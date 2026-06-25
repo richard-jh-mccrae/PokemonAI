@@ -21,7 +21,8 @@ htmlcov/
 
 # --- Submission build output (assembled by tools/package_agent.py) ---
 /dist/
-/data/submissions/   # deployed bundles — kept locally forever, not committed (ADR-0019)
+# deployed bundles — kept locally forever, not committed (ADR-0019)
+/data/submissions/
 
 # --- Blunder inspector viewer build (regenerate via viewer/build.py) ---
 /tools/train/blunder/viewer/.src/
