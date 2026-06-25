@@ -52,7 +52,7 @@ jobs:
       # Windows (sim.py picks by os.name). Engine-backed legality/playability tests depend on it.
       # Fail fast & clearly (and print which library loaded) if it can't.
       - name: Verify native engine loads
-        run: python -c "import sys; sys.path.insert(0, 'my_submissions'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
+        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
 
       # Whole suite runs offline on both OSes: native engine ships in-repo, kaggle-environments is
       # a pip dep, and the Kaggle CLI is monkeypatched in tests. Enforces the .coveragerc Scouting
@@ -62,7 +62,7 @@ jobs:
           mkdir -p reports
           python -m pytest tests/ -q \
             --junitxml=reports/junit-${{ matrix.os }}-py${{ matrix.python-version }}.xml \
-            --cov=my_submissions/common/scouting \
+            --cov=src/common/scouting \
             --cov=tools/meta_tracker \
             --cov-report=term-missing \
             --cov-report=xml:reports/coverage-${{ matrix.os }}-py${{ matrix.python-version }}.xml \

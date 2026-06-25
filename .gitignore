@@ -30,4 +30,7 @@ htmlcov/
 # without the native engine). data/EN_Card_Data.csv and the sample replay
 # fixture under tests/fixtures/ are also committed intentionally.
 
-/data/
+/data/decks/
+/data/meta/
+/data/replays/
+*.pdf
