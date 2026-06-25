@@ -1,0 +1,193 @@
+"""System tests (ISTQB system level) for the whole blunder-busting feature, end to end on the
+REAL agent — strategy, engine-backed Pilot, the tuner CLI's own Pilot builder, and the packaged
+bundle run in a subprocess (cwd = bundle, like the Kaggle grader).
+
+The journey, one test per stage:
+  ST-1  identify a blunder + author a Correction WITH A NOTE  -> real inspector data spine
+  ST-2  the noted Correction becomes a new-Hypothesis proposal -> real engine tune() (H route)
+  ST-3  a Correction becomes a weight change                   -> real engine tune() (W route)
+  ST-4  the packaged agent APPLIES the tune in a real decision -> real bundle, subprocess
+  ST-5  the packaged agent USES a newly committed Hypothesis   -> real bundle, subprocess
+
+ST-1..3 load the native engine in-process (fast, offline); ST-4..5 run the real shipped bundle.
+All skip cleanly if the engine/agent is unavailable, so the lib-free fast suite is unaffected.
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "tools"))
+
+from meta_tracker.parse import load_replay  # noqa: E402
+from package_agent import package  # noqa: E402
+from pilot_helpers import ATTACH, MAIN, NO, PLAY, make_select, opt, poke, state  # noqa: E402
+from train.blunder.correction import build_correction  # noqa: E402
+from train.blunder.decisions import Decision, iter_decisions  # noqa: E402
+from train.blunder.provenance import build_identity  # noqa: E402
+from train.blunder.service import record_correction  # noqa: E402
+from train.blunder.store import load_corrections  # noqa: E402
+from train.tuner.io import sparse_overrides  # noqa: E402
+from train.tuner.run import tune  # noqa: E402
+
+AGENT = "mega_starmie"
+# a committed own-game replay placed under the build-identity layout (submissions/<stem>/replays/)
+REAL_REPLAY = (REPO / "submissions" / "mega_starmie_20260625-034931_623a009-dirty"
+               / "replays" / "81785223.json")
+STARYU, CINDERACE = 1030, 666
+
+pytestmark = pytest.mark.skipif(
+    not (REPO / "src" / "agents" / AGENT / "main.py").exists(),
+    reason="real agent src/agents/mega_starmie not present",
+)
+
+
+@pytest.fixture(scope="module")
+def real_pilot():
+    """The exact engine-backed Pilot + seed weights the tuner uses (tune._build_pilot)."""
+    try:
+        from train.tune import _build_pilot
+        return _build_pilot(AGENT)
+    except Exception as exc:                       # native engine unavailable in this env
+        pytest.skip(f"engine-backed Pilot unavailable: {exc}")
+
+
+def _taggable(replay, *, frame=None):
+    """A real Decision (>=2 options, chosen in range) — at ``frame`` if given, else the first."""
+    for d in iter_decisions(replay):
+        if frame is not None and d.frame != frame:
+            continue
+        if len(d.options) >= 2 and all(0 <= c < len(d.options) for c in d.chosen):
+            return d
+    raise AssertionError("no suitable taggable Decision found")
+
+
+def _other_index(d) -> list[int]:
+    return [next(i for i in range(len(d.options)) if i not in d.chosen)]
+
+
+def _run_agent(bundle: Path, obs: dict) -> list[int]:
+    """Run the bundled agent's decide() on ``obs`` in a clean subprocess (cwd = bundle)."""
+    (bundle / "probe_obs.json").write_text(json.dumps(obs), encoding="utf-8")
+    probe = ("import json, main\n"
+             "obs = json.load(open('probe_obs.json', encoding='utf-8'))\n"
+             "print('RESULT' + json.dumps(main.agent(obs)))\n")
+    env = {**os.environ, "PYTHONPATH": str(bundle)}
+    proc = subprocess.run([sys.executable, "-c", probe], cwd=bundle, env=env,
+                          capture_output=True, text=True, timeout=180)
+    assert proc.returncode == 0, f"bundle run failed:\n{proc.stderr}"
+    line = next(ln for ln in proc.stdout.splitlines() if ln.startswith("RESULT"))
+    return json.loads(line[len("RESULT"):])
+
+
+# --- ST-1: identify a blunder and author a Correction with a note ------------------------------
+
+def test_tag_blunder_with_note_is_stored(tmp_path):
+    """REQ-TUNER-0013: tagging a real Decision through the inspector spine stores a Correction
+    with the human note, an auto-captured obs, decoded labels, and the build that played it."""
+    if not REAL_REPLAY.exists():
+        pytest.skip("committed own-game replay absent")
+    replay = load_replay(REAL_REPLAY)
+    d = _taggable(replay)
+    bid = build_identity(REAL_REPLAY)
+    note = "snipe the highest-threat benched attacker, not the wall"
+    store = tmp_path / "corrections.jsonl"
+
+    record_correction(replay, frame=d.frame, correct=_other_index(d), category="bad_target",
+                      rationale=note, source="own", agent=AGENT, store_path=store,
+                      agent_build=bid["agent_build"], agent_version=bid["agent_version"],
+                      built_at=bid["built_at"])
+
+    [stored] = load_corrections(store)
+    assert stored.rationale == note               # the note is preserved verbatim
+    assert stored.obs is not None                 # obs auto-captured from the film (no manual entry)
+    assert stored.correct_label                   # option decoded to a human label
+    assert stored.agent_build == bid["agent_build"] and bid["agent_build"]   # build traceability
+
+
+# --- ST-2: the noted Correction translates to a new-Hypothesis proposal (H route) --------------
+
+def test_correction_with_note_becomes_a_hypothesis_proposal(real_pilot):
+    """REQ-TUNER-0013: a Correction whose better option fires the same Hypotheses as the chosen
+    one (the agent is *blind* to the situation) becomes a proposal carrying the note as its spec."""
+    if not REAL_REPLAY.exists():
+        pytest.skip("committed own-game replay absent")
+    pilot, seeds = real_pilot
+    replay = load_replay(REAL_REPLAY)
+    d = _taggable(replay, frame=28)               # a target select -> identical fired sets -> H
+    note = "should snipe the higher-threat benched attacker with energy attached"
+    corr = build_correction(d, source="own", agent=AGENT, correct=_other_index(d),
+                            category="bad_target", rationale=note)
+
+    res = tune([corr], pilot, seeds)
+
+    assert len(res.proposals) == 1
+    assert res.proposals[0].rationale == note     # the note IS the authoring spec
+    assert not sparse_overrides(res.overrides, seeds)   # H route: no weight change
+
+
+# --- ST-3: a Correction translates to a weight change (W route) --------------------------------
+
+def test_correction_translates_to_a_weight_change(real_pilot):
+    """REQ-TUNER-0013: when the better option fires DIFFERENT Hypotheses than the chosen one, the
+    tuner fits a real weight delta so 'correct' outranks 'chosen' — landing in tuned.json."""
+    pilot, seeds = real_pilot
+    play = {"type": PLAY, "area": 2, "index": 0, "playerIndex": 0}     # play Staryu from hand
+    attach = {"type": ATTACH, "area": 4, "index": 0, "playerIndex": 0}  # attach to the Active
+    obs = make_select([play, attach], context=MAIN,
+                      current=state(hand=[STARYU], active=poke(CINDERACE, hp=70)))
+    d = Decision(episode_id="synthetic", frame=0, seat=0, turn=2, select_context="Main",
+                 select_type="Main", options=[play, attach], chosen=[0],
+                 current=obs["current"], obs=obs)
+    corr = build_correction(d, source="own", agent=AGENT, correct=[1], category="misattachment",
+                            rationale="develop the attack instead of over-benching")
+
+    res = tune([corr], pilot, seeds)
+
+    changed = sparse_overrides(res.overrides, seeds)
+    assert changed                                # a real Hypothesis weight moved (W route)
+    assert set(changed) <= set(seeds)            # every changed key is a real Hypothesis id
+
+
+# --- ST-4: the packaged agent APPLIES the tune in a real decision ------------------------------
+
+def test_packaged_agent_applies_tuned_weight_in_a_decision(tmp_path):
+    """REQ-TUNER-0013: the shipped bundle loads tuned.json and the weight changes which move it
+    picks — an extreme override flips the choice an empty file would have made."""
+    package(AGENT, tmp_path)
+    bundle = tmp_path / AGENT
+    obs = make_select([opt(type=ATTACH), opt(type=NO)], context=MAIN,
+                      current=state(active=poke(CINDERACE, hp=70)))
+
+    (bundle / "tuned.json").write_text("{}", encoding="utf-8")
+    assert _run_agent(bundle, obs) == [0]         # ATTACH preferred (power-up-attacker fires)
+
+    (bundle / "tuned.json").write_text(json.dumps({"power-up-attacker": -100000.0}), encoding="utf-8")
+    assert _run_agent(bundle, obs) == [1]         # the tune flips the decision
+
+
+# --- ST-5: the packaged agent USES a newly committed Hypothesis --------------------------------
+
+def test_packaged_agent_uses_a_newly_committed_hypothesis(tmp_path):
+    """REQ-TUNER-0013: once a human commits a new when() to the deck Strategy, the shipped agent
+    fires it — here a rule favouring 'play' options flips the decision the base agent would make."""
+    package(AGENT, tmp_path)
+    bundle = tmp_path / AGENT
+    (bundle / "tuned.json").write_text("{}", encoding="utf-8")
+    obs = make_select([opt(type=NO), opt(type=PLAY)], context=MAIN, current=state())
+
+    assert _run_agent(bundle, obs) == [0]         # baseline: nothing prefers the 'play' option
+
+    strat = bundle / "strategy.py"
+    strat.write_text(
+        strat.read_text(encoding="utf-8")
+        + "\nfrom common.strategy import Hypothesis as _H\n"
+        + "STRATEGY.hypotheses.append(_H('st-new-rule', '', "
+        + "when=lambda c: c.option_type == 7, weight=999.0))\n",
+        encoding="utf-8",
+    )
+    assert _run_agent(bundle, obs) == [1]         # the agent now fires the committed Hypothesis

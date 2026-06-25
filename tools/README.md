@@ -34,8 +34,9 @@ the data products **in order** (each step reads the previous output):
 | `run_meta_tracker.py` | Daily fetch: download top episodes, band by rating, parse, build HTML dashboard | `python tools/run_meta_tracker.py [--bands Elite High] [--cap 500]` |
 | `deck_convert.py` | Limitless `.txt` ↔ `deck.csv` (resolves by card name, asserts the 5 deck rules) | `python tools/deck_convert.py to-csv <deck.txt> <name> [--force]`  ·  `to-txt <deck.csv> [-o out.txt]` |
 | `deck_stealer.py` | Pull a team's exact 60-card deck out of a replay → `agents/<name>/deck.csv` | `python tools/deck_stealer.py <replay.json[.gz]> <team> <name> [--force]` |
-| `package_agent.py` | Stage agent + `common/` + `cg/` and zip → `dist/<name>_<date>_<githash>.zip` (the shipped bundle; `-dirty` if the tree is modified, `--no-stamp` for a stable `dist/<name>.zip`) | `python tools/package_agent.py <name> [--out dist] [--no-stamp]` |
+| `package_agent.py` | Stage agent + `common/` + `cg/` + a self-contained `brief.html` (the embedded **Manifest**, ADR-0019) and zip → `dist/<name>_<date>_<githash>.zip` | `python tools/package_agent.py <name> [--out dist] [--no-stamp]` |
 | `sim/check_agent.py` | Gated pre-submit check: contents → legality → playability → deployability | `python tools/sim/check_agent.py <name> [--matches 5] [--no-deployability]` |
+| `submit_agent.py` | Submission lifecycle (ADR-0019): `build` (package + record), gated `submit` (refuse-dirty → Agent Check → upload), `collect` (replays+score → `performance.jsonl`), `dashboard` | `python tools/submit_agent.py build\|submit\|collect\|dashboard <args>` |
 
 Deps: native `cg` for `dump_cards` / `build_card_functions` / `check_agent`; `check_agent`'s
 self-play also needs `kaggle_environments` (`tools/sim/requirements.txt`). The rest are

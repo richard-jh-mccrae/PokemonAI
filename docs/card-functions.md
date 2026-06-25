@@ -11,6 +11,30 @@ which resolves exact effects.
 Decision: [ADR-0006](adr/0006-function-tags-single-source-of-structural-facts.md) (revised
 2026-06-24 — structural facts removed; Function Tags are behavioral-only).
 
+## Consumers — where tags feed decisions (reach for a tag here)
+
+Function Tags are the **canonical universal *behavioral* signal**. When you add behavioral decision
+logic, read a tag — don't re-derive what a card does.
+
+- **Now (wired).** The Pilot loads the table once (`agents/<deck>/main.py` → `Pilot(functions=…)`)
+  and exposes it as `Context.tags`. Reading it today: `dig-before-commit` (`draw`/`search`),
+  `use-acceleration` (`energy_accel`), and `keep-a-startable-hand` (`opener`, with a `starter`-Role
+  fallback) — see [general-strategy.md](general-strategy.md).
+- **Planned (designed, not yet wired).** **Posture** (Read-conditioned play) and **Search-API
+  query gating** (`search_budget` / Tier-1 — deciding which cards are worth a per-move query). When
+  those land they **must** consult tags ([ADR-0008](adr/0008-pilot-is-a-layered-rules-pipeline.md)).
+
+**Which signal to read** — the three sources never overlap:
+
+| Need | Source | In the Pilot |
+|---|---|---|
+| a card's *behavior* (draw / search / gust / accel / heal / opener / …) | **Function Tag** | `c.tags` |
+| a deck's *intent* for a card (win_condition / accel_source / starter / …) | **Role** | `c.roles` |
+| a *structural* fact (HP, weakness, prize value, stage, attack cost) | **CardStat** | `c.stat` |
+
+Toggling `card_functions.json` off (comment the `functions=` arg / remove the file) disables only
+the tag-reading rules; Role- and stat-driven decisions are unaffected.
+
 ## Why probe (not parse, not embed)
 
 The engine exposes a card's effect only as free `text` (`Skill.text` / `Attack.text`) —

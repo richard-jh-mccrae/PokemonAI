@@ -18,6 +18,7 @@ sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
 
 from meta_tracker.parse import load_replay  # noqa: E402
+from train.blunder.provenance import build_identity  # noqa: E402
 from train.blunder.shell import serve  # noqa: E402
 from train.blunder.store import DEFAULT_PATH  # noqa: E402
 
@@ -39,12 +40,15 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     replay = load_replay(args.replay)
+    bid = build_identity(args.replay)   # traceability: which agent build played this game (ADR-0018)
     if not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}/")).start()
     serve(
         replay, store_path=args.store, agent=args.agent, source=args.source,
         our_team=args.team, submission_id=args.submission_id,
-        agent_version=args.agent_version, viewer_dir=args.viewer_dir, port=args.port,
+        agent_version=args.agent_version or bid["agent_version"],
+        agent_build=bid["agent_build"], built_at=bid["built_at"],
+        viewer_dir=args.viewer_dir, port=args.port,
     )
 
 

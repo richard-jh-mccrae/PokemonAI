@@ -1,0 +1,67 @@
+{
+  "deck": "mega_starmie",
+  "generated_at": "2026-06-25T21:10:47",
+  "open": [
+    {
+      "id": "bad-retreat-81785223-12",
+      "category": "bad_retreat",
+      "episode_id": 81785223,
+      "frame": 12,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Main' (turn 1) to prefer 'End turn' over 'Retreat'",
+      "rationale": "Want Cinderace to attack next turn, so stay in active",
+      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
+      "built_at": "2026-06-25T03:49:31"
+    },
+    {
+      "id": "bad-target-81785223-28",
+      "category": "bad_target",
+      "episode_id": 81785223,
+      "frame": 28,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Damage' (turn 3) to prefer 'Lillie’s Clefairy ex' over 'Latias ex'",
+      "rationale": "Should have snipped benched Pokemon with energy attached. That is a higher threat",
+      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
+      "built_at": "2026-06-25T03:49:31"
+    },
+    {
+      "id": "bad-target-81785223-39",
+      "category": "bad_target",
+      "episode_id": 81785223,
+      "frame": 39,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Damage' (turn 7) to prefer 'Lillie’s Clefairy ex' over 'Latias ex'",
+      "rationale": "Should snipe highest threat Pokemon, in this case the only benched pokemon with energy.",
+      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
+      "built_at": "2026-06-25T03:49:31"
+    },
+    {
+      "id": "sequencing-error-81785223-45",
+      "category": "sequencing_error",
+      "episode_id": 81785223,
+      "frame": 45,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Damage' (turn 9) to prefer 'Lillie’s Clefairy ex' over 'Latias ex'",
+      "rationale": "",
+      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
+      "built_at": "2026-06-25T03:49:31"
+    }
+  ],
+  "skipped": [
+    {
+      "episode_id": 81785223,
+      "frame": 32,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 81785223,
+      "frame": 38,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 81785223,
+      "frame": 44,
+      "reason": "tactical"
+    }
+  ]
+}

@@ -80,6 +80,22 @@ def test_peer_source_supported_and_bad_source_rejected():
                          category="bad_target", rationale="r")
 
 
+def test_correction_carries_build_identity():
+    """REQ-BLUNDER-0015: a Correction records the agent build it was made against (traceability),
+    and it round-trips through the log."""
+    d = _a_main_decision()
+    corr = build_correction(
+        d, source="own", agent="mega_starmie",
+        agent_build="mega_starmie_20260625-034931_623a009-dirty",
+        agent_version="623a009-dirty", built_at="2026-06-25T03:49:31",
+        correct=[4], category="missed_win", rationale="r",
+    )
+    assert corr.agent_build == "mega_starmie_20260625-034931_623a009-dirty"
+    assert corr.agent_version == "623a009-dirty"
+    assert corr.built_at == "2026-06-25T03:49:31"
+    assert Correction.from_dict(corr.to_dict()) == corr
+
+
 def test_corrections_have_unique_ids_and_legacy_records_get_stable_ids():
     """REQ-BLUNDER-0013: every Correction has a unique id; records saved before ids
     existed get a stable, deterministic id on load (so they can be edited/removed)."""

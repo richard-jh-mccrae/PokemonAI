@@ -36,4 +36,4 @@ The self-contained submission `package_agent` produces: `main.py` + `deck.csv` +
 shared `cg/` engine + `common/` runtime, and nothing else. The unit uploaded and graded;
 **Deployability** is a statement about it. (ADR-0004 also calls this the "submission
 directory" — same thing.)
-_Avoid_: submission (overloaded: the act of submitting vs. the artifact), package, zip, dist
+_Avoid_: Submission (the Bundle **plus** its Manifest and tracking — a distinct term owned by [Submission & Tracking](../submit/CONTEXT.md)), package, zip, dist

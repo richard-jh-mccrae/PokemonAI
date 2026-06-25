@@ -27,13 +27,15 @@ works on the grader today.
 shipped bundle; the stamp names the deploy artifact by build date + commit (`-dirty` when
 the work tree has uncommitted changes), so each date+commit yields one artifact (a same-day
 rebuild of the same commit overwrites). `--no-stamp` falls back to a stable `dist/<name>.zip`.
-The in-bundle `version_control.md` still records the full date **and** time of the build.
+The bundle also carries a self-contained `brief.html` (the embedded decision-steering
+**Manifest**) — see [ADR-0019](0019-submissions-are-traceable-and-tracked.md).
 
 **Consequences.**
 - One source of truth for `common/` and `cg/`; no per-agent drift.
 - All of an agent's top-level `*.py` ship (so `from strategy import …` works in the zip),
-  plus its human-readable `deck.txt` (when present) and a generated `version_control.md`
-  build card (agent + date + time + git hash) for provenance.
+  plus `tuned.json` (when present) and a generated `brief.html` build card whose embedded
+  Manifest carries the decklist + provenance (superseding the old `deck.txt`/`version_control.md`,
+  ADR-0019).
 - Imports are unchanged between dev, the local self-play harness, and the grader.
 - A build step is required to produce a submittable zip (`dist/` is gitignored).
 - Rejected: nesting `common/` per agent (duplication/drift); symlinks (fragile on

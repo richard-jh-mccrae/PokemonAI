@@ -22,6 +22,7 @@ class Decision:
     options: list[dict]   # the legal option list (select.option)
     chosen: list[int]     # positional indices into options (the recorded selection)
     current: dict         # full-information board snapshot at this Decision
+    obs: dict | None = None  # the agent observation (int enums) for the Tuner -- aligned to options
 
     def snapshot(self) -> dict:
         """The embedded state a Correction stores -- already decoupled from the
@@ -78,6 +79,9 @@ def iter_decisions(replay: dict) -> list[Decision]:
                 options=copy.deepcopy(select.get("option")),
                 chosen=list(chosen),
                 current=copy.deepcopy(current),
+                # the agent obs (int enums) is recorded one frame after the prompt, same as
+                # `selected` -- so it aligns option-for-option with this Decision (verified).
+                obs=copy.deepcopy(nxt.get("obs")),
             )
         )
     return out

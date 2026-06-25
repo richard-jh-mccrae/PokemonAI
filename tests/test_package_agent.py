@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from package_agent import artifact_stem, package, version_control_md
+from package_agent import artifact_stem, package
 
 # A self-contained agent fixture (main.py + strategy.py + deck.csv + deck.txt) so these tests don't
 # depend on a deletable source agent under src/agents/ (shared common/ + cg/ still come
@@ -26,12 +26,13 @@ def test_package_produces_self_contained_zip(tmp_path):
     assert any(n.startswith("cg/") for n in names)              # shared engine bundled
     assert any(n.startswith("common/scouting/") for n in names)  # shared scouting bundled
     assert not any("__pycache__" in n for n in names)            # pruned
-    # the only .md that ships is the build card; common/cg docs (CONTEXT.md, README.md, …) are pruned
-    assert [n for n in names if n.endswith(".md")] == ["version_control.md"]
+    # the build card now ships as brief.html (ADR-0019); all .md (CONTEXT.md, README.md, …) are pruned
+    assert not any(n.endswith(".md") for n in names)
+    assert "brief.html" in names
 
 
 @pytest.mark.req("REQ-SIM-0004")
-def test_package_ships_sibling_py_modules_and_the_decklist_txt(tmp_path):
+def test_package_ships_sibling_py_modules_not_the_decklist_txt(tmp_path):
     # the fixture has main.py + strategy.py + deck.csv + deck.txt
     with zipfile.ZipFile(package("mega_starmie", tmp_path, agents_root=FIXTURE_AGENTS)) as zf:
         names = zf.namelist()
@@ -40,7 +41,27 @@ def test_package_ships_sibling_py_modules_and_the_decklist_txt(tmp_path):
     assert "main.py" in top
     assert "strategy.py" in top   # sibling module must ship so the bundle imports
     assert "deck.csv" in top
-    assert "deck.txt" in top       # human-readable decklist ships alongside deck.csv
+    assert "deck.txt" not in top   # ADR-0019: the decklist now lives in brief.html, not a raw file
+
+
+def test_fixture_main_mirrors_the_real_agent_hook():
+    """REQ-SIM-0004: the packaging fixture's main.py stands in for the deployable agent hook —
+    keep them byte-identical so fixture-based tests can't drift from what actually ships (e.g. the
+    `overrides`/`functions` wiring). Skips if the real agent was deleted (the fixture is
+    deliberately self-contained)."""
+    real = Path(__file__).resolve().parents[1] / "src" / "agents" / "mega_starmie" / "main.py"
+    if not real.exists():
+        pytest.skip("real agent absent (fixture is intentionally standalone)")
+    fixture = FIXTURE_AGENTS / "mega_starmie" / "main.py"
+    assert fixture.read_text(encoding="utf-8") == real.read_text(encoding="utf-8")
+
+
+def test_package_ships_tuned_json_when_present(tmp_path):
+    """REQ-PKG-0002: machine-tuned weights (tuned.json) ride along in the Bundle so the shipped
+    agent applies them (ADR-0018)."""
+    with zipfile.ZipFile(package("mega_starmie", tmp_path, agents_root=FIXTURE_AGENTS)) as zf:
+        top = {n for n in zf.namelist() if "/" not in n.rstrip("/")}
+    assert "tuned.json" in top
 
 
 @pytest.mark.req("REQ-SIM-0004")
@@ -71,22 +92,3 @@ def test_stamped_zip_lands_under_dist_with_date_and_githash(tmp_path):
 def test_no_stamp_yields_the_stable_name(tmp_path):
     zip_path = package("mega_starmie", tmp_path, agents_root=FIXTURE_AGENTS, stamp=False)
     assert zip_path.name == "mega_starmie.zip"
-
-
-@pytest.mark.req("REQ-SIM-0004")
-def test_version_control_md_renders_agent_date_time_githash():
-    md = version_control_md("mega_starmie", datetime(2026, 6, 25, 14, 30, 5), "623ea73-dirty")
-    assert "agent: mega_starmie" in md
-    assert "date: 2026-06-25" in md
-    assert "time: 14:30:05" in md
-    assert "git hash: 623ea73-dirty" in md
-
-
-@pytest.mark.req("REQ-SIM-0004")
-def test_package_writes_version_control_card(tmp_path):
-    # the build card ships at the bundle root and names the agent it was built for
-    with zipfile.ZipFile(package("mega_starmie", tmp_path, agents_root=FIXTURE_AGENTS)) as zf:
-        assert "version_control.md" in zf.namelist()
-        card = zf.read("version_control.md").decode("utf-8")
-    assert "agent: mega_starmie" in card
-    assert "git hash:" in card

@@ -87,6 +87,8 @@ class _Handler(BaseHTTPRequestHandler):
                 store_path=STATE["store_path"],
                 submission_id=form.get("submission_id", STATE.get("submission_id")),
                 agent_version=form.get("agent_version", STATE.get("agent_version")),
+                agent_build=STATE.get("agent_build"),
+                built_at=STATE.get("built_at"),
                 attribution=form.get("attribution") or None,
             )
         except (KeyError, ValueError) as exc:
@@ -96,11 +98,12 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def serve(replay: dict, *, store_path, agent="", source="own", our_team=None,
-          submission_id=None, agent_version=None, viewer_dir="", host="127.0.0.1", port=8077):
+          submission_id=None, agent_version=None, agent_build=None, built_at=None,
+          viewer_dir="", host="127.0.0.1", port=8077):
     """Start the shell server (blocking). Returns the bound port."""
     STATE.update(replay=replay, store_path=str(store_path), agent=agent, source=source,
                  our_team=our_team, submission_id=submission_id, agent_version=agent_version,
-                 viewer_dir=str(viewer_dir))
+                 agent_build=agent_build, built_at=built_at, viewer_dir=str(viewer_dir))
     httpd = ThreadingHTTPServer((host, port), _Handler)
     print(f"blunder_correction shell -> http://{host}:{httpd.server_address[1]}/")
     try:
@@ -163,7 +166,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  <label>Correct move(s) — the better legal option</label><select id="correct" multiple></select>
  <label>Source</label><select id="source"></select>
  <label>Attribution (optional)</label><input id="attribution" placeholder="hypothesis:&lt;id&gt; / missing_hypothesis / tactical / value / scouting">
- <label>Rationale</label><textarea id="rationale" placeholder="Why it's a blunder + the intended line"></textarea>
+ <label>Rationale — state the <b>general rule</b>, not just this instance</label><textarea id="rationale" placeholder="The rule the agent should learn (e.g. 'snipe the highest-threat benched attacker with energy'), then the intended line. This becomes the when() the Tuner authors."></textarea>
  <button id="save">Save blunder ▸ ship</button>
  <div id="msg"></div><div id="log"></div>
  <h3 style="margin:16px 0 4px">Logged blunders — this replay (<span id="count">0</span>)</h3>
