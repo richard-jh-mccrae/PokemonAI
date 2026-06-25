@@ -1,9 +1,10 @@
 """Assemble a self-contained submission directory and zip it (see ADR-0004).
 
-Copies a deck-specific agent (`agents/<name>/`'s `*.py` + `deck.csv` + the human-readable
-`deck.txt` when present) together with the shared `common/` and `cg/` packages (and the
-compiled `common/scouting/artifact.json`) into `dist/<name>/`, writes a `version_control.md`
-build card (agent + date + time + git hash), then zips it to
+Copies a deck-specific agent (`agents/<name>/`'s `*.py` + `deck.csv` + `tuned.json` when
+present) together with the shared `common/` and `cg/` packages (and the compiled
+`common/scouting/artifact.json`) into `dist/<name>/`, writes a self-contained `brief.html`
+(the embedded decision-steering **Manifest** — provenance, hypotheses, capabilities, deck;
+see ADR-0019), then zips it to
 `dist/<name>_<YYYYMMDD>_<githash>.zip` — the staged dir *is* the exact shipped bundle,
 and the stamped zip names the deploy artifact by build date + commit (`-dirty` suffix when the
 work tree has uncommitted changes). `--no-stamp` falls back to a stable `dist/<name>.zip`.
@@ -49,17 +50,6 @@ def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | No
     return f"{name}_{when:%Y%m%d}_{git_hash}"
 
 
-def version_control_md(name: str, when: datetime, git_hash: str) -> str:
-    """Build-provenance card written into the bundle as `version_control.md`."""
-    return (
-        "# version control\n\n"
-        f"- agent: {name}\n"
-        f"- date: {when:%Y-%m-%d}\n"
-        f"- time: {when:%H:%M:%S}\n"
-        f"- git hash: {git_hash}\n"
-    )
-
-
 def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True) -> Path:
     """Stage `dist/<name>/` and zip it; return the zip path.
 
@@ -69,8 +59,8 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     `stamp` (default) names the zip `<name>_<date>_<githash>.zip`; pass False for a stable
     `<name>.zip`. The staged dir stays `dist/<name>/` either way (scratch, overwritten per build);
     only the zip carries the stamp, so a build history accumulates while the stage does not.
-    Bundles `deck.txt` when present and always writes a `version_control.md` build card, both at
-    the bundle root.
+    Ships `tuned.json` when present and always writes a self-contained `brief.html` (the
+    embedded Manifest, ADR-0019) at the bundle root.
     """
     name = Path(name).name or name  # accept a path (e.g. tab-completed) or a bare name
     agent_dir = (Path(agents_root) if agents_root else MS / "agents") / name
@@ -85,14 +75,17 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     for py in sorted(agent_dir.glob("*.py")):  # main.py + sibling modules (e.g. strategy.py)
         shutil.copy2(py, stage / py.name)
     shutil.copy2(agent_dir / "deck.csv", stage / "deck.csv")
-    if (deck_txt := agent_dir / "deck.txt").exists():  # human-readable decklist, when present
-        shutil.copy2(deck_txt, stage / "deck.txt")
+    if (tuned := agent_dir / "tuned.json").exists():   # machine weight overrides (ADR-0018), when present
+        shutil.copy2(tuned, stage / "tuned.json")
+    if (tuned_meta := agent_dir / "tuned.meta.json").exists():  # training provenance sidecar (ADR-0019)
+        shutil.copy2(tuned_meta, stage / "tuned.meta.json")
     shutil.copytree(MS / "common", stage / "common", ignore=_IGNORE)
     shutil.copytree(MS / "cg", stage / "cg", ignore=_IGNORE)
 
-    when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for the card and the zip name
-    (stage / "version_control.md").write_text(
-        version_control_md(name, when, git_hash), encoding="utf-8")
+    when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for the brief and the zip name
+    from submit.brief import build_manifest, render_brief  # lazy: avoid an import cycle
+    manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
+    (stage / "brief.html").write_text(render_brief(manifest), encoding="utf-8")
 
     stem = artifact_stem(name, when=when, git_hash=git_hash) if stamp else name
     return Path(shutil.make_archive(str(Path(dist) / stem), "zip", root_dir=stage))

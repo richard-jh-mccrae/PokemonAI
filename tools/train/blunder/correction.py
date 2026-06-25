@@ -46,8 +46,11 @@ class Correction:
     correct: list[int]          # the better legal option positions (mandatory)
     correct_label: str
     category: str               # closed human vocab (mandatory)
-    attribution: str | None     # learning-surface link (optional in v1)
+    attribution: str | None     # learning-surface link (derived by the Tuner; ADR-0017)
     rationale: str              # free prose
+    obs: dict | None = None     # the agent observation (int-enum) for the Tuner to replay the Pilot
+    agent_build: str | None = None  # submission-folder stem of the build that played (traceability)
+    built_at: str | None = None     # that build's timestamp (ISO), parsed from the stem
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -79,6 +82,9 @@ def build_correction(
     attribution: str | None = None,
     chosen_label: str = "",
     correct_label: str = "",
+    obs: dict | None = None,
+    agent_build: str | None = None,
+    built_at: str | None = None,
 ) -> Correction:
     """Validate and assemble a Correction from a tagged Decision.
 
@@ -113,4 +119,7 @@ def build_correction(
         category=category,
         attribution=attribution,
         rationale=rationale,
+        obs=obs if obs is not None else getattr(decision, "obs", None),
+        agent_build=agent_build,
+        built_at=built_at,
     )

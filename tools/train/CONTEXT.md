@@ -55,3 +55,11 @@ improvements. It derives each Correction's **Attribution** (replaying the Pilot 
 **status** transition. Job A of [ADR-0009](../../docs/adr/0009-training-methodology.md); designed in
 [ADR-0017](../../docs/adr/0017-corrections-compile-to-hypotheses.md).
 _Avoid_: weight-tuner (too narrow — it also authors Hypotheses), trainer (the value model, Job B)
+
+**Verifier**:
+The deterministic accuracy gate for an authored **Hypothesis**: inject the candidate (its
+`when()` trigger + a seed weight), re-run the **Tuner**'s weight fit over all **Corrections**,
+and accept only if it satisfies its target cluster (`correct ≻ chosen`), regresses none that
+were previously satisfied, and keeps the test suite green. What makes an LLM-authored trigger
+trustworthy. See [ADR-0017](../../docs/adr/0017-corrections-compile-to-hypotheses.md).
+_Avoid_: validator, checker, test

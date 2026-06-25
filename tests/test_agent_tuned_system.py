@@ -1,0 +1,64 @@
+"""System test (ISTQB system level): the shipped agent bundle actually *applies* tuned.json.
+
+The package test proves tuned.json is *shipped*; the io test proves the Pilot *can* apply
+overrides. Neither proves the deployable wiring — that ``main.py`` loads the file from the
+bundle and feeds it to the Pilot. This runs the real, packaged agent in a clean subprocess
+(cwd = the bundle, like the Kaggle grader) and asserts a weight override in tuned.json reaches
+``Pilot._weight``. Skips if the real agent dir is absent (the package tests use a fixture so they
+survive its deletion; this one is specifically about the deployable, so it targets src/agents).
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "tools"))
+from package_agent import package  # noqa: E402
+
+AGENT = "mega_starmie"
+TARGET = "power-up-attacker"   # a real General Strategy Hypothesis id (general_strategy.py)
+AUTHORED = 15.0               # its authored seed weight
+
+pytestmark = pytest.mark.skipif(
+    not (REPO / "src" / "agents" / AGENT / "main.py").exists(),
+    reason="real agent src/agents/mega_starmie not present",
+)
+
+_PROBE = (
+    "import json, main\n"
+    "hs = (*main._pilot.general.hypotheses, *main._pilot.strategy.hypotheses)\n"
+    f"h = next(h for h in hs if h.id == {TARGET!r})\n"
+    "print('RESULT' + json.dumps({'overrides': main._pilot.overrides, "
+    "'w': main._pilot._weight(h)}))\n"
+)
+
+
+def _run_bundle(bundle: Path) -> dict:
+    """Import the bundled agent in a clean subprocess (cwd = bundle) and read back the probe."""
+    env = {**os.environ, "PYTHONPATH": str(bundle)}   # resolve main/strategy/common/cg from the bundle only
+    proc = subprocess.run([sys.executable, "-c", _PROBE], cwd=bundle, env=env,
+                          capture_output=True, text=True, timeout=180)
+    assert proc.returncode == 0, f"bundle import failed:\n{proc.stderr}"
+    line = next(ln for ln in proc.stdout.splitlines() if ln.startswith("RESULT"))
+    return json.loads(line[len("RESULT"):])
+
+
+def test_packaged_agent_applies_tuned_weight_override(tmp_path):
+    """REQ-TUNER-0011: the deployable agent loads tuned.json and its weights reach _weight —
+    an override changes the effective weight; an empty file falls back to the authored seed."""
+    package(AGENT, tmp_path)            # stages the exact shipped bundle at tmp_path/<agent>
+    bundle = tmp_path / AGENT
+
+    (bundle / "tuned.json").write_text("{}", encoding="utf-8")
+    base = _run_bundle(bundle)
+    assert base["overrides"] == {}
+    assert base["w"] == AUTHORED        # no override -> authored default
+
+    (bundle / "tuned.json").write_text(json.dumps({TARGET: 999.0}), encoding="utf-8")
+    tuned = _run_bundle(bundle)
+    assert tuned["overrides"] == {TARGET: 999.0}
+    assert tuned["w"] == 999.0          # the shipped agent actually applies the diff

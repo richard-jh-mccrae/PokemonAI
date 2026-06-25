@@ -14,9 +14,11 @@ def _main():
     return next(d for d in iter_decisions(load_replay(FIXTURE)) if d.select_context == "Main")
 
 
-def _c(source="own", category="missed_win", submission_id=100, rationale="r"):
+def _c(source="own", category="missed_win", submission_id=100, rationale="r",
+       agent_build=None, built_at=None):
     return build_correction(_main(), source=source, agent="mega_starmie",
-                            submission_id=submission_id, correct=[4], category=category, rationale=rationale)
+                            submission_id=submission_id, agent_build=agent_build, built_at=built_at,
+                            correct=[4], category=category, rationale=rationale)
 
 
 def test_summarize_counts_own_pile_by_category():
@@ -48,6 +50,19 @@ def test_summarize_groups_own_by_submission_timeline():
     assert s["own"]["by_submission"][101]["by_category"]["missed_win"] == 1
 
 
+def test_summarize_groups_own_by_build():
+    """REQ-TUNER-0010: own corrections group by agent build (the over-time evolution view)."""
+    s = summarize([
+        _c("own", "missed_win", agent_build="mega_starmie_20260601_aaa", built_at="2026-06-01T00:00:00"),
+        _c("own", "bad_target", agent_build="mega_starmie_20260601_aaa", built_at="2026-06-01T00:00:00"),
+        _c("own", "missed_win", agent_build="mega_starmie_20260610_bbb", built_at="2026-06-10T00:00:00"),
+    ])
+    by_build = s["own"]["by_build"]
+    assert by_build["mega_starmie_20260601_aaa"]["total"] == 2
+    assert by_build["mega_starmie_20260601_aaa"]["built_at"] == "2026-06-01T00:00:00"
+    assert by_build["mega_starmie_20260610_bbb"]["by_category"]["missed_win"] == 1
+
+
 def test_report_html_is_offline_and_lists_categories_with_drilldown(tmp_path):
     """REQ-BLUNDER-0010: the report is self-contained (no external refs) and lists the
     own-pile categories with an expandable drill-down showing the rationale."""
@@ -64,6 +79,18 @@ def test_report_html_is_offline_and_lists_categories_with_drilldown(tmp_path):
     assert "had exact lethal, passed" in txt              # drill-down shows the rationale
     assert "<details>" in txt and "<summary>" in txt      # expandable
     assert "http" not in txt                              # offline: no CDN / external refs
+
+
+def test_report_html_shows_builds_over_time(tmp_path):
+    """REQ-TUNER-0010: the offline report lists each agent build (traceability / evolution)."""
+    log = tmp_path / "c.jsonl"
+    append_correction(_c("own", "missed_win", agent_build="mega_starmie_20260601_aaa",
+                         built_at="2026-06-01T00:00:00"), log)
+    append_correction(_c("own", "bad_target", agent_build="mega_starmie_20260610_bbb",
+                         built_at="2026-06-10T00:00:00"), log)
+    txt = build_report(log, tmp_path / "r.html").read_text(encoding="utf-8")
+    assert "mega_starmie_20260601_aaa" in txt and "mega_starmie_20260610_bbb" in txt
+    assert "http" not in txt
 
 
 def test_report_empty_is_placeholder(tmp_path):

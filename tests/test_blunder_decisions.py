@@ -47,3 +47,14 @@ def test_decision_embeds_selfcontained_full_info_snapshot():
     captured = main.current["turn"]
     replay["steps"][0][0]["visualize"][main.frame]["current"]["turn"] = 999
     assert main.current["turn"] == captured
+
+
+def test_decision_carries_pilot_ready_obs_aligned_to_its_options():
+    """REQ-BLUNDER-0014: each Decision embeds the agent obs (int enums, the Pilot's input) for
+    the Tuner, aligned option-for-option with the Decision (the film records it one frame after
+    the prompt, like `selected`)."""
+    main = next(d for d in iter_decisions(load_replay(FIXTURE)) if d.select_context == "Main")
+    assert main.obs is not None
+    assert isinstance(main.obs["select"]["type"], int)                  # int enum = Pilot-ready
+    assert len(main.obs["select"]["option"]) == len(main.options)       # aligned to the Decision
+    assert all(0 <= c < len(main.obs["select"]["option"]) for c in main.chosen)

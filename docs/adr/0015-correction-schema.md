@@ -43,3 +43,12 @@ The embedded film `current` is full-info, string-enum — for human display. The
 the Pilot's exact input, so the Correction also embeds the **agent `obs`** (int-enum, hidden-info)
 for the Decision's frame. This makes featurization self-contained (no replay needed) at identical
 accuracy. Existing records (saved before this) backfill `obs` from their retained replays.
+
+## Amendment ([ADR-0018](0018-applying-tuner-output.md)): build-identity traceability
+
+Each Correction also records the **build that played the game** — `agent_build` (the
+`submissions/<agent>_<date>_<sha>[-dirty]/` stem), `agent_version` (the git sha), and `built_at`
+(the parsed timestamp) — **auto-derived from the replay path** (`provenance.build_identity`); no
+flags to remember. This ties every correction to a concrete agent version + date, so the report
+can show how the blunder profile evolved build-by-build over the competition. Pre-existing records
+backfill via `tools/train/backfill_obs.py`.

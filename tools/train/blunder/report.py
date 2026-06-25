@@ -19,20 +19,32 @@ def _bucket(items: list[Correction]) -> dict:
     return {"total": len(items), "by_category": dict(Counter(c.category for c in items))}
 
 
+def _group(items, keyfn, extra=None) -> dict:
+    """Group corrections by ``keyfn(c)`` into {key: {total, by_category, **extra(c)}}."""
+    out: dict = {}
+    for c in items:
+        key = keyfn(c)
+        slot = out.get(key)
+        if slot is None:
+            slot = {"total": 0, "by_category": {}}
+            if extra:
+                slot.update(extra(c))
+            out[key] = slot
+        slot["total"] += 1
+        slot["by_category"][c.category] = slot["by_category"].get(c.category, 0) + 1
+    return out
+
+
 def summarize(corrections: Iterable[Correction]) -> dict:
     """Counts for the trend report: own (by category, by submission) and peer (by category)."""
     corrections = list(corrections)
     own = [c for c in corrections if c.source == "own"]
     peer = [c for c in corrections if c.source == "peer"]
 
-    by_submission: dict = {}
-    for c in own:
-        slot = by_submission.setdefault(c.submission_id, {"total": 0, "by_category": {}})
-        slot["total"] += 1
-        slot["by_category"][c.category] = slot["by_category"].get(c.category, 0) + 1
-
     result = {"own": _bucket(own), "peer": _bucket(peer)}
-    result["own"]["by_submission"] = by_submission
+    result["own"]["by_submission"] = _group(own, lambda c: c.submission_id)
+    result["own"]["by_build"] = _group(own, lambda c: c.agent_build,
+                                       extra=lambda c: {"built_at": c.built_at})
     return result
 
 
@@ -95,6 +107,19 @@ def build_report(corrections_path: Path | str, out_path: Path | str) -> Path:
             slot = subs[sid]
             cats = ", ".join(f"{_esc(c)}&times;{n}" for c, n in sorted(slot["by_category"].items()))
             rows.append(f"<tr><td>{_esc(sid)}</td><td>{slot['total']}</td><td>{cats}</td></tr>")
+        parts.append("<table>" + "".join(rows) + "</table>")
+    else:
+        parts.append("<p class='muted'>none</p>")
+
+    parts.append("<h2>My agents &mdash; by build (over time)</h2>")
+    builds = own.get("by_build", {})
+    if builds:
+        rows = ["<tr><th>built</th><th>build</th><th>total</th><th>categories</th></tr>"]
+        for b in sorted(builds, key=lambda k: (builds[k].get("built_at") or "", str(k))):
+            slot = builds[b]
+            cats = ", ".join(f"{_esc(c)}&times;{n}" for c, n in sorted(slot["by_category"].items()))
+            rows.append(f"<tr><td>{_esc(slot.get('built_at') or '?')}</td><td>{_esc(b)}</td>"
+                        f"<td>{slot['total']}</td><td>{cats}</td></tr>")
         parts.append("<table>" + "".join(rows) + "</table>")
     else:
         parts.append("<p class='muted'>none</p>")
