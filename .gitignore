@@ -36,3 +36,4 @@ htmlcov/
 /data/replays/
 *.pdf
 .claude/settings.local.json
+data/submissions/
