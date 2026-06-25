@@ -2,10 +2,15 @@ Codebase for the Kaggle **Pokémon TCG AI Battle Challenge — Strategy** compet
 
 ## Conventions (override global standards)
 
-- **No CI for this repo.** Skip the global GitHub-Actions / `.github/workflows/ci.yml`
-  mandate entirely — don't scaffold or maintain it, and don't treat CI as part of an
-  accepted plan here. Tests and docs still apply (run the suite locally:
-  `python -m pytest tests/ -q`).
+- **Windows + Linux are both first-class.** Dev/build is on Windows; the Kaggle grader is
+  Linux — both must work. `.github/workflows/ci.yml` runs the pytest suite + the Scouting
+  coverage gate on `windows-latest` and `ubuntu-latest` (Python 3.11 + 3.12). The committed
+  `cg/cg.dll` (Windows) and `cg/libcg.so` (Linux) let the native engine load on both, so the
+  whole suite runs offline. Keep code cross-platform: `pathlib` not string paths, explicit
+  `encoding="utf-8"`, no OS-only assumptions.
+- **CI runs tests only.** The rest of the global CI spec (Doxygen / Sphinx / GitHub Pages /
+  PDF) stays out until those toolchains exist here. Run locally: `python -m pytest tests/ -q`.
+  Details: `docs/ci.md`.
 
 ## Secrets
 
