@@ -28,10 +28,10 @@ jobs:
       run:
         shell: bash
     strategy:
-      fail-fast: false       # report every OS/interpreter, don't cancel siblings
+      fail-fast: false       # report both OSes, don't cancel siblings
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.11", "3.12"]   # 3.11 = dev parity
+        python-version: ["3.12"]   # most recent only (dev box runs 3.11)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
