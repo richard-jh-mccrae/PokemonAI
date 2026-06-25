@@ -1,0 +1,23 @@
+Pokémon: 10
+3 Staryu POR 20
+3 Mega Starmie ex POR 21
+4 Cinderace MEG 28
+
+Trainer: 37
+4 Lillie's Determination MEG 119
+4 Salvatore TEF 160
+4 Wally's Compassion MEG 132
+2 Harlequin WHT 83
+2 Hilda WHT 84
+1 Boss’s Orders PAL 172
+4 Buddy-Buddy Poffin TEF 144
+4 Crushing Hammer SVI 168
+4 Mega Signal MEG 121
+4 Pokégear 3.0 SVI 186
+2 Night Stretcher SFA 61
+1 Ultra Ball SVI 196
+1 Hero’s Cape TEF 152
+
+Energy: 13
+9 Water Energy SVE 3
+4 Ignition Energy WHT 86

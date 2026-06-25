@@ -1,0 +1,53 @@
+"""Replay -> Decision extraction for the blunder inspector.
+
+Decisions come from the full-information ``visualize`` film (both hands visible),
+not the per-seat agent Observation (which hides the opponent).
+"""
+from conftest import FIXTURES
+
+from meta_tracker.parse import load_replay
+from train.blunder.decisions import iter_decisions
+
+FIXTURE = FIXTURES / "episode-81364540-replay.json.gz"
+
+
+def test_iter_decisions_yields_taggable_decisions_from_film():
+    """REQ-BLUNDER-0001: each option-decision with a recorded choice becomes a
+    Decision carrying seat, turn, the select context, and the chosen option(s)."""
+    decisions = iter_decisions(load_replay(FIXTURE))
+
+    # 42 frames present a select with options *and* a recorded choice; the
+    # coin-flip / deck-submission frame (no ``selected``) is not a Decision.
+    assert len(decisions) == 42
+
+    first = decisions[0]
+    assert first.seat == 1               # current.yourIndex (the acting player)
+    assert first.turn == 0
+    assert first.select_context == "Mulligan"
+    assert first.chosen == [0]           # positional indices into select.option
+
+
+def test_decision_embeds_selfcontained_full_info_snapshot():
+    """REQ-BLUNDER-0002: a Decision embeds the legal options and an *independent*
+    full-information snapshot -- both hands visible, decoupled from the source
+    replay so the record survives replay mutation/deletion (the 'embed' guarantee)."""
+    replay = load_replay(FIXTURE)
+    decisions = iter_decisions(replay)
+    first = decisions[0]
+
+    # legal options captured (Mulligan: keep / mulligan)
+    assert len(first.options) == 2
+
+    # full-information snapshot: both seats present, both hands visible
+    players = first.current["players"]
+    assert len(players) == 2
+    assert all(len(p["hand"]) == 7 for p in players)
+
+    # a Main decision exposes the real legal move set
+    main = next(d for d in decisions if d.select_context == "Main")
+    assert {o["type"] for o in main.options} >= {"Play", "Attach", "End"}
+
+    # snapshot is independent of the source replay: mutating the film must NOT
+    # change an already-extracted Decision.
+    replay["steps"][0][0]["visualize"][first.frame]["current"]["turn"] = 999
+    assert first.current["turn"] == 0

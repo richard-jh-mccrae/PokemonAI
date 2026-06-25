@@ -1,0 +1,4 @@
+# Simulator harness dependency. The cabt env ships *inside* kaggle-environments
+# (no standalone package); pinned to the Kaggle ladder version — see ADR-0010.
+# Re-pin and re-verify make("cabt") if the ladder bumps.
+kaggle-environments==1.30.1

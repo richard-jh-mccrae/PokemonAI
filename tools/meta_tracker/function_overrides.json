@@ -1,0 +1,22 @@
+{
+  "_note": "Curated tags the probe can't reach, confirmed via tools/verify_meta_cards.py against card text. Unioned with probe-derived tags at build; never clobbered by regeneration. cardId -> [tags]. NOTE: `stall` is a curated *play-role* seed (a big-HP setup wall that declines to attack) — a usage pattern, not a parseable function; proper coverage needs replay-usage learning (see docs/card-functions.md). Inline names are for humans only.",
+  "19":   ["search"],
+  "66":   ["stall"],
+  "90":   ["search"],
+  "112":  ["heal", "spread"],
+  "344":  ["search"],
+  "353":  ["search"],
+  "721":  ["recycle"],
+  "756":  ["stall"],
+  "1071": ["search", "stall"],
+  "1081": ["energy_denial"],
+  "1115": ["search"],
+  "1129": ["recycle"],
+  "1134": ["search"],
+  "1189": ["search"],
+  "1197": ["hand_disruption"],
+  "1217": ["hand_disruption"],
+  "1229": ["heal"],
+  "1254": ["recycle"],
+  "1264": ["bench_guard"]
+}

@@ -1,0 +1,10 @@
+# Coverage scoped to the Scouting feature (runtime + compiler); ≥80% gate.
+[run]
+branch = True
+
+[report]
+include =
+    */common/scouting/*
+    */compile_scouting.py
+show_missing = True
+fail_under = 80

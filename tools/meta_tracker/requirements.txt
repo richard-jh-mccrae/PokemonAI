@@ -1,0 +1,6 @@
+# meta_tracker runtime + dev deps (Python 3.10+)
+plotly>=6.0        # self-contained HTML dashboard (JS inlined)
+kaggle>=2.2        # CLI used for leaderboard / episodes / replay download
+pytest>=8.0        # tests (uses the gzipped sample replay fixture)
+# Regenerating cards.json (dump_cards.py) additionally needs the native `cg`
+# engine shipped in my_submissions/cg — no extra pip install required.

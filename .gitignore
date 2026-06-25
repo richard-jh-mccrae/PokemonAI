@@ -1,0 +1,33 @@
+# --- Credentials (NEVER commit) ---
+/kaggle_api_token/
+.kaggle/
+*access_token*
+
+# --- Local meta_tracker artifacts (Task Scheduler runs locally) ---
+/data/meta/
+/reports/
+
+# Raw replays are never retained (ADR-0002), but guard against stray files
+episode-*-replay.json
+/data/probe/
+
+# --- Python ---
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+/.venv/
+
+# --- Submission build output (assembled by tools/package_agent.py) ---
+/dist/
+
+# --- Blunder inspector viewer build (regenerate via viewer/build.py) ---
+/tools/train/blunder/viewer/.src/
+/tools/train/blunder/viewer/dist/
+
+# Note: tools/meta_tracker/cards.json IS committed (lets the pipeline run
+# without the native engine). data/EN_Card_Data.csv and the sample replay
+# fixture under tests/fixtures/ are also committed intentionally.
+
+/data/
