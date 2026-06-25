@@ -52,6 +52,7 @@ STRATEGY = Strategy(
     lines=[Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX,
                 role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
-    params={"setup_energy_target": 3},   # aspirational target (Nebula Beam CCC) — future attach-priority
+    params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority
+            "search_budget": 0},          # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
     hypotheses=HYPOTHESES,
 )
