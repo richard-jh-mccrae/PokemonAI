@@ -13,7 +13,10 @@ from common.cards import CardFunctions
 from common.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
-from pilot_helpers import HAND, MAIN, SETUP_ACTIVE, attack_opt, card_opt, make_select, poke, state
+from pilot_helpers import (
+    ATTACH, HAND, MAIN, MULLIGAN, NO, PLAY, SETUP_ACTIVE, YES,
+    attack_opt, card_opt, make_select, opt, poke, state,
+)
 
 # Load the deck's real Strategy from the test fixture (lib-free; imports only common.strategy).
 _FIX = Path(__file__).parent / "fixtures" / "agents" / "mega_starmie" / "strategy.py"
@@ -34,7 +37,7 @@ _STATS = DictCardStatProvider({
     BUDDY_POFFIN: CardStat(BUDDY_POFFIN, hp=0),
     MEGA_SIGNAL: CardStat(MEGA_SIGNAL, hp=0),
 })
-_TAGS = CardFunctions({BUDDY_POFFIN: ["search"], MEGA_SIGNAL: ["search"]})
+_TAGS = CardFunctions({BUDDY_POFFIN: ["search"], MEGA_SIGNAL: ["search"], CINDERACE: ["opener"]})
 
 
 def _pilot(functions=_TAGS, stats=_STATS):
@@ -101,3 +104,23 @@ def test_weakness_has_an_effect_on_the_knockout():
                           current=state(active=poke(MEGA_STARMIE, energy=3),
                                         opp_active=poke(9999, hp=160)))
     assert p.explain(nonweak).options[0].score < KO_SCORE      # 120 < 160 -> no KO
+
+
+@pytest.mark.req("REQ-SYS-0005")
+def test_agent_keeps_a_startable_cinderace_hand_rather_than_mulliganing():
+    # Blunder #2: hand has Cinderace but no Basic -> engine offers Mulligan [Yes=redraw, No=keep].
+    # Cinderace's Explosiveness (opener tag + starter role) makes it keepable: keep, don't redraw.
+    p = _pilot()
+    mull = make_select([opt(YES), opt(NO)], context=MULLIGAN, current=state(hand=[CINDERACE]))
+    assert p.decide(mull) == [1]   # No = keep the hand
+    assert "keep-a-startable-hand" in {h.id for h, _ in p.explain(mull).options[0].fired}
+
+
+@pytest.mark.req("REQ-SYS-0006")
+def test_agent_attaches_energy_during_setup_rather_than_passing():
+    # Blunder #1: in SETUP, attaching an Energy must beat doing nothing (power-up-attacker), so the
+    # agent powers up its attacker instead of only ever playing the special accel energy.
+    p = _pilot()
+    obs = make_select([opt(ATTACH), opt(PLAY)], current=state(active=poke(STARYU, energy=0)))
+    assert p.decide(obs) == [0]    # attach the Energy
+    assert "power-up-attacker" in {h.id for h, _ in p.explain(obs).options[0].fired}

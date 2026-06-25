@@ -10,13 +10,13 @@ python tools/deck_stealer.py <replay.json|.json.gz> <team-name> <dir-name> [--fo
 python tools/deck_stealer.py data/replays/starmie_keidroid.json keidroid mega_starmie
 ```
 
-Writes `my_submissions/agents/<dir-name>/deck.csv` (60 card ids, one per line,
+Writes `src/agents/<dir-name>/deck.csv` (60 card ids, one per line,
 sorted by id so re-stealing the same list from any replay is byte-identical) and
 prints a provenance line:
 
 ```
 stole keidroid's Cinderace / Mega Starmie ex (episode 81475913, won vs uuji-qvp)
-  -> my_submissions\agents\mega_starmie\deck.csv
+  -> src\agents\mega_starmie\deck.csv
 ```
 
 ## How it works

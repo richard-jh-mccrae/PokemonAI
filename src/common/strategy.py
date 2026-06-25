@@ -20,8 +20,10 @@ class Plan(enum.Enum):
 
 @dataclass
 class Ready:
-    """When a Line's payoff counts as online: in play with >= `energy` attached."""
-    energy: int = 0
+    """When a Line's payoff counts as online: in play with >= `energy` attached. `energy=None`
+    (the default) derives the threshold from the engine — the payoff's cheapest attack cost — so
+    a Pokémon with a 1-Energy attack is 'online' at 1, not at the cost of its biggest attack."""
+    energy: int | None = None
 
 
 @dataclass

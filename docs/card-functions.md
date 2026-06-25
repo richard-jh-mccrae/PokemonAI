@@ -101,6 +101,7 @@ tagged; the runtime reads those off `CardData` (`ex`/`megaEx`/`cardType`/`aceSpe
 | Board | `switch`, `heal`, `spread` | probe |
 | Conditions | `poison`, `burn` (chip attrition), `sleep`, `paralyze` (lock out attack/retreat), `confuse` (attack deterrent) | probe |
 | Defensive | `bench_guard` (protect the Bench from attack/Ability *effects* — Battle Cage) | override |
+| Setup | `opener` (a non-Basic that may take the Active Spot from hand during setup — Explosiveness; keeps a no-Basic hand from being mulliganed away — Cinderace) | override |
 | Play-role | `stall` (a big-HP setup wall that *declines to attack* to buy tempo — Mega Kangaskhan ex, Dudunsparce, Meowth ex) | curated seed |
 
 ### Complete tag reference
@@ -129,6 +130,7 @@ ex/Mega-ex, trainer type, ACE SPEC — are *not* here; the runtime reads them of
 | `paralyze` | condition | Paralyzed — can't attack/retreat for one turn (hard lock). | Probe: a `PARALYZED` condition log. |
 | `confuse` | condition | Confused — attacking risks self-damage on a coin flip (deterrent). | Probe: a `CONFUSED` condition log. |
 | `bench_guard` | defensive | Protects benched Pokémon from the *effects* of attacks/Abilities (anti-spread/disruption — Battle Cage). | Override: passive/preventive, so not probe-observable, but readable from card text. |
+| `opener` | setup | A non-Basic that may be placed in the Active Spot from hand during setup (Explosiveness — Cinderace) — so a hand with no Basic Pokémon is still keepable. The Pilot reads it to *keep* (not mulligan) a startable opening hand. | Override: a setup-phase placement ability, not probe-observable, but readable from card text (like `bench_guard`). |
 | `stall` | play-role | A big-HP wall piloted *not to attack*, buying tempo to set up. | Curated seed (`function_overrides.json`): a usage pattern, not parseable — full coverage needs replay-usage data (future). |
 
 `search` is a *direct* deck tutor (`DECK→HAND`); a "look at top N, take 1" is `dig`+`draw`, not
@@ -270,8 +272,9 @@ plain Item — are now omitted, so the table is smaller than the old structural-
   Thwackey, Dwebble, Ethan's Quilava, Salvatore, Team Rocket's Transceiver → `search`),
   `hand_disruption` (Xerosic's Machinations, Team Rocket's Archer), `recycle` (Sacred Ash, Kyogre,
   Levincia), `energy_denial` (Enhanced Hammer), `heal` (Wally's Compassion), Munkidori's
-  counter-move `heal`+`spread`, plus the two **override-only** tags `bench_guard` (Battle Cage) and
-  the curated `stall` seed (Mega Kangaskhan ex, Dudunsparce, Meowth ex). They union in at build
+  counter-move `heal`+`spread`, plus the **override-only** tags `bench_guard` (Battle Cage),
+  `opener` (Cinderace's Explosiveness — a startable non-Basic), and the curated `stall` seed
+  (Mega Kangaskhan ex, Dudunsparce, Meowth ex). They union in at build
   time and are guarded by the golden oracle; extend the file as the meta-verification flags more.
 - Optional future polish (not blocking): richer probing of conditional Abilities; regenerating
   the stale `cards.json`. The tag *vocabulary* itself is done.

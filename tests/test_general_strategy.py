@@ -6,7 +6,10 @@ from common.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Line, Ready, Strategy
-from pilot_helpers import ATTACH, HAND, MAIN, PLAY, attack_opt, card_opt, make_select, opt, poke, state
+from pilot_helpers import (
+    ACTIVE, ATTACH, ATTACH_FROM, BENCH, HAND, MAIN, MULLIGAN, NO, PLAY, YES,
+    attack_opt, card_opt, make_select, opt, poke, state,
+)
 
 
 def _fired(option_trace):
@@ -71,13 +74,73 @@ def test_pre_position_attacker_develops_the_bench_during_race():
     assert "pre-position-attacker" in _fired(pilot.explain(obs).options[0])
 
 
+@pytest.mark.req("REQ-GEN-0011")
+def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
+    WATER, LIGHTNING = 3, 4
+    stats = DictCardStatProvider({
+        700: CardStat(700, energyType=WATER, weakness=LIGHTNING, hp=70),   # my Active (Weak to L)
+        900: CardStat(900, energyType=LIGHTNING, maxDamage=120),           # opp Active: 120, Lightning
+        800: CardStat(800, energyType=WATER, hp=110),                      # my benched successor
+    })
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    # ATTACH_FROM (pick the Pokémon to attach to): opt0 = my Active (30 HP left, doomed — 120 x2
+    # Weakness >> 30), opt1 = my Bench. Don't sink the Energy into the dying Active.
+    obs = make_select([card_opt(ACTIVE, 0), card_opt(BENCH, 0)], context=ATTACH_FROM,
+                      current=state(active=poke(700, hp=30), bench=[poke(800, hp=110)],
+                                    opp_active=poke(900, hp=160)))
+    assert pilot.decide(obs) == [1]   # attach to the Bench successor, not the doomed Active
+    assert "dont-feed-the-doomed" in _fired(pilot.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0010")
+def test_use_acceleration_prioritizes_an_energy_accel_card():
+    # A card tagged `energy_accel` multiplies your one manual attach — tempo-positive for any deck.
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                  functions=CardFunctions({222: ["energy_accel"]}))
+    # opt0 -> card 111 (untagged), opt1 -> card 222 (energy_accel): use-acceleration lifts opt1.
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], current=state(hand=[111, 222]))
+    assert pilot.decide(obs) == [1]
+    assert "use-acceleration" in _fired(pilot.explain(obs).options[1])
+
+
+@pytest.mark.req("REQ-GEN-0008")
+def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
+    OPENER = 666
+    mull = make_select([opt(YES), opt(NO)], context=MULLIGAN, current=state(hand=[OPENER]))
+
+    # an `opener` Function Tag in hand -> keep (No), don't redraw and hand the opponent a card.
+    by_tag = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                   functions=CardFunctions({OPENER: ["opener"]}))
+    assert by_tag.decide(mull) == [1]
+    assert "keep-a-startable-hand" in _fired(by_tag.explain(mull).options[0])
+
+    # the `starter` Role alone (no card_functions.json) -> still keeps: survives the A/B toggle.
+    by_role = Pilot(Strategy(roles={OPENER: ["starter"]}), deck=[1] * 60,
+                    general_strategy=GENERAL_STRATEGY)
+    assert by_role.decide(mull) == [1]
+
+    # neither signal -> ungoverned, defaults to the redraw blunder.
+    baseline = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+    assert baseline.decide(mull) == [0]
+
+
+@pytest.mark.req("REQ-GEN-0007")
+def test_power_up_attacker_attaches_energy_rather_than_passing():
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+    # SETUP, options = [attach an Energy, a do-nothing play]. Attaching must win: power-up-attacker
+    # (+15) overcomes attach-energy-last (-5) so a plain attachment nets positive (the blunder fix).
+    obs = make_select([opt(ATTACH), opt(PLAY)], current=state())   # state() -> SETUP
+    assert pilot.decide(obs) == [0]
+    assert "power-up-attacker" in _fired(pilot.explain(obs).options[0])
+
+
 @pytest.mark.req("REQ-GEN-0006")
 def test_build_before_attack_penalizes_a_nonlethal_attack_in_setup():
     stats = DictCardStatProvider({900: CardStat(900, hp=200)})
     ATK = 11
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, attacks={ATK: 50})
-    # SETUP (no win-con ready): a non-lethal attack (50 vs 200 HP) -> develop instead.
+    # SETUP (no win-con ready): a weak non-lethal attack (50 vs 200 HP) -> develop instead.
     nonlethal = make_select([attack_opt(ATK)], context=MAIN,
                             current=state(active=poke(700), opp_active=poke(900, hp=200)))
     assert "build-before-attack" in _fired(pilot.explain(nonlethal).options[0])
@@ -85,3 +148,16 @@ def test_build_before_attack_penalizes_a_nonlethal_attack_in_setup():
     lethal = make_select([attack_opt(ATK)], context=MAIN,
                          current=state(active=poke(700), opp_active=poke(900, hp=40)))
     assert "build-before-attack" not in _fired(pilot.explain(lethal).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0009")
+def test_build_before_attack_allows_a_high_value_sub_ko_attack():
+    # Jetting Blow prints 120 into a 330-HP wall: not a KO, but well worth taking. The value-gate
+    # must let it through — only genuinely weak chip (below the floor) is suppressed during setup.
+    stats = DictCardStatProvider({1031: CardStat(1031, hp=330)})
+    ATK = 11
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                  stats=stats, attacks={ATK: 120})
+    strong = make_select([attack_opt(ATK)], context=MAIN,
+                         current=state(active=poke(700), opp_active=poke(1031, hp=330)))
+    assert "build-before-attack" not in _fired(pilot.explain(strong).options[0])

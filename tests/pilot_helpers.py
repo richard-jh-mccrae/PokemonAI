@@ -6,10 +6,11 @@ native lib. Mirrors `scouting_helpers`.
 """
 from __future__ import annotations
 
-# AreaType / OptionType / SelectContext values (see my_submissions/cg/api.py).
+# AreaType / OptionType / SelectContext values (see src/cg/api.py).
 HAND, ACTIVE, BENCH = 2, 4, 5
 CARD, PLAY, ATTACH, ATTACK = 3, 7, 8, 13
-MAIN, SETUP_ACTIVE = 0, 1
+YES, NO = 1, 2
+MAIN, SETUP_ACTIVE, ATTACH_FROM, MULLIGAN = 0, 1, 21, 42
 
 
 def opt(type: int = PLAY, **kw) -> dict:

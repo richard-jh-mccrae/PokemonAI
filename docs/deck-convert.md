@@ -11,7 +11,7 @@ python tools/deck_convert.py to-csv <deck.txt> <dir-name> [--force]
 python tools/deck_convert.py to-txt <deck.csv> [-o out.txt]
 ```
 
-`to-csv` writes `my_submissions/agents/<dir-name>/deck.csv` (60 ids, sorted — same
+`to-csv` writes `src/agents/<dir-name>/deck.csv` (60 ids, sorted — same
 format as `deck_stealer`); attach your own `main.py` to run/package it. `to-txt`
 prints to stdout by default.
 

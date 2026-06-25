@@ -4,7 +4,7 @@ from conftest import FIXTURES
 from meta_tracker.parse import load_replay
 from train.blunder.correction import build_correction
 from train.blunder.decisions import iter_decisions
-from train.blunder.store import append_correction, load_corrections
+from train.blunder.store import append_correction, delete_correction, load_corrections
 
 FIXTURE = FIXTURES / "episode-81364540-replay.json.gz"
 
@@ -35,3 +35,14 @@ def test_append_grows_log_without_clobbering(tmp_path):
 def test_load_missing_file_is_empty(tmp_path):
     """REQ-BLUNDER-0006: loading a non-existent log yields an empty list, not an error."""
     assert load_corrections(tmp_path / "nope.jsonl") == []
+
+
+def test_delete_correction_removes_by_id(tmp_path):
+    """REQ-BLUNDER-0013: a logged Correction can be removed by id (review list edit/remove)."""
+    path = tmp_path / "corrections.jsonl"
+    a, b = _corr("missed_win"), _corr("overextension")
+    append_correction(a, path)
+    append_correction(b, path)
+    removed = delete_correction(a.id, path)
+    left = load_corrections(path)
+    assert removed == 1 and [c.category for c in left] == ["overextension"]

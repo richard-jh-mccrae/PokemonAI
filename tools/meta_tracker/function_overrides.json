@@ -6,6 +6,7 @@
   "112":  ["heal", "spread"],
   "344":  ["search"],
   "353":  ["search"],
+  "666":  ["opener"],
   "721":  ["recycle"],
   "756":  ["stall"],
   "1071": ["search", "stall"],

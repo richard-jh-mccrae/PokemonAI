@@ -1,6 +1,6 @@
 """Dump the engine's card pool to a portable JSON cache.
 
-Loads card + attack tables from the native `cg` engine (in `my_submissions/cg`)
+Loads card + attack tables from the native `cg` engine (in `src/cg`)
 and writes `cards.json` next to this file. The rest of meta_tracker reads that
 JSON, so the pipeline and tests never need the native library at runtime.
 
@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "cards.json"
 
-# CardType / EnergyType enum value -> label (see my_submissions/cg/api.py).
+# CardType / EnergyType enum value -> label (see src/cg/api.py).
 CATEGORY = {0: "pokemon", 1: "item", 2: "tool", 3: "supporter",
             4: "stadium", 5: "basic_energy", 6: "special_energy"}
 ENERGY = {0: "colorless", 1: "grass", 2: "fire", 3: "water", 4: "lightning",
@@ -37,7 +37,7 @@ def stage_of(c) -> str | None:
 
 
 def main() -> None:
-    sys.path.insert(0, str(REPO / "my_submissions"))
+    sys.path.insert(0, str(REPO / "src"))
     from cg.api import all_attack, all_card_data  # noqa: E402
 
     attacks_by_id = {a.attackId: {"name": a.name, "damage": int(a.damage),

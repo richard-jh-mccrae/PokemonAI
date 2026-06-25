@@ -7,7 +7,12 @@ from common.strategy import Hypothesis, Plan, Strategy
 
 # OptionType values (cg/api.py): playing a card from hand / attaching a card to a Pokémon.
 _PLAY, _ATTACH = 7, 8
+_YES = 1            # OptionType.YES — the "redraw the cards?" affirmative at a Mulligan select
+_MULLIGAN = 42      # SelectContext.MULLIGAN ("Would you like to redraw the cards?")
+_ATTACH_FROM = 21   # SelectContext.ATTACH_FROM — choose the Pokémon to attach an Energy to
+_ACTIVE = 4         # AreaType.ACTIVE
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
+_CHIP_CEILING = 100  # build-before-attack suppresses only attacks weaker than this (docs/weights.md)
 
 
 def _multi_prize(stat) -> bool:
@@ -43,12 +48,43 @@ HYPOTHESES = [
         when=lambda c: c.board.my_bench == 0 and c.option_type == _PLAY and _is_pokemon(c.stat),
         weight=60, status="assumed"),
     Hypothesis(
+        id="keep-a-startable-hand",
+        rationale="Don't mulligan away a hand you can already start — if a Pokémon in hand can "
+                  "take the Active Spot (a Basic, or one whose Ability lets it open, like "
+                  "Explosiveness), keep it rather than redraw and give the opponent a free card.",
+        when=lambda c: c.select_context == _MULLIGAN and c.option_type == _YES
+        and c.board.hand_startable,
+        weight=-40, status="assumed"),
+    Hypothesis(
+        id="power-up-attacker",
+        rationale="Attach an Energy every turn — building energy toward an attack is the core "
+                  "tempo of the game; without a steady stream of attachments your attackers never "
+                  "come online. (Sequenced after draw/search by attach-energy-last, but it still "
+                  "happens.)",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _ATTACH,
+        weight=15, status="assumed"),
+    Hypothesis(
         id="attach-energy-last",
         rationale="Attach Energy late in the turn — it is the one irreversible setup action, so "
                   "play your draw, search and development first to reveal the best target before "
                   "committing.",
         when=lambda c: c.plan == Plan.SETUP and c.option_type == _ATTACH,
         weight=-5, status="assumed"),
+    Hypothesis(
+        id="use-acceleration",
+        rationale="Energy acceleration multiplies your one manual attachment per turn — getting "
+                  "attackers online faster is tempo-positive for any deck, so prioritise playing "
+                  "your acceleration.",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and "energy_accel" in c.tags,
+        weight=25, status="assumed"),
+    Hypothesis(
+        id="dont-feed-the-doomed",
+        rationale="If your Active will be Knocked Out next turn and you have a benched Pokémon, "
+                  "don't sink this Energy into the doomed Active — attach to the successor instead "
+                  "so you aren't rebuilding from nothing after it falls.",
+        when=lambda c: c.select_context == _ATTACH_FROM and c.option_area == _ACTIVE
+        and c.board.active_doomed and c.board.my_bench > 0,
+        weight=-30, status="assumed"),
     Hypothesis(
         id="pre-position-attacker",
         rationale="While racing, keep developing the next attacker on the Bench so a Knocked-Out "
@@ -57,10 +93,11 @@ HYPOTHESES = [
         weight=25, status="assumed"),
     Hypothesis(
         id="build-before-attack",
-        rationale="During setup, don't waste the turn chipping with a non-lethal attack — your "
-                  "turn ends when you attack, so develop your board instead unless the attack "
-                  "scores a knockout.",
-        when=lambda c: c.plan == Plan.SETUP and c.is_attack and not c.is_ko,
+        rationale="During setup, don't end your turn chipping with a weak attack (below a "
+                  "meaningful-damage floor) — your turn ends when you attack, so develop your "
+                  "board instead unless the attack scores a knockout or real damage.",
+        when=lambda c: c.plan == Plan.SETUP and c.is_attack and not c.is_ko
+        and c.tactical < _CHIP_CEILING,
         weight=-20, status="assumed"),
 ]
 

@@ -34,15 +34,16 @@ def test_build_correction_embeds_snapshot_and_judgment():
     assert len(corr.decision["options"]) == len(d.options)
 
 
-def test_correct_must_be_legal_and_differ_from_chosen():
-    """REQ-BLUNDER-0004: `correct` must index real option positions and not equal `chosen`."""
-    d = _a_main_decision()                             # positions 0..4, chosen [1]
+def test_correct_must_be_legal_option_positions():
+    """REQ-BLUNDER-0004: `correct` must index real option positions (the film's raw
+    `selected` is not a reliable option-position, so we don't compare against it)."""
+    d = _a_main_decision()                             # positions 0..4
     with pytest.raises(ValueError):
         build_correction(d, source="own", agent="x", correct=[9],
                          category="missed_win", rationale="r")          # out of range
     with pytest.raises(ValueError):
-        build_correction(d, source="own", agent="x", correct=list(d.chosen),
-                         category="missed_win", rationale="r")          # == chosen
+        build_correction(d, source="own", agent="x", correct=[],
+                         category="missed_win", rationale="r")          # empty
 
 
 def test_category_must_be_in_vocab():
@@ -77,3 +78,16 @@ def test_peer_source_supported_and_bad_source_rejected():
     with pytest.raises(ValueError):
         build_correction(d, source="enemy", agent="x", correct=[4],
                          category="bad_target", rationale="r")
+
+
+def test_corrections_have_unique_ids_and_legacy_records_get_stable_ids():
+    """REQ-BLUNDER-0013: every Correction has a unique id; records saved before ids
+    existed get a stable, deterministic id on load (so they can be edited/removed)."""
+    d = _a_main_decision()
+    a = build_correction(d, source="own", agent="x", correct=[4], category="missed_win", rationale="r")
+    b = build_correction(d, source="own", agent="x", correct=[4], category="missed_win", rationale="r")
+    assert a.id and b.id and a.id != b.id
+
+    legacy = a.to_dict(); legacy.pop("id")                 # simulate a pre-id record
+    assert Correction.from_dict(dict(legacy)).id == Correction.from_dict(dict(legacy)).id  # stable
+    assert Correction.from_dict(dict(legacy)).id           # non-empty

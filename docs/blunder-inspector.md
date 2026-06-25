@@ -1,8 +1,8 @@
 # Blunder inspector (`tools/train/blunder/`)
 
 Offline tool to step through a replay in the **official cabt viewer**, tag a Decision as a
-blunder, and emit a **Correction** — curated training signal for Job A weight-tuning
-([ADR-0009](adr/0009-training-methodology.md)). Trends across submissions surface what our
+blunder, and emit a **Correction** — curated training signal consumed by the
+[Blunder Tuner](blunder-tuner.md) (Job A, [ADR-0009](adr/0009-training-methodology.md)). Trends across submissions surface what our
 agents get wrong over the competition. See the [Training context](../tools/train/CONTEXT.md),
 [ADR-0014](adr/0014-blunder-inspector-viewer-engine.md) (viewer), and
 [ADR-0015](adr/0015-correction-schema.md) (schema).
@@ -39,9 +39,23 @@ python tools/train/blunder/viewer/build.py     # clones kaggle-environments, pnp
 ```
 
 The build inlines everything into a single self-contained `dist/index.html` (~600 KB) via
-`vite:singlefile`, so it runs with no server-side assets. **Offline caveat:** the only
-external reference is a Google Fonts stylesheet for toolbar *icon glyphs* — the board and
-cards render fully offline; without internet the toolbar icons fall back to text.
+`vite:singlefile`, so it runs with no server-side assets.
+
+**Two viewers (see [ADR-0014](adr/0014-blunder-inspector-viewer-engine.md) amendment):**
+- The vendored OSS board is **plain** (text + lines, no card art) but **offline** — the iframe default.
+- The **colorful** dynamic viewer (as shown online) is a **HEROZ-hosted, online-only** web
+  app (`ptcgvis.heroz.jp`); the shell's **🎨 colorful** button POSTs the replay to it
+  (embedded in the iframe if HEROZ allows framing, else a new tab). HEROZ's page is
+  cross-origin, so you tag in the side panel — which indexes frames by the **same step
+  `X / N`** the viewer shows (read the step from the viewer, type it in the panel, land on
+  the exact frame). The panel's "engine selected" mirrors the viewer's "Selected Action":
+  the film records a select's choice in the **next** frame (offset +1), which the code
+  accounts for, so `chosen` is a valid option position. You read the move in the colorful
+  viewer and pick the **correct** move from the panel's option list.
+- An **"Analyze as"** selector (P0 / P1 / both self-play) picks which seat is *us*: it flips
+  the viewer's perspective and auto-labels each saved blunder **own** (your agent + submission)
+  or **peer** (the opponent's team name) from the frame's acting seat — so both players'
+  blunders are taggable in one pass.
 
 ## Run
 

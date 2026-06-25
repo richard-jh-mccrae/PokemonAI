@@ -26,7 +26,24 @@ shell drives navigation, it always knows the current step being tagged.
 **Consequences.** Introduces a **one-time Node/pnpm build + a vendored JS bundle into an
 otherwise Python-only repo** — a deliberate deviation (Node v24 + corepack are present
 locally). The viewer is **pinned to the env version**; bumping `kaggle-environments` means
-re-vendoring. Offline use is guaranteed once vendored (no CDN, no network). The
-`postMessage` contract with `@kaggle-environments/core` is an external dependency to be
-resolved at build time; if the viewer does not emit its current step, the shell still knows
-it because the shell is the navigation authority.
+re-vendoring. The shell feeds the replay via `postMessage({replay})` (contract confirmed in
+`@kaggle-environments/core`); the shell is the navigation authority.
+
+## Amendment (corrected after building): two viewers, only one is offline
+
+The premise that vendoring yields a *pixel-identical-to-online* viewer was **wrong**. The
+OSS `visualizer/default` is a **plain canvas board** (text + lines, no card art). The
+colorful dynamic viewer shown online is a **separate, closed, HEROZ-hosted web app**
+(`https://ptcgvis.heroz.jp/Visualizer/Replay/<EpisodeId>/<seat>`); the OSS board merely
+renders "Open Visualizer" buttons that **POST the replay JSON** to it. So:
+
+- **Offline** = the vendored plain board (no card art).
+- **Colorful, "as online"** = HEROZ-hosted, **online-only**, opened via form POST (works on
+  *any* replay — own/peer/local — since the data travels in the POST body).
+
+The shell surfaces a **colorful** action (embed in the iframe if HEROZ permits framing,
+else new tab). HEROZ's page is **cross-origin**, so tagging cannot be injected into it and
+its current step cannot be read — the user reads the colorful viewer and tags the matching
+**Decision** in our panel (correlated by turn/frame/context). The strict-offline requirement
+and the colorful viewer are therefore **mutually exclusive**; the tool keeps the plain board
+as the offline default and the colorful viewer one click away.

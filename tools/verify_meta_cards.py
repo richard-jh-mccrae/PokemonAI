@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))                          # meta_tracker
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "my_submissions"))   # cg (lazy)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (lazy)
 
 from meta_tracker.cards import load_cards                  # noqa: E402
 from meta_tracker.function_audit import audit_card         # noqa: E402
@@ -29,7 +29,7 @@ from meta_tracker.meta_usage import rank_card_usage        # noqa: E402
 from meta_tracker.store import connect, load_episodes      # noqa: E402
 
 DEFAULT_TABLE = (Path(__file__).resolve().parents[1]
-                 / "my_submissions" / "common" / "card_functions.json")
+                 / "src" / "common" / "card_functions.json")
 _BAND_WEIGHTS = {"Elite": 3, "High": 2, "Mid": 1}   # weight the meta-defining tiers
 
 

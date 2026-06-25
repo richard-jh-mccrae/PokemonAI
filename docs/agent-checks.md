@@ -10,7 +10,7 @@ Driven by the **real** cabt simulator (`kaggle-environments`) — see
 
 `tools/sim/check_agent.py` runs these in order, stopping at the first failure:
 
-1. **contents** — the source agent dir (`my_submissions/agents/<name>/`) has `main.py` + `deck.csv`.
+1. **contents** — the source agent dir (`src/agents/<name>/`) has `main.py` + `deck.csv`.
 2. **legality** — `deck.csv` is exactly 60 integer rows and the engine accepts it; the precise
    rule is reported (invalid id / >4 copies / no Basic Pokémon / >1 ACE SPEC).
 3. **playability** — the agent plays itself 5 times on the cabt engine; every seat must finish

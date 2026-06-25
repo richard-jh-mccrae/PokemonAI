@@ -12,7 +12,7 @@ from .correction import Correction, build_correction
 from .decisions import Decision, iter_decisions
 from .decode import option_label
 from .seats import detect_seat
-from .store import DEFAULT_PATH, append_correction
+from .store import DEFAULT_PATH, append_correction, load_corrections
 
 
 def _labeled_options(decision: Decision) -> list[dict]:
@@ -21,7 +21,11 @@ def _labeled_options(decision: Decision) -> list[dict]:
 
 
 def _labels_for(decision: Decision, positions: list[int]) -> str:
-    return ", ".join(option_label(decision.options[i], decision.current) for i in positions)
+    # The film's `selected` is not always a clean option-position (engine quirk; e.g.
+    # Count/Card selects), so label only the in-range positions and skip the rest.
+    n = len(decision.options)
+    return ", ".join(option_label(decision.options[i], decision.current)
+                     for i in positions if isinstance(i, int) and 0 <= i < n)
 
 
 def decisions_payload(replay: dict, our_team: str | None = None) -> dict:
@@ -42,6 +46,64 @@ def decisions_payload(replay: dict, our_team: str | None = None) -> dict:
             for d in decisions
         ],
     }
+
+
+def _film(replay: dict) -> list[dict]:
+    steps = replay.get("steps") or []
+    return (steps[0][0].get("visualize") or []) if steps and steps[0] else []
+
+
+def frames_payload(replay: dict, our_team: str | None = None) -> dict:
+    """Every film frame, numbered like HEROZ's stepper (1-based ``step`` of ``total``).
+
+    Each frame carries its 0-based ``frame`` (used when POSTing a tag), ``turn``,
+    ``context``, a ``selected_label`` (mirrors the viewer's "Selected Action"), and --
+    for taggable frames (those that are real Decisions) -- the labeled ``options``.
+    """
+    info = replay.get("info") or {}
+    film = _film(replay)
+    by_frame: dict[int, Decision] = {d.frame: d for d in iter_decisions(replay)}
+
+    frames = []
+    for idx, raw in enumerate(film):
+        select = raw.get("select") or {}
+        current = raw.get("current") or {}
+        decision = by_frame.get(idx)
+        if decision is not None:
+            options = _labeled_options(decision)
+            chosen = decision.chosen
+            selected_label = _labels_for(decision, decision.chosen)
+        else:
+            options, chosen, selected_label = [], (raw.get("selected") or []), ""
+        frames.append({
+            "step": idx + 1, "frame": idx,
+            "turn": current.get("turn"), "seat": current.get("yourIndex"),
+            "context": select.get("context"), "type": select.get("type"),
+            "taggable": decision is not None,
+            "chosen": chosen, "selected_label": selected_label, "options": options,
+        })
+
+    return {
+        "episode_id": info.get("EpisodeId"), "team_names": info.get("TeamNames"),
+        "seat": detect_seat(replay, our_team) if our_team else None,
+        "total": len(film), "frames": frames,
+    }
+
+
+def list_corrections(replay: dict, store_path: Path | str = DEFAULT_PATH) -> list[dict]:
+    """The Corrections already logged for THIS replay's episode -- the review list."""
+    episode_id = (replay.get("info") or {}).get("EpisodeId")
+    out = []
+    for c in load_corrections(store_path):
+        if c.episode_id != episode_id:
+            continue
+        frame = c.decision.get("frame")
+        out.append({
+            "id": c.id, "frame": frame, "step": (frame or 0) + 1, "turn": c.decision.get("turn"),
+            "seat": c.seat, "source": c.source, "category": c.category,
+            "correct": c.correct, "correct_label": c.correct_label, "rationale": c.rationale,
+        })
+    return out
 
 
 def record_correction(

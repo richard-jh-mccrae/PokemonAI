@@ -9,7 +9,7 @@ rather than a stand-in. See [ADR-0010](../../docs/adr/0010-local-agent-verificat
 Consumes the **Bundle** assembled by `package_agent`
 ([ADR-0004](../../docs/adr/0004-shared-common-packaged-per-submission.md)) and the agent
 vocabulary (**Pilot**, **Strategy**) from the
-[Agent Runtime](../../my_submissions/common/CONTEXT.md) context.
+[Agent Runtime](../../src/common/CONTEXT.md) context.
 
 ## Language
 

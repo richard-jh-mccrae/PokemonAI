@@ -259,7 +259,7 @@ _EVO_DATA = None          # lazy {cardId: {name, evolvesFrom, stage1, stage2}}
 def _cg_on_path():
     import sys
     from pathlib import Path
-    ms = str(Path(__file__).resolve().parents[2] / "my_submissions")
+    ms = str(Path(__file__).resolve().parents[2] / "src")
     if ms not in sys.path:
         sys.path.insert(0, ms)
 

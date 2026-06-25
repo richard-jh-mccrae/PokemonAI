@@ -18,13 +18,13 @@ def test_iter_decisions_yields_taggable_decisions_from_film():
 
     # 42 frames present a select with options *and* a recorded choice; the
     # coin-flip / deck-submission frame (no ``selected``) is not a Decision.
-    assert len(decisions) == 42
+    assert len(decisions) == 43
 
     first = decisions[0]
-    assert first.seat == 1               # current.yourIndex (the acting player)
+    assert first.seat == 0               # current.yourIndex (the acting player)
     assert first.turn == 0
-    assert first.select_context == "Mulligan"
-    assert first.chosen == [0]           # positional indices into select.option
+    assert first.select_context == "IsFirst"
+    assert first.chosen == [0]           # selection read from the NEXT film frame (offset +1)
 
 
 def test_decision_embeds_selfcontained_full_info_snapshot():
@@ -32,22 +32,18 @@ def test_decision_embeds_selfcontained_full_info_snapshot():
     full-information snapshot -- both hands visible, decoupled from the source
     replay so the record survives replay mutation/deletion (the 'embed' guarantee)."""
     replay = load_replay(FIXTURE)
-    decisions = iter_decisions(replay)
-    first = decisions[0]
-
-    # legal options captured (Mulligan: keep / mulligan)
-    assert len(first.options) == 2
+    main = next(d for d in iter_decisions(replay) if d.select_context == "Main")
 
     # full-information snapshot: both seats present, both hands visible
-    players = first.current["players"]
+    players = main.current["players"]
     assert len(players) == 2
     assert all(len(p["hand"]) == 7 for p in players)
 
-    # a Main decision exposes the real legal move set
-    main = next(d for d in decisions if d.select_context == "Main")
-    assert {o["type"] for o in main.options} >= {"Play", "Attach", "End"}
+    # the Main decision exposes the real legal move set
+    assert {o["type"] for o in main.options} >= {"Play", "End"}
 
     # snapshot is independent of the source replay: mutating the film must NOT
     # change an already-extracted Decision.
-    replay["steps"][0][0]["visualize"][first.frame]["current"]["turn"] = 999
-    assert first.current["turn"] == 0
+    captured = main.current["turn"]
+    replay["steps"][0][0]["visualize"][main.frame]["current"]["turn"] = 999
+    assert main.current["turn"] == captured

@@ -21,12 +21,12 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))                          # meta_tracker
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "my_submissions"))   # cg (lazy)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (lazy)
 
 from meta_tracker.function_audit import audit_card  # noqa: E402
 
 DEFAULT_TABLE = (Path(__file__).resolve().parents[1]
-                 / "my_submissions" / "common" / "card_functions.json")
+                 / "src" / "common" / "card_functions.json")
 
 
 def _card_texts() -> dict[int, tuple[str, str]]:

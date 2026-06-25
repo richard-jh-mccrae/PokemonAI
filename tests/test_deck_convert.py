@@ -64,9 +64,11 @@ def test_ambiguous_card_is_a_problem():
 
 @req
 def test_real_limitless_deck_hard_fails_on_absent_card(tmp_path):
+    src = REPO / "data" / "decks" / "limitless_dragpult.txt"
+    if not src.exists():
+        pytest.skip("needs local Limitless decklist; data/ is gitignored")  # not on a clean checkout/CI
     with pytest.raises(ConvertError) as e:
-        convert_to_csv(REPO / "data" / "decks" / "limitless_dragpult.txt",
-                       "x", dest_root=tmp_path)
+        convert_to_csv(src, "x", dest_root=tmp_path)
     assert any("Special Red Card" in p for p in e.value.problems)
     assert not (tmp_path / "x").exists()                         # nothing written on failure
 
@@ -135,7 +137,7 @@ def test_round_trip_preserves_multiset():
 @req
 def test_to_csv_writes_sorted_legal_deck(tmp_path):
     src = sorted(int(x) for x in
-                 (REPO / "my_submissions" / "agents" / "mega_starmie" / "deck.csv")
+                 (REPO / "src" / "agents" / "mega_starmie" / "deck.csv")
                  .read_text().split())
     txt = tmp_path / "d.txt"
     txt.write_text(render_txt(src), encoding="utf-8")
