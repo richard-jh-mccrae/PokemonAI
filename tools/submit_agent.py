@@ -29,7 +29,15 @@ def _common(p: argparse.ArgumentParser) -> None:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Build/submit a Submission (ADR-0019)")
+    ap = argparse.ArgumentParser(
+        description="Build/submit a Submission (ADR-0019). <agent> is a directory under src/agents/.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "examples:\n"
+            "  python tools/submit_agent.py build   mega_starmie [--label L] [--submission-id N]\n"
+            "  python tools/submit_agent.py submit  mega_starmie [--label L] [--allow-dirty]\n"
+            "  python tools/submit_agent.py collect 1 --replays data/replays/\n"
+            "  python tools/submit_agent.py dashboard\n"))
     sub = ap.add_subparsers(dest="cmd", required=True)
     _common(sub.add_parser("build", help="package + record (never uploads)"))
     s = sub.add_parser("submit", help="gated upload to the Simulation competition")
