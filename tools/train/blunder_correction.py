@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools"))
-sys.path.insert(0, str(REPO / "my_submissions"))
+sys.path.insert(0, str(REPO / "src"))
 
 from meta_tracker.parse import load_replay  # noqa: E402
 from train.blunder.shell import serve  # noqa: E402

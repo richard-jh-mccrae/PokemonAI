@@ -1,7 +1,7 @@
 # General Strategy — the deck-agnostic doctrine
 
 The **General Strategy** is the shared baseline of decision rules every deck plays *beneath* its
-own [Strategy](../my_submissions/common/CONTEXT.md). It is a registry of weighted, testable
+own [Strategy](../src/common/CONTEXT.md). It is a registry of weighted, testable
 **Hypotheses** ([agent-architecture.md](agent-architecture.md)) keyed on **universal** signals —
 [Function Tags](card-functions.md) (what a card *does*), engine card stats (HP, weakness, prize
 value), and a per-decision **board** summary — so a brand-new deck already plays competent
@@ -11,11 +11,31 @@ disables any rule by overriding its weight **by id** (learned from replays/train
 hand-authored — [ADR-0009](adr/0009-training-methodology.md)). Weights are seeds on the
 [weight scale](weights.md), to be ladder-tuned.
 
-Source: `my_submissions/common/general_strategy.py` (positional hypotheses) and the Tactical
+Source: `src/common/general_strategy.py` (positional hypotheses) and the Tactical
 Evaluator in `common/pilot.py` (combat). Each Hypothesis carries a plain-English `rationale`
 (surfaced to users in the decision trace, `Pilot.explain`) and a `status`
 (`assumed → testing → confirmed / refuted`). Heuristics are grounded in competitive Pokémon TCG
 theory — see the [Bibliography](#bibliography).
+
+**Energy attachment** is a layered, deck-overridable procedure of its own
+([ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)): the general rules below
+(`power-up-attacker`, `use-acceleration`, `dont-feed-the-doomed`, `attach-energy-last`) read deck
+*roles* and engine *stats*, never hand-authored numbers. Readiness (the `SETUP → RACE` flip) is
+**engine-derived** — a Line's `ready.energy` defaults to `None`, so "online" is the payoff's
+cheapest attack cost (`CardStat.minAttackCost`): Mega Starmie ex is online at 1 W (Jetting Blow),
+not the 3 of Nebula Beam.
+
+## Opening
+
+### `keep-a-startable-hand` · weight −40 · status: assumed
+> Don't mulligan away a hand you can already start — if a Pokémon in hand can take the Active Spot
+> (a Basic, or one whose Ability lets it open, like Explosiveness), keep it rather than redraw and
+> give the opponent a free card.
+
+**Reads:** at a `MULLIGAN` select (no Basic in hand → "redraw?"), penalises the **redraw** option
+when the hand holds an `opener`-tagged card (Explosiveness — [card-functions.md](card-functions.md))
+**or** a `starter`-Role card. The role branch makes the keep survive a `card_functions.json` A/B
+toggle. **Source:** F7 — Rulebook (the mulligan rule); the card's own Ability text.
 
 ## Setup & sequencing
 
@@ -33,12 +53,30 @@ theory — see the [Bibliography](#bibliography).
 **Reads:** option is an `ATTACH`. **Fires:** `SETUP`. **Source:** F12 — JustInBasil (Damage:
 "once it's on a Pokémon, it's stuck there").
 
-### `build-before-attack` · weight −20 · status: assumed
-> During setup, don't waste the turn chipping with a non-lethal attack — your turn ends when you
-> attack, so develop your board instead unless the attack scores a knockout.
+### `power-up-attacker` · weight 15 · status: assumed
+> Attach an Energy every turn — building energy toward an attack is the core tempo of the game;
+> without a steady stream of attachments your attackers never come online.
 
-**Reads:** option is an attack that is **not** a KO (`is_attack & !is_ko`). **Fires:** `SETUP`.
-**Source:** F6 — Bulbapedia (*Attack*: using an attack ends your turn).
+**Reads:** option is an `ATTACH`. **Fires:** `SETUP` / `RACE`. The positive driver that makes the
+agent actually attach — it nets `+10` against `attach-energy-last`'s `−5`, so plain Energy gets
+played (sequenced after draw/search, but played). **Source:** F12 — JustInBasil (Deck Strategy).
+
+### `use-acceleration` · weight 25 · status: assumed
+> Energy acceleration multiplies your one manual attachment per turn — getting attackers online
+> faster is tempo-positive for any deck, so prioritise playing your acceleration.
+
+**Reads:** the option card's `energy_accel` Function Tag. **Fires:** `SETUP` / `RACE`. The universal
+form of a deck's `accel_source` rule. **Source:** F12 / F14 — JustInBasil (Consistency / Deck Strategy).
+
+### `build-before-attack` · weight −20 · status: assumed
+> During setup, don't end your turn chipping with a weak attack (below a meaningful-damage floor) —
+> your turn ends when you attack, so develop your board instead unless the attack scores a knockout
+> or real damage.
+
+**Reads:** an attack in `SETUP` whose Tactical value is below the chip floor
+(`is_attack & !is_ko & tactical < 100`) — a *value*-gate, so a strong sub-KO attack (Jetting Blow's
+120 + 50 snipe) is **not** suppressed, only genuine chip. **Source:** F6 — Bulbapedia (*Attack*:
+using an attack ends your turn).
 
 ## Bench development & prize liability
 
@@ -65,6 +103,17 @@ Attackers).
 **Reads:** a `PLAY` of a Pokémon. **Fires:** `RACE` (aggression). **Source:** F14 — JustInBasil
 (Deck Strategy: maintain a stream of attackers).
 
+### `dont-feed-the-doomed` · weight −30 · status: assumed
+> If your Active will be Knocked Out next turn and you have a benched Pokémon, don't sink this
+> Energy into the doomed Active — attach to the successor instead so you aren't rebuilding from
+> nothing after it falls.
+
+**Reads:** at an `ATTACH_FROM` select, penalises attaching to my **Active** (`option_area`) when the
+board's **incoming-KO** estimate fires (the opponent's biggest attack, doubled on my Active's
+Weakness, ≥ my Active's remaining HP) **and** I have a Bench. The threat estimate is closed-form off
+engine stats (`maxDamage` / `weakness` / HP); attack-affordability is a future refinement.
+**Source:** F8 / F14 — TCG Protectors (Prize Trade); JustInBasil (Secondary Attackers).
+
 ## Combat (Tactical Evaluator)
 
 These live in the Search-backed Tactical Evaluator, not as positional weights — they score
@@ -88,6 +137,11 @@ mapping; see below.) **Source:** F1 / F3 — TCG Protectors (Prize Trade); JustI
 |---|---|---|
 | `gust-the-damaged` — gust an *already-damaged* benched opponent into a KO (chip → prize) | opponent-bench targeting, i.e. **Posture** ([scouting.md](scouting.md)) + the gust option's target | F9 — JustInBasil (Gusting) |
 | HP-/damage-boost "crosses an OHKO line" | a damage/HP **breakpoint model** + meta stat table | F10 / F11 — JustInBasil (Damage) |
+
+A first **closed-form breakpoint** has landed — `Board.active_doomed` (the opponent's biggest attack,
+weakness-doubled, vs my Active's remaining HP), consumed by `dont-feed-the-doomed`. The same estimate
+seeds `gust-the-damaged` and the OHKO-line damage-boost rules once attack-affordability and
+opponent-Bench targeting are wired ([ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)).
 
 ## Not a reflex weight — handled elsewhere
 

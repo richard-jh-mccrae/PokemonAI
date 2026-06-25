@@ -7,7 +7,7 @@ not (set, number) — see ADR-0013. Energy basics are mapped by element
 and straight/curly apostrophes.
 
 `to-csv` resolves every line, asserts the 5 deck-construction rules, and writes
-`my_submissions/agents/<name>/deck.csv` only if *everything* passes (hard-fail,
+`src/agents/<name>/deck.csv` only if *everything* passes (hard-fail,
 see ADR-0013). `to-txt` renders a deck.csv back to a Limitless-style .txt.
 
 Usage:
@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO / "tools"))  # make `meta_tracker` importable
 
 from meta_tracker.cards import load_cards, stage_rank  # noqa: E402
 
-AGENTS = REPO / "my_submissions" / "agents"
+AGENTS = REPO / "src" / "agents"
 EN_CSV = REPO / "data" / "EN_Card_Data.csv"
 
 # basic-energy {symbol} -> element name

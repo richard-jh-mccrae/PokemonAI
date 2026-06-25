@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools"))
-sys.path.insert(0, str(REPO / "my_submissions"))
+sys.path.insert(0, str(REPO / "src"))
 
 from train.blunder.report import build_report  # noqa: E402
 from train.blunder.store import DEFAULT_PATH  # noqa: E402

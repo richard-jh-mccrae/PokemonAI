@@ -16,11 +16,12 @@ import json
 import logging
 import os
 import sys
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-MS = REPO / "my_submissions"
+MS = REPO / "src"
 
 
 @dataclass
@@ -142,14 +143,17 @@ def _suppressed_output():
 def _import_make():
     """Import kaggle_environments.make, muting its noisy one-time env discovery.
 
-    Two noise sources: INFO logging (the library resets its own logger to INFO on import,
+    Three noise sources: INFO logging (the library resets its own logger to INFO on import,
     so a plain setLevel loses the race — `logging.disable` is a global override it can't
-    beat) and a native (C++) open_spiel dump to the stderr fd (needs fd-level redirect).
+    beat); a native (C++) open_spiel dump to the stderr fd (needs fd-level redirect); and
+    pydantic Field-deprecation warnings from its werewolf env (Python `warnings`, so neither
+    of the above catches them — needs `catch_warnings`).
     """
     prev_disable = logging.root.manager.disable
     logging.disable(logging.INFO)  # import-time INFO/DEBUG never emits (no text, no per-record errors)
     try:
-        with _suppressed_output():  # fd-level: native open_spiel stderr dump
+        with _suppressed_output(), warnings.catch_warnings():  # fd-level: native open_spiel stderr dump
+            warnings.simplefilter("ignore")  # + ke's import-time warnings (pydantic Field deprecations, …)
             from kaggle_environments import make
     finally:
         logging.disable(prev_disable)
@@ -248,8 +252,10 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
 
 
 def _agent_name(raw: str) -> str:
-    """Accept a bare agent name or a path to its dir; return the bare name."""
-    return Path(raw).name or raw
+    """Accept a bare agent name or a path to its dir (either separator); return the bare name."""
+    # Normalize Windows-style backslashes first: on Linux '\' is a valid filename char, not a
+    # separator, so Path(r"a\b\c").name would return the whole string. Works on both OSes.
+    return Path(str(raw).replace("\\", "/")).name or str(raw)
 
 
 def check_agent(
@@ -287,12 +293,12 @@ def main(argv=None) -> int:
     import argparse
 
     ap = argparse.ArgumentParser(description="Gated Agent Check (see tools/sim/CONTEXT.md, ADR-0010).")
-    ap.add_argument("name", help="agent directory under my_submissions/agents/")
+    ap.add_argument("name", help="agent directory under src/agents/")
     ap.add_argument("--matches", type=int, default=5, help="playability self-play matches")
     ap.add_argument("--no-deployability", action="store_true", help="skip the package/extract/run stage")
     ap.add_argument("--reports", default=str(REPO / "reports"), help="dir for failure replays")
     ap.add_argument("--agents-root", default=None,
-                    help="dir holding agent subdirs (default my_submissions/agents)")
+                    help="dir holding agent subdirs (default src/agents)")
     args = ap.parse_args(argv)
     name = _agent_name(args.name)  # accept a path (e.g. tab-completed) or a bare name
 

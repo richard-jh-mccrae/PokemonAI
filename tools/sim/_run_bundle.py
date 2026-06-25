@@ -2,7 +2,7 @@
 
 Invoked by check_deployability with cwd set to the extracted Bundle. Because it loads
 `cg`/`common`/`main` from the CWD in a fresh interpreter, it verifies the Bundle is
-self-contained (nothing leaks in from my_submissions/). See ADR-0010.
+self-contained (nothing leaks in from src/). See ADR-0010.
 
 Usage: python _run_bundle.py [replay_json_path]
 Prints `STATUSES=<json>`; exits 0 iff both seats finished DONE.

@@ -3,7 +3,7 @@
 ## Contexts
 
 - [Meta Tracker](./CONTEXT.md) — offline daily pipeline; scrapes replays and reports the deck **Meta** per **Rank Band**.
-- [Agent Runtime](./my_submissions/common/CONTEXT.md) — deck-agnostic runtime agent code (`my_submissions/common/`, shared across agents): the **Pilot** decision architecture, the **Base Value Model**, and **Scouting** (recognize the opponent and produce the **Read**).
+- [Agent Runtime](./src/common/CONTEXT.md) — deck-agnostic runtime agent code (`src/common/`, shared across agents): the **Pilot** decision architecture, the **Base Value Model**, and **Scouting** (recognize the opponent and produce the **Read**).
 - [Agent Checks](./tools/sim/CONTEXT.md) — pre-submission harness (`tools/sim/`) that drives the real cabt simulator to verify an agent's **Playability** and **Deployability** before upload.
 - [Training](./tools/train/CONTEXT.md) — offline tooling (`tools/train/`) that turns **Replays** into learning signal; first component is the **blunder inspector** (`blunder_correction`), which emits **Corrections**.
 

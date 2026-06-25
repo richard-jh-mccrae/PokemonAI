@@ -1,11 +1,11 @@
 # Agent Architecture — the Pilot
 
-Deck-agnostic decision engine (`my_submissions/common/`). It turns each engine Observation
+Deck-agnostic decision engine (`src/common/`). It turns each engine Observation
 into a legal move the same way for every deck; a deck contributes only its `deck.csv` and a
 declarative `strategy.py`. Optimised for **legibility** — every decision is explainable —
 because in the Strategy Category the deliverable is the *reasoning*, not the ladder rank.
 
-Glossary: [common/CONTEXT.md](../my_submissions/common/CONTEXT.md). Decisions:
+Glossary: [common/CONTEXT.md](../src/common/CONTEXT.md). Decisions:
 [ADR-0012](adr/0012-optimize-for-strategy-category.md) (optimise for the Strategy Category),
 [ADR-0008](adr/0008-pilot-is-a-layered-rules-pipeline.md) (this pipeline),
 [ADR-0007](adr/0007-learning-is-one-offline-value-model.md) (the value-model seam),
@@ -74,7 +74,7 @@ Strategy(
   tunable `weight`, and a `status` (`assumed → testing → confirmed / refuted`). It is the
   unit the writeup is organised around.
 
-Worked example: [agents/mega_starmie/strategy.py](../my_submissions/agents/mega_starmie/strategy.py).
+Worked example: [agents/mega_starmie/strategy.py](../src/agents/mega_starmie/strategy.py).
 This replaces the per-deck imperative style of
 [demos/rules-based-lucario.py](../demos/rules-based-lucario.py) (hard-coded card ids + magic
 numbers, no reuse or tunability).
@@ -134,7 +134,7 @@ instrumentation fills it in.
 ## Layout
 
 ```
-my_submissions/
+src/
   common/
     pilot.py    Sense→Plan→Score→Act, choose_plan, Tactical Evaluator
     strategy.py Plan/Ready/Line/Hypothesis/Strategy + closed Plan & Role vocab

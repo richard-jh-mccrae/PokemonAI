@@ -20,7 +20,9 @@ def _read_deck() -> list[int]:
 
 
 # Built once at import (the pregame window): eager-load the engine-derived tables.
-_attacks = {a.attackId: a.damage for a in all_attack()}
+_all_attacks = all_attack()
+_attacks = {a.attackId: a.damage for a in _all_attacks}
+_attack_costs = {a.attackId: len(a.energies) for a in _all_attacks}
 _pilot = Pilot(
     STRATEGY,
     _read_deck(),
@@ -28,6 +30,7 @@ _pilot = Pilot(
     stats=EngineCardStatProvider(),
     functions=CardFunctions.load(),
     attacks=_attacks,
+    attack_costs=_attack_costs,
     search_budget=0,
 )
 

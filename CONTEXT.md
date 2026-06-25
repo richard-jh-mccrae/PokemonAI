@@ -1,6 +1,6 @@
 # Pokémon TCG Meta Analysis
 
-Glossary for the daily pipeline that pulls match replays from the official daily top-episode export and reports the deck **Meta** the agent will face. Game-rule terms (energy, evolution, prize) follow standard Pokémon TCG usage and the enums in `my_submissions/cg/api.py`; only project-specific terms are defined here.
+Glossary for the daily pipeline that pulls match replays from the official daily top-episode export and reports the deck **Meta** the agent will face. Game-rule terms (energy, evolution, prize) follow standard Pokémon TCG usage and the enums in `src/cg/api.py`; only project-specific terms are defined here.
 
 ## Language
 

@@ -1,7 +1,7 @@
 """Compile the shipped Scouting artifact from the meta store (see docs/scouting.md).
 
 Reads `data/meta/meta.db` + `cards.json` and writes
-`my_submissions/common/scouting/artifact.json`. Native-lib-free. Run after the daily
+`src/common/scouting/artifact.json`. Native-lib-free. Run after the daily
 fetch; re-bundle/submit deliberately.
 
 Usage:
@@ -22,7 +22,7 @@ from meta_tracker.compile_scouting import compile_artifact  # noqa: E402
 from meta_tracker.store import connect, load_episodes      # noqa: E402
 
 DEFAULT_OUT = (Path(__file__).resolve().parents[1]
-               / "my_submissions" / "common" / "scouting" / "artifact.json")
+               / "src" / "common" / "scouting" / "artifact.json")
 
 
 def main() -> None:

@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))                          # meta_tracker
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "my_submissions"))   # cg (lazy)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (lazy)
 
 from meta_tracker.card_functions import accumulate_tables, build_function_table  # noqa: E402
 from meta_tracker.cards import load_cards                     # noqa: E402
@@ -31,7 +31,7 @@ from meta_tracker.probe_cards import (  # noqa: E402
     _ability_pokemon, probe_card, probe_evolution, probe_pokemon, probe_pokemon_ability)
 
 DEFAULT_OUT = (Path(__file__).resolve().parents[1]
-               / "my_submissions" / "common" / "card_functions.json")
+               / "src" / "common" / "card_functions.json")
 DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "meta_tracker" / "function_overrides.json"
 _TRAINER_CATS = {"item", "supporter", "stadium", "tool"}
 _COMBAT_PASSES = 4   # heal/damage align in only ~1-in-N combat games, so probe several & union

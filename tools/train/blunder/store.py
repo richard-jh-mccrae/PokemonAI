@@ -25,6 +25,19 @@ def append_correction(correction: Correction, path: Path | str = DEFAULT_PATH) -
     return path
 
 
+def delete_correction(corr_id: str, path: Path | str = DEFAULT_PATH) -> int:
+    """Remove the Correction with ``corr_id`` from the log (rewrites it). Returns count removed."""
+    path = Path(path)
+    if not path.exists():
+        return 0
+    items = load_corrections(path)
+    keep = [c for c in items if c.id != corr_id]
+    with path.open("w", encoding="utf-8") as fh:
+        for c in keep:
+            fh.write(json.dumps(c.to_dict(), ensure_ascii=False) + "\n")
+    return len(items) - len(keep)
+
+
 def load_corrections(path: Path | str = DEFAULT_PATH) -> list[Correction]:
     """Load all Corrections from the log, in append order. Missing log -> []."""
     path = Path(path)

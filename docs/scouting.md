@@ -1,12 +1,12 @@
 # Scouting — opponent recognition & the Read
 
-Deck-agnostic runtime capability (`my_submissions/common/scouting/`). It watches what
+Deck-agnostic runtime capability (`src/common/scouting/`). It watches what
 the opponent reveals, recognizes the **Archetype** it's facing, and produces the
 **Read**: a live, per-turn assessment (candidates + confidence, predicted development,
 objective threats/targets). It **does not act** — that's **Posture**, a consumer of the
 Read (deck-specific, out of scope here).
 
-Glossary: [common/CONTEXT.md](../my_submissions/common/CONTEXT.md). Decisions:
+Glossary: [common/CONTEXT.md](../src/common/CONTEXT.md). Decisions:
 [ADR-0003](adr/0003-scouting-knowledge-is-a-shipped-artifact.md) (shipped artifact +
 engine stats), [ADR-0004](adr/0004-shared-common-packaged-per-submission.md) (shared
 `common/`, package step). Grader constraints (≤~10 min/match, tight per-move budget,

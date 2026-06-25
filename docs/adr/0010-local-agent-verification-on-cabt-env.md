@@ -20,7 +20,7 @@ env via `kaggle-environments==1.30.1` (the ladder's pinned version).
   function agent is not parallelizable, so `env.run` runs it in the current process; loading
   the module twice gives each seat its own module-level state.
 - **Deployability** instead runs the extracted Bundle in a fresh **subprocess** (cwd = the
-  Bundle): once `cg`/`common` are imported from `my_submissions/` they are cached in
+  Bundle): once `cg`/`common` are imported from `src/` they are cached in
   `sys.modules`, so only a clean interpreter can prove the *Bundle's own* copies load and
   run — i.e. that the shipped artifact is self-contained.
 - Deck **legality** is pre-checked by calling `cg.game.battle_start` directly — the same

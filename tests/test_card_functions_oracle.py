@@ -13,7 +13,7 @@ import pytest
 
 from meta_tracker.cards import load_cards
 
-TABLE = Path(__file__).resolve().parents[1] / "my_submissions" / "common" / "card_functions.json"
+TABLE = Path(__file__).resolve().parents[1] / "src" / "common" / "card_functions.json"
 
 # (card name, tag it must carry) — only reliable, deterministic tags.
 ORACLE = [
@@ -38,6 +38,7 @@ ORACLE = [
     ("Xerosic’s Machinations", "hand_disruption"),
     ("Kyogre", "recycle"),
     ("Battle Cage", "bench_guard"),             # new vocab: protects the bench from attack/ability effects
+    ("Cinderace", "opener"),                    # new vocab: Explosiveness — a non-Basic that may open (curated override)
     ("Meowth ex", "stall"),                     # play-role seed (curated, pending replay-usage)
     ("Mega Kangaskhan ex", "stall"),
     ("Dudunsparce", "stall"),

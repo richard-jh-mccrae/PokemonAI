@@ -5,7 +5,7 @@ tutor + evolve Staryu -> Mega Starmie ex, then fire Nebula Beam (one Ignition En
 Evolution = CCC). Weights are seed values, every Hypothesis status="assumed" — to be
 ladder-tuned and corrected (ADR-0009). Pure data: no engine, no control flow.
 """
-from common.strategy import Hypothesis, Line, Plan, Ready, Strategy
+from common.strategy import Hypothesis, Line, Plan, Strategy
 
 # --- Card ids (mega_starmie/deck.csv) -------------------------------------
 STARYU, MEGA_STARMIE_EX, CINDERACE = 1030, 1031, 666
@@ -50,8 +50,8 @@ HYPOTHESES = [
 STRATEGY = Strategy(
     name="mega_starmie",
     lines=[Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX,
-                role="win_condition", ready=Ready(energy=3))],   # CCC for Nebula Beam
+                role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
-    params={"setup_energy_target": 3},
+    params={"setup_energy_target": 3},   # aspirational target (Nebula Beam CCC) — future attach-priority
     hypotheses=HYPOTHESES,
 )

@@ -8,6 +8,8 @@ option at the *first divergent* Decision (Tier-1; the rest of the line goes in
 """
 from __future__ import annotations
 
+import hashlib
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 
@@ -17,8 +19,16 @@ from .decisions import Decision
 SOURCES = ("own", "peer")
 
 
+def _derive_id(data: dict) -> str:
+    """Stable id for a legacy record saved before ids existed (deterministic)."""
+    dec = data.get("decision") or {}
+    key = f"{data.get('episode_id')}|{dec.get('frame')}|{data.get('seat')}|{data.get('tagged_at')}|{data.get('category')}"
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+
+
 @dataclass(frozen=True)
 class Correction:
+    id: str                     # unique id (for edit/remove in the review list)
     # identity / provenance
     source: str                 # "own" (our submission) | "peer" (another team's game of our deck)
     episode_id: int | None
@@ -44,6 +54,9 @@ class Correction:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Correction":
+        data = dict(data)
+        if not data.get("id"):                 # backfill ids for pre-id records
+            data["id"] = _derive_id(data)
         return cls(**data)
 
 
@@ -81,10 +94,9 @@ def build_correction(
     n_options = len(decision.options)
     if not correct or any(not isinstance(i, int) or i < 0 or i >= n_options for i in correct):
         raise ValueError(f"correct {correct!r} must index legal options 0..{n_options - 1}")
-    if list(correct) == list(decision.chosen):
-        raise ValueError("correct must differ from chosen (otherwise it is not a blunder)")
 
     return Correction(
+        id=uuid.uuid4().hex[:12],
         source=source,
         episode_id=decision.episode_id,
         seat=decision.seat,

@@ -2,7 +2,7 @@
 
 Given a downloaded replay (full-information: both teams' decks live in the
 agent-0-only ``visualize`` frame, see ADR-0001) and a team name, write that team's
-exact decklist to ``my_submissions/agents/<name>/deck.csv``. The replay is the unit
+exact decklist to ``src/agents/<name>/deck.csv``. The replay is the unit
 of choice -- picking *which* replay to download is itself the disambiguation when a
 team runs more than one deck (ADR-0005). Offline; no Kaggle token needed.
 
@@ -21,7 +21,7 @@ sys.path.insert(0, str(REPO / "tools"))  # make `meta_tracker` importable
 
 from meta_tracker.parse import parse_replay  # noqa: E402
 
-AGENTS = REPO / "my_submissions" / "agents"
+AGENTS = REPO / "src" / "agents"
 
 
 class StealError(RuntimeError):
@@ -73,7 +73,7 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("replay", help="path to a downloaded replay (.json or .json.gz)")
     ap.add_argument("team", help="exact TeamName whose deck to copy (quote if it has spaces)")
-    ap.add_argument("name", help="new directory name under my_submissions/agents/")
+    ap.add_argument("name", help="new directory name under src/agents/")
     ap.add_argument("--force", action="store_true", help="overwrite if the dir already exists")
     args = ap.parse_args()
 

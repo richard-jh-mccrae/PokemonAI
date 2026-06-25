@@ -1,17 +1,17 @@
 # Continuous Integration
 
 `.github/workflows/ci.yml` runs the test suite on every push to `main`, every pull
-request, and on manual dispatch (`workflow_dispatch`). It is a **2×2 matrix** (4 jobs):
-runners `ubuntu-latest` **and** `windows-latest` × Python **3.11** (dev parity) and
-**3.12**. Both platforms are first-class — dev/build is on Windows, the Kaggle grader is
-Linux. Every step runs under `bash` (Git Bash on the Windows runner) so the commands are
+request, and on manual dispatch (`workflow_dispatch`). It is a **2-job matrix**: runners
+`ubuntu-latest` **and** `windows-latest`, both on Python **3.12** (the most recent; the dev
+box runs 3.11). Both platforms are first-class — dev/build is on Windows, the Kaggle grader
+is Linux. Every step runs under `bash` (Git Bash on the Windows runner) so the commands are
 identical on both, and `PYTHONUTF8=1` gives Windows the same UTF-8 default as Linux.
 
 ## What runs
 
 The **entire** `pytest` suite — it is offline and self-contained on Linux:
 
-- **Native engine** — `my_submissions/cg/` ships both `libcg.so` (Linux, x86-64 ELF) and
+- **Native engine** — `src/cg/` ships both `libcg.so` (Linux, x86-64 ELF) and
   `cg.dll` (Windows); `sim.py` picks by `os.name`, so the engine-backed legality/playability
   tests load it on either runner. A dedicated *Verify native engine loads* step prints the
   loaded library path and fails fast with a clear error if it can't load (e.g. a missing
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 python -m pytest tests/ -q
 # with the coverage gate (what CI enforces):
 python -m pytest tests/ \
-  --cov=my_submissions/common/scouting --cov=tools/meta_tracker --cov-report=term-missing
+  --cov=src/common/scouting --cov=tools/meta_tracker --cov-report=term-missing
 ```
 
 ## Scope & extending

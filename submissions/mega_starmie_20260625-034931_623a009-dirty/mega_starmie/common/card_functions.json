@@ -1,0 +1,678 @@
+{
+"19": [
+"search"
+],
+"34": [
+"paralyze"
+],
+"36": [
+"dig"
+],
+"56": [
+"spread"
+],
+"60": [
+"poison"
+],
+"66": [
+"draw",
+"stall"
+],
+"77": [
+"paralyze"
+],
+"79": [
+"burn"
+],
+"86": [
+"dig",
+"energy_accel"
+],
+"90": [
+"search"
+],
+"94": [
+"spread"
+],
+"96": [
+"draw",
+"energy_accel"
+],
+"98": [
+"draw"
+],
+"103": [
+"hand_disruption"
+],
+"110": [
+"confuse"
+],
+"112": [
+"confuse",
+"heal",
+"spread"
+],
+"118": [
+"burn"
+],
+"120": [
+"dig",
+"draw"
+],
+"121": [
+"spread"
+],
+"122": [
+"dig"
+],
+"134": [
+"confuse"
+],
+"174": [
+"search"
+],
+"182": [
+"draw"
+],
+"197": [
+"confuse"
+],
+"207": [
+"sleep"
+],
+"230": [
+"poison"
+],
+"245": [
+"confuse"
+],
+"246": [
+"hand_disruption"
+],
+"248": [
+"confuse"
+],
+"254": [
+"paralyze"
+],
+"256": [
+"burn"
+],
+"259": [
+"burn"
+],
+"269": [
+"energy_accel"
+],
+"283": [
+"search"
+],
+"286": [
+"dig"
+],
+"293": [
+"draw"
+],
+"344": [
+"search"
+],
+"351": [
+"draw"
+],
+"353": [
+"search"
+],
+"357": [
+"energy_accel"
+],
+"360": [
+"paralyze"
+],
+"373": [
+"draw"
+],
+"376": [
+"hand_disruption"
+],
+"380": [
+"search"
+],
+"413": [
+"burn"
+],
+"417": [
+"energy_accel"
+],
+"427": [
+"paralyze"
+],
+"429": [
+"sleep"
+],
+"433": [
+"hand_disruption"
+],
+"448": [
+"paralyze"
+],
+"456": [
+"poison"
+],
+"457": [
+"confuse"
+],
+"468": [
+"poison"
+],
+"470": [
+"hand_disruption"
+],
+"471": [
+"confuse"
+],
+"475": [
+"draw"
+],
+"488": [
+"poison"
+],
+"493": [
+"dig"
+],
+"497": [
+"burn"
+],
+"516": [
+"sleep"
+],
+"535": [
+"poison"
+],
+"569": [
+"energy_accel"
+],
+"576": [
+"switch"
+],
+"581": [
+"paralyze"
+],
+"582": [
+"paralyze"
+],
+"593": [
+"confuse"
+],
+"596": [
+"hand_disruption"
+],
+"609": [
+"hand_disruption"
+],
+"613": [
+"poison"
+],
+"616": [
+"paralyze"
+],
+"641": [
+"energy_accel"
+],
+"658": [
+"confuse"
+],
+"663": [
+"burn"
+],
+"666": [
+"opener"
+],
+"671": [
+"paralyze"
+],
+"692": [
+"poison"
+],
+"705": [
+"draw"
+],
+"706": [
+"poison"
+],
+"716": [
+"burn"
+],
+"721": [
+"recycle"
+],
+"730": [
+"sleep"
+],
+"731": [
+"paralyze"
+],
+"733": [
+"paralyze"
+],
+"756": [
+"draw",
+"stall"
+],
+"780": [
+"poison",
+"sleep"
+],
+"820": [
+"poison"
+],
+"821": [
+"poison"
+],
+"834": [
+"energy_accel"
+],
+"843": [
+"hand_disruption"
+],
+"852": [
+"paralyze"
+],
+"854": [
+"poison",
+"sleep"
+],
+"856": [
+"burn"
+],
+"861": [
+"sleep"
+],
+"866": [
+"draw"
+],
+"895": [
+"hand_disruption"
+],
+"896": [
+"hand_disruption"
+],
+"903": [
+"search"
+],
+"904": [
+"switch"
+],
+"910": [
+"poison"
+],
+"911": [
+"poison",
+"sleep"
+],
+"915": [
+"paralyze",
+"search"
+],
+"929": [
+"burn"
+],
+"931": [
+"burn"
+],
+"935": [
+"burn"
+],
+"941": [
+"sleep"
+],
+"953": [
+"paralyze"
+],
+"968": [
+"confuse"
+],
+"980": [
+"poison"
+],
+"984": [
+"hand_disruption"
+],
+"986": [
+"poison"
+],
+"990": [
+"paralyze"
+],
+"1009": [
+"energy_accel",
+"sleep"
+],
+"1012": [
+"poison"
+],
+"1024": [
+"hand_disruption"
+],
+"1026": [
+"burn",
+"poison"
+],
+"1038": [
+"paralyze"
+],
+"1043": [
+"confuse"
+],
+"1045": [
+"search"
+],
+"1052": [
+"energy_accel"
+],
+"1060": [
+"poison"
+],
+"1061": [
+"paralyze",
+"poison"
+],
+"1071": [
+"search",
+"stall"
+],
+"1076": [
+"hand_disruption"
+],
+"1077": [
+"dig",
+"draw"
+],
+"1080": [
+"draw",
+"hand_disruption"
+],
+"1081": [
+"energy_denial"
+],
+"1083": [
+"search"
+],
+"1084": [
+"search"
+],
+"1086": [
+"search"
+],
+"1088": [
+"gust",
+"switch"
+],
+"1092": [
+"search"
+],
+"1094": [
+"dig",
+"draw"
+],
+"1095": [
+"burn",
+"confuse"
+],
+"1096": [
+"heal"
+],
+"1097": [
+"recycle"
+],
+"1100": [
+"search"
+],
+"1102": [
+"dig",
+"draw"
+],
+"1106": [
+"dig"
+],
+"1107": [
+"switch"
+],
+"1110": [
+"recycle"
+],
+"1112": [
+"heal"
+],
+"1115": [
+"search"
+],
+"1117": [
+"heal"
+],
+"1118": [
+"recycle"
+],
+"1119": [
+"search"
+],
+"1120": [
+"energy_denial"
+],
+"1121": [
+"search"
+],
+"1122": [
+"dig",
+"draw"
+],
+"1123": [
+"switch"
+],
+"1124": [
+"gust"
+],
+"1125": [
+"search"
+],
+"1126": [
+"search"
+],
+"1129": [
+"recycle"
+],
+"1130": [
+"heal"
+],
+"1132": [
+"search"
+],
+"1134": [
+"search"
+],
+"1135": [
+"energy_accel"
+],
+"1142": [
+"search"
+],
+"1145": [
+"search"
+],
+"1146": [
+"energy_accel"
+],
+"1147": [
+"heal"
+],
+"1152": [
+"search"
+],
+"1153": [
+"heal"
+],
+"1181": [
+"draw"
+],
+"1182": [
+"gust"
+],
+"1183": [
+"search"
+],
+"1184": [
+"recycle"
+],
+"1185": [
+"dig",
+"draw"
+],
+"1187": [
+"draw"
+],
+"1188": [
+"dig"
+],
+"1189": [
+"search"
+],
+"1190": [
+"heal"
+],
+"1191": [
+"switch"
+],
+"1192": [
+"draw"
+],
+"1193": [
+"dig",
+"draw"
+],
+"1194": [
+"search"
+],
+"1197": [
+"hand_disruption"
+],
+"1198": [
+"energy_accel",
+"search"
+],
+"1199": [
+"draw"
+],
+"1200": [
+"draw"
+],
+"1202": [
+"dig",
+"draw"
+],
+"1203": [
+"draw",
+"switch"
+],
+"1204": [
+"confuse",
+"gust"
+],
+"1205": [
+"search"
+],
+"1206": [
+"search"
+],
+"1207": [
+"draw"
+],
+"1208": [
+"draw"
+],
+"1210": [
+"search"
+],
+"1212": [
+"heal"
+],
+"1213": [
+"draw",
+"hand_disruption"
+],
+"1214": [
+"draw"
+],
+"1215": [
+"search"
+],
+"1216": [
+"draw"
+],
+"1217": [
+"hand_disruption"
+],
+"1218": [
+"switch"
+],
+"1219": [
+"search"
+],
+"1220": [
+"search"
+],
+"1222": [
+"heal"
+],
+"1223": [
+"draw",
+"hand_disruption"
+],
+"1224": [
+"draw"
+],
+"1225": [
+"search"
+],
+"1227": [
+"draw"
+],
+"1229": [
+"heal"
+],
+"1230": [
+"dig"
+],
+"1231": [
+"search"
+],
+"1232": [
+"search"
+],
+"1233": [
+"search"
+],
+"1235": [
+"dig",
+"energy_accel"
+],
+"1236": [
+"draw"
+],
+"1237": [
+"draw"
+],
+"1238": [
+"recycle"
+],
+"1239": [
+"draw"
+],
+"1241": [
+"heal"
+],
+"1254": [
+"recycle"
+],
+"1264": [
+"bench_guard"
+]
+}

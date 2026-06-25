@@ -1,7 +1,7 @@
 # ADR-0005: deck_stealer copies decks from a replay file, not the leaderboard or meta store
 
 `deck_stealer` takes a downloaded replay plus a team name and writes that team's
-exact 60-card deck to `my_submissions/agents/<name>/deck.csv`. We source from the
+exact 60-card deck to `src/agents/<name>/deck.csv`. We source from the
 **replay** — not a team-name lookup against the leaderboard or the meta store —
 because a replay is full-information and pins the *exact* list a team ran in *that*
 game; choosing which replay to download is itself the disambiguation when a team

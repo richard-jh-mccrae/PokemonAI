@@ -17,6 +17,7 @@ class CardStat:
     ex: bool = False
     megaEx: bool = False
     maxDamage: int = 0
+    minAttackCost: int | None = None   # energy count of the card's cheapest attack (None if unknown)
     weakness: int | None = None
     resistance: int | None = None
     energyType: int | None = None
@@ -40,14 +41,18 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
     Kept separate from the engine import so it is testable lib-free.
     """
     dmg: dict[int, int] = {}
+    cost: dict[int, int] = {}
     for a in attacks:
         dmg.setdefault(a.attackId, a.damage)
+        cost.setdefault(a.attackId, len(getattr(a, "energies", None) or []))
     cache: dict[int, CardStat] = {}
     for c in card_data:
         max_dmg = max((dmg.get(aid, 0) for aid in c.attacks), default=0)
+        costs = [cost[aid] for aid in c.attacks if aid in cost]   # energy-count of each known attack
         cache[c.cardId] = CardStat(
             cardId=c.cardId, name=c.name, hp=int(c.hp),
             ex=bool(c.ex), megaEx=bool(c.megaEx), maxDamage=int(max_dmg),
+            minAttackCost=(min(costs) if costs else None),
             weakness=(int(c.weakness) if c.weakness is not None else None),
             resistance=(int(c.resistance) if c.resistance is not None else None),
             energyType=(int(c.energyType) if c.energyType is not None else None),

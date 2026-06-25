@@ -36,3 +36,10 @@ be `own`|`peer`.
 atomic model yields clean Job-A ranking labels ("`correct` should outrank `chosen` at this
 state") but cannot, in v1, encode multi-step alternative lines — captured as prose until
 Tier-2. `chosen_label`/`correct_label` are filled by the option decoder for legibility.
+
+## Amendment ([ADR-0017](0017-corrections-compile-to-hypotheses.md)): embed the agent `obs`
+
+The embedded film `current` is full-info, string-enum — for human display. The **Tuner** needs
+the Pilot's exact input, so the Correction also embeds the **agent `obs`** (int-enum, hidden-info)
+for the Decision's frame. This makes featurization self-contained (no replay needed) at identical
+accuracy. Existing records (saved before this) backfill `obs` from their retained replays.

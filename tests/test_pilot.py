@@ -47,6 +47,29 @@ def test_plan_is_setup_until_wincon_is_ready():
     assert choose_plan(racing, strat) == Plan.RACE
 
 
+@pytest.mark.req("REQ-PILOT-0018")
+def test_readiness_is_engine_derived_when_ready_is_unset():
+    # Mega Starmie's cheapest attack (Jetting Blow) costs 1 energy. Leaving `ready` unset derives
+    # "online" from the engine: payoff in play with >= 1 energy -> RACE (not the 3 Nebula demands).
+    stats = DictCardStatProvider({MEGA_STARMIE: CardStat(MEGA_STARMIE, minAttackCost=1)})
+    strat = Strategy(lines=[Line(path=[STARYU, MEGA_STARMIE], payoff=MEGA_STARMIE)])  # ready unset
+
+    assert choose_plan(state(active=poke(MEGA_STARMIE, energy=0)), strat, stats) == Plan.SETUP
+    assert choose_plan(state(active=poke(MEGA_STARMIE, energy=1)), strat, stats) == Plan.RACE
+
+
+@pytest.mark.req("REQ-PILOT-0019")
+def test_among_knockouts_the_cheaper_attack_is_preferred():
+    # Both attacks KO the 100-HP target; prefer the cheaper cost so the finisher's Energy is
+    # left in reserve. The pricey KO is option 0, so only an efficiency tiebreak can choose opt1.
+    CHEAP, PRICEY = 11, 12
+    pilot = Pilot(Strategy(), deck=[1] * 60, attacks={CHEAP: 120, PRICEY: 210},
+                  attack_costs={CHEAP: 1, PRICEY: 3})
+    obs = make_select([attack_opt(PRICEY), attack_opt(CHEAP)], context=MAIN,
+                      current=state(active=poke(700), opp_active=poke(900, hp=100)))
+    assert pilot.decide(obs) == [1]
+
+
 @pytest.mark.req("REQ-PILOT-0004")
 def test_hypothesis_biases_its_choice():
     open_cinderace = Hypothesis(

@@ -5,9 +5,11 @@ import pytest
 
 from sim.check_agent import check_contents, check_legality
 
+from conftest import require_kaggle_environments
+
 REPO = Path(__file__).resolve().parents[1]
 # Self-contained agent fixtures (so tests don't depend on a deletable source agent under
-# my_submissions/agents/). `mega_starmie` is a complete, legal, shippable agent copied here.
+# src/agents/). `mega_starmie` is a complete, legal, shippable agent copied here.
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 LEGAL_DECK = FIXTURE_AGENTS / "mega_starmie" / "deck.csv"
 
@@ -62,17 +64,17 @@ def test_legality_fails_with_the_specific_rule(tmp_path):
 
 @pytest.mark.req("REQ-SIM-0003")
 def test_playability_fixture_self_play_is_clean():
-    pytest.importorskip("kaggle_environments")
+    require_kaggle_environments()
     from sim.check_agent import check_playability
 
-    agent_dir = FIXTURE_AGENTS / "mega_starmie"   # shared common/cg resolve via my_submissions on sys.path
-    result = check_playability(agent_dir, syspath_roots=[REPO / "my_submissions"], matches=2)
+    agent_dir = FIXTURE_AGENTS / "mega_starmie"   # shared common/cg resolve via src on sys.path
+    result = check_playability(agent_dir, syspath_roots=[REPO / "src"], matches=2)
     assert result.ok, result.detail
 
 
 @pytest.mark.req("REQ-SIM-0003")
 def test_playability_loads_sibling_modules_from_agent_dir():
-    pytest.importorskip("kaggle_environments")
+    require_kaggle_environments()
     from sim.check_agent import check_playability
 
     # main.py does `from helper import OK` — only resolvable if the agent dir is on sys.path
@@ -83,7 +85,7 @@ def test_playability_loads_sibling_modules_from_agent_dir():
 
 @pytest.mark.req("REQ-SIM-0003")
 def test_playability_detects_a_crash_and_saves_replay(tmp_path):
-    pytest.importorskip("kaggle_environments")
+    require_kaggle_environments()
     from sim.check_agent import check_playability
 
     crasher = REPO / "tests" / "fixtures" / "agents" / "crasher"
@@ -96,7 +98,7 @@ def test_playability_detects_a_crash_and_saves_replay(tmp_path):
 
 @pytest.mark.req("REQ-SIM-0004")
 def test_deployability_packages_extracts_and_runs(tmp_path):
-    pytest.importorskip("kaggle_environments")
+    require_kaggle_environments()
     from sim.check_agent import check_deployability
 
     result = check_deployability("mega_starmie", work_dir=tmp_path, agents_root=FIXTURE_AGENTS)
@@ -140,7 +142,7 @@ def test_agent_name_accepts_a_path_or_bare_name():
 
 @pytest.mark.req("REQ-SIM-0005")
 def test_cli_runs_a_real_agent_through_playability():
-    pytest.importorskip("kaggle_environments")
+    require_kaggle_environments()
     import subprocess
     import sys
 

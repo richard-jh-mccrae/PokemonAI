@@ -47,15 +47,22 @@ def _film(replay: dict) -> list[dict]:
 def iter_decisions(replay: dict) -> list[Decision]:
     """Every option-choice with a recorded selection, in film order.
 
-    Frames without a ``select`` with options, or without a recorded ``selected``
-    (the coin-flip / deck-submission frame), are not Decisions.
+    The selection for the select prompted at frame ``i`` is recorded in the *next*
+    frame's ``selected`` (the film offsets selection by +1 -- verified: frame i's
+    selection == ``film[i+1].selected``, giving valid option positions for every
+    frame). Frames without a ``select`` with options, or whose selection is missing
+    (the terminal frame), are not Decisions.
     """
     episode_id = (replay.get("info") or {}).get("EpisodeId")
+    film = _film(replay)
     out: list[Decision] = []
-    for i, frame in enumerate(_film(replay)):
+    for i, frame in enumerate(film):
         select = frame.get("select")
-        chosen = frame.get("selected")
-        if not isinstance(select, dict) or not select.get("option") or chosen is None:
+        if not isinstance(select, dict) or not select.get("option"):
+            continue
+        nxt = film[i + 1] if i + 1 < len(film) else None
+        chosen = nxt.get("selected") if nxt else None
+        if chosen is None:
             continue
         current = frame.get("current") or {}
         out.append(

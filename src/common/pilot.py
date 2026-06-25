@@ -16,18 +16,34 @@ from common.strategy import Plan, Strategy
 _ZONE = {2: "hand", 4: "active", 5: "bench"}
 _ATTACK = 13  # OptionType.ATTACK
 KO_SCORE = 1000  # an option that knocks out the target dominates a mere chip
+_OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
+_STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
+_EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
+                           # far below prize granularity (1) so it never overrides prize value
 
 
-def choose_plan(state: dict, strategy) -> Plan:
-    """Pick this turn's Plan. SETUP until a win-condition Line's payoff is in play with
-    enough energy; then RACE. (STABILIZE / CLOSE arrive with their own signals.)"""
+def choose_plan(state: dict, strategy, stats=None) -> Plan:
+    """Pick this turn's Plan. SETUP until a win-condition Line's payoff is in play with enough
+    energy to attack; then RACE. A Line's `ready.energy` is the threshold; when unset (None) it is
+    derived from the engine — the payoff's cheapest attack cost, so a 1-Energy attack counts.
+    (STABILIZE / CLOSE arrive with their own signals.)"""
     me = state["players"][state["yourIndex"]]
     board = [p for p in (me.get("active") or []) + (me.get("bench") or []) if p]
     for line in strategy.lines:
-        if any(p["id"] == line.payoff and len(p.get("energies", [])) >= line.ready.energy
-               for p in board):
+        threshold = line.ready.energy
+        if threshold is None:                          # derive "online" from the cheapest attack
+            threshold = _min_attack_cost(stats, line.payoff)
+        if any(p["id"] == line.payoff and len(p.get("energies", [])) >= threshold for p in board):
             return Plan.RACE
     return Plan.SETUP
+
+
+def _min_attack_cost(stats, payoff: int, default: int = 1) -> int:
+    """The payoff's cheapest attack's energy cost, read off the engine CardStat (`default` when
+    unknown — never 0, so a Pokémon is never 'online' with no Energy)."""
+    stat = stats.get(payoff) if stats else None
+    cost = getattr(stat, "minAttackCost", None) if stat else None
+    return cost if cost is not None else default
 
 
 @dataclass
@@ -37,11 +53,14 @@ class Board:
     my_bench: int = 0
     my_active_id: int | None = None
     my_active_energy: int = 0
+    my_active_hp: int = 0
     opp_active_id: int | None = None
     opp_active_hp: int = 0
     opp_bench: tuple = ()          # ((cardId, hp), …) of the opponent's benched Pokémon
     turn: int = 0
     energy_attached: bool = False  # have I already attached Energy this turn?
+    hand_startable: bool = False   # a card in hand can take the Active Spot (opener tag / starter role)
+    active_doomed: bool = False    # the opponent can Knock Out my Active next turn (incoming-KO estimate)
 
 
 @dataclass
@@ -51,11 +70,13 @@ class Context:
     select_context: int | None
     option_type: int | None
     card_id: int | None
+    option_area: int | None = None  # AreaType of the option's target (4=active, 5=bench) — attach targeting
     roles: list = field(default_factory=list)
     tags: list = field(default_factory=list)
     stat: object | None = None     # the option card's engine CardStat (hp/weakness/prize value/…)
     board: Board = field(default_factory=Board)   # per-decision board summary (same for all options)
     is_attack: bool = False
+    tactical: float = 0.0          # the option's closed-form combat value (>= KO_SCORE on a knockout)
     is_ko: bool = False            # this option is an attack that knocks out the opponent's Active
 
 
@@ -80,14 +101,15 @@ class Decision:
 
 class Pilot:
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
-                 functions=None, attacks=None, search_budget=0):
+                 functions=None, attacks=None, attack_costs=None, search_budget=0):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
         self.deck = list(deck)
         self.stats = stats
         self.functions = functions
-        self.attacks = attacks or {}
+        self.attacks = attacks or {}                    # attackId -> printed damage
+        self.attack_costs = attack_costs or {}          # attackId -> Energy count (efficiency tiebreak)
         self.search_budget = search_budget
 
     def decide(self, obs: dict) -> list[int]:
@@ -131,13 +153,15 @@ class Pilot:
         Active's HP. A knockout dominates; otherwise the chip is worth its damage."""
         if option.get("type") != _ATTACK:
             return 0
-        dmg = self.attacks.get(option.get("attackId"), 0)
+        attack_id = option.get("attackId")
+        dmg = self.attacks.get(attack_id, 0)
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
         dmg = self._weakness_adjusted(obs, opp, dmg)
+        eff = _EFFICIENCY * self.attack_costs.get(attack_id, 0)   # cheaper of equal outcomes wins
         if hp and dmg >= hp:
-            return KO_SCORE + self._prize_value(opp)   # among KOs, prefer the higher-prize target
-        return dmg
+            return KO_SCORE + self._prize_value(opp) - eff   # among KOs, prefer higher-prize then cheaper
+        return dmg - eff
 
     def _prize_value(self, poke: dict | None) -> int:
         """Prizes a knockout yields — Mega ex 3, ex 2, else 1 (read off the engine CardStat)."""
@@ -181,16 +205,16 @@ class Pilot:
     def _context(self, obs: dict, select: dict, board: Board, option: dict,
                  tactical: float = 0.0) -> Context:
         state = obs.get("current") or {}
-        plan = choose_plan(state, self.strategy) if state.get("players") else Plan.SETUP
+        plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
         cid = self._option_card_id(obs, option)
         roles = self.strategy.roles.get(cid, []) if cid is not None else []
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         is_attack = option.get("type") == _ATTACK
         return Context(plan=plan, select_context=select.get("context"),
-                       option_type=option.get("type"), card_id=cid, roles=roles, tags=tags,
-                       stat=stat, board=board, is_attack=is_attack,
-                       is_ko=is_attack and tactical >= KO_SCORE)
+                       option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
+                       roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
+                       tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE)
 
     def _board(self, obs: dict) -> Board:
         """Summarise the shared board once per decision (see Board)."""
@@ -205,12 +229,46 @@ class Pilot:
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
             my_active_energy=len((ma or {}).get("energies") or []),
+            my_active_hp=(ma or {}).get("hp", 0),
             opp_active_id=(oa or {}).get("id"),
             opp_active_hp=(oa or {}).get("hp", 0),
             opp_bench=tuple((b.get("id"), b.get("hp", 0)) for b in (opp.get("bench") or []) if b),
             turn=state.get("turn", 0),
             energy_attached=bool(state.get("energyAttached")),
+            hand_startable=self._hand_startable(me.get("hand") or []),
+            active_doomed=self._active_doomed(ma, oa),
         )
+
+    def _active_doomed(self, ma: dict | None, oa: dict | None) -> bool:
+        """True if the opponent's Active can Knock Out my Active next turn — its biggest attack
+        (doubled when my Active is Weak to the attacker's type) >= my Active's remaining HP. A
+        closed-form threat estimate off engine stats (attack-affordability refinement is future)."""
+        my_hp = (ma or {}).get("hp", 0)
+        if not (self.stats and ma and oa and my_hp):
+            return False
+        opp_stat = self.stats.get(oa.get("id"))
+        if not opp_stat:
+            return False
+        incoming = opp_stat.maxDamage or 0
+        my_stat = self.stats.get(ma.get("id"))
+        if (my_stat and my_stat.weakness is not None and opp_stat.energyType is not None
+                and my_stat.weakness == opp_stat.energyType):
+            incoming *= 2
+        return incoming >= my_hp
+
+    def _hand_startable(self, hand: list) -> bool:
+        """True if a card in hand can take the Active Spot — a Pokémon with the `opener`
+        Function Tag (Explosiveness-type) or the deck's `starter` Role — so a no-Basic hand is
+        keepable (a Basic would prevent the mulligan prompt entirely)."""
+        for c in hand:
+            cid = c.get("id") if c else None
+            if cid is None:
+                continue
+            if self.functions and _OPENER_TAG in self.functions.tags(cid):
+                return True
+            if _STARTER_ROLE in self.strategy.roles.get(cid, []):
+                return True
+        return False
 
     def _option_card_id(self, obs: dict, option: dict) -> int | None:
         area, index = option.get("area"), option.get("index")
