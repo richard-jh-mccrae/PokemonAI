@@ -6,7 +6,7 @@ timing out, and still works once packaged. It drives the **real** competition si
 the `cabt` environment on `kaggle-environments`, the same code the Kaggle ladder runs —
 rather than a stand-in. See [ADR-0010](../../docs/adr/0010-local-agent-verification-on-cabt-env.md).
 
-Consumes the **Bundle** assembled by `package_agent`
+Consumes the **Bundle** assembled by `submit.package` (via `build`)
 ([ADR-0004](../../docs/adr/0004-shared-common-packaged-per-submission.md)) and the agent
 vocabulary (**Pilot**, **Strategy**) from the
 [Agent Runtime](../../src/common/CONTEXT.md) context.
@@ -32,7 +32,7 @@ match. Verified on the **extracted** artifact, never the source tree.
 _Avoid_: packaged, shippable, valid
 
 **Bundle**:
-The self-contained submission `package_agent` produces: `main.py` + `deck.csv` + the
+The self-contained submission `submit.package` produces: `main.py` + `deck.csv` + the
 shared `cg/` engine + `common/` runtime, and nothing else. The unit uploaded and graded;
 **Deployability** is a statement about it. (ADR-0004 also calls this the "submission
 directory" — same thing.)

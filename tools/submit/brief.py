@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from package_agent import REPO, _git_hash, artifact_stem  # reuse the build-stamp helpers
+from submit.package import REPO, _git_hash, artifact_stem  # reuse the build-stamp helpers
 
 
 def render_brief(manifest: dict) -> str:

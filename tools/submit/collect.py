@@ -15,7 +15,7 @@ from statistics import median
 from common.telemetry import TAG
 from meta_tracker.archetype import classify
 from meta_tracker.parse import extract_decks, winner_index
-from package_agent import REPO
+from submit.package import REPO
 
 DEFAULT_PERF = REPO / "data" / "performance.jsonl"
 

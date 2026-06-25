@@ -10,7 +10,7 @@ and the stamped zip names the deploy artifact by build date + commit (`-dirty` s
 work tree has uncommitted changes). `--no-stamp` falls back to a stable `dist/<name>.zip`.
 
 Usage:
-    python tools/package_agent.py <name> [--out dist] [--no-stamp]
+    python tools/submit/package.py <name> [--out dist] [--no-stamp]
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs")  # ship code, not docs
 

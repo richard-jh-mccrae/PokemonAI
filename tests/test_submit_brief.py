@@ -132,7 +132,7 @@ def test_brief_renders_expandable_hypothesis_rows_with_all_info(tmp_path):
 def test_package_ships_brief_and_drops_deck_txt_and_version_control(tmp_path):
     import zipfile
 
-    from package_agent import package
+    from submit.package import package
 
     with zipfile.ZipFile(package("mega_starmie", tmp_path, agents_root=FIXTURE.parent)) as zf:
         names = zf.namelist()

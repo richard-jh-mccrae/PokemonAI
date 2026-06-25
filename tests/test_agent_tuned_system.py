@@ -17,7 +17,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
-from package_agent import package  # noqa: E402
+from submit.package import package  # noqa: E402
 
 AGENT = "mega_starmie"
 TARGET = "power-up-attacker"   # a real General Strategy Hypothesis id (general_strategy.py)

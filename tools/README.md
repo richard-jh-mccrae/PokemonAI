@@ -20,7 +20,7 @@ the data products **in order** (each step reads the previous output):
    (`common/scouting/artifact.json`). Needs the meta store; run the daily fetch first if stale.
 4. **Re-validate decks**: `python tools/deck_convert.py to-csv <deck.txt> <name>` hard-fails on
    now-illegal cards; then `python tools/sim/check_agent.py <name>`.
-5. **`python tools/package_agent.py <name>`** — re-bundle for submission.
+5. **`python tools/submit_agent.py build <name>`** — re-bundle for submission.
 
 ## Tool reference
 
@@ -34,9 +34,8 @@ the data products **in order** (each step reads the previous output):
 | `run_meta_tracker.py` | Daily fetch: download top episodes, band by rating, parse, build HTML dashboard | `python tools/run_meta_tracker.py [--bands Elite High] [--cap 500]` |
 | `deck_convert.py` | Limitless `.txt` ↔ `deck.csv` (resolves by card name, asserts the 5 deck rules) | `python tools/deck_convert.py to-csv <deck.txt> <name> [--force]`  ·  `to-txt <deck.csv> [-o out.txt]` |
 | `deck_stealer.py` | Pull a team's exact 60-card deck out of a replay → `agents/<name>/deck.csv` | `python tools/deck_stealer.py <replay.json[.gz]> <team> <name> [--force]` |
-| `package_agent.py` | Stage agent + `common/` + `cg/` + a self-contained `brief.html` (the embedded **Manifest**, ADR-0019) and zip → `dist/<name>_<date>_<githash>.zip` | `python tools/package_agent.py <name> [--out dist] [--no-stamp]` |
 | `sim/check_agent.py` | Gated pre-submit check: contents → legality → playability → deployability | `python tools/sim/check_agent.py <name> [--matches 5] [--no-deployability]` |
-| `submit_agent.py` | Submission lifecycle (ADR-0019): `build` (package + record), gated `submit` (refuse-dirty → Agent Check → upload), `collect` (replays+score → `performance.jsonl`), `dashboard` | `python tools/submit_agent.py build\|submit\|collect\|dashboard <args>` |
+| `submit_agent.py` | Submission lifecycle (ADR-0019): `build` (package → local `builds.jsonl` ledger, no upload), gated `submit [N]` (uploads a *prior* build's exact zip, default latest: refuse-dirty → Agent Check → upload → committed `agent_history.jsonl`), `collect` (replays+score → `performance.jsonl`), `dashboard`. Packaging itself is the `submit/package.py` library. | `python tools/submit_agent.py build\|submit\|collect\|dashboard <args>` |
 
 Deps: native `cg` for `dump_cards` / `build_card_functions` / `check_agent`; `check_agent`'s
 self-play also needs `kaggle_environments` (`tools/sim/requirements.txt`). The rest are

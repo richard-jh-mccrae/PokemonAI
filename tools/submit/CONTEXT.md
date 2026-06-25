@@ -37,10 +37,16 @@ it for a human — one file that is both machine- and human-readable, the at-a-g
 that agent at build time.
 _Avoid_: report, readme, version_control card
 
+**Build Ledger**:
+The local, gitignored `builds.jsonl` recording every `build`. The pool `submit` draws from —
+by id, or the most recent by default — uploading that build's *exact* zip. `submit` then
+promotes the chosen build into Agent History.
+_Avoid_: Agent History (the committed *submitted* record), history
+
 **Agent History**:
-The committed, durable record of *what each agent was* — one entry per Submission (state
-summary + join keys + lineage + experiment intent).
-_Avoid_: log, ledger, changelog
+The committed, durable record of *what each agent was* — one entry per Submission actually
+uploaded (state summary + join keys + lineage + experiment intent).
+_Avoid_: log, changelog, Build Ledger (that is the local pre-submit pool)
 
 **Performance Log**:
 The committed record of *how each agent performed over time* — time-stamped samples per

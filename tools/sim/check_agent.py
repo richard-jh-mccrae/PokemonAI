@@ -230,7 +230,7 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
     """Package the agent, extract it, verify the Bundle's contents, and run it once."""
     import zipfile
 
-    from package_agent import package  # lazy; tools/ is on sys.path
+    from submit.package import package  # lazy; tools/ is on sys.path
 
     work_dir = Path(work_dir)
     zip_path = package(name, work_dir / "dist", agents_root=agents_root)
@@ -302,7 +302,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     name = _agent_name(args.name)  # accept a path (e.g. tab-completed) or a bare name
 
-    sys.path.insert(0, str(REPO / "tools"))  # so check_deployability can import package_agent
+    sys.path.insert(0, str(REPO / "tools"))  # so check_deployability can import submit.package
     sys.path.insert(0, str(MS))  # so the in-process stages can import cg / common
     report = check_agent(
         name,

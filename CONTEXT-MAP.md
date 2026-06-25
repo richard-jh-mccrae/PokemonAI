@@ -15,7 +15,7 @@
 - **Meta Tracker → Training**: the blunder inspector loads the same downloaded **Replays** to mark blunders on any Episode featuring our deck (ours or a peer's).
 - **Training → Agent Runtime**: **Corrections** become per-decision ranking labels that tune **Hypothesis** weights (Job A) and may author a Hypothesis — see [ADR-0009](./docs/adr/0009-training-methodology.md).
 - **Agent Checks → Agent Runtime**: the harness verifies agents built on the Agent Runtime; it runs the *real* cabt env rather than a stand-in — see [ADR-0010](./docs/adr/0010-local-agent-verification-on-cabt-env.md).
-- **Agent Checks → packaging**: **Deployability** consumes the **Bundle** assembled by `package_agent` — see [ADR-0004](./docs/adr/0004-shared-common-packaged-per-submission.md).
+- **Agent Checks → packaging**: **Deployability** consumes the **Bundle** assembled by `submit.package` — see [ADR-0004](./docs/adr/0004-shared-common-packaged-per-submission.md).
 - **Agent Runtime → Submission & Tracking**: a **Submission** packages a **Bundle** and embeds a **Manifest** read *declaratively* from the agent's **Strategy** + **General Strategy** (Tier lives in `Strategy.params`) — see [ADR-0019](./docs/adr/0019-submissions-are-traceable-and-tracked.md).
 - **Training → Submission & Tracking**: each Submission ships the Tuner's `tuned.json` plus a `tuned.meta.json` provenance sidecar, and the agent's **Decision Telemetry** feeds **Corrections** — see [ADR-0018](./docs/adr/0018-applying-tuner-output.md), [ADR-0009](./docs/adr/0009-training-methodology.md).
 - **Agent Checks → Submission & Tracking**: `submit` gates on **Deployability** / **Playability** before uploading — see [ADR-0010](./docs/adr/0010-local-agent-verification-on-cabt-env.md).

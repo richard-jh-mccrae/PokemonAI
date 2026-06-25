@@ -24,7 +24,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
 
 from meta_tracker.parse import load_replay  # noqa: E402
-from package_agent import package  # noqa: E402
+from submit.package import package  # noqa: E402
 from pilot_helpers import ATTACH, MAIN, NO, PLAY, make_select, opt, poke, state  # noqa: E402
 from train.blunder.correction import build_correction  # noqa: E402
 from train.blunder.decisions import Decision, iter_decisions  # noqa: E402

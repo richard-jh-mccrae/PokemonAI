@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from package_agent import artifact_stem, package
+from submit.package import artifact_stem, package
 
 # A self-contained agent fixture (main.py + strategy.py + deck.csv + deck.txt) so these tests don't
 # depend on a deletable source agent under src/agents/ (shared common/ + cg/ still come
