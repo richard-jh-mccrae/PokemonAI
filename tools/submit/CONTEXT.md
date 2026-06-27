@@ -34,7 +34,9 @@ _Avoid_: config, metadata, snapshot
 **Agent Brief**:
 The self-contained HTML carried inside each Submission that **embeds** its Manifest and renders
 it for a human — one file that is both machine- and human-readable, the at-a-glance state of
-that agent at build time.
+that agent at build time. Renders the full decklist (names from the card cache) and a highlighted
+**deck-change** callout versus this agent's previous build (the Build Ledger stores each build's
+deck as the baseline).
 _Avoid_: report, readme, version_control card
 
 **Build Ledger**:

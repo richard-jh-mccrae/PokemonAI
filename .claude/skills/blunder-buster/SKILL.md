@@ -34,33 +34,67 @@ patterns appear). **Commit authored Hypotheses before the next round** so re-fea
    "snipe the highest threat" corrections). Their ids are the **cluster**. (The same `tune.py` run
    also (re)writes `src/agents/<deck>/tuned.json` — the deterministic Tier-0 weight deltas; commit
    it alongside the authored Hypothesis.)
+   - **Also mine the `UNSATISFIED` lines** `tune.py` prints: these are *W-route* corrections whose
+     `correct ≻ chosen` the weight fit could **not** honour (a conflict between corrections, or a gap
+     no existing Hypothesis discriminates). They are prime **H** candidates — treat them like `open`
+     proposals and cluster them too. A `tuned.json` of `{}` is normal and honest: it means the round's
+     leverage is entirely in new rules, not reweighting (the fit ships weights only when they satisfy
+     strictly more corrections than the seeds; lower `--reg` only if you *want* clean corrections to
+     move weights more aggressively — the ladder is the real gate).
 
-2. **Read the feature catalog** (author against the LIVE source, never memory):
+2. **See how the agent actually decided** (the live trace, ADR-0019). Each Correction may embed
+   `live_trace` — the `@T` Decision Telemetry the **shipped** agent emitted at that exact decision
+   (`opts[].score / tac / fired:[[hyp_id, weight]]`, `chosen`, `margin`). Read it per cluster member
+   to ground authoring in the agent's *real* reasoning: which hypotheses fired on the chosen vs the
+   correct option, and by what margin. (If `live_trace` is null, run
+   `python tools/train/backfill_obs.py` once the game's `episode-<id>-agent-<seat>-logs.json` is
+   collected, or rely on the obs re-derivation.)
+
+3. **Read the feature catalog** (author against the LIVE source, never memory):
    - `src/common/pilot.py` — the `Context` / `Board` fields a `when(ctx)` may read.
    - `src/cg/api.py` — `SelectContext` / `OptionType` / `AreaType` / `EnergyType` enums.
    - `src/common/cards.py` + `card_functions.json` — the function **tags**.
    - `src/common/general_strategy.py` + `src/agents/<deck>/strategy.py` — existing Hypotheses as
      **style examples** (mirror their shape).
 
-3. **Author the candidate `when()`** from the cluster's RATIONALES (the authoring spec):
+4. **Author the candidate `when()`** from the cluster's RATIONALES (the authoring spec):
    - Prefer **universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s.
    - Pure + total predicate; seed `weight` in-band (`docs/weights.md`); `status="assumed"`.
 
-4. **Verify** — the gate; iterate until it passes:
+5. **Verify** — the gate; iterate until it passes:
    - Build the deck's Pilot (mirror `tools/train/tune.py:_build_pilot`) wrapped as
      `pilot_with(extra) -> Pilot(..., hypotheses=base + extra, ...)`.
    - Load the cluster's Corrections; call `verify(candidate, corrections, pilot_with, seeds,
      cluster)` from `train.tuner.verify`. Require `result.passed` (cluster satisfied + empty
      `regressed`). Too narrow → cluster unsatisfied (broaden); too broad → `regressed` (tighten).
 
-5. **Suite-green.** `python -m pytest tests/ -q` — must not break Playability / existing behavior.
+6. **Retest — "see the log after the fix"** (ADR-0019, closes the loop). For each cluster member,
+   `retest(correction, pilot_with([candidate]))` from `train.tuner.retest` re-derives the decision
+   in the **same `@T` format** as the live log and diffs it against the embedded `live_trace`:
+   show `chosen_before → chosen_after`, `margin_before → margin_after`, and require `fixed` (the
+   `correct` option is now chosen). This is the before/after proof the blunder is addressed.
 
-6. **Place + present a diff** (the human commits):
+7. **Suite-green.** `python -m pytest tests/ -q` — must not break Playability / existing behavior.
+
+8. **Place + present a diff** (the human commits):
    - universal trigger → `src/common/general_strategy.py`
    - deck-specific (`roles`/`lines`/`card_id`s) → `src/agents/<deck>/strategy.py`
    - Set `status="testing"` once the Verifier passed; mark `confirmed`/`refuted` later from ladder A/B.
+
+9. **Write the run report** (the human-readable record + showcase). Step 1's `tune.py` already wrote
+   `docs/tuning/runs/<deck>_<timestamp>.md` (what was tuned/why/how much, proposals, unsatisfied) —
+   it prints `report -> <path>`. **Append** to that same file an `## Authored this round` section: for
+   each Hypothesis you committed, a bullet with its id, the cluster it fixes, the rationale, the seed
+   weight + band, and the **retest before/after** from step 6 (`chosen_before → after`,
+   `margin_before → after`, `fixed`). This is the per-run learning/progress artifact; keep it succinct
+   and explain *why*, not just *what*. The math itself lives once in `docs/tuning/methodology.md` —
+   link it, don't re-explain it.
 
 ## Rules
 - One Hypothesis per cluster, verified against **all** its members — not per-correction point-fixes.
 - The Verifier is non-negotiable: **no commit without `passed`**.
 - Don't invent `ctx` features — only what `Context` / `Board` expose.
+- **If you change how tuning works, update the explainer.** Any change to the method itself — the fit
+  objective/optimiser, attribution (W vs H), the regularisation/`reg`, the pocket, the adoption gate,
+  the verifier/retest — must be reflected in `docs/tuning/methodology.md` (the graded, educational
+  write-up) in the same change. Keep the math there in sync with `tools/train/tuner/`.

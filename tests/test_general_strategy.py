@@ -7,7 +7,7 @@ from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Line, Ready, Strategy
 from pilot_helpers import (
-    ACTIVE, ATTACH, ATTACH_FROM, BENCH, HAND, MAIN, MULLIGAN, NO, PLAY, YES,
+    ACTIVE, ATTACH, ATTACH_FROM, BENCH, DAMAGE, HAND, MAIN, MULLIGAN, NO, PLAY, YES,
     attack_opt, card_opt, make_select, opt, poke, state,
 )
 
@@ -18,7 +18,8 @@ def _fired(option_trace):
 
 @pytest.mark.req("REQ-GEN-0001")
 def test_dig_before_commit_prefers_search_in_setup_and_needs_the_tag_table():
-    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], current=state(hand=[111, 222]))
+    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                      current=state(hand=[111, 222]))
     # opt1 (card 222) is a search card; the General Strategy lifts it during SETUP.
     with_tags = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                       functions=CardFunctions({222: ["search"]}))
@@ -36,11 +37,25 @@ def test_dont_bench_multiprize_penalizes_a_nonwincon_ex_but_exempts_the_wincon()
     # 900 is the deck's win-condition; 800 is a bare 2-prize liability.
     pilot = Pilot(Strategy(roles={900: ["win_condition"]}), deck=[1] * 60,
                   general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], current=state(hand=[800, 900]))
+    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                      current=state(hand=[800, 900]))
 
     liability, wincon = pilot.explain(obs).options
     assert "dont-bench-multiprize" in _fired(liability)       # 800: ex, not the win-con -> penalized
     assert "dont-bench-multiprize" not in _fired(wincon)      # 900: Mega ex but the win-con -> exempt
+
+
+@pytest.mark.req("REQ-GEN-0002")
+def test_dont_bench_multiprize_also_penalizes_evolving_into_a_nonwincon_ex():
+    # adversarial-review fix: evolving a Basic into a non-wincon ex also puts a multi-prizer into
+    # play, so the gate must cover EVOLVE (option_type 9), not only PLAY.
+    _EVOLVE = 9
+    stats = DictCardStatProvider({888: CardStat(888, ex=True), 900: CardStat(900, megaEx=True)})
+    pilot = Pilot(Strategy(roles={900: ["win_condition"]}), deck=[1] * 60,
+                  general_strategy=GENERAL_STRATEGY, stats=stats)
+    # an EVOLVE whose result (the card in hand) is a loose 2-prize ex (888), not the win-condition.
+    obs = make_select([opt(_EVOLVE, area=HAND, index=0)], current=state(hand=[888]))
+    assert "dont-bench-multiprize" in _fired(pilot.explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0003")
@@ -98,7 +113,8 @@ def test_use_acceleration_prioritizes_an_energy_accel_card():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   functions=CardFunctions({222: ["energy_accel"]}))
     # opt0 -> card 111 (untagged), opt1 -> card 222 (energy_accel): use-acceleration lifts opt1.
-    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], current=state(hand=[111, 222]))
+    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                      current=state(hand=[111, 222]))
     assert pilot.decide(obs) == [1]
     assert "use-acceleration" in _fired(pilot.explain(obs).options[1])
 
@@ -132,6 +148,26 @@ def test_power_up_attacker_attaches_energy_rather_than_passing():
     obs = make_select([opt(ATTACH), opt(PLAY)], current=state())   # state() -> SETUP
     assert pilot.decide(obs) == [0]
     assert "power-up-attacker" in _fired(pilot.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0012")
+def test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy():
+    # A Damage/snipe select over the opponent's Bench: a bare Pokémon (opt0) vs one already
+    # carrying Energy (opt1, closest to attacking). snipe-the-threat lifts the energized target.
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(700),
+                                    opp_bench=[poke(800, energy=0), poke(900, energy=1)]))
+    assert pilot.decide(obs) == [1]
+    assert "snipe-the-threat" in _fired(pilot.explain(obs).options[1])
+    assert "snipe-the-threat" not in _fired(pilot.explain(obs).options[0])
+
+    # All-bare Bench (no energized threat anywhere): the rule fires on nothing -> baseline holds.
+    no_threat = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                            context=DAMAGE,
+                            current=state(active=poke(700),
+                                          opp_bench=[poke(800, energy=0), poke(900, energy=0)]))
+    assert "snipe-the-threat" not in _fired(pilot.explain(no_threat).options[1])
 
 
 @pytest.mark.req("REQ-GEN-0006")

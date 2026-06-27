@@ -21,6 +21,16 @@ from submit.build import DEFAULT_BUILDS, DEFAULT_HISTORY, DEFAULT_OUT, build  # 
 from submit.submit import submit  # noqa: E402
 
 
+def _build_id(v: str) -> int:
+    """A build number for `submit` — with a hint when someone passes an agent name out of habit."""
+    try:
+        return int(v)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a build number (or omit it for the latest build). To build and submit an "
+            f"agent, run `build {v}` first, then `submit`.")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Build/submit a Submission (ADR-0019). <agent> is a directory under src/agents/.",
@@ -43,17 +53,17 @@ def main(argv=None) -> int:
     b.add_argument("--agents-root", default=None)
 
     s = sub.add_parser("submit", help="upload a prior build (default: latest) to the competition")
-    s.add_argument("build_id", nargs="?", type=int, help="which build to submit (default: most recent)")
+    s.add_argument("build_id", nargs="?", type=_build_id, help="which build to submit (default: most recent)")
     s.add_argument("--allow-dirty", action="store_true", help="permit submitting a dirty build")
     s.add_argument("--out", default=str(DEFAULT_OUT))
     s.add_argument("--builds", default=str(DEFAULT_BUILDS))
     s.add_argument("--history", default=str(DEFAULT_HISTORY))
     s.add_argument("--agents-root", default=None)
 
-    c = sub.add_parser("collect", help="record a submission's performance from its replays + score")
-    c.add_argument("submission_id", type=int)
-    c.add_argument("--replays", required=True, help="dir of <stem>.replay.json + <stem>.log.json pairs")
-    c.add_argument("--seat", type=int, default=0)
+    c = sub.add_parser("collect", help="download a submitted build's replays + score → performance.jsonl")
+    c.add_argument("submission_id", nargs="?", type=int, help="which submission (default: latest submitted)")
+    c.add_argument("--max-replays", type=int, default=20, help="max episodes to download")
+    c.add_argument("--history", default=str(DEFAULT_HISTORY))
 
     d = sub.add_parser("dashboard", help="render the over-time state-vs-performance dashboard")
     d.add_argument("--out", default=str(REPO / "data" / "dashboard.html"))
@@ -63,10 +73,10 @@ def main(argv=None) -> int:
         from submit.dashboard import build_dashboard
         print(f"dashboard -> {build_dashboard(out=args.out)}")
     elif args.cmd == "collect":
-        from submit.collect import collect, fetch_from_dir, kaggle_score
-        sample = collect(args.submission_id, score_fn=kaggle_score,
-                         fetch_fn=lambda _ref: fetch_from_dir(args.replays), seat=args.seat)
-        print(f"collected #{args.submission_id}: {sample['record']} score={sample['public_score']}")
+        from submit.collect import collect_submission
+        sample = collect_submission(args.submission_id, history=args.history,
+                                    max_replays=args.max_replays)
+        print(f"collected #{sample['submission_id']}: {sample['record']} score={sample['public_score']}")
     elif args.cmd == "build":
         row = build(Path(args.agent).name, out=args.out, builds=args.builds,
                     agents_root=args.agents_root, submission_id=args.submission_id, label=args.label)

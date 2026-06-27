@@ -15,12 +15,23 @@ agents get wrong over the competition. See the [Training context](../tools/train
 | `decode.py` | `option_label(option, current)` → readable dropdown labels |
 | `categories.py` | the closed Category vocabulary + `is_valid_category` |
 | `correction.py` | `Correction` + `build_correction(...)` with validation |
-| `store.py` | append-only JSONL log at `data/corrections/corrections.jsonl` (committed) |
+| `store.py` | per-build correction tree `data/corrections/<agent_build>/corrections.jsonl` (committed); routes by `agent_build`, reads union the tree, **dedup by default** |
 | `seats.py` | `detect_seat(replay, team_name)` — which seat is ours |
 | `report.py` | `summarize(...)` + `build_report(log, out)` → offline HTML trends |
 
 A **Decision** = one engine `select` at one frame; `chosen`/`correct` index `select.option`.
 A **Correction** embeds a self-contained snapshot, so it outlives the replay (ADR-0015).
+
+**One Correction per decision (enforced).** `record_correction` refuses a second tag on a decision
+already corrected — `a correction already exists at this decision … edit or remove it first` — so
+conflicting tags (two different `correct`/`category` on one `(episode, seat, frame)`) can't be created.
+To change a call, use the panel's **edit** (it passes `replace_id` so refining its own tag is allowed)
+or **✕ remove**. The same frame in a *different* episode is a distinct blunder (allowed).
+
+**Dedup (automatic, backstop).** `load_corrections` also collapses exact duplicates by default
+(same episode/seat/frame/chosen/correct/category, keeping the latest), so the Tuner, report and
+`/blunder-buster` never double-count a legacy/imported repeat. `python tools/train/dedup_corrections.py`
+physically compacts the file and lists any residual conflicts; `dedup=False` reads the raw history.
 
 ## Category vocabulary (extensible, by process)
 
@@ -56,11 +67,22 @@ The build inlines everything into a single self-contained `dist/index.html` (~60
   the viewer's perspective and auto-labels each saved blunder **own** (your agent + submission)
   or **peer** (the opponent's team name) from the frame's acting seat — so both players'
   blunders are taggable in one pass.
+- The **live agent trace** (ADR-0019): when the collected `episode-<id>-agent-<seat>-logs.json`
+  sits beside the replay, the panel shows *how the agent actually decided* at the frame — each
+  option's `score`, fired hypotheses (id + weight), and the decision `margin` — and embeds that
+  `@T` record on the saved Correction as `live_trace`. Auto-loaded by the CLI (`telemetry_log`).
+- **Batch mode**: pass a *directory* (e.g. `data/replays/<build_stem>/`) instead of one file and
+  the top bar gains `◀ k/N · ep <id> ▶` to step across its Replays (episode-id order) without
+  leaving the tool. Each switch re-serves that Replay's frames + live trace and resets "Analyze as"
+  to its own-seat (varies per Replay); the right-pane list re-scopes to that episode. One shared
+  `corrections.jsonl`; build identity comes from the directory stem (`batch.discover_replays` /
+  `batch.load_game`).
 
 ## Run
 
 ```
 python tools/train/blunder_correction.py <replay.json|.gz> --team <ours> --agent mega_starmie
+python tools/train/blunder_correction.py data/replays/<build_stem>/ --team <ours> --agent mega_starmie  # batch
 python tools/train/blunder_report.py                         # rebuild the trend report
 python -m pytest tests/test_blunder_*.py -q                  # data-spine tests (REQ-BLUNDER-####)
 ```

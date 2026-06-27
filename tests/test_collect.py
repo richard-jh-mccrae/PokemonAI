@@ -92,3 +92,111 @@ def test_collect_orchestrates_score_fetch_parse_and_record(tmp_path):
     assert sample["submission_id"] == 7 and sample["public_score"] == 1200.0
     assert sample["kaggle_ref"] == "me/x/9"
     assert sample["record"]["wins"] == 2                      # both fetched matches parsed + recorded
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_collect_submission_defaults_to_latest_submitted_into_artifact_dir(tmp_path):
+    from submit.collect import collect_submission
+    from submit.history import append_history
+
+    history = tmp_path / "agent_history.jsonl"
+    for r in [{"submission_id": 1, "artifact": "a1", "submitted_at": "t1"},
+              {"submission_id": 2, "artifact": "a2", "submitted_at": "t2"}]:
+        append_history(history, r)
+    canned = {"result": "win", "opponent_archetype": "A",
+              "decision_ms": {"count": 2, "median_ms": 1.0, "max_ms": 3.0},
+              "telemetry": {"decisions": 2, "tier_mix": {"0": 2}}}
+    seen = {}
+
+    def dl(row, dest, n, kaggle_ref=None):
+        seen.update(artifact=row["artifact"], dest=str(dest), n=n, ref=kaggle_ref)
+        return [("R", "L", 0), ("R", "L", 1)]                # (replay, log, seat) per episode
+
+    sample = collect_submission(history=history, replays_root=tmp_path / "replays",
+                                perf_path=tmp_path / "p.jsonl", max_replays=7, download_fn=dl,
+                                parse_fn=lambda r, l, seat=0, cards=None: canned,
+                                score_fn=lambda sid: {"kaggle_ref": "12345", "public_score": 900.0, "rank": 1})
+
+    assert sample["submission_id"] == 2                       # latest submitted, by default
+    assert seen["artifact"] == "a2" and seen["dest"].endswith("a2")   # data/replays/<artifact stem>
+    assert seen["n"] == 7 and seen["ref"] == "12345"         # --max-replays + Kaggle id plumbed through
+    assert sample["record"]["wins"] == 2 and sample["public_score"] == 900.0
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_collect_submission_can_target_an_explicit_id(tmp_path):
+    from submit.collect import collect_submission
+    from submit.history import append_history
+
+    history = tmp_path / "h.jsonl"
+    for r in [{"submission_id": 1, "artifact": "a1", "submitted_at": "t1"},
+              {"submission_id": 2, "artifact": "a2", "submitted_at": "t2"}]:
+        append_history(history, r)
+    seen = {}
+
+    sample = collect_submission(1, history=history, replays_root=tmp_path, perf_path=tmp_path / "p.jsonl",
+                                download_fn=lambda row, dest, n, kaggle_ref=None: seen.update(a=row["artifact"]) or [],
+                                score_fn=lambda sid: {"kaggle_ref": None, "public_score": None, "rank": None})
+    assert sample["submission_id"] == 1 and seen["a"] == "a1"   # honored the explicit id
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_cli_collect_dispatches_with_supported_kwargs_only(monkeypatch, tmp_path):
+    import submit.collect as collectmod
+
+    captured = {}
+
+    def fake(submission_id=None, **kw):
+        captured.update(submission_id=submission_id, **kw)
+        return {"submission_id": submission_id or 1, "record": {}, "public_score": None}
+
+    monkeypatch.setattr(collectmod, "collect_submission", fake)
+    from submit_agent import main
+
+    rc = main(["collect", "5", "--max-replays", "9", "--history", str(tmp_path / "h.jsonl")])
+    assert rc == 0
+    assert captured["submission_id"] == 5 and captured["max_replays"] == 9
+    assert "seat" not in captured                        # regression: CLI must not pass a per-episode seat
+
+
+class _FakeApi:
+    """A stand-in Kaggle API that records which episodes it was asked to download."""
+
+    def __init__(self, ep_ids):
+        self._ep_ids = ep_ids
+        self.replay_calls: list = []
+        self.log_calls: list = []
+
+    def competition_list_episodes(self, submission_id=None):
+        return [type("Ep", (), {"id": i})() for i in self._ep_ids]   # no agents -> seat 0
+
+    def competition_episode_replay(self, episode_id=None, path=None):
+        self.replay_calls.append(episode_id)
+        (Path(path) / f"episode-{episode_id}-replay.json").write_text(
+            json.dumps({"r": episode_id}), encoding="utf-8")
+
+    def competition_episode_agent_logs(self, episode_id=None, agent_index=None, path=None):
+        self.log_calls.append((episode_id, agent_index))
+        (Path(path) / f"episode-{episode_id}-agent-{agent_index}-logs.json").write_text(
+            json.dumps([]), encoding="utf-8")
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_kaggle_download_skips_episodes_already_on_disk(tmp_path):
+    """Re-running `collect` must reuse already-downloaded episodes and fetch only the new ones."""
+    from submit.collect import _kaggle_download
+
+    dest = tmp_path / "replays"
+    dest.mkdir()
+    # episode 100 was collected on a prior run — both its files are already present
+    (dest / "episode-100-replay.json").write_text(json.dumps({"r": 100}), encoding="utf-8")
+    (dest / "episode-100-agent-0-logs.json").write_text(json.dumps([]), encoding="utf-8")
+
+    api = _FakeApi([100, 200])      # 100 cached, 200 is new
+    triples = _kaggle_download({"artifact": "x"}, dest, 20, kaggle_ref="42",
+                               api=api, sleep=lambda _s: None)
+
+    assert api.replay_calls == [200]            # only the new episode hit the network
+    assert api.log_calls == [(200, 0)]
+    assert len(triples) == 2                     # both episodes returned (cached + freshly fetched)
+    assert {t[0]["r"] for t in triples} == {100, 200}

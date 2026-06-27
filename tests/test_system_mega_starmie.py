@@ -51,8 +51,8 @@ def _open_active():   # SETUP: choose the opening Active (Staryu vs Cinderace)
                        current=state(hand=[STARYU, CINDERACE]))
 
 
-def _play_search():   # SETUP: a tutor/search card (Buddy Poffin) vs a basic (Staryu)
-    return make_select([card_opt(HAND, 0), card_opt(HAND, 1)],
+def _play_search():   # SETUP: PLAY a tutor/search card (Buddy Poffin) vs a basic (Staryu)
+    return make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
                        current=state(hand=[BUDDY_POFFIN, STARYU]))
 
 

@@ -89,6 +89,79 @@ def test_manifest_carries_provenance_join_keys_and_deck(tmp_path):
     assert 1031 in counts                            # Mega Starmie ex is in the list
 
 
+@pytest.mark.req("REQ-SUB-0003")
+def test_manifest_deck_resolves_card_names_and_categories(tmp_path):
+    agent = _agent_with_tuned(tmp_path, {})
+    cards = {1031: {"name": "Mega Starmie ex", "category": "pokemon"}}
+    deck = build_manifest(agent, cards=cards)["deck"]
+
+    star = next(c for c in deck["cards"] if c["id"] == 1031)
+    assert star["name"] == "Mega Starmie ex" and star["category"] == "pokemon"
+
+
+@pytest.mark.req("REQ-SUB-0004")
+def test_brief_renders_the_decklist_with_card_names_grouped(tmp_path):
+    agent = _agent_with_tuned(tmp_path, {})         # real fixture deck + the committed card cache
+    html = render_brief(build_manifest(agent, when=datetime(2026, 6, 25), git_hash="abc1234"))
+
+    assert "Mega Starmie ex" in html                # real card names, not just "60 cards"
+    # grouped into the standard decklist sections (the accented heading is rendered, not a JSON value)
+    assert "Pokémon" in html and "Trainer" in html and "Energy" in html
+    assert "3× Mega Starmie ex" in html             # count × name, like a real list
+
+
+@pytest.mark.req("REQ-SUB-0004")
+def test_brief_falls_back_to_size_when_no_card_db(tmp_path):
+    agent = _agent_with_tuned(tmp_path, {})
+    html = render_brief(build_manifest(agent, cards={}, when=datetime(2026, 6, 25), git_hash="abc1234"))
+
+    assert "Deck — 60 cards" in html                # still shows the size header
+    assert "<li" not in html                         # but no broken/empty decklist
+
+
+@pytest.mark.req("REQ-SUB-0010")
+def test_deck_diff_classifies_added_removed_and_recounted():
+    from submit.brief import _deck_diff
+
+    prev = {"cards": [{"id": 1, "count": 4, "name": "A"}, {"id": 2, "count": 2, "name": "B"},
+                      {"id": 3, "count": 1, "name": "Gone"}]}
+    cur = {"cards": [{"id": 1, "count": 4, "name": "A"}, {"id": 2, "count": 3, "name": "B"},
+                     {"id": 4, "count": 2, "name": "New"}]}
+
+    added, removed, changed, badges = _deck_diff(prev, cur)
+    assert [c["id"] for c in added] == [4] and badges[4] == "new"
+    assert [c["id"] for c in removed] == [3]                  # a card that left the deck
+    assert changed[0]["id"] == 2 and (changed[0]["from"], changed[0]["to"]) == (2, 3)
+    assert badges[2] == "+1"                                  # the inline recount marker
+
+
+@pytest.mark.req("REQ-SUB-0010")
+def test_deck_diff_is_empty_with_no_baseline_or_no_change():
+    from submit.brief import _deck_diff, _deck_diff_html
+
+    cur = {"cards": [{"id": 1, "count": 4, "name": "A"}]}
+    assert _deck_diff(None, cur) == ([], [], [], {})         # first build: nothing to diff
+    assert _deck_diff(cur, cur) == ([], [], [], {})          # rebuilt, same deck
+    assert _deck_diff_html(2, [], [], []) == ""              # -> no callout rendered
+
+
+@pytest.mark.req("REQ-SUB-0010")
+def test_brief_renders_a_highlighted_deck_change_callout(tmp_path):
+    agent = _agent_with_tuned(tmp_path, {})
+    manifest = build_manifest(agent, when=datetime(2026, 6, 25), git_hash="abc1234")
+    star = next(c for c in manifest["deck"]["cards"] if c.get("name") == "Mega Starmie ex")
+    # a baseline that differs: one extra Mega Starmie ex, plus a now-removed tech card
+    prev = {"cards": [{**c, "count": c["count"] + 1} if c is star else c
+                      for c in manifest["deck"]["cards"]]
+            + [{"id": 999999, "count": 2, "name": "Old Tech", "category": "item"}]}
+
+    html = render_brief(manifest, prev_deck=prev, prev_build_id=4)
+    assert "Deck changed since build #4" in html             # the highlighted callout
+    assert "Old Tech" in html and "(removed)" in html        # the card that left
+    assert "4 → 3" in html                                    # Mega Starmie ex recount (prev->cur)
+    assert "deckdiff" in html and "class='changed'" in html  # styled callout + inline highlight
+
+
 @pytest.mark.req("REQ-SUB-0008")
 def test_manifest_surfaces_training_provenance_from_sidecar(tmp_path):
     agent = _agent_with_tuned(tmp_path, {"open-cinderace": 99.0})

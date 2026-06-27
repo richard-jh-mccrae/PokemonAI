@@ -52,3 +52,26 @@ Each Correction also records the **build that played the game** — `agent_build
 flags to remember. This ties every correction to a concrete agent version + date, so the report
 can show how the blunder profile evolved build-by-build over the competition. Pre-existing records
 backfill via `tools/train/backfill_obs.py`.
+
+## Amendment: per-build storage (correction tree)
+
+The log is no longer one growing `data/corrections/corrections.jsonl` but a **tree mirroring
+`data/replays/<stem>/`**: `data/corrections/<agent_build>/corrections.jsonl`. Routing is automatic —
+a Correction carries its `agent_build` (the build-identity amendment), so `store.append_correction`
+files it under that build's subdir; corrections with no parseable build go to `_unfiled/`. A `.jsonl`
+path addresses one file; a **directory** addresses the whole tree (`load_corrections` unions + dedups
+every `<build>/corrections.jsonl`). This gives competition-long traceability — at the end you can see
+exactly which build had which corrections (the report's by-build view reads the tree). Reusable
+consumers are unchanged (they read the root dir by default). Migration: the single file was split by
+`agent_build` into per-build subdirs.
+
+## Amendment ([ADR-0019](0019-submissions-are-traceable-and-tracked.md)): embed the live trace
+
+When the game's **Decision Telemetry** log (`episode-<id>-agent-<seat>-logs.json`) is available, the
+Correction also embeds **`live_trace`** — the `@T` record the *shipped* agent emitted at this exact
+decision (`plan`, `tier`, `chosen`, per-option `score`/`tac`/`fired:[[hyp_id, weight]]`, `margin`):
+the ground truth for *how the agent actually decided* (not a re-derivation). Joined by the positional
+frame↔record map in `train.blunder.telemetry_log`, validated by option-count + chosen. It is the
+`before` anchor the **retest** (`train.tuner.retest`, same `telemetry.to_record` format) diffs the
+post-fix decision against. It reflects the build's *shipped* `tuned.json`, which can differ from
+current source — that divergence is the retest signal. Backfilled by `tools/train/backfill_obs.py`.

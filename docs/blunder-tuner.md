@@ -15,8 +15,9 @@ only (v1).
 
 ## How it works
 
-Input: `data/corrections/corrections.jsonl` (each Correction embeds the agent `obs` for its
-Decision — int-enum, the Pilot's exact input; ADR-0015 amendment). For each Correction:
+Input: the **per-build correction tree** `data/corrections/<agent_build>/corrections.jsonl`
+(`store.load_corrections` unions it; ADR-0015 amendment), each Correction embedding the agent `obs`
+for its Decision — int-enum, the Pilot's exact input. For each Correction:
 
 1. **Featurize** — `Pilot.explain(obs)` ([src/common/pilot.py](../src/common/pilot.py)) returns an
    `OptionTrace` per option, whose `.fired` is the set of Hypotheses that fired (the feature vector).
@@ -26,9 +27,16 @@ Decision — int-enum, the Pilot's exact input; ADR-0015 amendment). For each Co
    - gap is the combat term → `tactical` (out of scope)
 3. **Fan-out** (one Correction → several signals):
    - **W**: a ranking constraint `Σ wᵢ·(firedᵢ_correct − firedᵢ_chosen) + Δtactical > 0`. Fit all
-     constraints by convex **linear-ranking** (structured-perceptron / logistic rank, ADR-0009),
-     band-regularized to the [weights scale](weights.md) for legibility → write the per-deck
-     **`tuned.json`** (the `{hyp_id: weight}` overrides the Pilot merges by id — `pilot.py:_weight`).
+     constraints with a **soft-margin** structured perceptron (`fit.fit_weights`): an L2 pull back to
+     the authored seed (`reg`) + a band clamp (±100, [weights scale](weights.md)) bound the fit, and
+     a **pocket** returns the lowest-objective iterate `J = Σ hinge + ½·reg·Σ(w−seed)²` (not the
+     oscillating last step). The quadratic drift term is what separates a good fit from an overfit:
+     spreading a small move over several weights is cheap, but collapsing one doctrine weight far from
+     its seed is expensive, so the fit only does the latter when the ranking payoff truly outweighs it.
+     `reg` is the **conservatism knob** (`tune.py --reg`, default `fit.DEFAULT_REG=0.25`); the
+     [ladder A/B](adr/0009-training-methodology.md) is the ultimate arbiter of magnitude. Result →
+     the per-deck **`tuned.json`** (the `{hyp_id: weight}` overrides the Pilot merges by id —
+     `pilot.py:_weight`).
    - **H**: propose a **Hypothesis** (`id`, `rationale` from the Correction, seed weight by band, a
      `when()` *sketch*) for a human to commit to `strategy.py` / `general_strategy.py`. *Highest
      leverage — one blunder fixes a whole class of states.*
@@ -63,9 +71,17 @@ The Tuner's two outputs reach the agent two different ways.
 **Weights (`tuned.json`) — deterministic, no LLM.** `main.py` loads it as the Pilot's `overrides`
 (like `deck.csv`); `package_agent` ships it in the Bundle; `Pilot._weight` resolves each weight as
 `overrides.get(h.id, h.weight)`. The file is written **sparse** — only weights that differ from the
-authored seed (`tuner.io.sparse_overrides`) — so it *is* the set of deltas that take effect; `{}`
-means no weight-route corrections yet (all leverage is in the proposals). `tune.py` prints the
-`seed -> new` diff; `tests/test_tuned_wiring.py` guards that every shipped key is a real Hypothesis id.
+authored seed (`tuner.io.sparse_overrides`) — so it *is* the set of deltas that take effect.
+
+The fit ships **only if it earns it (adoption gate).** `tune()` keeps the fitted weights only when
+they satisfy **strictly more** corrections than the authored seeds already do; otherwise the drift
+bought nothing (or traded laterally) and the seeds are kept — so `{}` is the honest, common result on
+a corpus whose blunders need new *rules*, not reweighting (this is why a hand-curated `tuned.json`
+kept getting reset). `tune.py` prints `W-route: <sat>/<n> satisfied (fit adopted | seeds kept)`, the
+`seed -> new` diff for any adopted change, and an **`UNSATISFIED`** line per correction the shipped
+weights still can't honour (genuine conflict, or needs an H, not a weight). `tests/test_tuned_wiring.py`
+guards that every shipped key is a real Hypothesis id. (`tune.py` reconfigures stdout to UTF-8 so the
+`→` in energy-attach labels can't crash the run on a cp1252 console.)
 
 **Hypotheses (`missing_hypothesis` proposals) — the `/blunder-buster` skill.** An interactive
 Claude session, per **cluster** of related Corrections:
@@ -79,6 +95,22 @@ Claude session, per **cluster** of related Corrections:
 
 Status: `assumed` → `testing` (Verifier passed) → `confirmed`/`refuted` (human, after ladder A/B).
 The `rationale` is the **authoring spec**, so the inspector prompts for the *general rule* at capture.
+
+### Live Decision Telemetry — closing the loop ([ADR-0019](adr/0019-submissions-are-traceable-and-tracked.md))
+
+The shipped agent emits one `@T` record per decision (`common.telemetry`); `collect` saves it as
+`episode-<id>-agent-<seat>-logs.json` beside each replay. This is the **ground truth** trace the
+blunder loop reads end to end:
+
+- **See how it decided** — `train.blunder.telemetry_log` parses the log and joins a Correction's
+  `(seat, frame)` to its live record (positional map, validated by option-count + `chosen`). The
+  inspector surfaces it per frame (real `score`/`fired`/`margin`), and `record_correction` embeds it
+  as `Correction.live_trace`.
+- **Retest = see the log after the fix** — `train.tuner.retest` re-derives the decision under the
+  candidate Pilot via `telemetry.to_record(pilot.explain(obs))` (the *same* `@T` format) and diffs it
+  against `live_trace`: `chosen_before→after`, `margin`, and `fixed` (correct now chosen). Local +
+  instant; the full-game ladder A/B stays the ship gate. `/blunder-buster` runs this per cluster
+  member as before/after proof.
 
 ### Build order (shipped)
 1. **Wire weights** (deterministic) — done: `main.py` loads `overrides=_read_tuned()`,

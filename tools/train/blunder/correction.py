@@ -51,6 +51,7 @@ class Correction:
     obs: dict | None = None     # the agent observation (int-enum) for the Tuner to replay the Pilot
     agent_build: str | None = None  # submission-folder stem of the build that played (traceability)
     built_at: str | None = None     # that build's timestamp (ISO), parsed from the stem
+    live_trace: dict | None = None  # the live @T Decision Telemetry record this game emitted (ADR-0019)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -85,6 +86,7 @@ def build_correction(
     obs: dict | None = None,
     agent_build: str | None = None,
     built_at: str | None = None,
+    live_trace: dict | None = None,
 ) -> Correction:
     """Validate and assemble a Correction from a tagged Decision.
 
@@ -122,4 +124,5 @@ def build_correction(
         obs=obs if obs is not None else getattr(decision, "obs", None),
         agent_build=agent_build,
         built_at=built_at,
+        live_trace=live_trace,
     )

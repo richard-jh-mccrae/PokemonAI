@@ -114,6 +114,23 @@ Weakness, ≥ my Active's remaining HP) **and** I have a Bench. The threat estim
 engine stats (`maxDamage` / `weakness` / HP); attack-affordability is a future refinement.
 **Source:** F8 / F14 — TCG Protectors (Prize Trade); JustInBasil (Secondary Attackers).
 
+## Targeting the opponent's Bench
+
+### `snipe-the-threat` · weight 20 · status: testing
+> When an attack lets you choose which benched Pokémon to damage, hit the biggest threat. A benched
+> Pokémon already carrying Energy is closest to attacking, so sniping it (chip or Knock Out) denies
+> the opponent their next attacker rather than poking a bare, not-yet-online benchsitter.
+
+**Reads:** at a `DAMAGE` select, the per-option `Context.target_energy` / `target_is_threat` — the
+Energy attached to the **benched** Pokémon a `CARD` option targets (resolved off the option's
+`area`/`index`/`playerIndex` via `Pilot._option_pokemon`, the same path as `_option_card_id`; `None`
+for non-target options). Fires on the bench target that already carries Energy. This is the first
+wired **opponent-Bench targeting** signal the `gust-the-damaged` design below anticipated.
+**Caveat:** "threat" has a second face — a Pokémon that *evolves* into an attacker (e.g. Riolu→Lucario)
+is a threat with **zero** Energy, which this energy signal can't see; that is a separate, deferred
+cluster (a Function-Tag / Line lookup, not Energy). **Source:** F9 — JustInBasil (Gusting: remove
+the opponent's developing attacker).
+
 ## Combat (Tactical Evaluator)
 
 These live in the Search-backed Tactical Evaluator, not as positional weights — they score

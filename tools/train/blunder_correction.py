@@ -1,9 +1,11 @@
-"""blunder_correction -- open a replay in the tagging shell and author Corrections.
+"""blunder_correction -- open a replay (or a directory of them) in the tagging shell.
 
-    python tools/train/blunder_correction.py <replay.json|.gz> --team <ourTeam> --agent mega_starmie
+    python tools/train/blunder_correction.py <replay.json|.gz | dir/> --team <ourTeam> --agent mega_starmie
 
-Loads a cabt replay, serves the local tagging shell (official viewer + side panel),
-and appends each tagged blunder to the Correction log. See docs/blunder-inspector.md.
+A single Replay file tags one Episode; a directory (e.g. data/replays/<build_stem>/) is batch
+mode -- the shell's ◀/▶ steps across its Replays in episode-id order without leaving the tool.
+Serves the local tagging shell (official viewer + side panel) and appends each tagged blunder to
+the Correction log. See docs/blunder-inspector.md.
 """
 from __future__ import annotations
 
@@ -17,8 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
 
-from meta_tracker.parse import load_replay  # noqa: E402
-from train.blunder.provenance import build_identity  # noqa: E402
+from train.blunder.batch import discover_replays  # noqa: E402
 from train.blunder.shell import serve  # noqa: E402
 from train.blunder.store import DEFAULT_PATH  # noqa: E402
 
@@ -26,8 +27,8 @@ _VIEWER_DIST = Path(__file__).resolve().parent / "blunder" / "viewer" / "dist"
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Tag blunders in a replay -> Corrections")
-    ap.add_argument("replay", help="path to a cabt replay (.json or .json.gz)")
+    ap = argparse.ArgumentParser(description="Tag blunders in a replay (or a directory) -> Corrections")
+    ap.add_argument("replay", help="a cabt replay (.json/.json.gz) OR a directory of them (batch)")
     ap.add_argument("--team", help="our Kaggle team name (to auto-detect our seat)")
     ap.add_argument("--agent", default="", help="deck build name, e.g. mega_starmie")
     ap.add_argument("--source", default="own", choices=["own", "peer"])
@@ -39,15 +40,16 @@ def main(argv=None):
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args(argv)
 
-    replay = load_replay(args.replay)
-    bid = build_identity(args.replay)   # traceability: which agent build played this game (ADR-0018)
+    replays = discover_replays(args.replay)   # one file, or every Replay in a directory (batch)
+    if not replays:
+        raise SystemExit(f"no replays found at {args.replay}")
+    print(f"blunder_correction: {len(replays)} replay(s) from {args.replay}")
     if not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}/")).start()
     serve(
-        replay, store_path=args.store, agent=args.agent, source=args.source,
+        replays, store_path=args.store, agent=args.agent, source=args.source,
         our_team=args.team, submission_id=args.submission_id,
-        agent_version=args.agent_version or bid["agent_version"],
-        agent_build=bid["agent_build"], built_at=bid["built_at"],
+        agent_version=args.agent_version,
         viewer_dir=args.viewer_dir, port=args.port,
     )
 
