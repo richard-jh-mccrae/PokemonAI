@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from sim.battle import (AgentServer, MatchResult, format_report, play_match, read_deck,
-                        resolve_contestant, run_battle, tally, wilson_ci)
+                        resolve, resolve_contestant, run_battle, tally, wilson_ci)
 
 REPO = Path(__file__).resolve().parents[1]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
@@ -38,6 +38,21 @@ def test_resolve_unknown_id_or_name_raises_naming_the_miss():
 
 
 @pytest.mark.req("REQ-SIM-0006")
+def test_resolve_name_is_the_working_tree_source_not_a_build(tmp_path):
+    # a bare agent name resolves to the live src/agents/<name> dir, not the Build Ledger
+    row, bundle = resolve("mega_starmie", [], agents_root=FIXTURE_AGENTS,
+                          out=tmp_path, into=tmp_path)
+    assert bundle == FIXTURE_AGENTS / "mega_starmie"
+    assert row["label"] == "working-tree" and row["submission_id"] == "src"
+
+
+@pytest.mark.req("REQ-SIM-0006")
+def test_resolve_unknown_working_tree_name_errors(tmp_path):
+    with pytest.raises(ValueError, match="nope"):
+        resolve("nope", [], agents_root=FIXTURE_AGENTS, out=tmp_path, into=tmp_path)
+
+
+@pytest.mark.req("REQ-SIM-0006")
 def test_wilson_ci_is_wide_at_low_n_and_tight_at_high_n():
     lo_small, hi_small = wilson_ci(6, 10)
     lo_big, hi_big = wilson_ci(600, 1000)
@@ -68,6 +83,15 @@ def test_report_states_both_contestants_the_score_and_the_ci():
     assert "#3 wins 31" in report and "#1 wins 17" in report and "draws 2" in report
     assert "win-rate 62%" in report and "95% CI" in report   # 31/50 = 62%, with honesty interval
     assert "crashes 0" in report
+
+
+@pytest.mark.req("REQ-SIM-0006")
+def test_report_keeps_the_dirty_flag_on_a_working_tree_contestant():
+    src_row = {"submission_id": "src", "agent": "mega_starmie", "label": "working-tree",
+               "git_hash": "f1cd9bf-dirty"}
+    t = tally([MatchResult(winner=0)] * 3)
+    report = format_report(src_row, ROWS[0], t, elapsed=1.0, jobs=2, mode="curiosity")
+    assert "#src mega_starmie (working-tree, f1cd9bf-dirty)" in report   # -dirty not truncated away
 
 
 @pytest.mark.req("REQ-SIM-0006")

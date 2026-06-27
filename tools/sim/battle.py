@@ -82,10 +82,16 @@ def tally(results: list[MatchResult]) -> dict:
     }
 
 
+def _short_hash(h: str) -> str:
+    """Shorten the hex of a git hash to 7 while keeping any suffix (e.g. `f1cd9bf-dirty`)."""
+    head, _, suffix = (h or "").partition("-")
+    return head[:7] + (f"-{suffix}" if suffix else "")
+
+
 def _tag(row: dict) -> str:
     """`#3 mega_starmie (tuned, ccc)` — the contestant's provenance, one line."""
     sid = row.get("submission_id", "?")
-    bits = [b for b in (row.get("label"), (row.get("git_hash") or "")[:7]) if b]
+    bits = [b for b in (row.get("label"), _short_hash(row.get("git_hash"))) if b]
     suffix = f" ({', '.join(bits)})" if bits else ""
     return f"#{sid} {row.get('agent', '?')}{suffix}"
 
@@ -253,6 +259,31 @@ def _bundle_dir(row: dict, *, out: Path, into: Path) -> Path:
     return dest
 
 
+def _git_short() -> str:
+    """The current short commit (+`-dirty`) — provenance for a working-tree contestant."""
+    try:
+        head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO,
+                              capture_output=True, text=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=REPO,
+                               capture_output=True, text=True).stdout.strip()
+        return (head or "?") + ("-dirty" if dirty else "")
+    except OSError:
+        return "working"
+
+
+def resolve(spec: str, rows: list[dict], *, agents_root: Path, out: Path, into: Path) -> tuple:
+    """Resolve a CLI contestant to a (provenance row, Bundle dir): an **integer** is a Build id
+    (its zip is extracted under `into`); a **name** is the working-tree agent under `agents_root`."""
+    if spec.isdigit():
+        row = resolve_contestant(spec, rows)
+        return row, _bundle_dir(row, out=out, into=into)
+    agent_dir = Path(agents_root) / spec
+    if not (agent_dir / "main.py").exists():
+        raise ValueError(f"no working-tree agent {spec!r} under {agents_root} (or pass a build id)")
+    row = {"submission_id": "src", "agent": spec, "label": "working-tree", "git_hash": _git_short()}
+    return row, agent_dir
+
+
 def _default_jobs() -> int:
     return min(10, os.cpu_count() or 1)
 
@@ -268,31 +299,32 @@ def main(argv=None) -> int:
     from submit.history import read_history
 
     ap = argparse.ArgumentParser(
-        description="Battle: N Matches between two Builds (a build id or agent name each). "
-                    "A curiosity read, not a promotion gate — see tools/sim/CONTEXT.md.")
-    ap.add_argument("a", help="contestant A: a build id (e.g. 7) or agent name (its latest build)")
+        description="Battle: N Matches between two contestants. A curiosity read, not a "
+                    "promotion gate — see tools/sim/CONTEXT.md.")
+    ap.add_argument("a", help="contestant A: a build id (e.g. 7) or agent name (working-tree source)")
     ap.add_argument("b", help="contestant B: a build id or agent name")
     ap.add_argument("-n", "--games", type=int, default=20, help="number of Matches (default 20)")
     ap.add_argument("-j", "--jobs", type=int, default=_default_jobs(),
                     help="worker processes (default: min(10, cores))")
     ap.add_argument("--out", default=str(DEFAULT_OUT), help="dir holding the build artifact zips")
     ap.add_argument("--builds", default=str(DEFAULT_BUILDS), help="the Build Ledger")
+    ap.add_argument("--agents-root", default=str(REPO / "src" / "agents"),
+                    help="dir of working-tree agents (for a name contestant)")
     args = ap.parse_args(argv)
 
     rows = read_history(args.builds)
-    try:
-        a_row = resolve_contestant(args.a, rows)
-        b_row = resolve_contestant(args.b, rows)
-    except ValueError as e:
-        print(f"error: {e}")
-        return 1
-
     with tempfile.TemporaryDirectory() as tmp:
-        dir_a = _bundle_dir(a_row, out=Path(args.out), into=Path(tmp))
-        dir_b = _bundle_dir(b_row, out=Path(args.out), into=Path(tmp))
+        try:
+            a_row, dir_a = resolve(args.a, rows, agents_root=args.agents_root,
+                                   out=Path(args.out), into=Path(tmp))
+            b_row, dir_b = resolve(args.b, rows, agents_root=args.agents_root,
+                                   out=Path(args.out), into=Path(tmp))
+        except ValueError as e:
+            print(f"error: {e}")
+            return 1
         t0 = time.monotonic()
         results = run_battle(dir_a, dir_b, read_deck(dir_a), read_deck(dir_b), args.games,
-                             jobs=args.jobs)
+                             jobs=args.jobs, extra_syspath=[REPO / "src"])
         elapsed = time.monotonic() - t0
 
     print(format_report(a_row, b_row, tally(results), elapsed=elapsed, jobs=args.jobs,
