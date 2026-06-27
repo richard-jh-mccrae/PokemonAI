@@ -13,12 +13,36 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .batch import load_game
 from .categories import CATEGORIES
 from .correction import SOURCES
+from .seats import detect_seat
 from .service import frames_payload, list_corrections, record_correction
 from .store import delete_correction
 
-STATE: dict = {}  # set by serve(): replay, our_team, agent, source, submission_id, store_path, viewer_dir
+STATE: dict = {}  # set by serve(): replays (paths), current, cache, our_team, agent, source, ...
+
+
+def _game() -> dict:
+    """The current Replay's loaded context (lazy + cached): replay, live trace, own-seat, build id."""
+    idx = STATE["current"]
+    cache = STATE["cache"]
+    if idx not in cache:
+        cache[idx] = load_game(STATE["replays"][idx])
+    return cache[idx]
+
+
+def _own_seat(game: dict) -> int | None:
+    """Default 'Analyze as' seat: the log-derived own-seat, else team-name detection."""
+    seat = game.get("live_seat")
+    return seat if seat is not None else detect_seat(game["replay"], STATE.get("our_team"))
+
+
+def _games_payload() -> dict:
+    game = _game()
+    info = game["replay"].get("info") or {}
+    return {"count": len(STATE["replays"]), "current": STATE["current"],
+            "episode_id": info.get("EpisodeId"), "own_seat": _own_seat(game)}
 
 
 def _json(handler: BaseHTTPRequestHandler, payload, code: int = 200) -> None:
@@ -47,11 +71,15 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             return _send_html(self, _SHELL_HTML)
         if self.path.startswith("/replay.json"):
-            return _json(self, STATE["replay"])
+            return _json(self, _game()["replay"])
         if self.path.startswith("/frames.json"):
-            return _json(self, frames_payload(STATE["replay"], STATE.get("our_team")))
+            game = _game()
+            return _json(self, frames_payload(game["replay"], STATE.get("our_team"),
+                                              game.get("live_records"), game.get("live_seat")))
         if self.path.startswith("/corrections.json"):
-            return _json(self, list_corrections(STATE["replay"], STATE["store_path"]))
+            return _json(self, list_corrections(_game()["replay"], STATE["store_path"]))
+        if self.path.startswith("/games.json"):
+            return _json(self, _games_payload())
         if self.path.startswith("/meta.json"):
             return _json(self, {
                 "categories": list(CATEGORIES),
@@ -73,11 +101,16 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/delete"):
             removed = delete_correction(str(form.get("id", "")), STATE["store_path"])
             return _json(self, {"ok": True, "removed": removed})
+        if self.path.startswith("/game"):                 # switch which Replay we're tagging
+            idx = max(0, min(len(STATE["replays"]) - 1, int(form.get("i", 0))))
+            STATE["current"] = idx
+            return _json(self, {"ok": True, **_games_payload()})
         if not self.path.startswith("/correction"):
             return _json(self, {"error": "not found"}, 404)
+        game = _game()
         try:
             corr = record_correction(
-                STATE["replay"],
+                game["replay"],
                 frame=int(form["frame"]),
                 correct=[int(i) for i in form["correct"]],
                 category=form["category"],
@@ -86,9 +119,11 @@ class _Handler(BaseHTTPRequestHandler):
                 agent=form.get("agent", STATE.get("agent", "")),
                 store_path=STATE["store_path"],
                 submission_id=form.get("submission_id", STATE.get("submission_id")),
-                agent_version=form.get("agent_version", STATE.get("agent_version")),
-                agent_build=STATE.get("agent_build"),
-                built_at=STATE.get("built_at"),
+                agent_version=STATE.get("agent_version") or game.get("agent_version"),
+                agent_build=game.get("agent_build"),
+                built_at=game.get("built_at"),
+                live_records=game.get("live_records"),
+                replace_id=form.get("editing_id") or None,
                 attribution=form.get("attribution") or None,
             )
         except (KeyError, ValueError) as exc:
@@ -97,13 +132,25 @@ class _Handler(BaseHTTPRequestHandler):
                             "source": corr.source, "correct_label": corr.correct_label})
 
 
-def serve(replay: dict, *, store_path, agent="", source="own", our_team=None,
-          submission_id=None, agent_version=None, agent_build=None, built_at=None,
-          viewer_dir="", host="127.0.0.1", port=8077):
-    """Start the shell server (blocking). Returns the bound port."""
-    STATE.update(replay=replay, store_path=str(store_path), agent=agent, source=source,
-                 our_team=our_team, submission_id=submission_id, agent_version=agent_version,
-                 agent_build=agent_build, built_at=built_at, viewer_dir=str(viewer_dir))
+def init_state(replays, *, store_path, agent="", source="own", our_team=None,
+               submission_id=None, agent_version=None, viewer_dir=""):
+    """Populate the server STATE for a batch of Replay paths (testable without starting HTTP)."""
+    STATE.clear()
+    STATE.update(replays=[str(p) for p in replays], current=0, cache={},
+                 store_path=str(store_path), agent=agent, source=source, our_team=our_team,
+                 submission_id=submission_id, agent_version=agent_version, viewer_dir=str(viewer_dir))
+
+
+def serve(replays, *, store_path, agent="", source="own", our_team=None,
+          submission_id=None, agent_version=None, viewer_dir="", host="127.0.0.1", port=8077):
+    """Start the shell server (blocking). Returns the bound port.
+
+    ``replays`` is the ordered list of Replay paths (batch mode; a single-file run is a
+    batch-of-one). Each Replay's own-seat + live Decision Telemetry (ADR-0019) and build identity
+    are loaded lazily per game (``batch.load_game``); ``◀/▶`` steps across them in the UI.
+    """
+    init_state(replays, store_path=store_path, agent=agent, source=source, our_team=our_team,
+               submission_id=submission_id, agent_version=agent_version, viewer_dir=viewer_dir)
     httpd = ThreadingHTTPServer((host, port), _Handler)
     print(f"blunder_correction shell -> http://{host}:{httpd.server_address[1]}/")
     try:
@@ -147,6 +194,10 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  <div id="vbar">
   <button id="reload">🎨 colorful</button><button id="tab">↗ new tab</button>
   <button id="plain">plain board</button>
+  <span id="gnav" style="display:flex;gap:4px;align-items:center;margin-left:8px;border-left:1px solid #ddd;padding-left:8px">
+   <button id="gprev">◀</button><b id="gpos">1/1</b>
+   <span style="color:#888">ep <span id="gep">?</span></span><button id="gnext">▶</button>
+  </span>
   <span class="hint">read the step X/N from the viewer → type it on the right →</span>
  </div>
  <iframe id="viewer" name="viewer" src="about:blank"></iframe>
@@ -220,22 +271,37 @@ function editItem(k){
 }
 async function boot(){
   META=await (await fetch('/meta.json')).json();
+  META.categories.forEach(c=>$('category').add(new Option(c,c)));
+  META.sources.forEach(s=>$('source').add(new Option(s,s)));
+  $('analyze').onchange=()=>{openColorful('viewer'); show(i);};
+  $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
+  loadGame();
+}
+async function loadGame(){
+  const g=await (await fetch('/games.json')).json();
+  $('gpos').textContent=(g.current+1)+'/'+g.count; $('gep').textContent=g.episode_id??'?';
+  $('gprev').disabled=g.current<=0; $('gnext').disabled=g.current>=g.count-1;
   const p=await (await fetch('/frames.json')).json();
   FR=p.frames; total=p.total; teamNames=p.team_names||[];
   replayObj=await (await fetch('/replay.json')).json();
-  $('ids').innerHTML=`ep <b>${p.episode_id??'?'}</b> · sub <b>${META.submission_id??'—'}</b> · detected seat <b>${p.seat??'(none)'}</b>`;
+  const seat=(g.own_seat!=null?g.own_seat:(p.seat!=null?p.seat:0));
+  $('ids').innerHTML=`ep <b>${p.episode_id??'?'}</b> · sub <b>${META.submission_id??'—'}</b> · own seat <b>${g.own_seat??p.seat??'(none)'}</b>`;
+  $('analyze').innerHTML='';
   $('analyze').add(new Option(`P0 — ${pname(0)}`,'0'));
   $('analyze').add(new Option(`P1 — ${pname(1)}`,'1'));
   $('analyze').add(new Option('both (self-play) — all own','both'));
-  $('analyze').value=(p.seat==null?'0':String(p.seat));
-  $('analyze').onchange=()=>{openColorful('viewer'); show(i);};
+  $('analyze').value=String(seat);
   $('step').max=total; $('oftotal').textContent='/'+total;
-  META.categories.forEach(c=>$('category').add(new Option(c,c)));
-  META.sources.forEach(s=>$('source').add(new Option(s,s)));
+  $('pick').innerHTML='';
   FR.forEach((f,k)=>$('pick').add(new Option(`${f.step}/${total} · T${f.turn} · ${f.context||'—'}${f.taggable?'':' (—)'}`,k)));
-  openColorful('viewer');
-  show(0);
-  refreshList();
+  editingId=null;
+  openColorful('viewer'); show(0); refreshList();
+}
+async function switchGame(d){
+  const g=await (await fetch('/games.json')).json();
+  const j=g.current+d; if(j<0||j>=g.count) return;
+  await fetch('/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({i:j})});
+  loadGame();
 }
 function show(n){
   i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i], own=isOwn(f.seat);
@@ -244,10 +310,23 @@ function show(n){
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
     `<div><b>${f.context||'(no decision here)'}</b>${f.type?' ('+f.type+')':''}</div>`;
   if(f.selected_label) h+=`<div>engine selected: <b>${f.selected_label}</b></div>`;
+  if(f.live) h+=liveTraceHtml(f);
   $('now').innerHTML=h;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);
   $('msg').className=''; $('msg').textContent=f.taggable?'':'(not a taggable frame — step to a decision)';
+}
+function liveTraceHtml(f){
+  const t=f.live, ch=new Set(t.chosen||[]);
+  const lbl=p=>{const o=(f.options||[]).find(o=>o.pos===p.i); return o?o.label:('opt '+p.i);};
+  const rows=t.opts.map(p=>{
+    const fired=(p.fired||[]).map(x=>`${x[0]} ${x[1]>0?'+':''}${x[1]}`).join(', ')||'—';
+    return `<div${ch.has(p.i)?' style="font-weight:700"':''}>`+
+      `${ch.has(p.i)?'▶ ':'&nbsp;&nbsp;'}${esc(lbl(p))} · <b>${p.score}</b>`+
+      (p.tac?` (tac ${p.tac})`:'')+` <span style="color:#777">${esc(fired)}</span></div>`;}).join('');
+  return `<div style="margin-top:6px;border-top:1px dashed #cbd; padding-top:4px">`+
+    `<div style="color:#446">live agent trace — plan ${esc(t.plan)} · tier ${t.tier} · margin ${t.margin}</div>`+
+    rows+`</div>`;
 }
 function gotoStep(s){const k=FR.findIndex(f=>f.step==s); if(k>=0)show(k);}
 $('prev').onclick=()=>show(i-1); $('next').onclick=()=>show(i+1);
@@ -260,7 +339,8 @@ $('save').onclick=async()=>{
   if(!correct.length){$('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
   const body={frame:f.frame,correct,category:$('category').value,rationale:$('rationale').value,
     source:$('source').value, agent: own?META.agent:pname(f.seat),
-    submission_id: own?META.submission_id:null, attribution:$('attribution').value};
+    submission_id: own?META.submission_id:null, attribution:$('attribution').value,
+    editing_id: editingId||''};   // edit flow: lets the server allow replacing this same tag
   const r=await fetch('/correction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json(); $('msg').className=j.ok?'ok':'ko';
   if(j.ok){

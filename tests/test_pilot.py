@@ -5,7 +5,8 @@ from common.pilot import Pilot, choose_plan
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Plan, Ready, Strategy
 from pilot_helpers import (
-    HAND, MAIN, PLAY, SETUP_ACTIVE, attack_opt, card_opt, make_select, opt, poke, state,
+    BENCH, DAMAGE, HAND, MAIN, PLAY, SETUP_ACTIVE, attack_opt, card_opt, make_select, opt,
+    poke, state,
 )
 
 MEGA_STARMIE, STARYU, CINDERACE = 1031, 1030, 666
@@ -259,6 +260,42 @@ def test_context_board_exposes_my_bench_count():
 
     with_bench = make_select([opt()], current=state(active=poke(700), bench=[poke(701)]))
     assert "empty-bench" not in fired(pilot.explain(with_bench).options[0])
+
+
+@pytest.mark.req("REQ-PILOT-0020")
+def test_context_exposes_attack_target_energy_and_threat():
+    # At a Damage/snipe select the Context must expose, per option, the attached-energy count of
+    # the benched Pokémon it targets — and the derived "threat" boolean (has Energy) — so a snipe
+    # trigger can prefer the energized (closest-to-attacking) target.
+    counts = Hypothesis(id="energy-2", rationale="", when=lambda c: c.target_energy == 2, weight=1)
+    threat = Hypothesis(id="threat", rationale="", when=lambda c: c.target_is_threat, weight=1)
+    pilot = Pilot(Strategy(hypotheses=[counts, threat]), deck=[1] * 60)
+    fired = lambda o: {h.id for h, _ in o.fired}
+
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(700),
+                                    opp_bench=[poke(800, energy=0), poke(900, energy=2)]))
+    opt0, opt1 = pilot.explain(obs).options
+    assert fired(opt0) == set()                       # bare target: no energy -> not a threat
+    assert fired(opt1) == {"energy-2", "threat"}      # energized target: count + threat exposed
+
+
+@pytest.mark.req("REQ-PILOT-0021")
+def test_target_energy_flips_the_snipe_and_is_none_off_a_damage_select():
+    # The new field flips the preferred target: a snipe rule lifts the energized bench option (opt1,
+    # so only real scoring can choose it). The signal is defined ONLY for attack-target options —
+    # at any other select it is None/False, so the same rule cannot fire and the baseline holds.
+    snipe = Hypothesis(id="snipe", rationale="prefer the energized threat",
+                       when=lambda c: c.target_is_threat, weight=30)
+    pilot = Pilot(Strategy(hypotheses=[snipe]), deck=[1] * 60)
+    targets = [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)]
+    board = state(active=poke(700), opp_bench=[poke(800, energy=0), poke(900, energy=1)])
+
+    snipe_select = make_select(targets, context=DAMAGE, current=board)
+    assert pilot.decide(snipe_select) == [1]          # energized target wins the snipe
+
+    off_target = make_select(targets, context=MAIN, current=board)
+    assert pilot.decide(off_target) == [0]            # not a Damage select -> no signal -> baseline
 
 
 @pytest.mark.req("REQ-PILOT-0017")

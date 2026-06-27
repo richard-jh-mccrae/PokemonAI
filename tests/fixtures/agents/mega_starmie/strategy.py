@@ -13,7 +13,8 @@ WATER_ENERGY, IGNITION_ENERGY = 3, 17
 MEGA_SIGNAL, BUDDY_POFFIN, SALVATORE, HILDA, ULTRA_BALL = 1145, 1086, 1189, 1225, 1121
 CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 
-_SETUP_ACTIVE = 1  # SelectContext.SETUP_ACTIVE_POKEMON (cg/api.py)
+_SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON (cg/api.py)
+_PLAY, _ATTACH = 7, 8  # OptionType — board-commit options (vs a search/ToHand card sub-selection)
 
 # Per-deck Role overlay on the universal Function Tags (sparse — only deck-intentional cards).
 ROLES = {
@@ -38,12 +39,13 @@ HYPOTHESES = [
     Hypothesis(
         id="accel-into-main",
         rationale="Rush energy onto the Mega Starmie ex line as fast as possible.",
-        when=lambda c: c.plan == Plan.SETUP and "accel_source" in c.roles,
+        when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _ATTACH)
+        and "accel_source" in c.roles,
         weight=30, status="assumed"),
     Hypothesis(
         id="tutor-the-wincon",
         rationale="During setup, dig for the win-condition pieces (Mega Signal / Salvatore / Hilda).",
-        when=lambda c: c.plan == Plan.SETUP and "tutor" in c.roles,
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles,
         weight=25, status="assumed"),
 ]
 

@@ -13,6 +13,7 @@ from .decisions import Decision, iter_decisions
 from .decode import option_label
 from .seats import detect_seat
 from .store import DEFAULT_PATH, append_correction, load_corrections
+from .telemetry_log import record_for
 
 
 def _labeled_options(decision: Decision) -> list[dict]:
@@ -53,12 +54,17 @@ def _film(replay: dict) -> list[dict]:
     return (steps[0][0].get("visualize") or []) if steps and steps[0] else []
 
 
-def frames_payload(replay: dict, our_team: str | None = None) -> dict:
+def frames_payload(replay: dict, our_team: str | None = None,
+                   live_records: list[dict] | None = None, live_seat: int | None = None) -> dict:
     """Every film frame, numbered like HEROZ's stepper (1-based ``step`` of ``total``).
 
     Each frame carries its 0-based ``frame`` (used when POSTing a tag), ``turn``,
     ``context``, a ``selected_label`` (mirrors the viewer's "Selected Action"), and --
     for taggable frames (those that are real Decisions) -- the labeled ``options``.
+
+    When ``live_records`` (the parsed agent telemetry log, ADR-0019) is supplied, each taggable
+    frame for ``live_seat`` also carries ``live`` -- the @T record the SHIPPED agent emitted at
+    that decision (per-option score / fired hypotheses / margin): *how the agent actually decided*.
     """
     info = replay.get("info") or {}
     film = _film(replay)
@@ -75,12 +81,16 @@ def frames_payload(replay: dict, our_team: str | None = None) -> dict:
             selected_label = _labels_for(decision, decision.chosen)
         else:
             options, chosen, selected_label = [], (raw.get("selected") or []), ""
+        live = None
+        if live_records is not None and decision is not None and decision.seat == live_seat:
+            live = record_for(replay, live_records, seat=live_seat, frame=idx)
         frames.append({
             "step": idx + 1, "frame": idx,
             "turn": current.get("turn"), "seat": current.get("yourIndex"),
             "context": select.get("context"), "type": select.get("type"),
             "taggable": decision is not None,
             "chosen": chosen, "selected_label": selected_label, "options": options,
+            "live": live,
         })
 
     return {
@@ -116,22 +126,42 @@ def record_correction(
     source: str,
     agent: str,
     store_path: Path | str = DEFAULT_PATH,
+    live_records: list[dict] | None = None,
+    replace_id: str | None = None,
     **identity,
 ) -> Correction:
     """Build, validate (ADR-0015) and append a Correction for the Decision at ``frame``.
 
     ``chosen``/``correct`` are auto-labeled via the decoder. ``identity`` forwards
     optional keys (submission_id, agent_version, episode_time, tagged_at, attribution).
+    When ``live_records`` is supplied, the live @T Decision Telemetry record for this frame
+    (ADR-0019) is joined and embedded as ``live_trace`` -- ground truth for how the agent decided.
+
+    **One Correction per decision:** raises ``ValueError`` if a Correction already exists for this
+    ``(episode, seat, frame)`` -- to change it, edit/remove the existing one (the inspector's edit
+    flow passes ``replace_id`` so refining its own tag is allowed). Prevents conflicting tags on
+    one decision point.
     """
     decision = next((d for d in iter_decisions(replay) if d.frame == frame), None)
     if decision is None:
         raise ValueError(f"no Decision at frame {frame}")
 
+    existing = [c for c in load_corrections(store_path)
+                if c.episode_id == decision.episode_id and c.seat == decision.seat
+                and c.decision.get("frame") == frame and c.id != replace_id]
+    if existing:
+        raise ValueError(
+            f"a correction already exists at this decision (episode {decision.episode_id}, "
+            f"seat {decision.seat}, frame {frame}) - edit or remove it first")
+
+    live_trace = (record_for(replay, live_records, seat=decision.seat, frame=frame)
+                  if live_records is not None else None)
     correction = build_correction(
         decision, source=source, agent=agent, correct=list(correct),
         category=category, rationale=rationale,
         chosen_label=_labels_for(decision, decision.chosen),
         correct_label=_labels_for(decision, list(correct)),
+        live_trace=live_trace,
         **identity,
     )
     append_correction(correction, store_path)

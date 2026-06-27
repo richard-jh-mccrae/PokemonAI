@@ -9,12 +9,24 @@ from __future__ import annotations
 from pathlib import Path
 
 from submit.brief import build_manifest
-from submit.history import append_history, manifest_digest, next_submission_id, summary
+from submit.history import (append_history, manifest_digest, next_submission_id, read_history,
+                            summary)
 from submit.package import REPO, package
 
 DEFAULT_OUT = REPO / "data" / "submissions"
 DEFAULT_BUILDS = DEFAULT_OUT / "builds.jsonl"            # local ledger of built artifacts (gitignored)
 DEFAULT_HISTORY = REPO / "data" / "agent_history.jsonl"  # committed: agents actually submitted
+
+
+def _previous_build(builds: Path | str, agent: str) -> dict | None:
+    """The most recent prior build of `agent` that recorded a deck — the change-callout baseline."""
+    prior = [r for r in read_history(builds) if r.get("agent") == agent and r.get("deck")]
+    return prior[-1] if prior else None
+
+
+def _hyp_slim(rows: list) -> list:
+    """The minimal Hypothesis fields the next build's strategy-diff needs (keeps the ledger small)."""
+    return [{"id": h["id"], "effective": h["effective"], "status": h["status"]} for h in rows]
 
 
 def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFAULT_BUILDS,
@@ -24,9 +36,16 @@ def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFA
 
     `submission_id` defaults to the next monotonic id (the `N` you later pass to `submit`);
     `label` names the experiment. The Bundle's `artifact` stem is the join key downstream.
+    The brief highlights any deck change versus this agent's previous build.
     """
     sid = submission_id if submission_id is not None else next_submission_id(builds)
-    zip_path = package(name, Path(out), agents_root=agents_root)
+    prev = _previous_build(builds, Path(name).name)        # baseline for the change callouts
+    prev_hyps = ({"strategy": prev.get("strategy_hyps", []), "general": prev.get("general_hyps", [])}
+                 if prev else None)
+    zip_path = package(name, Path(out), agents_root=agents_root,
+                       prev_deck=(prev or {}).get("deck"),
+                       prev_build_id=(prev or {}).get("submission_id"),
+                       prev_hyps=prev_hyps)
     manifest = build_manifest(Path(out) / Path(name).name)   # the exact staged bundle that shipped
     prov = manifest["provenance"]
     row = {
@@ -38,6 +57,10 @@ def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFA
         "built_at": prov["built_at"],
         "manifest_digest": manifest_digest(manifest),
         "summary": summary(manifest),
+        "deck": manifest["deck"],  # full decklist — the baseline the *next* build diffs against
+        # slim Hypothesis rows (id/effective/status) — the baseline the *next* build diffs weights against
+        "strategy_hyps": _hyp_slim(manifest["strategy"]["hypotheses"]),
+        "general_hyps": _hyp_slim(manifest["general_strategy"]["hypotheses"]),
         "submitted_at": None,      # filled by `submit`
         "message": None,           # the `-m` text `submit` sent
         "kaggle_ref": None,        # filled by `collect` once Kaggle assigns it

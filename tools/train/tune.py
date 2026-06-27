@@ -19,7 +19,9 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.blunder.store import DEFAULT_PATH, load_corrections  # noqa: E402
+from train.tuner.fit import DEFAULT_REG  # noqa: E402
 from train.tuner.io import sparse_overrides, write_meta, write_overrides, write_proposals  # noqa: E402
+from train.tuner.report_md import render_run_report  # noqa: E402
 from train.tuner.run import tune  # noqa: E402
 
 
@@ -49,9 +51,20 @@ def _build_pilot(agent: str):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):           # labels carry '→'/curly quotes; cp1252 would crash
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(description="Compile Corrections -> tuned.json + proposals")
     ap.add_argument("--agent", help="only this agent (default: every agent in the log)")
     ap.add_argument("--store", default=str(DEFAULT_PATH))
+    ap.add_argument("--reg", type=float, default=DEFAULT_REG,
+                    help="weight-fit conservatism (higher = stay near authored seeds; "
+                         f"default {DEFAULT_REG}). Lower it to let clean corrections move weights more.")
+    ap.add_argument("--report-dir", default=str(REPO / "docs" / "tuning" / "runs"),
+                    help="where to write the human-readable per-run Markdown report")
+    ap.add_argument("--no-report", action="store_true", help="skip writing the per-run report")
     args = ap.parse_args(argv)
 
     corrections = [c for c in load_corrections(args.store) if c.source == "own"]
@@ -69,7 +82,7 @@ def main(argv=None):
         except Exception as exc:  # engine/strategy not available
             print(f"[{agent}] could not build Pilot: {exc}")
             continue
-        result = tune(corrs, pilot, seeds)
+        result = tune(corrs, pilot, seeds, reg=args.reg)
         changed = sparse_overrides(result.overrides, seeds)   # only genuine deltas reach tuned.json
         agent_dir = REPO / "src" / "agents" / agent
         out = write_overrides(changed, agent_dir / "tuned.json")
@@ -77,10 +90,21 @@ def main(argv=None):
         print(f"[{agent}] {len(corrs)} corrections -> {out} "
               f"| {len(changed)} weight change(s), {len(result.proposals)} proposals, "
               f"{len(result.skipped)} skipped")
+        sat = result.n_constraints - len(result.unsatisfied)
+        if result.n_constraints:
+            verb = "fit adopted" if result.fit_adopted else "seeds kept"
+            print(f"  W-route: {sat}/{result.n_constraints} ranking constraints satisfied "
+                  f"({verb}; seeds alone satisfy {result.base_satisfied})")
         for hid, new in sorted(changed.items()):
             print(f"  WEIGHT {hid}: {seeds[hid]} -> {new}")
-        if not changed:
+        if not changed and result.n_constraints:
+            print("  (no weight changes: the fit satisfied no more corrections than the authored "
+                  "seeds - leverage is in the proposals / unsatisfied list below)")
+        elif not changed:
             print("  (no weight changes from authored defaults - leverage is in the proposals below)")
+        for c in result.unsatisfied:                  # the fit couldn't honour these (conflict / needs a rule)
+            print(f"  UNSATISFIED ep {c.episode_id} frame {c.decision.get('frame')} "
+                  f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
         prop_out = write_proposals(
             REPO / "data" / "proposals" / f"{agent}.json", agent, result.proposals,
             result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"))
@@ -90,6 +114,18 @@ def main(argv=None):
             print(f"    rationale: {p.rationale}")
         for c, why in result.skipped:
             print(f"  SKIP frame {c.decision.get('frame')}: {why}")
+
+        if not args.no_report:                            # human-readable per-run report (docs/tuning/runs/)
+            now = datetime.now()
+            build = next((c.agent_build for c in corrs if c.agent_build), None)
+            md = render_run_report(agent, result, seeds, changed, reg=args.reg,
+                                   when_iso=now.isoformat(timespec="seconds"), build=build,
+                                   n_corrections=len(corrs))
+            report_dir = Path(args.report_dir)
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_path = report_dir / f"{agent}_{now:%Y%m%d-%H%M%S}.md"
+            report_path.write_text(md, encoding="utf-8")
+            print(f"  report -> {report_path} (human-readable; /blunder-buster appends to it)")
 
 
 if __name__ == "__main__":

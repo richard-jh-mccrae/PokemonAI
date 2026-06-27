@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .featurize import featurize
-from .fit import fit_weights, ranking_constraint
+from .fit import DEFAULT_REG, fit_weights, margin_of, ranking_constraint
 from .propose import ProposedHypothesis, propose_hypothesis
 
 
@@ -18,13 +18,33 @@ class TuneResult:
     overrides: dict                                  # {hyp_id: weight} -> tuned.json
     proposals: list[ProposedHypothesis] = field(default_factory=list)
     skipped: list = field(default_factory=list)      # [(correction, reason)]
+    n_constraints: int = 0                            # W-route corrections fed to the fit
+    unsatisfied: list = field(default_factory=list)  # W-route corrections shipped weights can't honour
+    base_satisfied: int = 0                           # constraints the authored seeds already satisfy
+    fit_adopted: bool = False                         # did the fit beat the seeds (else keep priors)?
+    w_items: list = field(default_factory=list)       # [(correction, Constraint)] — for the run report
 
 
-def tune(corrections, pilot, seeds: dict) -> TuneResult:
+def _n_satisfied(constraints, weights) -> int:
+    return sum(1 for c in constraints if margin_of(c, weights) > 0)
+
+
+def tune(corrections, pilot, seeds: dict, *, reg: float = DEFAULT_REG) -> TuneResult:
     """Route each Correction by derived attribution: `hypothesis:*` → a ranking constraint
     (W, fed to the weight fit); `missing_hypothesis` → a Hypothesis proposal (H); `tactical`
-    or no-obs → skipped."""
-    constraints, proposals, skipped = [], [], []
+    or no-obs → skipped.
+
+    The fit is soft-margin (regularised), so a contradictory W corpus no longer overfits silently.
+    Two guards make the output trustworthy:
+    - **Adoption gate** — the fitted weights are shipped *only if* they satisfy strictly more
+      corrections than the authored seeds; otherwise the drift bought nothing (or traded laterally)
+      and we keep the legible priors. (This is why a hand-curated `tuned.json` kept getting reset.)
+    - **`unsatisfied`** — the corrections the *shipped* weights still can't honour: genuine conflicts,
+      or blunders that need a new Hypothesis (H), not a weight.
+
+    ``reg`` is the conservatism knob (see ``fit.DEFAULT_REG``): higher keeps weights near the authored
+    seeds (won't gut a doctrine for a few extra ranks); lower lets clean corrections move them more."""
+    constraints, w_corrs, proposals, skipped = [], [], [], []
     for corr in corrections:
         if corr.obs is None:
             skipped.append((corr, "no obs (backfill from replay)"))
@@ -32,9 +52,18 @@ def tune(corrections, pilot, seeds: dict) -> TuneResult:
         feat = featurize(corr, pilot)
         if feat.attribution.startswith("hypothesis:"):
             constraints.append(ranking_constraint(feat))
+            w_corrs.append(corr)
         elif feat.attribution == "missing_hypothesis":
             proposals.append(propose_hypothesis(corr))
         else:
             skipped.append((corr, feat.attribution))
-    overrides = fit_weights(constraints, seeds) if constraints else dict(seeds)
-    return TuneResult(overrides=overrides, proposals=proposals, skipped=skipped)
+
+    base_satisfied = _n_satisfied(constraints, seeds)
+    fitted = fit_weights(constraints, seeds, reg=reg) if constraints else dict(seeds)
+    fit_adopted = _n_satisfied(constraints, fitted) > base_satisfied
+    overrides = fitted if fit_adopted else dict(seeds)
+    unsatisfied = [c for c, con in zip(w_corrs, constraints) if margin_of(con, overrides) <= 0]
+    return TuneResult(overrides=overrides, proposals=proposals, skipped=skipped,
+                      n_constraints=len(constraints), unsatisfied=unsatisfied,
+                      base_satisfied=base_satisfied, fit_adopted=fit_adopted,
+                      w_items=list(zip(w_corrs, constraints)))

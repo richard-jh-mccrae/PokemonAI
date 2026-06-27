@@ -1,4 +1,5 @@
 """`build`: package an agent and record it to the local build ledger, not Agent History (ADR-0019)."""
+import shutil
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,30 @@ def test_build_accepts_an_explicit_submission_id_and_label(tmp_path):
                 agents_root=FIXTURE_AGENTS, submission_id=42, label="tier1-experiment")
     assert row["submission_id"] == 42
     assert row["label"] == "tier1-experiment"
+
+
+@pytest.mark.req("REQ-SUB-0010")
+def test_next_build_brief_highlights_a_deck_change(tmp_path):
+    """A deck.csv edit must be highlighted in the *next* build's brief (vs the prior build)."""
+    agents = tmp_path / "agents"
+    shutil.copytree(FIXTURE_AGENTS / "mega_starmie", agents / "mega_starmie")  # a mutable copy
+    subs, builds = tmp_path / "s", tmp_path / "s" / "builds.jsonl"
+
+    def brief() -> str:                                  # the just-built brief (stage is overwritten per build)
+        return (subs / "mega_starmie" / "brief.html").read_text(encoding="utf-8")
+
+    build("mega_starmie", out=subs, builds=builds, agents_root=agents)
+    first = brief()
+
+    deck = agents / "mega_starmie" / "deck.csv"          # drop one card line -> a real deck change
+    deck.write_text("\n".join(deck.read_text(encoding="utf-8").splitlines()[:-1]) + "\n",
+                    encoding="utf-8")
+    two = build("mega_starmie", out=subs, builds=builds, agents_root=agents)
+    second = brief()
+
+    assert "<div class='deckdiff'>" not in first         # build #1 has no baseline -> no callout
+    assert "Deck changed since build #1" in second       # build #2 highlights the edit
+    assert two["deck"]["size"] == 59                      # ledger stores the new deck for build #3 to diff
 
 
 @pytest.mark.req("REQ-SUB-0009")

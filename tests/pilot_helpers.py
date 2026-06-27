@@ -7,10 +7,12 @@ native lib. Mirrors `scouting_helpers`.
 from __future__ import annotations
 
 # AreaType / OptionType / SelectContext values (see src/cg/api.py).
-HAND, ACTIVE, BENCH = 2, 4, 5
+DECK, HAND, DISCARD, ACTIVE, BENCH = 1, 2, 3, 4, 5
 CARD, PLAY, ATTACH, ATTACK = 3, 7, 8, 13
 YES, NO = 1, 2
 MAIN, SETUP_ACTIVE, ATTACH_FROM, MULLIGAN = 0, 1, 21, 42
+DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
+TO_HAND = 7  # SelectContext.TO_HAND — a search: choose which card to add to your hand
 
 
 def opt(type: int = PLAY, **kw) -> dict:
@@ -37,13 +39,13 @@ def _hand_card(cid: int) -> dict:
     return {"id": cid, "serial": 0, "playerIndex": 0}
 
 
-def state(*, your_index: int = 0, active=None, bench=(), hand=(),
+def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
           opp_active=None, opp_bench=(), turn: int = 2) -> dict:
     """A minimal `current` state with my board/hand (and optionally the opponent's)."""
     players = [None, None]
     players[your_index] = {"active": [active] if active else [], "bench": list(bench),
                            "hand": [_hand_card(c) for c in hand], "handCount": len(hand),
-                           "discard": [], "prize": []}
+                           "discard": [_hand_card(c) for c in discard], "prize": []}
     players[1 - your_index] = {"active": [opp_active] if opp_active else [],
                                "bench": list(opp_bench), "hand": None,
                                "discard": [], "prize": []}
@@ -51,15 +53,16 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(),
 
 
 def make_select(options, *, min_count: int = 1, max_count: int = 1,
-                context: int = 0, type: int = 0, current=None) -> dict:
-    """An observation whose `select` offers `options` — i.e. a decision menu."""
+                context: int = 0, type: int = 0, current=None, deck=None) -> dict:
+    """An observation whose `select` offers `options` — i.e. a decision menu. `deck` supplies the
+    revealed search candidates a DECK (area 1) option indexes into (a TO_HAND/search select)."""
     return {
         "select": {
             "type": type, "context": context,
             "minCount": min_count, "maxCount": max_count,
             "option": list(options),
             "remainDamageCounter": 0, "remainEnergyCost": 0,
-            "deck": None, "contextCard": None, "effect": None,
+            "deck": deck, "contextCard": None, "effect": None,
         },
         "logs": [],
         "current": current if current is not None else state(),

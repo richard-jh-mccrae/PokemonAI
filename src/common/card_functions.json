@@ -1,4 +1,7 @@
 {
+"17": [
+"discard_eot"
+],
 "19": [
 "search"
 ],
@@ -401,7 +404,8 @@
 "search"
 ],
 "1086": [
-"search"
+"search",
+"bench_fill"
 ],
 "1088": [
 "gust",
@@ -533,7 +537,8 @@
 "dig"
 ],
 "1189": [
-"search"
+"search",
+"rush_evolve"
 ],
 "1190": [
 "heal"
@@ -636,7 +641,8 @@
 "draw"
 ],
 "1229": [
-"heal"
+"heal",
+"clutch_heal"
 ],
 "1230": [
 "dig"

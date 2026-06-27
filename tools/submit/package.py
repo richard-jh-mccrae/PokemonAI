@@ -50,7 +50,9 @@ def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | No
     return f"{name}_{when:%Y%m%d}_{git_hash}"
 
 
-def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True) -> Path:
+def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True,
+            prev_deck: dict | None = None, prev_build_id: int | None = None,
+            prev_hyps: dict | None = None) -> Path:
     """Stage `dist/<name>/` and zip it; return the zip path.
 
     `name` may be a bare agent name or a path to its dir (only the basename is used).
@@ -60,7 +62,8 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     `<name>.zip`. The staged dir stays `dist/<name>/` either way (scratch, overwritten per build);
     only the zip carries the stamp, so a build history accumulates while the stage does not.
     Ships `tuned.json` when present and always writes a self-contained `brief.html` (the
-    embedded Manifest, ADR-0019) at the bundle root.
+    embedded Manifest, ADR-0019) at the bundle root. `prev_deck`/`prev_build_id` (the previous
+    build's deck) drive the brief's highlighted deck-change callout.
     """
     name = Path(name).name or name  # accept a path (e.g. tab-completed) or a bare name
     agent_dir = (Path(agents_root) if agents_root else MS / "agents") / name
@@ -85,7 +88,8 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for the brief and the zip name
     from submit.brief import build_manifest, render_brief  # lazy: avoid an import cycle
     manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
-    (stage / "brief.html").write_text(render_brief(manifest), encoding="utf-8")
+    brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id, prev_hyps=prev_hyps)
+    (stage / "brief.html").write_text(brief, encoding="utf-8")
 
     stem = artifact_stem(name, when=when, git_hash=git_hash) if stamp else name
     return Path(shutil.make_archive(str(Path(dist) / stem), "zip", root_dir=stage))

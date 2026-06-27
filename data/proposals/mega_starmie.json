@@ -1,50 +1,28 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-25T21:10:47",
+  "generated_at": "2026-06-27T13:45:54",
   "open": [
     {
-      "id": "bad-retreat-81785223-12",
-      "category": "bad_retreat",
-      "episode_id": 81785223,
-      "frame": 12,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 1) to prefer 'End turn' over 'Retreat'",
-      "rationale": "Want Cinderace to attack next turn, so stay in active",
-      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
-      "built_at": "2026-06-25T03:49:31"
-    },
-    {
-      "id": "bad-target-81785223-28",
+      "id": "bad-target-81905522-75",
       "category": "bad_target",
-      "episode_id": 81785223,
-      "frame": 28,
+      "episode_id": 81905522,
+      "frame": 75,
       "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 3) to prefer 'Lillie’s Clefairy ex' over 'Latias ex'",
-      "rationale": "Should have snipped benched Pokemon with energy attached. That is a higher threat",
-      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
-      "built_at": "2026-06-25T03:49:31"
+      "trigger_sketch": "fire at SelectContext='Damage' (turn 11) to prefer 'Riolu' over 'Hariyama'",
+      "rationale": "Hariyama is strongest benched pokemon, but is not threat due to no energy. Riolu can become mega lucario, so snipe that instead",
+      "agent_build": "mega_starmie_20260625_bde590c",
+      "built_at": "2026-06-25T00:00:00"
     },
     {
-      "id": "bad-target-81785223-39",
+      "id": "bad-target-81906131-25",
       "category": "bad_target",
-      "episode_id": 81785223,
-      "frame": 39,
+      "episode_id": 81906131,
+      "frame": 25,
       "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 7) to prefer 'Lillie’s Clefairy ex' over 'Latias ex'",
-      "rationale": "Should snipe highest threat Pokemon, in this case the only benched pokemon with energy.",
-      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
-      "built_at": "2026-06-25T03:49:31"
-    },
-    {
-      "id": "sequencing-error-81785223-45",
-      "category": "sequencing_error",
-      "episode_id": 81785223,
-      "frame": 45,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 9) to prefer 'Lillie’s Clefairy ex' over 'Latias ex'",
-      "rationale": "",
-      "agent_build": "mega_starmie_20260625-034931_623a009-dirty",
-      "built_at": "2026-06-25T03:49:31"
+      "trigger_sketch": "fire at SelectContext='Main' (turn 2) to prefer 'Attach Ignition Energy → Cinderace' over 'Attach Ignition Energy → Cinderace'",
+      "rationale": "never attach ignition energy to Cinderace when can attach basic energy",
+      "agent_build": "mega_starmie_20260625_bde590c",
+      "built_at": "2026-06-25T00:00:00"
     }
   ],
   "skipped": [
@@ -61,6 +39,26 @@
     {
       "episode_id": 81785223,
       "frame": 44,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 44,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 49,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 59,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 81906755,
+      "frame": 77,
       "reason": "tactical"
     }
   ]

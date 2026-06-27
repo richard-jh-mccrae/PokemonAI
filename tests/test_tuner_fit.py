@@ -41,3 +41,19 @@ def test_satisfied_after_fit_flags_a_contradiction():
     cons = [Constraint(deltas={"x": 1}, tactical_delta=0),
             Constraint(deltas={"x": -1}, tactical_delta=0)]
     assert not all(satisfied_after_fit(cons, seeds={}))
+
+
+def test_regularisation_bounds_an_unsatisfiable_push_near_the_seed():
+    """REQ-TUNER-0004: a perpetually-violated constraint must NOT pump its weight toward infinity
+    (the old raw perceptron drove `power-up-attacker` to 156). The L2 seed-pull settles it ~1/reg."""
+    con = Constraint(deltas={"x": 1}, tactical_delta=-10_000)   # needs x > 10000: never satisfiable
+    w = fit_weights([con], seeds={"x": 0.0})
+    assert 0 < w["x"] < 10          # bounded near the seed, not run away over `epochs`
+
+
+def test_clamp_is_a_hard_backstop_to_the_legible_band():
+    """REQ-TUNER-0004: even with the seed-pull disabled, no weight escapes the band (docs/weights.md;
+    >100 is reserved combat-scale) — the clamp is the floor/ceiling of last resort."""
+    con = Constraint(deltas={"x": 1}, tactical_delta=-10_000)
+    w = fit_weights([con], seeds={"x": 0.0}, reg=0.0)           # no shrinkage -> would climb to `epochs`
+    assert w["x"] == 100.0

@@ -13,7 +13,14 @@ from dataclasses import dataclass, field
 from common.strategy import Plan, Strategy
 
 # AreaType values used to resolve a CARD option to its card id (see cg/api.py).
-_ZONE = {2: "hand", 4: "active", 5: "bench"}
+_ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}
+_HAND = 2     # AreaType.HAND
+_DECK = 1     # AreaType.DECK — a search candidate; ids are revealed in the select's `deck` list
+_DISCARD = 3  # AreaType.DISCARD — a recover-from-discard candidate (Night Stretcher), in player.discard
+_PLAY = 7     # OptionType.PLAY — play a card from hand (encoded as a bare hand `index`, no `area`)
+_BENCH = 5    # AreaType.BENCH
+_CARD = 3     # OptionType.CARD (a card-target option, e.g. an attack's snipe target)
+_DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
 _ATTACK = 13  # OptionType.ATTACK
 KO_SCORE = 1000  # an option that knocks out the target dominates a mere chip
 _OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
@@ -61,6 +68,10 @@ class Board:
     energy_attached: bool = False  # have I already attached Energy this turn?
     hand_startable: bool = False   # a card in hand can take the Active Spot (opener tag / starter role)
     active_doomed: bool = False    # the opponent can Knock Out my Active next turn (incoming-KO estimate)
+    reusable_energy_in_hand: bool = False  # a plain (non-discard) Energy is in hand — a reusable
+                                           # alternative to a discard-at-end-of-turn Energy
+    wincon_in_play: bool = False   # my win-condition (a Line payoff / win_condition role) is already
+                                   # on my Active or Bench — so a search needn't fetch another copy
 
 
 @dataclass
@@ -71,6 +82,12 @@ class Context:
     option_type: int | None
     card_id: int | None
     option_area: int | None = None  # AreaType of the option's target (4=active, 5=bench) — attach targeting
+    attach_target_area: int | None = None  # for an attach, the AreaType of the Pokémon receiving the
+                                           # Energy (4=active can attack this turn, 5=bench cannot)
+    attach_target_roles: list = field(default_factory=list)  # deck Roles of that receiving Pokémon
+    target_energy: int | None = None  # attack-target snipe signal: Energy on the targeted benched
+                                      # Pokémon (None off a Damage/bench-target option)
+    target_is_threat: bool = False  # the attack target already carries Energy -> closest to attacking
     roles: list = field(default_factory=list)
     tags: list = field(default_factory=list)
     stat: object | None = None     # the option card's engine CardStat (hp/weakness/prize value/…)
@@ -206,15 +223,47 @@ class Pilot:
                  tactical: float = 0.0) -> Context:
         state = obs.get("current") or {}
         plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
-        cid = self._option_card_id(obs, option)
+        cid = self._option_card_id(obs, select, option)
         roles = self.strategy.roles.get(cid, []) if cid is not None else []
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         is_attack = option.get("type") == _ATTACK
+        target_energy = self._target_energy(obs, select, option)
+        at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
+        at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
+                       attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
+                       target_energy=target_energy, target_is_threat=bool(target_energy),
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE)
+
+    def _attach_target(self, obs: dict, option: dict) -> dict | None:
+        """The Pokémon an attach option puts Energy on — encoded as `inPlayArea`/`inPlayIndex`
+        (distinct from `area`/`index`, which point at the Energy card in hand). None when absent."""
+        area, index = option.get("inPlayArea"), option.get("inPlayIndex")
+        if area is None or index is None:
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        pi = option.get("playerIndex", state.get("yourIndex", 0))
+        if not (0 <= pi < len(players)) or players[pi] is None:
+            return None
+        cards = players[pi].get(_ZONE.get(area))
+        if not cards or not (0 <= index < len(cards)) or cards[index] is None:
+            return None
+        return cards[index]
+
+    def _target_energy(self, obs: dict, select: dict, option: dict) -> int | None:
+        """Energy attached to the Pokémon an attack-target option points at — the snipe 'threat'
+        signal: a benched Pokémon already carrying Energy is closest to attacking. Defined only for
+        bench attack-target options (SelectContext DAMAGE, OptionType CARD, AreaType BENCH); None
+        otherwise so non-target options carry no signal (cf. ``_option_card_id`` resolution)."""
+        if (select.get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return None
+        poke = self._option_pokemon(obs, select, option)
+        return len(poke.get("energies") or []) if poke else None
 
     def _board(self, obs: dict) -> Board:
         """Summarise the shared board once per decision (see Board)."""
@@ -237,7 +286,37 @@ class Pilot:
             energy_attached=bool(state.get("energyAttached")),
             hand_startable=self._hand_startable(me.get("hand") or []),
             active_doomed=self._active_doomed(ma, oa),
+            reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
+            wincon_in_play=self._wincon_in_play(me),
         )
+
+    def _wincon_in_play(self, me: dict) -> bool:
+        """True if my win-condition is already in play — a Strategy Line payoff or a card carrying the
+        `win_condition` / `primary_attacker` Role sitting on my Active or Bench. Lets a 'fetch the
+        win-condition' Hypothesis stand down once the payoff is on the board (don't pull a dead copy)."""
+        wincon = {line.payoff for line in self.strategy.lines}
+        wincon |= {cid for cid, r in self.strategy.roles.items()
+                   if {"win_condition", "primary_attacker"} & set(r)}
+        if not wincon:
+            return False
+        board = (me.get("active") or []) + (me.get("bench") or [])
+        return any(p and p.get("id") in wincon for p in board)
+
+    def _has_reusable_energy(self, hand: list) -> bool:
+        """True if a **reusable** (non-discard) Energy is in hand — a *typed* Energy card (hp 0 with a
+        real `energyType`) that is not tagged `discard_eot`. Used to prefer a Basic over a
+        discard-at-end-of-turn Energy when both are available (deck-agnostic). NB the engine reports
+        `energyType == 0` for Trainers *and* colourless special energies (e.g. Ignition), so a typed
+        basic Energy is `energyType not in (None, 0)` — that excludes Trainers and Ignition."""
+        for c in hand:
+            cid = c.get("id") if c else None
+            if cid is None:
+                continue
+            stat = self.stats.get(cid) if self.stats else None
+            tags = self.functions.tags(cid) if self.functions else []
+            if stat and stat.hp == 0 and stat.energyType not in (None, 0) and "discard_eot" not in tags:
+                return True
+        return False
 
     def _active_doomed(self, ma: dict | None, oa: dict | None) -> bool:
         """True if the opponent's Active can Knock Out my Active next turn — its biggest attack
@@ -270,10 +349,23 @@ class Pilot:
                 return True
         return False
 
-    def _option_card_id(self, obs: dict, option: dict) -> int | None:
+    def _option_pokemon(self, obs: dict, select: dict, option: dict) -> dict | None:
+        """The board card/Pokémon dict an option's (area, index, playerIndex) points at, or None.
+        AreaType -> zone via ``_ZONE`` (2=hand, 3=discard, 4=active, 5=bench); the owner defaults to
+        me. A play-from-hand option (OptionType PLAY) carries only a bare hand `index` (no `area`),
+        so it resolves against the hand — without this every Trainer/Pokémon play would have no card
+        id, and so no roles/tags/stat, silently disabling every such Hypothesis on plays. A DECK
+        search option (TO_HAND/ToField etc.) carries `area=DECK`, but the deck is hidden from the
+        player zones — its revealed candidates live in the select's own ``deck`` list, so resolve
+        there (this is what lets a 'fetch the win-condition' Hypothesis see a search's targets)."""
         area, index = option.get("area"), option.get("index")
+        if area is None and option.get("type") == _PLAY:
+            area = _HAND
         if area is None or index is None:
             return None
+        if area == _DECK:                                  # search candidates revealed on the select
+            deck = (select or {}).get("deck") or []
+            return deck[index] if 0 <= index < len(deck) else None
         state = obs.get("current") or {}
         players = state.get("players") or []
         pi = option.get("playerIndex", state.get("yourIndex", 0))
@@ -282,7 +374,11 @@ class Pilot:
         cards = players[pi].get(_ZONE.get(area))
         if not cards or not (0 <= index < len(cards)) or cards[index] is None:
             return None
-        return cards[index].get("id")
+        return cards[index]
+
+    def _option_card_id(self, obs: dict, select: dict, option: dict) -> int | None:
+        poke = self._option_pokemon(obs, select, option)
+        return poke.get("id") if poke else None
 
 
 def _fires(h, ctx: Context) -> bool:

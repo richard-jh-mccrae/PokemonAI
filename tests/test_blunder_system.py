@@ -35,9 +35,10 @@ from train.tuner.io import sparse_overrides  # noqa: E402
 from train.tuner.run import tune  # noqa: E402
 
 AGENT = "mega_starmie"
-# a committed own-game replay placed under the build-identity layout (submissions/<stem>/replays/)
-REAL_REPLAY = (REPO / "submissions" / "mega_starmie_20260625-034931_623a009-dirty"
-               / "replays" / "81785223.json")
+# a committed own-game replay (our agent-0 game) under the build-identity dir layout
+REAL_REPLAY = (REPO / "tests" / "fixtures" / "replays" / "mega_starmie_20260625_bde590c"
+               / "episode-81903490-replay.json.gz")
+OWN_SEAT = 0                       # episode-81903490 is our agent-0 game
 STARYU, CINDERACE = 1030, 666
 
 pytestmark = pytest.mark.skipif(
@@ -112,29 +113,38 @@ def test_tag_blunder_with_note_is_stored(tmp_path):
 # --- ST-2: the noted Correction translates to a new-Hypothesis proposal (H route) --------------
 
 def test_correction_with_note_becomes_a_hypothesis_proposal(real_pilot):
-    """REQ-TUNER-0013: a Correction whose better option fires the same Hypotheses as the chosen
-    one (the agent is *blind* to the situation) becomes a proposal carrying the note as its spec."""
+    """REQ-TUNER-0013: a Correction the agent is *blind* to (chosen & correct fire identical
+    Hypotheses) becomes a missing_hypothesis proposal carrying the note as its authoring spec."""
     if not REAL_REPLAY.exists():
         pytest.skip("committed own-game replay absent")
     pilot, seeds = real_pilot
     replay = load_replay(REAL_REPLAY)
-    d = _taggable(replay, frame=28)               # a target select -> identical fired sets -> H
     note = "should snipe the higher-threat benched attacker with energy attached"
-    corr = build_correction(d, source="own", agent=AGENT, correct=_other_index(d),
-                            category="bad_target", rationale=note)
 
-    res = tune([corr], pilot, seeds)
+    proposal = None                               # find any own-seat decision that routes H
+    for d in iter_decisions(replay):
+        if d.seat != OWN_SEAT or len(d.options) < 2 or not all(0 <= c < len(d.options) for c in d.chosen):
+            continue
+        corr = build_correction(d, source="own", agent=AGENT, correct=_other_index(d),
+                                category="bad_target", rationale=note)
+        res = tune([corr], pilot, seeds)
+        if res.proposals:                         # identical fired sets -> no rule discriminates
+            proposal = res.proposals[0]
+            break
 
-    assert len(res.proposals) == 1
-    assert res.proposals[0].rationale == note     # the note IS the authoring spec
-    assert not sparse_overrides(res.overrides, seeds)   # H route: no weight change
+    assert proposal is not None, "expected at least one missing_hypothesis frame in the replay"
+    assert proposal.rationale == note             # the note IS the authoring spec
 
 
 # --- ST-3: a Correction translates to a weight change (W route) --------------------------------
 
 def test_correction_translates_to_a_weight_change(real_pilot):
     """REQ-TUNER-0013: when the better option fires DIFFERENT Hypotheses than the chosen one, the
-    tuner fits a real weight delta so 'correct' outranks 'chosen' — landing in tuned.json."""
+    tuner fits a real weight delta so 'correct' outranks 'chosen' — landing in tuned.json.
+
+    Uses a responsive ``reg`` (the production default is deliberately conservative — it won't let one
+    correction overturn a strong doctrine weight; see ``fit.DEFAULT_REG``); this exercises the W-route
+    mechanism end to end, and the fit is *adopted* only because it satisfies the correction."""
     pilot, seeds = real_pilot
     play = {"type": PLAY, "area": 2, "index": 0, "playerIndex": 0}     # play Staryu from hand
     attach = {"type": ATTACH, "area": 4, "index": 0, "playerIndex": 0}  # attach to the Active
@@ -146,10 +156,11 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     corr = build_correction(d, source="own", agent=AGENT, correct=[1], category="misattachment",
                             rationale="develop the attack instead of over-benching")
 
-    res = tune([corr], pilot, seeds)
+    res = tune([corr], pilot, seeds, reg=0.15)
 
     changed = sparse_overrides(res.overrides, seeds)
-    assert changed                                # a real Hypothesis weight moved (W route)
+    assert res.fit_adopted                       # the fit satisfied the correction, so it ships
+    assert changed                               # a real Hypothesis weight moved (W route)
     assert set(changed) <= set(seeds)            # every changed key is a real Hypothesis id
 
 

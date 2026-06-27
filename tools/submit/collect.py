@@ -7,6 +7,7 @@ on a local `env.toJSON()` + `env.logs` — so the same code backs the system tes
 from __future__ import annotations
 
 import json
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ from meta_tracker.parse import extract_decks, winner_index
 from submit.package import REPO
 
 DEFAULT_PERF = REPO / "data" / "performance.jsonl"
+DEFAULT_REPLAYS = REPO / "data" / "replays"
 
 
 def parse_telemetry(stderr: str) -> list[dict]:
@@ -181,3 +183,102 @@ def parse_match(replay: dict, log, *, seat: int = 0, cards: dict | None = None) 
             "tier_mix": dict(Counter(str(r.get("tier")) for r in records)),
         },
     }
+
+
+def _resolve_submitted(history, submission_id):
+    """The Agent History row for a *submitted* build — `submission_id`, or the latest."""
+    from submit.history import read_history
+    rows = [r for r in read_history(history) if r.get("submitted_at")]
+    if not rows:
+        raise SystemExit("no submitted agents yet — run `submit` first")
+    if submission_id is None:
+        return rows[-1]
+    row = next((r for r in rows if r["submission_id"] == submission_id), None)
+    if row is None:
+        raise SystemExit(f"no submitted build #{submission_id} in the history")
+    return row
+
+
+def collect_submission(submission_id: int | None = None, *, history=None,
+                       replays_root=DEFAULT_REPLAYS, perf_path=DEFAULT_PERF, max_replays: int = 20,
+                       download_fn=None, score_fn=None, parse_fn=None, cards=None, when=None) -> dict:
+    """Resolve a submitted build (default: the most recently submitted), download up to
+    `max_replays` of its matches into `data/replays/<artifact>/`, parse them, and append a
+    Performance Log sample. `download_fn`/`score_fn` are injectable for testing.
+
+    `download_fn(row, dest, max_replays, kaggle_ref) -> [(replay, log, seat), …]` — `seat` is our
+    agent's index in that episode (it varies match to match), threaded into `parse_match`.
+    """
+    if history is None:
+        from submit.build import DEFAULT_HISTORY
+        history = DEFAULT_HISTORY
+    row = _resolve_submitted(history, submission_id)
+    dest = Path(replays_root) / row["artifact"]          # data/replays/<same name as the .zip>
+    parse = parse_fn or parse_match
+    score = (score_fn or kaggle_score)(row["submission_id"])
+    triples = (download_fn or _kaggle_download)(row, dest, max_replays,
+                                                kaggle_ref=score.get("kaggle_ref"))
+    matches = [parse(replay, log, seat=seat, cards=cards) for replay, log, seat in triples]
+    return record_sample(row["submission_id"], matches, kaggle_ref=score.get("kaggle_ref"),
+                         public_score=score.get("public_score"), rank=score.get("rank"),
+                         when=when, perf_path=perf_path)
+
+
+def _our_seat(episode, sub_id: int) -> int:
+    """The 0-based agent index our submission occupied in this episode (0 if undeterminable)."""
+    agents = getattr(episode, "agents", None) or getattr(episode, "episode_agents", None) or []
+    for a in agents:
+        a_sub = getattr(a, "submission_id", None) or getattr(a, "submissionId", None)
+        if a_sub == sub_id and getattr(a, "index", None) is not None:
+            return int(a.index)
+    return 0   # Kaggle serves our own log in slot 0 when ownership can't be matched
+
+
+def _kaggle_download(row: dict, dest, max_replays: int, *, kaggle_ref=None, api=None,
+                     sleep=None) -> list[tuple[dict, list, int]]:
+    """Download up to `max_replays` of OUR submission's episodes (replay + our agent's log) into
+    `dest`; return (replay, log, our_seat) triples. **Incremental**: an episode whose replay + log
+    are already on disk is reused, not re-fetched — only new matches hit the network (so re-running
+    `collect` picks up just the latest games). Public Kaggle API (token auth, kaggle-cli >= 2.0.2):
+    list_episodes / episode_replay / episode_agent_logs. Throttled (<=1/sec) on actual fetches.
+
+    `api`/`sleep` are injectable for testing (default: an authenticated KaggleApi / time.sleep)."""
+    import time
+
+    sleep = sleep or time.sleep
+    if kaggle_ref is None:
+        raise SystemExit("no Kaggle submission id — is the submission scored yet (submissions --csv)?")
+    try:
+        sub_id = int(kaggle_ref)
+    except (TypeError, ValueError):
+        raise SystemExit(f"unexpected Kaggle submission ref {kaggle_ref!r}; expected a numeric id")
+
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    if api is None:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        api = KaggleApi()
+        api.authenticate()   # reads ~/.kaggle/kaggle.json or KAGGLE_USERNAME/KAGGLE_KEY (never logged)
+
+    triples, fetched = [], 0
+    for ep in list(api.competition_list_episodes(submission_id=sub_id))[:max_replays]:
+        ep_id = getattr(ep, "id", None) or ep["id"]
+        seat = _our_seat(ep, sub_id)
+        replay_path = dest / f"episode-{ep_id}-replay.json"
+        log_path = dest / f"episode-{ep_id}-agent-{seat}-logs.json"
+        hit = False
+        if not replay_path.exists():                  # only fetch what we don't already have
+            api.competition_episode_replay(episode_id=ep_id, path=str(dest))
+            hit = True
+        if not log_path.exists():
+            api.competition_episode_agent_logs(episode_id=ep_id, agent_index=seat, path=str(dest))
+            hit = True
+        replay = json.loads(replay_path.read_text(encoding="utf-8"))
+        log = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else []
+        triples.append((replay, log, seat))
+        if hit:
+            fetched += 1
+            sleep(1)     # courtesy throttle — Kaggle: <=1/sec, <=3600/day; back off on 429
+    print(f"episodes: {len(triples)} total · {fetched} downloaded · {len(triples) - fetched} cached"
+          f" -> {dest}", file=sys.stderr)
+    return triples
