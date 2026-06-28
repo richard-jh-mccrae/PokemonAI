@@ -170,6 +170,69 @@ def test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy():
     assert "snipe-the-threat" not in _fired(pilot.explain(no_threat).options[1])
 
 
+@pytest.mark.req("REQ-GEN-0022")
+def test_snipe_the_evolving_threat_hits_the_fragile_preevo_over_the_weakest_deadend():
+    # No bench target carries Energy, so snipe-the-threat can't discriminate. A fragile pre-evo whose
+    # line becomes an attacker (Riolu -> Mega Lucario ex, 270) is the better snipe than a low-HP
+    # dead-end basic — even though the dead-end is the weakest. (The ep81905522 f75 shape.)
+    stats = DictCardStatProvider({
+        500: CardStat(500, name="Sunkern", maxDamage=20),                 # dead-end basic
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
+    })
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(700),
+                                    opp_bench=[poke(500, hp=60), poke(333, hp=80)]))
+    deadend, evolving = pilot.explain(obs).options
+    assert "snipe-the-evolving-threat" in _fired(evolving)         # Riolu: line reaches 270
+    assert "snipe-the-evolving-threat" not in _fired(deadend)      # Sunkern: dead end
+    assert pilot.decide(obs) == [1]                                # evolving(18) beats weakest(15)
+
+
+@pytest.mark.req("REQ-GEN-0022")
+def test_snipe_the_evolving_threat_defers_to_an_energized_threat_and_never_double_counts():
+    stats = DictCardStatProvider({
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
+        900: CardStat(900, name="Zubat", maxDamage=30),               # energized, non-evolving
+    })
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    # opt0: Riolu, no energy (evolving threat). opt1: an energized attacker (snipe-the-threat).
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(700),
+                                    opp_bench=[poke(333, hp=90), poke(900, energy=1, hp=80)]))
+    evolving, energized = pilot.explain(obs).options
+    assert "snipe-the-evolving-threat" in _fired(evolving)
+    assert "snipe-the-threat" not in _fired(evolving)
+    assert "snipe-the-threat" in _fired(energized)
+    assert pilot.decide(obs) == [1]                                # energized threat(20) > evolving(18)
+
+    # No double-count: a Riolu that ALSO carries Energy is the threat case, NOT the evolving case.
+    riolu_energized = make_select([card_opt(BENCH, 0, player=1)], context=DAMAGE,
+                                  current=state(active=poke(700), opp_bench=[poke(333, energy=1, hp=80)]))
+    fired = _fired(pilot.explain(riolu_energized).options[0])
+    assert "snipe-the-threat" in fired and "snipe-the-evolving-threat" not in fired
+
+
+@pytest.mark.req("REQ-GEN-0022")
+def test_only_snipe_rules_fire_at_a_damage_select():
+    # The no-double-count gate is whitelist-by-omission: a future DAMAGE hypothesis could silently
+    # stack. Guard it — at a DAMAGE select, only the three snipe rules may ever fire.
+    allowed = {"snipe-the-threat", "snipe-the-weakest", "snipe-the-evolving-threat"}
+    stats = DictCardStatProvider({
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
+        900: CardStat(900, name="Zubat", maxDamage=30),
+    })
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(700),
+                                    opp_bench=[poke(333, hp=80), poke(900, energy=1, hp=60)]))
+    for o in pilot.explain(obs).options:
+        assert _fired(o) <= allowed
+
+
 # NOTE: `build-before-attack` was removed — `_finish_turn_last` ("attack last") now sequences
 # development ahead of the turn-ending attack structurally, so a blanket chip penalty is redundant
 # (and was suppressing a useful chip below End when no development was available). See

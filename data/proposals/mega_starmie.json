@@ -1,6 +1,6 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-28T19:54:56",
+  "generated_at": "2026-06-28T22:06:51",
   "open": [
     {
       "id": "misattachment-82224509-31",
@@ -28,10 +28,70 @@
   "skipped": [],
   "reviewed": [
     {
+      "episode_id": 81785223,
+      "frame": 32,
+      "disposition": "covered",
+      "reason": "attack-last defers the Attack; real Pilot evolves the wincon first (evolve-into-wincon), Pokegear-dig endorsed (dig-before-commit) - same turn, first dev differs"
+    },
+    {
+      "episode_id": 81785223,
+      "frame": 38,
+      "disposition": "covered",
+      "reason": "attack-last defers the Attack; real Pilot evolves the wincon first (evolve-into-wincon), Pokegear-dig endorsed - same turn"
+    },
+    {
+      "episode_id": 81785223,
+      "frame": 44,
+      "disposition": "covered",
+      "reason": "attack-last develops first via a benched evolve even with a KO on the menu (KO preserved, taken after); Pokegear-dig endorsed"
+    },
+    {
+      "episode_id": 81903490,
+      "frame": 49,
+      "disposition": "covered",
+      "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - attaches Basic not Ignition"
+    },
+    {
+      "episode_id": 81903490,
+      "frame": 27,
+      "disposition": "covered",
+      "reason": "dont-waste-discard-energy sinks Ignition->Staryu to -20 (below End); Basic->Staryu +10 - real Pilot digs first then attaches Basic, never Ignition"
+    },
+    {
+      "episode_id": 81903490,
+      "frame": 74,
+      "disposition": "covered",
+      "reason": "evolve-into-wincon (40) outranks the deferred Attack (39.9); real Pilot plays a rush-evolve tutor then evolves Mega Starmie ex - same turn"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 29,
+      "disposition": "covered",
+      "reason": "hold-clutch-heal rewards Wally's Compassion ONLY when active_doomed; here not doomed -> Wally's scores 0, dominated by evolve-into-wincon + digs incl the human's Lillie's. Rule encodes the 'save it for clutch' correction exactly"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 59,
+      "disposition": "covered",
+      "reason": "attack-last defers the KO; real Pilot digs first; Salvatore endorsed (dig-before-commit), played same turn before the KO"
+    },
+    {
+      "episode_id": 81904451,
+      "frame": 6,
+      "disposition": "covered",
+      "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - develops then attaches Basic"
+    },
+    {
       "episode_id": 81904451,
       "frame": 37,
       "disposition": "refuted",
       "reason": "forgoes a KO (tactical ~1000) — over-eager; a positional rule must never override a Knock Out"
+    },
+    {
+      "episode_id": 81904451,
+      "frame": 50,
+      "disposition": "covered",
+      "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -35 (dead last); Hilda endorsed via tutor-the-wincon (45) and played"
     },
     {
       "episode_id": 81904451,
@@ -47,15 +107,15 @@
     },
     {
       "episode_id": 81905522,
-      "frame": 64,
-      "disposition": "refuted",
-      "reason": "forgoes a 209-damage attack — over-eager"
+      "frame": 47,
+      "disposition": "covered",
+      "reason": "attack-last defers the Attack; real Pilot evolves the wincon first; Basic-attach (power-up-attacker 15) outranks the Ignition attaches (-45/-60)"
     },
     {
       "episode_id": 81905522,
-      "frame": 75,
-      "disposition": "deferred",
-      "reason": "snipe the evolving threat (Riolu->Mega Lucario) — needs a forward evolution-threat signal (M0 in docs/todo/roadmap-search-posture-learning.md)"
+      "frame": 64,
+      "disposition": "refuted",
+      "reason": "forgoes a 209-damage attack — over-eager"
     },
     {
       "episode_id": 81906131,
@@ -112,6 +172,12 @@
       "reason": "Crushing Hammer to slow Mega Lucario line — needs reactive-disruption/Posture"
     },
     {
+      "episode_id": 82225643,
+      "frame": 57,
+      "disposition": "covered",
+      "reason": "attack-last/tiered: agent develops (a dig/play) before attacking; human wanted Ultra Ball as the first dev — same-turn ordering nicety"
+    },
+    {
       "episode_id": 82226116,
       "frame": 48,
       "disposition": "covered",
@@ -142,10 +208,22 @@
       "reason": "attack-last: agent develops before attacking; digs before attaching — same turn"
     },
     {
+      "episode_id": 82227388,
+      "frame": 50,
+      "disposition": "covered",
+      "reason": "attack-last/tiered: agent develops (a dig/play) before attacking; human wanted Pokegear as the first dev — same-turn ordering nicety"
+    },
+    {
       "episode_id": 82228017,
       "frame": 4,
       "disposition": "deferred",
       "reason": "Mega Signal wasteful (wincon already in hand, no Staryu) — full flip needs hand-quality eval"
+    },
+    {
+      "episode_id": 82228640,
+      "frame": 7,
+      "disposition": "deferred",
+      "reason": "save a wasteful Ultra Ball (Mega already in hand) and attach first — needs hand-quality eval (same family as 82228017-4)"
     },
     {
       "episode_id": 82228640,

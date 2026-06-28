@@ -76,6 +76,17 @@ A *routing hint*, not an outcome — the Search API still resolves exact effects
 _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category), structural tag
 (ex/trainer-type — those come from `CardData`), embedding (a rejected approach — use exact tags)
 
+**Evolving Threat**:
+A benched pre-evolution whose evolution line eventually reaches an attacker (a form that can OHKO a
+typical Active) — worth sniping *before* it comes online, even while it still carries no Energy.
+A purely **generic, deck-agnostic** structural fact: derived by inverting the engine card table's
+`evolvesFrom` into a forward map and reading the line's eventual damage. Distinct from a **Threat**
+(the attacker itself, already a payoff) and from an **EvoPath** (the *opponent-specific* prediction
+from the Read's Dossier — what *this* archetype actually runs). The generic forward map is the
+provider primitive both will share; the Read later refines an Evolving Threat's *accuracy*.
+_Avoid_: evolution threat / future attacker (use "Evolving Threat"), EvoPath (that's the Read's
+opponent-specific line), fragile_preevo (that's the `Intel.role` label, not the card-knowledge fact)
+
 ### Decision Architecture
 
 **Pilot**:

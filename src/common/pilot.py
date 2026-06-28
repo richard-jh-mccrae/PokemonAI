@@ -111,6 +111,9 @@ class Context:
     target_is_threat: bool = False  # the attack target already carries Energy -> closest to attacking
     target_hp: int | None = None    # HP of the targeted benched Pokémon (None off a Damage option)
     target_is_weakest: bool = False  # this snipe target has the least HP on the opponent's Bench
+    target_forward_damage: int | None = None  # Evolving Threat signal (ADR-0020): max damage the
+                                              # snipe target's evolution line eventually reaches
+                                              # (None off a Damage option / no chain / no provider)
     roles: list = field(default_factory=list)
     tags: list = field(default_factory=list)
     stat: object | None = None     # the option card's engine CardStat (hp/weakness/prize value/…)
@@ -296,6 +299,7 @@ class Pilot:
         target_hp = self._target_hp(obs, select, option)
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
                              and target_hp == board.weakest_bench_hp)
+        target_forward_damage = self._target_forward_damage(obs, select, option)
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
         return Context(plan=plan, select_context=select.get("context"),
@@ -305,6 +309,7 @@ class Pilot:
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
+                       target_forward_damage=target_forward_damage,
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE)
 
@@ -358,6 +363,24 @@ class Pilot:
             return None
         poke = self._option_pokemon(obs, select, option)
         return (poke or {}).get("hp") if poke else None
+
+    def _target_forward_damage(self, obs: dict, select: dict, option: dict) -> int | None:
+        """Max damage the benched snipe target's evolution line eventually reaches — the Evolving
+        Threat signal (ADR-0020): a fragile pre-evolution worth sniping before it comes online.
+        Defined only for bench attack-target options (DAMAGE / CARD / BENCH).
+
+        FAIL-CLOSED by construction (``_context`` is not exception-wrapped): returns None whenever
+        the provider, the method, the target Pokémon, its card id, or a forward chain is missing —
+        so a gap leaves the signal silent rather than crashing the decision."""
+        if (select.get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return None
+        fwd = getattr(self.stats, "forward_max_damage", None)   # None if no/old provider
+        if fwd is None:
+            return None
+        poke = self._option_pokemon(obs, select, option)
+        cid = (poke or {}).get("id")
+        return (fwd(cid) or None) if cid is not None else None
 
     def _board(self, obs: dict, select: dict | None = None) -> Board:
         """Summarise the shared board once per decision (see Board)."""

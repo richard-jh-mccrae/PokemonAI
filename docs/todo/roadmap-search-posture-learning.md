@@ -40,21 +40,35 @@ See [[snipe-threat-two-signals]].
 
 **Entry:** none.
 
-**Build**
-1. **Forward evolution index.** `CardStat` exposes `stage` + `evolvesFrom` (pre-evo *name*) but no forward map.
-   Build `name → [cards whose evolvesFrom == name]`, walk multi-hop for true Stage-2 lines, read the
-   eventual form's `maxDamage`. (NB the f75 line is a *single* hop — `Riolu` (Basic) → `Mega Lucario ex`
-   (Stage 1); verify every line against `data/EN_Card_Data.csv`, not the mainline TCG.) **Load-bearing prerequisite:** the stat provider must **enumerate all cards**
-   (today it's lookup-by-id) — add an `all_stats()` / iteration path to `src/common/scouting/provider.py`.
-2. **New Context signal** `target_evolves_into_attacker: bool` — set per bench-target option in `Pilot._context`
-   (parallel to `target_energy`), true when the targeted Basic's forward chain reaches a high-`maxDamage` form.
-3. **New Hypothesis** `snipe-the-evolving-threat` (general, `src/common/general_strategy.py`): fires at
-   `select_context == DAMAGE` when `target_evolves_into_attacker` and the target carries no Energy (the
-   energy case is already `snipe-the-threat`).
+**Build** — design grilled & adversarially reviewed 2026-06-28; see [ADR-0020](../adr/0020-forward-evolution-index-is-a-provider-primitive.md) and `[[snipe-threat-two-signals]]`.
+1. **Forward evolution index = provider primitive** (NOT a public `all_stats()`). Build it **inside**
+   `EngineCardStatProvider`/`DictCardStatProvider` from the `{cardId: CardStat}` cache they already
+   enumerate: a pure `_build_forward_index(cache)` that inverts `evolvesFrom` (a *name*) into
+   `name → {descendant cardIds}`, walks multi-hop (cycle/depth-guarded), and exposes
+   `forward_max_damage(card_id) -> int` = max printed damage over **descendants only** (0 if none).
+   Build it in the SAME lazy `if self._cache is None` block as `.get()` (factor `_ensure_cache()`) so the
+   two never diverge. **Key by name; fold MAX over all same-name printings** (154 names have >1 printing;
+   Riolu=3 ids). `evolvesFrom` is `None` for Basics in the engine (not the CSV `"n/a"`); 0 orphans.
+2. **New Context signal** `target_forward_damage: int | None` — set per bench-target option in
+   `Pilot._context` by a `_target_forward_damage` helper cloned from `_target_energy` (guard
+   DAMAGE/CARD/BENCH). **Fail-closed, coded defensively** — `_context` is NOT exception-wrapped, so the
+   helper must return `None` on `stats is None`, `getattr(self.stats, 'forward_max_damage', None)` missing,
+   unresolved option, or no chain. The 100 threshold is **not** applied here.
+3. **New Hypothesis** `snipe-the-evolving-threat` (`src/common/general_strategy.py`): weight **18**,
+   status `testing`, `when = select_context == DAMAGE and not target_is_threat and
+   (target_forward_damage or 0) >= EVOLVING_THREAT_DMG` (=100, the tunable constant). Document in the
+   rationale that `snipe-the-weakest` (15) **stacks additively** (a low-HP evolving target = 18+15).
 
 **Files:** `scouting/provider.py`, `pilot.py` (`_context`), `general_strategy.py`, tests.
-**Tests:** `REQ-GEN-####` — fires on Riolu-class target, not on a bare dead-end Basic; no double-count with `snipe-the-threat`.
-**Accept:** f75 (ep81905522) satisfied in `tune.py`, corpus ≥ current, suite green. Document the `maxDamage` threshold choice.
+**Tests (`REQ-GEN-0022`):** index (Riolu→270; dead-end→0; branching multi-hop max; cycle terminates;
+same-name MAX-fold), provider `forward_max_damage`, `_context` signal (incl. `stats=None`→None),
+hypothesis (fires on Riolu-class; silent on dead-end & on `target_is_threat`; ranks evolving>weakest,
+threat>evolving), a DAMAGE-context **only-intended-rules-fire** guard, and the f75 regression.
+Also fix `tests/test_scouting_provider.py` fixture `evolvesFrom="Lucario"` → `"Riolu"`.
+**Accept:** f75 (ep81905522) satisfied in `tune.py` (verified: margin 33>0), corpus ≥ current, suite green.
+On ship, **remove** the `81905522-75` deferred entry from `data/corrections/reviewed.json`.
+**Known M0 gaps (documented, not fixed):** bench-damage-immune pre-evos are wastefully sniped (no
+immunity field on `CardStat` yet); affordability ignored (opponent-agnostic upper bound — M2 Read refines).
 **Note:** this is the **generic** version (any deck). Opponent-*accuracy* (will they actually evolve it?) is an M2 refinement.
 
 ---

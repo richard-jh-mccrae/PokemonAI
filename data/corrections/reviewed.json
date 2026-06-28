@@ -28,11 +28,6 @@
     "reason": "forgoes a KO (tactical ~1000) — over-eager",
     "round": "2026-06-27"
   },
-  "81905522-75": {
-    "disposition": "deferred",
-    "reason": "snipe the evolving threat (Riolu->Mega Lucario) — needs a forward evolution-threat signal (M0 in docs/todo/roadmap-search-posture-learning.md)",
-    "round": "2026-06-27"
-  },
   "81906131-25": {
     "disposition": "covered",
     "reason": "degenerate record (chosen == correct); the intent is already handled by dont-waste-discard-energy",
@@ -147,5 +142,60 @@
     "disposition": "deferred",
     "reason": "save a wasteful Ultra Ball (Mega already in hand) and attach first — needs hand-quality eval (same family as 82228017-4)",
     "round": "2026-06-28"
+  },
+  "81785223-32": {
+    "disposition": "covered",
+    "reason": "attack-last defers the Attack; real Pilot evolves the wincon first (evolve-into-wincon), Pokegear-dig endorsed (dig-before-commit) - same turn, first dev differs",
+    "round": "2026-06-28-realpilot"
+  },
+  "81785223-38": {
+    "disposition": "covered",
+    "reason": "attack-last defers the Attack; real Pilot evolves the wincon first (evolve-into-wincon), Pokegear-dig endorsed - same turn",
+    "round": "2026-06-28-realpilot"
+  },
+  "81785223-44": {
+    "disposition": "covered",
+    "reason": "attack-last develops first via a benched evolve even with a KO on the menu (KO preserved, taken after); Pokegear-dig endorsed",
+    "round": "2026-06-28-realpilot"
+  },
+  "81903490-27": {
+    "disposition": "covered",
+    "reason": "dont-waste-discard-energy sinks Ignition->Staryu to -20 (below End); Basic->Staryu +10 - real Pilot digs first then attaches Basic, never Ignition",
+    "round": "2026-06-28-realpilot"
+  },
+  "81903490-49": {
+    "disposition": "covered",
+    "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - attaches Basic not Ignition",
+    "round": "2026-06-28-realpilot"
+  },
+  "81903490-74": {
+    "disposition": "covered",
+    "reason": "evolve-into-wincon (40) outranks the deferred Attack (39.9); real Pilot plays a rush-evolve tutor then evolves Mega Starmie ex - same turn",
+    "round": "2026-06-28-realpilot"
+  },
+  "81904064-29": {
+    "disposition": "covered",
+    "reason": "hold-clutch-heal rewards Wally's Compassion ONLY when active_doomed; here not doomed -> Wally's scores 0, dominated by evolve-into-wincon + digs incl the human's Lillie's. Rule encodes the 'save it for clutch' correction exactly",
+    "round": "2026-06-28-realpilot"
+  },
+  "81904064-59": {
+    "disposition": "covered",
+    "reason": "attack-last defers the KO; real Pilot digs first; Salvatore endorsed (dig-before-commit), played same turn before the KO",
+    "round": "2026-06-28-realpilot"
+  },
+  "81904451-6": {
+    "disposition": "covered",
+    "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - develops then attaches Basic",
+    "round": "2026-06-28-realpilot"
+  },
+  "81904451-50": {
+    "disposition": "covered",
+    "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -35 (dead last); Hilda endorsed via tutor-the-wincon (45) and played",
+    "round": "2026-06-28-realpilot"
+  },
+  "81905522-47": {
+    "disposition": "covered",
+    "reason": "attack-last defers the Attack; real Pilot evolves the wincon first; Basic-attach (power-up-attacker 15) outranks the Ignition attaches (-45/-60)",
+    "round": "2026-06-28-realpilot"
   }
 }

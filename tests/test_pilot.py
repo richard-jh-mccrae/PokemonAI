@@ -302,6 +302,34 @@ def test_target_energy_flips_the_snipe_and_is_none_off_a_damage_select():
     assert pilot.decide(off_target) == [0]            # not a Damage select -> no signal -> baseline
 
 
+@pytest.mark.req("REQ-GEN-0022")
+def test_context_exposes_target_forward_damage_and_is_fail_closed():
+    # At a Damage/snipe select the Context exposes, per option, the damage the target's evolution
+    # line eventually reaches (the Evolving Threat signal, ADR-0020). A probe rule reads it.
+    stats = DictCardStatProvider({
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
+        500: CardStat(500, name="Sunkern", maxDamage=20),    # dead-end basic
+    })
+    probe = Hypothesis(id="evo>=100", rationale="",
+                       when=lambda c: (c.target_forward_damage or 0) >= 100, weight=1)
+    pilot = Pilot(Strategy(hypotheses=[probe]), deck=[1] * 60, stats=stats)
+    fired = lambda o: {h.id for h, _ in o.fired}
+
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(700), opp_bench=[poke(500), poke(333)]))
+    opt0, opt1 = pilot.explain(obs).options
+    assert fired(opt0) == set()            # Sunkern: dead-end -> signal None -> silent
+    assert fired(opt1) == {"evo>=100"}     # Riolu: line reaches 270 -> exposed
+
+    off = make_select([card_opt(BENCH, 0, player=1)], context=MAIN,
+                      current=state(active=poke(700), opp_bench=[poke(333)]))
+    assert fired(pilot.explain(off).options[0]) == set()   # not a Damage select -> no signal
+
+    no_stats = Pilot(Strategy(hypotheses=[probe]), deck=[1] * 60)   # fail-closed: no provider
+    assert fired(no_stats.explain(obs).options[0]) == set()         # signal None, never crashes
+
+
 @pytest.mark.req("REQ-PILOT-0017")
 def test_tactical_values_a_ko_by_the_defenders_prize_count():
     stats = DictCardStatProvider({800: CardStat(800, megaEx=True), 900: CardStat(900)})

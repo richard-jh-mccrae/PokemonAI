@@ -4,7 +4,7 @@
 > `strategy.py` is generated from this **after sign-off** (ADR-0017). Build on the
 > [General Strategy](../../../docs/general-strategy.md): reuse, override, or extend — don't restate.
 
-**Status:** `drafting` · **Last grilled:** 2026-06-28 · **Author:** deck-genie + Richard
+**Status:** Phase A doctrine **complete**; Phase B (executable `strategy.py`) **deferred** · **Last grilled:** 2026-06-28 · **Author:** deck-genie + Richard
 
 ## Progress checklist (resumability — keep current)
 
@@ -13,9 +13,12 @@
 - [x] Phase 2 research synthesised + user-confirmed (confidence LOW — Cinderace build web-uncovered)
 - [x] Phase 3 card-by-card: 18/18; opening hands + Plan mapping locked (§4)
 - [x] Phase 4 General-Strategy disposition + hypothesis drafts complete
-- [ ] Phase 5 signed off → Phase B authorised  ← **awaiting sign-off**
+- [x] Phase 5 — doctrine accepted as the deliverable; **Phase B deferred** (user, 2026-06-28)
+- [ ] Phase 6 — executable `strategy.py` (run `/deck-genie mega_starmie` to resume here)
 
 Cards still to grill: none — all 18 locked. Open questions / deferred infra: see §8.
+**To resume Phase B later:** `/deck-genie mega_starmie` reads this doc + checklist and authors the
+gated `strategy.py` from the locked doctrine.
 
 ## 0 · Card facts (engine dump — substrate, do not hand-edit)
 

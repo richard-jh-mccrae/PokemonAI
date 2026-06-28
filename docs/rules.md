@@ -179,7 +179,12 @@ stack alongside. Only **Asleep & Paralyzed** block retreat.
 
 - **Tera Pokémon ex take NO attack damage while Benched** (both players' attacks). A Tera ex on the
   bench is an **invalid snipe target for damage** — relevant to the M0 evolving-threat snipe work.
-  Verify per card (`CardStat` / card text); flag if it appears in the meta.
+- ⚠️ **The immunity set is BROADER than Tera ex.** Other cards carry an unconditional *prevent-all-
+  damage-while-Benched* ability — e.g. **Antique Plume Fossil**, **Misty's Magikarp**, **Poltchageist**
+  (all evolve into a ≥100-damage form, so M0's `snipe-the-evolving-threat` will fire on them wastefully).
+  `CardStat` has **no immunity field today** — the M0 signal can't exclude them; this is a documented gap
+  ([ADR-0020](adr/0020-forward-evolution-index-is-a-provider-primitive.md)), closed later by threading
+  the engine's `tera`/benched-immunity ability into `CardStat`. Verify per card (`CardStat` / card text).
 
 ---
 

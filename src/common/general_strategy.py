@@ -19,6 +19,9 @@ _ACTIVE = 4         # AreaType.ACTIVE
 _BENCH = 5          # AreaType.BENCH
 _BENCH_MAX = 5      # a full Bench holds 5 — a bench-filler can place nothing once you're here
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
+# An evolution line "becomes an attacker" once it can OHKO a median body (median HP = 100; 100 is
+# ~p76 of damaging attacks). Tunable seed for `snipe-the-evolving-threat` (ADR-0020, docs/rules.md).
+EVOLVING_THREAT_DMG = 100
 # NOTE: the old `build-before-attack` / `dont-chip-with-a-doomed-active` chip-penalty rules (and the
 # `_CHIP_CEILING` they used) were removed — the Pilot's `_finish_turn_last` ("attack last") now
 # sequences development ahead of the turn-ending attack structurally, so a blanket chip penalty is
@@ -187,6 +190,20 @@ HYPOTHESES = [
                   "still sniped first.",
         when=lambda c: c.select_context == _DAMAGE and c.target_is_weakest,
         weight=15, status="testing"),
+    Hypothesis(
+        id="snipe-the-evolving-threat",
+        rationale="When an attack lets you choose a benched Pokémon to damage and none carries "
+                  "Energy, hit a fragile pre-evolution whose evolution line becomes a real attacker "
+                  "(its line eventually deals >= 100 — enough to OHKO a typical Active, e.g. Riolu → "
+                  "Mega Lucario ex). Sniping it now, before it evolves and powers up, denies that "
+                  "future threat. Fires only when the target carries no Energy — the energized case "
+                  "is `snipe-the-threat`, so the two never double-count — and ranks below it (an "
+                  "energized attacker hits sooner). Stacks additively with `snipe-the-weakest`: a "
+                  "low-HP evolving target is the best snipe of all. Generic (any deck); the Read "
+                  "refines its accuracy at M2.",
+        when=lambda c: c.select_context == _DAMAGE and not c.target_is_threat
+        and (c.target_forward_damage or 0) >= EVOLVING_THREAT_DMG,
+        weight=18, status="testing"),
     Hypothesis(
         id="fetch-the-wincon",
         rationale="When a search lets you choose which card to take into your hand (e.g. Ultra Ball), "

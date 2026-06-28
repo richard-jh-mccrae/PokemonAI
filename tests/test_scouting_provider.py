@@ -13,17 +13,79 @@ def test_dict_provider_returns_stats_or_none():
     assert p.get(999) is None
 
 
+@pytest.mark.req("REQ-GEN-0022")
+def test_forward_max_damage_reaches_the_evolution_lines_attacker():
+    # Riolu (Basic, weak attack) evolves into Mega Lucario ex (270). The forward index reports the
+    # damage the LINE eventually reaches, read off the pre-evolution (see ADR-0020).
+    stats = DictCardStatProvider({
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
+    })
+    assert stats.forward_max_damage(333) == 270
+
+
+@pytest.mark.req("REQ-GEN-0022")
+def test_forward_max_damage_is_zero_for_dead_ends_and_final_forms():
+    stats = DictCardStatProvider({
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
+        500: CardStat(500, name="Sunkern", maxDamage=20),          # bare basic, evolves into nothing
+    })
+    assert stats.forward_max_damage(678) == 0     # final form: descendants only, NOT its own 270
+    assert stats.forward_max_damage(500) == 0     # dead-end basic
+    assert stats.forward_max_damage(999) == 0     # unknown id -> fail-closed
+
+
+@pytest.mark.req("REQ-GEN-0022")
+def test_forward_max_damage_folds_max_over_same_name_printings():
+    # 'Riolu' has multiple printings; the descendant name 'Eevee-mon' too. Fold MAX over printings.
+    stats = DictCardStatProvider({
+        333: CardStat(333, name="Riolu", maxDamage=10),
+        974: CardStat(974, name="Riolu", maxDamage=30),            # second Riolu printing
+        678: CardStat(678, name="Mega Lucario ex", maxDamage=130, evolvesFrom="Riolu"),
+        679: CardStat(679, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),  # bigger print
+    })
+    assert stats.forward_max_damage(333) == 270   # folds the 130/270 printings -> 270
+    assert stats.forward_max_damage(974) == 270   # any printing of the pre-evo resolves the same
+
+
+@pytest.mark.req("REQ-GEN-0022")
+def test_forward_max_damage_walks_branching_multihop_and_survives_cycles():
+    stats = DictCardStatProvider({
+        1: CardStat(1, name="Wurmple", maxDamage=10),
+        2: CardStat(2, name="Silcoon", maxDamage=20, evolvesFrom="Wurmple"),
+        3: CardStat(3, name="Beautifly", maxDamage=90, evolvesFrom="Silcoon"),
+        4: CardStat(4, name="Cascoon", maxDamage=20, evolvesFrom="Wurmple"),
+        5: CardStat(5, name="Dustox", maxDamage=160, evolvesFrom="Cascoon"),  # max across all branches
+        # a malformed self-cycle must not hang the walk
+        6: CardStat(6, name="Loop", maxDamage=50, evolvesFrom="Loop"),
+    })
+    assert stats.forward_max_damage(1) == 160     # max over both 2-hop branches
+    assert stats.forward_max_damage(6) == 50      # cycle terminates (descendant 'Loop' folds its own)
+
+
+@pytest.mark.req("REQ-GEN-0022")
+def test_engine_provider_forward_max_damage_triggers_the_lazy_cache_build():
+    # The amendment guard: forward_max_damage called BEFORE any .get() must trigger the same lazy
+    # build (not crash on a None cache). Riolu (333) -> Mega Lucario ex line (270) off the real engine.
+    pytest.importorskip("cg")
+    from common.scouting.provider import EngineCardStatProvider
+    p = EngineCardStatProvider()
+    assert p.forward_max_damage(333) == 270   # first call ever — must self-build
+    assert p.get(333).name == "Riolu"         # cache shared, .get() still works
+
+
 @pytest.mark.req("REQ-SCOUT-0008")
 def test_build_cache_maps_engine_objects_to_stats():
     attacks = [SimpleNamespace(attackId=10, damage=270, energies=[0, 0, 0, 0]),   # 4-energy attack
                SimpleNamespace(attackId=11, damage=70, energies=[6])]             # 1-energy attack
     cards = [SimpleNamespace(cardId=678, name="Mega Lucario ex", hp=220, ex=True, megaEx=True,
-                             weakness=6, resistance=None, energyType=6, evolvesFrom="Lucario",
-                             attacks=[10, 11])]
+                             weakness=6, resistance=None, energyType=6, evolvesFrom="Riolu",
+                             attacks=[10, 11])]   # single hop Riolu->Mega Lucario ex (no Lucario in this set)
 
     cache = _build_cache(cards, attacks)
 
     st = cache[678]
     assert st.maxDamage == 270            # max damage over the card's attacks
     assert st.minAttackCost == 1          # min energy-count over the card's attacks (the cheap one)
-    assert st.megaEx and st.weakness == 6 and st.energyType == 6 and st.evolvesFrom == "Lucario"
+    assert st.megaEx and st.weakness == 6 and st.energyType == 6 and st.evolvesFrom == "Riolu"
