@@ -287,6 +287,66 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
         and not (_WINCON_ROLES & set(c.attach_target_roles)),
         weight=-15, status="testing"),
+    Hypothesis(
+        id="protect-ace-spec-tool",
+        rationale="An ACE SPEC card is limited to one per deck and is usually irreplaceable (no second "
+                  "copy; not recoverable from the discard). So beyond the usual 'hold a Tool for the "
+                  "attacker' reluctance, be EXTRA reluctant to spend an ACE SPEC Tool (e.g. Hero's Cape) "
+                  "on an off-role Pokémon — a wasted one-of ACE SPEC is gone for the whole game. Stacks "
+                  "additively on `save-tool-for-the-attacker` and reads the structural `aceSpec` fact "
+                  "off CardStat; fires only off the win-condition, like the base rule.",
+        when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
+        and c.stat is not None and getattr(c.stat, "aceSpec", False)
+        and not (_WINCON_ROLES & set(c.attach_target_roles)),
+        weight=-10, status="testing"),
+    Hypothesis(
+        id="deploy-hp-tool-on-breakpoint",
+        rationale="Deploy a +HP Pokémon Tool the turn it changes a combat outcome — not before. Fires "
+                  "when your Active win-condition is about to be Knocked Out (`active_doomed`) AND the "
+                  "Tool's flat HP boost would lift it ABOVE the incoming hit (e.g. +100 takes 330 -> "
+                  "430, dodging a Lightning OHKO that 330 wouldn't survive). Reads the per-Tool HP off "
+                  "`CardStat.hpBonus` (parsed from the Tool's text — the engine has no structured field) "
+                  "and the weakness-aware `Board.incoming_active_damage`, so it generalises to ANY "
+                  "unconditional +HP Tool and ANY weakness — the deck need not hardcode the bonus. Don't "
+                  "equip early (that just exposes an irreplaceable card — e.g. an ACE SPEC Hero's Cape — "
+                  "to removal); don't waste it when the boost wouldn't save the Pokémon anyway. Gated to "
+                  "the win-condition Active (don't burn a one-shot Tool on a disposable body) and a "
+                  "positional weight, so a lethal/KO still outranks it.",
+        when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
+        and c.stat is not None and getattr(c.stat, "hpBonus", 0) > 0
+        and c.attach_target_area == _ACTIVE and bool(_WINCON_ROLES & set(c.attach_target_roles))
+        and c.board.active_doomed
+        and c.board.incoming_active_damage < c.board.my_active_hp + c.stat.hpBonus,
+        weight=50, status="testing"),
+    Hypothesis(
+        id="gust-for-the-ko",
+        rationale="Play a gust Supporter (Function Tag `gust`, e.g. Boss's Orders — switch one of the "
+                  "opponent's Benched Pokémon into the Active Spot) only when it converts to a Knock Out "
+                  "this turn: drag up a benched Pokémon your Active can KO, reaching a prize you couldn't "
+                  "otherwise (often a high-prize ex/Mega hiding behind a wall). Fires only when such a KO "
+                  "exists (`Board.gust_best_ko_prizes > 0`); otherwise HOLD it — gusting a target you "
+                  "can't KO gifts the opponent, benching their committed Active safe and handing you "
+                  "nothing. (Whether-to-play only; which benched Pokémon to drag up is the gust SWITCH "
+                  "target-select rule. ADR-0022.)",
+        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
+        and c.board.gust_best_ko_prizes > c.board.active_ko_prizes
+        and not (c.plan == Plan.SETUP and not c.board.wincon_in_play),
+        weight=50, status="assumed"),
+    Hypothesis(
+        id="gust-for-the-stall",
+        rationale="Defensive stall-gust (tier 5) — a LAST resort when you're stuck. When your Active is "
+                  "doomed, you have no gustable KO and can't KO their Active, but they have an "
+                  "energyless, high-retreat benched Pokémon, play a gust Supporter to drag that body "
+                  "into the Active Spot: it can't attack and they must spend a turn retreating it, "
+                  "buying you a setup turn. Weighted low (below every tutor/draw) so it only wins the "
+                  "Supporter slot when nothing else advances you — and it never fires unless you're "
+                  "actually under threat. (Mechanically weak: a gust doesn't stop a normal retreat, so "
+                  "it only bites on a high retreat cost. ADR-0022.)",
+        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
+        and c.board.active_doomed
+        and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
+        and c.board.stall_target_exists,
+        weight=10, status="assumed"),
 ]
 
 GENERAL_STRATEGY = Strategy(name="general", hypotheses=HYPOTHESES)

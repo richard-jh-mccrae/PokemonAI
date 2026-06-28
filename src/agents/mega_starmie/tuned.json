@@ -1,9 +1,7 @@
 {
   "accel-into-main": 27.0,
   "attach-energy-last": -2.0,
-  "build-before-attack": -23.0,
   "dig-before-commit": 50.0,
-  "dont-chip-with-a-doomed-active": -43.0,
   "evolve-into-wincon": 55.0,
   "hold-clutch-heal": 63.0,
   "hold-position-in-setup": -22.0,

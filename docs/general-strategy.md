@@ -128,7 +128,8 @@ engine stats (`maxDamage` / `weakness` / HP); attack-affordability is a future r
 Energy attached to the **benched** Pokémon a `CARD` option targets (resolved off the option's
 `area`/`index`/`playerIndex` via `Pilot._option_pokemon`, the same path as `_option_card_id`; `None`
 for non-target options). Fires on the bench target that already carries Energy. This is the first
-wired **opponent-Bench targeting** signal the `gust-the-damaged` design below anticipated.
+wired **opponent-Bench targeting** signal; its value sub-terms are reused (not its order) by the
+**Gust (Boss's Orders)** doctrine below.
 **Caveat:** "threat" has a second face — a Pokémon that *evolves* into an attacker (e.g. Riolu→Lucario)
 is a threat with **zero** Energy, which this energy signal can't see; that is a separate, deferred
 cluster (a Function-Tag / Line lookup, not Energy). **Source:** F9 — JustInBasil (Gusting: remove
@@ -151,17 +152,122 @@ Among knockouts, prefer the **higher-prize target** — a KO yields `Mega ex →
 mapping; see below.) **Source:** F1 / F3 — TCG Protectors (Prize Trade); JustInBasil; PokeBeach
 ("Small is Good").
 
+## Gust (Boss's Orders) — designed, not yet built
+
+The doctrine for a **gust** — force the opponent to switch a benched Pokémon into their Active Spot
+(Boss's Orders, card id 1182). Grilled 2026-06-29, recorded in
+[ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md); it supersedes the earlier
+`gust-the-damaged` sketch. A gust is **two** Pilot decisions — *whether to play it* (one Supporter
+per turn; can't be played turn 1 on the play) and *which benched Pokémon to drag up* — neither
+supported today. (`prize-trade-target` below is a Tactical prize-preference over the *current* Active,
+not a Hypothesis; the gust decisions happen *before* the gust resolves, so Tactical can't see the
+future KO at the point of choosing.)
+
+**Doctrine — hold by default; gust only into a KO or a decisive stall.** A gust changes *which*
+opponent Pokémon is Active, worth your one Supporter only when the best target this turn is on their
+**bench**. Priority: **lethal/closing ▸ prize-grab KO ▸ threat-denial ▸ pre-evo tempo ▸ defensive
+stall**. **Never gust a target you can't KO** (it gifts the opponent — their committed Active goes
+safe to the bench, the dragged-up mon attacks you next turn) — except the stall. This respects the
+refuted "blanket gusting is core" caveat below: the gust is **KO-gated**, not a reflex.
+
+**Engine facts** (verified against the replay corpus + `cg/api.py`, per [CLAUDE.md](../CLAUDE.md)):
+the target-select is `SelectContext.SWITCH(3)` (**not** `TO_ACTIVE(4)`), opponent-owned options
+(`area=BENCH`, `playerIndex != yourIndex`); `SWITCH(3)` is also the agent's own retreat, so
+`playerIndex` is the disambiguator. Prizes-remaining is in the observation (`players[i].prize`
+length). The `gust` Function Tag spans four mechanically different cards, so v1 gates to **card id 1182**.
+
+### `gust_ko` — the shared lethal oracle (Tactical, generalized to any defender)
+`gust_ko(my_active, defender) → (can_ko, prizes)` lifts the Tactical KO math from the *current* Active
+to an **arbitrary** opponent Pokémon: the best **affordable** attack (availability-gated **+1** for
+the manual attach we can actually make this turn), **×2 on the defender's Weakness, minus the
+defender's Resistance**, vs the defender's HP; `prizes = Mega ex 3 / ex 2 / else 1`. Closed-form off
+`CardStat`, no Search (the Tier-0 contract). **One oracle feeds both gust decisions**, so the
+play-reason and the picked target agree by construction (a Verifier invariant). "Best affordable" =
+**best total board value**, not max printed damage — a 120 KO **+ 50 bench snipe** beats a 210 overkill
+when a worthwhile snipe target exists (reuse the snipe sub-terms); else fall back to cost-efficiency.
+
+### `gust-for-the-ko` · whether-to-play · seed: value-proportional · status: designed
+> Play Boss's Orders only when it converts to a KO this turn that beats your best non-gust line —
+> drag up a benched Pokémon you can KO (a prize you couldn't otherwise reach), especially a high-prize
+> ex/Mega hiding behind a wall.
+
+**Reads:** a `MAIN`/`PLAY` of a `gust`-tagged card (v1: id 1182) + `Board.gust_best_ko_prizes > 0`.
+**Net-of-baseline:** the gust KO must beat (a) KOing the current Active for free (gusting *removes*
+that Active) **and** (b) the best alternative Supporter. **Scale:** **lethal** (gust prizes ≥ the
+opponent's remaining prizes) scores in `KO_SCORE`-class and dominates any setup Supporter; a
+**non-lethal** gust-KO is a tunable seed, **damped in `SETUP` while the win-condition isn't in play**
+so a setup tutor can still win the Supporter slot. **Source:** F8/F9 — TCG Protectors (Prize Trade);
+JustInBasil (Gusting).
+
+### `gust-target` · the `SWITCH(3)` target-select · comparator · status: designed
+> Among the benched Pokémon you can KO after gusting, drag up the most valuable one.
+
+**Reads:** at a `SWITCH(3)` select with an opponent-owned (`playerIndex != yourIndex`) bench option,
+per-target `gust_ko`. **Hard-filter to `can_ko` first** — a non-KO gust is a blunder; this is the one
+place the gust pipeline differs from snipe (which has no KO filter). Rank survivors by **additive**
+value, **lethal short-circuiting above all**: `value = prizes + denial + forward_denial`, where
+- **`denial`** (board-only): the target threatens to KO one of my Pokémon soon — its incoming damage
+  (×2 on my Weakness) vs my board — scaled by the prize value of what it would KO. So a live 1-prize
+  attacker that kills my 3-prize win-condition outranks a fat **inert** 2-prize ex (prizes-first is a
+  trap).
+- **`forward_denial`** reuses the Evolving-Threat primitive (`forward_max_damage ≥ EVOLVING_THREAT_DMG`).
+
+Engine/replaceability denial ("their irreplaceable accelerator") needs the **Read** and is deferred.
+Share only the snipe **value sub-terms** (energy-threat / forward-damage / weakest-HP), never snipe's
+order or its (absent) KO filter. **Source:** F8/F9 — TCG Protectors (Prize Trade); JustInBasil (Gusting).
+
+### `gust-for-the-stall` · defensive stall-gust · seed: low (below all tutors) · status: designed
+> With no offense available, strand an energyless, high-retreat opponent benched Pokémon in the Active
+> Spot to waste their turn.
+
+**Fires only when** `Board.active_doomed` (their current Active will KO mine next turn) **and** no
+gustable KO **and** no KO on the current Active **and** an **energyless, retreat ≥ 2** bench target
+exists. Gusting their attacker to the bench removes the immediate threat; the stranded mon can't
+attack, costing them a retreat to recover. Weighted below every tutor/draw (a last resort). **Never**
+gust away an Active you've condition-doomed (Poison/Burn/Asleep clears on leaving the Active Spot — a
+rescue). **Mechanical caveat:** Boss's does not stop a normal retreat, so the stall only bites on a
+genuinely high retreat cost — hence the `active_doomed` gate (you're losing anyway, so a bought turn
+is upside). **Source:** F9 — JustInBasil (Gusting: disrupt the opponent's tempo).
+
+### Defensive guards
+- **Draw ≠ win:** a simultaneous double-KO that empties both players' prizes is a **draw**, not a win
+  ([rules.md](rules.md)) — `is_lethal` must not count it. But a forced draw beats a loss, so when
+  otherwise doomed a draw-forcing line is valued **above a loss, below a clean win**.
+- **Self-fragility damper:** reduce a non-lethal gust's value when taking it leaves my Active doomed
+  with **no benched win-condition ready**, scaled by my Active's prize value (don't expose the
+  3-prizer for a 1-prize gust). Overlaps a general "don't over-extend the win-condition" rule — a
+  candidate to promote later.
+
+**New signals this needs** (board-only v1): `Board.my/opp_prizes_remaining`,
+`Board.gust_best_ko_prizes` + the lethal flag; `Context.gust_can_ko` / `gust_ko_prizes` at an opponent
+`SWITCH(3)` option; the snipe value sub-terms widened to that select behind the `playerIndex` guard;
+and, for the stall, `CardStat.retreatCost`, per-bench energy on `Board.opp_bench`, and
+special-condition tracking. **Deferred:** the four-mechanic split (Pokémon Catcher coin-flip, Prime
+Catcher self-switch Item, Lisia's Appeal Basic-only + Confuse) and Read-conditioned (engine-denial,
+proactive-vs-scouted-matchup) gusting.
+
 ## Designed, not yet seeded
 
 | Rule | Needs | Source |
 |---|---|---|
-| `gust-the-damaged` — gust an *already-damaged* benched opponent into a KO (chip → prize) | opponent-bench targeting, i.e. **Posture** ([scouting.md](scouting.md)) + the gust option's target | F9 — JustInBasil (Gusting) |
-| HP-/damage-boost "crosses an OHKO line" | a damage/HP **breakpoint model** + meta stat table | F10 / F11 — JustInBasil (Damage) |
+| `gust-the-damaged` — **superseded** by the full **Gust (Boss's Orders)** doctrine above (board-only, KO-gated; the already-damaged case is just one KO-able target) | — see ADR-0022 | F9 — JustInBasil (Gusting) |
+| Damage-boost "crosses an OHKO line" (e.g. Maximum Belt +50 vs ex) | a damage **breakpoint model** + meta stat table; per-tool damage bonus is unstructured (free text), like `hpBonus` | F10 / F11 — JustInBasil (Damage) |
 
-A first **closed-form breakpoint** has landed — `Board.active_doomed` (the opponent's biggest attack,
-weakness-doubled, vs my Active's remaining HP), consumed by `dont-feed-the-doomed`. The same estimate
-seeds `gust-the-damaged` and the OHKO-line damage-boost rules once attack-affordability and
-opponent-Bench targeting are wired ([ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)).
+Two **closed-form breakpoints** have landed, both built on the same weakness-doubled incoming-damage
+estimate (`Board.incoming_active_damage`: the opponent's biggest attack, doubled on my Active's
+Weakness):
+- `Board.active_doomed` (incoming ≥ my Active's remaining HP), consumed by `dont-feed-the-doomed`.
+- **`deploy-hp-tool-on-breakpoint`** — the **HP-boost half** of the OHKO-line model: deploy a +HP
+  Pokémon Tool the turn its boost lifts a doomed win-condition Active *above* the incoming hit
+  (`incoming < my_active_hp + hpBonus`). The per-Tool HP is `CardStat.hpBonus`, parsed from the Tool's
+  free skill text (the engine has no structured field) — only the **unconditional** "+N HP" phrasing,
+  so a conditionally-restricted Tool parses to 0 and is never over-credited. Generalises to any
+  unconditional +HP Tool and any weakness — e.g. Hero's Cape (+100) on Mega Starmie ex (330 → 430).
+
+The **damage-boost half** still waits on a damage breakpoint model + attack-affordability +
+opponent-Bench targeting ([ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)); the
+same `incoming_active_damage` estimate also seeds the Gust doctrine's `denial` term (board-only — no
+Posture needed for v1; engine/replaceability denial waits on the Read).
 
 ## Not a reflex weight — handled elsewhere
 

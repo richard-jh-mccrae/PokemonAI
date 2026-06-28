@@ -83,6 +83,10 @@ generic behaviour the tags already trigger.
   how much do you rely on them?
 - Recovery: **what comes back first** from the discard, and at what point in the game?
 - Tools: which Pokémon wears it, and what breakpoint does it cross (e.g. +HP to survive an OHKO)?
+- **ACE SPEC** (CardData `aceSpec` — one per deck, immense power → restricted): grill it thoroughly
+  and on its own. It's singular and usually irreplaceable (no second copy; often not recoverable),
+  so the doctrine is *when* to deploy the single copy for maximum impact, not just *where* — don't
+  fritter it. The dump flags it `[ACE SPEC]`; treat that flag as "stop and design this carefully."
 
 ### Energy
 

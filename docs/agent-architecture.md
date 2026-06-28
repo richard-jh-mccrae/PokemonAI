@@ -94,8 +94,11 @@ numbers, no reuse or tunability).
   HP) and covers most decisions, including all of mega_starmie's attacks. Tier-1 escalates to
   the engine's Search API only when it changes the decision (effectful attacks, lethal
   confirmation, close-line lookahead) and the per-move budget allows. `search_budget=0` ships
-  by default — no lookahead until live timing justifies it. The Pilot **never crashes or
-  times out**: a bad hypothesis or malformed observation degrades to a legal fallback.
+  by default — no lookahead until live timing justifies it. The grader gives **2 vCPUs and
+  ≈10 min/match** ([Agent Checks](agent-checks.md) → Grader resources), so any lookahead is
+  bounded by wall-clock on 2 cores, **not** by memory — RAM is ample at 12.2 GiB. The Pilot
+  **never crashes or times out**: a bad hypothesis or malformed observation degrades to a legal
+  fallback.
 
 ## Posture — the Read changes play *(designed; wiring pending)*
 
@@ -129,7 +132,9 @@ mine, not an opponent you can box against.
 Every decision can emit a one-line rationale (card → tag/role → Hypothesis → Plan). The
 default-vs-tuned weight diffs, the Hypothesis `status` transitions, and the Correction log are
 the documented experiment trail the Strategy Category scores. This document is the spine; the
-instrumentation fills it in.
+instrumentation fills it in. What the final writeup must contain — Kaggle's
+[Winning Model Documentation Guidelines](writeup-guidelines.md) mapped to each of these
+artifacts — is the [Strategy Writeup guidelines](writeup-guidelines.md).
 
 ## Layout
 

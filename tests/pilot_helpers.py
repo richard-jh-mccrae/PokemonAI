@@ -11,6 +11,7 @@ DECK, HAND, DISCARD, ACTIVE, BENCH = 1, 2, 3, 4, 5
 CARD, PLAY, ATTACH, ATTACK = 3, 7, 8, 13
 YES, NO = 1, 2
 MAIN, SETUP_ACTIVE, ATTACH_FROM, MULLIGAN = 0, 1, 21, 42
+SWITCH = 3  # SelectContext.SWITCH — swap a Pokémon into the Active Spot (own retreat OR a Boss's gust)
 DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
 TO_HAND = 7  # SelectContext.TO_HAND — a search: choose which card to add to your hand
 
@@ -40,15 +41,17 @@ def _hand_card(cid: int) -> dict:
 
 
 def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
-          opp_active=None, opp_bench=(), turn: int = 2) -> dict:
-    """A minimal `current` state with my board/hand (and optionally the opponent's)."""
+          opp_active=None, opp_bench=(), turn: int = 2, prizes: int = 0, opp_prizes: int = 0) -> dict:
+    """A minimal `current` state with my board/hand (and optionally the opponent's). `prizes` /
+    `opp_prizes` set each player's remaining prize count (length of the `prize` list); 0 leaves it
+    empty (the prior default — no rule read prizes), so a lethal check only fires when a test sets it."""
     players = [None, None]
     players[your_index] = {"active": [active] if active else [], "bench": list(bench),
                            "hand": [_hand_card(c) for c in hand], "handCount": len(hand),
-                           "discard": [_hand_card(c) for c in discard], "prize": []}
+                           "discard": [_hand_card(c) for c in discard], "prize": [None] * prizes}
     players[1 - your_index] = {"active": [opp_active] if opp_active else [],
                                "bench": list(opp_bench), "hand": None,
-                               "discard": [], "prize": []}
+                               "discard": [], "prize": [None] * opp_prizes}
     return {"turn": turn, "yourIndex": your_index, "players": players}
 
 

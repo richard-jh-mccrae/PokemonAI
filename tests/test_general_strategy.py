@@ -237,3 +237,107 @@ def test_only_snipe_rules_fire_at_a_damage_select():
 # development ahead of the turn-ending attack structurally, so a blanket chip penalty is redundant
 # (and was suppressing a useful chip below End when no development was available). See
 # tests/test_search_discipline.py::test_a_weak_chip_is_taken_when_no_development_is_available.
+
+
+@pytest.mark.req("REQ-GEN-0023")
+def test_protect_ace_spec_tool_stacks_extra_reluctance_off_the_wincon():
+    """An ACE SPEC Tool is a one-of, irreplaceable card. Attaching it to a NON-wincon Pokémon draws
+    the base `save-tool-for-the-attacker` reluctance PLUS an extra `protect-ace-spec-tool` bump."""
+    stats = DictCardStatProvider({1159: CardStat(1159, aceSpec=True),     # an ACE SPEC Tool
+                                  700: CardStat(700, hp=120)})            # a non-wincon target
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                  functions=CardFunctions({1159: ["tool"]}))
+    obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
+                      current=state(active=poke(999), bench=[poke(700)], hand=[1159]))
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "save-tool-for-the-attacker" in fired   # the base reluctance (any tool off-wincon)
+    assert "protect-ace-spec-tool" in fired         # + the ACE SPEC intensifier (irreplaceable)
+
+
+@pytest.mark.req("REQ-GEN-0023")
+def test_protect_ace_spec_tool_silent_on_a_plain_tool():
+    """A non-ACE-SPEC Tool draws only the base reluctance — the intensifier stays off."""
+    stats = DictCardStatProvider({1160: CardStat(1160, aceSpec=False), 700: CardStat(700, hp=120)})
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                  functions=CardFunctions({1160: ["tool"]}))
+    obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
+                      current=state(active=poke(999), bench=[poke(700)], hand=[1160]))
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "save-tool-for-the-attacker" in fired
+    assert "protect-ace-spec-tool" not in fired     # not ACE SPEC -> no extra bump
+
+
+# --- deploy-hp-tool-on-breakpoint (general +HP Tool deploy; reads the parsed CardStat.hpBonus) ----
+_WATER, _LIGHTNING, _FIRE = 3, 4, 2
+_HP_TOOL, _WINCON = 1159, 900
+
+
+def _hp_tool_pilot(*, hp_bonus=100, opp_type=_FIRE, opp_dmg=400, wincon_role=True):
+    """A Pilot whose Active win-condition (HP 330, Weak to Lightning) faces an attacker dealing
+    `opp_dmg`, with a +`hp_bonus` Tool in hand. `opp_type` == the wincon's weakness doubles the
+    incoming hit (the weakness-aware breakpoint)."""
+    stats = DictCardStatProvider({
+        _WINCON: CardStat(_WINCON, hp=330, energyType=_WATER, weakness=_LIGHTNING),
+        _HP_TOOL: CardStat(_HP_TOOL, hp=0, hpBonus=hp_bonus),
+        800: CardStat(800, energyType=opp_type, maxDamage=opp_dmg),
+    })
+    roles = {_WINCON: ["win_condition"]} if wincon_role else {}
+    return Pilot(Strategy(roles=roles), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                 stats=stats, functions=CardFunctions({_HP_TOOL: ["tool"]}))
+
+
+def _attach_hp_tool():
+    # ATTACH the +HP Tool (hand idx 0) onto my full-HP (330) Active win-condition, facing card 800.
+    return make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)],
+                       current=state(active=poke(_WINCON, hp=330), opp_active=poke(800, hp=200),
+                                     hand=[_HP_TOOL]))
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_deploy_hp_tool_fires_when_the_boost_dodges_the_incoming_ko():
+    """Active wincon is doomed (incoming 400 >= 330) but +100 (-> 430) survives → deploy the Tool now.
+    Reads the per-Tool HP off CardStat.hpBonus, so it generalises beyond any one card."""
+    pilot = _hp_tool_pilot(opp_dmg=400)
+    assert "deploy-hp-tool-on-breakpoint" in _fired(pilot.explain(_attach_hp_tool()).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_deploy_hp_tool_silent_when_the_boost_would_not_save():
+    """Incoming 500 still KOs even at 430 → the Tool is wasted, so don't deploy it."""
+    pilot = _hp_tool_pilot(opp_dmg=500)
+    assert "deploy-hp-tool-on-breakpoint" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_deploy_hp_tool_silent_when_not_doomed():
+    """Incoming 200 < 330 → not under threat → hold the Tool, don't equip early into removal."""
+    pilot = _hp_tool_pilot(opp_dmg=200)
+    assert "deploy-hp-tool-on-breakpoint" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_deploy_hp_tool_silent_for_a_tool_with_no_hp_bonus():
+    """A Tool whose text grants no flat HP (hpBonus 0) never triggers the breakpoint rule, even on a
+    doomed Active — the rule is specifically about crossing a survival HP line."""
+    pilot = _hp_tool_pilot(hp_bonus=0, opp_dmg=400)
+    assert "deploy-hp-tool-on-breakpoint" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_deploy_hp_tool_breakpoint_is_weakness_aware():
+    """Generality across WEAKNESS: an attacker printing only 180 is harmless normally, but doubled by
+    the wincon's Lightning weakness it's 360 >= 330 (doomed) — and +100 (-> 430) clears 360. The
+    rule fires off the weakness-doubled incoming estimate, not the printed number."""
+    pilot = _hp_tool_pilot(opp_type=_LIGHTNING, opp_dmg=180)   # 180 x2 (weakness) = 360
+    assert "deploy-hp-tool-on-breakpoint" in _fired(pilot.explain(_attach_hp_tool()).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_deploy_hp_tool_silent_off_the_wincon_where_save_tool_reluctance_rules():
+    """Gated to the win-condition Active: with no wincon Role on the target, the deploy rule stays
+    silent and the base `save-tool-for-the-attacker` reluctance governs instead (don't burn a
+    one-shot Tool on a disposable body)."""
+    pilot = _hp_tool_pilot(opp_dmg=400, wincon_role=False)
+    fired = _fired(pilot.explain(_attach_hp_tool()).options[0])
+    assert "deploy-hp-tool-on-breakpoint" not in fired
+    assert "save-tool-for-the-attacker" in fired

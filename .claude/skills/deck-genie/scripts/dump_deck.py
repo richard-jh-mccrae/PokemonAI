@@ -152,7 +152,7 @@ def render_markdown(records: list[dict], deck_dir: Path) -> str:
         for r in mons:
             flags = " ".join(f for f, on in
                              [("ex", r.get("ex")), ("Mega-ex", r.get("megaEx")),
-                              ("Tera", r.get("tera"))] if on)
+                              ("Tera", r.get("tera")), ("ACE SPEC", r.get("aceSpec"))] if on)
             head = (f"### {r['count']}× {r['name']}  —  {r.get('stage','')} "
                     f"{r.get('type','')} · {r.get('hp','?')} HP · {r['prize_value']} prize"
                     + (f" · {flags}" if flags else ""))
@@ -179,13 +179,14 @@ def render_markdown(records: list[dict], deck_dir: Path) -> str:
         out.append(f"## {cat}\n")
         for r in rows:
             tagstr = f" · `{'`, `'.join(r['tags'])}`" if r.get("tags") else ""
+            ace = " **[ACE SPEC]**" if r.get("aceSpec") else ""
             text = ""
             ab = r.get("abilities") or []
             if ab:
                 text = " — " + " / ".join(s["text"] for s in ab)
             elif cat == "Energy":
                 text = f" — provides {r.get('type','?')}"
-            out.append(f"- **{r['count']}× {r['name']}**{tagstr}{text}")
+            out.append(f"- **{r['count']}× {r['name']}**{ace}{tagstr}{text}")
         out.append("")
 
     unknown = by_cat.get("?", [])

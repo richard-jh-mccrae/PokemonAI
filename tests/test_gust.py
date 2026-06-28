@@ -1,0 +1,265 @@
+"""Gust (Boss's Orders) — the whether-to-play line (general doctrine, ADR-0022, docs/general-strategy.md).
+
+Behaviour through the Pilot's PUBLIC interface (`decide` / `explain`): the agent plays a gust Supporter
+exactly when it converts to a KO this turn that beats its best non-gust line, and holds it otherwise.
+Lib-free: observations built by hand via `pilot_helpers`.
+"""
+import pytest
+
+from common.cards import CardFunctions
+from common.general_strategy import GENERAL_STRATEGY
+from common.pilot import KO_SCORE, Pilot
+from common.scouting.provider import CardStat, DictCardStatProvider
+from common.strategy import Strategy
+from pilot_helpers import (
+    BENCH, HAND, MAIN, PLAY, SWITCH, attack_opt, card_opt, make_select, opt, poke, state)
+
+END = 14  # OptionType.END (not exported by pilot_helpers)
+
+BOSS = 1182        # Boss's Orders — Supporter, Function Tag `gust`
+WINCON = 901       # my Active attacker / win-condition
+WALL = 800         # opponent's Active: a high-HP wall I can't KO
+BENCHIE = 700      # opponent's benched Pokémon: low HP, KO-able after a gust (1 prize)
+KOABLE_ACTIVE = 810  # opponent's Active: low HP, KO-able by my cheap attack right now (1 prize)
+EX_BENCHIE = 702   # opponent's benched ex: KO-able after a gust, worth 2 prizes
+OFF_WINCON = 902   # my Active: an attacker that is NOT the deck's win-condition
+TUTOR = 903        # a setup search Supporter (Function Tag `search`)
+BIG_BENCHIE = 703  # opponent's benched Pokémon: too much HP to KO after a gust
+MEGA_WINCON = 904  # my Active: a 3-prize Mega ex win-condition (what a live attacker threatens)
+LIVE_ATTACKER = 705  # opponent's benched 1-prize attacker, energized, hits hard enough to KO my Active
+DOOM_ACTIVE = 811  # opponent's Active: a wall I can't KO that nonetheless KOs my Active next turn
+STALL_TARGET = 706  # opponent's benched mon: energyless + high retreat — the defensive stall-gust pick
+WATER, LIGHTNING, FIRE = 3, 4, 2
+
+_STATS = DictCardStatProvider({
+    BOSS: CardStat(BOSS, hp=0),
+    WINCON: CardStat(WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120),
+    WALL: CardStat(WALL, hp=330),
+    BENCHIE: CardStat(BENCHIE, hp=60),
+    KOABLE_ACTIVE: CardStat(KOABLE_ACTIVE, hp=100),
+    EX_BENCHIE: CardStat(EX_BENCHIE, hp=60, ex=True),
+    OFF_WINCON: CardStat(OFF_WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120),
+    TUTOR: CardStat(TUTOR, hp=0),
+    BIG_BENCHIE: CardStat(BIG_BENCHIE, hp=200),
+    MEGA_WINCON: CardStat(MEGA_WINCON, energyType=WATER, weakness=LIGHTNING, megaEx=True,
+                          minAttackCost=1, minCostDamage=120),
+    LIVE_ATTACKER: CardStat(LIVE_ATTACKER, energyType=WATER, maxDamage=200),
+    DOOM_ACTIVE: CardStat(DOOM_ACTIVE, energyType=FIRE, hp=330, maxDamage=200),
+    STALL_TARGET: CardStat(STALL_TARGET, hp=200, retreatCost=2),
+})
+_TAGS = CardFunctions({BOSS: ["gust"], TUTOR: ["search"]})
+
+
+def _pilot():
+    return Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
+                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
+
+
+def _fired(option_trace):
+    return {h.id for h, _ in option_trace.fired}
+
+
+@pytest.mark.req("REQ-GUST-0001")
+def test_gust_for_the_ko_plays_bosss_to_reach_a_benched_ko():
+    """Opp Active is a wall I can't KO (120 < 330) but a benched mon is KO-able (120 >= 60) and Boss's
+    is in hand → play Boss's Orders to drag the benched mon up. Options: [chip attack, play Boss's,
+    End] → choose the Boss's play (index 1)."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_active=poke(WALL, hp=330),
+                      opp_bench=[poke(BENCHIE, hp=60)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0001")
+def test_gust_for_the_ko_stands_down_in_setup_before_the_wincon_is_online():
+    """SETUP with no win-condition in play: a cheap gustable prize must not preempt developing the
+    win-condition — gust-for-the-ko stands down so a setup tutor wins the one Supporter slot."""
+    obs = make_select(
+        [opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=200),
+                      opp_active=poke(WALL, hp=330),
+                      opp_bench=[poke(BENCHIE, hp=60)],
+                      hand=[TUTOR, BOSS]))
+    p = _pilot()
+    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [0]   # play the tutor, develop the win-condition first
+
+
+@pytest.mark.req("REQ-GUST-0001")
+def test_gust_for_the_lethal_fires_even_through_the_setup_damping():
+    """A gust that takes my last prize WINS — it must fire even in SETUP before the win-condition is
+    online (where a non-lethal gust stands down). The wall Active is un-KO-able, but a benched mon is
+    KO-able for my final prize → take the game over a setup tutor."""
+    obs = make_select(
+        [opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=200),
+                      opp_active=poke(WALL, hp=330),
+                      opp_bench=[poke(BENCHIE, hp=60)],
+                      hand=[TUTOR, BOSS], prizes=1))
+    p = _pilot()
+    assert p.explain(obs).options[1].tactical >= KO_SCORE   # lethal gust is KO_SCORE-class (Tactical)
+    assert p.decide(obs) == [1]                             # take the game even over a setup tutor
+
+
+@pytest.mark.req("REQ-GUST-0001")
+def test_gust_for_the_ko_silent_when_no_benched_mon_is_ko_able():
+    """No gustable KO (the only benched mon, 200 HP, survives my 120) → HOLD Boss's: the rule stays
+    silent and the agent does not spend its Supporter to gift the opponent a free switch."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_active=poke(WALL, hp=330),
+                      opp_bench=[poke(BENCHIE, hp=200)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) != [1]
+
+
+@pytest.mark.req("REQ-GUST-0001")
+def test_gust_for_the_ko_silent_when_current_active_ko_is_at_least_as_good():
+    """Net-of-baseline: I can KO the current Active for 1 prize (120 >= 100) and the gust only reaches
+    another 1-prize KO → don't gust (the direct KO is free and gusting would bench their Active safe).
+    The rule fires only when the gust beats the current-Active KO."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_active=poke(KOABLE_ACTIVE, hp=100),
+                      opp_bench=[poke(BENCHIE, hp=60)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) != [1]
+
+
+@pytest.mark.req("REQ-GUST-0001")
+def test_gust_for_the_ko_fires_to_reach_a_higher_prize_than_the_current_active():
+    """Prize-grab: I could KO the current Active for 1 prize, but a benched ex is KO-able for 2 → gust
+    to reach the bigger prize (the gust beats the baseline KO)."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_active=poke(KOABLE_ACTIVE, hp=100),
+                      opp_bench=[poke(EX_BENCHIE, hp=60)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]
+
+
+# --- the gust TARGET-select: which benched Pokémon to drag up (SWITCH context, ADR-0022) -----------
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_gust_target_drags_up_a_ko_able_bench_mon():
+    """At the gust target-select (SWITCH, opponent-owned bench options), drag up a Pokémon my Active
+    can KO (120 >= 60), not one it can't (120 < 200). Options index opp bench [big, KO-able]."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_bench=[poke(BIG_BENCHIE, hp=200), poke(BENCHIE, hp=60)]))
+    p = _pilot()
+    opts = p.explain(obs).options
+    assert opts[1].tactical >= KO_SCORE     # KO-able target → KO_SCORE-class (Tactical)
+    assert opts[0].tactical < KO_SCORE      # un-KO-able target → not boosted
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_gust_target_prefers_the_higher_prize_ko():
+    """Two KO-able targets → drag up the bigger prize: a 2-prize ex over a 1-prize basic."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_bench=[poke(BENCHIE, hp=60), poke(EX_BENCHIE, hp=60)]))
+    p = _pilot()
+    opts = p.explain(obs).options
+    assert opts[1].tactical > opts[0].tactical    # the ex (2 prizes) outscores the basic (1)
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_gust_target_denial_outranks_a_bigger_inert_prize():
+    """Prizes-first is a trap: an inert 2-prize ex vs a live 1-prize attacker that KOs my 3-prize
+    win-condition next turn → drag up the live attacker (prizes + denial), not the fat inert prize."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(MEGA_WINCON, energy=1, hp=200),
+                      opp_bench=[poke(EX_BENCHIE, hp=60),                  # 2-prize, no Energy: inert
+                                 poke(LIVE_ATTACKER, hp=60, energy=2)]))   # 1-prize, energized: threat
+    p = _pilot()
+    opts = p.explain(obs).options
+    assert opts[1].tactical > opts[0].tactical    # denial lifts the live attacker above the bigger prize
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_gust_target_does_not_fire_on_my_own_retreat():
+    """SWITCH is ALSO my own retreat (playerIndex == yourIndex) — the gust target scoring must stay
+    silent on my own benched Pokémon (resolved by the owner guard), never treating a retreat as a gust."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=0)],
+        context=SWITCH,
+        current=state(active=poke(WINCON, energy=1, hp=200), bench=[poke(BENCHIE, hp=60)]))
+    p = _pilot()
+    assert p.explain(obs).options[0].tactical == 0   # my own bench → no gust KO_SCORE boost
+
+
+# --- tier-5 defensive stall-gust: strand an energyless high-retreat body (ADR-0022) ---------------
+
+@pytest.mark.req("REQ-GUST-0003")
+def test_gust_for_the_stall_fires_when_stuck_with_an_energyless_high_retreat_target():
+    """My Active is doomed, I have NO gustable KO and can't KO their Active, but they have an
+    energyless, high-retreat benched mon → play Boss's to strand it Active and buy a setup turn."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=100),
+                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-stall" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0003")
+def test_gust_for_the_stall_silent_when_not_under_threat():
+    """Not doomed (the Active survives) → don't spend the Supporter on a marginal stall; hold it."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=300),   # 200 incoming < 300 → not doomed
+                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-stall" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) != [1]
+
+
+@pytest.mark.req("REQ-GUST-0003")
+def test_gust_stall_target_picks_the_energyless_high_retreat_body():
+    """In a stall (no KO-able target), drag up the energyless high-retreat body — never an energized
+    attacker (gusting a live attacker into the Active Spot would gift them tempo)."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=100),
+                      opp_bench=[poke(LIVE_ATTACKER, hp=200, energy=2),    # energized: would be a gift
+                                 poke(STALL_TARGET, hp=200, energy=0)]))   # energyless, retreat 2: stall
+    p = _pilot()
+    assert p.decide(obs) == [1]

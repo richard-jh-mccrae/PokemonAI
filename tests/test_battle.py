@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from sim.battle import (AgentServer, MatchResult, format_report, play_match, read_deck,
-                        resolve, resolve_contestant, run_battle, tally, wilson_ci)
+from sim.battle import (AgentServer, BattleMatch, MatchResult, balanced_tally, format_report,
+                        parse_spec, play_match, read_deck, resolve, resolve_contestant, run_battle,
+                        seat_plan, tally, to_battle_match, wilson_ci)
 
 REPO = Path(__file__).resolve().parents[1]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
@@ -76,6 +77,59 @@ def test_tally_counts_wins_draws_and_crashes():
 
 
 @pytest.mark.req("REQ-SIM-0006")
+def test_parse_spec_splits_off_an_optional_experiment_overlay():
+    assert parse_spec("mega_starmie@exp/cand.json") == ("mega_starmie", "exp/cand.json")
+    assert parse_spec("3") == ("3", None)                  # a bare build id, no overlay
+    assert parse_spec("mega_starmie") == ("mega_starmie", None)
+
+
+@pytest.mark.req("REQ-SIM-0006")
+def test_to_battle_match_maps_engine_seat_to_contestant():
+    # A occupied seat 0: engine outcome is already A/B-relative (identity)
+    assert to_battle_match(0, MatchResult(winner=0)) == BattleMatch(a_seat=0, winner=0)
+    # A occupied seat 1: engine seat 1 winning means A (contestant 0) won
+    assert to_battle_match(1, MatchResult(winner=1)) == BattleMatch(a_seat=1, winner=0)
+    # A in seat 1, engine seat 0 won and crashed -> that's B (contestant 1) winning + crashing
+    assert to_battle_match(1, MatchResult(winner=0, crashed=(0,))) == BattleMatch(a_seat=1, winner=1, crashed=(1,))
+    # a draw stays a draw regardless of seat
+    assert to_battle_match(1, MatchResult(winner=None)).winner is None
+
+
+@pytest.mark.req("REQ-SIM-0006")
+def test_seat_plan_splits_n_evenly_and_is_deterministic():
+    plan = seat_plan(4)
+    assert len(plan) == 4 and plan.count(0) == 2 and plan.count(1) == 2   # even split
+    odd = seat_plan(5)
+    assert len(odd) == 5 and abs(odd.count(0) - odd.count(1)) == 1        # odd: differ by one
+    assert seat_plan(5) == odd                                            # deterministic (no RNG)
+
+
+@pytest.mark.req("REQ-SIM-0006")
+def test_balanced_tally_counts_A_wins_in_both_seats_and_splits_by_seat():
+    # A won once from each seat; B won once from each seat (a perfectly balanced sample).
+    records = [
+        BattleMatch(a_seat=0, winner=0),        # A sat seat 0 and won
+        BattleMatch(a_seat=1, winner=0),        # A sat seat 1 and won
+        BattleMatch(a_seat=0, winner=1),        # A sat seat 0, B won
+        BattleMatch(a_seat=1, winner=1),        # A sat seat 1, B won
+    ]
+    t = balanced_tally(records)
+    assert (t["n"], t["a_wins"], t["b_wins"]) == (4, 2, 2)   # A's wins counted regardless of its seat
+    # the per-seat split is the ADR-0021 audit: the seat effect must stay visible
+    assert t["by_seat"][0] == {"n": 2, "a_wins": 1}
+    assert t["by_seat"][1] == {"n": 2, "a_wins": 1}
+
+
+@pytest.mark.req("REQ-SIM-0006")
+def test_report_shows_the_per_seat_split_for_a_balanced_run():
+    # A won 1 of 2 as seat 0, 2 of 2 as seat 1 — the seat effect the report must keep visible
+    records = [BattleMatch(0, 0), BattleMatch(0, 1), BattleMatch(1, 0), BattleMatch(1, 0)]
+    report = format_report(ROWS[2], ROWS[0], balanced_tally(records), elapsed=1.0, jobs=2, mode="pre-filter")
+    assert "seat 0" in report and "seat 1" in report      # both seats surfaced (ADR-0021 audit)
+    assert "1/2" in report and "2/2" in report            # A's per-seat win counts
+
+
+@pytest.mark.req("REQ-SIM-0006")
 def test_report_states_both_contestants_the_score_and_the_ci():
     t = tally([MatchResult(winner=0)] * 31 + [MatchResult(winner=1)] * 17 + [MatchResult(winner=None)] * 2)
     report = format_report(ROWS[2], ROWS[0], t, elapsed=8.3, jobs=10, mode="curiosity")
@@ -136,3 +190,21 @@ def test_run_battle_parallel_tallies_every_match():
     t = tally(results)
     assert t["n"] == 4                          # every fanned-out Match came back
     assert t["a_wins"] + t["b_wins"] + t["draws"] == 4
+
+
+@pytest.mark.req("REQ-SIM-0007")
+def test_run_battle_is_seat_balanced_and_records_a_seat():
+    deck = read_deck(MEGA)
+    results = run_battle(MEGA, MEGA, deck, deck, n=4, jobs=1, extra_syspath=SRC)
+    assert len(results) == 4 and all(isinstance(r, BattleMatch) for r in results)
+    assert {r.a_seat for r in results} == {0, 1}             # contestant A plays both seats
+    assert sum(1 for r in results if r.a_seat == 0) == 2     # N/2 each way (ADR-0021)
+
+
+@pytest.mark.req("REQ-SIM-0007")
+def test_run_battle_parallel_is_globally_seat_balanced():
+    # odd per-worker shares (12/4 -> 3 each) must not all tilt the same way; the split is global
+    deck = read_deck(MEGA)
+    results = run_battle(MEGA, MEGA, deck, deck, n=12, jobs=4, extra_syspath=SRC)
+    assert len(results) == 12
+    assert sum(1 for r in results if r.a_seat == 0) == 6     # exact N/2, not 8/4 (ADR-0021)

@@ -23,6 +23,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
 
+# Kaggle caps a submission archive at 197.7 MiB.
+MAX_SUBMISSION_MIB = 197.7
+MAX_SUBMISSION_BYTES = int(MAX_SUBMISSION_MIB * 1024 * 1024)
+
 
 @dataclass
 class StageResult:
@@ -234,6 +238,14 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
 
     work_dir = Path(work_dir)
     zip_path = package(name, work_dir / "dist", agents_root=agents_root)
+
+    size = zip_path.stat().st_size  # the archive is what Kaggle receives
+    if size > MAX_SUBMISSION_BYTES:
+        return StageResult(
+            False, "deployability",
+            f"bundle {size / 1024 / 1024:.1f} MiB exceeds {MAX_SUBMISSION_MIB} MiB cap",
+        )
+
     extracted = work_dir / "extracted"
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(extracted)

@@ -25,6 +25,7 @@ _BENCH = 5    # AreaType.BENCH
 _ACTIVE = 4   # AreaType.ACTIVE
 _CARD = 3     # OptionType.CARD (a card-target option, e.g. an attack's snipe target)
 _DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
+_SWITCH = 3   # SelectContext.SWITCH — swap into the Active Spot (my own retreat OR a Boss's gust target)
 _MAIN = 0     # SelectContext.MAIN — the open turn menu (where attack-last sequencing applies)
 _ATTACK = 13  # OptionType.ATTACK
 _END = 14     # OptionType.END — end the turn
@@ -33,6 +34,8 @@ _OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active
 _STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
                            # far below prize granularity (1) so it never overrides prize value
+_STALL_RETREAT = 2         # retreat cost that makes a stranded energyless body a real tempo cost — the
+                           # defensive stall-gust only bothers with a target this expensive to retreat
 
 
 def choose_plan(state: dict, strategy, stats=None) -> Plan:
@@ -74,6 +77,20 @@ class Board:
     energy_attached: bool = False  # have I already attached Energy this turn?
     hand_startable: bool = False   # a card in hand can take the Active Spot (opener tag / starter role)
     active_doomed: bool = False    # the opponent can Knock Out my Active next turn (incoming-KO estimate)
+    incoming_active_damage: int = 0  # closed-form estimate of the opponent's biggest attack vs my
+                                     # Active (weakness-doubled) — the margin behind active_doomed,
+                                     # exposed so a +HP tool can test it crosses a survival breakpoint
+    active_cheap_attack_kos: bool = False  # my Active's CHEAPEST attack would KO the opponent's Active
+                                           # this turn (closed-form) — so a costly burst Energy
+                                           # (e.g. Ignition->Nebula) is unnecessary; the cheap attack does it
+    gust_best_ko_prizes: int = 0   # best prizes among the opponent's benched Pokémon my Active could KO
+                                   # after gusting one to the Active Spot (0 if none) — the whether-to-play
+                                   # gate for a gust Supporter (Boss's Orders). ADR-0022.
+    active_ko_prizes: int = 0      # prizes from KOing the opponent's CURRENT Active with my cheapest
+                                   # attack (0 if I can't) — the baseline a gust must beat (gusting
+                                   # removes this Active, so it's only worth the Supporter for a bigger KO)
+    my_prizes_remaining: int = 0   # prizes I still need to take (len of my prize pile); 0 when the obs
+                                   # doesn't populate it. A gust KO reaching this count WINS (ADR-0022)
     reusable_energy_in_hand: bool = False  # a plain (non-discard) Energy is in hand — a reusable
                                            # alternative to a discard-at-end-of-turn Energy
     wincon_in_play: bool = False   # my win-condition (a Line payoff / win_condition role) is already
@@ -87,6 +104,8 @@ class Board:
     bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
                                        # enough Energy to attack — a finisher to retreat into
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
+    stall_target_exists: bool = False  # the opponent has an energyless, high-retreat benched Pokémon —
+                                       # a candidate to strand Active with a defensive stall-gust (ADR-0022)
 
 
 @dataclass
@@ -217,7 +236,10 @@ class Pilot:
 
     def _option_trace(self, obs: dict, select: dict, board: Board, option: dict,
                       index: int) -> OptionTrace:
-        tactical = self._tactical(obs, option)
+        tactical = (self._tactical(obs, option)
+                    + self._gust_tactical(obs, select, board, option)
+                    + self._gust_target_tactical(obs, select, board, option)
+                    + self._gust_stall_target_tactical(obs, select, board, option))
         ctx = self._context(obs, select, board, option, tactical)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
@@ -244,6 +266,82 @@ class Pilot:
         if hp and dmg >= hp:
             return KO_SCORE + self._prize_value(opp) - eff   # among KOs, prefer higher-prize then cheaper
         return dmg - eff
+
+    def _gust_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for PLAYING a gust card (Function Tag `gust`, e.g. Boss's Orders) when
+        the gust takes my LAST prize(s) — winning the game. Structural (not a tunable weight), so it
+        lives in the Tactical layer like every other knockout rather than as a positional Hypothesis.
+        Fires only when the best gustable KO reaches my remaining prize count AND a direct attack on
+        the current Active does NOT (else just attack — don't spend the Supporter). 0 otherwise — the
+        non-lethal gust is the tunable `gust-for-the-ko` Hypothesis. ADR-0022."""
+        if option.get("type") != _PLAY:
+            return 0
+        cid = self._option_card_id(obs, select, option)
+        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        mp = board.my_prizes_remaining
+        if ("gust" in tags and mp > 0
+                and board.gust_best_ko_prizes >= mp and board.active_ko_prizes < mp):
+            return KO_SCORE + board.gust_best_ko_prizes
+        return 0
+
+    def _gust_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for a gust TARGET option — at a SWITCH select, choosing WHICH of the
+        opponent's benched Pokémon to drag into the Active Spot (Boss's Orders; ADR-0022). Scores each
+        opponent-owned bench target by whether my Active can KO it after the gust, plus its prize value,
+        so the agent drags up the most valuable KO-able body. Guarded to opponent-owned options
+        (`playerIndex != yourIndex`) because SWITCH is ALSO my own retreat. 0 for an un-KO-able target
+        (a non-KO gust is a blunder) and off any non-gust SWITCH option. The threat / evolving-threat /
+        weakest tie-breaks among equal targets are the (widened) snipe Hypotheses."""
+        if (select.get("context") != _SWITCH or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return 0
+        yi = (obs.get("current") or {}).get("yourIndex", 0)
+        if option.get("playerIndex", yi) == yi:          # my own retreat, not a gust of the opponent
+            return 0
+        target = self._option_pokemon(obs, select, option)
+        if not target:
+            return 0
+        my_stat = self.stats.get(board.my_active_id) if self.stats else None
+        if not self._can_ko(my_stat, target):
+            return 0
+        return KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
+
+    def _gust_stall_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """Small value for a defensive stall-gust TARGET — at a SWITCH select, an ENERGYLESS,
+        high-retreat (>= `_STALL_RETREAT`) opponent benched Pokémon is the body to strand Active (it
+        can't attack and costs them a retreat). Scaled by `retreatCost` so the most expensive-to-retreat
+        body wins; far below a KO target's KO_SCORE, so it only decides among non-KO options (a real KO
+        always outranks a stall). Owner-guarded; 0 otherwise. ADR-0022."""
+        if (select.get("context") != _SWITCH or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return 0
+        yi = (obs.get("current") or {}).get("yourIndex", 0)
+        if option.get("playerIndex", yi) == yi:
+            return 0
+        target = self._option_pokemon(obs, select, option)
+        if not target or (target.get("energies") or []):       # energized -> not a stall body (a gift)
+            return 0
+        stat = self.stats.get(target.get("id")) if self.stats else None
+        return stat.retreatCost if (stat and stat.retreatCost >= _STALL_RETREAT) else 0
+
+    def _gust_target_denial(self, board: Board, target: dict) -> int:
+        """Defensive value of removing `target` via the gust: if it is a LIVE threat — it carries
+        Energy AND its biggest attack (weakness-doubled vs my Active) would KO my Active — return my
+        Active's prize value, so a live attacker that would take my win-condition outranks a bigger but
+        INERT prize (prizes-first is a trap; ADR-0022). 0 for an inert / non-threatening target."""
+        if not (self.stats and target and (target.get("energies") or [])):
+            return 0
+        t_stat = self.stats.get(target.get("id"))
+        if not t_stat:
+            return 0
+        incoming = t_stat.maxDamage or 0
+        my_stat = self.stats.get(board.my_active_id)
+        if (my_stat and my_stat.weakness is not None and t_stat.energyType is not None
+                and my_stat.weakness == t_stat.energyType):
+            incoming *= 2
+        if board.my_active_hp and incoming >= board.my_active_hp:
+            return self._prize_value({"id": board.my_active_id})
+        return 0
 
     def _prize_value(self, poke: dict | None) -> int:
         """Prizes a knockout yields — Mega ex 3, ex 2, else 1 (read off the engine CardStat)."""
@@ -403,6 +501,11 @@ class Pilot:
             energy_attached=bool(state.get("energyAttached")),
             hand_startable=self._hand_startable(me.get("hand") or []),
             active_doomed=self._active_doomed(ma, oa),
+            incoming_active_damage=self._incoming_active_damage(ma, oa),
+            active_cheap_attack_kos=self._active_cheap_attack_kos(ma, oa),
+            gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp),
+            active_ko_prizes=self._active_ko_prizes(ma, oa),
+            my_prizes_remaining=len(me.get("prize") or []),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
@@ -410,6 +513,7 @@ class Pilot:
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             bench_wincon_ready=self._bench_wincon_ready(me),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
+            stall_target_exists=self._stall_target_exists(opp),
         )
 
     def _wincon_set(self) -> set:
@@ -492,22 +596,89 @@ class Pilot:
                 return True
         return False
 
-    def _active_doomed(self, ma: dict | None, oa: dict | None) -> bool:
-        """True if the opponent's Active can Knock Out my Active next turn — its biggest attack
-        (doubled when my Active is Weak to the attacker's type) >= my Active's remaining HP. A
-        closed-form threat estimate off engine stats (attack-affordability refinement is future)."""
-        my_hp = (ma or {}).get("hp", 0)
-        if not (self.stats and ma and oa and my_hp):
-            return False
+    def _incoming_active_damage(self, ma: dict | None, oa: dict | None) -> int:
+        """Closed-form estimate of the damage the opponent's Active would deal to my Active next turn
+        — its biggest attack, doubled when my Active is Weak to the attacker's type. 0 when unknown.
+        The magnitude behind `_active_doomed`; exposed on the Board so a +HP tool (Hero's Cape) can
+        test whether it crosses a survival breakpoint."""
+        if not (self.stats and ma and oa):
+            return 0
         opp_stat = self.stats.get(oa.get("id"))
         if not opp_stat:
-            return False
+            return 0
         incoming = opp_stat.maxDamage or 0
         my_stat = self.stats.get(ma.get("id"))
         if (my_stat and my_stat.weakness is not None and opp_stat.energyType is not None
                 and my_stat.weakness == opp_stat.energyType):
             incoming *= 2
-        return incoming >= my_hp
+        return incoming
+
+    def _active_doomed(self, ma: dict | None, oa: dict | None) -> bool:
+        """True if the opponent's Active can Knock Out my Active next turn — its biggest attack
+        (doubled when my Active is Weak to the attacker's type) >= my Active's remaining HP. A
+        closed-form threat estimate off engine stats (attack-affordability refinement is future)."""
+        my_hp = (ma or {}).get("hp", 0)
+        return bool(my_hp) and self._incoming_active_damage(ma, oa) >= my_hp
+
+    def _can_ko(self, my_stat, defender: dict | None) -> bool:
+        """My Active's CHEAPEST attack would Knock Out `defender` this turn — its cheapest-cost attack
+        damage, doubled when the defender is Weak to my Active's type, >= the defender's remaining HP.
+        The shared closed-form KO oracle (ADR-0022) behind both the current-Active KO checks and the
+        gust whether-to-play signal. Fail-closed when stats / HP are missing."""
+        hp = (defender or {}).get("hp", 0)
+        if not (my_stat and hp):
+            return False
+        dmg = my_stat.minCostDamage or 0
+        d_stat = self.stats.get(defender.get("id")) if self.stats else None
+        if (d_stat and d_stat.weakness is not None and my_stat.energyType is not None
+                and d_stat.weakness == my_stat.energyType):
+            dmg *= 2
+        return dmg >= hp
+
+    def _active_cheap_attack_kos(self, ma: dict | None, oa: dict | None) -> bool:
+        """True if my Active's cheapest attack KOs the opponent's CURRENT Active this turn — so a costly
+        burst Energy (e.g. Ignition -> Nebula Beam) is unnecessary. The mirror of `_active_doomed`
+        (me attacking them, cheapest attack), via the shared `_can_ko` oracle."""
+        if not (self.stats and ma and oa):
+            return False
+        return self._can_ko(self.stats.get(ma.get("id")), oa)
+
+    def _active_ko_prizes(self, ma: dict | None, oa: dict | None) -> int:
+        """Prizes from Knocking Out the opponent's CURRENT Active with my cheapest attack this turn
+        (0 if I can't) — the baseline a gust must beat (gusting benches their current Active, so a gust
+        is only worth the Supporter for a strictly bigger KO)."""
+        if not (self.stats and ma and oa):
+            return 0
+        return self._prize_value(oa) if self._can_ko(self.stats.get(ma.get("id")), oa) else 0
+
+    def _gust_best_ko_prizes(self, ma: dict | None, opp: dict | None) -> int:
+        """Best prizes among the opponent's benched Pokémon my Active could Knock Out this turn after
+        gusting it to the Active Spot — the whether-to-play signal for a gust Supporter (ADR-0022).
+        Applies the shared `_can_ko` oracle to each bench defender; the max `_prize_value` among the
+        KO-able ones (0 if none). Closed-form off engine stats, no Search."""
+        if not (self.stats and ma and opp):
+            return 0
+        my_stat = self.stats.get(ma.get("id"))
+        best = 0
+        for b in (opp.get("bench") or []):
+            if b and self._can_ko(my_stat, b):
+                best = max(best, self._prize_value(b))
+        return best
+
+    def _stall_target_exists(self, opp: dict | None) -> bool:
+        """True if the opponent has an ENERGYLESS, high-retreat (>= `_STALL_RETREAT`) benched Pokémon —
+        the defensive stall-gust candidate (drag it Active so they must spend a turn retreating it
+        before they can attack). Energyless = can't attack once stranded; high-retreat = a real tempo
+        cost. Closed-form off engine stats; needs `CardStat.retreatCost`. ADR-0022."""
+        if not (self.stats and opp):
+            return False
+        for b in (opp.get("bench") or []):
+            if not b or (b.get("energies") or []):
+                continue
+            stat = self.stats.get(b.get("id"))
+            if stat and stat.retreatCost >= _STALL_RETREAT:
+                return True
+        return False
 
     def _hand_startable(self, hand: list) -> bool:
         """True if a card in hand can take the Active Spot — a Pokémon with the `opener`

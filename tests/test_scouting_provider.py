@@ -88,4 +88,58 @@ def test_build_cache_maps_engine_objects_to_stats():
     st = cache[678]
     assert st.maxDamage == 270            # max damage over the card's attacks
     assert st.minAttackCost == 1          # min energy-count over the card's attacks (the cheap one)
+    assert st.minCostDamage == 70         # damage of the cheapest-cost attack (id 11) — not the 270
     assert st.megaEx and st.weakness == 6 and st.energyType == 6 and st.evolvesFrom == "Riolu"
+
+
+@pytest.mark.req("REQ-SCOUT-0008")
+def test_build_cache_carries_ace_spec():
+    """ACE SPEC is a structural fact the runtime reads off CardStat — for 'protect the irreplaceable
+    one-of ACE SPEC' rules (e.g. Hero's Cape)."""
+    cards = [SimpleNamespace(cardId=1159, name="Hero's Cape", hp=0, ex=False, megaEx=False,
+                             weakness=None, resistance=None, energyType=0, evolvesFrom=None,
+                             attacks=[], aceSpec=True),
+             SimpleNamespace(cardId=3, name="Water Energy", hp=0, ex=False, megaEx=False,
+                             weakness=None, resistance=None, energyType=3, evolvesFrom=None,
+                             attacks=[], aceSpec=False)]
+    cache = _build_cache(cards, [])
+    assert cache[1159].aceSpec is True       # Hero's Cape — the ACE SPEC
+    assert cache[3].aceSpec is False         # a plain Basic Energy
+
+
+def _tool(card_id, name, text, ace_spec=False):
+    """An engine CardData stand-in for a Pokémon Tool whose only datum of interest is its skill text
+    (the engine has no structured HP-bonus field — see ``_parse_tool_hp_bonus``)."""
+    return SimpleNamespace(cardId=card_id, name=name, hp=0, ex=False, megaEx=False,
+                           weakness=None, resistance=None, energyType=0, evolvesFrom=None,
+                           attacks=[], aceSpec=ace_spec,
+                           skills=[SimpleNamespace(name="", text=text)])
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_build_cache_parses_flat_hp_bonus_only_from_unconditional_tool_text():
+    """A +HP Tool's bonus lives ONLY in free skill text — parse the UNCONDITIONAL 'gets +N HP' into a
+    structured ``CardStat.hpBonus``, the primitive the general breakpoint model reads. Restricted
+    variants ('The Cynthia's Pokémon …', 'The {G} Pokémon …') grant the bonus only to a subset, so
+    they parse to 0 — the model must never over-credit HP a target might not get. Source text verified
+    against data/EN_Card_Data.csv."""
+    cards = [
+        _tool(1159, "Hero's Cape", "The Pokémon this card is attached to gets +100 HP.", ace_spec=True),
+        _tool(1173, "Cynthia's Power Weight",
+              "The Cynthia's Pokémon this card is attached to gets +70 HP."),
+        _tool(1157, "Rescue Board",
+              "The Retreat Cost of the Pokémon this card is attached to is {C} less. If that "
+              "Pokémon's remaining HP is 30 or less, it has no Retreat Cost."),
+    ]
+    cache = _build_cache(cards, [])
+    assert cache[1159].hpBonus == 100    # unconditional +100 — the parseable, general case
+    assert cache[1173].hpBonus == 0      # restricted to 'Cynthia's Pokémon' — not credited
+    assert cache[1157].hpBonus == 0      # no HP bonus at all (a retreat tool)
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_build_cache_hp_bonus_defaults_to_zero_without_skills():
+    """A card record with no skills (the lib-free test shape, and any non-Tool) parses to 0 — no crash."""
+    cards = [SimpleNamespace(cardId=678, name="Mega Lucario ex", hp=220, ex=True, megaEx=True,
+                             weakness=6, resistance=None, energyType=6, evolvesFrom="Riolu", attacks=[])]
+    assert _build_cache(cards, [])[678].hpBonus == 0

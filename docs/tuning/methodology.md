@@ -194,6 +194,17 @@ must clear two gates before shipping:
 
 Then a human reviews the diff and commits. No executable rule is ever auto-committed.
 
+**Parallel-mode join (`union_verify`).** When `/blunder-buster` fans clusters out to parallel agents,
+each cluster clears the per-cluster Verifier *in isolation* — but isolated passes don't compose:
+cluster A's rule can regress cluster B's Correction once both ship. The **join** therefore re-runs a
+single `union_verify` (`tools/train/tuner/verify.py`): inject **all** authored rules at once against a
+**seeds-only** baseline and reject the round if any previously-satisfied Correction regressed. It is
+the same re-fit-and-no-regression logic as gate 1, lifted from one candidate to the union — with two
+guards that keep the base-vs-union delta honest: no duplicate authored rule ids (a dict-merge would
+drop one and the pilot would double-weight it), and no authored rule already present in the baseline
+(which would mask its own interference). The full `pytest` suite at the join covers over-firing on
+non-Correction states the corpus can't see.
+
 ---
 
 ## 7. A worked example — `accel-into-main` and the Ignition energy

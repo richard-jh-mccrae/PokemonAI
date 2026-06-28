@@ -14,7 +14,9 @@
 - [x] Phase 3 card-by-card: 18/18; opening hands + Plan mapping locked (§4)
 - [x] Phase 4 General-Strategy disposition + hypothesis drafts complete
 - [x] Phase 5 — doctrine accepted as the deliverable; **Phase B deferred** (user, 2026-06-28)
-- [ ] Phase 6 — executable `strategy.py` (run `/deck-genie mega_starmie` to resume here)
+- [~] Phase 6 — executable `strategy.py`: the 3 residual deck hypotheses authored **test-first +
+  gated** (`prefer-going-second`, `never-fetch-cinderace`, `conserve-ignition-prefer-water`); full
+  suite green (441), Playability deferred to CI (`kaggle_environments` not local)
 
 Cards still to grill: none — all 18 locked. Open questions / deferred infra: see §8.
 **To resume Phase B later:** `/deck-genie mega_starmie` reads this doc + checklist and authors the
@@ -194,9 +196,14 @@ Salvatore rush line stands.
     into the Active Spot so they waste turns retreating it before they can attack. Buys 1–2 setup turns.
 - **Sequencing:** it's your one Supporter — spend it the turn the gust pays (a KO, or the stall).
 - **Anti-patterns:** don't burn it on a turn you needed Salvatore/Hilda more, unless the gust wins/saves.
-- **Disposition:** offensive gust→KO → Tactical / `prize-trade-target` (covers). **Defensive
-  stall-gust → DEFERRED**: needs an opponent-board read (their active/bench energy + retreat costs)
-  + a my-not-ready signal → Posture/Scout (designed, not wired). See §8.
+- **Disposition:** the gust **decisions** (whether to play it, which benched mon) are **NOT supported
+  today** — `prize-trade-target` is a Tactical prize-preference over the *current* Active (not a
+  Hypothesis), and the gust decisions happen before the gust resolves, so Tactical can't see "gust X up
+  → KO X" at the point of choosing. The gust (whether-to-play **and** which benched mon)
+  is **designed** as the general Boss's Orders doctrine (grilled 2026-06-29): a `gust_ko` lethal
+  oracle generalizing Tactical to any defender, a whether-to-play gate, and a **SWITCH(3)**
+  target-select Hypothesis (tiers 1–5, incl. the defensive stall-gust). Sniping an evolving pre-evo
+  with our own attack → general `snipe-the-evolving-threat` (covers the DAMAGE target).
 
 ### 2× Hilda — `search` (targeted setup)
 - **Mechanics:** Supporter. Search deck for an **Evolution Pokémon AND an Energy**, both to hand.
@@ -257,14 +264,37 @@ Salvatore rush line stands.
 - **Disposition:** disruption supporting the race; no general rule fires (coin-flip item). Deck
   nuance "don't hammer a target we're about to KO" → needs a we-have-lethal-on-target signal (§8).
 
-### 1× Hero's Cape — Tool (+100 HP, flexible survival)
-- **Mechanics:** Pokémon Tool. +100 HP to the holder.
-- **Use:** **default on Mega Starmie ex** (→ 430 HP) to dodge OHKOs, especially vs **Lightning**.
-  **Edge cases:** put it on **Staryu or Cinderace** when protecting that Pokémon avoids *losing the
-  game*, or to keep **Staryu alive one more turn** so it can evolve to Starmie next turn for the big
-  hit. A survival tool for line-continuity, not strictly Mega-only.
-- **Disposition:** crossing an OHKO line → HP-breakpoint (general "designed, not yet seeded"); the
-  where-to-attach default → deck nuance / Phase B.
+### 1× Hero's Cape — **ACE SPEC** Tool (+100 HP; one-per-deck, irreplaceable) · tag `tool`
+- **Mechanics:** Pokémon Tool, **ACE SPEC** (engine `aceSpec=True`; rule: max 1 ACE SPEC per deck —
+  `docs/rules.md` Appendix 3). +100 HP to the holder (Mega Starmie ex → 430). The deck's **only**
+  ACE SPEC, a hard 1-of, and **unrecoverable** once lost (Night Stretcher returns a Pokémon or Basic
+  Energy, **not** a Tool; no 2nd copy is legal). Tools **transfer on evolution** (verify in
+  `rulebook.txt`), so a Cape on Staryu carries up to Mega Starmie ex.
+- **Default target:** the wincon — **Mega Starmie ex**. Never a reflex equip onto a setup piece.
+- **WHEN — gate on an HP breakpoint, not on holding it.** Attach the turn +100 changes a combat
+  outcome (lets the carrier survive an otherwise-lethal hit). **Flagship: vs Lightning** (the line's
+  weakness), 430 dodges an OHKO that 330 wouldn't. If +100 crosses no incoming-lethal line this turn
+  (they can't reach 330, or reach 430 anyway), **hold it** — early equip just exposes the
+  irreplaceable card to removal for no payoff.
+- **Anti-Lightning is the headline read:** save the slot for the Lightning matchup when the Read
+  suggests it — reactive by default; proactive-vs-scouted-Lightning needs Posture (deferred).
+- **Protect the carrier; pair with Wally's.** Don't Cape a Mega Starmie ex about to be gusted/sacked.
+- **Edge case (deliberate, not default):** Cape on **Staryu** to survive one more turn and evolve
+  (protects the LINE; it transfers up), or on any body whose loss this turn = losing the game.
+- **Anti-patterns:** fritter on a spent Cinderace; Cape a Pokémon KO'd anyway even at 430; "use it
+  just to use it" with no breakpoint crossed; Cape a 70-HP Staryu for value while Mega Starmie ex is
+  online and threatened.
+- **Disposition (IMPLEMENTED 2026-06-28, TDD; generalised same day):**
+  - **WHERE** → general `save-tool-for-the-attacker` (−15) **+ general `protect-ace-spec-tool`**
+    (−10, reads the `aceSpec` CardStat fact) — extra reluctance to fritter the one-of ACE SPEC off
+    the wincon.
+  - **WHEN** → general rule **`deploy-hp-tool-on-breakpoint`** (+50): attach a +HP Tool to the Active
+    wincon when it's `active_doomed` AND the boost dodges the incoming OHKO
+    (`incoming_active_damage < my_active_hp + hpBonus`). Reactive, per ruling; a positional weight, so
+    a lethal/KO still outranks it. **Now fully general** — the +100 is no longer deck-hardcoded; it's
+    read off `CardStat.hpBonus`, parsed from the Cape's skill text (engine has no structured field).
+    The old deck rule `deploy-heros-cape-on-breakpoint` was removed (subsumed). Restricted +HP tools
+    ("Cynthia's Pokémon", "{G} Pokémon") parse to 0, so they're never over-credited.
 
 ### 2× Harlequin — `draw`, `hand_disruption` (disruption-primary)
 - **Mechanics:** Supporter. Both players shuffle hands into deck; coin — heads you draw 5 / opp 3, tails you 3 / opp 5.
@@ -322,42 +352,54 @@ Explosiveness even with no Basic (`keep-a-startable-hand` covers, working as-is)
   benched basic up, kill it with Cinderace's 50 or Starmie's Jetting Blow 120) — are used across
   **SETUP / RACE / STABILIZE** as the board calls, not reserved for one phase.
 
+**Promote after a KO** (general rules, no deck code): bring up a **ready benched Mega Starmie ex**
+first (`promote-the-ready-wincon`, 40); else promote **Cinderace** as a disposable wall/staller
+(`promote-the-staller`, 20 — fires on the `opener` tag) to keep a bare Staryu safe on the Bench and
+retreat it free once you can evolve; never strand a bare pre-evolution you can't evolve this turn.
+
+**Sequencing is structural, not a weight:** "attack last" (develop everything first, then the
+turn-ending attack) is enforced by the Pilot's `_finish_turn_last`, so the old chip-penalty
+hypotheses (`build-before-attack`, `dont-chip-with-a-doomed-active`) were **removed** from the
+General Strategy — don't reference them. `dig-before-commit` now also fires in RACE (dig before the
+turn-ending attack, not only in SETUP).
+
 ## 5 · General-Strategy disposition table (growing)
 
 | General Hypothesis | Disposition | Seed weight | Why (deck-specific reasoning) |
 |---|---|---|---|
-| `prefer-rush-evolve-tutor` | covers-as-is | — | Salvatore rush-evolves Staryu→Mega Starmie ex |
+| `prefer-rush-evolve-tutor` | covers-as-is (refined) | — | Salvatore rush-evolves Staryu→Mega Starmie ex; now gated on `line_preevo_in_play` (stands down with no Staryu in play to evolve) |
 | `evolve-into-wincon` | covers-as-is | — | Staryu→Mega Starmie ex |
 | `hold-clutch-heal` | covers-as-is | — | Wally's Compassion defensive save |
 | `fetch-the-wincon` | covers-as-is | — | fetch Mega Starmie ex (Mega Signal / Hilda / Ultra Ball) |
 | `dont-bench-multiprize` | covers-as-is | — | Mega Starmie ex (3-prize) is the wincon → exempt; no loose multiprizers to bench |
 | `dont-waste-discard-energy` | override / extend | TBD | Ignition is finite + non-recyclable: prefer Water over Ignition **even on the wincon** unless Nebula is needed / ≥2 Ignition in hand → §6 `conserve-ignition-prefer-water` |
-| `hold-position-in-setup` | **conflicts** | TBD (condition/raise) | the deck's engine *wants* to retreat Cinderace (retreat 0) to promote the attacker — a planned pivot, not a wasted setup turn → §6 `pivot-cinderace-to-attacker` |
+| `hold-position-in-setup` | covers-as-is (resolved) | — | Cinderace-pivot conflict **resolved** by general **`retreat-to-ready-attacker`** (60 > 25): retreat the spent non-wincon Active into the ready benched wincon. No deck rule needed. |
 | `use-acceleration` | gap (tag) | — | Cinderace's Turbo Flare isn't tagged `energy_accel` (probe gap) → general rule won't fire; deck uses Role `accel_source` instead. Candidate: add the tag via `function_overrides.json`. |
-| `prize-trade-target` / Tactical | covers-as-is | — | Boss's Orders **offensive** gust → KO |
-| Boss's **defensive stall-gust** | gap → **deferred** | — | gust a high-retreat energyless wall to deny the opponent's attacker a turn — needs opponent board read + my-not-ready (Posture) → §8 |
+| Boss's gust (offensive KO) | designed, **not built** | seeds TBD | gust *decisions* unsupported — `prize-trade-target` is a Tactical prize-preference over the *current* Active, blind to the gust. Designed 2026-06-29 (ADR-0022): `gust_ko` oracle + whether-to-play gate + SWITCH(3) target-select |
+| `snipe-the-evolving-threat` / `snipe-the-weakest` | covers-as-is | — | Jetting Blow's 50 bench-snipe target (evolving pre-evo / lowest-HP) — forward-evolution index, ADR-0020 |
+| Boss's **gust-target** (stall + offensive pre-evo) | designed → **general** (not built) | seeds TBD | not deck-specific: specified in the general Boss's Orders doctrine (grilled 2026-06-29, §8) |
+| `power-up-attacker` | covers-as-is (refined) | — | now gated on `attach_target_needs` — won't pile surplus Energy on an already-online Mega Starmie ex (1 W = Jetting Blow) |
+| `promote-the-ready-wincon` / `promote-the-staller` | covers-as-is | — | promote-after-KO: ready Mega Starmie ex first (40), else Cinderace (`opener`) as a staller (20); no deck rule |
+| `save-tool-for-the-attacker` | covers-as-is (+ optional `aceSpec` bump) | — | Hero's Cape (`tool` tag) → hold for the wincon; an `aceSpec` extra-reluctance bump is the optional deepening (§3, Hero's Cape deep dive) |
+| `build-before-attack`, `dont-chip-with-a-doomed-active` | **removed** | — | superseded by the Pilot's structural `_finish_turn_last` ("attack last") — no longer weights |
 
 ## 6 · New deck Hypotheses (drafts — trigger sketches, NOT lambdas yet)
 
-### `conserve-ignition-prefer-water` · seed weight −15 · status: assumed
+### `conserve-ignition-prefer-water` · seed weight −40 · status: assumed · **IMPLEMENTED 2026-06-28**
 > Ignition is finite (4, non-recyclable) — even on the win-condition, prefer a Basic Water attach
-> (→ Jetting Blow) over an Ignition unless Nebula Beam's 210 / ignore-effects is needed this turn,
-> or ≥2 Ignition are in hand and Nebula gets meaningfully ahead.
+> (→ Jetting Blow) over an Ignition unless Nebula Beam's 210 / ignore-effects is needed this turn.
 
-**Trigger sketch:** at an `ATTACH` whose option is Ignition (`discard_eot`) onto the wincon, when a
-reusable Water is available AND Jetting Blow would suffice AND <2 Ignition in hand → penalize.
-**Needs new Context signals:** "Jetting Blow suffices this turn" and "Ignition count in hand" — flag §8.
+**Implemented** via two new (general, additive) Pilot signals built test-first:
+`CardStat.minCostDamage` (damage of the cheapest-cost attack — Jetting Blow's 120, not Nebula's 210)
+and `Board.active_cheap_attack_kos` (closed-form: my Active's cheap attack KOs the opp Active,
+weakness-doubled — mirror of `active_doomed`). **Trigger:** `ATTACH` of Ignition (`discard_eot`) onto
+the **Active** wincon, when a reusable Water is in hand AND `active_cheap_attack_kos`. The greedy
+"≥2 Ignition" exception is **subsumed** — if the cheap attack KOs, Nebula never gets ahead, so no
+count signal is needed. Stands down when the cheap attack can't KO (Nebula genuinely needed).
 
-### `pivot-cinderace-to-attacker` · seed weight +30 · status: assumed
-> Cinderace (retreat 0) is the accel engine: Turbo Flare, then retreat to promote the Mega Starmie
-> ex attacker — a planned pivot, not a wasted setup retreat. Don't penalize retreating Cinderace
-> once the Starmie line is ready/energized.
+### ~~`pivot-cinderace-to-attacker`~~ — **COVERED** by general `retreat-to-ready-attacker` (60); draft dropped 2026-06-28 (forward-evolution / blunder-round reconciliation).
 
-**Trigger sketch:** at a MAIN `RETREAT` option where the Active is Cinderace (`accel_source`/`starter`)
-AND a benched wincon is ready → encourage (outweigh `hold-position-in-setup`'s −25).
-**Needs new Context signal:** "benched wincon ready" — flag §8.
-
-### `never-fetch-cinderace` · seed weight −60 · status: assumed
+### `never-fetch-cinderace` · seed weight −60 · status: assumed · **IMPLEMENTED 2026-06-28**
 > Cinderace can only enter via Explosiveness at game start; fetching it later is a dead card. Never
 > select it at a search. (Generalize via the `opener` tag → "don't fetch a setup-only opener.")
 
@@ -365,7 +407,7 @@ AND a benched wincon is ready → encourage (outweigh `hold-position-in-setup`'s
 Pokémon → strongly penalize. **Reads:** `select_context` TO_HAND, the candidate's `opener` tag.
 Prefer the tag form over a hard-coded Cinderace id.
 
-### `prefer-going-second` · seed weight TBD · status: assumed
+### `prefer-going-second` · seed weight −30 · status: assumed · **IMPLEMENTED 2026-06-28**
 > This is a turbo deck that wants to attack as early as possible. At the coin-toss "go first?" choice,
 > decline — going second lets you attack on your first turn (the player going first cannot), and
 > going first wastes a turn and risks an unusable end-of-turn Ignition.
@@ -389,9 +431,15 @@ params = { setup_energy_target: 3, search_budget: 0 }
 
 - **Resolved:** Cinderace never evolved (no Raboot in deck) — opener/accel/wall only, opening-hand
   only, never fetched.
-- **Jetting Blow case-B needs an opponent-bench-threat read** → that's the Posture/Scout layer
-  (designed, not wired — `docs/scouting.md`). Case-A (KO via HP/weakness) the Tactical Evaluator
-  already handles. Flag the snipe-the-wall branch as possibly-deferred until Posture lands.
+- **Jetting Blow bench-snipe targeting — RESOLVED.** The forward-evolution index shipped (ADR-0020):
+  provider `forward_max_damage` + Context `target_forward_damage` + general `snipe-the-evolving-threat`
+  (18), under `snipe-the-threat` (20) and over `snipe-the-weakest` (15), now pick the snipe target.
+  Residual: the Jetting-Blow-vs-Nebula **attack selection** on an un-KO-able wall is the **Tactical
+  Evaluator's** job, not a positional weight.
+- **Designed — comprehensive GENERAL Boss's Orders strategy** (grilled 2026-06-29, ADR-0022; **build pending**; user directive 2026-06-28) — Boss's is
+  powerful in nearly every deck, so its gust-target doctrine (offensive pre-evo gust, defensive
+  stall-gust, reach-a-prize KO) belongs in the General Strategy, built AFTER this reconciliation +
+  implementation. Will consume the opponent read (Posture/Scout) + the shipped forward-evolution index.
 - **Resolved:** Hero's Cape — default Mega Starmie ex (430 HP); edge-case onto Staryu/Cinderace for
   game-saving survival or line continuity (§3).
 - **Resolved:** Crushing Hammer — spam on sight vs energy decks; hold when our attack already KOs the
@@ -402,10 +450,58 @@ params = { setup_energy_target: 3, search_budget: 0 }
   - "Jetting Blow suffices this turn" (a non-Nebula KO available) + "Ignition count in hand" → for
     `conserve-ignition-prefer-water`.
   - "benched wincon ready (energized)" → for `pivot-cinderace-to-attacker`.
-  - opponent bench-threat read (Posture/Scout) → for Jetting Blow case-B (snipe-the-wall branch),
-    Boss's **defensive stall-gust** (their active/bench energy + retreat costs + my-not-ready), AND
-    Boss's **offensive pre-evo gust** (recognising which benched basic evolves into a threat —
-    frame-75 "evolves-into-attacker", deferred per [[snipe-threat-two-signals]]).
+  - **Boss's Orders gust-TARGET selection** (which benched Pokémon to drag up — offensive pre-evo
+    gust + defensive stall-gust) → **specified in the general Boss's Orders doctrine** (grilled
+    2026-06-29, ADR-0022; build pending); not a mega_starmie-specific rule. (forward-evolution index
+    already shipped; engine/replaceability-denial + proactive use still need the opponent read.)
   - "we have lethal on this target" → for Crushing Hammer (don't hammer a Pokémon we're about to KO).
-  - HP-breakpoint ("would +100 HP dodge an OHKO") + line-continuity → for Hero's Cape attach target.
+  - HP-breakpoint ("would +HP dodge an OHKO") → ✅ landed as general `deploy-hp-tool-on-breakpoint`
+    (`CardStat.hpBonus` + `incoming_active_damage`). Line-continuity (a Cape on Staryu transfers up
+    the evolution line — choosing the attach target with that in mind) is still open.
   Until these land, those rules may be partial/deferred — note at authoring time.
+
+## 9 · Reconciliation log + open items (2026-06-28, vs forward-evolution index + blunder round)
+
+**Resolved this session** (general rules now cover former deck drafts/deferrals):
+- `pivot-cinderace-to-attacker` → general `retreat-to-ready-attacker` (60); `hold-position-in-setup`
+  conflict **resolved**.
+- Bench-snipe targeting (Jetting Blow 50) → `snipe-the-evolving-threat`/`-weakest` + forward-evolution
+  index (ADR-0020). Boss's **gust-target** selection → now **designed** as the general Boss's Orders doctrine (grilled 2026-06-29, ADR-0022; build pending).
+- Hero's Cape = **ACE SPEC** doctrine written (§3): reactive deploy on an HP breakpoint, default the
+  wincon. WHERE → `save-tool-for-the-attacker`; WHEN → HP-breakpoint model (general, not-built).
+  **No standalone general ace-spec rule** (ACE SPECs too heterogeneous; scarcity = deckbuild principle);
+  at most a small `aceSpec` extra-reluctance weight bump.
+
+**Rulings (2026-06-28):** Hero's Cape **reactive for now** (proactive-vs-Lightning needs Posture).
+`save-tool-for-the-attacker` is **too crude — the right Tool target/timing depends 100% on the tool's
+function** (a +HP defensive Cape wants breakpoint timing; a damage/utility Tool wants a different
+target). → fold into the general Tool / HP-breakpoint work, don't leave it a blanket −15.
+
+**Status / OPEN:**
+1. ✅ DONE (Phase B, TDD 2026-06-28): **`conserve-ignition-prefer-water`** + **`prefer-going-second`**
+   authored test-first + gated (see §6; `tests/test_mega_starmie_triggers.py`).
+2. ✅ DONE: **`never-fetch-cinderace`** kept as a deck rule (user ruling) and implemented — the general
+   `prefer-wincon-line-piece` only *prefers* Staryu, it doesn't forbid a strictly-dead Cinderace fetch.
+3. ✅ DONE: stale `tuned.json` keys for the removed `build-before-attack` / `dont-chip-with-a-doomed-active`
+   cleaned (suite-green); doc folds applied — §4 now states "attack last is structural" + the
+   promote-after-KO note, and §5 records the `power-up-attacker` (`attach_target_needs`) and
+   `prefer-rush-evolve-tutor` (`line_preevo_in_play`) gating refinements + the removed chip rules.
+4. Future **general** work (separate, after reconciliation + Phase B): comprehensive **Boss's Orders**
+   strategy (**designed** 2026-06-29, ADR-0022; build pending); the **damage**-boost OHKO-line model
+   (Maximum Belt et al.); per-tool-aware
+   `save-tool-for-the-attacker` (target/timing by tool function — the line 469 ruling). (The HP-boost
+   breakpoint model is now done — see item 7.)
+5. **Phase B** largely shipped (test-first + gated): the 3 deck residual hypotheses
+   (`prefer-going-second`, `never-fetch-cinderace`, `conserve-ignition-prefer-water`); existing
+   `open-cinderace` / `accel-into-main` / `tutor-the-wincon` retained.
+6. ✅ DONE (Hero's Cape deep dive, TDD 2026-06-28): general `protect-ace-spec-tool` (ACE SPEC
+   reluctance), on new signals `CardStat.aceSpec`, `CardStat.minCostDamage`,
+   `Board.incoming_active_damage` / `active_cheap_attack_kos`.
+7. ✅ DONE (fully-general "+HP tool" breakpoint model, TDD 2026-06-28): new `CardStat.hpBonus` parses
+   a Tool's flat HP from its skill text (`_parse_tool_hp_bonus`, unconditional "+N HP" only — restricted
+   tools → 0, never over-credited); new **general** `deploy-hp-tool-on-breakpoint` (+50) reads it +
+   `Board.incoming_active_damage`, so ANY unconditional +HP Tool / ANY weakness inherits the breakpoint
+   deploy. The deck-specific `deploy-heros-cape-on-breakpoint` (hardcoded +100) was removed as subsumed.
+   Live-engine verified: Hero's Cape → hpBonus 100, Cynthia's Power Weight → 0. Remaining general work:
+   the comprehensive Boss's Orders strategy (**designed** 2026-06-29, ADR-0022; build pending); the
+   **damage**-boost OHKO-line model (Maximum Belt et al.).

@@ -1,6 +1,6 @@
 ---
 name: blunder-buster
-description: Bust a round of blunder corrections into verified Strategy improvements. Reads the correction log, clusters the missing_hypothesis blunders, authors a general when() trigger per cluster, gates each with the deterministic Verifier, and presents diffs to commit. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
+description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), gates each with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — nothing is punted to a future run or "deferred". Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
 ---
 
 # blunder-buster — corrections → verified Strategy improvements
@@ -9,10 +9,39 @@ Convert a **round** of blunder Corrections into committed agent improvements. Th
 the accuracy gate; the human commits. Never write executable `when()` code into a Strategy without
 the Verifier passing **and** human review. See `docs/blunder-tuner.md`, ADR-0017, ADR-0018.
 
-**Invocation:** `/blunder-buster [path/to/corrections.jsonl]` — omit the path to use the main log
-(`data/corrections/corrections.jsonl`).
+**One run resolves the WHOLE open set.** You walk through, consider, test, and act on **every**
+still-open correction in this session — start to finish. You do **not** stop after one cluster, and
+you do **not** punt anything to a "future run." See the completion mandate below.
 
-## Rounds & reconciliation (read this first)
+## Exhaustive completion mandate (read this first)
+
+A `/blunder-buster` run is **finished only when the open set is empty** — when every still-open
+correction has reached exactly one **terminal outcome**, with evidence:
+
+- **fixed** — a verified `when()` Hypothesis now fires it (Verifier `passed` + retest `fixed`), diff placed.
+- **covered** — an existing Hypothesis already handles it; you **name** that Hypothesis, confirmed
+  against the **real Pilot `decide()`** (not the W-route).
+- **refuted** — a bad correction (forgoes a KO / high-value attack), **proven with a test**; dropped
+  from the weight fit. See [[forgo-ko-corrections-are-refuted]].
+
+"Open" = every `missing_hypothesis` proposal in `data/proposals/<deck>.json` `open[]` **plus** every
+`UNSATISFIED` line `tune.py` prints. Each lands in exactly one cluster and is carried through to one
+of the three outcomes above.
+
+**There is no `deferred`, no "future run", no "leave for later".** If the *only* blocker is a missing
+signal — a `Context`/`Board` field, a function tag, or an enum the `when()` would need but that
+doesn't exist yet — you **build that infra in-session** (step 4b), then author the rule. "Needs infra"
+is a reason to **build**, never to skip. Do **not** report blunder busting finished while any
+correction is still unresolved.
+
+> **Why no defer:** every prior round's "deferred" pile silently became permanent backlog. The
+> Verifier + real Pilot make in-session resolution cheap, and a missing signal is usually one
+> `Context` field. Resolve it now.
+
+(Legacy `deferred` entries already in `data/corrections/reviewed.json` are **debt** under this
+mandate: any run that re-surfaces or touches one must re-resolve it to fixed / covered / refuted.)
+
+## Rounds & reconciliation
 
 There is **one append-only log**; you don't manage per-round files. Each run re-featurizes the
 **whole** log against the **current** Strategy, so reconciliation is automatic:
@@ -21,27 +50,32 @@ There is **one append-only log**; you don't manage per-round files. Each run re-
   committed now fires on it, so it drops out (becomes weight-tunable or already satisfied).
 - Only **still-uncovered** blunders surface as new `missing_hypothesis` clusters.
 
-**The reviewed ledger — don't re-assess what you set aside.** Auto-reconciliation only drops a
-blunder once a rule *satisfies* it. A blunder you assessed and **consciously set aside** —
-`refuted` (a bad correction, e.g. it forgoes a Knock Out), `deferred` (valid but needs new infra),
-or `covered` (already handled) — would otherwise resurface every run. Record those in
-`data/corrections/reviewed.json` (step 10); `tune.py` then excludes them from `open[]` /
-`UNSATISFIED` and lists them under `reviewed (excluded)` — so each round you only see **new** work.
+**The reviewed ledger — set-asides that stay set aside.** Auto-reconciliation only drops a blunder
+once a rule *satisfies* it. A `refuted` or `covered` correction you resolved by judgement (not by a
+firing rule) would otherwise resurface every run, so record it in `data/corrections/reviewed.json`
+(step 10); `tune.py` then excludes it from `open[]` / `UNSATISFIED` and lists it under
+`reviewed (excluded)`. **`refuted` and `covered` are the only set-aside outcomes** — both are
+terminal resolutions reached by **testing**, not punts.
 
-So the loop is: tag corrections → `/blunder-buster` → author + verify + **commit** + **record
-set-asides** → tag more (appended to the same log) → `/blunder-buster` again (prior clusters
-auto-drop; reviewed ones stay excluded; only the new patterns appear). **Commit authored
-Hypotheses before the next round** so re-featurization sees them.
+So the loop is: tag corrections → `/blunder-buster` → **resolve every open correction** (author +
+verify + **commit**, or test + **record refuted/covered**) → tag more (appended to the same log) →
+`/blunder-buster` again (prior clusters auto-drop; reviewed ones stay excluded; only the new patterns
+appear). **Commit authored Hypotheses before the next round** so re-featurization sees them.
 
 ## Steps
 
-1. **Pick a cluster.** `python tools/train/tune.py --agent <deck> [--store <path>]`, then read the
-   durable snapshot it writes: **`data/proposals/<deck>.json`** (`open[]` = the `missing_hypothesis`
-   proposals, each with category/episode/frame/`agent_build`; `skipped[]` = tactical/no-obs). Group
-   `open` proposals by category + similar rationale into ONE pattern (e.g. the three `bad-target`
-   "snipe the highest threat" corrections). Their ids are the **cluster**. (The same `tune.py` run
-   also (re)writes `src/agents/<deck>/tuned.json` — the deterministic Tier-0 weight deltas; commit
-   it alongside the authored Hypothesis.)
+> Steps 2–10 run **per cluster**. After step 1 builds the full cluster worklist, loop 2–10 over
+> **every** cluster on it — you are not done until all are resolved (step 11).
+
+1. **Enumerate & cluster EVERY open proposal.** `python tools/train/tune.py --agent <deck>
+   [--store <path>]`, then read the durable snapshot it writes: **`data/proposals/<deck>.json`**
+   (`open[]` = the `missing_hypothesis` proposals, each with category/episode/frame/`agent_build`;
+   `skipped[]` = tactical/no-obs). Group **all** `open` proposals by category + similar rationale into
+   patterns (e.g. the three `bad-target` "snipe the highest threat" corrections form ONE pattern).
+   Each pattern's ids are a **cluster**. Build the **full cluster worklist now** — every open proposal
+   lands in exactly one cluster (a singleton if it shares no pattern); **none is left off the list**.
+   (The same `tune.py` run also (re)writes `src/agents/<deck>/tuned.json` — the deterministic Tier-0
+   weight deltas; commit it alongside the authored Hypothesis.)
    - **Also mine the `UNSATISFIED` lines** `tune.py` prints: these are *W-route* corrections whose
      `correct ≻ chosen` the weight fit could **not** honour (a conflict between corrections, or a gap
      no existing Hypothesis discriminates). They are prime **H** candidates — treat them like `open`
@@ -69,6 +103,24 @@ Hypotheses before the next round** so re-featurization sees them.
    - Prefer **universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s.
    - Pure + total predicate; seed `weight` in-band (`docs/weights.md`); `status="assumed"`.
 
+4b. **Missing signal? Build the infra in-session — never defer.** If the `when()` you need must read
+   a signal that doesn't exist yet (a `Context`/`Board` field, a function tag, an enum/select-context
+   exposure), **add it now** — this is the *only* place a "needs infra" correction goes, and it goes
+   *forward*, not into the ledger:
+   - Pick the layer: a derived board/decision signal → `Context`/`Board` in `src/common/pilot.py`; a
+     card-behavioral property → a tag in `card_functions.json` (+ wiring in `src/common/cards.py`);
+     engine vocabulary → `src/cg/api.py`.
+   - Compute it from sources already available to the Pilot; keep it **pure + total**; mirror the shape
+     of an existing signal (e.g. `target_energy`). Verify every card/rule fact **at source**
+     (`docs/rules.md`, `docs/rulebook.txt`, `data/EN_Card_Data.csv`), never from memory.
+   - Add a **focused unit test** for the new signal under `tests/`, then author the `when()` that reads
+     it and continue to step 5. Worked example of the kind of signal this unblocks: the snipe
+     **"evolves-into-attacker"** lookahead ([[snipe-threat-two-signals]], frame 75) — previously
+     deferred for lack of this exact `Context` signal; under this skill you **build and ship it**.
+   - If the signal is genuinely large (a multi-file subsystem), still **resolve the correction this
+     session**: build the **smallest correct version** the rule actually needs. That is still building,
+     not punting — the correction must reach a terminal outcome before the run ends.
+
 5. **Verify** — the gate; iterate until it passes:
    - Build the deck's Pilot (mirror `tools/train/tune.py:_build_pilot`) wrapped as
      `pilot_with(extra) -> Pilot(..., hypotheses=base + extra, ...)`.
@@ -82,7 +134,8 @@ Hypotheses before the next round** so re-featurization sees them.
    show `chosen_before → chosen_after`, `margin_before → margin_after`, and require `fixed` (the
    `correct` option is now chosen). This is the before/after proof the blunder is addressed.
 
-7. **Suite-green.** `python -m pytest tests/ -q` — must not break Playability / existing behavior.
+7. **Suite-green.** `python -m pytest tests/ -q` — must not break Playability / existing behavior
+   (and must include any new signal's test from step 4b).
 
 8. **Place + present a diff** (the human commits):
    - universal trigger → `src/common/general_strategy.py`
@@ -94,25 +147,158 @@ Hypotheses before the next round** so re-featurization sees them.
    it prints `report -> <path>`. **Append** to that same file an `## Authored this round` section: for
    each Hypothesis you committed, a bullet with its id, the cluster it fixes, the rationale, the seed
    weight + band, and the **retest before/after** from step 6 (`chosen_before → after`,
-   `margin_before → after`, `fixed`). This is the per-run learning/progress artifact; keep it succinct
-   and explain *why*, not just *what*. The math itself lives once in `docs/tuning/methodology.md` —
-   link it, don't re-explain it.
+   `margin_before → after`, `fixed`). Also record any **new infra built** in step 4b (the signal, its
+   layer, its test). This is the per-run learning/progress artifact; keep it succinct and explain
+   *why*, not just *what*. The math itself lives once in `docs/tuning/methodology.md` — link it, don't
+   re-explain it.
 
-10. **Record what you set aside** (so it never resurfaces). For every `open` proposal / `UNSATISFIED`
-    correction you assessed but did **not** author a rule for, record a disposition in the reviewed
-    ledger — `python tools/train/review_correction.py <episode>-<frame> <disposition> "<reason>"`:
+10. **Record the set-asides** (so they never resurface). For every `open` proposal / `UNSATISFIED`
+    correction you resolved **without** authoring a firing rule, record its terminal disposition —
+    `python tools/train/review_correction.py <episode>-<frame> <disposition> "<reason>"`:
     - `refuted` — a bad correction (e.g. it forgoes a **KO** / a high-value attack; `tactical ≈ 1000`).
-      Also dropped from the weight fit so the bad label stops pressuring weights. (See
-      [[forgo-ko-corrections-are-refuted]].)
-    - `deferred` — valid but needs new infrastructure (a new `Context` signal); note what's missing.
-    - `covered` — already handled by an existing Hypothesis; name it.
-    Next `tune.py` run excludes them (shown under `reviewed (excluded)`), so the next round only
-    surfaces genuinely new patterns.
+      **Prove it first** (retest shows the agent's pick is the KO), then record. Also dropped from the
+      weight fit so the bad label stops pressuring weights. (See [[forgo-ko-corrections-are-refuted]].)
+    - `covered` — already handled by an existing Hypothesis; **name it**, and confirm with the real
+      Pilot `decide()` that it actually fires (not just the W-route).
+    There is **no `deferred`.** A correction blocked only by a missing signal is **not** set aside —
+    you built the infra in step 4b and authored the rule. Next `tune.py` run excludes the recorded
+    set-asides (shown under `reviewed (excluded)`), so the next round only surfaces genuinely new work.
+
+11. **Completion gate — prove the open set is empty.** Re-run `python tools/train/tune.py
+    --agent <deck>` and confirm that **no unresolved correction remains**: every line is either one you
+    committed a fix for (drops on this reconciliation) or one recorded `refuted`/`covered` in the
+    ledger (`reviewed (excluded)`). Produce a **terminal-outcome ledger** — one line per open
+    correction, its outcome (fixed / covered / refuted) and the evidence (Verifier+retest id / named
+    Hypothesis / refutation test). **Only when every correction has an outcome may you report blunder
+    busting finished.** If any correction is still unresolved, you are **not** done — return to step 2
+    for it. Do not say "the rest are for a future run."
+
+## Parallel mode (fan-out) — same gates, different schedule
+
+Parallel mode changes **only how clusters are scheduled** — every gate is unchanged (Verifier
+non-negotiable; no `deferred` / build-infra-in-session per step 4b; exhaustive completion per step 11;
+human commits). It busts a multi-cluster round faster by authoring **independent** clusters
+concurrently, then proving at a serial join that they didn't step on each other. **Default is serial**
+(steps 1→11). Fan out only when **both** hold: (a) the session is orchestration-capable — parallel
+mode uses the **Workflow tool**, which needs the multi-agent opt-in (ultracode on, or the user asked
+for it); and (b) **≥2 clusters classify SOFT** (below). One cluster, an all-HARD round, or no opt-in →
+run serial.
+
+### Eligibility — SOFT vs HARD (file-disjoint AND behavior-disjoint)
+
+A cluster is **parallel-eligible (SOFT)** only if its *entire* planned write-set is **append-only into
+a shared list/map**:
+
+| Write-set | SOFT (parallel-safe) | HARD (serialize) |
+|---|---|---|
+| Universal Hypothesis | append into `general_strategy.py` `HYPOTHESES` (`:46-273`) — order-independent (`pilot.py:219-221` sums all fired weights) | — |
+| Deck Hypothesis | append into deck `strategy.py` `HYPOTHESES` (`:31-58`) | edits the same deck `ROLES` dict (`:20-29`) / `STRATEGY` ctor (`:60-68`) |
+| Function tag | tag a card **no other concurrent cluster touches** (`card_functions.json`) | two clusters tag the **same** card id |
+| Context/Board signal (step 4b) | — | **always HARD** — co-edits the dataclass body **and** its single `_context`/`_board` return (`pilot.py:92-120`/`:301-309`, `:62-89`/`:371-390`) |
+| Enum / mirror constant | — | two clusters edit the same mirror block (`general_strategy.py:9-21`, `pilot.py:16-34`) |
+
+**Rule of thumb:** append-to-a-list/map = parallel-safe; edit-a-shared-structured-region = serialize.
+**Every step-4b new signal is HARD by construction.** File-disjoint ≠ behavior-disjoint (two new
+Hypotheses can both fire on one option and fight in the summed score), so also apply a **conservative
+static pre-filter**: if two SOFT clusters target the **same `SelectContext` + `OptionType` + an
+overlapping card set**, route the later one to the serial tail. Residual behavior-overlap *is* allowed
+into the parallel batch — the join's union-verify is the net that catches it.
+
+### Phase 1 — serial setup & classify (steps 1–3, once)
+
+Run `tune.py --agent <deck>` **exactly once** — it is the **single shared writer** of `tuned.json` /
+`data/proposals/<deck>.json` / the run report; never run it inside a fan-out worktree (it desyncs the
+durable snapshot). Cluster **every** open correction into the full worklist (step 1), read `live_trace`
++ the feature catalog (steps 2–3). Then **classify each cluster SOFT/HARD** and partition into a
+**parallel batch** (pairwise-disjoint SOFT clusters) + a **serial HARD tail**. **Record the full
+worklist of cluster ids** — the join reconciles against *this*, not against whatever agents return.
+
+### Phase 2 — parallel authoring (steps 4–7 per cluster, isolated)
+
+Spawn one **authoring agent per SOFT cluster** via the **Workflow tool**, each with
+**`isolation: 'worktree'`** (per-agent edits + pytest never collide on disk). **Same effort:** with the
+Workflow tool, **omit `opts.effort` and `opts.model`** → the agent inherits this session's effort+model
+— that *is* the "same effort as the spawner" guarantee. *(If you ever fall back to `spawn_task`/Task
+tooling, effort is **not** inherited by omission — pass parent effort+model explicitly, have the agent
+echo them back in its result, and reject/re-spawn any downgraded run.)*
+
+Each authoring agent runs steps 4→5→6→7 to completion **in its worktree**: author the `when()` (4),
+Verifier `passed` against `pilot_with([candidate])` (5), retest each member `fixed` (6),
+`pytest tests/ -q` green incl. any new test (7). It does **not** commit/merge — it **returns structured
+data**: cluster ids, the authored Hypothesis **source text** + target file/region, `VerifyResult`,
+per-member retest before/after, suite status, and its echoed effort/model. **If it discovers it needs
+step-4b infra**, that reclassifies the cluster **HARD** — it returns `needs-serialization` instead of
+editing shared `pilot.py`, and the cluster drops to the serial tail. Read-only **adjudication** of
+`covered`/`refuted` (step 10) may also fan out — no worktree (no writes) but **still at full effort**
+(covered/refuted are terminal judgements, not cheap).
+
+### Phase 3 — serial join, union-verify & completion gate (steps 7–11 over the union)
+
+1. **Run the HARD tail** now, one cluster at a time under its file/region lock (steps 4–7 each).
+2. **Structural re-apply, not git merge.** Take each agent's returned Hypothesis source text and
+   **insert it programmatically** before the target list's closing bracket; do **not** rely on git
+   auto-merge (every parallel pair textually conflicts on the `]` line). Immediately run an
+   **`ast.parse` / `py_compile` gate** on each touched file — a malformed concatenation fails **here**,
+   naming the offending cluster, before any verify.
+3. **Collect `all_authored`.** Gather each agent's authored Hypothesis from its structured result
+   into one `all_authored` list — it feeds both the structural re-apply (above) and `union_verify`
+   (below). You do **not** hand-build the union seeds: `union_verify` derives them and **raises on
+   duplicate authored ids** (ids are `category-episode-frame`, so two clusters sharing episode+frame
+   collide and a dict-merge would silently drop one — a completion-mandate breach). If it raises,
+   namespace the colliding id before proceeding.
+4. **Union-verify — the interference detector.** Call
+   **`union_verify(all_authored, corrections, pilot_with, seeds, clusters)`** (`train.tuner.verify`) —
+   the join-only gate that encodes the correct wiring so a hand-rolled join can't reintroduce the two
+   classic bugs. It injects **every** authored Hypothesis **once** against a **seeds-only** baseline
+   and returns `regressed` across the whole corpus + per-cluster `clusters_satisfied`. It does **not**
+   route the union through `verify()`'s single-`candidate` path (that double-counts — `verify.py:33`
+   layers `[candidate]` on top and `pilot.py:219-221` sums fired weights with no dedupe), and it
+   **raises** if `pilot_with([])` is not seeds-only (a contaminated baseline makes `regressed` a no-op,
+   `verify.py:32,36`) or if two clusters' authored ids collide. **`corrections` must include the
+   previously-`covered` ones**, not just parallel-batch members — a new rule can steal a covered
+   Correction's option. **Require** `result.passed` (every cluster satisfied in the union **and**
+   `result.regressed` empty). A non-empty `regressed` names the exact Correction one agent's rule broke
+   for another → reconcile (below).
+5. **Full suite + union-retest.** Re-run `pytest tests/ -q` once on the merged tree — this catches
+   over-firing on **non-correction** Playability states the corpus-only verify can't see; it is
+   **load-bearing, not optional**. Then `retest(member, pilot_with(all_authored))` for every cluster
+   member **and every previously-`covered` correction** (a new union Hypothesis can steal the option a
+   `covered` correction relied on; `refuted` KO-dominated ones are immune — `KO_SCORE` swamps any
+   band-≤100 weight). All must still be `fixed`/satisfied.
+6. **Steps 8–11 over the union.** Place each diff (8), append the run report incl. any new infra (9),
+   record `refuted`/`covered` set-asides (10), and run the **step-11 completion gate** — re-run
+   `tune.py`, prove the open set empty. **Reconcile against the Phase-1 full worklist:** every cluster
+   id maps to exactly one terminal outcome — `fixed` (diff present **and** union-verified) / `covered`
+   / `refuted` / `re-queued-serial`. A missing / null / timed-out / `needs-serialization` result is
+   **re-queued to the serial tail, never dropped** — do not let "all *reported* clusters passed"
+   vacuously pass over a dead agent. Human commits.
+
+### Loop-safe reconciliation (when the join regresses)
+
+If union-verify reports `regressed` (or a union-retest flips a member, or the suite breaks on a
+union-only over-fire), the two clusters are proven **behavior-dependent** despite being file-disjoint.
+**Merge them into one cluster**, hand to a **single serial** authoring agent that makes the triggers
+mutually exclusive (tighten one `when()` to exclude the overlap, or fold both under one broader
+Hypothesis), re-run steps 5–7, and **re-enter the FULL join review** (never a partial check).
+**Termination:** merges are **one-way** (clusters only combine, never re-split), so each pass strictly
+decreases the cluster count over a fixed finite open set — worst case collapses to one serial cluster,
+i.e. today's guaranteed-terminating path. The run is finished only when one **full** join review passes
+clean **and** step 11 shows the open set empty — the same exhaustive-completion mandate, reached by a
+fan-out-then-converge schedule.
 
 ## Rules
 - One Hypothesis per cluster, verified against **all** its members — not per-correction point-fixes.
+- **Parallel mode is scheduling only.** Fanning clusters out (see *Parallel mode*) never weakens a
+  gate: the Verifier still gates every cluster, the join's **union-verify + full `pytest` + step-11**
+  must pass over the **merged** tree, and a dead/failed agent **re-queues serial** — never a silently
+  dropped correction.
 - The Verifier is non-negotiable: **no commit without `passed`**.
-- Don't invent `ctx` features — only what `Context` / `Board` expose.
+- **Exhaustive or not finished.** Every open correction must reach a terminal outcome
+  (fixed / covered / refuted) **this session**; the run is finished only when the open set is empty
+  (step 11). No `deferred`, no "future run", no leaving a correction unanalyzed.
+- **Don't invent `ctx` features in a `when()`** — read only what `Context` / `Board` actually expose.
+  If a rule genuinely needs a signal that isn't there, **add it to the proper layer first** (step 4b,
+  with a test) — never fabricate a field the Pilot doesn't compute.
 - **If you change how tuning works, update the explainer.** Any change to the method itself — the fit
   objective/optimiser, attribution (W vs H), the regularisation/`reg`, the pocket, the adoption gate,
   the verifier/retest — must be reflected in `docs/tuning/methodology.md` (the graded, educational

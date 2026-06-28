@@ -39,6 +39,59 @@ class MatchResult:
     crashed: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True)
+class BattleMatch:
+    """One seat-balanced Match outcome, A/B-relative plus the seat A occupied.
+
+    ``winner`` is contestant-relative (0=A, 1=B, None=draw) — already mapped out of the
+    engine seat by `run_battle` using ``a_seat`` (which engine seat 0/1 contestant A sat in).
+    ``a_seat`` is what makes seat-balancing *auditable* (ADR-0021): per-seat win-rates stay
+    visible instead of being averaged away.
+    """
+    a_seat: int
+    winner: int | None
+    crashed: tuple[int, ...] = ()
+
+
+def balanced_tally(records: list) -> dict:
+    """Aggregate seat-balanced `BattleMatch`es: the overall A/B counts (`tally`) plus a
+    per-seat split `by_seat[s] = {n, a_wins}` — the ADR-0021 fairness audit."""
+    overall = tally(records)
+    by_seat = {
+        s: {
+            "n": sum(1 for r in records if r.a_seat == s),
+            "a_wins": sum(1 for r in records if r.a_seat == s and r.winner == 0),
+        }
+        for s in (0, 1)
+    }
+    return {**overall, "by_seat": by_seat}
+
+
+def to_battle_match(a_seat: int, result: "MatchResult") -> "BattleMatch":
+    """Map an engine-relative `MatchResult` (winner/crashed by engine seat) to a contestant-relative
+    `BattleMatch`, given which engine seat contestant A occupied. A is contestant 0, B is 1."""
+    def contestant(seat: int) -> int:
+        return 0 if seat == a_seat else 1
+    winner = None if result.winner is None else contestant(result.winner)
+    return BattleMatch(a_seat=a_seat, winner=winner,
+                       crashed=tuple(contestant(s) for s in result.crashed))
+
+
+def seat_plan(n: int) -> list[int]:
+    """Which engine seat contestant A occupies in each of `n` Matches: ~N/2 in seat 0, ~N/2 in
+    seat 1 (an odd Match goes to seat 0). Deterministic, so any first/second-player advantage
+    cancels across the run instead of being handed to one contestant (ADR-0021)."""
+    half = (n + 1) // 2
+    return [0 if i < half else 1 for i in range(n)]
+
+
+def parse_spec(spec: str) -> tuple[str, str | None]:
+    """Split a contestant spec into `(base, overlay_path)`. `name@overlay.json` carries an
+    experiment overlay (the config under test, ADR-0021); a bare name/id carries none."""
+    base, sep, overlay = spec.partition("@")
+    return base, (overlay if sep else None)
+
+
 def resolve_contestant(spec: str, rows: list[dict]) -> dict:
     """Resolve a CLI contestant `spec` to a Build row from the ledger `rows`.
 
@@ -111,6 +164,10 @@ def format_report(a: dict, b: dict, t: dict, *, elapsed: float, jobs: int, mode:
         f"  {sid_a} win-rate {rate * 100:.0f}%   (95% CI {lo * 100:.0f}-{hi * 100:.0f}%)"
         "  -- ladder is the real judge",
     ]
+    if "by_seat" in t:                                  # seat-balanced run: keep the seat effect visible (ADR-0021)
+        s = t["by_seat"]
+        lines.append(f"  seat split  {sid_a} as seat 0: {s[0]['a_wins']}/{s[0]['n']}   "
+                     f"as seat 1: {s[1]['a_wins']}/{s[1]['n']}")
     if t["a_crashes"] or t["b_crashes"]:
         lines.append(f"  crashes {t['a_crashes'] + t['b_crashes']}  "
                      f"({sid_a}: {t['a_crashes']}, {sid_b}: {t['b_crashes']})"
@@ -133,8 +190,12 @@ class AgentServer:
     *different* Bundles play one Match without colliding, which an in-process load cannot.
     """
 
-    def __init__(self, bundle: Path | str, extra_syspath=()):
+    def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None):
         env = dict(os.environ, AGENT_NO_TELEMETRY="1", PYTHONIOENCODING="utf-8")
+        if overlay:                                   # the config under test, as an absolute path (cwd=bundle)
+            env["AGENT_OVERLAY"] = str(Path(overlay).resolve())
+        else:
+            env.pop("AGENT_OVERLAY", None)            # a baseline contestant must not inherit a stray overlay
         self.proc = subprocess.Popen(
             [sys.executable, str(_SERVER), *(str(p) for p in extra_syspath)],
             cwd=str(bundle), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -204,24 +265,37 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
     return MatchResult(winner=winner, crashed=crashed)
 
 
+def _play_seated(server_a, server_b, deck_a, deck_b, a_seat: int) -> BattleMatch:
+    """Play one Match with contestant A in engine seat `a_seat` (B in the other), returning a
+    contestant-relative `BattleMatch`. Alternating the seat across a run cancels the
+    first/second-player advantage instead of handing it to one contestant (ADR-0021)."""
+    if a_seat == 0:
+        res = play_match(server_a, server_b, deck_a, deck_b)
+    else:
+        res = play_match(server_b, server_a, deck_b, deck_a)   # A sits engine seat 1
+    return to_battle_match(a_seat, res)
+
+
 def _split(n: int, jobs: int) -> list[int]:
     """Spread `n` Matches across `jobs` workers as evenly as possible (drops empty shares)."""
     base, extra = divmod(n, jobs)
     return [base + (1 if i < extra else 0) for i in range(jobs) if base + (1 if i < extra else 0)]
 
 
-def _run_serial(dir_a: Path, dir_b: Path, deck_a, deck_b, n, extra_syspath) -> list[MatchResult]:
-    """Run `n` Matches in this process through one persistent pair of servers (import paid once)."""
-    a = AgentServer(dir_a, extra_syspath)
-    b = AgentServer(dir_b, extra_syspath)
+def _run_serial(dir_a: Path, dir_b: Path, deck_a, deck_b, n, extra_syspath,
+                overlay_a=None, overlay_b=None) -> list[BattleMatch]:
+    """Run `n` seat-balanced Matches through one persistent pair of servers (import paid once).
+    Server identity (a=A, b=B) is fixed; only the engine *seat* alternates per `seat_plan`."""
+    a = AgentServer(dir_a, extra_syspath, overlay=overlay_a)
+    b = AgentServer(dir_b, extra_syspath, overlay=overlay_b)
     results = []
     try:
-        for _ in range(n):
-            results.append(play_match(a, b, deck_a, deck_b))
+        for a_seat in seat_plan(n):
+            results.append(_play_seated(a, b, deck_a, deck_b, a_seat))
             if not a.alive():                      # a crash killed the server -> respawn for the next Match
-                a = AgentServer(dir_a, extra_syspath)
+                a = AgentServer(dir_a, extra_syspath, overlay=overlay_a)
             if not b.alive():
-                b = AgentServer(dir_b, extra_syspath)
+                b = AgentServer(dir_b, extra_syspath, overlay=overlay_b)
     finally:
         a.close()
         b.close()
@@ -229,15 +303,20 @@ def _run_serial(dir_a: Path, dir_b: Path, deck_a, deck_b, n, extra_syspath) -> l
 
 
 def run_battle(dir_a: Path, dir_b: Path, deck_a, deck_b, n, *, jobs=1,
-               extra_syspath=()) -> list[MatchResult]:
-    """Run a Battle of `n` Matches, fanned across `jobs` worker processes (each with its own
-    engine + server pair, since the native engine keeps per-process state). Order-independent."""
+               extra_syspath=(), overlay_a=None, overlay_b=None) -> list[BattleMatch]:
+    """Run a Battle of `n` seat-balanced Matches, fanned across `jobs` worker processes (each with
+    its own engine + server pair, since the native engine keeps per-process state). Order-independent.
+    `overlay_a`/`overlay_b` are the per-contestant experiment overlays (the configs under test)."""
     if jobs <= 1 or n <= 1:
-        return _run_serial(dir_a, dir_b, deck_a, deck_b, n, extra_syspath)
+        return _run_serial(dir_a, dir_b, deck_a, deck_b, n, extra_syspath, overlay_a, overlay_b)
     procs = []
+    plan = seat_plan(n)                            # split seats GLOBALLY, then hand each worker its slice,
+    i = 0                                          # so odd per-worker shares can't all tilt the same way
     for share in _split(n, jobs):
-        cmd = [sys.executable, str(_WORKER), str(dir_a), str(dir_b), str(share),
-               *(str(p) for p in extra_syspath)]
+        seats = ",".join(str(s) for s in plan[i:i + share])
+        i += share
+        cmd = [sys.executable, str(_WORKER), str(dir_a), str(dir_b), seats,
+               str(overlay_a or "-"), str(overlay_b or "-"), *(str(p) for p in extra_syspath)]
         procs.append(subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, encoding="utf-8"))
     results = []
     for proc in procs:
@@ -245,7 +324,8 @@ def run_battle(dir_a: Path, dir_b: Path, deck_a, deck_b, n, *, jobs=1,
         for line in out.splitlines():
             if line.strip():
                 d = json.loads(line)
-                results.append(MatchResult(winner=d["winner"], crashed=tuple(d["crashed"])))
+                results.append(BattleMatch(a_seat=d["a_seat"], winner=d["winner"],
+                                           crashed=tuple(d["crashed"])))
     return results
 
 
@@ -257,6 +337,11 @@ def _bundle_dir(row: dict, *, out: Path, into: Path) -> Path:
     with zipfile.ZipFile(Path(out) / f"{row['artifact']}.zip") as zf:
         zf.extractall(dest)
     return dest
+
+
+def _read_overlay(path):
+    """The overlay's contents ({overrides, params}) recorded in the Battle Result, or None."""
+    return json.loads(Path(path).read_text(encoding="utf-8")) if path else None
 
 
 def _git_short() -> str:
@@ -301,8 +386,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Battle: N Matches between two contestants. A curiosity read, not a "
                     "promotion gate — see tools/sim/CONTEXT.md.")
-    ap.add_argument("a", help="contestant A: a build id (e.g. 7) or agent name (working-tree source)")
-    ap.add_argument("b", help="contestant B: a build id or agent name")
+    ap.add_argument("a", help="contestant A: a build id / agent name, optionally `@overlay.json`")
+    ap.add_argument("b", help="contestant B: a build id / agent name, optionally `@overlay.json`")
     ap.add_argument("-n", "--games", type=int, default=20, help="number of Matches (default 20)")
     ap.add_argument("-j", "--jobs", type=int, default=_default_jobs(),
                     help="worker processes (default: min(10, cores))")
@@ -310,25 +395,50 @@ def main(argv=None) -> int:
     ap.add_argument("--builds", default=str(DEFAULT_BUILDS), help="the Build Ledger")
     ap.add_argument("--agents-root", default=str(REPO / "src" / "agents"),
                     help="dir of working-tree agents (for a name contestant)")
+    ap.add_argument("--note", default="", help="experiment intent recorded in the Battle Result")
+    ap.add_argument("--mode", default=None, choices=["pre-filter", "curiosity"],
+                    help="default: pre-filter if an overlay is given, else curiosity")
     args = ap.parse_args(argv)
+
+    from datetime import datetime, timezone
+
+    from sim.result import DEFAULT_LOG, append_battle, build_battle_result, next_battle_id
+
+    base_a, overlay_a = parse_spec(args.a)
+    base_b, overlay_b = parse_spec(args.b)
+    mode = args.mode or ("pre-filter" if (overlay_a or overlay_b) else "curiosity")
 
     rows = read_history(args.builds)
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            a_row, dir_a = resolve(args.a, rows, agents_root=args.agents_root,
+            a_row, dir_a = resolve(base_a, rows, agents_root=args.agents_root,
                                    out=Path(args.out), into=Path(tmp))
-            b_row, dir_b = resolve(args.b, rows, agents_root=args.agents_root,
+            b_row, dir_b = resolve(base_b, rows, agents_root=args.agents_root,
                                    out=Path(args.out), into=Path(tmp))
         except ValueError as e:
             print(f"error: {e}")
             return 1
+        deck_a, deck_b = read_deck(dir_a), read_deck(dir_b)
         t0 = time.monotonic()
-        results = run_battle(dir_a, dir_b, read_deck(dir_a), read_deck(dir_b), args.games,
-                             jobs=args.jobs, extra_syspath=[REPO / "src"])
+        results = run_battle(dir_a, dir_b, deck_a, deck_b, args.games, jobs=args.jobs,
+                             extra_syspath=[REPO / "src"], overlay_a=overlay_a, overlay_b=overlay_b)
         elapsed = time.monotonic() - t0
 
-    print(format_report(a_row, b_row, tally(results), elapsed=elapsed, jobs=args.jobs,
-                        mode="curiosity"))
+    bt = balanced_tally(results)
+    print(format_report(a_row, b_row, bt, elapsed=elapsed, jobs=args.jobs, mode=mode))
+
+    result = build_battle_result(
+        battle_id=next_battle_id(), ran_at=datetime.now(timezone.utc).isoformat(),
+        run_git_hash=_git_short(), mode=mode, hypothesis=args.note,
+        contestants=[{"row": a_row, "deck_ids": deck_a, "overlay": _read_overlay(overlay_a)},
+                     {"row": b_row, "deck_ids": deck_b, "overlay": _read_overlay(overlay_b)}],
+        records=results,
+        params={"n_requested": args.games, "jobs": args.jobs, "max_steps": _MAX_STEPS,
+                "seat_balanced": True, "n_as_deck0": sum(1 for r in results if r.a_seat == 0),
+                "n_as_deck1": sum(1 for r in results if r.a_seat == 1)},
+    )
+    append_battle(DEFAULT_LOG, result)
+    print(f"  -> Battle Result #{result['battle_id']} appended to {DEFAULT_LOG}")
     return 0
 
 

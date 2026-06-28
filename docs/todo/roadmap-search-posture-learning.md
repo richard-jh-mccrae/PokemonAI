@@ -9,12 +9,14 @@ Tier-0 rules Pilot. Trigger-gated, not date-gated. Anchored to
 ## TL;DR — the dependency chain
 
 ```
-M0 cheap f75            M1 self-play LADDER        M2 Posture            M3 Tier-1 Search       M4 Value Model
-(forward evo graph)  →  (evaluator + A/B gate)  →  (the Read → play)  →  (escalation+budget) →  (replay-trained leaf eval)
+M0 cheap f75            M1 self-play PRE-FILTER     M2 Posture            M3 Tier-1 Search       M4 Value Model
+(forward evo graph)  →  (cheap A/B, NOT the gate)→  (the Read → play)  →  (escalation+budget) →  (replay-trained leaf eval)
 ship next round         foundational, build early   Read already built    Search API exists      heaviest, last
 ```
 
-- **M1 is foundational**, not last: you cannot validate M2/M3/M4 without a ladder A/B gate (ADR-0009 Job C).
+- **M1 is foundational**, not last: you cannot triage M2/M3/M4 changes without a cheap offline A/B.
+  It is a **pre-filter, not the gate** — the real Kaggle ladder stays authoritative (ADR-0009 Job C);
+  trust *negative* signals (drop clearly-worse configs), treat positives as hints (ADR-0021).
 - **"Training via self-play" ≠ RL.** ADR-0007 rejects RL-from-scratch. Self-play is the **evaluator + on-policy
   filler + source of our own games to correct**; the **value model is supervised on mined replays**. Keep these separate.
 - Two unknowns are already resolved: the **Read is built** (`src/common/scouting/`), the **Search API exists**
@@ -73,25 +75,61 @@ immunity field on `CardStat` yet); affordability ignored (opponent-agnostic uppe
 
 ---
 
-## M1 — Self-play ladder: the evaluator / A/B gate  ·  *foundational, build before M2–M4*
+## M1 — Self-play Pre-filter: cheap offline A/B (NOT the gate)  ·  *foundational, build before M2–M4*
 
-**Why early:** every later milestone claims "X helps" — only a ladder win-rate can confirm it (ADR-0009 Job C).
-Self-play is **not** a trainer here; it is the evaluator + a source of our own games to feed the blunder inspector.
+**Why early:** later milestones each claim "X helps"; a cheap offline A/B triages configs before spending a
+scarce real-ladder submission. It is a **Pre-filter, not the gate** — the real Kaggle ladder stays
+authoritative (ADR-0009 Job C). Local self-play is noisy/mirror-biased, so trust *negative* signals (drop
+clearly-worse configs); a positive is only a hint. *(Grilled & measured 2026-06-28; see [ADR-0021](../adr/0021-prefilter-balances-seats.md).)*
 
-**Entry:** a working packaged agent (have it) + the cabt engine (have it; `tools/sim/check_agent.py` already self-matches).
+**Entry:** a working packaged agent (have it) + the cabt engine (have it). The existing **Battle** harness
+(`tools/sim/battle.py`) already runs N-match A/B in **isolated subprocesses** with Wilson CI + parallelism —
+M1 **extends it**; **`tools/selfplay/` is dropped** (it would duplicate Battle and misuse "ladder", which
+the glossary reserves for the real competition).
 
-**Build** (`tools/selfplay/`, [planned] in the layout)
-1. **Ladder runner** `ladder.py A B -n N`: run N offline self-matches config-A vs config-B on the pinned engine,
-   report win-rate + Wilson CI. Deterministic seeds (pass seeds in; no `Date.now`/RNG in the harness).
-2. **Config = a Strategy + overrides + `search_budget`** (so it A/Bs weights, Posture-on/off, Tier-0 vs Tier-1).
-   Reuse the Playability harness from `tools/sim/check_agent.py`.
-3. **On-policy correction source:** dump our own games as replays the blunder inspector can tag (closes the
-   ADR-0009 "own-Pilot blunder-correction — the gold signal" loop).
+**Build** (extend `tools/sim/battle.py`)
+1. **Seat-balancing [required, ADR-0021].** Play N/2 with config-A as `deck0`, N/2 as `deck1`, aggregate A's
+   win-rate — else the first/second-player asymmetry (going-first can't attack turn 1; *measured* ~13pt, mirror
+   37/63) swamps the config signal. A **balanced mirror's CI must contain 50%** (the fairness check).
+2. **Config injection (sub-build 2): a per-contestant experiment overlay.** JSON
+   `{overrides:{hyp:weight}, params:{search_budget,…}}` pointed to by an env var (mirrors `AGENT_NO_TELEMETRY`),
+   read *first* by a config loader **factored into `common`** so all agents share it, falling back to `tuned.json`.
+   **Inert on the grader.** A/Bs weights now and params/flags (Posture, Tier) later without a full build.
+3. **Opponent = same-deck self (Q4).** Our full Pilot both seats, differing only by overlay — the opponent
+   *has a brain*, so racing / bench-pressure dynamics (what the weights encode) actually arise. **Random opponents
+   rejected** (no pressure → those dynamics never occur → win-rate saturates → no discrimination; kept only as a
+   crash/floor check). A representative-meta **agent gauntlet** comes later, once meta decks are handcrafted into
+   agents (battle.py already does agent-A-vs-B).
+4. **Persist a Battle Result (output capture, [ADR-0021](../adr/0021-prefilter-balances-seats.md) amendment).** Today
+   `battle.py` only *prints* a report and discards per-Match results. Append one immutable, self-describing row per run
+   to a committed `data/battles.jsonl` (reuse `tools/submit/history.py`): an aggregate header (provenance, the **overlay
+   measured**, `params` incl. the seat split, `tally`, win-rate + Wilson CI, `hypothesis`) + `matches[]` rows (the source
+   of truth — incl. **`a_seat`** so balancing is auditable, `winner_seat`, `crashed_seats`, `end_reason`, `turns`).
+   `deck_hash` per contestant; `turns` null on non-clean exits; **no `verdict`** stored (derived on read). A
+   SQLite/dashboard read-path is deferred.
+5. **Own-game replay corpus (M1b, sequenced after the A/B core) — grilled & revised 2026-06-29, see
+   [ADR-0022](../adr/0022-selfplay-corpus-uses-cabt-env-path.md).** A new `tools/sim/selfplay.py`
+   (`<agent> -n N [--overlay]`) runs **mirror self-play on the cabt-env path** (`env.run` → `env.toJSON`,
+   reusing check_agent) and saves every game to `data/replays/selfplay/<stem>/<episode_id>.json`. **Why
+   cabt-env, not battle.py `--save-replays`:** the Tuner needs each Correction's per-frame agent `obs`
+   (`featurize` → `pilot.explain(obs)`; no-obs corrections are skipped), and `visualize_data()` lacks
+   `obs` — only `env.toJSON()` carries it. The stem matches `provenance` so corrections auto-file under a
+   real build folder; `EpisodeId` is globally unique (dedup/review assume it). Mirror-only until handcrafted
+   opponents exist (varied-opponent corpus would need battle.py isolation + hand-captured obs — deferred).
+   No inspector/Tuner changes (the Correction schema already supports self-play).
 
-**Files:** `tools/selfplay/ladder.py`, small reuse of `tools/sim/`.
-**Accept:** `python tools/selfplay/ladder.py mega_starmie-default mega_starmie-tuned -n 200` → stable win-rate + CI;
-reproducible from a seed; emits taggable game logs.
-**Risk:** match cost — keep N modest, parallelize across cores offline (training-time only, not grader).
+**Files:** `tools/sim/battle.py`, `src/common/` (shared config loader), `data/battles.jsonl` (committed, reuse
+`tools/submit/history.py`), tests.
+**Accept:** balanced mirror CI contains 50%; A/B win-rate + Wilson CI over **N≈400–800 seat-balanced** matches
+(throughput ~79 games/s @8 jobs → ~10s, so cost is not a constraint at Tier-0); every run appends a **Battle Result**
+to `data/battles.jsonl` with per-Match `a_seat` (balancing auditable) and the overlay-under-test captured;
+`--save-replays` output loads in the blunder inspector (M1b). **Reproducibility is statistical** (no engine seed) —
+the old "reproducible from a seed" criterion is **retired** (ADR-0021).
+**Tests (`REQ-SIM-####`):** seat-balance aggregation + even N/2 split; config-overlay loader (env overlay merges over
+`tuned.json`; absent env = today's behavior, grader-inert); report shows balanced aggregate + per-seat split;
+Battle Result round-trips (write → reload → aggregates recompute from `matches[]`); `--save-replays` file parses in
+the inspector (captured `visualize` sample, no live engine); smoke: tiny balanced mirror runs and returns a report.
+**Risk:** match cost is negligible at Tier-0; it only bites at M3/Tier-1 (search) — measure there.
 
 ---
 
@@ -161,6 +199,13 @@ is absent.
 
 ## Decision log
 - **DE-RISKED:** engine Search API exists (`cg/api.py search_begin/step/end`); the Read is built (`scouting/`).
+- **RESOLVED (M1, grilled 2026-06-28 → [ADR-0021](../adr/0021-prefilter-balances-seats.md)):** M1 is a *pre-filter,
+  not the gate*; **extend `tools/sim/battle.py`** (drop `tools/selfplay/`); **seat-balancing is required** (measured
+  ~13pt first/second skew; engine has **no seed** → reproducibility is statistical); config via an **env-var experiment
+  overlay** factored into `common`; opponent = **same-deck self** now (gauntlet later; random rejected); own-game
+  taggable replays via `--save-replays`/`visualize_data()` (M1b), not the cabt-env path.
+- **FOUND (separate blunder):** the Pilot has no `IS_FIRST` handler → it always elects to go first (the worse side),
+  a ~13pt self-inflicted loss; tracked for `/blunder-buster`.
 - **OPEN (resolve early, cheap to check):** per-move Tier-1 cost (M3); value-model feature encoding + replay volume (M4).
 - **REJECTED (ADR-0007):** RL / self-play as the primary trainer; neural policy / learned card embeddings.
 

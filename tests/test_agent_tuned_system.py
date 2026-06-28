@@ -37,9 +37,9 @@ _PROBE = (
 )
 
 
-def _run_bundle(bundle: Path) -> dict:
+def _run_bundle(bundle: Path, env_extra: dict | None = None) -> dict:
     """Import the bundled agent in a clean subprocess (cwd = bundle) and read back the probe."""
-    env = {**os.environ, "PYTHONPATH": str(bundle)}   # resolve main/strategy/common/cg from the bundle only
+    env = {**os.environ, "PYTHONPATH": str(bundle), **(env_extra or {})}   # resolve from the bundle only
     proc = subprocess.run([sys.executable, "-c", _PROBE], cwd=bundle, env=env,
                           capture_output=True, text=True, timeout=180)
     assert proc.returncode == 0, f"bundle import failed:\n{proc.stderr}"
@@ -62,3 +62,16 @@ def test_packaged_agent_applies_tuned_weight_override(tmp_path):
     tuned = _run_bundle(bundle)
     assert tuned["overrides"] == {TARGET: 999.0}
     assert tuned["w"] == 999.0          # the shipped agent actually applies the diff
+
+
+def test_packaged_agent_applies_experiment_overlay(tmp_path):
+    """REQ-SIM-0008: the agent honors an AGENT_OVERLAY experiment overlay layered over tuned.json
+    — the offline A/B injection path (ADR-0021). Inert (falls back to tuned.json) when unset."""
+    package(AGENT, tmp_path)
+    bundle = tmp_path / AGENT
+    (bundle / "tuned.json").write_text("{}", encoding="utf-8")
+
+    overlay = tmp_path / "exp.json"
+    overlay.write_text(json.dumps({"overrides": {TARGET: 7.0}}), encoding="utf-8")
+    out = _run_bundle(bundle, env_extra={"AGENT_OVERLAY": str(overlay)})
+    assert out["w"] == 7.0              # the overlay weight reached _weight, over the empty tuned.json
