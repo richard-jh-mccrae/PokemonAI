@@ -1,1 +1,8 @@
-{}
+{
+  "attach-energy-last": -2.0,
+  "dig-before-commit": 50.0,
+  "evolve-into-wincon": 55.0,
+  "hold-clutch-heal": 63.0,
+  "power-up-attacker": 21.0,
+  "prefer-bench-fill-first": 21.0
+}

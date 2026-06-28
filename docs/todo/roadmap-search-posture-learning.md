@@ -42,8 +42,9 @@ See [[snipe-threat-two-signals]].
 
 **Build**
 1. **Forward evolution index.** `CardStat` exposes `stage` + `evolvesFrom` (pre-evo *name*) but no forward map.
-   Build `name → [cards whose evolvesFrom == name]`, walk multi-hop (Riolu→Lucario→Mega Lucario), read the
-   eventual form's `maxDamage`. **Load-bearing prerequisite:** the stat provider must **enumerate all cards**
+   Build `name → [cards whose evolvesFrom == name]`, walk multi-hop for true Stage-2 lines, read the
+   eventual form's `maxDamage`. (NB the f75 line is a *single* hop — `Riolu` (Basic) → `Mega Lucario ex`
+   (Stage 1); verify every line against `data/EN_Card_Data.csv`, not the mainline TCG.) **Load-bearing prerequisite:** the stat provider must **enumerate all cards**
    (today it's lookup-by-id) — add an `all_stats()` / iteration path to `src/common/scouting/provider.py`.
 2. **New Context signal** `target_evolves_into_attacker: bool` — set per bench-target option in `Pilot._context`
    (parallel to `target_energy`), true when the targeted Basic's forward chain reaches a high-`maxDamage` form.

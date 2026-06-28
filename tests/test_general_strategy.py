@@ -170,30 +170,7 @@ def test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy():
     assert "snipe-the-threat" not in _fired(pilot.explain(no_threat).options[1])
 
 
-@pytest.mark.req("REQ-GEN-0006")
-def test_build_before_attack_penalizes_a_nonlethal_attack_in_setup():
-    stats = DictCardStatProvider({900: CardStat(900, hp=200)})
-    ATK = 11
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  stats=stats, attacks={ATK: 50})
-    # SETUP (no win-con ready): a weak non-lethal attack (50 vs 200 HP) -> develop instead.
-    nonlethal = make_select([attack_opt(ATK)], context=MAIN,
-                            current=state(active=poke(700), opp_active=poke(900, hp=200)))
-    assert "build-before-attack" in _fired(pilot.explain(nonlethal).options[0])
-    # a lethal attack is exempt — take the knockout.
-    lethal = make_select([attack_opt(ATK)], context=MAIN,
-                         current=state(active=poke(700), opp_active=poke(900, hp=40)))
-    assert "build-before-attack" not in _fired(pilot.explain(lethal).options[0])
-
-
-@pytest.mark.req("REQ-GEN-0009")
-def test_build_before_attack_allows_a_high_value_sub_ko_attack():
-    # Jetting Blow prints 120 into a 330-HP wall: not a KO, but well worth taking. The value-gate
-    # must let it through — only genuinely weak chip (below the floor) is suppressed during setup.
-    stats = DictCardStatProvider({1031: CardStat(1031, hp=330)})
-    ATK = 11
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  stats=stats, attacks={ATK: 120})
-    strong = make_select([attack_opt(ATK)], context=MAIN,
-                         current=state(active=poke(700), opp_active=poke(1031, hp=330)))
-    assert "build-before-attack" not in _fired(pilot.explain(strong).options[0])
+# NOTE: `build-before-attack` was removed — `_finish_turn_last` ("attack last") now sequences
+# development ahead of the turn-ending attack structurally, so a blanket chip penalty is redundant
+# (and was suppressing a useful chip below End when no development was available). See
+# tests/test_search_discipline.py::test_a_weak_chip_is_taken_when_no_development_is_available.

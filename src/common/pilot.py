@@ -18,10 +18,16 @@ _HAND = 2     # AreaType.HAND
 _DECK = 1     # AreaType.DECK — a search candidate; ids are revealed in the select's `deck` list
 _DISCARD = 3  # AreaType.DISCARD — a recover-from-discard candidate (Night Stretcher), in player.discard
 _PLAY = 7     # OptionType.PLAY — play a card from hand (encoded as a bare hand `index`, no `area`)
+_ATTACH = 8   # OptionType.ATTACH — attach an Energy (the one irreversible per-turn commitment)
+_EVOLVE = 9   # OptionType.EVOLVE — evolve a Pokémon in play
+_RETREAT = 12 # OptionType.RETREAT — swap the Active out (changes which Pokémon can attack)
 _BENCH = 5    # AreaType.BENCH
+_ACTIVE = 4   # AreaType.ACTIVE
 _CARD = 3     # OptionType.CARD (a card-target option, e.g. an attack's snipe target)
 _DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
+_MAIN = 0     # SelectContext.MAIN — the open turn menu (where attack-last sequencing applies)
 _ATTACK = 13  # OptionType.ATTACK
+_END = 14     # OptionType.END — end the turn
 KO_SCORE = 1000  # an option that knocks out the target dominates a mere chip
 _OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
 _STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
@@ -72,6 +78,15 @@ class Board:
                                            # alternative to a discard-at-end-of-turn Energy
     wincon_in_play: bool = False   # my win-condition (a Line payoff / win_condition role) is already
                                    # on my Active or Bench — so a search needn't fetch another copy
+    wincon_in_hand: bool = False   # the win-condition card is already in my hand — so a tutor needn't
+                                   # dig for another copy
+    line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
+                                       # play — so there's something a rush-evolve tutor can evolve
+    weakest_bench_hp: int | None = None  # least HP among the opponent's benched snipe targets at a
+                                         # DAMAGE select — the target closest to a knockout
+    bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
+                                       # enough Energy to attack — a finisher to retreat into
+    active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
 
 
 @dataclass
@@ -85,9 +100,17 @@ class Context:
     attach_target_area: int | None = None  # for an attach, the AreaType of the Pokémon receiving the
                                            # Energy (4=active can attack this turn, 5=bench cannot)
     attach_target_roles: list = field(default_factory=list)  # deck Roles of that receiving Pokémon
+    attach_target_needs: bool = False  # the receiving Pokémon still needs Energy to attack (has fewer
+                                       # than its cheapest attack cost) — gates "attach to the needy"
+    card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
+                                       # pre-evolution that builds toward the win-condition)
+    card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
+                                       # win_condition / primary_attacker)
     target_energy: int | None = None  # attack-target snipe signal: Energy on the targeted benched
                                       # Pokémon (None off a Damage/bench-target option)
     target_is_threat: bool = False  # the attack target already carries Energy -> closest to attacking
+    target_hp: int | None = None    # HP of the targeted benched Pokémon (None off a Damage option)
+    target_is_weakest: bool = False  # this snipe target has the least HP on the opponent's Bench
     roles: list = field(default_factory=list)
     tags: list = field(default_factory=list)
     stat: object | None = None     # the option card's engine CardStat (hp/weakness/prize value/…)
@@ -107,6 +130,7 @@ class OptionTrace:
     card_id: int | None
     fired: list                  # [(Hypothesis, effective_weight)] whose trigger fired
     tactical: float = 0.0
+    deferred: bool = False       # a turn-ending attack held behind beneficial development (attack-last)
 
 
 @dataclass
@@ -144,11 +168,49 @@ class Pilot:
         if select is None:                       # initial deck-submission step
             return Decision(chosen=list(self.deck))
         options = select.get("option") or []
-        board = self._board(obs)
+        board = self._board(obs, select)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
         max_count = select.get("maxCount", 0)
         order = sorted(range(len(options)), key=lambda i: traces[i].score, reverse=True)
+        order = self._finish_turn_last(options, traces, order, max_count, select.get("context"))
         return Decision(chosen=order[:max_count], options=traces)
+
+    def _finish_turn_last(self, options: list, traces: list, order: list, max_count: int,
+                          select_context: int | None) -> list:
+        """Sequence the turn's commitments LAST. The engine re-presents the open turn menu after each
+        non-ending action, so the whole turn still happens — which means you should take the most
+        informative, reversible actions first and the irreversible ones last:
+
+          tier 0  informative development — draw / search, fill the Bench, evolve a benched Pokémon,
+                  play a Pokémon. Free, and reveals a better target before you commit.
+          tier 1  the Energy attach — the one irreversible per-turn commitment. Dig first, THEN attach.
+          tier 2  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
+
+        An option is sequenced early only when a Hypothesis endorses it (score > 0). A knockout is
+        never forfeited: an Evolve of the Active drops to tier 2 when a KO is on the menu, and the KO
+        attack outscores everything else in tier 2. Stable within a tier (keeps the score order).
+        Only at a single-pick MAIN menu; every other context (snipe, search, mulligan) is untouched."""
+        if max_count != 1 or len(order) < 2 or select_context != _MAIN:
+            return order
+        ko_available = any(options[i].get("type") == _ATTACK and traces[i].tactical >= KO_SCORE
+                           for i in order)
+
+        def _tier(i: int) -> int:
+            o = options[i]
+            t = o.get("type")
+            if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
+                return 2
+            if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
+                return 2                                             # would forfeit an available KO
+            if traces[i].score <= 0:                                 # only an endorsed action sequences early
+                return 2
+            return 1 if t == _ATTACH else 0                          # attach (commit) after informative dev
+
+        if any(_tier(i) < 2 for i in order):                         # legibility: mark the held-back attacks
+            for i in order:
+                if options[i].get("type") == _ATTACK:
+                    traces[i].deferred = True
+        return sorted(order, key=_tier)                             # stable -> within a tier, score order
 
     def _option_trace(self, obs: dict, select: dict, board: Board, option: dict,
                       index: int) -> OptionTrace:
@@ -227,14 +289,22 @@ class Pilot:
         roles = self.strategy.roles.get(cid, []) if cid is not None else []
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        card_is_line_preevo = cid is not None and cid in self._line_preevo_set()
+        card_is_wincon = cid is not None and cid in self._wincon_set()
         is_attack = option.get("type") == _ATTACK
         target_energy = self._target_energy(obs, select, option)
+        target_hp = self._target_hp(obs, select, option)
+        target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
+                             and target_hp == board.weakest_bench_hp)
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
+                       attach_target_needs=self._attach_target_needs(at_target),
+                       card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
+                       target_hp=target_hp, target_is_weakest=target_is_weakest,
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE)
 
@@ -254,6 +324,20 @@ class Pilot:
             return None
         return cards[index]
 
+    def _attach_target_needs(self, target: dict | None) -> bool:
+        """True if the Pokémon an attach option targets still needs Energy to attack — it carries
+        fewer Energy than its cheapest attack cost. Lets `power-up-attacker` fire only on a Pokémon
+        that benefits from the attachment, so the agent spreads Energy to the bare bench attacker
+        instead of piling a needless surplus on an already-online one (the over-attach blunders).
+
+        Fail-open: when the receiving Pokémon (or its attack cost) can't be resolved, assume it
+        needs Energy — only SUPPRESS the attachment when we can positively confirm the target is
+        already online, so a missing-target option keeps the default attach-every-turn behavior."""
+        if not target:
+            return True
+        have = len((target.get("energies") or []))
+        return have < _min_attack_cost(self.stats, target.get("id"))
+
     def _target_energy(self, obs: dict, select: dict, option: dict) -> int | None:
         """Energy attached to the Pokémon an attack-target option points at — the snipe 'threat'
         signal: a benched Pokémon already carrying Energy is closest to attacking. Defined only for
@@ -265,7 +349,17 @@ class Pilot:
         poke = self._option_pokemon(obs, select, option)
         return len(poke.get("energies") or []) if poke else None
 
-    def _board(self, obs: dict) -> Board:
+    def _target_hp(self, obs: dict, select: dict, option: dict) -> int | None:
+        """Remaining HP of the benched Pokémon an attack-target option points at — the snipe
+        'weakest' signal (lowest HP = closest to a knockout). Defined only for bench attack-target
+        options (DAMAGE / CARD / BENCH); None otherwise (cf. ``_target_energy``)."""
+        if (select.get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return None
+        poke = self._option_pokemon(obs, select, option)
+        return (poke or {}).get("hp") if poke else None
+
+    def _board(self, obs: dict, select: dict | None = None) -> Board:
         """Summarise the shared board once per decision (see Board)."""
         state = obs.get("current") or {}
         players = state.get("players") or []
@@ -288,7 +382,64 @@ class Pilot:
             active_doomed=self._active_doomed(ma, oa),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             wincon_in_play=self._wincon_in_play(me),
+            wincon_in_hand=self._wincon_in_hand(me),
+            line_preevo_in_play=self._line_preevo_in_play(me),
+            weakest_bench_hp=self._weakest_snipe_hp(obs, select),
+            bench_wincon_ready=self._bench_wincon_ready(me),
+            active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
         )
+
+    def _wincon_set(self) -> set:
+        """Card ids that ARE the win-condition — a Strategy Line payoff or a card carrying the
+        `win_condition` / `primary_attacker` Role."""
+        wincon = {line.payoff for line in self.strategy.lines}
+        wincon |= {cid for cid, r in self.strategy.roles.items()
+                   if {"win_condition", "primary_attacker"} & set(r)}
+        return wincon
+
+    def _wincon_in_hand(self, me: dict) -> bool:
+        """True if the win-condition card is already in my hand — a tutor needn't dig for another."""
+        wincon = self._wincon_set()
+        return bool(wincon) and any(c and c.get("id") in wincon for c in (me.get("hand") or []))
+
+    def _line_preevo_set(self) -> set:
+        """Card ids that are a non-payoff member of a Line's path — a pre-evolution that builds
+        toward the win-condition payoff (e.g. Staryu on the Staryu → Mega Starmie line)."""
+        return {cid for line in self.strategy.lines for cid in line.path if cid != line.payoff}
+
+    def _line_preevo_in_play(self, me: dict) -> bool:
+        """True if a non-payoff member of any Line's path (a pre-evolution) is on my Active/Bench —
+        so a rush-evolve tutor has something to evolve toward the payoff."""
+        preevos = self._line_preevo_set()
+        if not preevos:
+            return False
+        board = (me.get("active") or []) + (me.get("bench") or [])
+        return any(p and p.get("id") in preevos for p in board)
+
+    def _bench_wincon_ready(self, me: dict) -> bool:
+        """True if a benched win-condition / primary attacker already carries enough Energy to attack
+        (>= its cheapest attack cost) — a powered finisher worth retreating into."""
+        wincon = self._wincon_set()
+        if not wincon:
+            return False
+        return any(p and p.get("id") in wincon
+                   and len(p.get("energies") or []) >= _min_attack_cost(self.stats, p.get("id"))
+                   for p in (me.get("bench") or []))
+
+    def _weakest_snipe_hp(self, obs: dict, select: dict | None) -> int | None:
+        """Least HP among the benched Pokémon a DAMAGE select can snipe — the target closest to a
+        knockout (a prize). None off a Damage select. Resolves each option's target the same way
+        the snipe Hypotheses do, so the owner/zone indexing matches `target_energy`."""
+        if not select or select.get("context") != _DAMAGE:
+            return None
+        hps = []
+        for o in (select.get("option") or []):
+            if o.get("type") == _CARD and o.get("area") == _BENCH:
+                poke = self._option_pokemon(obs, select, o)
+                hp = (poke or {}).get("hp") or 0
+                if hp:
+                    hps.append(hp)
+        return min(hps) if hps else None
 
     def _wincon_in_play(self, me: dict) -> bool:
         """True if my win-condition is already in play — a Strategy Line payoff or a card carrying the

@@ -46,8 +46,11 @@ HYPOTHESES = [
         id="tutor-the-wincon",
         rationale="During setup, dig for the win-condition pieces (Mega Signal / Salvatore / Hilda) "
                   "by playing a tutor. (Choosing WHICH card a search pulls is the deck-agnostic "
-                  "`fetch-the-wincon` / `fetch-energy-when-starved` in common/general_strategy.py.)",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles,
+                  "`fetch-the-wincon` / `fetch-energy-when-starved` in common/general_strategy.py.) "
+                  "Stands down once the win-condition is already in hand — no need to dig for a copy "
+                  "you're holding.",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles
+        and not c.board.wincon_in_hand,
         weight=25, status="assumed"),
     # NOTE: discard-Energy discipline (don't waste Ignition) is now the deck-agnostic
     # `dont-waste-discard-energy` in common/general_strategy.py — it fires off the `discard_eot`

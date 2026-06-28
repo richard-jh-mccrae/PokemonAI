@@ -43,6 +43,7 @@ def test_load_game_provides_replay_live_trace_own_seat_and_build_identity():
     assert game["replay"]["info"]["EpisodeId"] == 81905063
     assert game["live_seat"] == 1                       # agent-1 log -> we are seat 1 in this Replay
     assert game["live_records"] and "opts" in game["live_records"][0]
+    assert game["agent"] == "mega_starmie"              # deck/build name from the stem (auto-fill source)
     assert game["agent_build"] == "mega_starmie_20260625_bde590c"
     assert game["agent_version"] == "bde590c"
 
@@ -86,6 +87,31 @@ def _post(port, path, body):
                                  data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     return json.loads(urllib.request.urlopen(req).read())
+
+
+def test_own_tag_auto_fills_agent_from_the_build_folder(tmp_path):
+    """SYSTEM (HTTP): with NO --agent, an own blunder's `agent` is auto-filled from the replay's
+    build-folder stem (mega_starmie_…) — the UI sends an empty agent and the server resolves it."""
+    store = tmp_path / "c.jsonl"
+    shell.init_state(discover_replays(TELE), store_path=str(store))   # note: no agent= passed
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), shell._Handler)
+    port = httpd.server_address[1]
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        game = load_game(discover_replays(TELE)[0])      # the current (seat-0) replay
+        d = _own_taggable(game)
+        correct = next(i for i in range(len(d.options)) if i not in d.chosen)
+        res = _post(port, "/correction", {
+            "frame": d.frame, "correct": [correct], "category": "bad_target",
+            "rationale": "auto-fill check", "source": "own", "agent": "",   # UI sends empty with no --agent
+        })
+        assert res["ok"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    [stored] = load_corrections(store)
+    assert stored.agent == "mega_starmie"               # auto-filled from the build folder, not blank
 
 
 def test_shell_serves_and_switches_replays_over_http(tmp_path):

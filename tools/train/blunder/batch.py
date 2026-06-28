@@ -53,6 +53,7 @@ def load_game(path: Path | str) -> dict:
         "replay": load_replay(path),
         "live_records": load_log(log_path) if log_path else None,
         "live_seat": live_seat,
+        "agent": bid["agent"],              # the deck/build name from the dir stem (auto-fills own tags)
         "agent_build": bid["agent_build"],
         "agent_version": bid["agent_version"],
         "built_at": bid["built_at"],

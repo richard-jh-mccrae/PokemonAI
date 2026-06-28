@@ -1,5 +1,9 @@
 # General Strategy — the deck-agnostic doctrine
 
+> **Game rules** (turn structure, weakness ×2, prizes, per-turn limits, special conditions) are
+> canonical in **[rules.md](rules.md)** — read it before reasoning about any rule. This doc covers
+> *strategy*; rules.md covers *the rules they operate within*.
+
 The **General Strategy** is the shared baseline of decision rules every deck plays *beneath* its
 own [Strategy](../src/common/CONTEXT.md). It is a registry of weighted, testable
 **Hypotheses** ([agent-architecture.md](agent-architecture.md)) keyed on **universal** signals —
@@ -68,15 +72,14 @@ played (sequenced after draw/search, but played). **Source:** F12 — JustInBasi
 **Reads:** the option card's `energy_accel` Function Tag. **Fires:** `SETUP` / `RACE`. The universal
 form of a deck's `accel_source` rule. **Source:** F12 / F14 — JustInBasil (Consistency / Deck Strategy).
 
-### `build-before-attack` · weight −20 · status: assumed
-> During setup, don't end your turn chipping with a weak attack (below a meaningful-damage floor) —
-> your turn ends when you attack, so develop your board instead unless the attack scores a knockout
-> or real damage.
-
-**Reads:** an attack in `SETUP` whose Tactical value is below the chip floor
-(`is_attack & !is_ko & tactical < 100`) — a *value*-gate, so a strong sub-KO attack (Jetting Blow's
-120 + 50 snipe) is **not** suppressed, only genuine chip. **Source:** F6 — Bulbapedia (*Attack*:
-using an attack ends your turn).
+### `build-before-attack` / `dont-chip-with-a-doomed-active` — **removed** (superseded by attack-last)
+These two chip-penalty rules made development beat a weak attack. The Pilot's `_finish_turn_last`
+("attack last", `pilot.py`) now does that **structurally** — at the open turn menu it sequences every
+beneficial non-ending action ahead of the turn-ending attack, then takes the attack (and its KO) the
+same turn. A blanket chip penalty became redundant *and* harmful: with no development available it
+dragged a useful chip below `End`, so the agent did nothing instead of chipping. Removed (and the
+`_CHIP_CEILING` value-floor with them). **Source:** F6 — Bulbapedia (*Attack*: using an attack ends
+your turn) — the very fact attack-last is built on.
 
 ## Bench development & prize liability
 

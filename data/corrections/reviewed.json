@@ -1,0 +1,151 @@
+{
+  "_note": "Corrections already reviewed in blunder-busting — excluded from fresh work in tune.py and /blunder-buster (so each round surfaces only NEW patterns). Hand-editable; append with tools/train/review_correction.py. Key = '<episode_id>-<frame>' (the id the reports print). disposition: 'refuted' (a bad correction, e.g. it forgoes a Knock Out — also dropped from the weight fit), 'deferred' (valid but needs new infrastructure), 'covered' (already handled by an existing rule). Keys starting with '_' are comments. NB keyed by decision (episode+frame), so a conflicting re-tag of the same decision is covered by one entry. DESIGN: this is a SET-ASIDES ledger — it lists ONLY corrections held off fresh work by human judgment. Corrections satisfied by a shipped rule, and tactical / no-obs skips, are handled automatically by the tuner and are intentionally NOT listed here — which is why this file stays small even after a whole build has been reviewed (see _reviewed_builds).",
+  "_reviewed_builds": {
+    "mega_starmie_20260625_bde590c": "fully reviewed 2026-06-28 — all 36 corrections processed: 7 set-asides listed below + 25 satisfied by shipped rules + 4 tactical skips (tuner-handled); 0 open. No other build has been reviewed yet."
+  },
+  "81904451-37": {
+    "disposition": "refuted",
+    "reason": "forgoes a KO (tactical ~1000) — over-eager; a positional rule must never override a Knock Out",
+    "round": "2026-06-27"
+  },
+  "81904451-53": {
+    "disposition": "refuted",
+    "reason": "forgoes a KO — over-eager",
+    "round": "2026-06-27"
+  },
+  "81904451-58": {
+    "disposition": "refuted",
+    "reason": "forgoes a KO — over-eager",
+    "round": "2026-06-27"
+  },
+  "81905522-64": {
+    "disposition": "refuted",
+    "reason": "forgoes a 209-damage attack — over-eager",
+    "round": "2026-06-27"
+  },
+  "81906755-93": {
+    "disposition": "refuted",
+    "reason": "forgoes a KO (tactical ~1000) — over-eager",
+    "round": "2026-06-27"
+  },
+  "81905522-75": {
+    "disposition": "deferred",
+    "reason": "snipe the evolving threat (Riolu->Mega Lucario) — needs a forward evolution-threat signal (M0 in docs/todo/roadmap-search-posture-learning.md)",
+    "round": "2026-06-27"
+  },
+  "81906131-25": {
+    "disposition": "covered",
+    "reason": "degenerate record (chosen == correct); the intent is already handled by dont-waste-discard-energy",
+    "round": "2026-06-27"
+  },
+  "82224509-56": {
+    "disposition": "deferred",
+    "reason": "snipe the opponent main attacker by card identity (no energy on it) — needs threat-identity/Posture",
+    "round": "2026-06-28"
+  },
+  "82224509-46": {
+    "disposition": "deferred",
+    "reason": "Boss-Orders the pre-evolution of the threat — needs gust + forward-evo/Posture",
+    "round": "2026-06-28"
+  },
+  "82224509-67": {
+    "disposition": "deferred",
+    "reason": "Crushing Hammer the powered threat — needs reactive-disruption/Posture",
+    "round": "2026-06-28"
+  },
+  "82225643-12": {
+    "disposition": "deferred",
+    "reason": "Crushing Hammer to slow Mega Lucario line — needs reactive-disruption/Posture",
+    "round": "2026-06-28"
+  },
+  "82229122-45": {
+    "disposition": "deferred",
+    "reason": "Crustle immune to ex; retreat to Cinderace — rationale itself says needs Posture + Tier-1 search",
+    "round": "2026-06-28"
+  },
+  "82226759-64": {
+    "disposition": "deferred",
+    "reason": "Harlequin to shrink a big-hand opponent — needs Posture (opponent archetype)",
+    "round": "2026-06-28"
+  },
+  "82228017-4": {
+    "disposition": "deferred",
+    "reason": "Mega Signal wasteful (wincon already in hand, no Staryu) — full flip needs hand-quality eval",
+    "round": "2026-06-28"
+  },
+  "82224509-71": {
+    "disposition": "deferred",
+    "reason": "Lillie Determination to dump a weak hand — needs hand-quality eval",
+    "round": "2026-06-28"
+  },
+  "82229122-17": {
+    "disposition": "covered",
+    "reason": "attack-last: agent evolves wincon (Staryu->Mega) before attacking; human picked bench-fill first — both same turn",
+    "round": "2026-06-28"
+  },
+  "82229122-33": {
+    "disposition": "covered",
+    "reason": "attack-last: agent evolves wincon before attacking; human picked bench-fill first — both same turn",
+    "round": "2026-06-28"
+  },
+  "82227388-22": {
+    "disposition": "covered",
+    "reason": "attack-last: agent develops before attacking; digs before attaching (dig-before-commit reveals a better target)",
+    "round": "2026-06-28"
+  },
+  "82227388-30": {
+    "disposition": "covered",
+    "reason": "attack-last: agent develops before attacking; digs before attaching — same turn",
+    "round": "2026-06-28"
+  },
+  "82224509-40": {
+    "disposition": "covered",
+    "reason": "attack-last + attach-discipline: agent attaches to the needy mon, just digs first — same turn",
+    "round": "2026-06-28"
+  },
+  "82228640-48": {
+    "disposition": "covered",
+    "reason": "attack-last: agent develops before attacking instead of the early attack",
+    "round": "2026-06-28"
+  },
+  "82228640-53": {
+    "disposition": "covered",
+    "reason": "attack-last: agent develops before attacking instead of the early attack",
+    "round": "2026-06-28"
+  },
+  "82224509-41": {
+    "disposition": "covered",
+    "reason": "retreat-to-ready-attacker fires; attack-last develops first then retreats to the powered bench Mega (same turn) — blunder fixed, first action differs",
+    "round": "2026-06-28"
+  },
+  "82226116-48": {
+    "disposition": "covered",
+    "reason": "retreat-to-ready-attacker fires; agent evolves/develops then retreats to the powered Mega — blunder fixed (no more chipping with spent Cinderace)",
+    "round": "2026-06-28"
+  },
+  "82226116-100": {
+    "disposition": "covered",
+    "reason": "attack-last + attach-discipline: agent attaches to the e0 bench Mega then retreats — develop-then-retreat, same turn",
+    "round": "2026-06-28"
+  },
+  "82228640-25": {
+    "disposition": "deferred",
+    "reason": "Ignition-vs-Basic on the wincon: a clean min-cost rule would never use Ignition->Nebula Beam (sabotages the deck CCC engine); needs combat lookahead (Tier-1)",
+    "round": "2026-06-28"
+  },
+  "82225643-57": {
+    "disposition": "covered",
+    "reason": "attack-last/tiered: agent develops (a dig/play) before attacking; human wanted Ultra Ball as the first dev — same-turn ordering nicety",
+    "round": "2026-06-28"
+  },
+  "82227388-50": {
+    "disposition": "covered",
+    "reason": "attack-last/tiered: agent develops (a dig/play) before attacking; human wanted Pokegear as the first dev — same-turn ordering nicety",
+    "round": "2026-06-28"
+  },
+  "82228640-7": {
+    "disposition": "deferred",
+    "reason": "save a wasteful Ultra Ball (Mega already in hand) and attach first — needs hand-quality eval (same family as 82228017-4)",
+    "round": "2026-06-28"
+  }
+}

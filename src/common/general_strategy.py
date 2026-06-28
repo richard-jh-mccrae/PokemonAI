@@ -14,11 +14,15 @@ _MULLIGAN = 42      # SelectContext.MULLIGAN ("Would you like to redraw the card
 _ATTACH_FROM = 21   # SelectContext.ATTACH_FROM — choose the Pokémon to attach an Energy to
 _DAMAGE = 15        # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a snipe)
 _TO_HAND = 7        # SelectContext.TO_HAND — a search: choose which card to add to your hand
+_TO_ACTIVE = 4      # SelectContext.TO_ACTIVE — promote a benched Pokémon to the Active Spot
 _ACTIVE = 4         # AreaType.ACTIVE
 _BENCH = 5          # AreaType.BENCH
 _BENCH_MAX = 5      # a full Bench holds 5 — a bench-filler can place nothing once you're here
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
-_CHIP_CEILING = 100  # build-before-attack suppresses only attacks weaker than this (docs/weights.md)
+# NOTE: the old `build-before-attack` / `dont-chip-with-a-doomed-active` chip-penalty rules (and the
+# `_CHIP_CEILING` they used) were removed — the Pilot's `_finish_turn_last` ("attack last") now
+# sequences development ahead of the turn-ending attack structurally, so a blanket chip penalty is
+# redundant and was harming play (it dropped a useful chip below End when no development remained).
 
 
 def _multi_prize(stat) -> bool:
@@ -42,9 +46,11 @@ def _is_reusable_energy(stat, tags) -> bool:
 HYPOTHESES = [
     Hypothesis(
         id="dig-before-commit",
-        rationale="During setup, play draw and search cards first — see more of your deck and "
-                  "find your pieces before making irreversible plays like attaching Energy.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY
+        rationale="Play draw and search cards before ending your turn — they cost nothing and see "
+                  "more of your deck: during setup, dig before irreversible plays like attaching "
+                  "Energy; while racing, dig before the turn-ending attack (you still attack the "
+                  "same turn — see `_finish_turn_last`). Free card advantage every turn.",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
         and ("draw" in c.tags or "search" in c.tags),
         weight=20, status="assumed"),
     Hypothesis(
@@ -75,8 +81,11 @@ HYPOTHESES = [
         rationale="Attach an Energy every turn — building energy toward an attack is the core "
                   "tempo of the game; without a steady stream of attachments your attackers never "
                   "come online. (Sequenced after draw/search by attach-energy-last, but it still "
-                  "happens.)",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _ATTACH,
+                  "happens.) Fires only on a Pokémon that still NEEDS Energy to attack (fewer than "
+                  "its cheapest attack cost) — so the agent spreads Energy to a bare Bench attacker "
+                  "rather than piling a needless surplus on one that is already online.",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _ATTACH
+        and c.attach_target_needs,
         weight=15, status="assumed"),
     Hypothesis(
         id="attach-energy-last",
@@ -108,14 +117,6 @@ HYPOTHESES = [
         when=lambda c: c.plan == Plan.RACE and c.option_type == _PLAY and _is_pokemon(c.stat),
         weight=25, status="assumed"),
     Hypothesis(
-        id="build-before-attack",
-        rationale="During setup, don't end your turn chipping with a weak attack (below a "
-                  "meaningful-damage floor) — your turn ends when you attack, so develop your "
-                  "board instead unless the attack scores a knockout or real damage.",
-        when=lambda c: c.plan == Plan.SETUP and c.is_attack and not c.is_ko
-        and c.tactical < _CHIP_CEILING,
-        weight=-20, status="assumed"),
-    Hypothesis(
         id="hold-position-in-setup",
         rationale="During setup, don't retreat the Active — you're still developing and want the "
                   "Active (your starter / energy accelerator) to attack; a setup retreat wastes "
@@ -137,7 +138,7 @@ HYPOTHESES = [
             or c.board.turn <= 1                                        # first turn going first: no attack
             or (c.board.reusable_energy_in_hand                         # a reusable Basic is available …
                 and not (_WINCON_ROLES & set(c.attach_target_roles)))), # … and this isn't the wincon
-        weight=-40, status="testing"),
+        weight=-60, status="testing"),   # near-imperative: must beat the accel boosts on a wasted attach
     Hypothesis(
         id="hold-clutch-heal",
         rationale="A heal that bounces the healed Pokémon's Energy back to hand (Function Tag "
@@ -164,8 +165,10 @@ HYPOTHESES = [
         rationale="During setup, prefer a card that can rush-evolve your line (Function Tag "
                   "`rush_evolve`, e.g. Salvatore: fetch a Pokémon and evolve it the same turn its "
                   "pre-evolution was played). It collapses two turns of setup into one and gets the "
-                  "win-condition online a turn early.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "rush_evolve" in c.tags,
+                  "win-condition online a turn early. Stands down when there's no pre-evolution in "
+                  "play to evolve — without an evolution target the rush-evolve does nothing.",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "rush_evolve" in c.tags
+        and c.board.line_preevo_in_play,
         weight=30, status="testing"),
     Hypothesis(
         id="snipe-the-threat",
@@ -175,6 +178,15 @@ HYPOTHESES = [
                   "than poking a bare, not-yet-online benchsitter.",
         when=lambda c: c.select_context == _DAMAGE and c.target_is_threat,
         weight=20, status="testing"),
+    Hypothesis(
+        id="snipe-the-weakest",
+        rationale="When an attack lets you choose a benched Pokémon to damage and none is a live "
+                  "Energy-threat, hit the LOWEST-HP one — it's closest to a knockout (a prize, and "
+                  "one fewer future attacker) and avoids dumping a small snipe into a high-HP wall "
+                  "it can't dent. Ranks below `snipe-the-threat`, so an energy-bearing attacker is "
+                  "still sniped first.",
+        when=lambda c: c.select_context == _DAMAGE and c.target_is_weakest,
+        weight=15, status="testing"),
     Hypothesis(
         id="fetch-the-wincon",
         rationale="When a search lets you choose which card to take into your hand (e.g. Ultra Ball), "
@@ -199,26 +211,65 @@ HYPOTHESES = [
         weight=25, status="testing"),
     Hypothesis(
         id="prefer-bench-fill-first",
-        rationale="During setup, a card that fetches Basics straight onto your Bench (Function Tag "
-                  "`bench_fill`, e.g. Buddy-Buddy Poffin) is best played FIRST in a thin deck — it "
-                  "develops the Bench and shrinks the deck, raising the quality of every later "
-                  "draw/search. A gentle nudge to sequence it ahead of hand-refill tutors. Stands "
-                  "down once the Bench is full, where a bench-filler can place nothing.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "bench_fill" in c.tags
-        and c.board.my_bench < _BENCH_MAX,
+        rationale="A card that fetches Basics straight onto your Bench (Function Tag `bench_fill`, "
+                  "e.g. Buddy-Buddy Poffin) is best played FIRST in a thin deck — it develops the "
+                  "Bench and shrinks the deck, raising the quality of every later draw/search, and "
+                  "feeds spread-Energy attacks (e.g. Cinderace loading the Bench). Played in setup "
+                  "AND while racing (refill a Bench thinned by knockouts before the turn-ending "
+                  "attack). Stands down once the Bench is full, where a bench-filler places nothing.",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        and "bench_fill" in c.tags and c.board.my_bench < _BENCH_MAX,
         weight=15, status="testing"),
     Hypothesis(
-        id="dont-chip-with-a-doomed-active",
-        rationale="The RACE-phase analog of build-before-attack: when your Active is about to be "
-                  "Knocked Out and the only attack is a weak, non-lethal chip, don't spend the turn "
-                  "attacking — your Active dies next turn regardless, so develop your successor "
-                  "(attach Energy to the Bench / play a Pokémon) instead of rebuilding from nothing. "
-                  "RACE-only (build-before-attack already governs SETUP, and stacking both would over-"
-                  "penalise); gated to a sub-threshold, non-KO attack, so it never suppresses a Knock "
-                  "Out or a real, meaningful attack.",
-        when=lambda c: c.plan == Plan.RACE and c.board.active_doomed and c.is_attack
-        and not c.is_ko and c.tactical < _CHIP_CEILING,
-        weight=-40, status="testing"),
+        id="prefer-wincon-line-piece",
+        rationale="When fetching a card into hand (a search), prefer one that builds your win-"
+                  "condition LINE — a pre-evolution on the path to the payoff (e.g. Staryu → Mega "
+                  "Starmie) over an off-line opener / accelerator (e.g. Cinderace). At a PROMOTE "
+                  "(bring a benched Pokémon to the Active Spot) only do this when the payoff is in "
+                  "hand to evolve it THIS turn — otherwise promoting a bare pre-evolution just "
+                  "exposes your fragile evolution base (see `promote-the-staller`). Ranks below "
+                  "`fetch-the-wincon` (the payoff itself) and `fetch-energy-when-starved`.",
+        when=lambda c: c.card_is_line_preevo and (
+            c.select_context == _TO_HAND
+            or (c.select_context == _TO_ACTIVE and c.board.wincon_in_hand)),
+        weight=18, status="testing"),
+    Hypothesis(
+        id="promote-the-ready-wincon",
+        rationale="When your Active is Knocked Out and a benched win-condition is already powered up "
+                  "enough to attack, promote IT — bring your live attacker to the front rather than a "
+                  "pre-evolution or a staller.",
+        when=lambda c: c.select_context == _TO_ACTIVE and c.card_is_wincon
+        and c.board.bench_wincon_ready,
+        weight=40, status="testing"),
+    Hypothesis(
+        id="promote-the-staller",
+        rationale="When your Active is Knocked Out and you can NEITHER promote a powered win-condition "
+                  "NOR evolve a pre-evolution this turn (the payoff isn't in hand), promote a "
+                  "disposable opener / wall (Function Tag `opener`, e.g. Cinderace) instead of a bare "
+                  "pre-evolution — it stalls, keeps the fragile pre-evolution safe on the Bench, can "
+                  "be retreated for free once you draw the evolution, and can attack if you find "
+                  "Energy.",
+        when=lambda c: c.select_context == _TO_ACTIVE and "opener" in c.tags
+        and not c.board.wincon_in_hand and not c.board.bench_wincon_ready,
+        weight=20, status="testing"),
+    Hypothesis(
+        id="retreat-to-ready-attacker",
+        rationale="When your Active is NOT your win-condition (e.g. a spent opener like Cinderace) "
+                  "and a benched win-condition is already powered up enough to attack, retreat into "
+                  "it — bring your real attacker to the front to finish the turn. Weighted to beat a "
+                  "weak chip from the spent Active but never a real attack or a knockout (a lethal "
+                  "always wins on tactical).",
+        when=lambda c: c.select_context == _MAIN and c.option_type == _RETREAT
+        and c.board.bench_wincon_ready and not c.board.active_is_wincon,
+        weight=60, status="testing"),
+    Hypothesis(
+        id="save-tool-for-the-attacker",
+        rationale="A Pokémon Tool (Function Tag `tool`, e.g. Hero's Cape) is a one-shot equip — don't "
+                  "spend it on an off-role Pokémon (a spent opener / accelerator). Hold it for the "
+                  "win-condition / primary attacker that will actually carry the game.",
+        when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
+        and not (_WINCON_ROLES & set(c.attach_target_roles)),
+        weight=-15, status="testing"),
 ]
 
 GENERAL_STRATEGY = Strategy(name="general", hypotheses=HYPOTHESES)

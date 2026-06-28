@@ -45,9 +45,19 @@ for its Decision — int-enum, the Pilot's exact input. For each Correction:
 
 Output: `tuned.json` (machine, automatic) + proposed Hypothesis edits (assisted, human-committed) +
 status updates. `tune.py` also writes a durable, committed **`data/proposals/<deck>.json`** snapshot
-(`open[]` proposals + `skipped[]`, each stamped with source `agent_build`/`built_at`) — the
-`/blunder-buster` cluster source, and a git-tracked timeline of how open blunders shrink per build.
+(`open[]` proposals + `skipped[]` + `reviewed[]`, each stamped with source `agent_build`/`built_at`) —
+the `/blunder-buster` cluster source, and a git-tracked timeline of how open blunders shrink per build.
 **The ladder A/B (Job C) is the only ship gate** — the Tuner never self-validates.
+
+**The reviewed ledger (`data/corrections/reviewed.json`).** Auto-reconciliation drops a blunder once a
+rule *satisfies* it; a blunder consciously **set aside** would otherwise resurface every run. The ledger
+(hand-editable JSON keyed by `"<episode>-<frame>"`) records dispositions — `refuted` (a bad correction,
+e.g. it forgoes a Knock Out — *also* dropped from the weight fit so it stops pressuring weights),
+`deferred` (needs new infra), `covered` (handled by an existing rule). `tune.py` partitions these out
+of the active corpus before routing (so they leave `open[]` / `UNSATISFIED`) and lists them under
+`reviewed (excluded)` (and `reviewed[]` in the snapshot) — no silent drop. Append with
+`python tools/train/review_correction.py <episode>-<frame> <disposition> "<reason>"` (loader:
+`tools/train/blunder/reviewed.py`).
 
 ## Build notes / gotchas (read before implementing)
 

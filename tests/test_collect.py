@@ -159,6 +159,40 @@ def test_cli_collect_dispatches_with_supported_kwargs_only(monkeypatch, tmp_path
     assert "seat" not in captured                        # regression: CLI must not pass a per-episode seat
 
 
+@pytest.mark.req("REQ-SUB-0011")
+def test_kaggle_score_fails_cleanly_with_an_auth_hint(monkeypatch):
+    """An unauthenticated Kaggle CLI must yield an actionable message, not a raw traceback."""
+    import subprocess
+
+    import submit.collect as collectmod
+
+    class _Proc:
+        returncode, stdout = 1, ""
+        stderr = "Authentication required to call the Kaggle API."
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
+    with pytest.raises(SystemExit) as ei:
+        collectmod.kaggle_score(1)
+    msg = str(ei.value)
+    assert "authenticated" in msg.lower() and "KAGGLE_API_TOKEN" in msg   # tells you how to fix it
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_run_kaggle_surfaces_the_cli_error_on_other_failures(monkeypatch):
+    import subprocess
+
+    import submit.collect as collectmod
+
+    class _Proc:
+        returncode, stdout = 2, ""
+        stderr = "404 - competition not found: typo-comp"
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
+    with pytest.raises(SystemExit) as ei:
+        collectmod._run_kaggle(["competitions", "submissions", "typo-comp", "--csv"])
+    assert "competition not found" in str(ei.value)      # the real cause, surfaced not swallowed
+
+
 class _FakeApi:
     """A stand-in Kaggle API that records which episodes it was asked to download."""
 

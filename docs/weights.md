@@ -34,8 +34,8 @@ in the normal→strong range.
 
 **Weights can be negative** — a penalty steers *away* from an option. General-Strategy energy/opening
 seeds ([general-strategy.md](general-strategy.md), [ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)):
-`power-up-attacker` +15 and `use-acceleration` +25 (normal tempo); `build-before-attack` −20 and
-`dont-feed-the-doomed` −30 (strong penalties); `keep-a-startable-hand` −40 (strong — avoid a clear
-blunder); `attach-energy-last` −5 (faint sequencing nudge). Separately, the Tactical Evaluator
-carries a `_CHIP_CEILING = 100` **value floor** (not a weight): `build-before-attack` suppresses only
-attacks scoring below it, so a strong sub-KO attack (e.g. a 120 + 50 snipe) survives.
+`power-up-attacker` +15 and `use-acceleration` +25 (normal tempo); `dont-feed-the-doomed` −30 (strong
+penalty); `keep-a-startable-hand` −40 (strong — avoid a clear blunder); `attach-energy-last` −5 (faint
+sequencing nudge). (The old `build-before-attack` / `dont-chip-with-a-doomed-active` chip penalties and
+their `_CHIP_CEILING` value floor were **removed** — the Pilot's `_finish_turn_last` "attack last"
+sequencing supersedes them; see [general-strategy.md](general-strategy.md).)

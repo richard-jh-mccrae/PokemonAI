@@ -1,65 +1,187 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-27T13:45:54",
+  "generated_at": "2026-06-28T19:54:56",
   "open": [
     {
-      "id": "bad-target-81905522-75",
-      "category": "bad_target",
-      "episode_id": 81905522,
-      "frame": 75,
+      "id": "misattachment-82224509-31",
+      "category": "misattachment",
+      "episode_id": 82224509,
+      "frame": 31,
       "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 11) to prefer 'Riolu' over 'Hariyama'",
-      "rationale": "Hariyama is strongest benched pokemon, but is not threat due to no energy. Riolu can become mega lucario, so snipe that instead",
-      "agent_build": "mega_starmie_20260625_bde590c",
-      "built_at": "2026-06-25T00:00:00"
+      "trigger_sketch": "fire at SelectContext='AttachFrom' (turn 4) to prefer 'Mega Starmie ex' over 'Mega Starmie ex'",
+      "rationale": "dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other benched mon without any energy",
+      "agent_build": "mega_starmie_20260627_93a70be",
+      "built_at": "2026-06-27T00:00:00"
     },
     {
-      "id": "bad-target-81906131-25",
-      "category": "bad_target",
-      "episode_id": 81906131,
-      "frame": 25,
+      "id": "other-82225138-19",
+      "category": "other",
+      "episode_id": 82225138,
+      "frame": 19,
       "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 2) to prefer 'Attach Ignition Energy → Cinderace' over 'Attach Ignition Energy → Cinderace'",
-      "rationale": "never attach ignition energy to Cinderace when can attach basic energy",
-      "agent_build": "mega_starmie_20260625_bde590c",
-      "built_at": "2026-06-25T00:00:00"
+      "trigger_sketch": "fire at SelectContext='Main' (turn 3) to prefer 'Play Harlequin' over 'Play Salvatore'",
+      "rationale": "never play salvatore when no staryu is on board to evolve. hand also sucked, so use harlequin",
+      "agent_build": "mega_starmie_20260627_93a70be",
+      "built_at": "2026-06-27T00:00:00"
     }
   ],
-  "skipped": [
+  "skipped": [],
+  "reviewed": [
     {
-      "episode_id": 81785223,
-      "frame": 32,
-      "reason": "tactical"
+      "episode_id": 81904451,
+      "frame": 37,
+      "disposition": "refuted",
+      "reason": "forgoes a KO (tactical ~1000) — over-eager; a positional rule must never override a Knock Out"
     },
     {
-      "episode_id": 81785223,
-      "frame": 38,
-      "reason": "tactical"
+      "episode_id": 81904451,
+      "frame": 53,
+      "disposition": "refuted",
+      "reason": "forgoes a KO — over-eager"
     },
     {
-      "episode_id": 81785223,
-      "frame": 44,
-      "reason": "tactical"
+      "episode_id": 81904451,
+      "frame": 58,
+      "disposition": "refuted",
+      "reason": "forgoes a KO — over-eager"
     },
     {
-      "episode_id": 81904064,
-      "frame": 44,
-      "reason": "tactical"
+      "episode_id": 81905522,
+      "frame": 64,
+      "disposition": "refuted",
+      "reason": "forgoes a 209-damage attack — over-eager"
     },
     {
-      "episode_id": 81904064,
-      "frame": 49,
-      "reason": "tactical"
+      "episode_id": 81905522,
+      "frame": 75,
+      "disposition": "deferred",
+      "reason": "snipe the evolving threat (Riolu->Mega Lucario) — needs a forward evolution-threat signal (M0 in docs/todo/roadmap-search-posture-learning.md)"
     },
     {
-      "episode_id": 81904064,
-      "frame": 59,
-      "reason": "tactical"
+      "episode_id": 81906131,
+      "frame": 25,
+      "disposition": "covered",
+      "reason": "degenerate record (chosen == correct); the intent is already handled by dont-waste-discard-energy"
     },
     {
       "episode_id": 81906755,
-      "frame": 77,
-      "reason": "tactical"
+      "frame": 93,
+      "disposition": "refuted",
+      "reason": "forgoes a KO (tactical ~1000) — over-eager"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 40,
+      "disposition": "covered",
+      "reason": "attack-last + attach-discipline: agent attaches to the needy mon, just digs first — same turn"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 41,
+      "disposition": "covered",
+      "reason": "retreat-to-ready-attacker fires; attack-last develops first then retreats to the powered bench Mega (same turn) — blunder fixed, first action differs"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 46,
+      "disposition": "deferred",
+      "reason": "Boss-Orders the pre-evolution of the threat — needs gust + forward-evo/Posture"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 56,
+      "disposition": "deferred",
+      "reason": "snipe the opponent main attacker by card identity (no energy on it) — needs threat-identity/Posture"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 67,
+      "disposition": "deferred",
+      "reason": "Crushing Hammer the powered threat — needs reactive-disruption/Posture"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 71,
+      "disposition": "deferred",
+      "reason": "Lillie Determination to dump a weak hand — needs hand-quality eval"
+    },
+    {
+      "episode_id": 82225643,
+      "frame": 12,
+      "disposition": "deferred",
+      "reason": "Crushing Hammer to slow Mega Lucario line — needs reactive-disruption/Posture"
+    },
+    {
+      "episode_id": 82226116,
+      "frame": 48,
+      "disposition": "covered",
+      "reason": "retreat-to-ready-attacker fires; agent evolves/develops then retreats to the powered Mega — blunder fixed (no more chipping with spent Cinderace)"
+    },
+    {
+      "episode_id": 82226116,
+      "frame": 100,
+      "disposition": "covered",
+      "reason": "attack-last + attach-discipline: agent attaches to the e0 bench Mega then retreats — develop-then-retreat, same turn"
+    },
+    {
+      "episode_id": 82226759,
+      "frame": 64,
+      "disposition": "deferred",
+      "reason": "Harlequin to shrink a big-hand opponent — needs Posture (opponent archetype)"
+    },
+    {
+      "episode_id": 82227388,
+      "frame": 22,
+      "disposition": "covered",
+      "reason": "attack-last: agent develops before attacking; digs before attaching (dig-before-commit reveals a better target)"
+    },
+    {
+      "episode_id": 82227388,
+      "frame": 30,
+      "disposition": "covered",
+      "reason": "attack-last: agent develops before attacking; digs before attaching — same turn"
+    },
+    {
+      "episode_id": 82228017,
+      "frame": 4,
+      "disposition": "deferred",
+      "reason": "Mega Signal wasteful (wincon already in hand, no Staryu) — full flip needs hand-quality eval"
+    },
+    {
+      "episode_id": 82228640,
+      "frame": 25,
+      "disposition": "deferred",
+      "reason": "Ignition-vs-Basic on the wincon: a clean min-cost rule would never use Ignition->Nebula Beam (sabotages the deck CCC engine); needs combat lookahead (Tier-1)"
+    },
+    {
+      "episode_id": 82228640,
+      "frame": 48,
+      "disposition": "covered",
+      "reason": "attack-last: agent develops before attacking instead of the early attack"
+    },
+    {
+      "episode_id": 82228640,
+      "frame": 53,
+      "disposition": "covered",
+      "reason": "attack-last: agent develops before attacking instead of the early attack"
+    },
+    {
+      "episode_id": 82229122,
+      "frame": 17,
+      "disposition": "covered",
+      "reason": "attack-last: agent evolves wincon (Staryu->Mega) before attacking; human picked bench-fill first — both same turn"
+    },
+    {
+      "episode_id": 82229122,
+      "frame": 33,
+      "disposition": "covered",
+      "reason": "attack-last: agent evolves wincon before attacking; human picked bench-fill first — both same turn"
+    },
+    {
+      "episode_id": 82229122,
+      "frame": 45,
+      "disposition": "deferred",
+      "reason": "Crustle immune to ex; retreat to Cinderace — rationale itself says needs Posture + Tier-1 search"
     }
   ]
 }

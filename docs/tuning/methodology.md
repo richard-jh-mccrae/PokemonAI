@@ -45,6 +45,21 @@ $$\text{Score}(o) \;=\; \underbrace{\sum_{i} w_i \cdot \text{fired}_i(o)}_{\text
 This is a **linear model**: the score is a weighted sum of binary features. That single fact is what
 makes the learning below tractable — everything reduces to choosing the weights $w_i$.
 
+> **One non-additive exception — tiered turn sequencing (`_finish_turn_last`).** The engine
+> re-presents the open turn menu after each non-ending action, so the whole turn still happens — and
+> the Pilot's final step **reorders** the argmax to take the most informative, reversible actions
+> first and the irreversible ones last, at a single-pick MAIN menu: **tier 0** informative development
+> (draw/search, fill the Bench, evolve a benched Pokémon, play a Pokémon — any option a rule scored
+> `> 0`) → **tier 1** the Energy attach (the one irreversible per-turn commit) → **tier 2** the
+> turn-ending attack (plus Retreat / End / non-beneficial). A knockout is never forfeited (an
+> Evolve-of-the-Active drops to tier 2 when a KO is on the menu; the KO outscores everything in
+> tier 2). This is a selection layer **the weight fit does not model**: it reasons about the additive
+> score above, so it will flag a sequencing-fixed (or tie-resolved) Correction as `UNSATISFIED` /
+> propose a rule for it even though the real `decide()` already chooses correctly. (It also made the
+> old `build-before-attack` / `dont-chip` chip-penalty weights obsolete — they were removed.) **The
+> authoritative measure of whether a Correction is fixed is the real Pilot `decide()` / the Verifier —
+> not the W-route count.** When in doubt, replay the agent, don't read the additive margin.
+
 The weights live on a documented, legible scale ([weights.md](../weights.md)): `10–20` = a normal
 preference, `30–50` = strong doctrine, and so on. They start as **authored seeds** (an expert prior)
 and are refined by the process below.

@@ -39,11 +39,12 @@ def _driving(result, hid: str):
 
 def render_run_report(agent: str, result, seeds: dict, changed: dict, *, reg: float,
                       when_iso: str, build: str | None, n_corrections: int,
-                      methodology: str = "../methodology.md") -> str:
+                      methodology: str = "../methodology.md", reviewed=None) -> str:
     """Return the Markdown report for one tune run.
 
     ``changed`` is the sparse `{hyp_id: new_weight}` actually shipped (``io.sparse_overrides``);
     ``result`` is the ``run.TuneResult``; ``seeds`` the authored weights (for the seed→new delta).
+    ``reviewed`` is ``[(correction, entry)]`` excluded by the reviewed ledger (already assessed).
     """
     sat = result.n_constraints - len(result.unsatisfied)
     verdict = ("fit **adopted**" if result.fit_adopted else
@@ -99,4 +100,14 @@ def render_run_report(agent: str, result, seeds: dict, changed: dict, *, reg: fl
     else:
         out.append("- _None._")
     out.append("")
+
+    if reviewed:
+        out.append("## Already reviewed (excluded from fresh work)")
+        out.append("_Assessed in an earlier round and recorded in `data/corrections/reviewed.json` — "
+                   "not re-surfaced here. `refuted` are also dropped from the weight fit._")
+        for c, entry in reviewed:
+            e = entry or {}
+            out.append(f"- {_at(c)} **{e.get('disposition', '?')}** {_move(c)} — "
+                       f"“{e.get('reason', '')}”")
+        out.append("")
     return "\n".join(out) + "\n"

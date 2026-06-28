@@ -18,6 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from train.blunder.reviewed import DEFAULT_REVIEWED, load_reviewed, partition_reviewed  # noqa: E402
 from train.blunder.store import DEFAULT_PATH, load_corrections  # noqa: E402
 from train.tuner.fit import DEFAULT_REG  # noqa: E402
 from train.tuner.io import sparse_overrides, write_meta, write_overrides, write_proposals  # noqa: E402
@@ -65,8 +66,11 @@ def main(argv=None):
     ap.add_argument("--report-dir", default=str(REPO / "docs" / "tuning" / "runs"),
                     help="where to write the human-readable per-run Markdown report")
     ap.add_argument("--no-report", action="store_true", help="skip writing the per-run report")
+    ap.add_argument("--reviewed", default=str(DEFAULT_REVIEWED),
+                    help="the reviewed-corrections ledger (already-assessed blunders to exclude)")
     args = ap.parse_args(argv)
 
+    reviewed = load_reviewed(args.reviewed)
     corrections = [c for c in load_corrections(args.store) if c.source == "own"]
     agents = {c.agent for c in corrections}
     if args.agent:
@@ -76,7 +80,8 @@ def main(argv=None):
         return
 
     for agent in sorted(agents):
-        corrs = [c for c in corrections if c.agent == agent]
+        corrs_all = [c for c in corrections if c.agent == agent]
+        corrs, dispositioned = partition_reviewed(corrs_all, reviewed)  # drop already-assessed blunders
         try:
             pilot, seeds = _build_pilot(agent)
         except Exception as exc:  # engine/strategy not available
@@ -107,20 +112,29 @@ def main(argv=None):
                   f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
         prop_out = write_proposals(
             REPO / "data" / "proposals" / f"{agent}.json", agent, result.proposals,
-            result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"))
+            result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"),
+            reviewed=dispositioned)
         print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
         for p in result.proposals:
             print(f"  PROPOSE {p.id} (seed {p.seed_weight}): {p.trigger_sketch}")
             print(f"    rationale: {p.rationale}")
         for c, why in result.skipped:
             print(f"  SKIP frame {c.decision.get('frame')}: {why}")
+        if dispositioned:                                 # already-assessed blunders, held off fresh work
+            from collections import Counter
+            by = Counter((e or {}).get("disposition", "?") for _, e in dispositioned)
+            print(f"  reviewed (excluded): {len(dispositioned)} already-assessed "
+                  f"({', '.join(f'{k} {n}' for k, n in sorted(by.items()))}) — data/corrections/reviewed.json")
+            for c, e in dispositioned:
+                print(f"    SEEN ep {c.episode_id} frame {c.decision.get('frame')} "
+                      f"[{(e or {}).get('disposition', '?')}]: {(e or {}).get('reason', '')}")
 
         if not args.no_report:                            # human-readable per-run report (docs/tuning/runs/)
             now = datetime.now()
             build = next((c.agent_build for c in corrs if c.agent_build), None)
             md = render_run_report(agent, result, seeds, changed, reg=args.reg,
                                    when_iso=now.isoformat(timespec="seconds"), build=build,
-                                   n_corrections=len(corrs))
+                                   n_corrections=len(corrs), reviewed=dispositioned)
             report_dir = Path(args.report_dir)
             report_dir.mkdir(parents=True, exist_ok=True)
             report_path = report_dir / f"{agent}_{now:%Y%m%d-%H%M%S}.md"

@@ -1,7 +1,7 @@
 """Pilot: turn an observation into a legal selection (ADR-0008)."""
 import pytest
 
-from common.pilot import Pilot, choose_plan
+from common.pilot import KO_SCORE, Pilot, choose_plan
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Plan, Ready, Strategy
 from pilot_helpers import (
@@ -230,8 +230,12 @@ def test_weakness_doubles_tactical_damage_and_can_flip_the_choice():
         return make_select([opt(PLAY), attack_opt(ATK)], context=MAIN,
                            current=state(active=poke(700, energy=3), opp_active=poke(defender, hp=160)))
 
-    assert pilot.decide(vs(800)) == [1]   # 90x2 = 180 >= 160 -> KO (1000) beats the 100 play
-    assert pilot.decide(vs(900)) == [0]   # 90 < 160 (no KO): 90 < 100 -> the play wins; weakness flipped it
+    # Weakness doubling flips the ATTACK's tactical value from a 90 chip to a 180 KO.
+    assert pilot.explain(vs(800)).options[1].tactical >= KO_SCORE   # 90x2 = 180 >= 160 -> KO recognised
+    assert pilot.explain(vs(900)).options[1].tactical == 90         # 90 < 160 -> just a chip
+    # Final pick: the +100 play is beneficial development, so "attack-last" sequences it ahead of the
+    # attack either way (the KO is taken on the same turn once development is exhausted).
+    assert pilot.decide(vs(800)) == [0] and pilot.decide(vs(900)) == [0]
 
 
 @pytest.mark.req("REQ-PILOT-0015")

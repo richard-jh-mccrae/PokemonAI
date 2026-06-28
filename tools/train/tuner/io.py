@@ -56,13 +56,18 @@ def load_overrides(path: Path | str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generated_at: str) -> Path:
+def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generated_at: str,
+                    reviewed=None) -> Path:
     """Write the durable ``missing_hypothesis`` proposals snapshot (ADR-0018).
 
     The Tuner's proposals are otherwise stdout-only and ephemeral. This records them — with each
     one's source provenance (category/episode/frame/build) — as a committed per-deck file, so the
     ``/blunder-buster`` skill reads it instead of re-parsing stdout and ``git`` history of the file
     is a per-build timeline of how the agent's open blunders shrink. Overwritten each run.
+
+    ``reviewed`` is ``[(correction, entry)]`` for blunders excluded by the reviewed ledger
+    (already assessed — refuted / deferred / covered); recorded so the snapshot shows *why* they
+    aren't in ``open`` (no silent drop).
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,6 +83,11 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
         "skipped": [
             {"episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason}
             for c, reason in skipped
+        ],
+        "reviewed": [
+            {"episode_id": c.episode_id, "frame": c.decision.get("frame"),
+             "disposition": (entry or {}).get("disposition"), "reason": (entry or {}).get("reason")}
+            for c, entry in (reviewed or [])
         ],
     }
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

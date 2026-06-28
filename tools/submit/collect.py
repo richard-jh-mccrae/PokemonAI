@@ -91,6 +91,17 @@ def aggregate_matches(matches: list[dict]) -> dict:
 
 COMPETITION = "pokemon-tcg-ai-battle"
 
+# Shown when the Kaggle CLI/API can't authenticate — `collect` needs Kaggle (scores + replays).
+_AUTH_HINT = (
+    "Kaggle isn't authenticated. Set KAGGLE_API_TOKEN, or save the token to "
+    "%USERPROFILE%\\.kaggle\\access_token (see kaggle_api_token/instructions.txt), then retry."
+)
+
+
+def _looks_like_auth_error(text: str) -> bool:
+    t = (text or "").lower()
+    return "authentication required" in t or "401" in t or "403" in t or "unauthorized" in t
+
 
 def _to_float(x):
     try:
@@ -99,14 +110,29 @@ def _to_float(x):
         return None
 
 
+def _run_kaggle(args: list[str]) -> str:
+    """Run a `kaggle` CLI command and return stdout — surfacing the real cause on failure.
+
+    The raw CLI is `check=True` + `capture_output`, which hides *why* it failed; here a non-zero
+    exit raises a clean `SystemExit` carrying the CLI's own stderr (auth failures get the hint)."""
+    import subprocess
+    try:
+        proc = subprocess.run(["kaggle", *args], capture_output=True, text=True)
+    except FileNotFoundError:
+        raise SystemExit("the `kaggle` CLI isn't installed — `pip install kaggle` (or activate the venv).")
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip()
+        raise SystemExit(_AUTH_HINT if _looks_like_auth_error(err)
+                         else f"`kaggle {' '.join(args)}` failed (exit {proc.returncode}):\n{err}")
+    return proc.stdout
+
+
 def kaggle_score(submission_id: int, *, competition: str = COMPETITION) -> dict:
     """Look up a Submission's `ref` + `public_score` from `submissions --csv`, matched by the
     `#<id>` our `-m` message carries in the `description` field."""
     import csv
     import io
-    import subprocess
-    out = subprocess.run(["kaggle", "competitions", "submissions", competition, "--csv"],
-                         capture_output=True, text=True, check=True).stdout
+    out = _run_kaggle(["competitions", "submissions", competition, "--csv"])
     for r in csv.DictReader(io.StringIO(out)):
         if (r.get("description") or "").startswith(f"#{submission_id} "):
             return {"kaggle_ref": r.get("ref"), "public_score": _to_float(r.get("publicScore")),
@@ -258,7 +284,10 @@ def _kaggle_download(row: dict, dest, max_replays: int, *, kaggle_ref=None, api=
     if api is None:
         from kaggle.api.kaggle_api_extended import KaggleApi
         api = KaggleApi()
-        api.authenticate()   # reads ~/.kaggle/kaggle.json or KAGGLE_USERNAME/KAGGLE_KEY (never logged)
+        try:
+            api.authenticate()   # reads ~/.kaggle/access_token / KAGGLE_API_TOKEN (never logged)
+        except Exception as e:
+            raise SystemExit(f"{_AUTH_HINT}\n({e})")
 
     triples, fetched = [], 0
     for ep in list(api.competition_list_episodes(submission_id=sub_id))[:max_replays]:

@@ -21,9 +21,17 @@ There is **one append-only log**; you don't manage per-round files. Each run re-
   committed now fires on it, so it drops out (becomes weight-tunable or already satisfied).
 - Only **still-uncovered** blunders surface as new `missing_hypothesis` clusters.
 
-So the loop is: tag corrections → `/blunder-buster` → author + verify + **commit** → tag more
-(appended to the same log) → `/blunder-buster` again (prior clusters auto-drop; only the new
-patterns appear). **Commit authored Hypotheses before the next round** so re-featurization sees them.
+**The reviewed ledger — don't re-assess what you set aside.** Auto-reconciliation only drops a
+blunder once a rule *satisfies* it. A blunder you assessed and **consciously set aside** —
+`refuted` (a bad correction, e.g. it forgoes a Knock Out), `deferred` (valid but needs new infra),
+or `covered` (already handled) — would otherwise resurface every run. Record those in
+`data/corrections/reviewed.json` (step 10); `tune.py` then excludes them from `open[]` /
+`UNSATISFIED` and lists them under `reviewed (excluded)` — so each round you only see **new** work.
+
+So the loop is: tag corrections → `/blunder-buster` → author + verify + **commit** + **record
+set-asides** → tag more (appended to the same log) → `/blunder-buster` again (prior clusters
+auto-drop; reviewed ones stay excluded; only the new patterns appear). **Commit authored
+Hypotheses before the next round** so re-featurization sees them.
 
 ## Steps
 
@@ -89,6 +97,17 @@ patterns appear). **Commit authored Hypotheses before the next round** so re-fea
    `margin_before → after`, `fixed`). This is the per-run learning/progress artifact; keep it succinct
    and explain *why*, not just *what*. The math itself lives once in `docs/tuning/methodology.md` —
    link it, don't re-explain it.
+
+10. **Record what you set aside** (so it never resurfaces). For every `open` proposal / `UNSATISFIED`
+    correction you assessed but did **not** author a rule for, record a disposition in the reviewed
+    ledger — `python tools/train/review_correction.py <episode>-<frame> <disposition> "<reason>"`:
+    - `refuted` — a bad correction (e.g. it forgoes a **KO** / a high-value attack; `tactical ≈ 1000`).
+      Also dropped from the weight fit so the bad label stops pressuring weights. (See
+      [[forgo-ko-corrections-are-refuted]].)
+    - `deferred` — valid but needs new infrastructure (a new `Context` signal); note what's missing.
+    - `covered` — already handled by an existing Hypothesis; name it.
+    Next `tune.py` run excludes them (shown under `reviewed (excluded)`), so the next round only
+    surfaces genuinely new patterns.
 
 ## Rules
 - One Hypothesis per cluster, verified against **all** its members — not per-correction point-fixes.

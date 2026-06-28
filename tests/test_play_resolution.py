@@ -34,6 +34,8 @@ def test_evolve_into_wincon_fires_only_on_an_evolve_into_the_wincon():
 
 
 def test_prefer_rush_evolve_tutor_fires_on_a_setup_rush_evolve_play():
-    assert bool(_rush.when(_ctx(tags=["rush_evolve"])))
-    assert not _rush.when(_ctx(tags=["rush_evolve"], plan=Plan.RACE))   # setup only
-    assert not _rush.when(_ctx(tags=["search"]))                        # a plain tutor, not rush_evolve
+    have_preevo = Board(line_preevo_in_play=True)                       # a pre-evolution to evolve
+    assert bool(_rush.when(_ctx(tags=["rush_evolve"], board=have_preevo)))
+    assert not _rush.when(_ctx(tags=["rush_evolve"], plan=Plan.RACE, board=have_preevo))  # setup only
+    assert not _rush.when(_ctx(tags=["search"], board=have_preevo))     # a plain tutor, not rush_evolve
+    assert not _rush.when(_ctx(tags=["rush_evolve"]))                   # no pre-evo in play -> stands down

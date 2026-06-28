@@ -61,6 +61,9 @@ class Correction:
         data = dict(data)
         if not data.get("id"):                 # backfill ids for pre-id records
             data["id"] = _derive_id(data)
+        if not data.get("agent") and data.get("agent_build"):
+            from .provenance import parse_build_stem   # agent_build is authoritative for which deck played
+            data["agent"] = parse_build_stem(data["agent_build"]).get("agent") or data.get("agent", "")
         return cls(**data)
 
 

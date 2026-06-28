@@ -108,6 +108,9 @@ class _Handler(BaseHTTPRequestHandler):
         if not self.path.startswith("/correction"):
             return _json(self, {"error": "not found"}, 404)
         game = _game()
+        # Agent on the saved tag: the form value (own -> CLI --agent via META.agent; peer -> the
+        # opponent label) wins, else auto-fill from THIS replay's build folder, else the CLI default.
+        agent = form.get("agent") or game.get("agent") or STATE.get("agent", "")
         try:
             corr = record_correction(
                 game["replay"],
@@ -116,7 +119,7 @@ class _Handler(BaseHTTPRequestHandler):
                 category=form["category"],
                 rationale=form.get("rationale", ""),
                 source=form.get("source", STATE.get("source", "own")),
-                agent=form.get("agent", STATE.get("agent", "")),
+                agent=agent,
                 store_path=STATE["store_path"],
                 submission_id=form.get("submission_id", STATE.get("submission_id")),
                 agent_version=STATE.get("agent_version") or game.get("agent_version"),
