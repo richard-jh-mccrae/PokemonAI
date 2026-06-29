@@ -13,6 +13,8 @@
   "1071": ["search", "stall"],
   "1081": ["energy_denial"],
   "1086": ["bench_fill"],
+  "1121": ["tutor_pokemon", "cost_discard"],
+  "1145": ["tutor_mega"],
   "1115": ["search"],
   "1129": ["recycle"],
   "1134": ["search"],

@@ -200,9 +200,9 @@ Salvatore rush line stands.
   today** — `prize-trade-target` is a Tactical prize-preference over the *current* Active (not a
   Hypothesis), and the gust decisions happen before the gust resolves, so Tactical can't see "gust X up
   → KO X" at the point of choosing. The gust (whether-to-play **and** which benched mon)
-  is **designed** as the general Boss's Orders doctrine (grilled 2026-06-29): a `gust_ko` lethal
-  oracle generalizing Tactical to any defender, a whether-to-play gate, and a **SWITCH(3)**
-  target-select Hypothesis (tiers 1–5, incl. the defensive stall-gust). Sniping an evolving pre-evo
+  is **shipped** as the general Boss's Orders doctrine (ADR-0022, 2026-06-29): the `_can_ko` lethal
+  oracle generalizing Tactical to any defender, a whether-to-play gate (+ lethal Tactical term), and
+  the **SWITCH(3)** target-select (KO + prizes + denial + the tier-5 stall). Sniping an evolving pre-evo
   with our own attack → general `snipe-the-evolving-threat` (covers the DAMAGE target).
 
 ### 2× Hilda — `search` (targeted setup)
@@ -375,9 +375,9 @@ turn-ending attack, not only in SETUP).
 | `dont-waste-discard-energy` | override / extend | TBD | Ignition is finite + non-recyclable: prefer Water over Ignition **even on the wincon** unless Nebula is needed / ≥2 Ignition in hand → §6 `conserve-ignition-prefer-water` |
 | `hold-position-in-setup` | covers-as-is (resolved) | — | Cinderace-pivot conflict **resolved** by general **`retreat-to-ready-attacker`** (60 > 25): retreat the spent non-wincon Active into the ready benched wincon. No deck rule needed. |
 | `use-acceleration` | gap (tag) | — | Cinderace's Turbo Flare isn't tagged `energy_accel` (probe gap) → general rule won't fire; deck uses Role `accel_source` instead. Candidate: add the tag via `function_overrides.json`. |
-| Boss's gust (offensive KO) | designed, **not built** | seeds TBD | gust *decisions* unsupported — `prize-trade-target` is a Tactical prize-preference over the *current* Active, blind to the gust. Designed 2026-06-29 (ADR-0022): `gust_ko` oracle + whether-to-play gate + SWITCH(3) target-select |
+| Boss's gust (offensive KO + stall) | **shipped** 2026-06-29 (ADR-0022) | `gust-for-the-ko` 50, `gust-for-the-stall` 10 | general gust doctrine: `_can_ko` oracle → whether-to-play + lethal (Tactical) + SWITCH(3) target-select (KO+prizes+denial) + tier-5 stall. Refinements pending: condition/draw guards, 4-mechanic split |
 | `snipe-the-evolving-threat` / `snipe-the-weakest` | covers-as-is | — | Jetting Blow's 50 bench-snipe target (evolving pre-evo / lowest-HP) — forward-evolution index, ADR-0020 |
-| Boss's **gust-target** (stall + offensive pre-evo) | designed → **general** (not built) | seeds TBD | not deck-specific: specified in the general Boss's Orders doctrine (grilled 2026-06-29, §8) |
+| Boss's **gust-target** (stall + offensive pre-evo) | **shipped** → general (ADR-0022) | — | not deck-specific: the general Boss's Orders doctrine — SWITCH(3) target-select (KO+prizes+denial+forward-denial) + tier-5 stall |
 | `power-up-attacker` | covers-as-is (refined) | — | now gated on `attach_target_needs` — won't pile surplus Energy on an already-online Mega Starmie ex (1 W = Jetting Blow) |
 | `promote-the-ready-wincon` / `promote-the-staller` | covers-as-is | — | promote-after-KO: ready Mega Starmie ex first (40), else Cinderace (`opener`) as a staller (20); no deck rule |
 | `save-tool-for-the-attacker` | covers-as-is (+ optional `aceSpec` bump) | — | Hero's Cape (`tool` tag) → hold for the wincon; an `aceSpec` extra-reluctance bump is the optional deepening (§3, Hero's Cape deep dive) |

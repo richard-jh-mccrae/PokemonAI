@@ -39,3 +39,6 @@ def test_prefer_rush_evolve_tutor_fires_on_a_setup_rush_evolve_play():
     assert not _rush.when(_ctx(tags=["rush_evolve"], plan=Plan.RACE, board=have_preevo))  # setup only
     assert not _rush.when(_ctx(tags=["search"], board=have_preevo))     # a plain tutor, not rush_evolve
     assert not _rush.when(_ctx(tags=["rush_evolve"]))                   # no pre-evo in play -> stands down
+    # payoff already in hand -> evolve directly; don't waste a tutor (mirrors tutor-the-wincon's gate)
+    assert not _rush.when(_ctx(tags=["rush_evolve"],
+                               board=Board(line_preevo_in_play=True, wincon_in_hand=True)))

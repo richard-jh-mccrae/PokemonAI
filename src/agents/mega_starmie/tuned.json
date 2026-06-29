@@ -1,10 +1,10 @@
 {
   "accel-into-main": 27.0,
-  "attach-energy-last": -2.0,
-  "dig-before-commit": 50.0,
-  "evolve-into-wincon": 55.0,
+  "attach-energy-last": -8.0,
+  "dig-before-commit": 38.0,
+  "dont-waste-discard-energy": -63.0,
+  "evolve-into-wincon": 52.0,
   "hold-clutch-heal": 63.0,
-  "hold-position-in-setup": -22.0,
-  "power-up-attacker": 18.0,
+  "power-up-attacker": 12.0,
   "prefer-bench-fill-first": 21.0
 }

@@ -1,6 +1,6 @@
 ---
 name: blunder-buster
-description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), gates each with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — nothing is punted to a future run or "deferred". Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
+description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), gates each with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — nothing is punted to a future run or "deferred". Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
 ---
 
 # blunder-buster — corrections → verified Strategy improvements
@@ -75,7 +75,11 @@ appear). **Commit authored Hypotheses before the next round** so re-featurizatio
    Each pattern's ids are a **cluster**. Build the **full cluster worklist now** — every open proposal
    lands in exactly one cluster (a singleton if it shares no pattern); **none is left off the list**.
    (The same `tune.py` run also (re)writes `src/agents/<deck>/tuned.json` — the deterministic Tier-0
-   weight deltas; commit it alongside the authored Hypothesis.)
+   weight deltas; commit it alongside the authored Hypothesis.) **Refresh the trend dashboard to
+   eyeball the incoming surface:** `python tools/train/blunder_report.py` rebuilds
+   `reports/blunders.html` (local, gitignored) — a by-category / submission / build / **resolution** /
+   **avg-blunders-per-game** view that badges each blunder fixed / covered / refuted / deferred / open
+   / skipped (from the reviewed ledger + the proposals snapshot you just regenerated).
    - **Also mine the `UNSATISFIED` lines** `tune.py` prints: these are *W-route* corrections whose
      `correct ≻ chosen` the weight fit could **not** honour (a conflict between corrections, or a gap
      no existing Hypothesis discriminates). They are prime **H** candidates — treat them like `open`
@@ -172,6 +176,13 @@ appear). **Commit authored Hypotheses before the next round** so re-featurizatio
     Hypothesis / refutation test). **Only when every correction has an outcome may you report blunder
     busting finished.** If any correction is still unresolved, you are **not** done — return to step 2
     for it. Do not say "the rest are for a future run."
+    - **Refresh the trend dashboard.** `python tools/train/blunder_report.py` rebuilds
+      `reports/blunders.html` (local, gitignored) so it reflects this round's outcomes: each blunder
+      is badged with its terminal disposition — **fixed** (a committed rule satisfies it; reconciliation
+      dropped it from `open[]`) / **covered** / **refuted** / **deferred** (reviewed ledger) / **open**
+      / **skipped** — and the header splits resolved vs open. `fixed` is derived from the proposals
+      snapshot, so the dashboard is accurate to the **last `tune.py` run** (step 1 / this gate just
+      refreshed it). Parallel mode reaches this step too (Phase 3 runs steps 8–11).
 
 ## Parallel mode (fan-out) — same gates, different schedule
 

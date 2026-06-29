@@ -8,6 +8,7 @@ engine passes, so the fast unit suite needs no native lib.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
 from common.strategy import Plan, Strategy
@@ -34,8 +35,33 @@ _OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active
 _STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
                            # far below prize granularity (1) so it never overrides prize value
+_BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, capped below — a sub-prize
+_BENCH_SNIPE_CAP = 0.9     # tiebreak so among equal-outcome KO attacks the one that ALSO snipes a benched
+                           # target wins (best total board value), without ever overriding a prize (ADR-0022 #14)
 _STALL_RETREAT = 2         # retreat cost that makes a stranded energyless body a real tempo cost — the
                            # defensive stall-gust only bothers with a target this expensive to retreat
+_EVOLVING_THREAT_DMG = 100 # an evolution line "becomes an attacker" at >= this damage (ADR-0020; mirrors
+                           # general_strategy.EVOLVING_THREAT_DMG)
+_EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so it
+                             # never overrides a real prize difference)
+_RESISTANCE = 30           # damage Resistance subtracts when the defender resists the attacker's type. The
+                           # amount is the card's PRINTED resistance (e.g. Slowking "Fighting -30") — a
+                           # per-card fact, NOT in our data export (CardData/CSV are resistance-TYPE only).
+                           # In THIS set it is a uniform -30: verified by probing 47 resistant Pokémon
+                           # through the simulator (tools/sim/probe_resistance.py) + the printed cards, all
+                           # -30. Applied AFTER Weakness (rules.md §5). Revisit if a card ever prints other.
+
+# A deck-search's FETCH FILTER — what set of cards it can pull OUT of the deck, as a predicate over
+# the engine CardStat — keyed by the curated behavioral Function Tag that names the filter (the same
+# escape-hatch tags as `bench_fill`; structural categories like megaEx stay on CardStat, the runtime
+# reads them here rather than duplicating them as tags). The shared basis for the deck-knowledge
+# whiff / redundancy signals: a search whose every legal target is provably gone (or already held)
+# is a dead card. Extend per new search card by adding its filter tag + predicate.
+_FETCH_FILTERS = {
+    "bench_fill": lambda st: st.hp > 0 and not st.evolvesFrom,    # Basic Pokémon (Buddy-Buddy Poffin)
+    "tutor_mega": lambda st: bool(getattr(st, "megaEx", False)),  # a Mega Evolution ex (Mega Signal)
+    "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
+}
 
 
 def choose_plan(state: dict, strategy, stats=None) -> Plan:
@@ -91,6 +117,9 @@ class Board:
                                    # removes this Active, so it's only worth the Supporter for a bigger KO)
     my_prizes_remaining: int = 0   # prizes I still need to take (len of my prize pile); 0 when the obs
                                    # doesn't populate it. A gust KO reaching this count WINS (ADR-0022)
+    opp_prizes_remaining: int = 0  # prizes the OPPONENT still needs (len of their prize pile); 0 when the
+                                   # obs doesn't populate it. A recoil that KOs my Active and hands them
+                                   # THIS many prizes simultaneously with my own lethal is a DRAW (ADR-0022 #2)
     reusable_energy_in_hand: bool = False  # a plain (non-discard) Energy is in hand — a reusable
                                            # alternative to a discard-at-end-of-turn Energy
     wincon_in_play: bool = False   # my win-condition (a Line payoff / win_condition role) is already
@@ -101,11 +130,53 @@ class Board:
                                        # play — so there's something a rush-evolve tutor can evolve
     weakest_bench_hp: int | None = None  # least HP among the opponent's benched snipe targets at a
                                          # DAMAGE select — the target closest to a knockout
+    strongest_forward_bench: int | None = None  # greatest forward-evolution damage among the opponent's
+                                                # benched snipe targets at a DAMAGE select — the most
+                                                # dangerous latent evolving threat (Riolu→Mega Lucario
+                                                # 270 over Makuhita→Hariyama 210). None off a Damage select
+    bench_threat_present: bool = False  # at a DAMAGE select, some benched snipe target already carries
+                                        # Energy (an imminent attacker) — so the evolving-threat snipe
+                                        # stands down: snipe-the-threat (energized) is the priority
     bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
                                        # enough Energy to attack — a finisher to retreat into
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
     stall_target_exists: bool = False  # the opponent has an energyless, high-retreat benched Pokémon —
                                        # a candidate to strand Active with a defensive stall-gust (ADR-0022)
+    opp_has_energy_in_play: bool = False  # the opponent has Energy on any Pokémon (Active or Bench) — a
+                                          # target an energy-denial Item (Crushing Hammer) can strip; the
+                                          # whether-to-play gate for `play-energy-denial` (no Energy -> it whiffs)
+    deck_empty_ids: frozenset = field(default_factory=frozenset)  # MY card ids the deck is PROVABLY
+                                          # empty of. Stateless mode: every copy seen OUTSIDE the deck
+                                          # (hand + discard + board incl. attached/stacks + a face-up
+                                          # prize) reaches the 60-card count. With the deck-tracker
+                                          # annotation (`obs['own_prizes']`) it is EXACT (prize-aware:
+                                          # also includes cards that are entirely PRIZED). Either way
+                                          # sound — never probabilistic. Queried by `deck_definitely_empty_of`.
+    deck_known_counts: dict | None = None  # EXACT count of each card still in my deck, once the
+                                          # deck-tracker has anchored the prizes (deck = decklist −
+                                          # visible − prizes); None until the first search reveal.
+                                          # Backs the POSITIVE `deck_definitely_has`.
+    opp_active_condition_gift: bool = False  # the opponent's Active carries ANY special condition
+                                          # (poison/burn/sleep/paralyze/confuse) — gusting it off to the
+                                          # bench would CLEAR it (a free cure). The guard that suppresses
+                                          # the stall-gust so we never rescue a condition. ADR-0022 #10
+    active_condition_ko_prizes: int = 0   # prizes from the opponent's CURRENT Active dying to poison/burn
+                                          # at the upcoming Checkup (0<hp<=10*poison+20*burn), else 0 — a
+                                          # free KO I'd get without attacking, so an offensive gust must
+                                          # beat THIS too (gusting it off cures it). ADR-0022 #10
+
+    def deck_definitely_empty_of(self, card_id: int) -> bool:
+        """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
+        (hand + discard + board + a revealed prize) against the known 60-card list (see
+        `deck_empty_ids`). Certain, never probabilistic: a copy that could still be in the hidden
+        prizes leaves this False (unless the deck-tracker has resolved the prizes, when it's exact)."""
+        return card_id in self.deck_empty_ids
+
+    def deck_definitely_has(self, card_id: int) -> bool:
+        """True iff `card_id` is PROVABLY still in my deck (a search CAN fetch it) — requires the
+        deck-tracker's exact deck counts (`deck_known_counts`, available once a search has anchored
+        the prizes). False when unknown: positive certainty is never asserted on a guess."""
+        return bool(self.deck_known_counts) and self.deck_known_counts.get(card_id, 0) > 0
 
 
 @dataclass
@@ -121,6 +192,11 @@ class Context:
     attach_target_roles: list = field(default_factory=list)  # deck Roles of that receiving Pokémon
     attach_target_needs: bool = False  # the receiving Pokémon still needs Energy to attack (has fewer
                                        # than its cheapest attack cost) — gates "attach to the needy"
+    attach_target_under_max: bool = False  # the receiving Pokémon carries fewer Energy than its
+                                           # HIGHEST-damage attack costs — i.e. it can't yet fire its
+                                           # big attack (Mega Starmie at 1 W can Jetting Blow but not
+                                           # Nebula Beam CCC). Gates "keep building the active attacker
+                                           # toward its payoff attack". Fail-CLOSED (False when unknown).
     card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
                                        # pre-evolution that builds toward the win-condition)
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
@@ -130,6 +206,10 @@ class Context:
     target_is_threat: bool = False  # the attack target already carries Energy -> closest to attacking
     target_hp: int | None = None    # HP of the targeted benched Pokémon (None off a Damage option)
     target_is_weakest: bool = False  # this snipe target has the least HP on the opponent's Bench
+    target_is_strongest_forward: bool = False  # this snipe target's evolution line is the most
+                                               # dangerous on the Bench (its forward damage is the
+                                               # greatest, and a real threat) — the priority evolving
+                                               # snipe (Riolu→Mega Lucario over Makuhita→Hariyama)
     target_forward_damage: int | None = None  # Evolving Threat signal (ADR-0020): max damage the
                                               # snipe target's evolution line eventually reaches
                                               # (None off a Damage option / no chain / no provider)
@@ -140,6 +220,14 @@ class Context:
     is_attack: bool = False
     tactical: float = 0.0          # the option's closed-form combat value (>= KO_SCORE on a knockout)
     is_ko: bool = False            # this option is an attack that knocks out the opponent's Active
+    search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
+                                   # fetch target (by its fetch-filter, see Pilot._FETCH_FILTERS) is
+                                   # PROVABLY gone from the deck — so it whiffs. SOUND (built on
+                                   # Board.deck_empty_ids); False off a search / unknown filter
+    search_redundant_wincon: bool = False  # this option PLAYS a tutor that can fetch ONLY the
+                                   # win-condition AND the win-condition is already in hand — so it
+                                   # would only dig a redundant copy (e.g. Mega Signal with a Mega in
+                                   # hand). False off a search / a tutor that can fetch anything else
 
 
 @dataclass
@@ -164,7 +252,8 @@ class Decision:
 
 class Pilot:
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
-                 functions=None, attacks=None, attack_costs=None, search_budget=0):
+                 functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
+                 search_budget=0):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -173,7 +262,10 @@ class Pilot:
         self.functions = functions
         self.attacks = attacks or {}                    # attackId -> printed damage
         self.attack_costs = attack_costs or {}          # attackId -> Energy count (efficiency tiebreak)
+        self.recoil = recoil or {}                      # attackId -> unconditional self-damage (ADR-0022 #2)
+        self.bench_snipe = bench_snipe or {}            # attackId -> opp-bench snipe rider (ADR-0022 #14)
         self.search_budget = search_budget
+        self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
 
     def decide(self, obs: dict) -> list[int]:
         """The highest-scoring legal selection (the grader hot path): the deck on the initial
@@ -205,7 +297,10 @@ class Pilot:
 
           tier 0  informative development — draw / search, fill the Bench, evolve a benched Pokémon,
                   play a Pokémon. Free, and reveals a better target before you commit.
-          tier 1  the Energy attach — the one irreversible per-turn commitment. Dig first, THEN attach.
+          tier 1  irreversible per-turn COMMITMENTS — the Energy attach, and a discard-COST search
+                  (`cost_discard`, e.g. Ultra Ball: pays 2 cards from hand). Do the free digs first,
+                  THEN spend the irreversible thing — a free tutor may find what it would, and you
+                  pick the discards knowing more.
           tier 2  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
 
         An option is sequenced early only when a Hypothesis endorses it (score > 0). A knockout is
@@ -217,16 +312,24 @@ class Pilot:
         ko_available = any(options[i].get("type") == _ATTACK and traces[i].tactical >= KO_SCORE
                            for i in order)
 
+        def _cost_discard(i: int) -> bool:
+            cid = traces[i].card_id
+            return bool(self.functions) and cid is not None and "cost_discard" in self.functions.tags(cid)
+
         def _tier(i: int) -> int:
             o = options[i]
             t = o.get("type")
+            if t == _ATTACH and traces[i].tactical >= KO_SCORE:      # attach that UNLOCKS a KO this turn
+                return 0                                             # take the win — don't dig first
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
                 return 2
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
                 return 2                                             # would forfeit an available KO
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
                 return 2
-            return 1 if t == _ATTACH else 0                          # attach (commit) after informative dev
+            if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # irreversible commitment: after free dev
+                return 1
+            return 0
 
         if any(_tier(i) < 2 for i in order):                         # legibility: mark the held-back attacks
             for i in order:
@@ -236,10 +339,11 @@ class Pilot:
 
     def _option_trace(self, obs: dict, select: dict, board: Board, option: dict,
                       index: int) -> OptionTrace:
-        tactical = (self._tactical(obs, option)
+        tactical = (self._tactical(obs, board, option)
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
-                    + self._gust_stall_target_tactical(obs, select, board, option))
+                    + self._gust_stall_target_tactical(obs, select, board, option)
+                    + self._attach_lethal_tactical(obs, select, board, option))
         ctx = self._context(obs, select, board, option, tactical)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
@@ -252,9 +356,11 @@ class Pilot:
         (0 disables). ADR-0008 tunables: shared defaults -> per-deck/machine overrides."""
         return self.overrides.get(h.id, h.weight)
 
-    def _tactical(self, obs: dict, option: dict) -> float:
+    def _tactical(self, obs: dict, board: Board, option: dict) -> float:
         """Closed-form combat value (Tier-0): printed damage (x2 on Weakness) vs the opponent
-        Active's HP. A knockout dominates; otherwise the chip is worth its damage."""
+        Active's HP. A knockout dominates; otherwise the chip is worth its damage. Among equal-outcome
+        KO attacks, a bench-snipe rider on a worthwhile target adds a sub-prize bonus (#14), and a
+        game-winning KO whose forced recoil is a SIMULTANEOUS double-KO is a draw, not a win (#2)."""
         if option.get("type") != _ATTACK:
             return 0
         attack_id = option.get("attackId")
@@ -264,8 +370,40 @@ class Pilot:
         dmg = self._weakness_adjusted(obs, opp, dmg)
         eff = _EFFICIENCY * self.attack_costs.get(attack_id, 0)   # cheaper of equal outcomes wins
         if hp and dmg >= hp:
-            return KO_SCORE + self._prize_value(opp) - eff   # among KOs, prefer higher-prize then cheaper
+            if self._is_simultaneous_draw(board, attack_id, self._prize_value(opp)):
+                return dmg - eff                            # a simultaneous double-KO is a DRAW, not a win
+            return (KO_SCORE + self._prize_value(opp) - eff  # among KOs, prefer higher-prize then cheaper
+                    + self._bench_snipe_bonus(board, attack_id))  # then the one that also snipes a bench
         return dmg - eff
+
+    def _bench_snipe_bonus(self, board: Board, attack_id) -> float:
+        """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes one of the opponent's Benched
+        Pokémon is worth a little extra board value — so among equal-outcome KO attacks the agent prefers
+        the one with a useful rider (e.g. Jetting Blow 120 + 50 bench snipe over a 210 overkill). Scaled by
+        the rider amount, capped below a prize; 0 when the attack has no clean rider or there's no benched
+        target to hit."""
+        rider = self.bench_snipe.get(attack_id, 0)
+        if rider <= 0 or not board.opp_bench:
+            return 0
+        return min(_BENCH_SNIPE_CAP, _BENCH_SNIPE * rider)
+
+    def _is_simultaneous_draw(self, board: Board, attack_id, opp_active_prize: int) -> bool:
+        """True iff a game-winning KO with this attack is actually a DRAW (ADR-0022 #2): its UNCONDITIONAL
+        recoil also Knocks Out my own Active and hands the opponent their LAST prize at the same Checkup as
+        my own lethal — a simultaneous win, which the competition rules score as a draw (not a win, and not
+        a loss). Requires both prize counts in the obs; conservative (only fires on a forced recoil that
+        clears my Active's HP). Half (a) only — suppress the false win; valuing a forced draw above a loss
+        is a noted refinement."""
+        mp, op = board.my_prizes_remaining, board.opp_prizes_remaining
+        if mp <= 0 or op <= 0:
+            return False
+        if opp_active_prize < mp:                            # this KO doesn't take my last prize -> not lethal
+            return False
+        recoil = self.recoil.get(attack_id, 0)
+        if not board.my_active_hp or recoil < board.my_active_hp:   # recoil doesn't self-KO my Active
+            return False
+        my_prize = self._prize_value({"id": board.my_active_id})
+        return my_prize >= op                                # my self-KO gives them their last prize too
 
     def _gust_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for PLAYING a gust card (Function Tag `gust`, e.g. Boss's Orders) when
@@ -282,6 +420,42 @@ class Pilot:
         if ("gust" in tags and mp > 0
                 and board.gust_best_ko_prizes >= mp and board.active_ko_prizes < mp):
             return KO_SCORE + board.gust_best_ko_prizes
+        return 0
+
+    def _attach_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for an ATTACH that UNLOCKS a knockout this turn — attaching this Energy
+        to my Active win-condition lets its best now-affordable attack KO the opponent's Active (e.g.
+        Ignition → CCC → Nebula Beam 210 vs a 200-HP Active = win). Closed-form lethal lookahead the
+        single-action tactical can't see: it models the post-attach Energy (a Basic provides 1; a
+        discard-burst Energy — `discard_eot`, i.e. Ignition — provides CCC=3 on an Evolution, per the
+        card text) and asks whether an affordable attack reaches the defender's HP (weakness-doubled).
+
+        Fires only when the attach is NECESSARY (the Active can't ALREADY KO — else just attack, don't
+        spend the attach) so it never rewards a needless attachment. Lives in the Tactical layer like
+        the gust lethal, not as a tunable weight; `_finish_turn_last` then sequences a lethal attach
+        first (take the win before digging). 0 otherwise."""
+        if option.get("type") != _ATTACH or option.get("inPlayArea") != _ACTIVE:
+            return 0
+        opp = self._opp_active(obs)
+        opp_hp = (opp or {}).get("hp", 0)
+        active_stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        if not (active_stat and opp and opp_hp):
+            return 0
+        eid = self._option_card_id(obs, select, option)
+        etags = self.functions.tags(eid) if (self.functions and eid is not None) else []
+        is_evo = bool(getattr(active_stat, "evolvesFrom", None))   # Mega Starmie evolvesFrom Staryu
+        provided = 3 if ("discard_eot" in etags and is_evo) else 1   # Ignition: CCC on an Evolution
+
+        def best_affordable(energy: int) -> float:
+            best = max((self.attacks.get(aid, 0) for aid in (active_stat.attacks or ())
+                        if self.attack_costs.get(aid, 99) <= energy), default=0)
+            return self._weakness_adjusted(obs, opp, best)
+
+        cur = board.my_active_energy
+        if best_affordable(cur) >= opp_hp:                  # already lethal — no attach needed
+            return 0
+        if best_affordable(cur + provided) >= opp_hp:
+            return KO_SCORE + self._prize_value(opp)
         return 0
 
     def _gust_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
@@ -304,7 +478,20 @@ class Pilot:
         my_stat = self.stats.get(board.my_active_id) if self.stats else None
         if not self._can_ko(my_stat, target):
             return 0
-        return KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
+        return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
+                + self._gust_forward_denial(target))
+
+    def _gust_forward_denial(self, target: dict) -> float:
+        """Sub-prize tie-break: removing a target whose evolution LINE becomes an attacker
+        (`forward_max_damage` >= `_EVOLVING_THREAT_DMG`) is worth a little extra — denies a latent
+        threat before it comes online. Reuses the ADR-0020 forward-evolution provider primitive (the
+        shared value sub-term, not the snipe Hypothesis's weight). < 1 prize, so it breaks ties among
+        equal-prize targets without ever overriding a real prize difference."""
+        fwd = getattr(self.stats, "forward_max_damage", None)
+        cid = (target or {}).get("id")
+        if fwd is None or cid is None:
+            return 0
+        return _EVOLVING_GUST_DENIAL if (fwd(cid) or 0) >= _EVOLVING_THREAT_DMG else 0
 
     def _gust_stall_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """Small value for a defensive stall-gust TARGET — at a SWITCH select, an ENERGYLESS,
@@ -334,11 +521,8 @@ class Pilot:
         t_stat = self.stats.get(target.get("id"))
         if not t_stat:
             return 0
-        incoming = t_stat.maxDamage or 0
-        my_stat = self.stats.get(board.my_active_id)
-        if (my_stat and my_stat.weakness is not None and t_stat.energyType is not None
-                and my_stat.weakness == t_stat.energyType):
-            incoming *= 2
+        # the target attacks ME: target = attacker, my Active = defender (Weakness AND Resistance).
+        incoming = self._wr_adjusted(t_stat, self.stats.get(board.my_active_id), t_stat.maxDamage or 0)
         if board.my_active_hp and incoming >= board.my_active_hp:
             return self._prize_value({"id": board.my_active_id})
         return 0
@@ -352,17 +536,27 @@ class Pilot:
             return 2
         return 1
 
-    def _weakness_adjusted(self, obs: dict, opp: dict | None, dmg: float) -> float:
-        """Double the damage when the defending Active is Weak to my Active's type (x2, S&V;
-        Active only). Closed-form Tier-0; Tier-1 Search resolves the exact figure."""
-        if not (self.stats and opp and dmg):
+    def _wr_adjusted(self, attacker_stat, defender_stat, dmg: float) -> float:
+        """The ONE Weakness/Resistance helper: adjust `dmg` for the DEFENDER's Weakness (x2, S&V) then
+        Resistance (flat -30) vs the ATTACKER's type — in that order (rules.md §5). Direction-agnostic
+        (attacker/defender are passed explicitly), so EVERY closed-form damage estimate — my attacks AND
+        incoming damage — factors both modifiers identically. Closed-form Tier-0; Tier-1 Search resolves
+        the exact figure. ADR-0022."""
+        if not (dmg and attacker_stat and defender_stat and attacker_stat.energyType is not None):
             return dmg
-        defender = self.stats.get(opp.get("id"))
-        attacker = self.stats.get(self._my_active_id(obs))
-        if (defender and attacker and defender.weakness is not None
-                and defender.weakness == attacker.energyType):
-            return dmg * 2
+        if defender_stat.weakness is not None and defender_stat.weakness == attacker_stat.energyType:
+            dmg *= 2
+        if defender_stat.resistance is not None and defender_stat.resistance == attacker_stat.energyType:
+            dmg = max(0, dmg - _RESISTANCE)
         return dmg
+
+    def _weakness_adjusted(self, obs: dict, opp: dict | None, dmg: float) -> float:
+        """My Active's attack damage on the opponent's Active, Weakness/Resistance-adjusted — the
+        obs-resolving convenience over `_wr_adjusted` (my Active = attacker, opp = defender)."""
+        if not (self.stats and opp):
+            return dmg
+        return self._wr_adjusted(self.stats.get(self._my_active_id(obs)),
+                                 self.stats.get(opp.get("id")), dmg)
 
     def _my_active_id(self, obs: dict) -> int | None:
         state = obs.get("current") or {}
@@ -398,18 +592,61 @@ class Pilot:
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
                              and target_hp == board.weakest_bench_hp)
         target_forward_damage = self._target_forward_damage(obs, select, option)
+        target_is_strongest_forward = (
+            target_forward_damage is not None and board.strongest_forward_bench is not None
+            and target_forward_damage == board.strongest_forward_bench
+            and target_forward_damage >= _EVOLVING_THREAT_DMG)
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
+        search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
                        attach_target_needs=self._attach_target_needs(at_target),
+                       attach_target_under_max=self._attach_target_under_max(at_target),
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
+                       target_is_strongest_forward=target_is_strongest_forward,
                        target_forward_damage=target_forward_damage,
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
-                       tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE)
+                       tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
+                       search_targets_exhausted=search_exhausted,
+                       search_redundant_wincon=redundant_wincon)
+
+    def _search_signals(self, option: dict, tags: list, board: Board) -> tuple[bool, bool]:
+        """The two deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
+        (every card it can fetch is provably gone from the deck) and whether it is a REDUNDANT
+        wincon-tutor (it can fetch ONLY the win-condition, which is already in hand). Both False off
+        a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`)."""
+        if option.get("type") != _PLAY:
+            return False, False
+        fetch_set = self._search_deck_set(tags)
+        if not fetch_set:
+            return False, False
+        exhausted = all(cid in board.deck_empty_ids for cid in fetch_set)
+        wincon = self._wincon_set()
+        redundant = bool(wincon) and fetch_set <= wincon and board.wincon_in_hand
+        return exhausted, redundant
+
+    def _search_deck_set(self, tags: list) -> set:
+        """The set of card ids in my deck a search with these fetch-filter tags can pull OUT of the
+        deck (union over the card's `_FETCH_FILTERS` tags; empty for a non-search / unknown filter).
+        Each filter's deck-set is deck-fixed, so it is memoised per tag."""
+        result: set = set()
+        for tag in tags:
+            pred = _FETCH_FILTERS.get(tag)
+            if pred is None:
+                continue
+            if tag not in self._fetch_cache:
+                ids = set()
+                for cid in set(self.deck):
+                    stat = self.stats.get(cid) if self.stats else None
+                    if stat and pred(stat):
+                        ids.add(cid)
+                self._fetch_cache[tag] = ids
+            result |= self._fetch_cache[tag]
+        return result
 
     def _attach_target(self, obs: dict, option: dict) -> dict | None:
         """The Pokémon an attach option puts Energy on — encoded as `inPlayArea`/`inPlayIndex`
@@ -440,6 +677,23 @@ class Pilot:
             return True
         have = len((target.get("energies") or []))
         return have < _min_attack_cost(self.stats, target.get("id"))
+
+    def _attach_target_under_max(self, target: dict | None) -> bool:
+        """True if the Pokémon an attach option targets carries fewer Energy than its HIGHEST-damage
+        attack costs — it can still build toward its big attack (Mega Starmie at 1 W can Jetting Blow
+        but not yet Nebula Beam CCC). The mirror of `_attach_target_needs` against `maxDamageCost`,
+        gating `build-active-wincon` (keep loading the active attacker toward its payoff attack).
+
+        Fail-CLOSED: returns False when the target, its CardStat, or its max-damage cost is unknown —
+        over-firing would pile a needless surplus, so only fire when we can positively confirm the
+        target is still short of its biggest attack."""
+        if not target:
+            return False
+        stat = self.stats.get(target.get("id")) if self.stats else None
+        cost = getattr(stat, "maxDamageCost", None) if stat else None
+        if cost is None:
+            return False
+        return len((target.get("energies") or [])) < cost
 
     def _target_energy(self, obs: dict, select: dict, option: dict) -> int | None:
         """Energy attached to the Pokémon an attack-target option points at — the snipe 'threat'
@@ -489,6 +743,9 @@ class Pilot:
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
         ma = next((p for p in (me.get("active") or []) if p), None)
         oa = next((p for p in (opp.get("active") or []) if p), None)
+        prizes = obs.get("own_prizes")             # exact prize multiset from the deck-tracker, or None
+        deck_empty = self._deck_empty_ids(me, prizes)
+        deck_known = self._deck_known_counts(me, prizes)
         return Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
@@ -506,14 +763,22 @@ class Pilot:
             gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp),
             active_ko_prizes=self._active_ko_prizes(ma, oa),
             my_prizes_remaining=len(me.get("prize") or []),
+            opp_prizes_remaining=len(opp.get("prize") or []),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
+            strongest_forward_bench=self._strongest_forward_snipe(obs, select),
+            bench_threat_present=self._bench_threat_present(obs, select),
             bench_wincon_ready=self._bench_wincon_ready(me),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             stall_target_exists=self._stall_target_exists(opp),
+            opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
+            deck_empty_ids=deck_empty,
+            deck_known_counts=deck_known,
+            opp_active_condition_gift=self._opp_active_condition_gift(opp),
+            active_condition_ko_prizes=self._active_condition_ko_prizes(opp, oa),
         )
 
     def _wincon_set(self) -> set:
@@ -568,6 +833,33 @@ class Pilot:
                     hps.append(hp)
         return min(hps) if hps else None
 
+    def _strongest_forward_snipe(self, obs: dict, select: dict | None) -> int | None:
+        """Greatest forward-evolution damage among the benched Pokémon a DAMAGE select can snipe — the
+        most dangerous latent evolving threat (e.g. Riolu→Mega Lucario ex 270 over Makuhita→Hariyama
+        210). None off a Damage select or when no provider/forward chain. Resolves each target the
+        same way the snipe Hypotheses do, so the indexing matches `target_forward_damage`."""
+        if not select or select.get("context") != _DAMAGE:
+            return None
+        best = None
+        for o in (select.get("option") or []):
+            if o.get("type") == _CARD and o.get("area") == _BENCH:
+                fwd = self._target_forward_damage(obs, select, o)
+                if fwd is not None and (best is None or fwd > best):
+                    best = fwd
+        return best
+
+    def _bench_threat_present(self, obs: dict, select: dict | None) -> bool:
+        """True if any benched Pokémon a DAMAGE select can snipe already carries Energy — an imminent
+        attacker. When present, the evolving-threat snipe stands down (snipe-the-threat takes the
+        energized body first; a not-yet-evolved threat is the lower priority). False off a Damage select."""
+        if not select or select.get("context") != _DAMAGE:
+            return False
+        for o in (select.get("option") or []):
+            if o.get("type") == _CARD and o.get("area") == _BENCH:
+                if self._target_energy(obs, select, o):
+                    return True
+        return False
+
     def _wincon_in_play(self, me: dict) -> bool:
         """True if my win-condition is already in play — a Strategy Line payoff or a card carrying the
         `win_condition` / `primary_attacker` Role sitting on my Active or Bench. Lets a 'fetch the
@@ -606,12 +898,8 @@ class Pilot:
         opp_stat = self.stats.get(oa.get("id"))
         if not opp_stat:
             return 0
-        incoming = opp_stat.maxDamage or 0
-        my_stat = self.stats.get(ma.get("id"))
-        if (my_stat and my_stat.weakness is not None and opp_stat.energyType is not None
-                and my_stat.weakness == opp_stat.energyType):
-            incoming *= 2
-        return incoming
+        # opponent attacks ME: opp Active = attacker, my Active = defender (Weakness AND Resistance).
+        return int(self._wr_adjusted(opp_stat, self.stats.get(ma.get("id")), opp_stat.maxDamage or 0))
 
     def _active_doomed(self, ma: dict | None, oa: dict | None) -> bool:
         """True if the opponent's Active can Knock Out my Active next turn — its biggest attack
@@ -628,11 +916,8 @@ class Pilot:
         hp = (defender or {}).get("hp", 0)
         if not (my_stat and hp):
             return False
-        dmg = my_stat.minCostDamage or 0
         d_stat = self.stats.get(defender.get("id")) if self.stats else None
-        if (d_stat and d_stat.weakness is not None and my_stat.energyType is not None
-                and d_stat.weakness == my_stat.energyType):
-            dmg *= 2
+        dmg = self._wr_adjusted(my_stat, d_stat, my_stat.minCostDamage or 0)
         return dmg >= hp
 
     def _active_cheap_attack_kos(self, ma: dict | None, oa: dict | None) -> bool:
@@ -650,6 +935,27 @@ class Pilot:
         if not (self.stats and ma and oa):
             return 0
         return self._prize_value(oa) if self._can_ko(self.stats.get(ma.get("id")), oa) else 0
+
+    def _opp_active_condition_gift(self, opp: dict | None) -> bool:
+        """True if the opponent's Active carries ANY special condition (poison/burn/sleep/paralyze/
+        confuse) — gusting it off to the bench would CLEAR it (rules.md §8), handing them a free cure.
+        The guard the stall-gust checks so it never rescues a working condition. Flags ride as booleans
+        on the player dict (PlayerState.poisoned/…). ADR-0022 #10."""
+        if not opp:
+            return False
+        return any(opp.get(k) for k in ("poisoned", "burned", "asleep", "paralyzed", "confused"))
+
+    def _active_condition_ko_prizes(self, opp: dict | None, oa: dict | None) -> int:
+        """Prizes from the opponent's CURRENT Active dying to poison/burn at the upcoming Pokémon
+        Checkup — its prize value when `0 < hp <= 10*poison + 20*burn` (the fixed per-Checkup ticks,
+        rulebook L193/L209), else 0. A free KO I'd take WITHOUT attacking, so an offensive gust must
+        beat this too: gusting that Active off to the bench cures it and forfeits the free prize.
+        ADR-0022 #10 (offensive baseline)."""
+        if not (self.stats and opp and oa):
+            return 0
+        hp = oa.get("hp", 0)
+        tick = (10 if opp.get("poisoned") else 0) + (20 if opp.get("burned") else 0)
+        return self._prize_value(oa) if (0 < hp <= tick) else 0
 
     def _gust_best_ko_prizes(self, ma: dict | None, opp: dict | None) -> int:
         """Best prizes among the opponent's benched Pokémon my Active could Knock Out this turn after
@@ -679,6 +985,80 @@ class Pilot:
             if stat and stat.retreatCost >= _STALL_RETREAT:
                 return True
         return False
+
+    def _opp_has_energy_in_play(self, opp: dict | None) -> bool:
+        """True if any of the opponent's Pokémon (Active or Bench) carries Energy — a target an
+        energy-denial Item (Function Tag `energy_denial`, e.g. Crushing Hammer) can strip. The
+        whether-to-play gate for `play-energy-denial`: with no Energy in play the coin-flip denial
+        whiffs, so hold the Item. Closed-form off the board snapshot, no Search."""
+        if not opp:
+            return False
+        board = (opp.get("active") or []) + (opp.get("bench") or [])
+        return any(p and (p.get("energies") or []) for p in board)
+
+    def _deck_empty_ids(self, me: dict, prizes: dict | None = None) -> frozenset:
+        """The card ids my deck is PROVABLY empty of. SOUND in both modes, never probabilistic.
+
+        Stateless (``prizes`` None): every copy of the id is accounted for OUTSIDE the deck (hand,
+        discard, board, a face-up prize), reaching the known 60-card count — so none can remain. The
+        deck and FACE-DOWN prizes are the only unseen zones, so a count that falls short leaves the
+        id out (it could be prized). Exact (``prizes`` given by the deck-tracker): the prizes are
+        resolved, so ``deck = decklist − visible − prizes`` and the id is empty when that is 0 —
+        which ALSO catches cards that are entirely prized. Empty when no deck list is configured."""
+        if not self.deck:
+            return frozenset()
+        deck_counts = Counter(self.deck)
+        seen = self._visible_card_counts(me)
+        if prizes is not None:
+            return frozenset(cid for cid, n in deck_counts.items()
+                             if n - seen.get(cid, 0) - prizes.get(cid, 0) <= 0)
+        return frozenset(cid for cid, n in deck_counts.items() if seen.get(cid, 0) >= n)
+
+    def _deck_known_counts(self, me: dict, prizes: dict | None) -> dict | None:
+        """EXACT count of each card still in my deck (``decklist − visible − prizes``), once the
+        deck-tracker has anchored the prizes; None when the prizes are not yet resolved (no positive
+        deck claim without certainty). Only positive counts are kept."""
+        if not self.deck or prizes is None:
+            return None
+        deck_counts = Counter(self.deck)
+        seen = self._visible_card_counts(me)
+        return {cid: rem for cid, n in deck_counts.items()
+                if (rem := n - seen.get(cid, 0) - prizes.get(cid, 0)) > 0}
+
+    def _visible_card_counts(self, me: dict) -> Counter:
+        """Count MY card copies that are provably OUTSIDE the deck: my hand, my discard, every board
+        Pokémon (its own id + attached Energy cards + Tools + the `preEvolution` cards stacked under
+        it — e.g. the Staryu under a Mega Starmie ex) and any FACE-UP prize. Face-down prizes (None)
+        and the hidden deck are left uncounted — exactly the unknowns that keep `_deck_empty_ids`
+        sound."""
+        counts: Counter = Counter()
+        for c in (me.get("hand") or []):
+            if c and c.get("id") is not None:
+                counts[c["id"]] += 1
+        for c in (me.get("discard") or []):
+            if c and c.get("id") is not None:
+                counts[c["id"]] += 1
+        for p in (me.get("prize") or []):
+            if p and p.get("id") is not None:          # a revealed prize (face-down prizes are None)
+                counts[p["id"]] += 1
+        for poke in (me.get("active") or []) + (me.get("bench") or []):
+            self._count_in_play(poke, counts)
+        return counts
+
+    @staticmethod
+    def _count_in_play(poke: dict | None, counts: Counter) -> None:
+        """Add a board Pokémon and everything attached to / stacked under it (its own id, attached
+        Energy cards and Tools, and the `preEvolution` cards beneath it) to `counts` — all are out
+        of the deck."""
+        if not poke:
+            return
+        if poke.get("id") is not None:
+            counts[poke["id"]] += 1
+        for group in ("energyCards", "tools", "preEvolution"):
+            for c in (poke.get(group) or []):
+                cid = c.get("id") if isinstance(c, dict) else c
+                if cid is not None:
+                    counts[cid] += 1
 
     def _hand_startable(self, hand: list) -> bool:
         """True if a card in hand can take the Active Spot — a Pokémon with the `opener`

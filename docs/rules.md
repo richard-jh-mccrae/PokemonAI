@@ -113,9 +113,14 @@ All **`[ENGINE-LEGAL]`** (the engine simply won't offer a second one) and **`[RU
 - **Weakness:** the defending **Active** takes **more** damage from an attack of its weakness type —
   multiplier is the **printed amount** (S&V cards print **×2**, e.g. L172). Active base damage **only** —
   never Bench (L170), never ability/effect damage counters. `[PROJECT-VERIFIED]`
-- **Resistance:** the defending Active takes **less** damage — by the **per-card printed amount** next to
-  its resistance type (L265, glossary L614). **There is no universal number** (my earlier "−30" was
-  wrong — it's whatever the card prints). Bench Pokémon ignore Resistance too.
+- **Resistance:** the defending Active takes **less** damage when hit by its resistance type — by the
+  **per-card printed amount** next to its resistance type (L265, glossary L614; e.g. Slowking prints
+  "Fighting −30"), applied after Weakness. **In this set that printed amount is a uniform −30** on every
+  resistant card — verified 2026-06-29 by probing **47** resistant Pokémon through the simulator
+  (`tools/sim/probe_resistance.py`; both Fighting/Grass, ex & non-ex) plus the printed cards, all −30.
+  Few Pokémon have Resistance, and the amount is **not** in our data export (`CardData.resistance` / CSV
+  are resistance-*type* only) — it lives on the card. Bench Pokémon ignore Resistance too.
+  `[PROJECT-VERIFIED]`
 - Weakness/Resistance are stored as a **type** on the card (`{P}` = Psychic): `CardStat.weakness` /
   `.resistance` = an `EnergyType`. The multiplier/reduction is the **rule**, not card data. `[ENGINE-STAT]` type; `[RULE]` amount.
 - **Damage calc order** (L255-270): base printed → effects on *your* Active (e.g. "+40 this turn") → **×

@@ -463,7 +463,9 @@
 "energy_denial"
 ],
 "1121": [
-"search"
+"cost_discard",
+"search",
+"tutor_pokemon"
 ],
 "1122": [
 "dig",
@@ -500,7 +502,8 @@
 "search"
 ],
 "1145": [
-"search"
+"search",
+"tutor_mega"
 ],
 "1146": [
 "energy_accel"
@@ -604,7 +607,8 @@
 ],
 "1213": [
 "draw",
-"hand_disruption"
+"hand_disruption",
+"discard_hand"
 ],
 "1214": [
 "draw"
@@ -632,7 +636,8 @@
 ],
 "1223": [
 "draw",
-"hand_disruption"
+"hand_disruption",
+"discard_hand"
 ],
 "1224": [
 "draw"
@@ -641,7 +646,8 @@
 "search"
 ],
 "1227": [
-"draw"
+"draw",
+"discard_hand"
 ],
 "1229": [
 "heal",

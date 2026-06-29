@@ -40,18 +40,26 @@ def _hand_card(cid: int) -> dict:
     return {"id": cid, "serial": 0, "playerIndex": 0}
 
 
+_CONDITIONS = ("poisoned", "burned", "asleep", "paralyzed", "confused")
+
+
 def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
-          opp_active=None, opp_bench=(), turn: int = 2, prizes: int = 0, opp_prizes: int = 0) -> dict:
+          opp_active=None, opp_bench=(), turn: int = 2, prizes: int = 0, opp_prizes: int = 0,
+          opp_conditions=()) -> dict:
     """A minimal `current` state with my board/hand (and optionally the opponent's). `prizes` /
     `opp_prizes` set each player's remaining prize count (length of the `prize` list); 0 leaves it
-    empty (the prior default — no rule read prizes), so a lethal check only fires when a test sets it."""
+    empty (the prior default — no rule read prizes), so a lethal check only fires when a test sets it.
+    `opp_conditions` sets the opponent's Active special-condition flags (e.g. ("poisoned",)) — they
+    ride as booleans on the player dict (PlayerState.poisoned/burned/asleep/paralyzed/confused)."""
     players = [None, None]
     players[your_index] = {"active": [active] if active else [], "bench": list(bench),
                            "hand": [_hand_card(c) for c in hand], "handCount": len(hand),
                            "discard": [_hand_card(c) for c in discard], "prize": [None] * prizes}
-    players[1 - your_index] = {"active": [opp_active] if opp_active else [],
-                               "bench": list(opp_bench), "hand": None,
-                               "discard": [], "prize": [None] * opp_prizes}
+    opp = {"active": [opp_active] if opp_active else [],
+           "bench": list(opp_bench), "hand": None,
+           "discard": [], "prize": [None] * opp_prizes}
+    opp.update({k: (k in opp_conditions) for k in _CONDITIONS})
+    players[1 - your_index] = opp
     return {"turn": turn, "yourIndex": your_index, "players": players}
 
 

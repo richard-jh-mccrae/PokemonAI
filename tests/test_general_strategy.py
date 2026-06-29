@@ -218,8 +218,9 @@ def test_snipe_the_evolving_threat_defers_to_an_energized_threat_and_never_doubl
 @pytest.mark.req("REQ-GEN-0022")
 def test_only_snipe_rules_fire_at_a_damage_select():
     # The no-double-count gate is whitelist-by-omission: a future DAMAGE hypothesis could silently
-    # stack. Guard it — at a DAMAGE select, only the three snipe rules may ever fire.
-    allowed = {"snipe-the-threat", "snipe-the-weakest", "snipe-the-evolving-threat"}
+    # stack. Guard it — at a DAMAGE select, only the snipe rules may ever fire.
+    allowed = {"snipe-the-threat", "snipe-the-weakest", "snipe-the-evolving-threat",
+               "snipe-the-strongest-evolving-threat"}
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),

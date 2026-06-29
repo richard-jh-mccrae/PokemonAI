@@ -1,10 +1,14 @@
 """Aggregating Corrections into trend summaries."""
+import json
+from types import SimpleNamespace
+
 from conftest import FIXTURES
 
 from meta_tracker.parse import load_replay
 from train.blunder.correction import build_correction
 from train.blunder.decisions import iter_decisions
-from train.blunder.report import build_report, summarize
+from train.blunder.report import _disposition, avg_blunders_per_game, build_report, summarize
+from train.blunder.reviewed import review_key
 from train.blunder.store import append_correction
 
 FIXTURE = FIXTURES / "episode-81364540-replay.json.gz"
@@ -97,3 +101,92 @@ def test_report_empty_is_placeholder(tmp_path):
     """REQ-BLUNDER-0010: an empty log still writes a valid placeholder report."""
     out = build_report(tmp_path / "none.jsonl", tmp_path / "r.html")
     assert out.exists() and "No corrections" in out.read_text(encoding="utf-8")
+
+
+# --- resolution view: disposition tagging (fixed/covered/refuted/deferred/open/skipped) ---------
+
+def _fake(ep, frame, agent="mega_starmie"):
+    return SimpleNamespace(episode_id=ep, decision={"frame": frame}, agent=agent)
+
+
+def test_disposition_classifies_ledger_then_open_then_skipped_then_fixed():
+    """REQ-BLUNDER-0011: precedence ledger > open > skipped > fixed; a deck with no proposals
+    snapshot stays open (never wrongly claimed fixed)."""
+    reviewed = {"1-5": {"disposition": "covered"}, "1-6": {"disposition": "refuted"}}
+    open_keys, skipped_keys, decks = {"2-7"}, {"3-8"}, {"mega_starmie"}
+
+    assert _disposition(_fake(1, 5), reviewed, open_keys, skipped_keys, decks) == "covered"
+    assert _disposition(_fake(1, 6), reviewed, open_keys, skipped_keys, decks) == "refuted"
+    assert _disposition(_fake(2, 7), reviewed, open_keys, skipped_keys, decks) == "open"
+    assert _disposition(_fake(3, 8), reviewed, open_keys, skipped_keys, decks) == "skipped"
+    assert _disposition(_fake(9, 9), reviewed, open_keys, skipped_keys, decks) == "fixed"   # deck tuned, not open
+    assert _disposition(_fake(9, 9, agent="other"), reviewed, open_keys, skipped_keys, decks) == "open"  # unknown deck
+
+
+def test_report_enriched_badges_a_refuted_blunder_and_splits_resolved(tmp_path):
+    """REQ-BLUNDER-0011: with a ledger, an own blunder is badged with its disposition, the header
+    splits resolved vs open, a by-resolution section appears — and the report stays offline."""
+    log = tmp_path / "c.jsonl"
+    c1 = _c("own", "missed_win", 100, rationale="had exact lethal, passed")
+    append_correction(c1, log)
+    reviewed = tmp_path / "reviewed.json"
+    reviewed.write_text(json.dumps({review_key(c1): {"disposition": "refuted", "reason": "forgoes a KO"}}),
+                        encoding="utf-8")
+
+    txt = build_report(log, tmp_path / "r.html", reviewed_path=reviewed).read_text(encoding="utf-8")
+    assert "pill refuted" in txt and ">refuted<" in txt   # disposition badge rendered
+    assert "by resolution" in txt                         # the new section
+    assert "1 resolved" in txt and "0 open" in txt        # header split
+    assert "http" not in txt                              # still fully offline
+
+
+def test_report_marks_fixed_when_deck_tuned_and_no_longer_open(tmp_path):
+    """REQ-BLUNDER-0011: a blunder whose deck has a proposals snapshot but is no longer in open[]
+    (reconciliation dropped it — a rule satisfies it) is tagged fixed."""
+    log = tmp_path / "c.jsonl"
+    append_correction(_c("own", "missed_win", 100), log)
+    proposals = tmp_path / "proposals"
+    proposals.mkdir()
+    (proposals / "mega_starmie.json").write_text(
+        json.dumps({"deck": "mega_starmie", "open": [], "skipped": []}), encoding="utf-8")
+
+    txt = build_report(log, tmp_path / "r.html", proposals_dir=proposals).read_text(encoding="utf-8")
+    assert "pill fixed" in txt and "1 resolved" in txt
+
+
+def test_report_unenriched_has_no_resolution_view(tmp_path):
+    """REQ-BLUNDER-0011: omit ledger + proposals → legacy tag-trend output, no badges/section."""
+    log = tmp_path / "c.jsonl"
+    append_correction(_c("own", "missed_win", 100), log)
+    txt = build_report(log, tmp_path / "r.html").read_text(encoding="utf-8")
+    assert "by resolution" not in txt and "class='pill" not in txt
+
+
+# --- avg blunders per game (by build) ----------------------------------------------------------
+
+def _fakec(source="own", build="b1", ep=1, built_at=None):
+    return SimpleNamespace(source=source, agent_build=build, episode_id=ep, built_at=built_at)
+
+
+def test_avg_blunders_per_game_normalizes_by_distinct_tagged_game():
+    """REQ-BLUNDER-0012: avg = own blunders ÷ distinct tagged episodes, per build; peer excluded;
+    two blunders in the same game count as one game (not two)."""
+    stats = avg_blunders_per_game([
+        _fakec(build="b1", ep=1), _fakec(build="b1", ep=1), _fakec(build="b1", ep=2),  # 3 / 2 games
+        _fakec(build="b2", ep=5),                                                       # 1 / 1 game
+        _fakec(source="peer", build="b1", ep=9),                                        # peer: ignored
+    ])
+    assert stats["b1"]["blunders"] == 3 and stats["b1"]["games"] == 2 and stats["b1"]["avg"] == 1.5
+    assert stats["b2"]["avg"] == 1.0
+    assert "peer" not in stats and stats["b1"]["blunders"] == 3        # peer not folded into b1
+
+
+def test_report_renders_avg_blunders_per_game_section(tmp_path):
+    """REQ-BLUNDER-0012: the offline report shows the avg-blunders-per-game graph with the ratio."""
+    log = tmp_path / "c.jsonl"
+    append_correction(_c("own", "missed_win", 100), log)
+    append_correction(_c("own", "overextension", 100), log)     # same fixture episode → 1 game, 2 blunders
+    txt = build_report(log, tmp_path / "r.html").read_text(encoding="utf-8")
+    assert "avg blunders per game" in txt
+    assert "<b>2.0</b>" in txt                                  # 2 blunders / 1 distinct game
+    assert "http" not in txt

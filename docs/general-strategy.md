@@ -152,16 +152,25 @@ Among knockouts, prefer the **higher-prize target** — a KO yields `Mega ex →
 mapping; see below.) **Source:** F1 / F3 — TCG Protectors (Prize Trade); JustInBasil; PokeBeach
 ("Small is Good").
 
-## Gust (Boss's Orders) — designed, not yet built
+## Gust (Boss's Orders) — implemented (ADR-0022)
 
 The doctrine for a **gust** — force the opponent to switch a benched Pokémon into their Active Spot
 (Boss's Orders, card id 1182). Grilled 2026-06-29, recorded in
 [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md); it supersedes the earlier
 `gust-the-damaged` sketch. A gust is **two** Pilot decisions — *whether to play it* (one Supporter
-per turn; can't be played turn 1 on the play) and *which benched Pokémon to drag up* — neither
-supported today. (`prize-trade-target` below is a Tactical prize-preference over the *current* Active,
-not a Hypothesis; the gust decisions happen *before* the gust resolves, so Tactical can't see the
-future KO at the point of choosing.)
+per turn; can't be played turn 1 on the play) and *which benched Pokémon to drag up*. Both are now
+**shipped** test-first (`tests/test_gust.py`, plus an end-to-end check through the real mega_starmie
+Pilot). All KO / lethal / prize value lives in the **Tactical layer** (structural, so the weight-tuner
+never ingests a KO_SCORE-magnitude seed); only the two tunable positional weights below are
+Hypotheses. **Refinements shipped 2026-06-29** (ADR-0022 §Refinements): the special-condition rescue
+guard (all 5 conditions) + its offensive poison/burn baseline (#10), the Item-vs-Supporter economy
+split (#12), Resistance in the KO oracle (simulator-verified flat **−30**), the simultaneous-double-KO
+draw-guard (#2, half a), and the bench-snipe attack-value bonus (#14) — the last three on a new
+`Attack.text` rider parser. **Still deferred:** the draw-*over-loss* valuation (#2 half b), the
+four-mechanic split's coin-flip (Pokémon Catcher) / Basic-only-Confuse (Lisia's Appeal) branches
+(v1 fires on any `gust` card, correct for mega_starmie which runs only Boss's), and Read-conditioned
+gusting. (`prize-trade-target` below is a Tactical prize-preference over the *current* Active, not a
+Hypothesis.)
 
 **Doctrine — hold by default; gust only into a KO or a decisive stall.** A gust changes *which*
 opponent Pokémon is Active, worth your one Supporter only when the best target this turn is on their
@@ -186,20 +195,22 @@ play-reason and the picked target agree by construction (a Verifier invariant). 
 **best total board value**, not max printed damage — a 120 KO **+ 50 bench snipe** beats a 210 overkill
 when a worthwhile snipe target exists (reuse the snipe sub-terms); else fall back to cost-efficiency.
 
-### `gust-for-the-ko` · whether-to-play · seed: value-proportional · status: designed
+### `gust-for-the-ko` · whether-to-play · seed: value-proportional · status: assumed (shipped)
 > Play Boss's Orders only when it converts to a KO this turn that beats your best non-gust line —
 > drag up a benched Pokémon you can KO (a prize you couldn't otherwise reach), especially a high-prize
 > ex/Mega hiding behind a wall.
 
 **Reads:** a `MAIN`/`PLAY` of a `gust`-tagged card (v1: id 1182) + `Board.gust_best_ko_prizes > 0`.
-**Net-of-baseline:** the gust KO must beat (a) KOing the current Active for free (gusting *removes*
-that Active) **and** (b) the best alternative Supporter. **Scale:** **lethal** (gust prizes ≥ the
-opponent's remaining prizes) scores in `KO_SCORE`-class and dominates any setup Supporter; a
-**non-lethal** gust-KO is a tunable seed, **damped in `SETUP` while the win-condition isn't in play**
-so a setup tutor can still win the Supporter slot. **Source:** F8/F9 — TCG Protectors (Prize Trade);
-JustInBasil (Gusting).
+**Net-of-baseline:** the gust KO must beat every FREE KO of the current Active — (a) attacking it
+(`active_ko_prizes`), (b) **poison/burn finishing it at the next Checkup** when its HP ≤ the fixed tick
+(poison 10, burn 20 — `active_condition_ko_prizes`, #10), since gusting it off would only cure it, and
+(c) the best alternative Supporter. **Scale:** **lethal** (gust prizes ≥ the opponent's remaining
+prizes) scores in `KO_SCORE`-class and dominates any setup Supporter; a **non-lethal** gust-KO is a
+tunable seed, **damped in `SETUP` while the win-condition isn't in play** — but only for a **Supporter**
+gust (`cardType == SUPPORTER`, #12): a free **Item** gust (Pokémon Catcher) into a KO costs no Supporter
+slot, so it fires even in setup. **Source:** F8/F9 — TCG Protectors (Prize Trade); JustInBasil (Gusting).
 
-### `gust-target` · the `SWITCH(3)` target-select · comparator · status: designed
+### `gust-target` · the `SWITCH(3)` target-select · comparator · status: assumed (shipped)
 > Among the benched Pokémon you can KO after gusting, drag up the most valuable one.
 
 **Reads:** at a `SWITCH(3)` select with an opponent-owned (`playerIndex != yourIndex`) bench option,
@@ -216,7 +227,7 @@ Engine/replaceability denial ("their irreplaceable accelerator") needs the **Rea
 Share only the snipe **value sub-terms** (energy-threat / forward-damage / weakest-HP), never snipe's
 order or its (absent) KO filter. **Source:** F8/F9 — TCG Protectors (Prize Trade); JustInBasil (Gusting).
 
-### `gust-for-the-stall` · defensive stall-gust · seed: low (below all tutors) · status: designed
+### `gust-for-the-stall` · defensive stall-gust · seed: low (below all tutors) · status: assumed (shipped)
 > With no offense available, strand an energyless, high-retreat opponent benched Pokémon in the Active
 > Spot to waste their turn.
 
@@ -224,27 +235,39 @@ order or its (absent) KO filter. **Source:** F8/F9 — TCG Protectors (Prize Tra
 gustable KO **and** no KO on the current Active **and** an **energyless, retreat ≥ 2** bench target
 exists. Gusting their attacker to the bench removes the immediate threat; the stranded mon can't
 attack, costing them a retreat to recover. Weighted below every tutor/draw (a last resort). **Never**
-gust away an Active you've condition-doomed (Poison/Burn/Asleep clears on leaving the Active Spot — a
-rescue). **Mechanical caveat:** Boss's does not stop a normal retreat, so the stall only bites on a
+gust away an Active that carries **any** special condition (`Board.opp_active_condition_gift` —
+poison/burn/sleep/paralyze/confuse): switching it to the bench **clears** the condition (rules.md §8),
+so the stall would hand the opponent a free cure. **Mechanical caveat:** Boss's does not stop a normal retreat, so the stall only bites on a
 genuinely high retreat cost — hence the `active_doomed` gate (you're losing anyway, so a bought turn
 is upside). **Source:** F9 — JustInBasil (Gusting: disrupt the opponent's tempo).
 
 ### Defensive guards
-- **Draw ≠ win:** a simultaneous double-KO that empties both players' prizes is a **draw**, not a win
-  ([rules.md](rules.md)) — `is_lethal` must not count it. But a forced draw beats a loss, so when
-  otherwise doomed a draw-forcing line is valued **above a loss, below a clean win**.
-- **Self-fragility damper:** reduce a non-lethal gust's value when taking it leaves my Active doomed
-  with **no benched win-condition ready**, scaled by my Active's prize value (don't expose the
-  3-prizer for a 1-prize gust). Overlaps a general "don't over-extend the win-condition" rule — a
-  candidate to promote later.
+- **Draw ≠ win (#2, half a — shipped):** a game-winning KO whose **unconditional recoil** also KOs my
+  own Active and hands the opponent their LAST prize at the same Checkup is a **draw**, not a win
+  ([rules.md](rules.md)) — `_tactical` must not score it `KO_SCORE`. Recoil is parsed from `Attack.text`
+  (`parse_attack_recoil`, clean unconditional phrasing only; a "you may" recoil we'd decline → 0).
+  *Deferred (half b):* valuing a forced draw **above a loss** when otherwise doomed (needs best-line
+  reasoning the closed-form layer doesn't express).
+- **Weakness/Resistance in every damage estimate (shipped):** a single helper `_wr_adjusted(attacker,
+  defender, dmg)` applies the defender's Weakness (×2) **then** Resistance (−30) vs the attacker's type
+  (rules.md §5), and **every** closed-form damage site routes through it — my attacks (`_tactical`,
+  `_can_ko`) **and** incoming damage (`_incoming_active_damage`/`active_doomed`, `_gust_target_denial`),
+  so Resistance is honoured in **both** directions (e.g. if MY Active resists the attacker's type, the
+  agent doesn't wrongly think it's doomed). The amount is a per-card printed fact (e.g. Slowking
+  "Fighting −30"), **not in our data export** (`CardData`/CSV carry resistance-*type* only; the type IS
+  precompiled into `CardStat.resistance`) — but it is a **uniform −30** across this set, verified by
+  probing **47** resistant Pokémon through the simulator (`tools/sim/probe_resistance.py`) + the printed
+  cards. Moot for mega_starmie (Water/Fire attacks never meet the pool's Fighting/Grass resistances, and
+  its Pokémon carry no resistance); matters for a Fighting deck (mega_lucario).
+- **Self-fragility damper (deferred):** reduce a non-lethal gust's value when taking it leaves my Active
+  doomed with **no benched win-condition ready**, scaled by my Active's prize value (don't expose the
+  3-prizer for a 1-prize gust). A candidate to promote later.
 
-**New signals this needs** (board-only v1): `Board.my/opp_prizes_remaining`,
-`Board.gust_best_ko_prizes` + the lethal flag; `Context.gust_can_ko` / `gust_ko_prizes` at an opponent
-`SWITCH(3)` option; the snipe value sub-terms widened to that select behind the `playerIndex` guard;
-and, for the stall, `CardStat.retreatCost`, per-bench energy on `Board.opp_bench`, and
-special-condition tracking. **Deferred:** the four-mechanic split (Pokémon Catcher coin-flip, Prime
-Catcher self-switch Item, Lisia's Appeal Basic-only + Confuse) and Read-conditioned (engine-denial,
-proactive-vs-scouted-matchup) gusting.
+**Signals (shipped, board-only v1):** `Board.my/opp_prizes_remaining`, `gust_best_ko_prizes`,
+`active_ko_prizes`, `active_condition_ko_prizes`, `opp_active_condition_gift`, `stall_target_exists`;
+`CardStat.retreatCost` / `cardType`; per-`attackId` `recoil` / `bench_snipe` maps off `Attack.text`.
+**Deferred:** the four-mechanic split's coin-flip (Pokémon Catcher) / Basic-only-Confuse (Lisia's
+Appeal) branches and Read-conditioned (engine-denial, proactive-vs-scouted-matchup) gusting.
 
 ## Designed, not yet seeded
 

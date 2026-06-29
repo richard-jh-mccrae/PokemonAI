@@ -7,11 +7,13 @@ Corrections are counted separately (expertise injection, not our agent's blunder
 from __future__ import annotations
 
 import html as _html
+import json
 from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
 from .correction import Correction
+from .reviewed import load_reviewed, review_key
 from .store import load_corrections
 
 
@@ -48,6 +50,71 @@ def summarize(corrections: Iterable[Correction]) -> dict:
     return result
 
 
+def avg_blunders_per_game(corrections) -> dict:
+    """Per agent build: own blunder count, the distinct tagged games, and their ratio.
+
+    A "game" here is a **distinct tagged episode** — the games that surfaced ≥1 blunder. A reviewed
+    game with no blunder leaves no row in the log, so this is blunders per *blundered* game (an upper
+    bound on the true per-game-played rate), computed entirely from the Correction log. Returns
+    ``{agent_build: {"blunders", "games", "avg", "built_at"}}``."""
+    out: dict = {}
+    for c in corrections:
+        if c.source != "own":
+            continue
+        slot = out.setdefault(c.agent_build, {"blunders": 0, "episodes": set(), "built_at": c.built_at})
+        slot["blunders"] += 1
+        slot["episodes"].add(c.episode_id)
+    for slot in out.values():
+        slot["games"] = len(slot["episodes"])
+        slot["avg"] = slot["blunders"] / slot["games"] if slot["games"] else 0.0
+    return out
+
+
+# --- Resolution view: tag each blunder with its /blunder-buster terminal outcome ----------------
+# `fixed` is implicit — auto-reconciliation (ADR-0018) dropped it from `open[]` because a committed
+# rule now satisfies it; `covered`/`refuted`/`deferred` come from the reviewed ledger; `open` still
+# needs a rule; `skipped` is the tactical / no-obs pile the tuner can't route.
+_RESOLVED = ("fixed", "covered", "refuted", "deferred")
+_DISP_ORDER = ("fixed", "covered", "refuted", "deferred", "open", "skipped")
+
+
+def _load_proposals(proposals_dir) -> tuple[set, set, set]:
+    """Scan ``data/proposals/*.json`` → (open_keys, skipped_keys, decks_with_proposals), keyed
+    ``"<episode_id>-<frame>"`` like the ledger. Best-effort: a missing/unreadable dir yields empty
+    sets (every blunder then falls back to ``open`` — never wrongly claimed ``fixed``)."""
+    open_keys, skipped_keys, decks = set(), set(), set()
+    p = Path(proposals_dir)
+    if not p.exists():
+        return open_keys, skipped_keys, decks
+    for f in sorted(p.glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        decks.add(data.get("deck") or f.stem)
+        open_keys.update(f"{e.get('episode_id')}-{e.get('frame')}" for e in data.get("open", []))
+        skipped_keys.update(f"{e.get('episode_id')}-{e.get('frame')}" for e in data.get("skipped", []))
+    return open_keys, skipped_keys, decks
+
+
+def _disposition(c, reviewed: dict, open_keys: set, skipped_keys: set, decks: set) -> str:
+    """One Correction's terminal outcome (the /blunder-buster vocabulary): ledger disposition
+    (covered/refuted/deferred) > still-``open`` > ``skipped`` > ``fixed`` (its deck was tuned and the
+    blunder is no longer open, so a rule satisfies it). A deck with no proposals snapshot stays
+    ``open`` — we never claim ``fixed`` without the evidence that reconciliation dropped it."""
+    key = review_key(c)
+    entry = reviewed.get(key)
+    if entry:
+        return entry.get("disposition", "covered")
+    if key in open_keys:
+        return "open"
+    if key in skipped_keys:
+        return "skipped"
+    if c.agent in decks:
+        return "fixed"
+    return "open"
+
+
 _STYLE = (
     "body{font:14px system-ui,sans-serif;margin:24px;color:#1a1a1a}"
     "h1{font-size:20px}h2{font-size:16px;margin-top:24px;border-bottom:1px solid #ddd}"
@@ -55,6 +122,10 @@ _STYLE = (
     ".bar{display:inline-block;height:12px;background:#3b6db3;vertical-align:middle}"
     ".muted{color:#777}details{margin:3px 0}summary{cursor:pointer}"
     "code{background:#f2f2f2;padding:1px 4px;border-radius:3px}"
+    ".pill{display:inline-block;font-size:11px;font-weight:600;padding:0 6px;border-radius:8px;"
+    "color:#fff;margin-right:6px}"
+    ".fixed{background:#2e7d32}.covered{background:#3b6db3}.refuted{background:#8a8a8a}"
+    ".deferred{background:#b3873b}.open{background:#c0392b}.skipped{background:#cccccc;color:#333}"
 )
 
 
@@ -76,8 +147,53 @@ def _category_table(by_category: dict) -> str:
     return "<table>" + "".join(rows) + "</table>"
 
 
-def build_report(corrections_path: Path | str, out_path: Path | str) -> Path:
-    """Render a self-contained, offline HTML trend report (no external resources)."""
+def _per_game_table(stats: dict) -> str:
+    """Avg blunders-per-game by build, chronological — the over-time blunder-density trend."""
+    if not stats:
+        return "<p class='muted'>none</p>"
+    rows_data = sorted(  # chronological by built_at, then build id
+        ((slot.get("built_at") or "", build, slot["games"], slot["blunders"], slot["avg"])
+         for build, slot in stats.items()),
+        key=lambda r: (r[0], str(r[1])),
+    )
+    top = max((avg for *_, avg in rows_data), default=0) or 1
+    rows = ["<tr><th>built</th><th>build</th><th>games</th><th>blunders</th>"
+            "<th>avg/game</th><th></th></tr>"]
+    for built, build, games, blunders, avg in rows_data:
+        width = int(220 * avg / top)
+        rows.append(
+            f"<tr><td>{_esc(built or '?')}</td><td>{_esc(build)}</td><td>{games}</td>"
+            f"<td>{blunders}</td><td><b>{avg:.1f}</b></td>"
+            f"<td><div class='bar' style='width:{width}px'></div></td></tr>"
+        )
+    return "<table>" + "".join(rows) + "</table>"
+
+
+def _resolution_table(counts: dict) -> str:
+    """Disposition pills with counts + bars, in a stable fixed→open→skipped order."""
+    present = [(d, counts[d]) for d in _DISP_ORDER if counts.get(d)]
+    if not present:
+        return "<p class='muted'>none</p>"
+    top = max(n for _, n in present)
+    rows = []
+    for disp, count in present:
+        width = int(220 * count / top) if top else 0
+        rows.append(
+            f"<tr><td><span class='pill {disp}'>{disp}</span></td><td>{count}</td>"
+            f"<td><div class='bar' style='width:{width}px'></div></td></tr>"
+        )
+    return "<table>" + "".join(rows) + "</table>"
+
+
+def build_report(corrections_path: Path | str, out_path: Path | str, *,
+                 reviewed_path: Path | str | None = None,
+                 proposals_dir: Path | str | None = None) -> Path:
+    """Render a self-contained, offline HTML trend report (no external resources).
+
+    When ``reviewed_path`` (the reviewed ledger) and/or ``proposals_dir`` (``data/proposals``) are
+    supplied, each own blunder is also tagged with its terminal outcome — fixed / covered / refuted /
+    deferred / open / skipped — the header splits resolved vs open, and a *by resolution* section is
+    added. Omit both for the plain tag-trend view (unchanged legacy output)."""
     out_path = Path(out_path)
     corrections = load_corrections(corrections_path)
     if not corrections:
@@ -88,13 +204,37 @@ def build_report(corrections_path: Path | str, out_path: Path | str) -> Path:
         )
         return out_path
 
+    enrich = reviewed_path is not None or proposals_dir is not None
+    reviewed = load_reviewed(reviewed_path) if reviewed_path is not None else {}
+    open_keys, skipped_keys, decks = (
+        _load_proposals(proposals_dir) if proposals_dir is not None else (set(), set(), set()))
+    disp = ({id(c): _disposition(c, reviewed, open_keys, skipped_keys, decks)
+             for c in corrections if c.source == "own"} if enrich else {})
+
     summary = summarize(corrections)
     own, peer = summary["own"], summary["peer"]
+
+    head_counts = ""
+    if enrich:
+        counts = Counter(disp.values())
+        resolved_n = sum(counts.get(d, 0) for d in _RESOLVED)
+        head_counts = f" ({resolved_n} resolved &middot; {counts.get('open', 0)} open"
+        head_counts += f" &middot; {counts['skipped']} skipped)" if counts.get("skipped") else ")"
+
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'><title>Blunder trends</title>",
         f"<style>{_STYLE}</style></head><body>",
         "<h1>Blunder trends</h1>",
-        f"<p>{own['total']} own-agent blunders &middot; {peer['total']} peer blunders</p>",
+        f"<p>{own['total']} own-agent blunders{head_counts} &middot; {peer['total']} peer blunders</p>",
+    ]
+    if enrich:
+        parts.append("<h2>My agents &mdash; by resolution</h2>")
+        parts.append(_resolution_table(counts))
+    parts.append("<h2>My agents &mdash; avg blunders per game (by build, over time)</h2>")
+    parts.append("<p class='muted'>avg = own blunders &divide; distinct tagged games "
+                 "(games that surfaced &ge;1 blunder)</p>")
+    parts.append(_per_game_table(avg_blunders_per_game(corrections)))
+    parts += [
         "<h2>My agents &mdash; by category</h2>",
         _category_table(own["by_category"]),
         "<h2>My agents &mdash; by submission (timeline)</h2>",
@@ -130,8 +270,9 @@ def build_report(corrections_path: Path | str, out_path: Path | str) -> Path:
             continue
         chosen = _esc(c.chosen_label or c.chosen)
         correct = _esc(c.correct_label or c.correct)
+        badge = f"<span class='pill {disp[id(c)]}'>{disp[id(c)]}</span>" if enrich else ""
         head = (
-            f"{_esc(c.category)} &middot; ep {_esc(c.episode_id)} &middot; "
+            f"{badge}{_esc(c.category)} &middot; ep {_esc(c.episode_id)} &middot; "
             f"turn {_esc(c.decision.get('turn'))} &middot; <code>{chosen}</code> &rarr; <code>{correct}</code>"
         )
         parts.append(f"<details><summary>{head}</summary><p>{_esc(c.rationale)}</p></details>")

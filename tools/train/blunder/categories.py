@@ -18,10 +18,12 @@ CATEGORIES: tuple[str, ...] = (
     "wasted_resource",       # supporter/item/ability/card spent for little or negative value
     # tempo & board
     "slow_setup",            # too slow developing the win-condition
+    "missed_evolution",      # a beneficial evolution was available and not made (evolve when able)
     "overextension",         # over-committed the board -> prize liability / sweep exposure
     # positioning & reads
     "bad_retreat",           # wrong retreat call (when / whether / where)
-    "ignored_threat",        # failed to play around a known incoming threat
+    "ignored_threat",        # failed to play around a known incoming threat (defensive)
+    "missed_disruption",     # failed to proactively deny the opponent (hammer energy, Boss the pre-evo)
     # catch-all
     "sequencing_error",      # right actions, wrong order (locked out a better line)
     "other",                 # escape hatch; forces a good rationale and flags a vocab gap

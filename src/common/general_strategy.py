@@ -15,8 +15,10 @@ _ATTACH_FROM = 21   # SelectContext.ATTACH_FROM — choose the Pokémon to attac
 _DAMAGE = 15        # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a snipe)
 _TO_HAND = 7        # SelectContext.TO_HAND — a search: choose which card to add to your hand
 _TO_ACTIVE = 4      # SelectContext.TO_ACTIVE — promote a benched Pokémon to the Active Spot
+_DISCARD = 8        # SelectContext.DISCARD — choose which card(s) to discard (e.g. Ultra Ball's cost)
 _ACTIVE = 4         # AreaType.ACTIVE
 _BENCH = 5          # AreaType.BENCH
+_SUPPORTER = 3      # CardType.SUPPORTER — a gust on this card costs the one-per-turn Supporter slot
 _BENCH_MAX = 5      # a full Bench holds 5 — a bench-filler can place nothing once you're here
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
 # An evolution line "becomes an attacker" once it can OHKO a median body (median HP = 100; 100 is
@@ -52,9 +54,12 @@ HYPOTHESES = [
         rationale="Play draw and search cards before ending your turn — they cost nothing and see "
                   "more of your deck: during setup, dig before irreversible plays like attaching "
                   "Energy; while racing, dig before the turn-ending attack (you still attack the "
-                  "same turn — see `_finish_turn_last`). Free card advantage every turn.",
+                  "same turn — see `_finish_turn_last`). Free card advantage every turn. Stands down "
+                  "for a discard-COST search (`cost_discard`, e.g. Ultra Ball pays 2 cards from hand): "
+                  "that dig is NOT free, so it earns no free-dig bonus — its real (cost-aware) value "
+                  "is left to dedicated rules, and `_finish_turn_last` sequences it as a commitment.",
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
-        and ("draw" in c.tags or "search" in c.tags),
+        and ("draw" in c.tags or "search" in c.tags) and "cost_discard" not in c.tags,
         weight=20, status="assumed"),
     Hypothesis(
         id="dont-bench-multiprize",
@@ -169,9 +174,12 @@ HYPOTHESES = [
                   "`rush_evolve`, e.g. Salvatore: fetch a Pokémon and evolve it the same turn its "
                   "pre-evolution was played). It collapses two turns of setup into one and gets the "
                   "win-condition online a turn early. Stands down when there's no pre-evolution in "
-                  "play to evolve — without an evolution target the rush-evolve does nothing.",
+                  "play to evolve — without an evolution target the rush-evolve does nothing — AND "
+                  "when the payoff is already in hand: you can evolve directly this turn, so spending "
+                  "a tutor (and a second copy from the deck) to do the same is wasteful (mirrors "
+                  "`tutor-the-wincon`'s `not wincon_in_hand` gate).",
         when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "rush_evolve" in c.tags
-        and c.board.line_preevo_in_play,
+        and c.board.line_preevo_in_play and not c.board.wincon_in_hand,
         weight=30, status="testing"),
     Hypothesis(
         id="snipe-the-threat",
@@ -237,6 +245,34 @@ HYPOTHESES = [
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
         and "bench_fill" in c.tags and c.board.my_bench < _BENCH_MAX,
         weight=15, status="testing"),
+    Hypothesis(
+        id="dont-search-an-empty-deck",
+        rationale="A deck-search / tutor (Buddy-Buddy Poffin → Basic Pokémon to the Bench; Mega "
+                  "Signal → a Mega Evolution ex; Ultra Ball → any Pokémon) is a dead card once the "
+                  "deck holds none of what it can fetch. Stand it down when the deck is PROVABLY "
+                  "empty of EVERY card the search can pull — all copies accounted for OUTSIDE the "
+                  "deck (hand + discard + board + revealed prizes vs the known 60-card list), read "
+                  "off `Context.search_targets_exhausted` (built on the sound `deck_definitely_empty_of`"
+                  " + each card's fetch-filter). SOUND, never probabilistic: a copy that could still "
+                  "sit in the hidden prizes leaves the signal silent, so the search is suppressed "
+                  "only when the whiff is CERTAIN — keep the spare card rather than burn it. Outweighs "
+                  "`prefer-bench-fill-first` / `dig-before-commit` so a guaranteed-whiff search drops "
+                  "below End. (Mirrors `dont-rush-evolve-without-target` for a tutor with no target.)",
+        when=lambda c: c.option_type == _PLAY and c.search_targets_exhausted,
+        weight=-60, status="testing"),
+    Hypothesis(
+        id="dont-tutor-the-held-wincon",
+        rationale="A tutor that can fetch ONLY the win-condition (e.g. Mega Signal → a Mega "
+                  "Evolution ex, the deck's lone Mega being the payoff) is redundant once the "
+                  "win-condition is already in hand — it would only dig a second, dead copy. Stand "
+                  "it down (read off `Context.search_redundant_wincon`: the search's fetch-set ⊆ the "
+                  "win-condition set AND `wincon_in_hand`) so the agent develops / attaches instead "
+                  "of burning the turn on a useless dig. Mirrors the deck's `tutor-the-wincon` gate "
+                  "(`not wincon_in_hand`) but ACTIVELY penalises, cancelling `dig-before-commit`'s "
+                  "blanket endorsement of any search. Stays silent for a flexible tutor (Ultra Ball "
+                  "can also fetch a pre-evolution / opener, so its fetch-set isn't ⊆ the wincon).",
+        when=lambda c: c.option_type == _PLAY and c.search_redundant_wincon,
+        weight=-45, status="testing"),
     Hypothesis(
         id="prefer-wincon-line-piece",
         rationale="When fetching a card into hand (a search), prefer one that builds your win-"
@@ -326,11 +362,18 @@ HYPOTHESES = [
                   "otherwise (often a high-prize ex/Mega hiding behind a wall). Fires only when such a KO "
                   "exists (`Board.gust_best_ko_prizes > 0`); otherwise HOLD it — gusting a target you "
                   "can't KO gifts the opponent, benching their committed Active safe and handing you "
-                  "nothing. (Whether-to-play only; which benched Pokémon to drag up is the gust SWITCH "
+                  "nothing. The SETUP-before-wincon stand-down only applies to a SUPPORTER gust (it "
+                  "costs your one Supporter slot); a free ITEM gust (Pokémon Catcher) into a KO fires "
+                  "even in setup. The KO must also beat any FREE KO of the current Active — both attacking it "
+                  "(`active_ko_prizes`) and poison/burn finishing it at the next Checkup "
+                  "(`active_condition_ko_prizes`); gusting that Active off would only cure it. "
+                  "(Whether-to-play only; which benched Pokémon to drag up is the gust SWITCH "
                   "target-select rule. ADR-0022.)",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.gust_best_ko_prizes > c.board.active_ko_prizes
-        and not (c.plan == Plan.SETUP and not c.board.wincon_in_play),
+        and c.board.gust_best_ko_prizes > max(c.board.active_ko_prizes,
+                                              c.board.active_condition_ko_prizes)
+        and not (getattr(c.stat, "cardType", None) == _SUPPORTER       # Supporter-economy damping only
+                 and c.plan == Plan.SETUP and not c.board.wincon_in_play),
         weight=50, status="assumed"),
     Hypothesis(
         id="gust-for-the-stall",
@@ -340,13 +383,107 @@ HYPOTHESES = [
                   "into the Active Spot: it can't attack and they must spend a turn retreating it, "
                   "buying you a setup turn. Weighted low (below every tutor/draw) so it only wins the "
                   "Supporter slot when nothing else advances you — and it never fires unless you're "
-                  "actually under threat. (Mechanically weak: a gust doesn't stop a normal retreat, so "
-                  "it only bites on a high retreat cost. ADR-0022.)",
+                  "actually under threat. Never stall-gust an Active that carries a special condition "
+                  "(`opp_active_condition_gift`) — switching it to the bench CLEARS the condition "
+                  "(rules.md §8), so the stall would hand the opponent a free cure. (Mechanically weak: "
+                  "a gust doesn't stop a normal retreat, so it only bites on a high retreat cost. ADR-0022.)",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
-        and c.board.stall_target_exists,
+        and c.board.stall_target_exists
+        and not c.board.opp_active_condition_gift,
         weight=10, status="assumed"),
+    Hypothesis(
+        id="play-energy-denial",
+        rationale="Play an energy-denial Item (Function Tag `energy_denial`, e.g. Crushing Hammer — "
+                  "'flip a coin; if heads, discard an Energy from 1 of the opponent's Pokémon') BEFORE "
+                  "your turn-ending attack, whenever the opponent has Energy in play to strip. Setting a "
+                  "developing attacker back an Energy (e.g. a Riolu about to become Mega Lucario ex, or "
+                  "chipping a powered Active toward un-attacking) is free disruption: the Item costs "
+                  "nothing, so `_finish_turn_last` sequences it tier 0 and you strip AND still attack the "
+                  "same turn (attack-last). A positional weight — a lethal attack still outranks it on "
+                  "tactical, so the KO is taken (after the free strip; the attack is just held one slot). "
+                  "Stands down when the opponent has no Energy in play: the coin-flip denial whiffs, so "
+                  "hold it (which benched/active Pokémon to strip is the engine's target select).",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        and "energy_denial" in c.tags and c.board.opp_has_energy_in_play,
+        weight=20, status="testing"),
+    Hypothesis(
+        id="build-active-wincon",
+        rationale="Keep attaching Energy to the ACTIVE win-condition until it can fire its BIGGEST "
+                  "attack — not just its cheapest. `power-up-attacker` stands down once a Pokémon can "
+                  "afford its cheapest attack (Mega Starmie at 1 W already 'needs' nothing — it can "
+                  "Jetting Blow), so without this the agent never builds the Active toward its payoff "
+                  "hit (Nebula Beam, CCC = 210) and instead diverts the Energy to an idle Bench piece "
+                  "or burns the turn on a draw card. Fires only on the Active win-condition that is "
+                  "still short of its highest-damage attack cost (`attach_target_under_max`), so it "
+                  "stops the moment the big attack is online and never over-stacks a finished attacker.",
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
+        and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.attach_target_under_max,
+        weight=20, status="testing"),
+    Hypothesis(
+        id="attach-before-hand-shuffle",
+        rationale="Attach the Energy you are holding BEFORE playing a card that throws your hand away "
+                  "(Function Tag `discard_hand`, e.g. Harlequin / Lillie's Determination — each "
+                  "'shuffle your hand into your deck'). That card discards any Energy still in hand, "
+                  "so playing it first wastes the attachment you could have made (and can shuffle away "
+                  "a game-winning Energy). Fires only when a reusable Energy is in hand and you have "
+                  "not yet attached this turn — weighted to push the hand-shuffle below an endorsed "
+                  "attach AND below 0, so `_finish_turn_last` sequences it last (dig with non-shuffle "
+                  "searches first, attach, then refresh the hand).",
+        when=lambda c: c.option_type == _PLAY and "discard_hand" in c.tags
+        and c.board.reusable_energy_in_hand and not c.board.energy_attached,
+        weight=-60, status="testing"),
+    Hypothesis(
+        id="hold-wincon-dont-shuffle",
+        rationale="Don't shuffle a usable win-condition out of your hand with a hand-shuffling draw "
+                  "Supporter (Function Tag `discard_hand`, e.g. Lillie's Determination / Judge — "
+                  "'shuffle your hand into your deck'). When the win-condition (a Line payoff) is in "
+                  "hand, refilling sends it back into the deck, costing the turn you could deploy it — "
+                  "hold it and dig another way. Complements `attach-before-hand-shuffle` (which guards "
+                  "held Energy) and `keep-key-cards-at-discard` (which guards a cost-discard): this "
+                  "guards the hand-shuffle of the PAYOFF itself. Moderate — it nets negative against "
+                  "`dig-before-commit` but is NOT absolute, so a genuinely dead hand still refills (the "
+                  "win-condition returns to the deck, recoverable; only a tempo cost).",
+        when=lambda c: c.option_type == _PLAY and "discard_hand" in c.tags
+        and c.board.wincon_in_hand,
+        weight=-25, status="assumed"),
+    Hypothesis(
+        id="dont-rush-evolve-without-target",
+        rationale="Don't play a rush-evolve tutor (Function Tag `rush_evolve`, e.g. Salvatore — "
+                  "'search for a card that evolves from 1 of your Pokémon and put it onto that Pokémon "
+                  "to evolve it') when there is NO pre-evolution in play to evolve — it whiffs, a "
+                  "wasted card. The positive `prefer-rush-evolve-tutor` already stands down here; this "
+                  "actively penalises the play so the agent attaches / develops instead. Pushes it "
+                  "below an endorsed attach and below 0 (sequenced last).",
+        when=lambda c: c.option_type == _PLAY and "rush_evolve" in c.tags
+        and not c.board.line_preevo_in_play,
+        weight=-60, status="testing"),
+    Hypothesis(
+        id="snipe-the-strongest-evolving-threat",
+        rationale="Among benched pre-evolutions whose lines become attackers, snipe the MOST dangerous "
+                  "one — the line that eventually deals the most damage (Riolu → Mega Lucario ex 270, "
+                  "online at a single Energy, over Makuhita → Hariyama 210). Breaks the tie that the "
+                  "flat `snipe-the-evolving-threat` (any line >= 100) leaves, and stacks high enough to "
+                  "outweigh `snipe-the-weakest` so the scariest FUTURE attacker is chipped even when it "
+                  "is not the lowest-HP body on the Bench. Fires only on the strongest forward threat "
+                  "that carries no Energy, and ONLY when no benched target is already energized — an "
+                  "imminent (energized) attacker is `snipe-the-threat`'s job and outranks a latent "
+                  "evolving one, so this stands down whenever such a threat is on the Bench.",
+        when=lambda c: c.select_context == _DAMAGE and c.target_is_strongest_forward
+        and not c.target_is_threat and not c.board.bench_threat_present,
+        weight=20, status="testing"),
+    Hypothesis(
+        id="keep-key-cards-at-discard",
+        rationale="At a cost-discard (e.g. Ultra Ball's 'discard 2 cards from your hand'), don't throw "
+                  "away your engine pieces — a discard-at-end-of-turn burst Energy (Function Tag "
+                  "`discard_eot`, e.g. Ignition Energy: finite, non-recyclable, the one-attach CCC that "
+                  "powers Nebula Beam) or your win-condition. A negative weight ranks those LAST among "
+                  "the discard candidates, so the agent sheds a redundant Supporter instead. (Which "
+                  "card a search FETCHES is `fetch-the-wincon`; this guards what a cost DISCARDS.)",
+        when=lambda c: c.select_context == _DISCARD
+        and ("discard_eot" in c.tags or c.card_is_wincon),
+        weight=-30, status="testing"),
 ]
 
 GENERAL_STRATEGY = Strategy(name="general", hypotheses=HYPOTHESES)

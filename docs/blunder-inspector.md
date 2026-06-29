@@ -17,7 +17,7 @@ agents get wrong over the competition. See the [Training context](../tools/train
 | `correction.py` | `Correction` + `build_correction(...)` with validation |
 | `store.py` | per-build correction tree `data/corrections/<agent_build>/corrections.jsonl` (committed); routes by `agent_build`, reads union the tree, **dedup by default** |
 | `seats.py` | `detect_seat(replay, team_name)` — which seat is ours |
-| `report.py` | `summarize(...)` + `build_report(log, out)` → offline HTML trends |
+| `report.py` | `summarize(...)` + `avg_blunders_per_game(...)` (own blunders ÷ distinct tagged games, by build over time) + `build_report(log, out, *, reviewed_path, proposals_dir)` → offline HTML trends; given the reviewed ledger + the `data/proposals` snapshot it also badges each blunder **fixed / covered / refuted / deferred / open / skipped** and splits resolved vs open |
 
 A **Decision** = one engine `select` at one frame; `chosen`/`correct` index `select.option`.
 A **Correction** embeds a self-contained snapshot, so it outlives the replay (ADR-0015).
@@ -36,8 +36,9 @@ physically compacts the file and lists any residual conflicts; `dedup=False` rea
 ## Category vocabulary (extensible, by process)
 
 `missed_win`, `missed_ko`, `bad_target`, `prize_mismanagement`, `misattachment`,
-`wasted_resource`, `slow_setup`, `overextension`, `bad_retreat`, `ignored_threat`,
-`sequencing_error`, `other`. Add a term in `categories.py` when a real blunder doesn't fit.
+`wasted_resource`, `slow_setup`, `missed_evolution`, `overextension`, `bad_retreat`,
+`ignored_threat`, `missed_disruption`, `sequencing_error`, `other`. Add a term in
+`categories.py` when a real blunder doesn't fit.
 
 ## Viewer (`tools/train/blunder/viewer/`)
 

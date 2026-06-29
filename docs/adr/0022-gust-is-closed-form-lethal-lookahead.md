@@ -1,6 +1,15 @@
 # ADR-0022: Gust decisions are a closed-form lethal-lookahead over hypothetical defenders (board-only, Read-deferred)
 
-**Status.** Accepted (grilled 2026-06-29) — **designed, build pending**.
+**Status.** Accepted (grilled 2026-06-29); **implemented 2026-06-29** — whether-to-play
+(`gust-for-the-ko` + the lethal Tactical term), the `SWITCH(3)` target-select (`_gust_target_tactical`
+= KO + prizes + denial + forward-denial), and the tier-5 stall-gust, all test-first in
+`tests/test_gust.py` + an end-to-end check through the real mega_starmie Pilot. **Refinements
+implemented 2026-06-29** (grilled; `tests/test_attack_value.py` + `tests/test_attack_riders.py`): the
+special-condition rescue guard + offensive baseline (#10), the Item-vs-Supporter split (#12), the
+simultaneous-double-KO draw-guard (#2, half a), the bench-snipe attack-value bonus (#14), and
+**Resistance** in the KO oracle — see the *Refinements* section below. **Still deferred:** the
+draw-over-loss valuation (#2 half b), the four-mechanic split's coin-flip / Confuse branches, and
+Read-conditioned gusting.
 
 **Context.** A *gust* (force the opponent to switch a benched Pokémon to their Active Spot — Boss's
 Orders, card id 1182) appears in nearly every deck, swings games, and is easily misplayed. It is the
@@ -83,3 +92,36 @@ proactive (scouted-matchup) gusting, and the four-mechanic split arrive once the
 The design and infra are tracked as a task list in the grilling session (oracle, Board/Context fields,
 the two KO Hypotheses, the tier-5 stall set, the Tactical bench-value refinement, the mechanic split,
 tests + docs).
+
+**Refinements (grilled + implemented 2026-06-29).** A second grilling pass built the five edge items.
+Two findings reshaped the original plan:
+
+- **Resistance is a per-card PRINTED amount, uniformly −30 in this set.** It is a card fact (printed on
+  the card, e.g. Slowking "Fighting −30"), **not** in our data export — `CardData.resistance` and the CSV
+  are resistance-*type* only, and the amount is in no text field, so the handoff's "text-parse it like
+  `hpBonus`" was a dead end. The simulator is the scalable authority ([CLAUDE.md](../../CLAUDE.md)): a
+  behavioral probe (drive `cg.game` with stacked decks so the only modifier is Resistance —
+  `tools/sim/probe_resistance.py`) over **47** resistant Pokémon — every basic Fighting-resist and
+  Grass-resist body, ex & non-ex, HP 90–280 — returned **−30 on every one**, matching the printed cards.
+  So `_RESISTANCE = 30` is a verified constant. A constant is correct *because* the printed amount is
+  uniform here; if a future card prints a different number the probe would surface it (revisit then). The
+  resistance *type* was already precompiled into `CardStat.resistance`. Weakness AND Resistance are now
+  applied through **one** direction-agnostic helper `_wr_adjusted(attacker, defender, dmg)` (rules.md §5
+  order), routed by **all four** closed-form damage sites — my attacks (`_tactical`, `_can_ko`) and
+  **incoming** damage (`_incoming_active_damage`/`active_doomed`, `_gust_target_denial`) — so Resistance
+  is honoured defensively too (a self-resisting Active isn't falsely flagged doomed), closing the
+  red-team "factor W/R into one helper" note.
+- **The "one shared parser" is really TWO things.** Recoil (#2) and bench-snipe (#14) *are* free-text
+  `Attack.text` riders → one parser, two `hpBonus`-style regexes (`parse_attack_recoil` /
+  `parse_attack_bench_snipe`, matching only the clean *unconditional* sentence, else 0 — under-credit is
+  the safe direction). Resistance is orthogonal (the constant above). All three reds are **moot for the
+  live mega_starmie deck** (Water/Fire attacks never meet Fighting/Grass resistances; no recoil
+  attackers; Jetting Blow's +50 snipe is already the cheapest KO) — built for generality + the mega_lucario
+  (Fighting) deck + the writeup.
+
+New signals added: `Board.opp_prizes_remaining` / `opp_active_condition_gift` / `active_condition_ko_prizes`,
+`CardStat.cardType`, and per-`attackId` `recoil` / `bench_snipe` maps. Decisions made in the grill:
+the stall guard blocks on **all five** conditions (conservative floor); the offensive baseline folds a
+poison/burn-doomed Active's prize into the gust net-of-baseline (Option 2) but never suppresses a
+**lethal** gust; #12 gates only the gust-for-the-ko SETUP-damping to `cardType == SUPPORTER`; #2 ships
+**half (a)** only (suppress the false win), draw-over-loss deferred.

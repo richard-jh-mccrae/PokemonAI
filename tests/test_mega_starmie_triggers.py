@@ -15,7 +15,7 @@ from common.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from pilot_helpers import (
-    ACTIVE, ATTACH, DECK, HAND, NO, SETUP_ACTIVE, TO_HAND, YES,
+    ACTIVE, ATTACH, ATTACK, DECK, HAND, NO, PLAY, SETUP_ACTIVE, TO_HAND, YES,
     card_opt, make_select, opt, poke, state,
 )
 
@@ -170,3 +170,40 @@ def test_deploy_heros_cape_silent_when_plus_100_would_not_save():
 def test_deploy_heros_cape_silent_when_not_doomed():
     """Incoming 200 < 330 → not under threat → hold the irreplaceable Cape, don't equip early."""
     assert "deploy-hp-tool-on-breakpoint" not in _fired(_cape_pilot().explain(_attach_cape_vs(6666)).options[0])
+
+
+# --- Boss's Orders gust, end-to-end through the REAL mega_starmie Pilot (general doctrine, ADR-0022) ---
+# The deck runs ONE gust card (Boss's Orders, id 1182, Function Tag `gust`). These confirm the GENERAL
+# gust rules fire through the shipped deck Pilot — real roles (Mega Starmie ex = win_condition), the
+# `_can_ko` oracle, and the SWITCH target-select.
+BOSS_ORDERS = 1182
+WALL_810, KO_BENCH_811 = 810, 811
+_GUST_STATS = DictCardStatProvider({
+    MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
+                           hp=330, minAttackCost=1, minCostDamage=120),   # Jetting Blow 120 at 1 W
+    BOSS_ORDERS: CardStat(BOSS_ORDERS, hp=0),
+    WALL_810: CardStat(WALL_810, hp=330),       # opp Active wall — Jetting Blow can't KO it
+    KO_BENCH_811: CardStat(KO_BENCH_811, hp=60),  # opp benched mon — Jetting Blow KOs it after a gust
+})
+_GUST_TAGS = CardFunctions({BOSS_ORDERS: ["gust"], CINDERACE: ["opener"]})
+
+
+def _gust_pilot():
+    return Pilot(STRATEGY, deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                 stats=_GUST_STATS, functions=_GUST_TAGS)
+
+
+@pytest.mark.req("REQ-MS-0005")
+def test_real_pilot_plays_bosss_orders_to_reach_a_benched_ko():
+    """Through the real deck: Mega Starmie ex online, opp Active is a wall it can't KO, but a benched
+    mon is KO-able — play Boss's Orders (gust-for-the-ko) to drag it up. Options: [Jetting Blow chip,
+    play Boss's, End]."""
+    obs = make_select(
+        [opt(ATTACK, attackId=1), opt(PLAY, area=HAND, index=0), opt(14)],   # 14 = OptionType.END
+        context=0,                                                           # MAIN
+        current=state(active=poke(MEGA_STARMIE, energy=1, hp=330),
+                      opp_active=poke(WALL_810, hp=330),
+                      opp_bench=[poke(KO_BENCH_811, hp=60)], hand=[BOSS_ORDERS]))
+    p = _gust_pilot()
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]

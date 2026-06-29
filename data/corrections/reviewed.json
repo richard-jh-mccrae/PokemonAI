@@ -44,14 +44,14 @@
     "round": "2026-06-28"
   },
   "82224509-67": {
-    "disposition": "deferred",
-    "reason": "Crushing Hammer the powered threat — needs reactive-disruption/Posture",
-    "round": "2026-06-28"
+    "disposition": "covered",
+    "reason": "Deferral reason ('needs reactive-disruption/Posture') is now obsolete — the new play-energy-denial Hypothesis supplies it and FIRES (+20 on Crushing Hammer cid 1120, gated by opp_has_energy_in_play). Single-frame retest reports fixed=False (chosen [7]Attack->[0]) ONLY because dig-before-commit ties play-energy-denial at +20 and the tie-break picks the dig as the literal first action; the Hammer (idx 5) is tier-0 endorsed and both attacks (tac 119.9/209.7 < 1000=KO_SCORE, neither a KO) are tier-2 deferred, so attack-last plays the Hammer before the attack this turn — the human's intent ('use crushing hammer'). First-dev-differs (cf 81785223-32/44, also covered at fixed=False). Covered by play-energy-denial + attack-last sequencing.",
+    "round": "2026-06-29"
   },
   "82225643-12": {
-    "disposition": "deferred",
-    "reason": "Crushing Hammer to slow Mega Lucario line — needs reactive-disruption/Posture",
-    "round": "2026-06-28"
+    "disposition": "covered",
+    "reason": "Deferral reason ('needs reactive-disruption/Posture') is now obsolete — play-energy-denial supplies it and FIRES (+20 on both Crushing Hammer copies idx 1/3: energy_denial tag + opponent's energized Riolu — strip it before it becomes Mega Lucario ex). Single-frame retest reports fixed=False (chosen [6]Attack->[0]) ONLY because dig-before-commit ties play-energy-denial at +20 and the tie-break picks the dig first; the Hammer is tier-0 endorsed and the 49.9-dmg attack (< 1000=KO_SCORE) is tier-2 deferred, so attack-last plays the Hammer before the attack this turn — the human's intent (slow the Mega Lucario line). First-dev-differs (cf 81785223-32/44). Covered by play-energy-denial + attack-last sequencing.",
+    "round": "2026-06-29"
   },
   "82229122-45": {
     "disposition": "deferred",
@@ -64,9 +64,9 @@
     "round": "2026-06-28"
   },
   "82228017-4": {
-    "disposition": "deferred",
-    "reason": "Mega Signal wasteful (wincon already in hand, no Staryu) — full flip needs hand-quality eval",
-    "round": "2026-06-28"
+    "disposition": "covered",
+    "reason": "Resolved by dont-tutor-the-held-wincon: Mega Signal is a wincon-only tutor (fetch-filter tutor_mega -> {Mega Starmie ex} = the deck's lone Mega ex), so with a Mega already in hand Context.search_redundant_wincon fires (-45), cancelling dig-before-commit; real Pilot retest chosen [0]->[1]=correct (attach). Sound: reads the new fetch-filter machinery on the sound deck-knowledge oracle.",
+    "round": "2026-06-29"
   },
   "82224509-71": {
     "disposition": "deferred",
@@ -139,9 +139,9 @@
     "round": "2026-06-28"
   },
   "82228640-7": {
-    "disposition": "deferred",
-    "reason": "save a wasteful Ultra Ball (Mega already in hand) and attach first — needs hand-quality eval (same family as 82228017-4)",
-    "round": "2026-06-28"
+    "disposition": "covered",
+    "reason": "Frame fixed by the cost_discard slice: Ultra Ball pays 2 cards to play, so dig-before-commit no longer grants it a free-dig bonus and _finish_turn_last tiers a discard-cost search as a commitment — Ultra Ball drops to score 0 / tier 2, the free Energy attach (needed Staryu) wins. Real Pilot retest chosen [1]->[0]=correct (attach). NOTE the deeper intent (Hilda DOMINATES Ultra Ball: finds Mega+energy; don't burn Hilda to the discard) is a dominated-action / hand-quality judgment still deferred to the value model — but the frame's blunder (Ultra Ball over the free attach) is resolved.",
+    "round": "2026-06-29"
   },
   "81785223-32": {
     "disposition": "covered",
@@ -197,5 +197,55 @@
     "disposition": "covered",
     "reason": "attack-last defers the Attack; real Pilot evolves the wincon first; Basic-attach (power-up-attacker 15) outranks the Ignition attaches (-45/-60)",
     "round": "2026-06-28-realpilot"
+  },
+  "82525741-58": {
+    "disposition": "refuted",
+    "reason": "Chosen Boss's Orders reaches a guaranteed KO (gust-for-the-ko fires: gust_best_ko_prizes 1 > active_ko_prizes 0 — gust the 70HP Staryu, Jetting Blow KOs it for a prize). The correct (attach + chip the 190HP active, no KO) forgoes that KO for positional chip; a positional weight must never override a KO (forgo-ko principle, ADR). Chip-the-bigger-fish-vs-take-the-small-KO lookahead deferred to a separate task.",
+    "round": "2026-06-29"
+  },
+  "82524455-6": {
+    "disposition": "refuted",
+    "reason": "Requires deck-content certainty (no Staryu left in deck) not soundly derivable from one obs: only 1 of 3 Staryu is visible; the other 2 could sit in the 6 hidden prizes, so 'a 2nd Buddy-Buddy whiffs' is a probabilistic read, not a fact. Playing bench-fill turn 1 is sound doctrine (prefer-bench-fill-first). Proper deck-tracking feature spawned as a follow-up task.",
+    "round": "2026-06-29"
+  },
+  "82523811-59": {
+    "disposition": "refuted",
+    "reason": "Mis-tagged: chosen [2] and correct [6] both attach a Basic {W} Energy to the SAME benched Mega Starmie (bench0) — board-identical, no real blunder as encoded (different identical W cards). The rationale's true intent (attach a 2nd energy to the ACTIVE toward Nebula Beam) is now realized by the new build-active-wincon Hypothesis, which makes the agent attach to the active win-condition here.",
+    "round": "2026-06-29"
+  },
+  "82525741-81": {
+    "disposition": "refuted",
+    "reason": "Mis-tagged: correct [2] == chosen [2] (both attach {W} to bench0) — structurally unsatisfiable (no ranking constraint). Rationale's intent (2nd energy to the ACTIVE toward Nebula Beam) is now realized by build-active-wincon, which makes the agent attach to the active win-condition here.",
+    "round": "2026-06-29"
+  },
+  "82523811-95": {
+    "disposition": "covered",
+    "reason": "Real Pilot decide() now picks the attach (build-active-wincon fires +20 on the active win-condition under its max attack cost; retest chosen [1]->[0]=correct). W-route flags it unsatisfiable only because the alternative is a KO attack (tac 1000.9) that dominates by score — but _finish_turn_last sequences the tier-1 attach BEFORE the tier-2 KO, so the energy is attached this turn and the KO still lands next frame (attack-last). Covered by build-active-wincon + attack-last sequencing.",
+    "round": "2026-06-29"
+  },
+  "82524455-27": {
+    "disposition": "covered",
+    "reason": "Real Pilot decide() now picks the attach (build-active-wincon fires +20; retest chosen [3]->[2]=correct). W-route unsatisfiable because the alternative is a KO attack dominating by score; _finish_turn_last sequences the tier-1 attach before the tier-2 attack so the energy is attached before the turn ends. Covered by build-active-wincon + attack-last sequencing.",
+    "round": "2026-06-29"
+  },
+  "82523811-15": {
+    "disposition": "covered",
+    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (new play-energy-denial fires +20: energy_denial tag + opponent's Active carries Energy; retest chosen [4]->[3]=correct). SETUP-phase strip of a developing Riolu before it becomes Mega Lucario ex. W-route satisfiable here (the competing option is only a 20-dmg chip, < the +20 rule). Covered by play-energy-denial + attack-last sequencing.",
+    "round": "2026-06-29"
+  },
+  "82523811-79": {
+    "disposition": "covered",
+    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [1]->[0]=correct). W-route flags it unsatisfiable only because the alternative is a 120-dmg attack (tac 119.9) that dominates by score — but _finish_turn_last sequences the tier-0 Item PLAY BEFORE the tier-2 attack, so the strip lands this turn and the attack still follows (attack-last). Covered by play-energy-denial + attack-last sequencing.",
+    "round": "2026-06-29"
+  },
+  "82525101-92": {
+    "disposition": "covered",
+    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [3]->[0]=correct). W-route unsatisfiable because the alternative is a 120-dmg attack dominating by score; _finish_turn_last sequences the tier-0 Item PLAY before the tier-2 attack (both Crushing Hammers then the attack — same turn). Covered by play-energy-denial + attack-last sequencing.",
+    "round": "2026-06-29"
+  },
+  "82525101-102": {
+    "disposition": "covered",
+    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [2]->[0]=correct). W-route unsatisfiable because the alternative is a 120-dmg attack dominating by score; _finish_turn_last sequences the tier-0 Item PLAY before the tier-2 attack. Covered by play-energy-denial + attack-last sequencing.",
+    "round": "2026-06-29"
   }
 }

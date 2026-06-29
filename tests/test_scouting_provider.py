@@ -89,6 +89,8 @@ def test_build_cache_maps_engine_objects_to_stats():
     assert st.maxDamage == 270            # max damage over the card's attacks
     assert st.minAttackCost == 1          # min energy-count over the card's attacks (the cheap one)
     assert st.minCostDamage == 70         # damage of the cheapest-cost attack (id 11) — not the 270
+    assert st.maxDamageCost == 4          # cost of the HIGHEST-damage attack (id 10, the 270 at CCCC)
+    assert st.attacks == (10, 11)         # the card's attack ids (lethal-attach lookahead reads these)
     assert st.megaEx and st.weakness == 6 and st.energyType == 6 and st.evolvesFrom == "Riolu"
 
 

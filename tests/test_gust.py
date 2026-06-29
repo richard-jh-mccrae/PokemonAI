@@ -29,10 +29,19 @@ MEGA_WINCON = 904  # my Active: a 3-prize Mega ex win-condition (what a live att
 LIVE_ATTACKER = 705  # opponent's benched 1-prize attacker, energized, hits hard enough to KO my Active
 DOOM_ACTIVE = 811  # opponent's Active: a wall I can't KO that nonetheless KOs my Active next turn
 STALL_TARGET = 706  # opponent's benched mon: energyless + high retreat — the defensive stall-gust pick
-WATER, LIGHTNING, FIRE = 3, 4, 2
+PREEVO_THREAT = 707  # opponent's benched pre-evo whose LINE becomes an attacker (forward-evolution)
+EVO_FORM = 708     # the attacker PREEVO_THREAT evolves into (gives it a high forward_max_damage)
+DEAD_END = 709     # opponent's benched mon that evolves into nothing (forward_max_damage 0)
+WEAK_ATTACKER = 905  # my Active: a 10-damage attacker that can't KO a 20-HP body by attacking
+ITEM_GUST = 1183   # a synthetic Item gust (cardType ITEM) — doesn't cost the one Supporter slot
+FIGHT_GUST = 906   # my Active: a Fighting attacker (120) — to exercise Resistance in the gust oracle
+RESIST_BENCHIE = 710  # opp benched mon: HP 100, RESISTS Fighting (survives 120-30=90) — a false KO
+WATER, LIGHTNING, FIRE, FIGHTING = 3, 4, 2, 6
+SUPPORTER, ITEM = 3, 1   # CardType values (cg/api.py)
 
 _STATS = DictCardStatProvider({
-    BOSS: CardStat(BOSS, hp=0),
+    BOSS: CardStat(BOSS, hp=0, cardType=SUPPORTER),
+    ITEM_GUST: CardStat(ITEM_GUST, hp=0, cardType=ITEM),
     WINCON: CardStat(WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120),
     WALL: CardStat(WALL, hp=330),
     BENCHIE: CardStat(BENCHIE, hp=60),
@@ -46,8 +55,14 @@ _STATS = DictCardStatProvider({
     LIVE_ATTACKER: CardStat(LIVE_ATTACKER, energyType=WATER, maxDamage=200),
     DOOM_ACTIVE: CardStat(DOOM_ACTIVE, energyType=FIRE, hp=330, maxDamage=200),
     STALL_TARGET: CardStat(STALL_TARGET, hp=200, retreatCost=2),
+    PREEVO_THREAT: CardStat(PREEVO_THREAT, name="Riolu", hp=60),
+    EVO_FORM: CardStat(EVO_FORM, name="MegaLucario", evolvesFrom="Riolu", maxDamage=270),
+    DEAD_END: CardStat(DEAD_END, name="Ditto", hp=60),
+    WEAK_ATTACKER: CardStat(WEAK_ATTACKER, energyType=WATER, minAttackCost=1, minCostDamage=10),
+    FIGHT_GUST: CardStat(FIGHT_GUST, energyType=FIGHTING, minAttackCost=1, minCostDamage=120),
+    RESIST_BENCHIE: CardStat(RESIST_BENCHIE, hp=100, resistance=FIGHTING),
 })
-_TAGS = CardFunctions({BOSS: ["gust"], TUTOR: ["search"]})
+_TAGS = CardFunctions({BOSS: ["gust"], ITEM_GUST: ["gust"], TUTOR: ["search"]})
 
 
 def _pilot():
@@ -90,6 +105,23 @@ def test_gust_for_the_ko_stands_down_in_setup_before_the_wincon_is_online():
     p = _pilot()
     assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
     assert p.decide(obs) == [0]   # play the tutor, develop the win-condition first
+
+
+@pytest.mark.req("REQ-GUST-0005")
+def test_item_gust_into_a_ko_fires_in_setup_unlike_a_supporter():
+    """#12 Item/Supporter split: an ITEM gust (cardType ITEM, e.g. Pokémon Catcher) doesn't cost your
+    one Supporter slot, so the SETUP-before-wincon damping that holds back a Supporter gust does NOT
+    apply — a free Item gust into a benched KO fires even in setup. (Same board as the Supporter
+    stand-down test above, but the gust card is an Item.)"""
+    obs = make_select(
+        [opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=200),
+                      opp_active=poke(WALL, hp=330),
+                      opp_bench=[poke(BENCHIE, hp=60)],
+                      hand=[ITEM_GUST, TUTOR]))
+    p = _pilot()
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[0])   # Item gust fires even in setup
 
 
 @pytest.mark.req("REQ-GUST-0001")
@@ -158,6 +190,77 @@ def test_gust_for_the_ko_fires_to_reach_a_higher_prize_than_the_current_active()
     assert p.decide(obs) == [1]
 
 
+# --- #10 condition-rescue guard: never gust off a working special condition (ADR-0022) ------------
+
+@pytest.mark.req("REQ-GUST-0004")
+@pytest.mark.parametrize("cond", ["poisoned", "burned", "asleep", "paralyzed", "confused"])
+def test_gust_for_the_stall_silent_when_opp_active_has_a_condition(cond):
+    """The S1 stall scenario, but the opponent's Active carries a special condition → HOLD Boss's:
+    gusting it off to the bench would CLEAR the condition (a free cure), so the stall stands down for
+    every one of the five conditions (any condition is a gift). Mirror of the firing case below."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=100),
+                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
+                      hand=[BOSS], opp_conditions=(cond,)))
+    p = _pilot()
+    assert "gust-for-the-stall" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) != [1]
+
+
+@pytest.mark.req("REQ-GUST-0004")
+def test_gust_for_the_stall_still_fires_with_no_condition():
+    """Control: same stall scenario, opponent's Active has NO condition → the stall-gust fires (the
+    guard only suppresses when a condition is present)."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(OFF_WINCON, energy=1, hp=100),
+                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-stall" in _fired(p.explain(obs).options[1])
+
+
+@pytest.mark.req("REQ-GUST-0004")
+def test_gust_for_the_ko_stands_down_when_burn_will_KO_the_active_for_the_same_prize():
+    """Offensive baseline: my weak Active (10) can't KO the opponent's 20-HP Active by attacking, but
+    it is BURNED — burn's 20 KOs it this Checkup for a free 1 prize. A gust reaching another 1-prize KO
+    must NOT fire: gusting the burned Active off to the bench CURES it, trading my Supporter for a prize
+    I'd already get. (The wincon is benched so the SETUP-damping can't confound the result.)"""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WEAK_ATTACKER, energy=1, hp=200),
+                      bench=[poke(WINCON, energy=1)],
+                      opp_active=poke(KOABLE_ACTIVE, hp=20),
+                      opp_bench=[poke(BENCHIE, hp=10)],
+                      hand=[BOSS], opp_conditions=("burned",)))
+    p = _pilot()
+    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) != [1]
+
+
+@pytest.mark.req("REQ-GUST-0004")
+def test_gust_for_the_ko_fires_past_the_condition_baseline_for_a_bigger_prize():
+    """Contrast: same burn-doomed 1-prize Active, but the gust reaches a 2-prize benched ex → fire.
+    The gust must beat the free condition-KO (1), and 2 > 1, so it's worth the Supporter."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WEAK_ATTACKER, energy=1, hp=200),
+                      bench=[poke(WINCON, energy=1)],
+                      opp_active=poke(KOABLE_ACTIVE, hp=20),
+                      opp_bench=[poke(EX_BENCHIE, hp=10)],
+                      hand=[BOSS], opp_conditions=("burned",)))
+    p = _pilot()
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]
+
+
 # --- the gust TARGET-select: which benched Pokémon to drag up (SWITCH context, ADR-0022) -----------
 
 @pytest.mark.req("REQ-GUST-0002")
@@ -207,6 +310,22 @@ def test_gust_target_denial_outranks_a_bigger_inert_prize():
 
 
 @pytest.mark.req("REQ-GUST-0002")
+def test_gust_target_breaks_ties_toward_an_evolving_threat():
+    """Two equal-prize, inert, KO-able targets → drag up the one whose evolution line becomes an
+    attacker (forward-evolution index), denying the latent threat. A sub-prize tie-break that never
+    overrides a real prize difference."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_bench=[poke(DEAD_END, hp=60), poke(PREEVO_THREAT, hp=60)]))
+    p = _pilot()
+    opts = p.explain(obs).options
+    assert opts[1].tactical > opts[0].tactical    # the evolving-threat pre-evo edges the dead-end
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0002")
 def test_gust_target_does_not_fire_on_my_own_retreat():
     """SWITCH is ALSO my own retreat (playerIndex == yourIndex) — the gust target scoring must stay
     silent on my own benched Pokémon (resolved by the owner guard), never treating a retreat as a gust."""
@@ -216,6 +335,23 @@ def test_gust_target_does_not_fire_on_my_own_retreat():
         current=state(active=poke(WINCON, energy=1, hp=200), bench=[poke(BENCHIE, hp=60)]))
     p = _pilot()
     assert p.explain(obs).options[0].tactical == 0   # my own bench → no gust KO_SCORE boost
+
+
+@pytest.mark.req("REQ-GUST-0009")
+def test_gust_oracle_respects_resistance_no_false_ko():
+    """The gust KO oracle (`_can_ko`) subtracts the defender's Resistance (flat -30, simulator-verified):
+    a benched mon that RESISTS my Fighting attacker survives my 120 (120-30=90 < 100) → NOT a KO target,
+    while an equal-HP non-resisting mon IS. Drag up the one I can actually KO, never the resisted body."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(FIGHT_GUST, energy=1),
+                      opp_bench=[poke(RESIST_BENCHIE, hp=100), poke(BENCHIE, hp=100)]))
+    p = _pilot()
+    opts = p.explain(obs).options
+    assert opts[0].tactical < KO_SCORE      # resisted → 90 < 100 → not a KO target
+    assert opts[1].tactical >= KO_SCORE     # non-resisting equal-HP mon → KO-able
+    assert p.decide(obs) == [1]
 
 
 # --- tier-5 defensive stall-gust: strand an energyless high-retreat body (ADR-0022) ---------------

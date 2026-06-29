@@ -1,0 +1,54 @@
+"""Attack-rider text parsers (ADR-0022 #2/#14): recoil (self-damage) and bench-snipe amounts read
+from the free-text `Attack.text`. Both match ONLY the clean UNCONDITIONAL phrasing as a whole
+sentence — conditional / variable / spread / own-bench riders parse to 0 (under-credit is the safe
+direction). Samples are real card text from `data/EN_Card_Data.csv`.
+"""
+import pytest
+
+from common.scouting.provider import parse_attack_bench_snipe, parse_attack_recoil
+
+
+@pytest.mark.req("REQ-GUST-0006")
+@pytest.mark.parametrize("text,expected", [
+    ("This Pokémon also does 20 damage to itself.", 20),                 # Wiglett Aqua Bomb
+    ("This Pokémon also does 50 damage to itself.", 50),                 # Excadrill Wild Tackle
+    ("This Pokémon also does 30 damage to itself.", 30),                 # Black Kyurem ex Black Frost
+    # conditional / variable / coin-flip recoil -> 0 (we'd decline or can't count it)
+    ("You may do 30 more damage. If you do, this Pokémon also does 30 damage to itself.", 0),  # Gurdurr
+    ("This Pokémon also does 10 damage to itself for each damage counter on it.", 0),  # Palafin
+    ("Flip 2 coins. If both of them are tails, this Pokémon also does 90 damage to itself.", 0),  # Raticate
+    ("You may have this Pokémon also do 60 damage to itself and make your opponent's "
+     "Active Pokémon Paralyzed.", 0),                                    # Pawmot Voltaic Fist
+    ("", 0),
+    ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon.", 0),  # not recoil
+])
+def test_parse_attack_recoil(text, expected):
+    assert parse_attack_recoil(text) == expected
+
+
+@pytest.mark.req("REQ-GUST-0006")
+@pytest.mark.parametrize("text,expected", [
+    # Mega Starmie ex Jetting Blow + Farigiraf ex Dirty Beam — the clean single-target opponent rider
+    ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon. "
+     "(Don't apply Weakness and Resistance for Benched Pokémon.)", 50),
+    ("This attack also does 30 damage to 1 of your opponent's Benched Pokémon. "
+     "(Don't apply Weakness and Resistance for Benched Pokémon.)", 30),
+    # spread ("each"), own bench, multi-target, conditional, restricted, no-rider -> 0
+    ("This attack also does 40 damage to each Benched Pokémon that has any damage counters on it "
+     "(both yours and your opponent's). (Don't apply Weakness and Resistance for Benched Pokémon.)", 0),  # Hippowdon
+    ("This attack also does 10 damage to 1 of your Benched Pokémon. "
+     "(Don't apply Weakness and Resistance for Benched Pokémon.)", 0),   # Girafarig — OWN bench
+    ("Discard 2 Energy from this Pokémon. This attack does 120 damage to 2 of your opponent's "
+     "Pokémon. (Don't apply Weakness and Resistance for Benched Pokémon.)", 0),  # Greninja ex — 2 targets
+    ("You may shuffle 3 Energy attached to this Pokémon into your deck. If you do, this attack also "
+     "does 120 damage to 1 of your opponent's Benched Pokémon. (Don't apply Weakness and Resistance "
+     "for Benched Pokémon.)", 0),                                        # Ogerpon — conditional
+    ("This attack does 60 damage to 1 of your opponent's Benched Pokémon {ex} or Benched Pokémon {V}. "
+     "(Don't apply Weakness and Resistance for Benched Pokémon.)", 0),   # Shaymin — restricted
+    ("This attack's damage isn't affected by Weakness or Resistance, or by any effects on your "
+     "opponent's Active Pokémon.", 0),                                   # Nebula Beam — no rider
+    ("This Pokémon also does 50 damage to itself.", 0),                  # recoil, not a snipe
+    ("", 0),
+])
+def test_parse_attack_bench_snipe(text, expected):
+    assert parse_attack_bench_snipe(text) == expected
