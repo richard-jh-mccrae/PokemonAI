@@ -56,3 +56,6 @@ class Strategy:
     roles: dict = field(default_factory=dict)          # cardId -> [Role]
     params: dict = field(default_factory=dict)         # tunable scalars
     hypotheses: list = field(default_factory=list)     # weighted, status-tracked rules
+    fetch_priority: list = field(default_factory=list)  # Tier-3 explicit grab order (cardIds, highest
+                                                        # first) — a combo deck's override of the derived
+                                                        # fetch importance (ADR-0023); empty for most decks

@@ -76,6 +76,24 @@ A *routing hint*, not an outcome — the Search API still resolves exact effects
 _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category), structural tag
 (ex/trainer-type — those come from `CardData`), embedding (a rejected approach — use exact tags)
 
+**Hand Refresh**:
+The umbrella concept for a card that throws your whole hand away to draw a fresh one. Splits by
+*where the old hand goes*, because that governs recoverability and the pull pool: a **Shuffle-Refresh**
+sends the hand into the *deck* then draws (recoverable — the cards rejoin what you can pull); a
+**Discard-Refresh** sends it to the *discard* then draws (gone unless a `recycle` card retrieves it).
+_Avoid_: hand dump, draw supporter (too broad), discard-hand (only one of the two sub-kinds)
+
+**Shuffle-Refresh**:
+A Hand Refresh that shuffles your hand into your *deck* and then draws (Lillie's Determination, Judge,
+Harlequin, Lacey). Tagged `shuffle_hand`. Some are also `hand_disruption` (both players refresh — Judge,
+Harlequin). Distinct from `recycle` (that pulls *out of* the discard, the opposite direction).
+_Avoid_: discard_hand / recycle_hand (misname the motion — it's hand→deck, not a discard or a discard-pull)
+
+**Discard-Refresh**:
+A Hand Refresh that sends your hand to the *discard* and then draws (Larry's Skill, Amarys; and a few
+attacks). Out of scope for the current Shuffle-Refresh build; noted as the sibling mechanic.
+_Avoid_: discard_hand (reserve a precise tag if/when this is built)
+
 **Evolving Threat**:
 A benched pre-evolution whose evolution line eventually reaches an attacker (a form that can OHKO a
 typical Active) — worth sniping *before* it comes online, even while it still carries no Energy.
@@ -88,6 +106,15 @@ _Avoid_: evolution threat / future attacker (use "Evolving Threat"), EvoPath (th
 opponent-specific line), fragile_preevo (that's the `Intel.role` label, not the card-knowledge fact)
 
 ### Decision Architecture
+
+**Fetch**:
+A card that presents a *choose-from-deck* select — the engine reveals a set of deck cards and the
+agent picks **which** to pull (Ultra Ball, Nest Ball, Mega Signal, Buddy-Buddy Poffin). Spans the
+Function Tags `search` / `dig` / `bench_fill` / `tutor_*`. Distinct from **draw** (random
+top-of-deck, no pick — Professor's Research / Iono), which the doctrine excludes. Governed by the
+**Fetch Doctrine** (the `search`-family section of [general-strategy.md](../../docs/general-strategy.md)):
+the whether-to-play / what-to-grab / what-to-discard decisions a fetch entails.
+_Avoid_: tutor (TCG jargon for the same thing — say "fetch"/"search"), draw (no pick)
 
 **Pilot**:
 A deck's complete in-match decision engine — the shared `common/` component behind every

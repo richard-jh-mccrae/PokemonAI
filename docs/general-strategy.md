@@ -269,6 +269,162 @@ is upside). **Source:** F9 — JustInBasil (Gusting: disrupt the opponent's temp
 **Deferred:** the four-mechanic split's coin-flip (Pokémon Catcher) / Basic-only-Confuse (Lisia's
 Appeal) branches and Read-conditioned (engine-denial, proactive-vs-scouted-matchup) gusting.
 
+## Fetch (Search) doctrine — designed; core shipped (ADR-0023)
+
+The doctrine for a **fetch** — a card that presents a *choose-from-deck* select (the engine reveals
+deck cards and you pick **which** to pull: Ultra Ball, Nest Ball, Mega Signal, Buddy-Buddy Poffin).
+Spans the Function Tags `search` / `dig` / `bench_fill` / `tutor_*`; **raw draw** (Professor's
+Research, Iono — no pick) is excluded. Grilled 2026-06-29, recorded in
+[ADR-0023](adr/0023-fetch-is-a-shared-value-comparator.md). It is the deck-agnostic counterpart of
+the **Gust** doctrine above, and **generalises the shipped rules already in the registry** (listed at
+the end of this section) into one coherent comparator. Glossary: [Fetch](../src/common/CONTEXT.md).
+
+**Doctrine — a fetch is three decisions over one shared value primitive.** Every fetch entails
+*(A) whether to play it now*, *(B) what to grab*, and *(C) what to discard* (when the card has a
+discard cost). All three read **one** closed-form primitive:
+
+> **`fetch_value(card, board) = importance × still-lacking × available`**
+
+so the play-reason, the grab, and the discard agree by construction (the same shared-oracle invariant
+as [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md)'s `gust_ko`).
+
+- **importance** — *derived first, overridden sparsely.* **Tier 1 (free, every deck):** `Strategy.lines`
+  membership (a Line pre-evo/payoff is a win-condition piece), Function Tags (`energy_accel`/`draw`/
+  `search` ⇒ engine piece; `bench_fill` ⇒ board-builder), and `CardStat` + the forward-evolution index
+  ([ADR-0020](adr/0020-forward-evolution-index-is-a-provider-primitive.md)) (is it a Basic? does its
+  line reach an attacker?). **Tier 2 (sparse Role overlay):** the deck's `roles` refine intent where it
+  diverges (`starter`, `accel_source`, a tech `disruption`), each Role mapping to a default fetch-weight
+  the deck tunes **by id** (the existing `_weight` override path, [pilot.py:354](../src/common/pilot.py:354)).
+  **Tier 3 (rare escape hatch):** a combo deck declares an explicit per-card fetch priority. No
+  exhaustive per-card table — a zero-label deck still grabs sensibly off derived importance.
+- **still-lacking** — the gap gate. **Need is per-category** ("a starter" = any Basic in play; "energy
+  in play" = attached count below the online threshold), with the **win-condition as the per-Line
+  exception** (specific). **"Have" = hand + in-play only** — a wincon in the *discard* or *prizes* is
+  **not** had. **Satisfy-count default 1, overridable** (energy/basics want count) — this is what makes a
+  redundant second copy fall to ~0 with no special guard.
+- **available** — `Board.deck_definitely_empty_of(cid)` *filters* a dead candidate (the sound
+  empty-deck oracle); `deck_definitely_has(cid)` gives positive confidence but **never forces** a fetch.
+  **Gap drives, availability only gates.**
+
+**(B) What to grab** = argmax `fetch_value` over the revealed candidates. **Multi-pick is shipped**
+(`_greedy_grab`, [pilot.py](../src/common/pilot.py)): a fetch-grab is a **single** `maxCount>1` select
+(verified against the replay corpus — `TO_HAND` up to 3, `TO_BENCH` up to 2 in one select, *not*
+sequential), so static top-N would double-grab a met need. Instead the Pilot picks **greedily with
+gap-update**: take the best, rebuild a virtual board where the acquired card counts as *had*
+(`wincon/support_in_play`, `my_bench`, `in_play_ids`, the next `fetch_priority` all close), re-score the
+rest — so the second pick moves to the *next* unmet need. **Take-fewer:** with `minCount 0`, stop once
+nothing remaining has positive grab value (don't bench a prize-liability body you don't need). Scoped to
+`_GRAB_CONTEXTS` (`TO_HAND`/`TO_BENCH`/`SETUP_BENCH`); discard and every other context keep static top-N.
+
+**(C) What to discard** reuses the **same primitive, inverted**: keep-value = `fetch_value` read as
+"want it *in hand*", and a discard sheds the **lowest-keep-value** N. One function, two directions →
+**you can never pitch a card you'd immediately fetch back**. Protected (never discarded): win-condition
+Line pieces, the `discard_eot` Energy you'll spend this turn, anything needed this turn. The one term
+discard adds that grab lacks is a deck-overridable **`good-in-discard`**: for a recursion / discard-fed
+accelerator deck the *right* pitch is a card it *wants* in the bin, so the deck lowers that card's
+effective keep-value.
+
+**(A) Whether to play now** — *positive endorsement shipped (`fetch-when-it-fills-a-need`); cost-netting
+deferred.* = `best_grab_value − cost_of_playing ≥ bar`, where `best_grab_value` is the
+top candidate from the same comparator (≈ 0 when nothing's lacking or the deck whiffs → stand down) and
+`cost_of_playing` splits by economy: a **free Item** fetch fires on any positive grab (deck-thinning
+floors it); a **`cost_discard`** fetch subtracts the keep-value of the cards shed (delay it until the
+discard is cheap); a **Supporter** fetch must beat the best alternative Supporter (the Item-vs-Supporter
+split [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md) already built). The **bar is
+Plan-scaled** (low in `SETUP` where digging is king, higher in `RACE`/`CLOSE` where tempo is precious).
+Sequencing stays structural in `_finish_turn_last` ([pilot.py](../src/common/pilot.py)) — free digs
+first (`dig-before-commit`), `cost_discard`/Supporter fetches as commitments after.
+
+**Deferred (designed-in seams, not built):** **(A) cost-netting + Plan-scaled bar** — the positive
+endorsement (`fetch-when-it-fills-a-need`) is shipped, but subtracting the shed cards' keep-value from a
+`cost_discard` fetch, the Supporter-economy opportunity cost, and a tuned per-Plan bar remain (the whiff /
+redundant / `cost_discard`-sequencing rules already cover the common stand-down cases). **Read-conditioned
+fetching** (grab a tech card *because* the Read names the matchup) → M2, via a Read-scaled bump on the
+deck's `disruption`/tech Role (drops in without reshaping the comparator), mirroring the Gust doctrine's
+Read deferral. **A prized win-condition raising the urgency to fetch its line-mate** → out of v1 (gap
+drives; too clever for now).
+
+### Shipped — the need-gated rungs (this build, status: testing)
+
+The grab/discard comparator is **built test-first** (`tests/test_fetch_doctrine.py`, REQ-GEN-0035..0040)
+as five need-gated Hypotheses + greedy multi-pick — the additive scored sum of these *is* `fetch_value`
+(no monolithic function; the ADR-0008 idiom). New `Context`/`Board` gap signals back them
+(`card_is_starter`/`_support`/`_redundant`/`_top_fetch_priority`, `support_in_play`, `in_play_ids`,
+`top_fetch_priority_id`).
+
+#### `fetch-when-it-fills-a-need` · weight 8 · status: testing  *(whether-to-play, decision A)*
+> Play a fetch when its reachable deck set still holds a card you currently lack — `fetch_fills_a_need`,
+the lookahead that scores the best grab with the **same** grab rungs (`_grab_value_of` over
+`_search_deck_set − deck_empty_ids`) before the search reveals the deck. Gives a discard-COST fetch
+(Ultra Ball) the positive driver `dig-before-commit` denies it; silent on a whiff / when nothing is
+lacking. Weighted **below a free needed development** (`power-up-attacker` nets +10 — the ep82228640-fr7
+shape), which also stands in for the deferred cost-netting. **Source:** ADR-0023; F12 — JustInBasil (Consistency).
+
+#### `fetch-a-starter` · weight 12 · status: testing
+> In SETUP with a thin Bench (`my_bench < 2`), grab a startable Basic (`card_is_starter`: hp > 0, no
+`evolvesFrom`) — develop the board. The fallback grab beneath the win-condition rungs. **Source:** F12 —
+JustInBasil (Consistency: a startable board).
+
+#### `fetch-the-support` · weight 15 · status: testing
+> With no engine Pokémon in play (`not board.support_in_play`), grab one (`card_is_support`: a Pokémon
+with a `draw`/`energy_accel`/`search`/`dig` Ability). An online engine multiplies every later turn.
+Gap-gated — silent once an engine is online. **Source:** F12 — JustInBasil (Consistency: engine first).
+
+#### `fetch-deck-priority` · weight 40 · status: testing
+> Tier-3 escape hatch: with an explicit `Strategy.fetch_priority`, grab the highest-priority candidate
+the search reveals (`card_is_top_fetch_priority`, resolved cross-option in `Board.top_fetch_priority_id`).
+Weighted above the derived rungs so the deck's stated order wins. Empty list → silent. **Source:** ADR-0023.
+
+#### `prefer-good-in-discard` · weight 25 · status: testing
+> Deck-override of the discard side: a card the deck marks Role `discard_fodder` (good in the bin for a
+recursion / discard-fed deck) is the preferred pitch. Outranks `discard-the-redundant`. **Source:** ADR-0023.
+
+#### `discard-the-redundant` · weight 20 · status: testing
+> At a forced discard, shed a card whose need is met first — v1 signal: a hand copy of a Pokémon already
+in play (`card_is_redundant`). The keep-value mirror of the grab side. **Source:** ADR-0023.
+
+### Shipped earlier — partial instances of the comparator (status: testing)
+
+These seven Hypotheses pre-date this build; the doctrine unifies them (each is one importance rung or one
+gap/availability gate of `fetch_value`), and the new rungs above slot in beside them.
+
+#### `fetch-the-wincon` · weight 30 · status: testing
+> Pull your win-condition / primary attacker first — the highest-value grab. **Reads:** `_TO_HAND` +
+the `win_condition`/`primary_attacker` Role; the *gap gate* `not board.wincon_in_play` and the
+energy-starve carve-out are the satisfy-gate in embryo. **Source:** F1 — JustInBasil (Consistency).
+
+#### `prefer-wincon-line-piece` · weight 18 · status: testing
+> Prefer a card that builds the win-condition **Line** (a pre-evolution on the path) over an off-line
+opener/accelerator; at a PROMOTE only when the payoff is in hand. **Reads:** `card_is_line_preevo`.
+Ranks below `fetch-the-wincon`. **Source:** F1 — JustInBasil (Consistency).
+
+#### `fetch-energy-when-starved` · weight 25 · status: testing
+> With no Energy on the Active and none in hand, take a reusable Basic Energy — the energy *need rung*
+(satisfy-count = the online threshold). **Reads:** `board.my_active_energy == 0` & a reusable Energy
+candidate. **Source:** F12 — JustInBasil (Deck Strategy: power an attacker).
+
+#### `prefer-bench-fill-first` · weight 15 · status: testing
+> Play a `bench_fill` (Poffin) first in a thin deck — develops the Bench and thins the deck (raising
+later draw quality); the *bench need rung* + the greedy multi-pick. **Reads:** `bench_fill` tag &
+`board.my_bench < BENCH_MAX`. Fires `SETUP`/`RACE`. **Source:** F12 — JustInBasil (Consistency).
+
+#### `dont-search-an-empty-deck` · weight −60 · status: testing
+> Stand down a search whose **every** target is provably gone (the *availability* gate). **Reads:**
+`Context.search_targets_exhausted`, built on the **sound** `deck_definitely_empty_of` — a copy that
+could sit in hidden prizes leaves it silent, so suppression is only on a CERTAIN whiff. **Source:**
+F12 — JustInBasil (Consistency); the sound empty-deck oracle.
+
+#### `dont-tutor-the-held-wincon` · weight −45 · status: testing
+> Stand down a wincon-ONLY tutor (Mega Signal) when the wincon is already in hand — the *redundant
+second copy* (satisfy-count met). **Reads:** `Context.search_redundant_wincon`. Stays silent for a
+flexible Ultra Ball (its fetch-set isn't ⊆ the wincon). **Source:** F1 — JustInBasil (Consistency).
+
+#### `keep-key-cards-at-discard` · weight −30 · status: testing
+> At a discard select, rank engine pieces and win-conditions **last** — the keep-value floor (the
+protected set). **Reads:** `_DISCARD` select + a `discard_eot`/win-condition card. The full
+keep-value ranking and `good-in-discard` term generalise it. **Source:** F12 — JustInBasil
+(Consistency: don't pitch your engine).
+
 ## Designed, not yet seeded
 
 | Rule | Needs | Source |

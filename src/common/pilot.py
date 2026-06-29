@@ -9,7 +9,7 @@ engine passes, so the fast unit suite needs no native lib.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from common.strategy import Plan, Strategy
 
@@ -25,6 +25,12 @@ _RETREAT = 12 # OptionType.RETREAT — swap the Active out (changes which Pokém
 _BENCH = 5    # AreaType.BENCH
 _ACTIVE = 4   # AreaType.ACTIVE
 _CARD = 3     # OptionType.CARD (a card-target option, e.g. an attack's snipe target)
+_TO_HAND = 7  # SelectContext.TO_HAND — a search: choose which card to add to your hand
+_TO_BENCH = 5    # SelectContext.TO_BENCH — fetch a Pokémon straight onto the Bench (Buddy-Buddy Poffin)
+_SETUP_BENCH = 2  # SelectContext.SETUP_BENCH_POKEMON — place a benched Pokémon during Set Up
+_GRAB_CONTEXTS = frozenset({_TO_HAND, _TO_BENCH, _SETUP_BENCH})  # fetch-grab selects: a maxCount>1 here
+                  # is a single multi-pick resolved GREEDILY with gap-update + take-fewer (not static
+                  # top-N) so a satisfied need isn't double-grabbed (ADR-0023). Discard/others stay top-N.
 _DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
 _SWITCH = 3   # SelectContext.SWITCH — swap into the Active Spot (my own retreat OR a Boss's gust target)
 _MAIN = 0     # SelectContext.MAIN — the open turn menu (where attack-last sequencing applies)
@@ -33,6 +39,9 @@ _END = 14     # OptionType.END — end the turn
 KO_SCORE = 1000  # an option that knocks out the target dominates a mere chip
 _OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
 _STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
+_ENGINE_TAGS = frozenset({"energy_accel", "draw", "search", "dig"})  # a "support/engine" Pokémon's
+                           # Ability does one of these — the `fetch-the-support` importance signal and
+                           # the `support_in_play` gap gate (an engine already online needs no tutor)
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
                            # far below prize granularity (1) so it never overrides prize value
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, capped below — a sub-prize
@@ -126,8 +135,17 @@ class Board:
                                    # on my Active or Bench — so a search needn't fetch another copy
     wincon_in_hand: bool = False   # the win-condition card is already in my hand — so a tutor needn't
                                    # dig for another copy
+    top_fetch_priority_id: int | None = None  # at a TO_HAND search, the highest-priority candidate id
+                                       # present, by the deck's explicit Strategy.fetch_priority list
+                                       # (None off a search / no list / none present) — Tier-3 override
     line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
                                        # play — so there's something a rush-evolve tutor can evolve
+    support_in_play: bool = False      # an engine/support Pokémon (a draw/accel/search Ability, see
+                                       # _ENGINE_TAGS) is on my Active/Bench — the gap gate for
+                                       # `fetch-the-support` (with an engine online I needn't tutor one)
+    in_play_ids: frozenset = field(default_factory=frozenset)  # card ids of my in-play Pokémon
+                                       # (Active + Bench) — a hand copy of one is a redundant duplicate
+                                       # (its need already met), the keep-value floor `discard-the-redundant`
     weakest_bench_hp: int | None = None  # least HP among the opponent's benched snipe targets at a
                                          # DAMAGE select — the target closest to a knockout
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among the opponent's
@@ -201,6 +219,22 @@ class Context:
                                        # pre-evolution that builds toward the win-condition)
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
                                        # win_condition / primary_attacker)
+    card_is_starter: bool = False      # this option's card is a startable Basic Pokémon (hp > 0, no
+                                       # evolvesFrom) — a body that develops an underdeveloped board
+                                       # (the `fetch-a-starter` grab rung). Derived off CardStat.
+    card_is_support: bool = False      # this option's card is an engine/support Pokémon (hp > 0 with a
+                                       # draw/accel/search Ability, see _ENGINE_TAGS) — the
+                                       # `fetch-the-support` grab rung. Derived off CardStat + tags.
+    card_is_top_fetch_priority: bool = False  # this candidate IS the deck's highest-priority fetch
+                                       # target present (== board.top_fetch_priority_id) — the Tier-3
+                                       # explicit-list grab override (`fetch-deck-priority`)
+    card_is_redundant: bool = False    # this option's card duplicates a Pokémon already in play (its
+                                       # need is met) — the lowest keep-value, preferred at a forced
+                                       # discard (`discard-the-redundant`)
+    fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
+                                       # card I currently lack (best grab value > 0, scored by the SAME
+                                       # grab rungs) — the whether-to-play endorsement (`fetch-when-it-
+                                       # fills-a-need`). False off a PLAY / a non-fetch / a need-less fetch
     target_energy: int | None = None  # attack-target snipe signal: Energy on the targeted benched
                                       # Pokémon (None off a Damage/bench-target option)
     target_is_threat: bool = False  # the attack target already carries Energy -> closest to attacking
@@ -287,7 +321,12 @@ class Pilot:
         max_count = select.get("maxCount", 0)
         order = sorted(range(len(options)), key=lambda i: traces[i].score, reverse=True)
         order = self._finish_turn_last(options, traces, order, max_count, select.get("context"))
-        return Decision(chosen=order[:max_count], options=traces)
+        if max_count > 1 and select.get("context") in _GRAB_CONTEXTS:   # greedy gap-update + take-fewer
+            chosen = self._greedy_grab(obs, select, board, traces, options,
+                                       select.get("minCount", 0), max_count)
+        else:
+            chosen = order[:max_count]
+        return Decision(chosen=chosen, options=traces)
 
     def _finish_turn_last(self, options: list, traces: list, order: list, max_count: int,
                           select_context: int | None) -> list:
@@ -586,6 +625,12 @@ class Pilot:
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         card_is_line_preevo = cid is not None and cid in self._line_preevo_set()
         card_is_wincon = cid is not None and cid in self._wincon_set()
+        card_is_starter = bool(stat and stat.hp > 0 and not stat.evolvesFrom)
+        card_is_support = bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags)))
+        card_is_top_fetch_priority = cid is not None and cid == board.top_fetch_priority_id
+        card_is_redundant = cid is not None and cid in board.in_play_ids
+        fetch_fills_a_need = (option.get("type") == _PLAY
+                              and self._fetch_fills_a_need(board, tags, plan))
         is_attack = option.get("type") == _ATTACK
         target_energy = self._target_energy(obs, select, option)
         target_hp = self._target_hp(obs, select, option)
@@ -605,6 +650,9 @@ class Pilot:
                        attach_target_needs=self._attach_target_needs(at_target),
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
+                       card_is_starter=card_is_starter, card_is_support=card_is_support,
+                       card_is_top_fetch_priority=card_is_top_fetch_priority,
+                       card_is_redundant=card_is_redundant, fetch_fills_a_need=fetch_fills_a_need,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
                        target_is_strongest_forward=target_is_strongest_forward,
@@ -647,6 +695,35 @@ class Pilot:
                 self._fetch_cache[tag] = ids
             result |= self._fetch_cache[tag]
         return result
+
+    def _grab_value_of(self, board: Board, cid: int, plan) -> float:
+        """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
+        positive TO_HAND grab Hypotheses that fire for it, scored with the SAME rungs as the real grab
+        (the shared-oracle invariant, ADR-0023). The whether-to-play lookahead's per-candidate term."""
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        roles = self.strategy.roles.get(cid, [])
+        ctx = Context(
+            plan=plan, select_context=_TO_HAND, option_type=_CARD, card_id=cid,
+            card_is_line_preevo=cid in self._line_preevo_set(),
+            card_is_wincon=cid in self._wincon_set(),
+            card_is_starter=bool(stat and stat.hp > 0 and not stat.evolvesFrom),
+            card_is_support=bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags))),
+            card_is_top_fetch_priority=(cid == board.top_fetch_priority_id),
+            roles=roles, tags=tags, stat=stat, board=board)
+        hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
+        return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
+
+    def _fetch_fills_a_need(self, board: Board, tags: list, plan) -> bool:
+        """True iff a fetch with these tags can pull a card I currently LACK from the deck — any
+        still-reachable candidate (its fetch-filter set minus the provably-gone `deck_empty_ids`) whose
+        grab value is positive. The whether-to-play lookahead: it estimates `best_grab_value > 0` from the
+        known deck before the search reveals it. False for a non-fetch (empty fetch set)."""
+        fetch_set = self._search_deck_set(tags)
+        if not fetch_set:
+            return False
+        reachable = fetch_set - board.deck_empty_ids
+        return any(self._grab_value_of(board, cid, plan) > 0 for cid in reachable)
 
     def _attach_target(self, obs: dict, option: dict) -> dict | None:
         """The Pokémon an attach option puts Energy on — encoded as `inPlayArea`/`inPlayIndex`
@@ -768,6 +845,10 @@ class Pilot:
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
+            support_in_play=self._support_in_play(me),
+            in_play_ids=frozenset(p.get("id") for p in ((me.get("active") or []) + (me.get("bench") or []))
+                                  if p and p.get("id") is not None),
+            top_fetch_priority_id=self._top_fetch_priority_id(select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             bench_threat_present=self._bench_threat_present(obs, select),
@@ -807,6 +888,77 @@ class Pilot:
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
+
+    def _top_fetch_priority_id(self, select: dict | None, exclude: frozenset = frozenset()) -> int | None:
+        """The highest-priority card id the deck WANTS most among a search's revealed candidates — the
+        first id in `Strategy.fetch_priority` that is present in the select's `deck` list (Tier-3, the
+        combo deck's explicit grab override). None off a TO_HAND search, an empty list, or no match.
+        `exclude` drops ids already acquired this multi-pick so the NEXT priority surfaces (greedy)."""
+        fp = getattr(self.strategy, "fetch_priority", None)
+        if not fp or not select or select.get("context") != _TO_HAND:
+            return None
+        present = {c.get("id") for c in (select.get("deck") or []) if c} - set(exclude)
+        return next((cid for cid in fp if cid in present), None)
+
+    def _is_support_id(self, cid: int | None) -> bool:
+        """True iff card `cid` is an engine/support Pokémon (hp > 0 with a draw/accel/search Ability) —
+        the per-id form of `card_is_support`, used to close the `support_in_play` gap as one is grabbed."""
+        if cid is None or not self.stats:
+            return False
+        st = self.stats.get(cid)
+        tags = self.functions.tags(cid) if self.functions else []
+        return bool(st and st.hp > 0 and (_ENGINE_TAGS & set(tags)))
+
+    def _virtual_grab_board(self, board: Board, select: dict, acquired_ids: list, bench_ctx: bool) -> Board:
+        """`board` as if the cards acquired so far this multi-pick were already had — the gap signals the
+        grab rungs read (wincon/support in play, bench size, in-play ids, the next fetch-priority) close as
+        needs are met, so greedy re-scoring won't re-pick an already-satisfied need (ADR-0023)."""
+        acq = {a for a in acquired_ids if a is not None}
+        wincon = self._wincon_set()
+        return replace(
+            board,
+            in_play_ids=board.in_play_ids | acq,
+            my_bench=board.my_bench + (len(acquired_ids) if bench_ctx else 0),
+            wincon_in_play=board.wincon_in_play or bool(wincon & acq),
+            wincon_in_hand=board.wincon_in_hand or bool(wincon & acq),
+            support_in_play=board.support_in_play or any(self._is_support_id(a) for a in acq),
+            top_fetch_priority_id=self._top_fetch_priority_id(select, exclude=acq))
+
+    def _greedy_grab(self, obs: dict, select: dict, board: Board, traces: list, options: list,
+                     min_count: int, max_count: int) -> list[int]:
+        """Resolve a fetch-grab multi-select (maxCount>1) greedily instead of static top-N: take the best
+        candidate, mark its need satisfied (a virtual board where acquired cards count as had), re-score
+        the rest, repeat. So a second copy of an already-met need stands down. TAKE-FEWER: once min_count
+        is met, stop as soon as no remaining candidate has positive grab value — don't over-grab (e.g.
+        bench a prize-liability body you don't need). ADR-0023; only for `_GRAB_CONTEXTS`."""
+        bench_ctx = select.get("context") in (_TO_BENCH, _SETUP_BENCH)
+        remaining = set(range(len(options)))
+        cur = traces
+        chosen: list[int] = []
+        acquired: list = []
+        while len(chosen) < max_count and remaining:
+            i = max(remaining, key=lambda j: (cur[j].score, -j))
+            if len(chosen) >= min_count and cur[i].score <= 0:
+                break                                        # take-fewer: nothing more worth grabbing
+            chosen.append(i)
+            remaining.discard(i)
+            acquired.append(cur[i].card_id)
+            if len(chosen) >= max_count or not remaining:
+                break
+            vboard = self._virtual_grab_board(board, select, acquired, bench_ctx)
+            cur = [self._option_trace(obs, select, vboard, o, k) if k in remaining else cur[k]
+                   for k, o in enumerate(options)]
+        return chosen
+
+    def _support_in_play(self, me: dict) -> bool:
+        """True if any of my in-play Pokémon is an engine/support piece — its Ability draws, accelerates
+        or searches (an `_ENGINE_TAGS` Function Tag). The gap behind `fetch-the-support`: with an engine
+        already online I needn't tutor another. False with no functions table."""
+        if not self.functions:
+            return False
+        board = (me.get("active") or []) + (me.get("bench") or [])
+        return any(p and (_ENGINE_TAGS & set(self.functions.tags(p.get("id"))))
+                   for p in board)
 
     def _bench_wincon_ready(self, me: dict) -> bool:
         """True if a benched win-condition / primary attacker already carries enough Energy to attack

@@ -20,6 +20,7 @@ _ACTIVE = 4         # AreaType.ACTIVE
 _BENCH = 5          # AreaType.BENCH
 _SUPPORTER = 3      # CardType.SUPPORTER — a gust on this card costs the one-per-turn Supporter slot
 _BENCH_MAX = 5      # a full Bench holds 5 — a bench-filler can place nothing once you're here
+_THIN_BENCH = 2     # below this many benched Pokémon the board is underdeveloped — a starter need
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
 # An evolution line "becomes an attacker" once it can OHKO a median body (median HP = 100; 100 is
 # ~p76 of damaging attacks). Tunable seed for `snipe-the-evolving-threat` (ADR-0020, docs/rules.md).
@@ -57,9 +58,13 @@ HYPOTHESES = [
                   "same turn — see `_finish_turn_last`). Free card advantage every turn. Stands down "
                   "for a discard-COST search (`cost_discard`, e.g. Ultra Ball pays 2 cards from hand): "
                   "that dig is NOT free, so it earns no free-dig bonus — its real (cost-aware) value "
-                  "is left to dedicated rules, and `_finish_turn_last` sequences it as a commitment.",
+                  "is left to dedicated rules, and `_finish_turn_last` sequences it as a commitment. "
+                  "Also stands down for a Shuffle-Refresh (`discard_hand`, e.g. Lillie's Determination): "
+                  "it DESTROYS the hand to redraw, the opposite of a dig — so it earns no early-dig bonus "
+                  "and is governed by the separate Shuffle-Refresh doctrine (dead-hand fallback), not here.",
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
-        and ("draw" in c.tags or "search" in c.tags) and "cost_discard" not in c.tags,
+        and ("draw" in c.tags or "search" in c.tags)
+        and "cost_discard" not in c.tags and "discard_hand" not in c.tags,
         weight=20, status="assumed"),
     Hypothesis(
         id="dont-bench-multiprize",
@@ -287,6 +292,57 @@ HYPOTHESES = [
             or (c.select_context == _TO_ACTIVE and c.board.wincon_in_hand)),
         weight=18, status="testing"),
     Hypothesis(
+        id="fetch-a-starter",
+        rationale="When a search lets you choose a card AND your board is underdeveloped (fewer than "
+                  "two benched Pokémon in SETUP), take a startable Basic Pokémon — a body you can play "
+                  "down to develop the Bench and open a turn of plays. The fallback grab rung beneath "
+                  "the win-condition rungs (`fetch-the-wincon` / `prefer-wincon-line-piece`): when no "
+                  "Line piece is on offer you still want board presence over an off-need card. Gap-gated "
+                  "— stands down once the Bench is developed (you no longer lack a starter). 'Starter' "
+                  "is derived structurally (a Basic: hp > 0, no `evolvesFrom`), so any deck inherits it.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_starter
+        and c.plan == Plan.SETUP and c.board.my_bench < _THIN_BENCH,
+        weight=12, status="testing"),
+    Hypothesis(
+        id="fetch-the-support",
+        rationale="When a search lets you choose a card AND you have no engine/support Pokémon in play, "
+                  "take one — a Pokémon whose Ability draws, accelerates Energy or searches (Function "
+                  "Tags `energy_accel`/`draw`/`search`/`dig`). An online engine multiplies every later "
+                  "turn, so when you lack one it is a high-value grab, second only to the win-condition "
+                  "and energy-when-starved. Gap-gated off `Board.support_in_play` — stands down once an "
+                  "engine is online (no dead second engine). Derived structurally (a Pokémon carrying an "
+                  "engine tag), so any deck inherits it; a deck refines which engine via its Roles.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_support
+        and not c.board.support_in_play,
+        weight=15, status="testing"),
+    Hypothesis(
+        id="fetch-when-it-fills-a-need",
+        rationale="Whether-to-PLAY a fetch (ADR-0023, decision A): play it when its reachable deck set "
+                  "still holds a card you currently LACK — `Context.fetch_fills_a_need`, the lookahead "
+                  "that scores the best grab with the SAME grab rungs (shared oracle) before the search "
+                  "reveals the deck. The positive endorsement a discard-COST fetch otherwise misses: "
+                  "`dig-before-commit` stands down for `cost_discard` (Ultra Ball), so without this an "
+                  "Ultra Ball that can fetch your unfound win-condition had no driver to be played. "
+                  "Modest, so it sequences as a commitment (`_finish_turn_last`) after the free digs; "
+                  "silent on a whiff / when nothing is lacking (best grab value 0). Weighted BELOW a "
+                  "free, needed development — a discard-cost dig should not outrank powering your "
+                  "attacker (`power-up-attacker` nets +10), the ep82228640-fr7 shape — which also stands "
+                  "in for the deferred cost-netting (the 2-card cost makes the net value lower than the "
+                  "raw grab). The full cost-netting (subtract the shed cards) and Plan-scaled bar remain.",
+        when=lambda c: c.option_type == _PLAY and c.fetch_fills_a_need,
+        weight=8, status="testing"),
+    Hypothesis(
+        id="fetch-deck-priority",
+        rationale="Tier-3 escape hatch (ADR-0023): when the deck declares an explicit ordered "
+                  "`Strategy.fetch_priority`, grab the highest-priority card on that list that the "
+                  "search actually reveals — the combo deck's override of the derived importance rungs "
+                  "(it knows a specific piece matters more than the generic win-condition/starter/support "
+                  "ladder). Fires on the single best-ranked present candidate (`card_is_top_fetch_priority`, "
+                  "resolved cross-option in `Board.top_fetch_priority_id`), weighted above the derived "
+                  "grab rungs so the deck's stated order wins. Empty list (most decks) -> silent.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_top_fetch_priority,
+        weight=40, status="testing"),
+    Hypothesis(
         id="promote-the-ready-wincon",
         rationale="When your Active is Knocked Out and a benched win-condition is already powered up "
                   "enough to attack, promote IT — bring your live attacker to the front rather than a "
@@ -472,6 +528,28 @@ HYPOTHESES = [
                   "evolving one, so this stands down whenever such a threat is on the Bench.",
         when=lambda c: c.select_context == _DAMAGE and c.target_is_strongest_forward
         and not c.target_is_threat and not c.board.bench_threat_present,
+        weight=20, status="testing"),
+    Hypothesis(
+        id="prefer-good-in-discard",
+        rationale="The deck-override of the discard side (ADR-0023): a recursion / discard-fed deck "
+                  "marks cards it WANTS in the discard with the Role `discard_fodder` (e.g. a Pokémon "
+                  "a Night-Stretcher/Sacred-Ash line recurs, or Energy a discard-pull accelerator "
+                  "reclaims). At a forced discard, prefer pitching such a card — for that deck the bin "
+                  "is an asset, so its keep-value in hand is low. Reads the deck Role directly; silent "
+                  "for any deck that declares no `discard_fodder`. Outranks the generic "
+                  "`discard-the-redundant` (the deck's stated synergy beats a plain duplicate).",
+        when=lambda c: c.select_context == _DISCARD and "discard_fodder" in c.roles,
+        weight=25, status="testing"),
+    Hypothesis(
+        id="discard-the-redundant",
+        rationale="At a forced discard (e.g. Ultra Ball's cost), shed the card whose need is already "
+                  "met first — the lowest keep-value. v1's redundancy signal is a hand copy of a "
+                  "Pokémon already in play (`Context.card_is_redundant`): a duplicate body you don't "
+                  "need a second of right now. A positive weight ranks it ABOVE a still-needed card as "
+                  "the pitch, the mirror of the grab comparator (shed what you'd not fetch back). Pairs "
+                  "with `keep-key-cards-at-discard`, which floors the engine pieces / win-condition so "
+                  "they are never the pitch — together: pitch the redundant, protect the key.",
+        when=lambda c: c.select_context == _DISCARD and c.card_is_redundant,
         weight=20, status="testing"),
     Hypothesis(
         id="keep-key-cards-at-discard",
