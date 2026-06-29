@@ -425,6 +425,62 @@ protected set). **Reads:** `_DISCARD` select + a `discard_eot`/win-condition car
 keep-value ranking and `good-in-discard` term generalise it. **Source:** F12 — JustInBasil
 (Consistency: don't pitch your engine).
 
+## Shuffle-Refresh doctrine — designed (ADR-0024)
+
+The doctrine for a **Shuffle-Refresh** — a Supporter that **shuffles your whole hand into your deck
+then draws** (Lillie's Determination, Judge, Harlequin, Lacey; Function Tag `shuffle_hand`). Almost
+every deck runs one and the dominant misplay is **refreshing away
+a working hand**. Grilled 2026-06-29, recorded in
+[ADR-0024](adr/0024-shuffle-refresh-is-fetch-decision-a-over-keep-value.md). Glossary: **Hand Refresh
+/ Shuffle-Refresh / Discard-Refresh** in [src/common/CONTEXT.md](../src/common/CONTEXT.md).
+
+**A Shuffle-Refresh is not a fetch — it is the Fetch comparator's decision (A) only.** A fetch
+presents a *choose-from-deck select* (three decisions: A play / B grab / C discard). A Shuffle-Refresh
+presents **no select** — the shuffle and the draw are automatic — so the only choice is *whether to
+play it*, and the gain is **stochastic** (N random cards), not a chosen card. It therefore **reuses**
+the [Fetch comparator (ADR-0023)](adr/0023-fetch-is-a-shared-value-comparator.md) rather than restating
+it, with **no grab and no discard** decision:
+
+- **Cost = the hand you'd shuffle away**, valued by the Fetch **keep-value** (`fetch_value` read as
+  "want it in hand"). Invariant inherited for free: **never shuffle away a hand you'd fetch back.**
+- **Gain-exists = does the deck still hold a card I lack**, reusing the need model
+  (`_fetch_fills_a_need` / `_grab_value_of`).
+- **Supporter-slot economy and the Plan-scaled bar** are the same as Fetch (A); deck-knowledge stays an
+  **availability gate, never a forcer**.
+
+**"Dead hand" is a full play-scan, not a keep-value floor.** `Board.hand_is_dead` ⇔ **no non-refresh
+card in hand yields any positive-scoring play this turn** (each hand card virtually scored through the
+real hypothesis + closed-form tactical pipeline — the same virtual-scoring pattern as
+`_fetch_fills_a_need`), **and** the deck still holds something I lack (`deck_holds_a_need`). Keep-value
+≈ 0 alone is blind to a playable tutor / gust-for-KO / clutch heal and would refresh them away. The
+full scan **is** "use your key cards first" proven structurally: every useful card outscores the
+refresh, so the refresh is reached only when nothing else is worth doing. It never preempts an attack
+(the scan is hand-only; attacks stay tier-2 turn-enders in `_finish_turn_last`, so a dead-hand + lethal
+refreshes **then** KOs the same turn).
+
+**v1 = Layer A (the dead-hand fallback) — shipped (ADR-0024), test-first (`tests/test_shuffle_refresh.py`).**
+
+#### `refresh-when-hand-is-dead` · weight +8 · status: testing
+> Play a Shuffle-Refresh **only when the hand is dead** — `shuffle_hand and board.hand_is_dead and
+board.deck_holds_a_need`. Beats `End` (≈0), loses to any real play or rival Supporter (a dead hand
+can't *contain* a better Supporter, so the slot economy is subsumed). Board-only, all Plans, fires
+from turn 1. **`hand_is_dead`** scans the REAL menu: no non-refresh PLAY/EVOLVE/ATTACH scores positive
+and no Pokémon PLAY is a (non-discouraged) development out — a bare bench-development isn't positively
+scored in SETUP, so it counts structurally. The scan is gated behind a refresh actually being in hand,
+so the common decision pays nothing.
+
+The two existing guards stay as explicit keep-value **floors** beside the comparator:
+`hold-wincon-dont-shuffle` (−25) for the *wincon-in-hand-but-not-playable-this-turn* case, and
+`attach-before-hand-shuffle` (−60) for held energy + sequencing.
+
+**Deferred (designed-in seams, not built):** **Layer B — stochastic pull-EV** (the "what can I expect
+to pull" pillar): a hypergeometric over the deck-tracker's exact `deck_known_counts`, live only
+**post-anchor**, refining "deck holds a need" into "P(the N-card draw fills it)" and unlocking the
+conditional 8-card windows (Lillie's at exactly 6 prizes, Lacey at opp ≤ 3) — and it must account for
+the shuffle **growing** the deck by the returned hand (a subtlety a fetch lacks). **`hand_disruption`
+offensive axis** (Judge / Harlequin wreck the opponent's hand — a term scaling with the opponent's hand
+size). **Deck-override** is mostly the existing `_weight` by-id path; no new seam.
+
 ## Designed, not yet seeded
 
 | Rule | Needs | Source |

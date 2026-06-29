@@ -59,12 +59,12 @@ HYPOTHESES = [
                   "for a discard-COST search (`cost_discard`, e.g. Ultra Ball pays 2 cards from hand): "
                   "that dig is NOT free, so it earns no free-dig bonus — its real (cost-aware) value "
                   "is left to dedicated rules, and `_finish_turn_last` sequences it as a commitment. "
-                  "Also stands down for a Shuffle-Refresh (`discard_hand`, e.g. Lillie's Determination): "
+                  "Also stands down for a Shuffle-Refresh (`shuffle_hand`, e.g. Lillie's Determination): "
                   "it DESTROYS the hand to redraw, the opposite of a dig — so it earns no early-dig bonus "
                   "and is governed by the separate Shuffle-Refresh doctrine (dead-hand fallback), not here.",
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
         and ("draw" in c.tags or "search" in c.tags)
-        and "cost_discard" not in c.tags and "discard_hand" not in c.tags,
+        and "cost_discard" not in c.tags and "shuffle_hand" not in c.tags,
         weight=20, status="assumed"),
     Hypothesis(
         id="dont-bench-multiprize",
@@ -480,20 +480,20 @@ HYPOTHESES = [
     Hypothesis(
         id="attach-before-hand-shuffle",
         rationale="Attach the Energy you are holding BEFORE playing a card that throws your hand away "
-                  "(Function Tag `discard_hand`, e.g. Harlequin / Lillie's Determination — each "
+                  "(Function Tag `shuffle_hand`, e.g. Harlequin / Lillie's Determination — each "
                   "'shuffle your hand into your deck'). That card discards any Energy still in hand, "
                   "so playing it first wastes the attachment you could have made (and can shuffle away "
                   "a game-winning Energy). Fires only when a reusable Energy is in hand and you have "
                   "not yet attached this turn — weighted to push the hand-shuffle below an endorsed "
                   "attach AND below 0, so `_finish_turn_last` sequences it last (dig with non-shuffle "
                   "searches first, attach, then refresh the hand).",
-        when=lambda c: c.option_type == _PLAY and "discard_hand" in c.tags
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.reusable_energy_in_hand and not c.board.energy_attached,
         weight=-60, status="testing"),
     Hypothesis(
         id="hold-wincon-dont-shuffle",
         rationale="Don't shuffle a usable win-condition out of your hand with a hand-shuffling draw "
-                  "Supporter (Function Tag `discard_hand`, e.g. Lillie's Determination / Judge — "
+                  "Supporter (Function Tag `shuffle_hand`, e.g. Lillie's Determination / Judge — "
                   "'shuffle your hand into your deck'). When the win-condition (a Line payoff) is in "
                   "hand, refilling sends it back into the deck, costing the turn you could deploy it — "
                   "hold it and dig another way. Complements `attach-before-hand-shuffle` (which guards "
@@ -501,9 +501,27 @@ HYPOTHESES = [
                   "guards the hand-shuffle of the PAYOFF itself. Moderate — it nets negative against "
                   "`dig-before-commit` but is NOT absolute, so a genuinely dead hand still refills (the "
                   "win-condition returns to the deck, recoverable; only a tempo cost).",
-        when=lambda c: c.option_type == _PLAY and "discard_hand" in c.tags
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.wincon_in_hand,
         weight=-25, status="assumed"),
+    Hypothesis(
+        id="refresh-when-hand-is-dead",
+        rationale="Play a Shuffle-Refresh (Function Tag `shuffle_hand`, e.g. Lillie's Determination / "
+                  "Judge — 'shuffle your hand into your deck, then draw') ONLY when your hand is dead: no "
+                  "other card in it yields a positive-scoring play this turn (`Board.hand_is_dead`, a full "
+                  "play-scan of the hand) AND the deck still holds a card you lack (`deck_holds_a_need`). "
+                  "ADR-0024 decision (A) — a refresh is not a dig (it DESTROYS the hand), so it is a "
+                  "last-resort hand reload, reached only when nothing else is worth doing; this is 'use "
+                  "your key cards first' proven structurally (every useful card outscores the refresh). "
+                  "Reuses the Fetch keep-value comparator: a live card keeps the hand off this gate, so we "
+                  "never shuffle away a hand we'd fetch back. Small positive — beats End (≈0), loses to any "
+                  "real play; a dead hand can't contain a better Supporter, so the one-per-turn slot "
+                  "economy is subsumed. Never preempts an attack (the scan is hand-only; the turn-ending "
+                  "attack stays an `_finish_turn_last` tier-2 commitment, so a dead-hand + lethal refreshes "
+                  "THEN KOs the same turn). Layer A; the stochastic pull-EV refinement is deferred.",
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
+        and c.board.hand_is_dead and c.board.deck_holds_a_need,
+        weight=8, status="testing"),
     Hypothesis(
         id="dont-rush-evolve-without-target",
         rationale="Don't play a rush-evolve tutor (Function Tag `rush_evolve`, e.g. Salvatore — "

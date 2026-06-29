@@ -43,8 +43,8 @@ def _stats():
 def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot"], 1223: ["draw", "discard_hand"],
-                                          1227: ["draw", "discard_hand"], 1189: ["search", "rush_evolve"]}),
+                 functions=CardFunctions({IGNITION: ["discard_eot"], 1223: ["draw", "shuffle_hand"],
+                                          1227: ["draw", "shuffle_hand"], 1189: ["search", "rush_evolve"]}),
                  attacks={10: 210, 11: 120, 12: 20}, attack_costs={10: 3, 11: 1, 12: 1}, **kw)
 
 
@@ -79,7 +79,7 @@ def test_build_active_wincon_prefers_active_over_a_bench_copy():
 @pytest.mark.req("REQ-GEN-0026")
 def test_attach_before_hand_shuffle_demotes_a_hand_shuffle_while_holding_energy():
     pilot = _pilot()
-    play_shuffle = opt(PLAY, area=HAND, index=0)          # Harlequin (discard_hand) in hand[0]
+    play_shuffle = opt(PLAY, area=HAND, index=0)          # Harlequin (shuffle_hand) in hand[0]
     attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # a W in hand[1]
     obs = make_select([play_shuffle, attach],
                       current=state(active=poke(WINCON, energy=1, hp=330), hand=[1223, WATER]))

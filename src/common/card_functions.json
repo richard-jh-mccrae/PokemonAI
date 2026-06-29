@@ -570,7 +570,8 @@
 "search"
 ],
 "1199": [
-"draw"
+"draw",
+"shuffle_hand"
 ],
 "1200": [
 "draw"
@@ -608,7 +609,7 @@
 "1213": [
 "draw",
 "hand_disruption",
-"discard_hand"
+"shuffle_hand"
 ],
 "1214": [
 "draw"
@@ -637,7 +638,7 @@
 "1223": [
 "draw",
 "hand_disruption",
-"discard_hand"
+"shuffle_hand"
 ],
 "1224": [
 "draw"
@@ -647,7 +648,7 @@
 ],
 "1227": [
 "draw",
-"discard_hand"
+"shuffle_hand"
 ],
 "1229": [
 "heal",

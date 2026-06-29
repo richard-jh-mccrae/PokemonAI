@@ -146,6 +146,12 @@ class Board:
     in_play_ids: frozenset = field(default_factory=frozenset)  # card ids of my in-play Pokémon
                                        # (Active + Bench) — a hand copy of one is a redundant duplicate
                                        # (its need already met), the keep-value floor `discard-the-redundant`
+    hand_is_dead: bool = False         # no non-refresh card in hand yields any positive-scoring play
+                                       # this turn (each virtually scored through the real pipeline) — the
+                                       # Shuffle-Refresh fallback gate (ADR-0024): refresh only a dead hand
+    deck_holds_a_need: bool = False    # my deck still holds a card I currently LACK (some deck card has
+                                       # positive grab-value, `_grab_value_of`) — the gain-exists guard for
+                                       # `refresh-when-hand-is-dead` (don't refresh into a deck of dead cards)
     weakest_bench_hp: int | None = None  # least HP among the opponent's benched snipe targets at a
                                          # DAMAGE select — the target closest to a knockout
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among the opponent's
@@ -823,7 +829,7 @@ class Pilot:
         prizes = obs.get("own_prizes")             # exact prize multiset from the deck-tracker, or None
         deck_empty = self._deck_empty_ids(me, prizes)
         deck_known = self._deck_known_counts(me, prizes)
-        return Board(
+        board = Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
             my_active_energy=len((ma or {}).get("energies") or []),
@@ -861,6 +867,62 @@ class Pilot:
             opp_active_condition_gift=self._opp_active_condition_gift(opp),
             active_condition_ko_prizes=self._active_condition_ko_prizes(opp, oa),
         )
+        # Shuffle-Refresh fallback signals (ADR-0024) — computed off the base board, so the hand-card
+        # play-scan can read the rest of the board. Only `refresh-when-hand-is-dead` reads them, and it
+        # fires only on a `shuffle_hand` option, so skip the (whole-menu) scan unless a refresh is in
+        # hand — the common case pays nothing. plan gates the deck's grab-value.
+        if not self._has_shuffle_refresh(me):
+            return board
+        plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
+        return replace(board,
+                       deck_holds_a_need=self._deck_holds_a_need(board, plan),
+                       hand_is_dead=self._hand_is_dead(obs, select, board))
+
+    def _has_shuffle_refresh(self, me: dict) -> bool:
+        """True iff a Shuffle-Refresh (a `shuffle_hand`-tagged card) is in my hand — the cheap guard that
+        gates the dead-hand scan (no refresh in hand -> the gate can never fire, so don't compute it)."""
+        if not self.functions:
+            return False
+        return any(c and "shuffle_hand" in self.functions.tags(c.get("id"))
+                   for c in (me.get("hand") or []))
+
+    def _deck_holds_a_need(self, board: Board, plan) -> bool:
+        """True iff my deck still holds a card I currently LACK — any deck card with positive grab-value
+        (`_grab_value_of`, the shared Fetch comparator). The gain-exists guard for the refresh: don't
+        shuffle for a fresh hand when the deck has nothing left worth drawing. Skips provably-gone ids."""
+        seen: set = set()
+        for cid in self.deck:
+            if cid in seen or cid in board.deck_empty_ids:
+                continue
+            seen.add(cid)
+            if self._grab_value_of(board, cid, plan) > 0:
+                return True
+        return False
+
+    def _hand_is_dead(self, obs: dict, select: dict, board: Board) -> bool:
+        """True iff NO option on the current menu develops the hand — no non-refresh PLAY / EVOLVE /
+        ATTACH scores positive, and no Pokémon PLAY is even a (non-discouraged) development out. Scans the
+        REAL menu options (so attach / evolve are seen with their true scores + tactical), the same
+        scoring idiom as `_fetch_fills_a_need`. The Shuffle-Refresh fallback gate (ADR-0024): a refresh is
+        reached only when nothing else is worth doing, so every useful play (develop / evolve / attach /
+        fetch / gust KO / clutch heal) keeps the hand 'live'. ATTACK / RETREAT / END are excluded — they
+        don't consume a hand card and coexist with a refresh (a dead-hand + lethal refreshes THEN attacks).
+        The refresh cards themselves (`shuffle_hand`) are excluded, else a hand of only refreshes is never
+        dead. A bare Pokémon bench-development isn't positively scored in SETUP, so it counts structurally."""
+        for i, o in enumerate((select or {}).get("option") or []):
+            if o.get("type") not in (_PLAY, _EVOLVE, _ATTACH):
+                continue                                     # board actions coexist with a refresh
+            cid = self._option_card_id(obs, select, o)
+            tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+            if "shuffle_hand" in tags:                       # don't count the refresh as its own out
+                continue
+            score = self._option_trace(obs, select, board, o, i).score
+            if score > 0:
+                return False                                 # an endorsed play -> hand is live
+            stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+            if o.get("type") == _PLAY and stat is not None and stat.hp > 0 and score >= 0:
+                return False                                 # a (non-discouraged) Pokémon development -> live
+        return True
 
     def _wincon_set(self) -> set:
         """Card ids that ARE the win-condition — a Strategy Line payoff or a card carrying the
