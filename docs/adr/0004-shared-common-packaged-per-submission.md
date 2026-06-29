@@ -20,7 +20,7 @@ zip — only `sys.path` differs (dev: `src/`; submission: the agent dir,
 which is the CWD and contains copies of `common/` + `cg/`). `cg` already proves this
 works on the grader today.
 
-`tools/package_agent.py <name>` assembles a submission: it copies the agent's `*.py`
+`tools/submit/package.py <name>` assembles a submission: it copies the agent's `*.py`
 (main.py + sibling modules such as `strategy.py`) + `deck.csv` + shared `common/` +
 `cg/` + the compiled `common/scouting/artifact.json` into `dist/<name>/` and zips it to
 `dist/<name>_<YYYYMMDD>_<githash>.zip`. The staged `dist/<name>/` *is* the exact

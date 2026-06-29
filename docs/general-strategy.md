@@ -297,7 +297,7 @@ as [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md)'s `gust_ko`).
   ([ADR-0020](adr/0020-forward-evolution-index-is-a-provider-primitive.md)) (is it a Basic? does its
   line reach an attacker?). **Tier 2 (sparse Role overlay):** the deck's `roles` refine intent where it
   diverges (`starter`, `accel_source`, a tech `disruption`), each Role mapping to a default fetch-weight
-  the deck tunes **by id** (the existing `_weight` override path, [pilot.py:354](../src/common/pilot.py:354)).
+  the deck tunes **by id** (the existing `_weight` override path, [`Pilot._weight`](../src/common/pilot.py)).
   **Tier 3 (rare escape hatch):** a combo deck declares an explicit per-card fetch priority. No
   exhaustive per-card table — a zero-label deck still grabs sensibly off derived importance.
 - **still-lacking** — the gap gate. **Need is per-category** ("a starter" = any Basic in play; "energy
@@ -335,8 +335,10 @@ floors it); a **`cost_discard`** fetch subtracts the keep-value of the cards she
 discard is cheap); a **Supporter** fetch must beat the best alternative Supporter (the Item-vs-Supporter
 split [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md) already built). The **bar is
 Plan-scaled** (low in `SETUP` where digging is king, higher in `RACE`/`CLOSE` where tempo is precious).
-Sequencing stays structural in `_finish_turn_last` ([pilot.py](../src/common/pilot.py)) — free digs
-first (`dig-before-commit`), `cost_discard`/Supporter fetches as commitments after.
+Sequencing stays structural in `_finish_turn_last` ([pilot.py](../src/common/pilot.py)) — free Item
+digs first (tier 0), then the one-per-turn **Supporter** (tier 1, so a Pokégear may upgrade which one
+you commit), then the blind Energy attach / `cost_discard` search (tier 2), then a `shuffle_hand`
+Supporter (tier 3, attach before nuking the hand), then the turn-ender (tier 4).
 
 **Deferred (designed-in seams, not built):** **(A) cost-netting + Plan-scaled bar** — the positive
 endorsement (`fetch-when-it-fills-a-need`) is shipped, but subtracting the shed cards' keep-value from a
@@ -458,8 +460,8 @@ real hypothesis + closed-form tactical pipeline — the same virtual-scoring pat
 ≈ 0 alone is blind to a playable tutor / gust-for-KO / clutch heal and would refresh them away. The
 full scan **is** "use your key cards first" proven structurally: every useful card outscores the
 refresh, so the refresh is reached only when nothing else is worth doing. It never preempts an attack
-(the scan is hand-only; attacks stay tier-2 turn-enders in `_finish_turn_last`, so a dead-hand + lethal
-refreshes **then** KOs the same turn).
+(the scan is hand-only; attacks stay last-tier turn-enders in `_finish_turn_last`, after the tier-3
+shuffle, so a dead-hand + lethal refreshes **then** KOs the same turn).
 
 **v1 = Layer A (the dead-hand fallback) — shipped (ADR-0024), test-first (`tests/test_shuffle_refresh.py`).**
 

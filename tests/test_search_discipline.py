@@ -371,7 +371,7 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
 @pytest.mark.req("REQ-GEN-0017")
 def test_dig_before_the_irreversible_energy_attach_even_with_no_attack():
     """Tier sequencing below attack-last: a draw/search (informative, tier 0) is played BEFORE the
-    Energy attach (the irreversible per-turn commit, tier 1) — even at a menu with no attack yet.
+    Energy attach (the irreversible per-turn commit, tier 2) — even at a menu with no attack yet.
     (f11: Pokégear before attaching Ignition.)"""
     DIG = 1227
     stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=160), DIG: CardStat(DIG),
@@ -382,4 +382,4 @@ def test_dig_before_the_irreversible_energy_attach_even_with_no_attack():
     dig = {"type": PLAY, "index": 0}                                  # play the search card (hand[0])
     obs = make_select([attach, dig, opt(14)], context=MAIN,
                       current=state(active=poke(CINDERACE, energy=0, hp=160), hand=[DIG, BASIC_W]))
-    assert pilot.decide(obs) == [1]                                  # dig (tier 0) before the attach (tier 1)
+    assert pilot.decide(obs) == [1]                                  # dig (tier 0) before the attach (tier 2)

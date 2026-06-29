@@ -19,7 +19,8 @@ These files drift; read them now, don't trust this doc's snapshot of them:
 - **`src/cg/api.py`** — `SelectContext` / `OptionType` / `AreaType` / `EnergyType` int values. Pull
   the constants you need as module-level ints with a comment (mirror the existing strategy files).
 - **`src/common/cards.py`** + the dump — the Function **tags** available on `c.tags`.
-- **`src/common/general_strategy.py`** + **`src/agents/<deck>/strategy.py`** — existing Hypotheses
+- **`src/common/strategy/baseline/baseline_*.py`** (deck-agnostic rules, clustered by
+  decision-context; ADR-0025) + **`src/agents/<deck>/strategy.py`** — existing Hypotheses
   as **style examples**. Match their shape exactly: a pure, total `lambda c: …` predicate, a seed
   `weight` in-band ([docs/weights.md](../../../docs/weights.md)), `status="assumed"`, a `rationale`
   that reads as plain competitive reasoning.
@@ -31,12 +32,12 @@ These files drift; read them now, don't trust this doc's snapshot of them:
 | covers-as-is | nothing — the General Strategy already fires |
 | override-candidate (seed weight) | a `{hyp_id: weight}` entry — seed it in `src/agents/<deck>/tuned.json` (the machine-overrides file `main.py` loads), or as a deck Hypothesis re-stating the id only if it must be deck-conditional |
 | conflicts | override the offending id toward `0`, and/or a deck Hypothesis that outweighs it — document why |
-| gap → new Hypothesis | a new `Hypothesis(...)` in `strategy.py` (deck-specific) or, if the trigger reads only universal `tags`/`roles`/`board`/`stat` and helps *any* deck, propose it for `general_strategy.py` instead |
+| gap → new Hypothesis | a new `Hypothesis(...)` in `strategy.py` (deck-specific) or, if the trigger reads only universal `tags`/`roles`/`board`/`stat` and helps *any* deck, propose it for the matching `src/common/strategy/baseline/baseline_<context>.py` cluster (ADR-0025) instead |
 | Role / Line / param | fill `roles={cardId: [...]}`, `lines=[Line(path=[...], payoff=...)]`, `params={...}` |
 
 Deck-specific (reads `card_id`s / deck `roles` / the deck's Line) → `strategy.py`. Universal (reads
-only tags/stat/board) → `general_strategy.py`. When unsure, keep it in the deck file; promotion to
-general is a deliberate, separately-reviewed step.
+only tags/stat/board) → the matching `strategy/baseline/baseline_<context>.py` cluster. When unsure,
+keep it in the deck file; promotion to general is a deliberate, separately-reviewed step.
 
 ## 3 · Gate 1 — per-Hypothesis trigger checks (the from-scratch Verifier)
 

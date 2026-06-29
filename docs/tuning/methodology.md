@@ -48,12 +48,14 @@ makes the learning below tractable — everything reduces to choosing the weight
 > **One non-additive exception — tiered turn sequencing (`_finish_turn_last`).** The engine
 > re-presents the open turn menu after each non-ending action, so the whole turn still happens — and
 > the Pilot's final step **reorders** the argmax to take the most informative, reversible actions
-> first and the irreversible ones last, at a single-pick MAIN menu: **tier 0** informative development
-> (draw/search, fill the Bench, evolve a benched Pokémon, play a Pokémon — any option a rule scored
-> `> 0`) → **tier 1** the Energy attach (the one irreversible per-turn commit) → **tier 2** the
-> turn-ending attack (plus Retreat / End / non-beneficial). A knockout is never forfeited (an
-> Evolve-of-the-Active drops to tier 2 when a KO is on the menu; the KO outscores everything in
-> tier 2). This is a selection layer **the weight fit does not model**: it reasons about the additive
+> first and the irreversible ones last, at a single-pick MAIN menu: **tier 0** free informative
+> development (draw/search, fill the Bench, evolve a benched Pokémon, play a Pokémon, an attach/gust
+> that unlocks a KO — any option a rule scored `> 0`) → **tier 1** the one-per-turn **Supporter**
+> (after the free Item digs, which may upgrade which Supporter you commit) → **tier 2** the blind/costly
+> commitments (the Energy attach, a `cost_discard` search) → **tier 3** a `shuffle_hand` Supporter (it
+> nukes the hand, so attach first) → **tier 4** the turn-ending attack (plus Retreat / End /
+> non-beneficial). A knockout is never forfeited (an Evolve-of-the-Active drops to the last tier when a
+> KO is on the menu; the KO outscores everything there). This is a selection layer **the weight fit does not model**: it reasons about the additive
 > score above, so it will flag a sequencing-fixed (or tie-resolved) Correction as `UNSATISFIED` /
 > propose a rule for it even though the real `decide()` already chooses correctly. (It also made the
 > old `build-before-attack` / `dont-chip` chip-penalty weights obsolete — they were removed.) **The

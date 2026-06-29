@@ -142,7 +142,9 @@ artifacts — is the [Strategy Writeup guidelines](writeup-guidelines.md).
 src/
   common/
     pilot.py    Sense→Plan→Score→Act, choose_plan, Tactical Evaluator
-    strategy.py Plan/Ready/Line/Hypothesis/Strategy + closed Plan & Role vocab
+    strategy/   data API (strategy.py: Hypothesis/Line/Plan/Ready/Strategy), engine vocab (context.py),
+                general_strategy.py (assembly), baseline/ (11 decision-context clusters),
+                doctrines/ (gust · fetch · shuffle_refresh — each owns a Pilot *Mixin)   [ADR-0025]
     cards.py    CardFunctions (Function Tag loader)
     scouting/   Scout / Read
     value/      Base Value Model loader            [planned]
@@ -162,7 +164,7 @@ tools/
 - **Verify on the real engine**: `python tools/sim/check_agent.py mega_starmie` — **Playability**
   (a full self-match, no crash/timeout/illegal) and **Deployability** (the packaged Bundle),
   on the pinned cabt env ([Agent Checks](agent-checks.md)).
-- **Package**: `python tools/package_agent.py mega_starmie` assembles the submission Bundle.
+- **Package**: `python tools/submit/package.py mega_starmie` assembles the submission Bundle.
 
 ## Status
 

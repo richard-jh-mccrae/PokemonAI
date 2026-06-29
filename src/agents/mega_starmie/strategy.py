@@ -6,6 +6,8 @@ Evolution = CCC). Weights are seed values, every Hypothesis status="assumed" —
 ladder-tuned and corrected (ADR-0009). Pure data: no engine, no control flow.
 """
 from common.strategy import Hypothesis, Line, Plan, Strategy
+from common.strategy.context import (
+    _ACTIVE, _ATTACH, _IS_FIRST, _PLAY, _SETUP_ACTIVE, _TO_HAND, _WINCON_ROLES, _YES)
 
 # --- Card ids (mega_starmie/deck.csv) -------------------------------------
 STARYU, MEGA_STARMIE_EX, CINDERACE = 1030, 1031, 666
@@ -13,13 +15,9 @@ WATER_ENERGY, IGNITION_ENERGY = 3, 17
 MEGA_SIGNAL, BUDDY_POFFIN, SALVATORE, HILDA, ULTRA_BALL = 1145, 1086, 1189, 1225, 1121
 CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 
-_SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON (cg/api.py)
-_TO_HAND = 7        # SelectContext.TO_HAND — a search: choose which card to take into hand
-_IS_FIRST = 41      # SelectContext.IS_FIRST — the coin-toss "Would you like to go first?" (YesNo)
-_PLAY, _ATTACH = 7, 8  # OptionType — board-commit options (vs a search/ToHand card sub-selection)
-_YES = 1            # OptionType.YES — the affirmative at a YesNo select
-_ACTIVE = 4         # AreaType.ACTIVE — an attach onto the Active Spot
-_WINCON_ROLES = {"win_condition", "primary_attacker"}
+# Engine-vocabulary constants (_SETUP_ACTIVE / _TO_HAND / _IS_FIRST / _PLAY / _ATTACH / _YES / _ACTIVE)
+# and _WINCON_ROLES are imported from common.strategy.context above — the single source shared with the
+# Pilot and every doctrine (ADR-0025), so a cg/api.py renumber can't silently drift this deck's literals.
 
 # Per-deck Role overlay on the universal Function Tags (sparse — only deck-intentional cards).
 ROLES = {
@@ -43,7 +41,13 @@ HYPOTHESES = [
         weight=40, status="assumed"),
     Hypothesis(
         id="accel-into-main",
-        rationale="Rush energy onto the Mega Starmie ex line as fast as possible.",
+        rationale="Rush energy onto the Mega Starmie ex line as fast as possible. NB this co-fires "
+                  "additively with the general baseline_energy rules on an energy play toward the "
+                  "win-condition (`build-active-wincon` +20, `power-up-attacker` +15 while the target "
+                  "still needs its cheapest attack, minus `attach-energy-last` -5) — so the effective "
+                  "SETUP energy-play nudge is ~+50-60, not +30 in isolation; tune this seed against the "
+                  "baseline_energy cluster, not alone. (`use-acceleration` does NOT co-fire: Ignition is "
+                  "`discard_eot`, not `energy_accel`.)",
         when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _ATTACH)
         and "accel_source" in c.roles,
         weight=30, status="assumed"),
@@ -51,7 +55,7 @@ HYPOTHESES = [
         id="tutor-the-wincon",
         rationale="During setup, dig for the win-condition pieces (Mega Signal / Salvatore / Hilda) "
                   "by playing a tutor. (Choosing WHICH card a search pulls is the deck-agnostic "
-                  "`fetch-the-wincon` / `fetch-energy-when-starved` in common/general_strategy.py.) "
+                  "`fetch-the-wincon` / `fetch-energy-when-starved` in common/strategy/doctrines/doctrine_fetch.py.) "
                   "Stands down once the win-condition is already in hand — no need to dig for a copy "
                   "you're holding.",
         when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles
@@ -87,19 +91,23 @@ HYPOTHESES = [
                   "Blow) instead, saving the Ignition for a turn that genuinely needs the 210 / "
                   "ignore-effects. When the cheap attack CAN'T KO, Nebula is needed, so this stands "
                   "down — it never blocks the Ignition you actually need (the greedy '>=2 Ignition' "
-                  "case is subsumed: if the cheap attack KOs, Nebula never gets ahead). Complements "
-                  "the general `dont-waste-discard-energy`, which exempts the win-condition.",
+                  "case is subsumed: if the cheap attack KOs, Nebula never gets ahead). Complements two "
+                  "general energy rules without either fighting it: `dont-waste-discard-energy` exempts "
+                  "the win-condition (so it stays silent here), and `build-active-wincon` carries a "
+                  "matching carve-out — it stands down for a `discard_eot` Energy when "
+                  "`active_cheap_attack_kos` — so it no longer co-fires on this attach. The reusable "
+                  "Water is never penalised by any of the three, so 'prefer Water' wins by its full margin.",
         when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags
         and c.attach_target_area == _ACTIVE and bool(_WINCON_ROLES & set(c.attach_target_roles))
         and c.board.reusable_energy_in_hand and c.board.active_cheap_attack_kos,
         weight=-40, status="assumed"),
     # NOTE: Hero's Cape (ACE SPEC, +100 HP) deployment is now the deck-agnostic
-    # `deploy-hp-tool-on-breakpoint` in common/general_strategy.py — it reads the per-Tool HP off
+    # `deploy-hp-tool-on-breakpoint` in common/strategy/baseline/baseline_tool.py — it reads the per-Tool HP off
     # `CardStat.hpBonus` (parsed +100 for the Cape) and the weakness-aware `incoming_active_damage`,
     # so every deck running an unconditional +HP Tool inherits the breakpoint deploy without
     # hardcoding the bonus. The ACE SPEC scarcity reluctance is the general `protect-ace-spec-tool`.
     # NOTE: discard-Energy discipline (don't waste Ignition) is the deck-agnostic
-    # `dont-waste-discard-energy` in common/general_strategy.py — it fires off the `discard_eot`
+    # `dont-waste-discard-energy` in common/strategy/baseline/baseline_energy.py — it fires off the `discard_eot`
     # Function Tag, so every deck that runs Ignition (or any discard-at-EOT Energy) inherits it.
 ]
 

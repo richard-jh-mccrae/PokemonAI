@@ -77,8 +77,10 @@ HYPOTHESES = [
                   "so playing it first wastes the attachment you could have made (and can shuffle away "
                   "a game-winning Energy). Fires only when a reusable Energy is in hand and you have "
                   "not yet attached this turn — weighted to push the hand-shuffle below an endorsed "
-                  "attach AND below 0, so `_finish_turn_last` sequences it last (dig with non-shuffle "
-                  "searches first, attach, then refresh the hand).",
+                  "attach AND below 0. Belt-and-suspenders: `_finish_turn_last` ALSO tiers any "
+                  "`shuffle_hand` Supporter structurally (tier 3, after the tier-2 Energy attach), so "
+                  "the attach precedes the shuffle even if this weight ever fails to fire; the weight "
+                  "additionally GATES whether to refresh at all (don't, while a held Energy is unplaced).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.reusable_energy_in_hand and not c.board.energy_attached,
         weight=-60, status="testing"),
@@ -109,8 +111,9 @@ HYPOTHESES = [
                   "never shuffle away a hand we'd fetch back. Small positive — beats End (≈0), loses to any "
                   "real play; a dead hand can't contain a better Supporter, so the one-per-turn slot "
                   "economy is subsumed. Never preempts an attack (the scan is hand-only; the turn-ending "
-                  "attack stays an `_finish_turn_last` tier-2 commitment, so a dead-hand + lethal refreshes "
-                  "THEN KOs the same turn). Layer A; the stochastic pull-EV refinement is deferred.",
+                  "attack stays a last-tier `_finish_turn_last` commitment, after the tier-3 shuffle, so a "
+                  "dead-hand + lethal refreshes THEN KOs the same turn). Layer A; the stochastic pull-EV "
+                  "refinement is deferred.",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.hand_is_dead and c.board.deck_holds_a_need,
         weight=8, status="testing"),

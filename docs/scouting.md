@@ -172,7 +172,7 @@ def agent(obs_dict):
 
 - **Compile daily** (after the fetch) so the local artifact tracks the meta; **submit
   deliberately** — the shipped artifact freezes at submission.
-- `tools/package_agent.py <name>` → copies `agents/<name>/{main.py,deck.csv}` + shared
+- `tools/submit/package.py <name>` → copies `agents/<name>/{main.py,deck.csv}` + shared
   `common/` + `cg/` + the artifact into `dist/<name>/`, then zips it. `dist/` is
   gitignored; **commit the artifact** as part of each submission commit (provenance).
 

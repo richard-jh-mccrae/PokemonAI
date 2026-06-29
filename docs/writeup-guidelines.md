@@ -59,7 +59,7 @@ the distinction in our project:
 | **B5 · directory_structure.txt** | A `find . -type d` readout. | the repo layout — [CONTEXT-MAP](../CONTEXT-MAP.md) + [Agent Architecture](agent-architecture.md) → Layout. |
 | **B6 · SETTINGS.json** | The single place that declares train/test/model/output paths; all I/O reads from it. | the **Manifest** is our single declarative record of every decision-steering input ([ADR-0019](adr/0019-submissions-are-traceable-and-tracked.md)). |
 | **B7 · Serialized trained model** | The trained model saved to disk, so prediction needs no re-train. | the shipped `tuned.json` (Hypothesis weights) + the Base Value Model artifact; the **Bundle** *is* the serialized, ready-to-play agent. |
-| **B8 · entry_points.md** | Separate `prepare_data` / `train` / `predict` commands. | **prepare**: `tools/meta_tracker` (Replays → meta + scouting + card-functions [+ value-model] artifacts). **train**: `tools/train` tuner (Corrections → `tuned.json`) [+ value trainer]. **"predict"**: `python tools/package_agent.py <deck>` → `python tools/sim/check_agent.py <deck>` (verify, incl. the 197.7 MiB size gate) → `submit`; at runtime `agent(obs)` is the per-decision predictor. |
+| **B8 · entry_points.md** | Separate `prepare_data` / `train` / `predict` commands. | **prepare**: `tools/meta_tracker` (Replays → meta + scouting + card-functions [+ value-model] artifacts). **train**: `tools/train` tuner (Corrections → `tuned.json`) [+ value trainer]. **"predict"**: `python tools/submit/package.py <deck>` → `python tools/sim/check_agent.py <deck>` (verify, incl. the 197.7 MiB size gate) → `submit`; at runtime `agent(obs)` is the per-decision predictor. |
 
 ## C. Kaggle Winner Presentation
 

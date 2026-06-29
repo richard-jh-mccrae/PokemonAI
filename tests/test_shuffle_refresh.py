@@ -127,3 +127,38 @@ def test_dig_before_commit_excludes_a_shuffle_refresh_but_not_a_plain_draw():
                                     hand=[LILLIES, PLAINDRAW]))
     assert "dig-before-commit" not in _fired(pilot.explain(obs).options[0])   # the Shuffle-Refresh
     assert "dig-before-commit" in _fired(pilot.explain(obs).options[1])       # the plain draw card
+
+
+# --- hold-wincon-dont-shuffle: don't shuffle a held win-condition back into the deck ---------------
+@pytest.mark.req("REQ-GEN-0047")
+def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_away():
+    """A Shuffle-Refresh shuffles the WHOLE hand into the deck — including a win-condition you are
+    holding. The reluctance fires (negative) so the agent doesn't bury the piece it just found. Closes
+    the behavioral coverage gap flagged by the 2026-06-29 refactor audit."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
+    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    # hand holds BOTH the refresh and the win-condition -> shuffling would bury the wincon.
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
+                                    hand=[LILLIES, WINC]))
+    trace = pilot.explain(obs).options[0]
+    assert "hold-wincon-dont-shuffle" in _fired(trace)
+
+
+@pytest.mark.req("REQ-GEN-0047")
+def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
+    """No win-condition in hand -> nothing precious to shuffle away -> the reluctance stays silent
+    (the refresh is then judged purely on the dead-hand fallback)."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
+    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
+    assert "hold-wincon-dont-shuffle" not in _fired(pilot.explain(obs).options[0])

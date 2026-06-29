@@ -18,6 +18,7 @@ _END = 14     # end the turn
 
 # ── SelectContext (cg/api.py) ──
 _MAIN = 0         # the open turn menu (play/attach/evolve/retreat/attack/end); attack-last applies here
+_SETUP_ACTIVE = 1 # SETUP_ACTIVE_POKEMON — choose which Pokémon takes the Active Spot during Set Up
 _SETUP_BENCH = 2  # SETUP_BENCH_POKEMON — place a benched Pokémon during Set Up
 _SWITCH = 3       # swap into the Active Spot (my own retreat OR a Boss's gust target)
 _TO_ACTIVE = 4    # promote a benched Pokémon to the Active Spot
@@ -26,6 +27,7 @@ _TO_HAND = 7      # a search: choose which card to add to your hand
 _DISCARD = 8      # choose which card(s) to discard (e.g. Ultra Ball's cost)
 _DAMAGE = 15      # choose which Pokémon an attack deals damage to (a bench snipe)
 _ATTACH_FROM = 21 # choose the Pokémon to attach an Energy to
+_IS_FIRST = 41    # IS_FIRST — the coin-toss "Would you like to go first?" (YesNo)
 _MULLIGAN = 42    # "Would you like to redraw the cards?"
 
 # fetch-grab selects: a maxCount>1 here is a single multi-pick resolved GREEDILY with gap-update +
@@ -54,8 +56,8 @@ _EVOLVING_THREAT_DMG = 100 # an evolution line "becomes an attacker" at >= this 
 
 __all__ = [
     "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_ATTACK", "_END",
-    "_MAIN", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND", "_DISCARD",
-    "_DAMAGE", "_ATTACH_FROM", "_MULLIGAN", "_GRAB_CONTEXTS",
+    "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
+    "_DISCARD", "_DAMAGE", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_ZONE",
     "KO_SCORE", "_SUPPORTER", "_BENCH_MAX", "_THIN_BENCH", "_OPENER_TAG", "_STARTER_ROLE",
     "_WINCON_ROLES", "_ENGINE_TAGS", "_EVOLVING_THREAT_DMG",

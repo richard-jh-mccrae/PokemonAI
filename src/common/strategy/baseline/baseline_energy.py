@@ -65,8 +65,14 @@ HYPOTHESES = [
                   "hit (Nebula Beam, CCC = 210) and instead diverts the Energy to an idle Bench piece "
                   "or burns the turn on a draw card. Fires only on the Active win-condition that is "
                   "still short of its highest-damage attack cost (`attach_target_under_max`), so it "
-                  "stops the moment the big attack is online and never over-stacks a finished attacker.",
+                  "stops the moment the big attack is online and never over-stacks a finished attacker. "
+                  "Carve-out: stands down for a one-shot discard-EOT Energy (`discard_eot`, e.g. Ignition) "
+                  "when the Active's CHEAP attack already KOs (`active_cheap_attack_kos`) — the big attack "
+                  "isn't needed this turn, so endorsing the burn would needlessly fight a deck's "
+                  "conserve-the-burst rule (e.g. mega_starmie `conserve-ignition-prefer-water`); a reusable "
+                  "Energy is never penalised, so 'prefer the reusable' wins by its full margin.",
         when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
-        and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.attach_target_under_max,
+        and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.attach_target_under_max
+        and not ("discard_eot" in c.tags and c.board.active_cheap_attack_kos),
         weight=20, status="testing"),
 ]

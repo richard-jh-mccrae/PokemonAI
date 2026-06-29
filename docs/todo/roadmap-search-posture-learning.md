@@ -56,7 +56,7 @@ See [[snipe-threat-two-signals]].
    DAMAGE/CARD/BENCH). **Fail-closed, coded defensively** — `_context` is NOT exception-wrapped, so the
    helper must return `None` on `stats is None`, `getattr(self.stats, 'forward_max_damage', None)` missing,
    unresolved option, or no chain. The 100 threshold is **not** applied here.
-3. **New Hypothesis** `snipe-the-evolving-threat` (`src/common/general_strategy.py`): weight **18**,
+3. **New Hypothesis** `snipe-the-evolving-threat` (`src/common/strategy/baseline/baseline_snipe.py`): weight **18**,
    status `testing`, `when = select_context == DAMAGE and not target_is_threat and
    (target_forward_damage or 0) >= EVOLVING_THREAT_DMG` (=100, the tunable constant). Document in the
    rationale that `snipe-the-weakest` (15) **stacks additively** (a low-HP evolving target = 18+15).

@@ -14,7 +14,8 @@ Energy-moving toolboxes).
 **Decision.** Energy attachment is a **layered procedure**, not per-deck logic:
 
 - **① General Strategy — universal reflex rules.** Deck-agnostic, id'd, weighted Hypotheses in
-  `common/general_strategy.py`: `power-up-attacker` (attach every turn), `use-acceleration`
+  `common/strategy/baseline/baseline_energy.py` (relocated from `common/general_strategy.py` by
+  ADR-0025): `power-up-attacker` (attach every turn), `use-acceleration`
   (prioritise the `energy_accel` Function Tag), `dont-feed-the-doomed` (don't sink Energy into an
   Active that will be Knocked Out next turn when a benched successor exists), `attach-energy-last`
   (sequence the attachment after draw/search).

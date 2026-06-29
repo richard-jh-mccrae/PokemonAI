@@ -100,8 +100,9 @@ appear). **Commit authored Hypotheses before the next round** so re-featurizatio
    - `src/common/pilot.py` — the `Context` / `Board` fields a `when(ctx)` may read.
    - `src/cg/api.py` — `SelectContext` / `OptionType` / `AreaType` / `EnergyType` enums.
    - `src/common/cards.py` + `card_functions.json` — the function **tags**.
-   - `src/common/general_strategy.py` + `src/agents/<deck>/strategy.py` — existing Hypotheses as
-     **style examples** (mirror their shape).
+   - `src/common/strategy/baseline/baseline_*.py` (deck-agnostic rules, clustered by decision-context;
+     ADR-0025) + `src/agents/<deck>/strategy.py` — existing Hypotheses as **style examples** (mirror
+     their shape).
 
 4. **Author the candidate `when()`** from the cluster's RATIONALES (the authoring spec):
    - Prefer **universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s.
@@ -142,7 +143,12 @@ appear). **Commit authored Hypotheses before the next round** so re-featurizatio
    (and must include any new signal's test from step 4b).
 
 8. **Place + present a diff** (the human commits):
-   - universal trigger → `src/common/general_strategy.py`
+   - universal trigger → append into the matching cluster's `HYPOTHESES` in
+     `src/common/strategy/baseline/baseline_<decision-context>.py` (energy / snipe / promote / retreat /
+     bench / tool / evolution / heal / opening / sequencing / disruption; ADR-0025) — `baseline/__init__`
+     + `general_strategy.py` pick it up automatically (a brand-new cluster also adds one line to
+     `baseline/__init__.py`). A rule that needs one card archetype's closed-form Pilot code goes in its
+     `src/common/strategy/doctrines/doctrine_*.py` instead.
    - deck-specific (`roles`/`lines`/`card_id`s) → `src/agents/<deck>/strategy.py`
    - Set `status="testing"` once the Verifier passed; mark `confirmed`/`refuted` later from ladder A/B.
 
@@ -202,11 +208,11 @@ a shared list/map**:
 
 | Write-set | SOFT (parallel-safe) | HARD (serialize) |
 |---|---|---|
-| Universal Hypothesis | append into `general_strategy.py` `HYPOTHESES` (`:46-273`) — order-independent (`pilot.py:219-221` sums all fired weights) | — |
+| Universal Hypothesis | append into the matching `strategy/baseline/baseline_<context>.py` `HYPOTHESES` (ADR-0025; different contexts → different files, so even more disjoint) — order-independent (`pilot.py` sums all fired weights) | — |
 | Deck Hypothesis | append into deck `strategy.py` `HYPOTHESES` (`:31-58`) | edits the same deck `ROLES` dict (`:20-29`) / `STRATEGY` ctor (`:60-68`) |
 | Function tag | tag a card **no other concurrent cluster touches** (`card_functions.json`) | two clusters tag the **same** card id |
 | Context/Board signal (step 4b) | — | **always HARD** — co-edits the dataclass body **and** its single `_context`/`_board` return (`pilot.py:92-120`/`:301-309`, `:62-89`/`:371-390`) |
-| Enum / mirror constant | — | two clusters edit the same mirror block (`general_strategy.py:9-21`, `pilot.py:16-34`) |
+| Enum / mirror constant | — | two clusters edit the same mirror block (`strategy/context.py`, `pilot.py:16-34`) |
 
 **Rule of thumb:** append-to-a-list/map = parallel-safe; edit-a-shared-structured-region = serialize.
 **Every step-4b new signal is HARD by construction.** File-disjoint ≠ behavior-disjoint (two new

@@ -66,8 +66,9 @@ locks). The grilling discipline and the per-category question banks live in
    Capture it into the working doc verbatim — it's the substrate. **Ground every mechanical claim in
    this dump, never in memory or a web guide.** (`--json` emits the machine form if you need it.)
 3. **Read what already exists**, so you build on it rather than reinvent:
-   - `src/common/general_strategy.py` + `docs/general-strategy.md` — the ~20 deck-agnostic
-     Hypotheses you'll reconcile against. Know them cold before grilling.
+   - `src/common/strategy/baseline/baseline_*.py` (clustered by decision-context; ADR-0025) +
+     `docs/general-strategy.md` — the deck-agnostic Hypotheses you'll reconcile against. Know them
+     cold before grilling.
    - `src/agents/<deck>/strategy.py` — a prior pass may already have Roles/Lines/Hypotheses.
    - `src/agents/<deck>/STRATEGY.md` — **if it exists, you're resuming.** Read its progress
      checklist and pick up where it left off; don't restart.

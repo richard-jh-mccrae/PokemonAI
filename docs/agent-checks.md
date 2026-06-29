@@ -15,7 +15,7 @@ Driven by the **real** cabt simulator (`kaggle-environments`) — see
    rule is reported (invalid id / >4 copies / no Basic Pokémon / >1 ACE SPEC).
 3. **playability** — the agent plays itself 5 times on the cabt engine; every seat must finish
    `DONE` (no crash `ERROR`, timeout `TIMEOUT`, or illegal move/deck `INVALID`).
-4. **deployability** — `tools/package_agent.py` builds the Bundle; its archive must be **≤ 197.7
+4. **deployability** — `tools/submit/package.py` builds the Bundle; its archive must be **≤ 197.7
    MiB** (the grader's submission-size cap), it is extracted to a clean dir, its contents are
    checked (`main.py`, `deck.csv`, `cg/`, `common/`), and it plays one match in a **fresh
    subprocess** — proving the shipped artifact is self-contained.

@@ -225,8 +225,12 @@ Salvatore rush line stands.
 - **Mechanics:** Item (unlimited/turn). Look at top 7, may take a **Supporter** to hand; rest shuffled back.
 - **Use:** play it **first**, before committing your one Supporter — it digs the Supporter you need
   (Salvatore / Hilda / Lillie's / Boss's). Consistency glue for a Supporter-hungry, draw-light deck.
-- **Disposition:** general `dig-before-commit` covers the setup lift; "Pokégear before your Supporter"
-  is the same sequencing principle.
+- **Disposition:** "Pokégear before your Supporter" is **structural**, not `dig-before-commit`: that
+  rule lifts digs above the *attach/attack*, but a Supporter is *also* a `search`/`draw` card, so it
+  collected the same bonus — it never ordered the Item-dig vs the Supporter. The Pilot's
+  `_finish_turn_last` tiers a Supporter as a commitment (tier 1) **below** a free Item dig (tier 0), so
+  Pokégear resolves first and may upgrade which Supporter you commit. (The `dig-before-commit` +20 the
+  Supporter still gets is harmless — the tier decides the order.)
 
 ### 4× Mega Signal — `search` (payoff tutor)
 - **Mechanics:** Item. Search deck for a **Mega Evolution ex** (→ Mega Starmie ex), reveal, to hand.

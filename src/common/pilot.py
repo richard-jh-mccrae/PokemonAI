@@ -65,8 +65,6 @@ class Board:
     my_active_id: int | None = None
     my_active_energy: int = 0
     my_active_hp: int = 0
-    opp_active_id: int | None = None
-    opp_active_hp: int = 0
     opp_bench: tuple = ()          # ((cardId, hp), …) of the opponent's benched Pokémon
     turn: int = 0
     energy_attached: bool = False  # have I already attached Energy this turn?
@@ -139,7 +137,10 @@ class Board:
     deck_known_counts: dict | None = None  # EXACT count of each card still in my deck, once the
                                           # deck-tracker has anchored the prizes (deck = decklist −
                                           # visible − prizes); None until the first search reveal.
-                                          # Backs the POSITIVE `deck_definitely_has`.
+                                          # Backs the POSITIVE `deck_definitely_has` (STAGED: v1 wires no
+                                          # positive-fetch consumer — ADR-0023 keeps the oracle an
+                                          # availability gate; a positive fetch endorsement is the planned
+                                          # reader — so this is intentionally read-only-from-tests today).
     opp_active_condition_gift: bool = False  # the opponent's Active carries ANY special condition
                                           # (poison/burn/sleep/paralyze/confuse) — gusting it off to the
                                           # bench would CLEAR it (a free cure). The guard that suppresses
@@ -217,6 +218,9 @@ class Context:
     tags: list = field(default_factory=list)
     stat: object | None = None     # the option card's engine CardStat (hp/weakness/prize value/…)
     board: Board = field(default_factory=Board)   # per-decision board summary (same for all options)
+    # NOTE: is_attack/tactical/is_ko are a documented deck-Hypothesis trigger surface (deck-genie
+    # authoring.md); no SHIPPED rule reads them yet (the sequencing core uses the OptionTrace copies),
+    # so they're intentionally kept — don't prune as dead without updating that authoring vocabulary.
     is_attack: bool = False
     tactical: float = 0.0          # the option's closed-form combat value (>= KO_SCORE on a knockout)
     is_ko: bool = False            # this option is an attack that knocks out the opponent's Active
@@ -303,17 +307,21 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         non-ending action, so the whole turn still happens — which means you should take the most
         informative, reversible actions first and the irreversible ones last:
 
-          tier 0  informative development — draw / search, fill the Bench, evolve a benched Pokémon,
-                  play a Pokémon. Free, and reveals a better target before you commit.
-          tier 1  irreversible per-turn COMMITMENTS — the Energy attach, and a discard-COST search
-                  (`cost_discard`, e.g. Ultra Ball: pays 2 cards from hand). Do the free digs first,
-                  THEN spend the irreversible thing — a free tutor may find what it would, and you
-                  pick the discards knowing more.
-          tier 2  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
+          tier 0  free informative development — draw / search, fill the Bench, evolve a benched
+                  Pokémon, play a Pokémon (and an attach / gust that UNLOCKS a KO — take the win).
+                  Free, and reveals a better target before you commit.
+          tier 1  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
+                  so commit it AFTER the free Item digs (a Pokégear may upgrade which Supporter you
+                  play) but before the blind attach. A KO-enabling gust Supporter stays in tier 0.
+          tier 2  the blind / costly COMMITMENTS — the Energy attach, and a discard-COST search
+                  (`cost_discard`, e.g. Ultra Ball: pays 2 cards from hand).
+          tier 3  a hand-SHUFFLE Supporter (`shuffle_hand`, e.g. Lillie's / Harlequin) — it nukes the
+                  hand, so attach your held Energy (tier 2) FIRST, then shuffle the dregs away.
+          tier 4  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
 
         An option is sequenced early only when a Hypothesis endorses it (score > 0). A knockout is
-        never forfeited: an Evolve of the Active drops to tier 2 when a KO is on the menu, and the KO
-        attack outscores everything else in tier 2. Stable within a tier (keeps the score order).
+        never forfeited: an Evolve of the Active drops to the last tier when a KO is on the menu, and
+        the KO attack outscores everything else there. Stable within a tier (keeps the score order).
         Only at a single-pick MAIN menu; every other context (snipe, search, mulligan) is untouched."""
         if max_count != 1 or len(order) < 2 or select_context != _MAIN:
             return order
@@ -324,22 +332,38 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             cid = traces[i].card_id
             return bool(self.functions) and cid is not None and "cost_discard" in self.functions.tags(cid)
 
+        def _is_supporter(i: int) -> bool:
+            cid = traces[i].card_id
+            st = self.stats.get(cid) if (self.stats and cid is not None) else None
+            return bool(st and getattr(st, "cardType", None) == _SUPPORTER)
+
+        def _is_shuffle_refresh(i: int) -> bool:                     # a hand-nuke Supporter (shuffle_hand)
+            cid = traces[i].card_id
+            return bool(self.functions) and cid is not None and "shuffle_hand" in self.functions.tags(cid)
+
         def _tier(i: int) -> int:
             o = options[i]
             t = o.get("type")
-            if t == _ATTACH and traces[i].tactical >= KO_SCORE:      # attach that UNLOCKS a KO this turn
-                return 0                                             # take the win — don't dig first
+            if t in (_ATTACH, _PLAY) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach: an ATTACH
+                return 0                                                  # that unlocks a KO, or a game-winning
+                                                                          # gust Supporter (KO_SCORE-class
+                                                                          # _gust_tactical) — take the win,
+                                                                          # don't dig first (REQ-GUST-0001)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
-                return 2
+                return 4
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
-                return 2                                             # would forfeit an available KO
+                return 4                                             # would forfeit an available KO
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
+                return 4
+            if t == _PLAY and _is_shuffle_refresh(i):                # hand-nuke: AFTER the Energy attach, so a
+                return 3                                             # held Energy is placed before the shuffle
+            if t == _PLAY and _is_supporter(i):                      # the one-per-turn Supporter: after the
+                return 1                                             # free Item digs, before the blind attach
+            if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # blind/costly commitment: after free dev
                 return 2
-            if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # irreversible commitment: after free dev
-                return 1
             return 0
 
-        if any(_tier(i) < 2 for i in order):                         # legibility: mark the held-back attacks
+        if any(_tier(i) < 4 for i in order):                         # legibility: mark the held-back attacks
             for i in order:
                 if options[i].get("type") == _ATTACK:
                     traces[i].deferred = True
@@ -656,8 +680,6 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             my_active_id=(ma or {}).get("id"),
             my_active_energy=len((ma or {}).get("energies") or []),
             my_active_hp=(ma or {}).get("hp", 0),
-            opp_active_id=(oa or {}).get("id"),
-            opp_active_hp=(oa or {}).get("hp", 0),
             opp_bench=tuple((b.get("id"), b.get("hp", 0)) for b in (opp.get("bench") or []) if b),
             turn=state.get("turn", 0),
             energy_attached=bool(state.get("energyAttached")),

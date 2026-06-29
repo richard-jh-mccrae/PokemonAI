@@ -37,6 +37,6 @@ showing the one you want ([ADR-0005](adr/0005-deck-stealer-source.md)).
 - **Team name** is matched exactly (quote names with spaces/unicode). If it isn't
   in the replay, the tool prints both team names and exits.
 - **Just the deck:** no `main.py` is written — you're stealing the deck, not the
-  agent. Add your own `main.py` to the dir before `package_agent.py` will build it.
+  agent. Add your own `main.py` to the dir before `tools/submit/package.py` will build it.
 - **Collisions** are refused unless `--force`, so a hand-edited list is never
   silently clobbered.

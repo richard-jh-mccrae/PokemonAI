@@ -64,6 +64,32 @@ def test_build_active_wincon_keeps_loading_the_active_toward_its_big_attack():
 
 
 @pytest.mark.req("REQ-GEN-0025")
+def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_attack_kos():
+    """Carve-out (refactor audit 2026-06-29): don't burn a finite discard-EOT Energy (Ignition) to
+    build toward the big attack when the Active win-condition's CHEAP attack already KOs the opponent —
+    Nebula isn't needed this turn, so the build endorsement would only partially cancel the deck's
+    `conserve-ignition-prefer-water` penalty (the two used to co-fire with opposite signs on the SAME
+    Ignition attach). Scoped to `discard_eot`: a reusable Water still builds toward the payoff."""
+    pilot = _pilot()
+    ign = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Ignition (hand idx 1)
+    # Active wincon at 1 W (short of Nebula CCC=3); its cheap attack (120) KOs the 120-HP opp Active.
+    obs = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
+                                           opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
+    assert "build-active-wincon" not in _fired(pilot.explain(obs).options[0])
+
+    # Control A — a reusable Water attach (no `discard_eot`) still builds toward the payoff, even on KO.
+    wat = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Water (hand idx 0)
+    obs_w = make_select([wat], current=state(active=poke(WINCON, energy=1, hp=330),
+                                             opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
+    assert "build-active-wincon" in _fired(pilot.explain(obs_w).options[0])
+
+    # Control B — when the cheap attack can't KO (Nebula IS needed), Ignition is the intended power.
+    obs_n = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
+                                             opp_active=poke(OPP, hp=300), hand=[WATER, IGNITION]))
+    assert "build-active-wincon" in _fired(pilot.explain(obs_n).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0025")
 def test_build_active_wincon_prefers_active_over_a_bench_copy():
     pilot = _pilot()
     # Active win-con (1 E) vs a bench copy (0 E): build the ATTACKER, not the idle bench piece.
@@ -212,7 +238,7 @@ def _denial_pilot(**kw):
 @pytest.mark.req("REQ-GEN-0031")
 def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
     """RACE: the Active win-con can attack for 120 (tactical 119.9), but a Crushing Hammer strip is
-    free — `_finish_turn_last` sequences the Item (tier 0) ahead of the turn-ending attack (tier 2),
+    free — `_finish_turn_last` sequences the Item (tier 0) ahead of the turn-ending attack (tier 4),
     so the agent disrupts AND still attacks the same turn (the ep82525101 fr92/fr102 shape)."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)            # Crushing Hammer in hand[0]
@@ -426,7 +452,7 @@ def test_dig_before_commit_skips_a_cost_discard_search():
 @pytest.mark.req("REQ-GEN-0033")
 def test_cost_discard_search_is_sequenced_after_a_free_dig_even_when_it_scores_higher():
     # Ultra Ball is endorsed (+50) over a free search (Mega Signal, +20), yet a discard-cost play is a
-    # COMMITMENT — `_finish_turn_last` holds it to tier 1, so the FREE dig (tier 0) is taken first.
+    # COMMITMENT — `_finish_turn_last` holds it to tier 2, so the FREE dig (tier 0) is taken first.
     pilot = _endorse_ultra_pilot()
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
                       current=state(active=poke(PREEVO, hp=70), hand=[ULTRA_BALL, MEGA_SIGNAL], prizes=6))
