@@ -17,9 +17,7 @@ from common.strategy import Plan, Strategy
 # doctrine modules, so it lives in common.strategy.context. The three card-archetype doctrines each
 # own their Hypotheses AND their Pilot-side code (a `*Mixin` this Pilot inherits) — see those modules.
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
-from common.strategy.doctrine_fetch import FetchMixin
-from common.strategy.doctrine_gust import GustMixin
-from common.strategy.doctrine_shuffle_refresh import ShuffleRefreshMixin
+from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
@@ -416,7 +414,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         return my_prize >= op                                # my self-KO gives them their last prize too
 
     # The Gust doctrine's whether-to-play lethal (`_gust_tactical`), the SWITCH target-select, and the
-    # gust Board signals live in common.strategy.doctrine_gust (GustMixin). `_attach_lethal_tactical`
+    # gust Board signals live in common.strategy.doctrines.doctrine_gust (GustMixin). `_attach_lethal_tactical`
     # below is the general lethal-ATTACH lookahead (not gust) — it stays in the core Tactical layer.
     def _attach_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for an ATTACH that UNLOCKS a knockout this turn — attaching this Energy
@@ -554,7 +552,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
     # whiff/redundant signals (`_search_signals`/`_search_deck_set`), the whether-to-play lookahead
     # (`_fetch_fills_a_need`), and the greedy multi-pick (`_greedy_grab`/`_virtual_grab_board` +
     # `_top_fetch_priority_id`/`_is_support_id`/`_support_in_play`) live in
-    # common.strategy.doctrine_fetch (FetchMixin).
+    # common.strategy.doctrines.doctrine_fetch (FetchMixin).
     def _attach_target(self, obs: dict, option: dict) -> dict | None:
         """The Pokémon an attach option puts Energy on — encoded as `inPlayArea`/`inPlayIndex`
         (distinct from `area`/`index`, which point at the Energy card in hand). None when absent."""
@@ -703,7 +701,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                        hand_is_dead=self._hand_is_dead(obs, select, board))
 
     # The Shuffle-Refresh doctrine's signals (`_has_shuffle_refresh`, `_deck_holds_a_need`,
-    # `_hand_is_dead`) live in common.strategy.doctrine_shuffle_refresh (ShuffleRefreshMixin);
+    # `_hand_is_dead`) live in common.strategy.doctrines.doctrine_shuffle_refresh (ShuffleRefreshMixin);
     # `_board` calls them.
 
     def _wincon_set(self) -> set:

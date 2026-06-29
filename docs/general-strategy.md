@@ -15,8 +15,11 @@ disables any rule by overriding its weight **by id** (learned from replays/train
 hand-authored — [ADR-0009](adr/0009-training-methodology.md)). Weights are seeds on the
 [weight scale](weights.md), to be ladder-tuned.
 
-Source: `src/common/general_strategy.py` (positional hypotheses) and the Tactical
-Evaluator in `common/pilot.py` (combat). Each Hypothesis carries a plain-English `rationale`
+Source: the positional hypotheses live in `src/common/strategy/baseline/baseline_*.py` (clustered by
+decision-context — energy / snipe / promote / …) plus the three card-archetype doctrines in
+`src/common/strategy/doctrines/`, assembled by `src/common/strategy/general_strategy.py`
+([ADR-0025](adr/0025-baseline-rules-cluster-by-decision-context.md)); the Tactical Evaluator
+in `common/pilot.py` handles combat. Each Hypothesis carries a plain-English `rationale`
 (surfaced to users in the decision trace, `Pilot.explain`) and a `status`
 (`assumed → testing → confirmed / refuted`). Heuristics are grounded in competitive Pokémon TCG
 theory — see the [Bibliography](#bibliography).

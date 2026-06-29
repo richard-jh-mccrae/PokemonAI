@@ -141,6 +141,22 @@ or disables one of its rules by overriding the weight **by id** (learned from re
 not authored).
 _Avoid_: Strategy (the per-deck doctrine), Playbook, Posture (the opponent-driven generic core)
 
+**Doctrine**:
+A self-contained module for ONE card archetype (Gust, Fetch, Shuffle-Refresh) owning BOTH its
+positional Hypotheses AND the Pilot-side closed-form code it needs — a `*Mixin` the Pilot inherits —
+so it reads "one file, end to end." Each is anchored to its own ADR and lives in
+`common/strategy/doctrines/`. The defining trait is the Mixin: a Doctrine carries closed-form
+tactical code (a KO oracle, a value comparator) that can't be expressed as a tunable weight.
+_Avoid_: rule group / category (a Baseline Cluster is those); General Strategy (the assembled whole)
+
+**Baseline Cluster**:
+A grouping of deck-agnostic General-Strategy Hypotheses by the **decision-context** they fire on
+(`energy` / `snipe` / `promote` / `retreat` / `bench` / `tool` / `evolution` / `heal` / `opening` /
+`sequencing` / `disruption`), one per `common/strategy/baseline/baseline_<context>.py`. Pure data —
+weights only, NO Pilot Mixin (the contrast with a Doctrine). A findability split only: the Pilot
+still scores every rule as one flat sum, so cluster boundaries and order are irrelevant at runtime.
+_Avoid_: doctrine (reserve that for the archetype+Mixin files), module (too generic)
+
 **Role**:
 A deck's purpose-label assigned to one of its cards/lines (`win_condition`,
 `primary_attacker`, `accel_source`, `starter`, …) — the per-deck overlay on the universal
