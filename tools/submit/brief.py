@@ -283,7 +283,7 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
     """
     agent_dir = Path(agent_dir)
     if general_strategy is None:
-        from common.general_strategy import GENERAL_STRATEGY
+        from common.strategy.general_strategy import GENERAL_STRATEGY
         general_strategy = GENERAL_STRATEGY
     when = when or datetime.now()
     git_hash = _git_hash(REPO) if git_hash is None else git_hash

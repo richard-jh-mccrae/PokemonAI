@@ -13,64 +13,26 @@ from dataclasses import dataclass, field, replace
 
 from common.strategy import Plan, Strategy
 
-# AreaType values used to resolve a CARD option to its card id (see cg/api.py).
-_ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}
-_HAND = 2     # AreaType.HAND
-_DECK = 1     # AreaType.DECK — a search candidate; ids are revealed in the select's `deck` list
-_DISCARD = 3  # AreaType.DISCARD — a recover-from-discard candidate (Night Stretcher), in player.discard
-_PLAY = 7     # OptionType.PLAY — play a card from hand (encoded as a bare hand `index`, no `area`)
-_ATTACH = 8   # OptionType.ATTACH — attach an Energy (the one irreversible per-turn commitment)
-_EVOLVE = 9   # OptionType.EVOLVE — evolve a Pokémon in play
-_RETREAT = 12 # OptionType.RETREAT — swap the Active out (changes which Pokémon can attack)
-_BENCH = 5    # AreaType.BENCH
-_ACTIVE = 4   # AreaType.ACTIVE
-_CARD = 3     # OptionType.CARD (a card-target option, e.g. an attack's snipe target)
-_TO_HAND = 7  # SelectContext.TO_HAND — a search: choose which card to add to your hand
-_TO_BENCH = 5    # SelectContext.TO_BENCH — fetch a Pokémon straight onto the Bench (Buddy-Buddy Poffin)
-_SETUP_BENCH = 2  # SelectContext.SETUP_BENCH_POKEMON — place a benched Pokémon during Set Up
-_GRAB_CONTEXTS = frozenset({_TO_HAND, _TO_BENCH, _SETUP_BENCH})  # fetch-grab selects: a maxCount>1 here
-                  # is a single multi-pick resolved GREEDILY with gap-update + take-fewer (not static
-                  # top-N) so a satisfied need isn't double-grabbed (ADR-0023). Discard/others stay top-N.
-_DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
-_SWITCH = 3   # SelectContext.SWITCH — swap into the Active Spot (my own retreat OR a Boss's gust target)
-_MAIN = 0     # SelectContext.MAIN — the open turn menu (where attack-last sequencing applies)
-_ATTACK = 13  # OptionType.ATTACK
-_END = 14     # OptionType.END — end the turn
-KO_SCORE = 1000  # an option that knocks out the target dominates a mere chip
-_OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
-_STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
-_ENGINE_TAGS = frozenset({"energy_accel", "draw", "search", "dig"})  # a "support/engine" Pokémon's
-                           # Ability does one of these — the `fetch-the-support` importance signal and
-                           # the `support_in_play` gap gate (an engine already online needs no tutor)
+# Engine vocabulary (option/select/area enum mirrors, KO_SCORE, _ENGINE_TAGS, …) is shared with the
+# doctrine modules, so it lives in common.strategy.context. The three card-archetype doctrines each
+# own their Hypotheses AND their Pilot-side code (a `*Mixin` this Pilot inherits) — see those modules.
+from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
+from common.strategy.doctrine_fetch import FetchMixin
+from common.strategy.doctrine_gust import GustMixin
+from common.strategy.doctrine_shuffle_refresh import ShuffleRefreshMixin
+
+# Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
                            # far below prize granularity (1) so it never overrides prize value
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, capped below — a sub-prize
 _BENCH_SNIPE_CAP = 0.9     # tiebreak so among equal-outcome KO attacks the one that ALSO snipes a benched
                            # target wins (best total board value), without ever overriding a prize (ADR-0022 #14)
-_STALL_RETREAT = 2         # retreat cost that makes a stranded energyless body a real tempo cost — the
-                           # defensive stall-gust only bothers with a target this expensive to retreat
-_EVOLVING_THREAT_DMG = 100 # an evolution line "becomes an attacker" at >= this damage (ADR-0020; mirrors
-                           # general_strategy.EVOLVING_THREAT_DMG)
-_EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so it
-                             # never overrides a real prize difference)
 _RESISTANCE = 30           # damage Resistance subtracts when the defender resists the attacker's type. The
                            # amount is the card's PRINTED resistance (e.g. Slowking "Fighting -30") — a
                            # per-card fact, NOT in our data export (CardData/CSV are resistance-TYPE only).
                            # In THIS set it is a uniform -30: verified by probing 47 resistant Pokémon
                            # through the simulator (tools/sim/probe_resistance.py) + the printed cards, all
                            # -30. Applied AFTER Weakness (rules.md §5). Revisit if a card ever prints other.
-
-# A deck-search's FETCH FILTER — what set of cards it can pull OUT of the deck, as a predicate over
-# the engine CardStat — keyed by the curated behavioral Function Tag that names the filter (the same
-# escape-hatch tags as `bench_fill`; structural categories like megaEx stay on CardStat, the runtime
-# reads them here rather than duplicating them as tags). The shared basis for the deck-knowledge
-# whiff / redundancy signals: a search whose every legal target is provably gone (or already held)
-# is a dead card. Extend per new search card by adding its filter tag + predicate.
-_FETCH_FILTERS = {
-    "bench_fill": lambda st: st.hp > 0 and not st.evolvesFrom,    # Basic Pokémon (Buddy-Buddy Poffin)
-    "tutor_mega": lambda st: bool(getattr(st, "megaEx", False)),  # a Mega Evolution ex (Mega Signal)
-    "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
-}
 
 
 def choose_plan(state: dict, strategy, stats=None) -> Plan:
@@ -261,7 +223,7 @@ class Context:
     tactical: float = 0.0          # the option's closed-form combat value (>= KO_SCORE on a knockout)
     is_ko: bool = False            # this option is an attack that knocks out the opponent's Active
     search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
-                                   # fetch target (by its fetch-filter, see Pilot._FETCH_FILTERS) is
+                                   # fetch target (by its fetch-filter, see doctrine_fetch._FETCH_FILTERS) is
                                    # PROVABLY gone from the deck — so it whiffs. SOUND (built on
                                    # Board.deck_empty_ids); False off a search / unknown filter
     search_redundant_wincon: bool = False  # this option PLAYS a tutor that can fetch ONLY the
@@ -290,7 +252,10 @@ class Decision:
     options: list = field(default_factory=list)
 
 
-class Pilot:
+class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
+    """Composed from three doctrine mixins (gust / fetch / shuffle-refresh) — each contributes its closed-form
+    Pilot-side methods; the shared Sense→Plan→Score→Act core is defined here. See common/strategy/."""
+
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
                  search_budget=0):
@@ -450,23 +415,9 @@ class Pilot:
         my_prize = self._prize_value({"id": board.my_active_id})
         return my_prize >= op                                # my self-KO gives them their last prize too
 
-    def _gust_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
-        """KO_SCORE-class value for PLAYING a gust card (Function Tag `gust`, e.g. Boss's Orders) when
-        the gust takes my LAST prize(s) — winning the game. Structural (not a tunable weight), so it
-        lives in the Tactical layer like every other knockout rather than as a positional Hypothesis.
-        Fires only when the best gustable KO reaches my remaining prize count AND a direct attack on
-        the current Active does NOT (else just attack — don't spend the Supporter). 0 otherwise — the
-        non-lethal gust is the tunable `gust-for-the-ko` Hypothesis. ADR-0022."""
-        if option.get("type") != _PLAY:
-            return 0
-        cid = self._option_card_id(obs, select, option)
-        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
-        mp = board.my_prizes_remaining
-        if ("gust" in tags and mp > 0
-                and board.gust_best_ko_prizes >= mp and board.active_ko_prizes < mp):
-            return KO_SCORE + board.gust_best_ko_prizes
-        return 0
-
+    # The Gust doctrine's whether-to-play lethal (`_gust_tactical`), the SWITCH target-select, and the
+    # gust Board signals live in common.strategy.doctrine_gust (GustMixin). `_attach_lethal_tactical`
+    # below is the general lethal-ATTACH lookahead (not gust) — it stays in the core Tactical layer.
     def _attach_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for an ATTACH that UNLOCKS a knockout this turn — attaching this Energy
         to my Active win-condition lets its best now-affordable attack KO the opponent's Active (e.g.
@@ -501,75 +452,6 @@ class Pilot:
             return 0
         if best_affordable(cur + provided) >= opp_hp:
             return KO_SCORE + self._prize_value(opp)
-        return 0
-
-    def _gust_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
-        """KO_SCORE-class value for a gust TARGET option — at a SWITCH select, choosing WHICH of the
-        opponent's benched Pokémon to drag into the Active Spot (Boss's Orders; ADR-0022). Scores each
-        opponent-owned bench target by whether my Active can KO it after the gust, plus its prize value,
-        so the agent drags up the most valuable KO-able body. Guarded to opponent-owned options
-        (`playerIndex != yourIndex`) because SWITCH is ALSO my own retreat. 0 for an un-KO-able target
-        (a non-KO gust is a blunder) and off any non-gust SWITCH option. The threat / evolving-threat /
-        weakest tie-breaks among equal targets are the (widened) snipe Hypotheses."""
-        if (select.get("context") != _SWITCH or option.get("type") != _CARD
-                or option.get("area") != _BENCH):
-            return 0
-        yi = (obs.get("current") or {}).get("yourIndex", 0)
-        if option.get("playerIndex", yi) == yi:          # my own retreat, not a gust of the opponent
-            return 0
-        target = self._option_pokemon(obs, select, option)
-        if not target:
-            return 0
-        my_stat = self.stats.get(board.my_active_id) if self.stats else None
-        if not self._can_ko(my_stat, target):
-            return 0
-        return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
-                + self._gust_forward_denial(target))
-
-    def _gust_forward_denial(self, target: dict) -> float:
-        """Sub-prize tie-break: removing a target whose evolution LINE becomes an attacker
-        (`forward_max_damage` >= `_EVOLVING_THREAT_DMG`) is worth a little extra — denies a latent
-        threat before it comes online. Reuses the ADR-0020 forward-evolution provider primitive (the
-        shared value sub-term, not the snipe Hypothesis's weight). < 1 prize, so it breaks ties among
-        equal-prize targets without ever overriding a real prize difference."""
-        fwd = getattr(self.stats, "forward_max_damage", None)
-        cid = (target or {}).get("id")
-        if fwd is None or cid is None:
-            return 0
-        return _EVOLVING_GUST_DENIAL if (fwd(cid) or 0) >= _EVOLVING_THREAT_DMG else 0
-
-    def _gust_stall_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
-        """Small value for a defensive stall-gust TARGET — at a SWITCH select, an ENERGYLESS,
-        high-retreat (>= `_STALL_RETREAT`) opponent benched Pokémon is the body to strand Active (it
-        can't attack and costs them a retreat). Scaled by `retreatCost` so the most expensive-to-retreat
-        body wins; far below a KO target's KO_SCORE, so it only decides among non-KO options (a real KO
-        always outranks a stall). Owner-guarded; 0 otherwise. ADR-0022."""
-        if (select.get("context") != _SWITCH or option.get("type") != _CARD
-                or option.get("area") != _BENCH):
-            return 0
-        yi = (obs.get("current") or {}).get("yourIndex", 0)
-        if option.get("playerIndex", yi) == yi:
-            return 0
-        target = self._option_pokemon(obs, select, option)
-        if not target or (target.get("energies") or []):       # energized -> not a stall body (a gift)
-            return 0
-        stat = self.stats.get(target.get("id")) if self.stats else None
-        return stat.retreatCost if (stat and stat.retreatCost >= _STALL_RETREAT) else 0
-
-    def _gust_target_denial(self, board: Board, target: dict) -> int:
-        """Defensive value of removing `target` via the gust: if it is a LIVE threat — it carries
-        Energy AND its biggest attack (weakness-doubled vs my Active) would KO my Active — return my
-        Active's prize value, so a live attacker that would take my win-condition outranks a bigger but
-        INERT prize (prizes-first is a trap; ADR-0022). 0 for an inert / non-threatening target."""
-        if not (self.stats and target and (target.get("energies") or [])):
-            return 0
-        t_stat = self.stats.get(target.get("id"))
-        if not t_stat:
-            return 0
-        # the target attacks ME: target = attacker, my Active = defender (Weakness AND Resistance).
-        incoming = self._wr_adjusted(t_stat, self.stats.get(board.my_active_id), t_stat.maxDamage or 0)
-        if board.my_active_hp and incoming >= board.my_active_hp:
-            return self._prize_value({"id": board.my_active_id})
         return 0
 
     def _prize_value(self, poke: dict | None) -> int:
@@ -668,69 +550,11 @@ class Pilot:
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon)
 
-    def _search_signals(self, option: dict, tags: list, board: Board) -> tuple[bool, bool]:
-        """The two deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
-        (every card it can fetch is provably gone from the deck) and whether it is a REDUNDANT
-        wincon-tutor (it can fetch ONLY the win-condition, which is already in hand). Both False off
-        a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`)."""
-        if option.get("type") != _PLAY:
-            return False, False
-        fetch_set = self._search_deck_set(tags)
-        if not fetch_set:
-            return False, False
-        exhausted = all(cid in board.deck_empty_ids for cid in fetch_set)
-        wincon = self._wincon_set()
-        redundant = bool(wincon) and fetch_set <= wincon and board.wincon_in_hand
-        return exhausted, redundant
-
-    def _search_deck_set(self, tags: list) -> set:
-        """The set of card ids in my deck a search with these fetch-filter tags can pull OUT of the
-        deck (union over the card's `_FETCH_FILTERS` tags; empty for a non-search / unknown filter).
-        Each filter's deck-set is deck-fixed, so it is memoised per tag."""
-        result: set = set()
-        for tag in tags:
-            pred = _FETCH_FILTERS.get(tag)
-            if pred is None:
-                continue
-            if tag not in self._fetch_cache:
-                ids = set()
-                for cid in set(self.deck):
-                    stat = self.stats.get(cid) if self.stats else None
-                    if stat and pred(stat):
-                        ids.add(cid)
-                self._fetch_cache[tag] = ids
-            result |= self._fetch_cache[tag]
-        return result
-
-    def _grab_value_of(self, board: Board, cid: int, plan) -> float:
-        """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
-        positive TO_HAND grab Hypotheses that fire for it, scored with the SAME rungs as the real grab
-        (the shared-oracle invariant, ADR-0023). The whether-to-play lookahead's per-candidate term."""
-        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
-        roles = self.strategy.roles.get(cid, [])
-        ctx = Context(
-            plan=plan, select_context=_TO_HAND, option_type=_CARD, card_id=cid,
-            card_is_line_preevo=cid in self._line_preevo_set(),
-            card_is_wincon=cid in self._wincon_set(),
-            card_is_starter=bool(stat and stat.hp > 0 and not stat.evolvesFrom),
-            card_is_support=bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags))),
-            card_is_top_fetch_priority=(cid == board.top_fetch_priority_id),
-            roles=roles, tags=tags, stat=stat, board=board)
-        hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
-        return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
-
-    def _fetch_fills_a_need(self, board: Board, tags: list, plan) -> bool:
-        """True iff a fetch with these tags can pull a card I currently LACK from the deck — any
-        still-reachable candidate (its fetch-filter set minus the provably-gone `deck_empty_ids`) whose
-        grab value is positive. The whether-to-play lookahead: it estimates `best_grab_value > 0` from the
-        known deck before the search reveals it. False for a non-fetch (empty fetch set)."""
-        fetch_set = self._search_deck_set(tags)
-        if not fetch_set:
-            return False
-        reachable = fetch_set - board.deck_empty_ids
-        return any(self._grab_value_of(board, cid, plan) > 0 for cid in reachable)
-
+    # The Fetch doctrine's comparator/oracle (`_grab_value_of` = `fetch_value`), the deck-knowledge
+    # whiff/redundant signals (`_search_signals`/`_search_deck_set`), the whether-to-play lookahead
+    # (`_fetch_fills_a_need`), and the greedy multi-pick (`_greedy_grab`/`_virtual_grab_board` +
+    # `_top_fetch_priority_id`/`_is_support_id`/`_support_in_play`) live in
+    # common.strategy.doctrine_fetch (FetchMixin).
     def _attach_target(self, obs: dict, option: dict) -> dict | None:
         """The Pokémon an attach option puts Energy on — encoded as `inPlayArea`/`inPlayIndex`
         (distinct from `area`/`index`, which point at the Energy card in hand). None when absent."""
@@ -878,51 +702,9 @@ class Pilot:
                        deck_holds_a_need=self._deck_holds_a_need(board, plan),
                        hand_is_dead=self._hand_is_dead(obs, select, board))
 
-    def _has_shuffle_refresh(self, me: dict) -> bool:
-        """True iff a Shuffle-Refresh (a `shuffle_hand`-tagged card) is in my hand — the cheap guard that
-        gates the dead-hand scan (no refresh in hand -> the gate can never fire, so don't compute it)."""
-        if not self.functions:
-            return False
-        return any(c and "shuffle_hand" in self.functions.tags(c.get("id"))
-                   for c in (me.get("hand") or []))
-
-    def _deck_holds_a_need(self, board: Board, plan) -> bool:
-        """True iff my deck still holds a card I currently LACK — any deck card with positive grab-value
-        (`_grab_value_of`, the shared Fetch comparator). The gain-exists guard for the refresh: don't
-        shuffle for a fresh hand when the deck has nothing left worth drawing. Skips provably-gone ids."""
-        seen: set = set()
-        for cid in self.deck:
-            if cid in seen or cid in board.deck_empty_ids:
-                continue
-            seen.add(cid)
-            if self._grab_value_of(board, cid, plan) > 0:
-                return True
-        return False
-
-    def _hand_is_dead(self, obs: dict, select: dict, board: Board) -> bool:
-        """True iff NO option on the current menu develops the hand — no non-refresh PLAY / EVOLVE /
-        ATTACH scores positive, and no Pokémon PLAY is even a (non-discouraged) development out. Scans the
-        REAL menu options (so attach / evolve are seen with their true scores + tactical), the same
-        scoring idiom as `_fetch_fills_a_need`. The Shuffle-Refresh fallback gate (ADR-0024): a refresh is
-        reached only when nothing else is worth doing, so every useful play (develop / evolve / attach /
-        fetch / gust KO / clutch heal) keeps the hand 'live'. ATTACK / RETREAT / END are excluded — they
-        don't consume a hand card and coexist with a refresh (a dead-hand + lethal refreshes THEN attacks).
-        The refresh cards themselves (`shuffle_hand`) are excluded, else a hand of only refreshes is never
-        dead. A bare Pokémon bench-development isn't positively scored in SETUP, so it counts structurally."""
-        for i, o in enumerate((select or {}).get("option") or []):
-            if o.get("type") not in (_PLAY, _EVOLVE, _ATTACH):
-                continue                                     # board actions coexist with a refresh
-            cid = self._option_card_id(obs, select, o)
-            tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
-            if "shuffle_hand" in tags:                       # don't count the refresh as its own out
-                continue
-            score = self._option_trace(obs, select, board, o, i).score
-            if score > 0:
-                return False                                 # an endorsed play -> hand is live
-            stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-            if o.get("type") == _PLAY and stat is not None and stat.hp > 0 and score >= 0:
-                return False                                 # a (non-discouraged) Pokémon development -> live
-        return True
+    # The Shuffle-Refresh doctrine's signals (`_has_shuffle_refresh`, `_deck_holds_a_need`,
+    # `_hand_is_dead`) live in common.strategy.doctrine_shuffle_refresh (ShuffleRefreshMixin);
+    # `_board` calls them.
 
     def _wincon_set(self) -> set:
         """Card ids that ARE the win-condition — a Strategy Line payoff or a card carrying the
@@ -951,77 +733,7 @@ class Pilot:
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
 
-    def _top_fetch_priority_id(self, select: dict | None, exclude: frozenset = frozenset()) -> int | None:
-        """The highest-priority card id the deck WANTS most among a search's revealed candidates — the
-        first id in `Strategy.fetch_priority` that is present in the select's `deck` list (Tier-3, the
-        combo deck's explicit grab override). None off a TO_HAND search, an empty list, or no match.
-        `exclude` drops ids already acquired this multi-pick so the NEXT priority surfaces (greedy)."""
-        fp = getattr(self.strategy, "fetch_priority", None)
-        if not fp or not select or select.get("context") != _TO_HAND:
-            return None
-        present = {c.get("id") for c in (select.get("deck") or []) if c} - set(exclude)
-        return next((cid for cid in fp if cid in present), None)
-
-    def _is_support_id(self, cid: int | None) -> bool:
-        """True iff card `cid` is an engine/support Pokémon (hp > 0 with a draw/accel/search Ability) —
-        the per-id form of `card_is_support`, used to close the `support_in_play` gap as one is grabbed."""
-        if cid is None or not self.stats:
-            return False
-        st = self.stats.get(cid)
-        tags = self.functions.tags(cid) if self.functions else []
-        return bool(st and st.hp > 0 and (_ENGINE_TAGS & set(tags)))
-
-    def _virtual_grab_board(self, board: Board, select: dict, acquired_ids: list, bench_ctx: bool) -> Board:
-        """`board` as if the cards acquired so far this multi-pick were already had — the gap signals the
-        grab rungs read (wincon/support in play, bench size, in-play ids, the next fetch-priority) close as
-        needs are met, so greedy re-scoring won't re-pick an already-satisfied need (ADR-0023)."""
-        acq = {a for a in acquired_ids if a is not None}
-        wincon = self._wincon_set()
-        return replace(
-            board,
-            in_play_ids=board.in_play_ids | acq,
-            my_bench=board.my_bench + (len(acquired_ids) if bench_ctx else 0),
-            wincon_in_play=board.wincon_in_play or bool(wincon & acq),
-            wincon_in_hand=board.wincon_in_hand or bool(wincon & acq),
-            support_in_play=board.support_in_play or any(self._is_support_id(a) for a in acq),
-            top_fetch_priority_id=self._top_fetch_priority_id(select, exclude=acq))
-
-    def _greedy_grab(self, obs: dict, select: dict, board: Board, traces: list, options: list,
-                     min_count: int, max_count: int) -> list[int]:
-        """Resolve a fetch-grab multi-select (maxCount>1) greedily instead of static top-N: take the best
-        candidate, mark its need satisfied (a virtual board where acquired cards count as had), re-score
-        the rest, repeat. So a second copy of an already-met need stands down. TAKE-FEWER: once min_count
-        is met, stop as soon as no remaining candidate has positive grab value — don't over-grab (e.g.
-        bench a prize-liability body you don't need). ADR-0023; only for `_GRAB_CONTEXTS`."""
-        bench_ctx = select.get("context") in (_TO_BENCH, _SETUP_BENCH)
-        remaining = set(range(len(options)))
-        cur = traces
-        chosen: list[int] = []
-        acquired: list = []
-        while len(chosen) < max_count and remaining:
-            i = max(remaining, key=lambda j: (cur[j].score, -j))
-            if len(chosen) >= min_count and cur[i].score <= 0:
-                break                                        # take-fewer: nothing more worth grabbing
-            chosen.append(i)
-            remaining.discard(i)
-            acquired.append(cur[i].card_id)
-            if len(chosen) >= max_count or not remaining:
-                break
-            vboard = self._virtual_grab_board(board, select, acquired, bench_ctx)
-            cur = [self._option_trace(obs, select, vboard, o, k) if k in remaining else cur[k]
-                   for k, o in enumerate(options)]
-        return chosen
-
-    def _support_in_play(self, me: dict) -> bool:
-        """True if any of my in-play Pokémon is an engine/support piece — its Ability draws, accelerates
-        or searches (an `_ENGINE_TAGS` Function Tag). The gap behind `fetch-the-support`: with an engine
-        already online I needn't tutor another. False with no functions table."""
-        if not self.functions:
-            return False
-        board = (me.get("active") or []) + (me.get("bench") or [])
-        return any(p and (_ENGINE_TAGS & set(self.functions.tags(p.get("id"))))
-                   for p in board)
-
+    # (Fetch doctrine greedy multi-pick + its gap helpers are in doctrine_fetch.FetchMixin, above.)
     def _bench_wincon_ready(self, me: dict) -> bool:
         """True if a benched win-condition / primary attacker already carries enough Energy to attack
         (>= its cheapest attack cost) — a powered finisher worth retreating into."""
@@ -1142,64 +854,9 @@ class Pilot:
             return False
         return self._can_ko(self.stats.get(ma.get("id")), oa)
 
-    def _active_ko_prizes(self, ma: dict | None, oa: dict | None) -> int:
-        """Prizes from Knocking Out the opponent's CURRENT Active with my cheapest attack this turn
-        (0 if I can't) — the baseline a gust must beat (gusting benches their current Active, so a gust
-        is only worth the Supporter for a strictly bigger KO)."""
-        if not (self.stats and ma and oa):
-            return 0
-        return self._prize_value(oa) if self._can_ko(self.stats.get(ma.get("id")), oa) else 0
-
-    def _opp_active_condition_gift(self, opp: dict | None) -> bool:
-        """True if the opponent's Active carries ANY special condition (poison/burn/sleep/paralyze/
-        confuse) — gusting it off to the bench would CLEAR it (rules.md §8), handing them a free cure.
-        The guard the stall-gust checks so it never rescues a working condition. Flags ride as booleans
-        on the player dict (PlayerState.poisoned/…). ADR-0022 #10."""
-        if not opp:
-            return False
-        return any(opp.get(k) for k in ("poisoned", "burned", "asleep", "paralyzed", "confused"))
-
-    def _active_condition_ko_prizes(self, opp: dict | None, oa: dict | None) -> int:
-        """Prizes from the opponent's CURRENT Active dying to poison/burn at the upcoming Pokémon
-        Checkup — its prize value when `0 < hp <= 10*poison + 20*burn` (the fixed per-Checkup ticks,
-        rulebook L193/L209), else 0. A free KO I'd take WITHOUT attacking, so an offensive gust must
-        beat this too: gusting that Active off to the bench cures it and forfeits the free prize.
-        ADR-0022 #10 (offensive baseline)."""
-        if not (self.stats and opp and oa):
-            return 0
-        hp = oa.get("hp", 0)
-        tick = (10 if opp.get("poisoned") else 0) + (20 if opp.get("burned") else 0)
-        return self._prize_value(oa) if (0 < hp <= tick) else 0
-
-    def _gust_best_ko_prizes(self, ma: dict | None, opp: dict | None) -> int:
-        """Best prizes among the opponent's benched Pokémon my Active could Knock Out this turn after
-        gusting it to the Active Spot — the whether-to-play signal for a gust Supporter (ADR-0022).
-        Applies the shared `_can_ko` oracle to each bench defender; the max `_prize_value` among the
-        KO-able ones (0 if none). Closed-form off engine stats, no Search."""
-        if not (self.stats and ma and opp):
-            return 0
-        my_stat = self.stats.get(ma.get("id"))
-        best = 0
-        for b in (opp.get("bench") or []):
-            if b and self._can_ko(my_stat, b):
-                best = max(best, self._prize_value(b))
-        return best
-
-    def _stall_target_exists(self, opp: dict | None) -> bool:
-        """True if the opponent has an ENERGYLESS, high-retreat (>= `_STALL_RETREAT`) benched Pokémon —
-        the defensive stall-gust candidate (drag it Active so they must spend a turn retreating it
-        before they can attack). Energyless = can't attack once stranded; high-retreat = a real tempo
-        cost. Closed-form off engine stats; needs `CardStat.retreatCost`. ADR-0022."""
-        if not (self.stats and opp):
-            return False
-        for b in (opp.get("bench") or []):
-            if not b or (b.get("energies") or []):
-                continue
-            stat = self.stats.get(b.get("id"))
-            if stat and stat.retreatCost >= _STALL_RETREAT:
-                return True
-        return False
-
+    # (The gust Board-signal builders — `_active_ko_prizes`, `_opp_active_condition_gift`,
+    # `_active_condition_ko_prizes`, `_gust_best_ko_prizes`, `_stall_target_exists` — are in
+    # doctrine_gust.GustMixin; `_board` calls them as `self.…`.)
     def _opp_has_energy_in_play(self, opp: dict | None) -> bool:
         """True if any of the opponent's Pokémon (Active or Bench) carries Energy — a target an
         energy-denial Item (Function Tag `energy_denial`, e.g. Crushing Hammer) can strip. The

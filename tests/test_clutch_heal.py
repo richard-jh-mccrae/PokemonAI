@@ -2,7 +2,7 @@
 Active is doomed, then play it first (it outranks the attach) so the bounce doesn't waste a fresh
 attachment — heal, re-power, attack. See docs/tuning/methodology.md and docs/card-functions.md."""
 from common.cards import CardFunctions
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, Context, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Plan, Strategy

@@ -8,7 +8,7 @@ from common import telemetry
 from common.cards import CardFunctions
 from common.config import load_overrides_and_params
 from common.deck_tracker import OwnCardModel
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import (
     EngineCardStatProvider, parse_attack_bench_snipe, parse_attack_recoil)

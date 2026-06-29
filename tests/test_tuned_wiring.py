@@ -9,7 +9,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.strategy import Hypothesis, Strategy
 

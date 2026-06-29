@@ -4,7 +4,7 @@ A discard-at-end-of-turn Energy (Ignition, tag `discard_eot`) is wasted unless t
 attacks this turn — see docs/tuning/methodology.md (worked example) and the Cinderace Turbo Flare line.
 """
 from common.cards import CardFunctions
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, Context, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy

@@ -30,7 +30,7 @@ def _build_pilot(agent: str):
     """The agent's real (engine-backed) Pilot + its authored seed weights, mirroring main.py."""
     from cg.api import all_attack
     from common.cards import CardFunctions
-    from common.general_strategy import GENERAL_STRATEGY
+    from common.strategy.general_strategy import GENERAL_STRATEGY
     from common.pilot import Pilot
     from common.scouting.provider import EngineCardStatProvider
 

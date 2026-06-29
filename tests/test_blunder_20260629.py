@@ -6,7 +6,7 @@ via pilot_helpers + DictCardStatProvider, so the fast suite needs no native engi
 import pytest
 
 from common.cards import CardFunctions
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Plan, Strategy

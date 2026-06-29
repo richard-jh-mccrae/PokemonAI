@@ -1,6 +1,6 @@
 """Play-from-hand option resolution (the bug that disabled every roles/tags Hypothesis on plays) +
 the win-condition development rules it unblocked (`evolve-into-wincon`, `prefer-rush-evolve-tutor`)."""
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, Context, Pilot
 from common.strategy import Plan, Strategy
 

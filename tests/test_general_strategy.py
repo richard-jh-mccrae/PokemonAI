@@ -2,7 +2,7 @@
 import pytest
 
 from common.cards import CardFunctions
-from common.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Line, Ready, Strategy
