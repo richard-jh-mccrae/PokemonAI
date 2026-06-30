@@ -266,7 +266,10 @@ def test_protect_ace_spec_tool_silent_on_a_plain_tool():
     assert "protect-ace-spec-tool" not in fired     # not ACE SPEC -> no extra bump
 
 
-# --- deploy-hp-tool-on-breakpoint (general +HP Tool deploy; reads the parsed CardStat.hpBonus) ----
+# --- deploy-hp-tool (general Tool Doctrine deploy, ADR-0028; reads the parsed CardStat.hpBonus) ----
+# PROACTIVE survival-turns deploy (no longer the reactive breakpoint): the +HP Tool goes onto the
+# Active win-condition whenever the boost banks a survival turn — or as the anti-shuffle default —
+# and stands down only on a body doomed even at +boost (with no successor) or off the win-condition.
 _WATER, _LIGHTNING, _FIRE = 3, 4, 2
 _HP_TOOL, _WINCON = 1159, 900
 
@@ -297,21 +300,23 @@ def test_deploy_hp_tool_fires_when_the_boost_dodges_the_incoming_ko():
     """Active wincon is doomed (incoming 400 >= 330) but +100 (-> 430) survives → deploy the Tool now.
     Reads the per-Tool HP off CardStat.hpBonus, so it generalises beyond any one card."""
     pilot = _hp_tool_pilot(opp_dmg=400)
-    assert "deploy-hp-tool-on-breakpoint" in _fired(pilot.explain(_attach_hp_tool()).options[0])
+    assert "deploy-hp-tool" in _fired(pilot.explain(_attach_hp_tool()).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0024")
 def test_deploy_hp_tool_silent_when_the_boost_would_not_save():
     """Incoming 500 still KOs even at 430 → the Tool is wasted, so don't deploy it."""
     pilot = _hp_tool_pilot(opp_dmg=500)
-    assert "deploy-hp-tool-on-breakpoint" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+    assert "deploy-hp-tool" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_silent_when_not_doomed():
-    """Incoming 200 < 330 → not under threat → hold the Tool, don't equip early into removal."""
+def test_deploy_hp_tool_fires_proactively_to_bank_a_survival_turn():
+    """ADR-0028 reversal of 'hold for a breakpoint': even when the Active is not under immediate threat
+    (incoming 200 < 330), +100 banks an extra survival turn (3 vs 2), so the Tool deploys PROACTIVELY
+    onto the Active win-condition — holding it would risk a hand-shuffle burying the irreplaceable card."""
     pilot = _hp_tool_pilot(opp_dmg=200)
-    assert "deploy-hp-tool-on-breakpoint" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+    assert "deploy-hp-tool" in _fired(pilot.explain(_attach_hp_tool()).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0024")
@@ -319,7 +324,7 @@ def test_deploy_hp_tool_silent_for_a_tool_with_no_hp_bonus():
     """A Tool whose text grants no flat HP (hpBonus 0) never triggers the breakpoint rule, even on a
     doomed Active — the rule is specifically about crossing a survival HP line."""
     pilot = _hp_tool_pilot(hp_bonus=0, opp_dmg=400)
-    assert "deploy-hp-tool-on-breakpoint" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+    assert "deploy-hp-tool" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0024")
@@ -328,15 +333,17 @@ def test_deploy_hp_tool_breakpoint_is_weakness_aware():
     the wincon's Lightning weakness it's 360 >= 330 (doomed) — and +100 (-> 430) clears 360. The
     rule fires off the weakness-doubled incoming estimate, not the printed number."""
     pilot = _hp_tool_pilot(opp_type=_LIGHTNING, opp_dmg=180)   # 180 x2 (weakness) = 360
-    assert "deploy-hp-tool-on-breakpoint" in _fired(pilot.explain(_attach_hp_tool()).options[0])
+    assert "deploy-hp-tool" in _fired(pilot.explain(_attach_hp_tool()).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0024")
 def test_deploy_hp_tool_silent_off_the_wincon_where_save_tool_reluctance_rules():
-    """Gated to the win-condition Active: with no wincon Role on the target, the deploy rule stays
-    silent and the base `save-tool-for-the-attacker` reluctance governs instead (don't burn a
-    one-shot Tool on a disposable body)."""
-    pilot = _hp_tool_pilot(opp_dmg=400, wincon_role=False)
+    """Off the win-condition with NO survival gain: a non-wincon body the boost can't help (330 HP vs
+    700 incoming → dies in 1 either way, gain 0) gets no deploy, and the base
+    `save-tool-for-the-attacker` reluctance governs instead (don't burn a one-shot Tool on a body that
+    gains nothing). A non-wincon WALL that DOES gain a turn earns the Cape — see the Tool Doctrine wall
+    tests (ADR-0028 'never say never')."""
+    pilot = _hp_tool_pilot(opp_dmg=700, wincon_role=False)
     fired = _fired(pilot.explain(_attach_hp_tool()).options[0])
-    assert "deploy-hp-tool-on-breakpoint" not in fired
+    assert "deploy-hp-tool" not in fired
     assert "save-tool-for-the-attacker" in fired

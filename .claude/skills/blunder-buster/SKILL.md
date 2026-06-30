@@ -1,6 +1,6 @@
 ---
 name: blunder-buster
-description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), gates each with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — nothing is punted to a future run or "deferred". Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
+description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), gates each with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — nothing is punted to a future run or "deferred". Corrections whose rationale carries the uppercase CRITICAL marker are surfaced first and resolved one at a time, blocking the rest of the run until each reaches a terminal outcome. Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
 ---
 
 # blunder-buster — corrections → verified Strategy improvements
@@ -41,6 +41,48 @@ correction is still unresolved.
 (Legacy `deferred` entries already in `data/corrections/reviewed.json` are **debt** under this
 mandate: any run that re-surfaces or touches one must re-resolve it to fixed / covered / refuted.)
 
+## CRITICAL corrections — resolve first, block the run (read this second)
+
+A Correction is **CRITICAL** when its `rationale` carries the uppercase token `CRITICAL` (the human
+writes it at tag time; the marker is **case-sensitive** — lowercase "critical" prose is *not* a
+flag). It means: **this blunder must be resolved before any other work this run.**
+
+**You do not hand-grep for it — the pipeline surfaces it.** Step 1's `tune.py` prints a
+`*** N CRITICAL correction(s) flagged … FIRST (blocking) ***` banner and tags each `PROPOSE` /
+`UNSATISFIED` line `[CRITICAL]` (with its rationale); `data/proposals/<deck>.json` `open[]` and
+`skipped[]` entries carry `"critical": true`; and `reports/blunders.html` badges each one
+`⚠ CRITICAL`. Read all three to build the cohort — a CRITICAL correction can land on **any** worklist
+source (H proposal, W-route `UNSATISFIED`, or `skipped`/tactical).
+
+**The gate (serial, blocking, per-item):**
+
+1. **Partition the CRITICAL cohort out** of the step-1 worklist before touching anything else, and
+   **list it back to the human up front** — each critical correction's id, episode/frame, and
+   rationale. This is the "pause": you surface the cohort and start on it, not on the rest.
+2. **Work the cohort first, one at a time.** Carry each critical correction through steps 2–10 to a
+   **terminal outcome** (fixed / covered / refuted) **before starting the next critical one, and
+   before *any* non-critical cluster.** No batching the cohort with normal clusters; no interleaving
+   non-critical work "while you think about it."
+3. **Checkpoint each.** When a critical correction reaches its outcome, **stop and present it**
+   explicitly — the authored `when()` + Verifier `passed` + retest `fixed`, or the **named** covering
+   Hypothesis (confirmed against the real Pilot), or the refutation test — and confirm it's resolved
+   before moving on. "Pay special attention" = each critical item is its own reviewed checkpoint, not
+   a line in a batch summary.
+4. **A CRITICAL that would be `refuted` is a HARD STOP.** If the only sound outcome is `refuted` (it
+   forgoes a KO / is dominated — [[forgo-ko-corrections-are-refuted]]), do **not** silently file it.
+   Present the refutation proof and **stop for explicit human acknowledgement** before recording it:
+   the human flagged this must-fix, so "your critical correction is actually wrong" is *their* call,
+   not the skill's. (A non-critical correction still auto-records `refuted` per step 10.)
+
+**Parallel mode:** the CRITICAL cohort **never fans out.** Resolve it **serially in Phase 1, ahead of
+the parallel batch** — Phase 1 setup → drive every CRITICAL correction to terminal (steps 4–11 each,
+serial) → only then spawn the Phase-2 fan-out over the *remaining* SOFT clusters. A blocking cohort
+can't be scheduled into concurrent authoring.
+
+This does **not** weaken the exhaustive-completion mandate — the run still ends only when the **whole**
+open set is empty (step 11). CRITICAL changes **order + gating**: critical first, blocking, one
+reviewed checkpoint each.
+
 ## Rounds & reconciliation
 
 There is **one append-only log**; you don't manage per-round files. Each run re-featurizes the
@@ -74,6 +116,9 @@ appear). **Commit authored Hypotheses before the next round** so re-featurizatio
    patterns (e.g. the three `bad-target` "snipe the highest threat" corrections form ONE pattern).
    Each pattern's ids are a **cluster**. Build the **full cluster worklist now** — every open proposal
    lands in exactly one cluster (a singleton if it shares no pattern); **none is left off the list**.
+   Then **partition out the CRITICAL cohort** — any member whose rationale carries the uppercase
+   `CRITICAL` token (`tune.py` banners it; `open[]`/`skipped[]` carry `"critical": true`). These are
+   worked first and **block** the rest — see *CRITICAL corrections* above.
    (The same `tune.py` run also (re)writes `src/agents/<deck>/tuned.json` — the deterministic Tier-0
    weight deltas; commit it alongside the authored Hypothesis.) **Refresh the trend dashboard to
    eyeball the incoming surface:** `python tools/train/blunder_report.py` rebuilds
@@ -304,6 +349,10 @@ clean **and** step 11 shows the open set empty — the same exhaustive-completio
 fan-out-then-converge schedule.
 
 ## Rules
+- **CRITICAL first.** A correction whose rationale carries the uppercase `CRITICAL` token is resolved
+  before any other cluster, **one at a time**, each to a terminal outcome with a reviewed checkpoint;
+  a CRITICAL that would be `refuted` **hard-stops for human acknowledgement** (see *CRITICAL
+  corrections*). The cohort never fans out — it runs serially ahead of the parallel batch.
 - One Hypothesis per cluster, verified against **all** its members — not per-correction point-fixes.
 - **Parallel mode is scheduling only.** Fanning clusters out (see *Parallel mode*) never weakens a
   gate: the Verifier still gates every cluster, the join's **union-verify + full `pytest` + step-11**

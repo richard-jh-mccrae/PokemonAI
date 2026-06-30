@@ -11,7 +11,7 @@ from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
-from common.strategy import Strategy
+from common.strategy import Line, Strategy
 from pilot_helpers import DECK, HAND, MAIN, PLAY, TO_HAND, card_opt, make_select, opt, poke, state
 
 DISCARD_SEL = 8         # SelectContext.DISCARD — a cost-discard select (pilot_helpers.DISCARD is the AreaType)
@@ -95,6 +95,60 @@ def test_discard_the_redundant_sheds_a_duplicate_already_in_play():
     assert pilot.decide(obs) == [0]                                   # pitch the redundant duplicate
     assert "discard-the-redundant" in _fired(pilot.explain(obs).options[0])
     assert "discard-the-redundant" not in _fired(pilot.explain(obs).options[1])
+
+
+# --- fetch the deployable base over a payoff you can't yet evolve --------------------------------
+BASEP, PAYP = 1030, 1031
+
+
+@pytest.mark.req("REQ-GEN-0039")
+def test_fetch_prefers_the_base_when_the_payoff_is_not_yet_deployable():
+    """At a search revealing BOTH the evolved payoff and its own pre-evolution, with NO base for the
+    payoff in play OR hand, grab the deployable base — fetching a payoff you have nothing to evolve
+    from just strands it (and a bench-accelerator like Cinderace gets no recipient). `fetch-the-wincon`
+    otherwise pulls the un-evolvable payoff (the verified mega_starmie trap)."""
+    stats = DictCardStatProvider({BASEP: CardStat(BASEP, hp=70),
+                                  PAYP: CardStat(PAYP, megaEx=True, hp=330, evolvesFrom="Basep")})
+    strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
+                     roles={PAYP: ["win_condition", "primary_attacker"], BASEP: ["starter"]})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    # Active powered (not energy-starved); bench empty; hand empty -> no base in play or in hand.
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
+                      deck=[{"id": BASEP}, {"id": PAYP}],
+                      current=state(active=poke(666, energy=1), bench=[], hand=[]))
+    assert pilot.decide(obs) == [0]                                   # the deployable base, not the payoff
+
+
+@pytest.mark.req("REQ-GEN-0039")
+def test_fetch_takes_the_payoff_once_a_base_is_in_hand():
+    """The inverse guard: with a base already in HAND the payoff IS deployable, so prefer the payoff
+    (`fetch-the-wincon`) — `fetch-base-before-stranded-payoff` stands down (don't over-correct)."""
+    stats = DictCardStatProvider({BASEP: CardStat(BASEP, hp=70),
+                                  PAYP: CardStat(PAYP, megaEx=True, hp=330, evolvesFrom="Basep")})
+    strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
+                     roles={PAYP: ["win_condition", "primary_attacker"], BASEP: ["starter"]})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
+                      deck=[{"id": BASEP}, {"id": PAYP}],
+                      current=state(active=poke(666, energy=1), bench=[], hand=[BASEP]))
+    assert pilot.decide(obs) == [1]                                   # the payoff — a base is in hand
+    assert "fetch-base-before-stranded-payoff" not in _fired(pilot.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0039")
+def test_fetch_base_rule_never_zeroes_the_payoff():
+    """Additive guard: with NO base deployable but the base absent from the reveal, the payoff is still
+    the best grab over an off-need filler — `fetch-base-before-stranded-payoff` lifts the base, it never
+    suppresses the payoff, so when only the payoff is on offer you still take it."""
+    stats = DictCardStatProvider({PAYP: CardStat(PAYP, megaEx=True, hp=330, evolvesFrom="Basep"),
+                                  860: CardStat(860, hp=90, evolvesFrom="Z")})   # off-need Stage-1 filler
+    strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
+                     roles={PAYP: ["win_condition", "primary_attacker"], BASEP: ["starter"]})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
+                      deck=[{"id": PAYP}, {"id": 860}],
+                      current=state(active=poke(666, energy=1), bench=[], hand=[]))
+    assert pilot.decide(obs) == [0]                                   # still grab the payoff
 
 
 # --- prefer-good-in-discard: a deck redirects the pitch to its discard-synergy fodder ------------

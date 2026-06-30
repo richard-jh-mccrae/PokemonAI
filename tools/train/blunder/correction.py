@@ -9,6 +9,7 @@ option at the *first divergent* Decision (Tier-1; the rest of the line goes in
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -17,6 +18,16 @@ from .categories import is_valid_category
 from .decisions import Decision
 
 SOURCES = ("own", "peer")
+
+CRITICAL_MARKER = "CRITICAL"                     # uppercase token in a rationale = must-fix-first
+_CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
+
+
+def is_critical(rationale: str | None) -> bool:
+    """True when ``rationale`` carries the uppercase ``CRITICAL`` token (word-boundary, case-
+    sensitive — so lowercase prose like 'a critical attack' is NOT a marker). The human writes it
+    at tag time to flag a blunder that ``/blunder-buster`` must resolve before any other work."""
+    return bool(rationale) and _CRITICAL_RE.search(rationale) is not None
 
 
 def _derive_id(data: dict) -> str:
@@ -52,6 +63,11 @@ class Correction:
     agent_build: str | None = None  # submission-folder stem of the build that played (traceability)
     built_at: str | None = None     # that build's timestamp (ISO), parsed from the stem
     live_trace: dict | None = None  # the live @T Decision Telemetry record this game emitted (ADR-0019)
+
+    @property
+    def is_critical(self) -> bool:
+        """Human flagged this blunder must-fix-first (uppercase CRITICAL in the rationale)."""
+        return is_critical(self.rationale)
 
     def to_dict(self) -> dict:
         return asdict(self)

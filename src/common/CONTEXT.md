@@ -115,6 +115,14 @@ provider primitive both will share; the Read later refines an Evolving Threat's 
 _Avoid_: evolution threat / future attacker (use "Evolving Threat"), EvoPath (that's the Read's
 opponent-specific line), fragile_preevo (that's the `Intel.role` label, not the card-knowledge fact)
 
+**Irreplaceable Tool**:
+A one-per-deck Pokémon Tool with no recovery path — an **ACE SPEC** (read off `CardData`, max one per
+deck) that, once lost, is gone for the game (no second copy is legal; a `recycle` card returns a Pokémon
+or Energy, never a Tool — e.g. Hero's Cape). Its scarcity governs how it is played: never frittered on
+an off-role body, and **never voluntarily shuffled away** by a Hand Refresh while a target exists.
+_Avoid_: ACE SPEC (the structural fact; an Irreplaceable Tool is the *play* consequence of it), one-of
+(a deckbuild count, not the no-recovery property)
+
 ### Decision Architecture
 
 **Fetch**:
@@ -125,6 +133,34 @@ top-of-deck, no pick — Professor's Research / Iono), which the doctrine exclud
 **Fetch Doctrine** (the `search`-family section of [general-strategy.md](../../docs/general-strategy.md)):
 the whether-to-play / what-to-grab / what-to-discard decisions a fetch entails.
 _Avoid_: tutor (TCG jargon for the same thing — say "fetch"/"search"), draw (no pick)
+
+**Deck-Content Odds**:
+The **probabilistic** read of my own deck — `P(deck still contains card C)` — the COMPLEMENT to the
+**sound** deck-emptiness oracle (`deck_definitely_empty_of`, which is certain-or-silent). A card's
+unseen copies (decklist − visible) are split **hypergeometrically** over the hidden face-down prize
+slots ([deck_odds.py](deck_odds.py); `Board.deck_contains_probability`, ADR-0029). It **agrees with the
+sound oracle at the extremes** (provably-empty → 0.0; pigeonhole-certain or prize-resolved → 1.0) and
+estimates the uncertain middle the sound oracle is silent on — answering *"should I keep hunting C?"*
+when the prizes are still hidden. Consumed as a **soft** whiff suppressor (`dont-search-a-probable-whiff`),
+never replacing the sound gate. Own-deck only.
+_Avoid_: deck tracker / deck-emptiness oracle (that's the SOUND, certain-or-silent half — these two are
+deliberately distinct epistemics), Scout/Read (that's opponent-deck recognition)
+
+**Stranded Payoff**:
+An evolved win-condition (a Stage-1/2/Mega) fetched or held with **no deployable base** — no Line
+pre-evolution in play **or hand** to evolve it from. A dead card until a base appears, so at a search
+the **base** outranks it (`fetch-base-before-stranded-payoff`). The signal is `wincon_base_deployable`
+(a base IS in play/hand → the payoff is deployable, prefer it again). Purely structural (Line path +
+visible zones); needs no deck deduction.
+_Avoid_: dead draw (that's any unplayable card — a Stranded Payoff is specifically the *evolved
+win-condition* with no base)
+
+**Acceleration Recipient**:
+A **benched** Line member (a pre-evolution or the payoff) that a bench-targeting accelerator loads
+Energy onto — e.g. Cinderace's Turbo Flare attaches 3 Basic Energy to the Bench, so a benched Staryu
+is its recipient. With **no** recipient the acceleration is wasted, so developing one is the top setup
+priority while the accelerator is Active (`accel_recipient_missing` → `develop-turbo-flare-recipient`).
+_Avoid_: target (overloaded — reserve "recipient" for the body that *receives* accelerated Energy)
 
 **Pilot**:
 A deck's complete in-match decision engine — the shared `common/` component behind every
@@ -152,7 +188,7 @@ not authored).
 _Avoid_: Strategy (the per-deck doctrine), Playbook, Posture (the opponent-driven generic core)
 
 **Doctrine**:
-A self-contained module for ONE card archetype (Gust, Fetch, Shuffle-Refresh) owning BOTH its
+A self-contained module for ONE card archetype (Gust, Fetch, Shuffle-Refresh, Tool) owning BOTH its
 positional Hypotheses AND the Pilot-side closed-form code it needs — a `*Mixin` the Pilot inherits —
 so it reads "one file, end to end." Each is anchored to its own ADR and lives in
 `common/strategy/doctrines/`. The defining trait is the Mixin: a Doctrine carries closed-form
@@ -191,6 +227,23 @@ The shared, Search-backed Score component that ranks combat options (attacker ×
 target) by engine-computed outcomes (KO / bench-snipe / prize math), not authored damage
 numbers. Hypotheses bias it.
 _Avoid_: AttackPlan (the deck-specific instance in `demos/rules-based-lucario.py`), damage table
+
+**Incoming**:
+The closed-form estimate of the worst damage the opponent can deal to one of my bodies next turn —
+from their best **affordable** attacker (one whose attached Energy can pay an attack now, allowing for
+one attach), not merely their current Active. The hardest-hitting affordable body is the opponent's
+predicted next promotion. A weakness-adjusted board-math estimate, not a guarantee. For a *benched*
+body, Incoming counts only true bench-snipe (the body is assumed to stay benched).
+_Avoid_: Threat (the objective attacker description from the Read; Incoming is the math *against my
+specific body*), active_doomed (a boolean derived from Incoming, not the magnitude)
+
+**Survival Window**:
+How many turns one of my bodies withstands the predicted **Incoming** before it is Knocked Out. The
+lever a defensive +HP Tool pays for: the Tool earns its slot when its boost widens this window by a
+full turn ("survives 2 turns instead of 1"); on a body that dies anyway even with the boost, it buys
+nothing. Drives both *whether* to deploy a +HP Tool and *which* body gets it.
+_Avoid_: breakpoint (one threshold; the Window is the turn count across repeated hits), heal value
+(restoring HP, not extending the count against future Incoming)
 
 **Base Value Model**:
 The single deck-agnostic, replay-trained estimator of win probability from a game state;

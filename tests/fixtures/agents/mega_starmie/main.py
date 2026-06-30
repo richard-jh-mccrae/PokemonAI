@@ -47,7 +47,8 @@ _pilot = Pilot(
     recoil=_recoil,
     bench_snipe=_bench_snipe,
     search_budget=_params.get("search_budget", 0),   # Tier from params (Strategy default or overlay; ADR-0019/0021)
-    scout=_scout,                                     # Posture-OFF in M2.0: the Read rides on Board, unconsumed
+    scout=_scout,                                     # opponent recognition → the Read on Board (ADR-0026)
+    posture=_params.get("posture", True),             # ADR-0026 kill-switch (overlay can force Posture off for A/B)
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
 _TELEMETRY = os.environ.get("AGENT_NO_TELEMETRY") != "1"     # always-on Decision Telemetry (ADR-0019)

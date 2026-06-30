@@ -75,7 +75,14 @@ immunity field on `CardStat` yet); affordability ignored (opponent-agnostic uppe
 
 ---
 
-## M1 — Self-play Pre-filter: cheap offline A/B (NOT the gate)  ·  *foundational, build before M2–M4*
+## M1 — Self-play Pre-filter: cheap offline A/B (NOT the gate)  ·  ✅ *BUILT & verified 2026-06-30*
+
+**Status: BUILT.** The whole M1 surface ships and is tested (28 tests; smoke A/B confirmed end-to-end):
+seat-balancing (`seat_plan`/`balanced_tally`/`by_seat`) + the `name@overlay.json` config overlay
+(→ `AGENT_OVERLAY`, `common/config.py`) in `tools/sim/battle.py`; the Battle Result → `data/battles.jsonl`
+in `tools/sim/result.py`; the M1b own-game corpus in `tools/sim/selfplay.py` ([ADR-0022](../adr/0022-selfplay-corpus-uses-cabt-env-path.md)).
+A/B a config with `python tools/sim/battle.py <agent> <agent>@overlay.json`. The build notes below are
+retained as the as-built record.
 
 **Why early:** later milestones each claim "X helps"; a cheap offline A/B triages configs before spending a
 scarce real-ladder submission. It is a **Pre-filter, not the gate** — the real Kaggle ladder stays

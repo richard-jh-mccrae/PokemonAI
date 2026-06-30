@@ -11,14 +11,16 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field, replace
 
+from common import deck_odds
 from common.strategy import Plan, Strategy
 from common.scouting.read import Read
+from common.scouting.matchup import matchup_favorability
 
 # Engine vocabulary (option/select/area enum mirrors, KO_SCORE, _ENGINE_TAGS, …) is shared with the
 # doctrine modules, so it lives in common.strategy.context. The three card-archetype doctrines each
 # own their Hypotheses AND their Pilot-side code (a `*Mixin` this Pilot inherits) — see those modules.
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
-from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin
+from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
@@ -53,6 +55,22 @@ _RESISTANCE = 30           # damage Resistance subtracts when the defender resis
                            # In THIS set it is a uniform -30: verified by probing 47 resistant Pokémon
                            # through the simulator (tools/sim/probe_resistance.py) + the printed cards, all
                            # -30. Applied AFTER Weakness (rules.md §5). Revisit if a card ever prints other.
+
+# Posture confidence (ADR-0026): the continuous γ ∈ [0,1] the generic-core levers scale by. Ramp the
+# Read's top posterior over [LO, HI] and discount by unmatched mass, so an unknown opponent → γ≈0.
+_POSTURE_GAMMA_LO = 0.5     # below this top-posterior, Posture is off (recognition too weak to act on)
+_POSTURE_GAMMA_HI = 0.85    # at/above this, Posture is at full strength
+
+
+def _posture_gamma(read) -> float:
+    """Posture confidence γ ∈ [0,1] from the Read (ADR-0026): ramp the top posterior over
+    [_POSTURE_GAMMA_LO, _POSTURE_GAMMA_HI], discounted by the unmatched (unknown) mass. 0 when there is no
+    Read or it is unrecognized — so an unknown opponent makes Posture contribute nothing (no-regression)."""
+    if read is None or not read.candidates:
+        return 0.0
+    top = read.confidence[0] if read.confidence else 0.0
+    ramp = max(0.0, min(1.0, (top - _POSTURE_GAMMA_LO) / (_POSTURE_GAMMA_HI - _POSTURE_GAMMA_LO)))
+    return ramp * (1.0 - read.unknown_mass)
 
 
 def choose_plan(state: dict, strategy, stats=None) -> Plan:
@@ -120,6 +138,14 @@ class Board:
                                        # (None off a search / no list / none present) — Tier-3 override
     line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
                                        # play — so there's something a rush-evolve tutor can evolve
+    wincon_base_deployable: bool = False  # a Line pre-evolution (a base to evolve the payoff from) is in
+                                       # play OR in hand — so the evolved payoff is deployable. When
+                                       # False, fetching the payoff just strands it: prefer the base
+                                       # (`fetch-base-before-stranded-payoff`)
+    accel_recipient_missing: bool = False  # my Active is a bench-accelerator (an `accel_source`-role
+                                       # Pokémon, e.g. Cinderace's Turbo Flare) AND no Line member sits
+                                       # on my Bench to receive the accelerated Energy — so the accel is
+                                       # wasted and developing a recipient is the top setup priority
     support_in_play: bool = False      # an engine/support Pokémon (a draw/accel/search Ability, see
                                        # _ENGINE_TAGS) is on my Active/Bench — the gap gate for
                                        # `fetch-the-support` (with an engine online I needn't tutor one)
@@ -159,6 +185,11 @@ class Board:
                                        # pre-evolution is bare (evolving it just exposes a dead 0-Energy
                                        # wincon — then promote a staller/accelerator instead, ep82753102 f120)
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
+    tool_deploy_slot: tuple | None = None  # (AreaType, inPlayIndex) of the body to equip my held +HP
+                                       # Tool this turn — the survival-turns target picker (ADR-0028);
+                                       # None when no +HP Tool in hand / no body worth equipping
+    irreplaceable_tool_in_hand: bool = False  # an ACE SPEC (one-per-deck, unrecoverable) Tool is in
+                                       # my hand — the anti-shuffle belt (never shuffle it away)
     priority_wincon_slot: tuple | None = None  # (AreaType, index) of the ONE win-condition Pokémon to
                                        # concentrate Energy on — the wincon carrying the MOST Energy
                                        # while still short of its biggest attack (closest to its payoff
@@ -194,6 +225,15 @@ class Board:
                                           # positive-fetch consumer — ADR-0023 keeps the oracle an
                                           # availability gate; a positive fetch endorsement is the planned
                                           # reader — so this is intentionally read-only-from-tests today).
+    deck_contains_odds: dict | None = None  # PROBABILISTIC {cardId: P(deck still holds ≥1 copy)} — the
+                                          # complement to the SOUND deck_definitely_empty_of (ADR-0029,
+                                          # common/deck_odds.py). Each card's unseen copies (decklist −
+                                          # visible) split hypergeometrically over the hidden prize slots;
+                                          # collapses to exact 1.0/0.0 once the tracker resolves the prizes
+                                          # (reuses deck_known_counts). None when uncomputable (no deck /
+                                          # no deckCount) — then the signal is silent. Read via
+                                          # `deck_contains_probability`; consulted by the Fetch doctrine's
+                                          # `dont-search-a-probable-whiff`, never replacing the sound guard.
     opp_active_condition_gift: bool = False  # the opponent's Active carries ANY special condition
                                           # (poison/burn/sleep/paralyze/confuse) — gusting it off to the
                                           # bench would CLEAR it (a free cure). The guard that suppresses
@@ -205,6 +245,12 @@ class Board:
     read: Read | None = None              # the per-decision Scouting Read (ADR-0026); None = Posture off
                                           # (no Scout wired / pregame). Carried here so every option shares
                                           # one Read; nothing scores off it in M2.0 (wiring is Posture-OFF).
+    posture_confidence: float = 0.0       # γ ∈ [0,1] from the Read (ADR-0026): the continuous strength the
+                                          # generic-core Posture levers scale by; 0 = unrecognized / no Scout.
+    favorability: float = 0.5             # compiled matchup win-rate vs the Read's candidate opponents
+                                          # (0.5 = neutral / no data) — the lever-A aggression signal (ADR-0026).
+    matchup_coverage: float = 0.0         # share of the Read's posterior that hit a real matchup cell; low
+                                          # coverage = favorability is mostly the 0.5 default, so trust it less.
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -218,6 +264,17 @@ class Board:
         deck-tracker's exact deck counts (`deck_known_counts`, available once a search has anchored
         the prizes). False when unknown: positive certainty is never asserted on a guess."""
         return bool(self.deck_known_counts) and self.deck_known_counts.get(card_id, 0) > 0
+
+    def deck_contains_probability(self, card_id: int) -> float:
+        """PROBABILISTIC P(my deck still contains `card_id`) ∈ [0,1] — the complement to the SOUND
+        `deck_definitely_empty_of` (ADR-0029, `deck_contains_odds` / common/deck_odds.py). Agrees with
+        the sound oracle at the extremes (a provably-empty card → 0.0; a pigeonhole-certain or
+        prize-resolved card → exactly 1.0) and estimates the uncertain middle. Returns **1.0** when the
+        odds are uncomputable (no deck / no deckCount) so a consumer never SUPPRESSES on missing data —
+        the conservative "assume present" default."""
+        if self.deck_contains_odds is None:
+            return 1.0
+        return self.deck_contains_odds.get(card_id, 0.0)
 
 
 @dataclass
@@ -242,6 +299,9 @@ class Context:
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
                                            # — the most-built buildable wincon. Gates `concentrate-energy-
                                            # on-wincon` so the deck loads one attacker instead of spreading.
+    attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
+                                           # survival-turns picker chose (== board.tool_deploy_slot) —
+                                           # the proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
     attach_from_target_needs: bool = False  # at an ATTACH_FROM target-select (the engine's pick-a-
                                            # recipient step for a multi-attach effect, e.g. Cinderace's
                                            # Turbo Flare 'attach a Basic to a Benched Pokémon'), THIS
@@ -310,6 +370,14 @@ class Context:
                                    # win-condition AND the win-condition is already in hand — so it
                                    # would only dig a redundant copy (e.g. Mega Signal with a Mega in
                                    # hand). False off a search / a tutor that can fetch anything else
+    search_targets_unlikely: bool = False  # this option PLAYS a search whose every still-REACHABLE
+                                   # fetch target is PROBABLY (not provably) prized — the best target's
+                                   # hypergeometric P(deck still contains it) is below the whiff
+                                   # threshold (ADR-0029, `Board.deck_contains_probability`). The
+                                   # PROBABILISTIC complement to `search_targets_exhausted`: mutually
+                                   # exclusive with it (it requires a reachable target), so the sound
+                                   # guard owns the CERTAIN whiff and this softly tips a LIKELY one.
+                                   # False off a search / when a target is plausibly present
 
 
 @dataclass
@@ -333,13 +401,13 @@ class Decision:
     read: Read | None = None     # the per-decision Scouting Read (ADR-0026), surfaced for legibility
 
 
-class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
-    """Composed from three doctrine mixins (gust / fetch / shuffle-refresh) — each contributes its closed-form
+class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+    """Composed from four doctrine mixins (gust / fetch / shuffle-refresh / tool) — each contributes its closed-form
     Pilot-side methods; the shared Sense→Plan→Score→Act core is defined here. See common/strategy/."""
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
-                 search_budget=0, scout=None):
+                 search_budget=0, scout=None, posture=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -352,6 +420,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         self.bench_snipe = bench_snipe or {}            # attackId -> opp-bench snipe rider (ADR-0022 #14)
         self.search_budget = search_budget
         self.scout = scout                              # opponent Scout (ADR-0026); None = Posture off
+        self.posture = posture                          # ADR-0026 kill-switch: False forces γ=0 + neutral
+                                                        # favorability → both levers off (the A/B baseline)
         self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
 
     def decide(self, obs: dict) -> list[int]:
@@ -731,7 +801,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             and target_forward_damage == board.strongest_forward_bench
             and target_forward_damage >= _EVOLVING_THREAT_DMG)
         target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp)
-        target_rank = self._target_threat_rank(obs, select, option)
+        target_rank = self._target_threat_rank(obs, select, option, board.read, board.posture_confidence)
         target_is_top_threat = (target_rank is not None and target_rank > 0
                                 and board.strongest_threat_rank > 0
                                 and target_rank == board.strongest_threat_rank)
@@ -742,7 +812,12 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         attach_target_is_priority_wincon = (
             option.get("type") == _ATTACH and board.priority_wincon_slot is not None
             and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.priority_wincon_slot)
+        attach_is_tool_deploy_target = (
+            option.get("type") == _ATTACH and board.tool_deploy_slot is not None
+            and "tool" in tags and getattr(stat, "hpBonus", 0) > 0
+            and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.tool_deploy_slot)
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
+        search_unlikely = self._search_probable_whiff(option, tags, board)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
@@ -750,6 +825,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                        attach_target_needs=self._attach_target_needs(at_target),
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
+                       attach_is_tool_deploy_target=attach_is_tool_deploy_target,
                        attach_from_target_needs=attach_from_needs,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
@@ -764,7 +840,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
-                       search_redundant_wincon=redundant_wincon)
+                       search_redundant_wincon=redundant_wincon,
+                       search_targets_unlikely=search_unlikely)
 
     # The Fetch doctrine's comparator/oracle (`_grab_value_of` = `fetch_value`), the deck-knowledge
     # whiff/redundant signals (`_search_signals`/`_search_deck_set`), the whether-to-play lookahead
@@ -885,6 +962,12 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         prizes = obs.get("own_prizes")             # exact prize multiset from the deck-tracker, or None
         deck_empty = self._deck_empty_ids(me, prizes)
         deck_known = self._deck_known_counts(me, prizes)
+        deck_odds_map = self._deck_contains_prob(me, deck_known)   # probabilistic complement (ADR-0029)
+        read = self.scout.observe(obs) if self.scout else None   # the Read (M2.0); γ/favorability derive from it
+        gamma = _posture_gamma(read) if self.posture else 0.0    # γ threads into snipe rank; kill-switch zeroes it
+        my_arch = self.strategy.params.get("my_archetype")
+        fav, cov = (matchup_favorability(self.scout.artifact, my_arch, read.candidates)
+                    if (self.posture and self.scout and read and my_arch) else (0.5, 0.0))
         board = Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
@@ -905,6 +988,9 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
+            wincon_base_deployable=(self._line_preevo_in_play(me)
+                                    or self._line_preevo_in_hand(me)),
+            accel_recipient_missing=self._accel_recipient_missing(me),
             support_in_play=self._support_in_play(me),
             in_play_ids=frozenset(p.get("id") for p in ((me.get("active") or []) + (me.get("bench") or []))
                                   if p and p.get("id") is not None),
@@ -913,7 +999,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             bench_threat_present=self._bench_threat_present(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
-            strongest_threat_rank=self._strongest_threat_rank(obs, select),
+            strongest_threat_rank=self._strongest_threat_rank(obs, select, read, gamma),
             bench_wincon_ready=self._bench_wincon_ready(me),
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
@@ -926,10 +1012,17 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
             deck_empty_ids=deck_empty,
             deck_known_counts=deck_known,
+            deck_contains_odds=deck_odds_map,
             opp_active_condition_gift=self._opp_active_condition_gift(opp),
             active_condition_ko_prizes=self._active_condition_ko_prizes(opp, oa),
-            read=self.scout.observe(obs) if self.scout else None,   # Posture Read (ADR-0026); None = off
+            read=read,                                              # Posture Read (ADR-0026); None = off
+            posture_confidence=gamma,                               # γ ∈ [0,1] the levers scale by
+            favorability=fav, matchup_coverage=cov,                 # lever-A signal + its reliability
         )
+        if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
+            board = replace(board,                      # Tool is in hand (the common case pays nothing)
+                            tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
+                            irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
         # Shuffle-Refresh fallback signals (ADR-0024) — computed off the base board, so the hand-card
         # play-scan can read the rest of the board. Only `refresh-when-hand-is-dead` reads them, and it
         # fires only on a `shuffle_hand` option, so skip the (whole-menu) scan unless a refresh is in
@@ -971,6 +1064,31 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
+
+    def _line_preevo_in_hand(self, me: dict) -> bool:
+        """True if a Line pre-evolution (a base to evolve the payoff from) is in my hand — so I can
+        bench it and deploy the payoff. The hand-side companion of `_line_preevo_in_play`."""
+        preevos = self._line_preevo_set()
+        if not preevos:
+            return False
+        return any(c and c.get("id") in preevos for c in (me.get("hand") or []))
+
+    def _line_member_set(self) -> set:
+        """Every card id on a Line's path — pre-evolutions AND the payoff. The Pokémon a bench
+        accelerator (e.g. Cinderace's Turbo Flare) can usefully load Energy onto."""
+        return {cid for line in self.strategy.lines for cid in line.path}
+
+    def _accel_recipient_missing(self, me: dict) -> bool:
+        """True if my Active is a bench-accelerator (an `accel_source`-Role Pokémon, e.g. Cinderace)
+        but NO Line member sits on my Bench to receive the accelerated Energy — so Turbo Flare would
+        attach to nothing. The trigger for developing a recipient first. False with no `accel_source`
+        Role declared, no such Active, or any Line member already benched."""
+        accel = {cid for cid, r in self.strategy.roles.items() if "accel_source" in r}
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        if not (accel and ma and ma.get("id") in accel):
+            return False
+        members = self._line_member_set()
+        return not any(b and b.get("id") in members for b in (me.get("bench") or []))
 
     # (Fetch doctrine greedy multi-pick + its gap helpers are in doctrine_fetch.FetchMixin, above.)
     def _evolve_to_ready_wincon_available(self, me: dict) -> bool:
@@ -1094,7 +1212,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             return 0
         return max((self.bench_snipe.get(aid, 0) for aid in (stat.attacks or ())), default=0)
 
-    def _target_threat_rank(self, obs: dict, select: dict, option: dict) -> float | None:
+    def _target_threat_rank(self, obs: dict, select: dict, option: dict,
+                            read=None, gamma: float = 0.0) -> float | None:
         """Snipe-priority THREAT rank for a benched DAMAGE target (None off a Damage/bench option).
 
         Higher = snipe first when no KO is available. The rank is the body's eventual attack power —
@@ -1115,6 +1234,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         stat = self.stats.get(cid) if self.stats else None
         own = stat.maxDamage if stat else 0
         fwd = self._target_forward_damage(obs, select, option) or 0
+        fwd = self._read_modulated_forward(cid, fwd, read, gamma)   # lever C (ADR-0026): Read-accurate forward
         rank = float(max(own, fwd))
         rank += 0.001 * own                                   # more-evolved tie-break (Drakloak>Dreepy)
         if self.functions:
@@ -1135,15 +1255,28 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         fci = getattr(self.stats, "forward_card_ids", None)
         return fci(cid) if (fci is not None and cid is not None) else frozenset()
 
-    def _strongest_threat_rank(self, obs: dict, select: dict | None) -> float:
-        """Greatest `_target_threat_rank` among the benched DAMAGE targets — the body to snipe when no
-        KO is on the menu. 0 off a Damage select."""
+    @staticmethod
+    def _read_modulated_forward(cid: int, fwd: float, read, gamma: float) -> float:
+        """Lever C (ADR-0026): scale M0's generic forward-evolution damage by the Read. Recognized (γ>0)
+        and the Read predicts THIS body's line (it is a `seen_cardId` on an evolution_path) → trust the
+        signal in full; recognized but the archetype runs no such line → suppress it (×(1−γ)); unknown
+        (γ=0) or no Read → the generic signal, unchanged. Suppressing denied lines is the accuracy win —
+        M0 ranks by the pool's scariest descendant; the Read says whether THIS deck actually runs it."""
+        if not gamma or not fwd or read is None:
+            return fwd
+        confirmed = any(p.seen_cardId == cid for p in read.evolution_paths)
+        return fwd if confirmed else fwd * (1.0 - gamma)
+
+    def _strongest_threat_rank(self, obs: dict, select: dict | None, read=None, gamma: float = 0.0) -> float:
+        """Greatest `_target_threat_rank` among the benched DAMAGE targets — the body to snipe when no KO
+        is on the menu. 0 off a Damage select. read/γ thread lever C (ADR-0026) consistently with the
+        per-option rank, so `target_is_top_threat` stays a valid equality."""
         if not select or select.get("context") != _DAMAGE:
             return 0.0
         best = 0.0
         for o in (select.get("option") or []):
             if o.get("type") == _CARD and o.get("area") == _BENCH:
-                r = self._target_threat_rank(obs, select, o)
+                r = self._target_threat_rank(obs, select, o, read, gamma)
                 if r is not None and r > best:
                     best = r
         return best
@@ -1328,6 +1461,30 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         seen = self._visible_card_counts(me)
         return {cid: rem for cid, n in deck_counts.items()
                 if (rem := n - seen.get(cid, 0) - prizes.get(cid, 0)) > 0}
+
+    def _deck_contains_prob(self, me: dict, deck_known: dict | None) -> dict | None:
+        """PROBABILISTIC ``{cardId: P(deck still holds ≥1 copy)}`` — the complement to the sound
+        ``_deck_empty_ids`` (ADR-0029, `Board.deck_contains_odds`). When the deck-tracker has resolved
+        the prizes (`deck_known` given), there is no randomness left — collapse to exact certainty
+        (1.0 for any in-deck card, 0.0 otherwise), reusing the SAME sound counts so the two signals
+        cannot disagree. Otherwise split each card's unseen copies (`decklist − visible`) over the
+        face-down prize slots hypergeometrically (`deck_odds.contains_odds`). None when uncomputable
+        (no deck / no `deckCount`) → the signal stays silent. Never raises (grader safety)."""
+        if not self.deck:
+            return None
+        try:
+            if deck_known is not None:                    # prizes resolved -> exact certainty, no guess
+                return {cid: 1.0 for cid in deck_known}
+            deck_count = me.get("deckCount")
+            if not isinstance(deck_count, int) or isinstance(deck_count, bool) or deck_count < 0:
+                return None                               # no sound deck size -> stay silent
+            prize_list = me.get("prize") or []            # face-DOWN prizes (a face-up prize is visible)
+            prizes_hidden = sum(1 for p in prize_list
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            seen = self._visible_card_counts(me)
+            return deck_odds.contains_odds(Counter(self.deck), seen, deck_count, prizes_hidden)
+        except Exception:
+            return None
 
     def _visible_card_counts(self, me: dict) -> Counter:
         """Count MY card copies that are provably OUTSIDE the deck: my hand, my discard, every board

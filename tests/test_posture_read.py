@@ -6,11 +6,14 @@ See ADR-0026 (the wiring staircase) and docs/scouting.md (the Read).
 """
 import pytest
 
+from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.read import EvoPath, Read
 from common.scouting.scout import Scout
 from common.strategy import Line, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from pilot_helpers import BENCH, card_opt, make_select, poke, state
 from scouting_helpers import MEGA_LUCARIO, RIOLU, SOLROCK, tiny_artifact
 
 MAIN, PLAY = 0, 7
@@ -24,9 +27,10 @@ def _stats():
     })
 
 
-def _pilot(scout=None):
+def _pilot(scout=None, my_archetype=None):
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
-                     roles={MEGA: ["win_condition", "primary_attacker"]})
+                     roles={MEGA: ["win_condition", "primary_attacker"]},
+                     params={"my_archetype": my_archetype} if my_archetype else {})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  attacks={11: 120}, attack_costs={11: 1}, scout=scout)
 
@@ -88,3 +92,115 @@ def test_unrecognized_opponent_yields_low_confidence_read():
     decision = _pilot(scout=Scout(tiny_artifact())).explain(_obs_early_unknown())
     assert decision.read is not None
     assert decision.read.confidence[0] < 0.6     # below the Scout's recognition threshold -> Posture off
+
+
+# ---- M2.1b Slice 1: Read-derived Board signals (γ + favorability), behavior-neutral ----
+
+def _board_of(pilot, obs):
+    return pilot._board(obs, obs["select"])
+
+
+@pytest.mark.req("REQ-POSTURE-0002")
+def test_posture_confidence_ramps_high_when_recognized():
+    # A confidently-recognized opponent yields a high posture-confidence gamma on the Board — the
+    # continuous scaling knob the M2.1b levers ride (ADR-0026).
+    board = _board_of(_pilot(scout=Scout(tiny_artifact())), _obs_facing_mega_lucario())
+    assert board.posture_confidence > 0.5
+
+
+@pytest.mark.req("REQ-POSTURE-0002")
+def test_posture_confidence_is_zero_when_unknown_or_no_scout():
+    # Unrecognized opponent (or no Scout wired) -> γ = 0, so the levers contribute nothing
+    # (no regression vs an unknown opponent is structural, ADR-0026).
+    assert _board_of(_pilot(scout=Scout(tiny_artifact())), _obs_early_unknown()).posture_confidence == 0.0
+    assert _board_of(_pilot(scout=None), _obs_facing_mega_lucario()).posture_confidence == 0.0
+
+
+@pytest.mark.req("REQ-POSTURE-0002")
+def test_favorability_reflects_the_matchup_table():
+    # With my_archetype declared and a compiled matchup cell vs the recognized opponent, the Board
+    # carries that favorability (the lever-A signal); coverage says how much posterior backs it.
+    art = tiny_artifact()
+    art.dossiers["Cinderace / Mega Starmie ex"] = {
+        "matchups": {"Mega Lucario ex": {"win_rate": 0.7, "n": 20.0}}}
+    board = _board_of(_pilot(scout=Scout(art), my_archetype="Cinderace / Mega Starmie ex"),
+                      _obs_facing_mega_lucario())
+    assert board.favorability > 0.6        # the 0.7 matchup cell dominates the posterior
+    assert board.matchup_coverage > 0.9    # nearly all posterior mass lands on a real cell
+
+
+@pytest.mark.req("REQ-POSTURE-0002")
+def test_favorability_defaults_neutral_without_my_archetype():
+    # No my_archetype declared -> neutral favorability, zero coverage (lever A stays off, safe default).
+    board = _board_of(_pilot(scout=Scout(tiny_artifact())), _obs_facing_mega_lucario())
+    assert board.favorability == 0.5 and board.matchup_coverage == 0.0
+
+
+# ---- M2.1b Slice 2: lever C (accurate-dev) — Read-modulated forward-evolution snipe rank ----
+
+SNIPER = 700
+
+
+def _snipe_pilot(stats):
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                 attacks={11: 120}, bench_snipe={11: 50})
+
+
+@pytest.mark.req("REQ-POSTURE-0003")
+def test_lever_c_suppresses_a_denied_evolving_threats_forward_rank():
+    # A benched Riolu's generic threat rank is its forward-evolution damage (Mega Lucario ex 270). When
+    # the Read CONFIRMS that line (it's on an evolution_path) the rank is unchanged; when a recognized
+    # archetype runs NO such line, lever C suppresses the forward signal (γ-scaled); unknown -> generic.
+    stats = DictCardStatProvider({
+        SNIPER: CardStat(SNIPER, name="Sniper", maxDamage=120, attacks=(11,)),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=220, megaEx=True,
+                               maxDamage=270, evolvesFrom="Riolu"),
+    })
+    pilot = _snipe_pilot(stats)
+    obs = make_select([card_opt(BENCH, 0, player=1)], context=15,
+                      current=state(active=poke(SNIPER), opp_bench=[poke(RIOLU, hp=70)]))
+    opt, select = obs["select"]["option"][0], obs["select"]
+
+    generic = pilot._target_threat_rank(obs, select, opt, read=None, gamma=0.0)
+    assert generic >= 270                                  # forward to Mega Lucario ex (M0 generic signal)
+    confirmed = Read(candidates=[("ML", 0.9)], confidence=(0.9, 0.5), unknown_mass=0.0,
+                     evolution_paths=[EvoPath(RIOLU, [RIOLU, MEGA_LUCARIO], MEGA_LUCARIO)])
+    denied = Read(candidates=[("G", 0.9)], confidence=(0.9, 0.5), unknown_mass=0.0)
+    assert pilot._target_threat_rank(obs, select, opt, read=confirmed, gamma=1.0) == generic   # confirmed
+    assert pilot._target_threat_rank(obs, select, opt, read=denied, gamma=1.0) < generic        # denied -> suppressed
+
+
+# ---- M2.1b Slice 3: lever A (favorability) — up-weight useful disruption when unfavored ----
+
+HAMMER = 555
+
+
+def _unfavored_pilot(win_rate, funcs):
+    art = tiny_artifact()
+    art.dossiers["MyDeck"] = {"matchups": {"Mega Lucario ex": {"win_rate": win_rate, "n": 30.0}}}
+    return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[1] * 60,
+                 general_strategy=GENERAL_STRATEGY, stats=DictCardStatProvider({}),
+                 functions=funcs, attacks={}, scout=Scout(art))
+
+
+def _obs_hammer_vs_energized_mega_lucario():
+    me = {"active": [{"id": 1, "energies": [], "hp": 100}], "bench": [],
+          "hand": [{"id": HAMMER}], "discard": [], "prize": []}
+    opp = {"active": [{"id": MEGA_LUCARIO, "energies": [1], "hp": 200}],
+           "bench": [{"id": SOLROCK}, {"id": RIOLU}], "discard": [], "prize": []}
+    return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 4},
+            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                       "option": [{"type": PLAY, "index": 0}], "deck": None}, "logs": []}
+
+
+@pytest.mark.req("REQ-POSTURE-0004")
+def test_lever_a_boosts_useful_disruption_when_unfavored():
+    # Recognized Mega Lucario ex, an UNFAVORABLE matchup (win-rate 0.3) — up-weight the useful energy
+    # denial (opp Active carries Energy to strip). Stands down at an EVEN matchup (favorability 0.5).
+    funcs = CardFunctions({HAMMER: ["energy_denial"]})
+    obs = _obs_hammer_vs_energized_mega_lucario()
+    unfavored = {h.id for h, _ in _unfavored_pilot(0.3, funcs).explain(obs).options[0].fired}
+    even = {h.id for h, _ in _unfavored_pilot(0.5, funcs).explain(obs).options[0].fired}
+    assert "disrupt-when-unfavored" in unfavored
+    assert "disrupt-when-unfavored" not in even

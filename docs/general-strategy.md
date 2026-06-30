@@ -307,7 +307,9 @@ as [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md)'s `gust_ko`).
   redundant second copy fall to ~0 with no special guard.
 - **available** — `Board.deck_definitely_empty_of(cid)` *filters* a dead candidate (the sound
   empty-deck oracle); `deck_definitely_has(cid)` gives positive confidence but **never forces** a fetch.
-  **Gap drives, availability only gates.**
+  Its **probabilistic complement** `deck_contains_probability(cid)` (ADR-0029) softly stands down a
+  *likely* whiff the sound oracle can't see (a target probably sitting in the hidden prizes) — never
+  replacing the sound gate. **Gap drives, availability only gates.**
 
 **(B) What to grab** = argmax `fetch_value` over the revealed candidates. **Multi-pick is shipped**
 (`_greedy_grab`, [pilot.py](../src/common/pilot.py)): a fetch-grab is a **single** `maxCount>1` select
@@ -403,6 +405,16 @@ energy-starve carve-out are the satisfy-gate in embryo. **Source:** F1 — JustI
 opener/accelerator; at a PROMOTE only when the payoff is in hand. **Reads:** `card_is_line_preevo`.
 Ranks below `fetch-the-wincon`. **Source:** F1 — JustInBasil (Consistency).
 
+#### `fetch-base-before-stranded-payoff` · weight 20 · status: testing
+> When the evolved payoff is NOT yet deployable — no Line pre-evolution in play **or hand**
+(`board.wincon_base_deployable` False) — prefer fetching the **base** over the payoff. A fetched
+payoff with no base to evolve from is a stranded dead card (and starves a bench-accelerator of a
+recipient). The inverse of `prefer-payoff-over-preevo`: it lifts the pre-evolution ABOVE
+`fetch-the-wincon` (+30) when the base is missing, but is **additive** (never zeroes the payoff), so
+if only the payoff is on offer you still grab it. **Reads:** `card_is_line_preevo` +
+`board.wincon_base_deployable`. Any evolution deck inherits it (origin: the mega_starmie Ultra-Ball
+Mega-over-Staryu trap, 2026-06-30).
+
 #### `fetch-energy-when-starved` · weight 25 · status: testing
 > With no Energy on the Active and none in hand, take a reusable Basic Energy — the energy *need rung*
 (satisfy-count = the online threshold). **Reads:** `board.my_active_energy == 0` & a reusable Energy
@@ -418,6 +430,17 @@ later draw quality); the *bench need rung* + the greedy multi-pick. **Reads:** `
 `Context.search_targets_exhausted`, built on the **sound** `deck_definitely_empty_of` — a copy that
 could sit in hidden prizes leaves it silent, so suppression is only on a CERTAIN whiff. **Source:**
 F12 — JustInBasil (Consistency); the sound empty-deck oracle.
+
+#### `dont-search-a-probable-whiff` · weight −25 · status: testing
+> The **probabilistic** complement (ADR-0029): stand down a search whose best still-**reachable** target
+is *probably* (not provably) prized — `Board.deck_contains_probability(cid)` below the 0.20 whiff
+threshold, the card's unseen copies split hypergeometrically over the hidden prize slots
+([deck_odds.py](../src/common/deck_odds.py)). **Reads:** `Context.search_targets_unlikely`. **Mutually
+exclusive** with `search_targets_exhausted` (it needs a reachable target), and weighted *above* the
+−60 sound guard: a guess only cancels a lone free-dig `dig-before-commit` (+20), never a real
+lacking-need grab (you still dig hard for an unfound win-condition). The refuted `82524455-f6` shape (2
+of 3 Staryu hideable in 6 prizes → P ≈ 0.98) stays above the bar, so it is **not** suppressed.
+**Source:** ADR-0029; reviewed.json `82524455-f6` (the probabilistic read the sound oracle refused).
 
 #### `dont-tutor-the-held-wincon` · weight −45 · status: testing
 > Stand down a wincon-ONLY tutor (Mega Signal) when the wincon is already in hand — the *redundant

@@ -31,6 +31,10 @@ class CardStat:
                                        # (Alakazam's Powerful Hand: 2 counters/card = 20), parsed from
                                        # attack text — the printed `damage` is 0, so this is the only
                                        # way the forward-doom / Posture read sees the threat. ep82754875
+    benchSnipeDamage: int = 0          # unconditional bench-snipe an attack also deals to ONE of the
+                                       # opponent's Benched Pokémon (Jetting Blow → 50), parsed from
+                                       # attack text — the opponent's incoming vs MY Bench (the Tool
+                                       # survival-turns math reads it for a benched carrier; ADR-0028)
     maxDamage: int = 0
     maxDamageCost: int | None = None   # energy count of the HIGHEST-damage attack (None if unknown) —
                                        # the mirror of minAttackCost: "fully online" means enough Energy
@@ -187,11 +191,13 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
     cost: dict[int, int] = {}
     recoil_by_aid: dict[int, int] = {}
     hand_size_by_aid: dict[int, int] = {}
+    bench_snipe_by_aid: dict[int, int] = {}
     for a in attacks:
         dmg.setdefault(a.attackId, a.damage)
         cost.setdefault(a.attackId, len(getattr(a, "energies", None) or []))
         recoil_by_aid.setdefault(a.attackId, parse_attack_recoil(getattr(a, "text", "") or ""))
         hand_size_by_aid.setdefault(a.attackId, parse_attack_hand_size(getattr(a, "text", "") or ""))
+        bench_snipe_by_aid.setdefault(a.attackId, parse_attack_bench_snipe(getattr(a, "text", "") or ""))
     cache: dict[int, CardStat] = {}
     for c in card_data:
         max_dmg = max((dmg.get(aid, 0) for aid in c.attacks), default=0)
@@ -213,6 +219,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             hpBonus=_parse_tool_hp_bonus(c),
             recoil=int(recoil),
             handSizeDamage=int(max((hand_size_by_aid.get(aid, 0) for aid in c.attacks), default=0)),
+            benchSnipeDamage=int(max((bench_snipe_by_aid.get(aid, 0) for aid in c.attacks), default=0)),
             maxDamage=int(max_dmg), maxDamageCost=max_dmg_cost,
             attacks=tuple(c.attacks),
             minAttackCost=(min(costs) if costs else None), minCostDamage=int(cheap_dmg),

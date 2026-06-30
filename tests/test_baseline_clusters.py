@@ -8,9 +8,10 @@ import pytest
 from common.strategy.baseline import (
     BASELINE_HYPOTHESES, BENCH_HYPOTHESES, DISRUPTION_HYPOTHESES, ENERGY_HYPOTHESES,
     EVOLUTION_HYPOTHESES, HEAL_HYPOTHESES, OPENING_HYPOTHESES, PROMOTE_HYPOTHESES,
-    RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES, SNIPE_HYPOTHESES, TOOL_HYPOTHESES,
+    RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES, SNIPE_HYPOTHESES,
 )
-from common.strategy.doctrines import FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRESH_HYPOTHESES
+from common.strategy.doctrines import (FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRESH_HYPOTHESES,
+                                       TOOL_HYPOTHESES as TOOL_DOCTRINE_HYPOTHESES)
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
 
@@ -30,14 +31,13 @@ CLUSTERS = {
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "promote-the-ready-wincon", "promote-the-staller"}),
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker"}),
-    "tool": (TOOL_HYPOTHESES, {
-        "save-tool-for-the-attacker", "protect-ace-spec-tool", "deploy-hp-tool-on-breakpoint"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
         "evolve-into-wincon", "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit"}),
-    "disruption": (DISRUPTION_HYPOTHESES, {"play-energy-denial", "play-harlequin-vs-hand-size"}),
+    "disruption": (DISRUPTION_HYPOTHESES, {
+        "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored"}),
 }
 
 
@@ -58,7 +58,8 @@ def test_baseline_hypotheses_is_the_disjoint_union_of_the_clusters():
 
 @pytest.mark.req("REQ-GEN-0025")
 def test_general_strategy_assembles_baseline_plus_doctrines_with_no_loss_or_dup():
-    doctrines = _ids(GUST_HYPOTHESES) | _ids(FETCH_HYPOTHESES) | _ids(REFRESH_HYPOTHESES)
+    doctrines = (_ids(GUST_HYPOTHESES) | _ids(FETCH_HYPOTHESES) | _ids(REFRESH_HYPOTHESES)
+                 | _ids(TOOL_DOCTRINE_HYPOTHESES))
     assert _ids(GENERAL_STRATEGY.hypotheses) == _ids(BASELINE_HYPOTHESES) | doctrines
     # no duplicate ids across the whole assembled strategy.
     ids = [h.id for h in GENERAL_STRATEGY.hypotheses]

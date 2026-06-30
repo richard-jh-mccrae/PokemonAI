@@ -6,6 +6,7 @@ file end to end (ADR-0008). The deck-agnostic baseline rules live in `common.str
   • doctrine_gust              Gust (Boss's Orders)  — ADR-0022 — `GustMixin`
   • doctrine_fetch             Fetch (Search)        — ADR-0023 — `FetchMixin`
   • doctrine_shuffle_refresh   Shuffle-Refresh       — ADR-0024 — `ShuffleRefreshMixin`
+  • doctrine_tool              Tool (Pokémon Tool)   — ADR-0028 — `ToolMixin`
 
 Re-exported here so callers can `from common.strategy.doctrines import GustMixin, FETCH_HYPOTHESES, …`.
 """
@@ -15,9 +16,12 @@ from common.strategy.doctrines.doctrine_gust import HYPOTHESES as GUST_HYPOTHESE
 from common.strategy.doctrines.doctrine_gust import GustMixin
 from common.strategy.doctrines.doctrine_shuffle_refresh import HYPOTHESES as REFRESH_HYPOTHESES
 from common.strategy.doctrines.doctrine_shuffle_refresh import ShuffleRefreshMixin
+from common.strategy.doctrines.doctrine_tool import HYPOTHESES as TOOL_HYPOTHESES
+from common.strategy.doctrines.doctrine_tool import ToolMixin
 
 __all__ = [
     "GustMixin", "GUST_HYPOTHESES",
     "FetchMixin", "FETCH_HYPOTHESES",
     "ShuffleRefreshMixin", "REFRESH_HYPOTHESES",
+    "ToolMixin", "TOOL_HYPOTHESES",
 ]
