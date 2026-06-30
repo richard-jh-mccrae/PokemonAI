@@ -68,6 +68,9 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
     ``reviewed`` is ``[(correction, entry)]`` for blunders excluded by the reviewed ledger
     (already assessed — refuted / deferred / covered); recorded so the snapshot shows *why* they
     aren't in ``open`` (no silent drop).
+
+    Each ``open``/``skipped`` entry carries ``"critical": bool`` (the rationale's CRITICAL marker)
+    so ``/blunder-buster`` can partition the must-fix-first cohort straight from the snapshot.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,11 +80,13 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
         "open": [
             {"id": p.id, "category": p.category, "episode_id": p.episode_id, "frame": p.frame,
              "seed_weight": p.seed_weight, "trigger_sketch": p.trigger_sketch,
-             "rationale": p.rationale, "agent_build": p.agent_build, "built_at": p.built_at}
+             "rationale": p.rationale, "agent_build": p.agent_build, "built_at": p.built_at,
+             "critical": p.critical}
             for p in proposals
         ],
         "skipped": [
-            {"episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason}
+            {"episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason,
+             "critical": c.is_critical}
             for c, reason in skipped
         ],
         "reviewed": [

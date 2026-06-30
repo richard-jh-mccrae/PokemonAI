@@ -45,18 +45,22 @@ _CONDITIONS = ("poisoned", "burned", "asleep", "paralyzed", "confused")
 
 def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
           opp_active=None, opp_bench=(), turn: int = 2, prizes: int = 0, opp_prizes: int = 0,
-          opp_conditions=(), opp_hand_count: int = 0) -> dict:
+          opp_conditions=(), opp_hand_count: int = 0, deck_count: int | None = None) -> dict:
     """A minimal `current` state with my board/hand (and optionally the opponent's). `prizes` /
     `opp_prizes` set each player's remaining prize count (length of the `prize` list); 0 leaves it
     empty (the prior default — no rule read prizes), so a lethal check only fires when a test sets it.
     `opp_conditions` sets the opponent's Active special-condition flags (e.g. ("poisoned",)) — they
     ride as booleans on the player dict (PlayerState.poisoned/burned/asleep/paralyzed/confused).
     `opp_hand_count` sets the opponent's hand size (the obs exposes the count, not the cards) — the
-    magnitude behind a hand-size attacker's forward-doom threat (Alakazam)."""
+    magnitude behind a hand-size attacker's forward-doom threat (Alakazam). `deck_count` sets my
+    remaining deck size (`deckCount`); left UNSET by default so the probabilistic deck-odds signal
+    (ADR-0029) stays silent unless a test opts in — keeping every prior test behaviour-neutral."""
     players = [None, None]
     players[your_index] = {"active": [active] if active else [], "bench": list(bench),
                            "hand": [_hand_card(c) for c in hand], "handCount": len(hand),
                            "discard": [_hand_card(c) for c in discard], "prize": [None] * prizes}
+    if deck_count is not None:
+        players[your_index]["deckCount"] = deck_count
     opp = {"active": [opp_active] if opp_active else [],
            "bench": list(opp_bench), "hand": None, "handCount": opp_hand_count,
            "discard": [], "prize": [None] * opp_prizes}

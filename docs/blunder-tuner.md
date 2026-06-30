@@ -59,6 +59,18 @@ of the active corpus before routing (so they leave `open[]` / `UNSATISFIED`) and
 `python tools/train/review_correction.py <episode>-<frame> <disposition> "<reason>"` (loader:
 `tools/train/blunder/reviewed.py`).
 
+**The CRITICAL marker — must-fix-first.** Write the uppercase token `CRITICAL` into a Correction's
+`rationale` to flag a blunder that `/blunder-buster` must resolve **before any other work** (the
+marker is case-sensitive, word-boundary — lowercase "critical" prose is not a flag;
+`train.blunder.correction.is_critical`). The pipeline surfaces it so the skill never hand-greps: a
+`missing_hypothesis` proposal carries `critical` (`tuner.propose`), the durable
+`data/proposals/<deck>.json` `open[]`/`skipped[]` entries serialize `"critical": true`
+(`tuner.io.write_proposals`), `tune.py` prints a `*** N CRITICAL … FIRST (blocking) ***` banner and
+tags each `PROPOSE`/`UNSATISFIED` line `[CRITICAL]` (with its rationale), and `blunders.html` badges
+each `⚠ CRITICAL`. The skill resolves the cohort serially, one reviewed checkpoint each, to a
+terminal outcome before any non-critical cluster — and **hard-stops for human acknowledgement** if a
+CRITICAL one would only resolve to `refuted`. See `.claude/skills/blunder-buster/SKILL.md`.
+
 ## Build notes / gotchas (read before implementing)
 
 - **`obs` must be embedded** in each Correction (update the inspector); **backfill the existing

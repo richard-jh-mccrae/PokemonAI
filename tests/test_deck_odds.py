@@ -1,0 +1,227 @@
+"""Probabilistic own-deck content estimate — `common.deck_odds` + the `Board.deck_contains_probability`
+signal and the `dont-search-a-probable-whiff` Fetch rung (ADR-0029).
+
+The COMPLEMENT to the sound deck tracker (test_deck_tracker.py): where the sound oracle is
+certain-or-silent (`deck_definitely_empty_of` stays silent on any copy that could hide in the prizes),
+this answers the *probabilistic* "is card C probably still in my deck?" by splitting a card's unseen
+copies over the hidden prize slots hypergeometrically. It NEVER contradicts the sound oracle (it agrees
+at the extremes) and never replaces the sound whiff guard — it only suppresses a *likely* whiff.
+"""
+import pytest
+
+from common.cards import CardFunctions
+from common.deck_odds import contains_odds, p_contains
+from common.pilot import Pilot
+from common.scouting.provider import CardStat, DictCardStatProvider
+from common.strategy import Strategy
+from common.strategy.general_strategy import GENERAL_STRATEGY
+from pilot_helpers import HAND, PLAY, make_select, opt, poke, state
+
+END = 14  # OptionType.END
+
+
+def _fired(o):
+    return {h.id for h, _ in o.fired}
+
+
+# ============================================================ the pure hypergeometric estimator
+@pytest.mark.req("REQ-GEN-0053")
+def test_unseen_copies_split_over_hidden_prizes_is_hypergeometric():
+    # 2 of 3 copies unseen, 6 hidden prizes, 30 in deck -> H=36. P(both prized)=C(6,2)/C(36,2)=15/630.
+    # The ep82524455-f6 shape: "2 of 3 Staryu could sit in 6 prizes" -> still very likely in the deck.
+    assert p_contains(unseen_copies=2, prizes_hidden=6, deck_count=30) == pytest.approx(1 - 15 / 630)
+    assert p_contains(2, 6, 30) > 0.9
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_single_unseen_copy_is_the_deck_share_of_the_hidden_pool():
+    # One unseen copy lands in a uniformly random hidden slot -> P(in deck) = deck_count / (deck+prizes).
+    assert p_contains(1, 5, 1) == pytest.approx(1 / 6)     # tiny deck, many prizes -> probably prized
+    assert p_contains(1, 2, 6) == pytest.approx(6 / 8)     # big deck, few prizes -> probably in deck
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_sound_at_the_extremes_agrees_with_the_sound_oracle():
+    assert p_contains(0, 6, 30) == 0.0     # every copy seen outside the deck -> sound-EMPTY (P 0)
+    assert p_contains(3, 2, 30) == 1.0     # 3 unseen copies, only 2 prize slots -> pigeonhole: in deck
+    assert p_contains(1, 0, 5) == 1.0      # no hidden prizes left -> the unseen copy MUST be in the deck
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_deck_empty_of_hidden_pool_means_all_unseen_are_prized():
+    # deck_count 0 with prizes remaining: all unseen copies are necessarily prized -> P(in deck) == 0.
+    assert p_contains(2, 6, 0) == 0.0
+    assert p_contains(1, 4, 0) == 0.0
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_more_prizes_or_fewer_deck_cards_lowers_presence_monotonically():
+    # Holding unseen copies fixed, presence falls as the deck thins relative to the prize pile.
+    a = p_contains(1, 6, 20)
+    b = p_contains(1, 6, 4)
+    c = p_contains(1, 6, 1)
+    assert a > b > c
+    assert 0.0 <= c <= a <= 1.0
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_p_contains_never_raises_and_stays_in_unit_interval():
+    # Grader safety: any garbage collapses to a float in [0,1] (1.0 = assume present, never suppress).
+    for args in [(-1, 6, 30), (1, -5, 3), (2, 6, -9), ("x", 6, 30), (1, None, 3), (10**9, 6, 30)]:
+        v = p_contains(*args)
+        assert isinstance(v, float) and 0.0 <= v <= 1.0
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_contains_odds_builds_a_per_card_dict():
+    odds = contains_odds(decklist={7: 3, 8: 4}, visible={7: 1}, deck_count=30, prizes_hidden=6)
+    assert odds[7] == pytest.approx(p_contains(2, 6, 30))   # 3 - 1 visible = 2 unseen
+    assert odds[8] == pytest.approx(p_contains(4, 6, 30))   # none seen -> 4 unseen
+    assert set(odds) == {7, 8}
+
+
+# ============================================================ the Board signal (pilot wiring)
+DECK = [1, 1, 1, 2, 2, 2, 3, 3, 3, 3]   # 3x id1, 3x id2, 4x id3 — same as test_deck_tracker
+
+
+def _poke(cid):
+    return {"id": cid, "energyCards": [], "tools": [], "preEvolution": []}
+
+
+def _board_obs(*, deck_count, prize_hidden=0, hand=(), discard=(), active=None, bench=(), own_prizes=None):
+    me = {
+        "hand": [{"id": c} for c in hand],
+        "discard": [{"id": c} for c in discard],
+        "active": [_poke(active)] if active is not None else [],
+        "bench": [_poke(c) for c in bench],
+        "prize": [None] * prize_hidden,
+        "deckCount": deck_count,
+    }
+    return {"current": {"turn": 2, "yourIndex": 0, "players": [me, None]}, "own_prizes": own_prizes}
+
+
+@pytest.mark.req("REQ-GEN-0054")
+def test_board_probability_unresolved_matches_the_hypergeometric_split():
+    pilot = Pilot(Strategy(), deck=DECK)
+    # visible {1:1, 2:1} -> 8 cards unseen; deck 6 + 2 hidden prizes = 8 (a consistent split).
+    b = pilot._board(_board_obs(deck_count=6, prize_hidden=2, hand=[1], active=2))
+    # id3: 4 unseen, only 2 prize slots -> pigeonhole CERTAIN, where the SOUND oracle stays silent.
+    assert b.deck_contains_probability(3) == 1.0
+    assert not b.deck_definitely_has(3)                      # sound makes no positive claim (no reveal)
+    # id1: 2 unseen over 2 prize slots of an 8-card pool -> P = 1 - C(2,2)/C(8,2).
+    assert b.deck_contains_probability(1) == pytest.approx(1 - 1 / 28)
+
+
+@pytest.mark.req("REQ-GEN-0054")
+def test_board_probability_is_low_when_a_card_is_mostly_prized():
+    pilot = Pilot(Strategy(), deck=[5] + [9] * 9)            # one copy of id5
+    # id5 nowhere visible; 1 in deck, 5 hidden prizes -> P(in deck) = 1/6.
+    b = pilot._board(_board_obs(deck_count=1, prize_hidden=5, active=9))
+    assert b.deck_contains_probability(5) == pytest.approx(1 / 6)
+
+
+@pytest.mark.req("REQ-GEN-0054")
+def test_board_probability_collapses_to_certainty_when_prizes_are_resolved():
+    pilot = Pilot(Strategy(), deck=DECK)
+    # The tracker has resolved prizes {1:2, 2:1} -> deck = {1:0, 2:1, 3:4}: no randomness left.
+    b = pilot._board(_board_obs(deck_count=7, hand=[1], active=2, own_prizes={1: 2, 2: 1}))
+    assert b.deck_contains_probability(1) == 0.0             # all id1 accounted (1 visible + 2 prized)
+    assert b.deck_contains_probability(2) == 1.0 and b.deck_contains_probability(3) == 1.0
+    assert b.deck_definitely_empty_of(1) and b.deck_definitely_has(2)   # agrees with the sound oracle
+
+
+@pytest.mark.req("REQ-GEN-0054")
+def test_board_probability_is_zero_for_a_provably_empty_card_agreeing_with_sound():
+    pilot = Pilot(Strategy(), deck=[5, 9, 9])
+    # both copies of id... id5 has 1 copy, seen in hand -> provably empty even stateless.
+    b = pilot._board(_board_obs(deck_count=1, prize_hidden=1, hand=[5], active=9))
+    assert b.deck_contains_probability(5) == 0.0
+    assert b.deck_definitely_empty_of(5)                     # the sound extreme: P 0 <-> definitely-empty
+
+
+@pytest.mark.req("REQ-GEN-0054")
+def test_board_probability_is_silent_without_a_deck_count():
+    pilot = Pilot(Strategy(), deck=DECK)
+    # No deckCount -> the split is uncomputable -> the signal stays silent (1.0 = assume present,
+    # never suppress). This is why every existing Pilot test (which sets no deckCount) is unaffected.
+    me = {"hand": [], "discard": [], "active": [], "bench": [], "prize": [None] * 6}
+    b = pilot._board({"current": {"turn": 2, "yourIndex": 0, "players": [me, None]}})
+    assert b.deck_contains_odds is None
+    assert b.deck_contains_probability(1) == 1.0
+
+
+# ============================================================ the dont-search-a-probable-whiff rung
+BASIC_TUTOR = 1086      # Buddy-Buddy Poffin shape (bench_fill -> Basics)
+MEGA, SIGNAL, FILLER, OTHER = 555, 556, 99, 999
+STARYU = 800
+
+
+def _whiff_stats():
+    return DictCardStatProvider({
+        MEGA: CardStat(MEGA, hp=330, megaEx=True, evolvesFrom="Riolu"),
+        STARYU: CardStat(STARYU, hp=70, evolvesFrom=None),
+        OTHER: CardStat(OTHER, hp=90, evolvesFrom=None),
+    })
+
+
+@pytest.mark.req("REQ-GEN-0055")
+def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prized():
+    """A tutor whose only deck target is PROBABLY (not provably) prized, endorsed only by the free-dig
+    rung, is softly stood down. Here a Mega-tutor for a lone Mega ex the lineless test deck does not
+    treat as a win-condition (so no lacking-need grab driver fires): its sole driver is dig-before-commit
+    (+20), and the probable-whiff penalty drops it below End. NOT the sound guard (the target is still
+    reachable)."""
+    funcs = CardFunctions({SIGNAL: ["search", "tutor_mega"]})
+    pilot = Pilot(Strategy(), deck=[MEGA] + [FILLER] * 40, general_strategy=GENERAL_STRATEGY,
+                  stats=_whiff_stats(), functions=funcs)
+    play_signal = opt(PLAY, area=HAND, index=0)
+    # MEGA nowhere visible; 1 in deck, 5 hidden prizes -> P(in deck) = 1/6 < threshold.
+    cur = state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5, deck_count=1)
+    obs = make_select([play_signal, opt(END)], current=cur)
+    assert pilot._context(obs, obs["select"], pilot._board(obs, obs["select"]),
+                          obs["select"]["option"][0], 0.0).search_targets_unlikely
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "dont-search-a-probable-whiff" in fired
+    assert "dont-search-an-empty-deck" not in fired         # NOT the sound guard — still reachable
+    assert pilot.decide(obs) == [1]                          # End beats the probable-whiff dig
+
+    # Control: same board with no deckCount -> the estimate is silent -> the dig is played.
+    obs2 = make_select([play_signal, opt(END)],
+                       current=state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5))
+    assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs2).options[0])
+    assert pilot.decide(obs2) == [0]
+
+
+@pytest.mark.req("REQ-GEN-0055")
+def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
+    """The ep82524455-f6 refutation, encoded: 2 of 3 Staryu unseen could sit in the 6 hidden prizes, so
+    a 2nd Buddy-Buddy Poffin is a PROBABILISTIC read, not a whiff. The estimate is ~0.98 (well above
+    threshold) -> the rung does NOT fire and the bench-filler is played."""
+    funcs = CardFunctions({BASIC_TUTOR: ["search", "bench_fill"]})
+    pilot = Pilot(Strategy(), deck=[STARYU] * 3 + [FILLER] * 57, general_strategy=GENERAL_STRATEGY,
+                  stats=_whiff_stats(), functions=funcs)
+    play_poffin = opt(PLAY, area=HAND, index=0)
+    # 1 of 3 Staryu visible (discard); deck 30, 6 hidden prizes -> 2 unseen, P(in deck) ~ 0.98.
+    cur = state(discard=[STARYU], hand=[BASIC_TUTOR], prizes=6, deck_count=30)
+    obs = make_select([play_poffin, opt(END)], current=cur)
+    ctx = pilot._context(obs, obs["select"], pilot._board(obs, obs["select"]),
+                         obs["select"]["option"][0], 0.0)
+    assert not ctx.search_targets_unlikely
+    assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs).options[0])
+    assert pilot.decide(obs) == [0]                          # play the bench-filler — it probably hits
+
+
+@pytest.mark.req("REQ-GEN-0055")
+def test_probable_whiff_is_mutually_exclusive_with_the_sound_empty_guard():
+    """When EVERY target is provably gone, the sound `dont-search-an-empty-deck` owns the suppression;
+    the probabilistic rung stays silent (it requires a still-reachable target), so they never double-count."""
+    funcs = CardFunctions({SIGNAL: ["search", "tutor_mega"]})
+    pilot = Pilot(Strategy(), deck=[MEGA] * 2 + [FILLER] * 58, general_strategy=GENERAL_STRATEGY,
+                  stats=_whiff_stats(), functions=funcs)
+    play_signal = opt(PLAY, area=HAND, index=0)
+    # Both Mega ex in the discard -> provably gone (sound), regardless of prizes/deck.
+    cur = state(discard=[MEGA, MEGA], hand=[SIGNAL], prizes=6, deck_count=10)
+    obs = make_select([play_signal, opt(END)], current=cur)
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "dont-search-an-empty-deck" in fired              # the sound guard fires
+    assert "dont-search-a-probable-whiff" not in fired       # the probabilistic rung stands aside

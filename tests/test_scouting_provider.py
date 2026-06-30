@@ -145,3 +145,20 @@ def test_build_cache_hp_bonus_defaults_to_zero_without_skills():
     cards = [SimpleNamespace(cardId=678, name="Mega Lucario ex", hp=220, ex=True, megaEx=True,
                              weakness=6, resistance=None, energyType=6, evolvesFrom="Riolu", attacks=[])]
     assert _build_cache(cards, [])[678].hpBonus == 0
+
+
+@pytest.mark.req("REQ-GEN-0024")
+def test_build_cache_parses_bench_snipe_damage_from_attack_text():
+    """A bench-snipe rider (Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched
+    Pokémon') lives only in attack text — parse the UNCONDITIONAL single-target snipe into a structured
+    ``CardStat.benchSnipeDamage`` (max over the card's attacks), the opponent-incoming-vs-my-Bench
+    primitive the Tool survival-turns math reads (ADR-0028)."""
+    attacks = [
+        SimpleNamespace(attackId=20, damage=120, energies=[6],
+                        text="This attack also does 50 damage to 1 of your opponent's Benched Pokémon."),
+        SimpleNamespace(attackId=21, damage=20, energies=[6], text=""),   # no snipe rider
+    ]
+    cards = [SimpleNamespace(cardId=1031, name="Mega Starmie ex", hp=330, ex=False, megaEx=True,
+                             weakness=4, resistance=None, energyType=3, evolvesFrom="Staryu",
+                             attacks=[20, 21])]
+    assert _build_cache(cards, attacks)[1031].benchSnipeDamage == 50

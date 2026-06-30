@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from train.blunder.correction import is_critical
+
 _SEED_WEIGHT = 20.0   # normal-preference band (docs/weights.md)
 
 
@@ -24,6 +26,7 @@ class ProposedHypothesis:
     frame: object = None
     agent_build: str | None = None
     built_at: str | None = None
+    critical: bool = False    # rationale carries the CRITICAL marker (resolve first; /blunder-buster gate)
 
 
 def _slug(text: str) -> str:
@@ -40,4 +43,5 @@ def propose_hypothesis(correction) -> ProposedHypothesis:
     return ProposedHypothesis(
         id=hid, rationale=correction.rationale or "", seed_weight=_SEED_WEIGHT,
         trigger_sketch=sketch, category=correction.category, episode_id=correction.episode_id,
-        frame=dec.get("frame"), agent_build=correction.agent_build, built_at=correction.built_at)
+        frame=dec.get("frame"), agent_build=correction.agent_build, built_at=correction.built_at,
+        critical=is_critical(correction.rationale))

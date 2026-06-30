@@ -5,6 +5,9 @@ disruption mechanics — hand disruption, ability lock — land.)
 from common.strategy.context import _PLAY
 from common.strategy.strategy import Hypothesis, Plan
 
+_POSTURE_UNFAVORED = 0.45     # matchup favorability at/below which a straight race is a losing plan (lever A)
+_POSTURE_MIN_COVERAGE = 0.25  # minimum matchup coverage to trust the favorability prior
+
 HYPOTHESES = [
     Hypothesis(
         id="play-energy-denial",
@@ -41,4 +44,21 @@ HYPOTHESES = [
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
         and "hand_disruption" in c.tags and c.board.opp_has_hand_size_attacker,
         weight=25, status="testing"),
+    Hypothesis(
+        id="disrupt-when-unfavored",
+        rationale="Lever A (ADR-0026): when the Read says this matchup is UNFAVORABLE — the compiled "
+                  "matchup win-rate is at/below `_POSTURE_UNFAVORED`, backed by `_POSTURE_MIN_COVERAGE` "
+                  "worth of evidence — the straight race loses, so change the game: up-weight a USEFUL "
+                  "free disruption (energy_denial while the opponent's Active carries Energy to strip, or "
+                  "hand_disruption against a hand_size_attacker). A meta PRIOR — it rides ON TOP of the "
+                  "base disruption rule (so it never boosts a wasteful one), is coverage-gated, and is "
+                  "board-dominated: a positional nudge that never overrides a KO (tactical wins) and "
+                  "stands down at an even/unknown matchup (favorability defaults to 0.5, coverage to 0). "
+                  "The favored->race half is deferred (no clean 'aggressive option' tag yet).",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
+        and c.board.favorability <= _POSTURE_UNFAVORED
+        and (("energy_denial" in c.tags and c.board.opp_active_has_energy)
+             or ("hand_disruption" in c.tags and c.board.opp_has_hand_size_attacker)),
+        weight=18, status="testing"),
 ]

@@ -12,7 +12,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
-from .correction import Correction
+from .correction import Correction, is_critical
 from .reviewed import load_reviewed, review_key
 from .store import load_corrections
 
@@ -126,6 +126,7 @@ _STYLE = (
     "color:#fff;margin-right:6px}"
     ".fixed{background:#2e7d32}.covered{background:#3b6db3}.refuted{background:#8a8a8a}"
     ".deferred{background:#b3873b}.open{background:#c0392b}.skipped{background:#cccccc;color:#333}"
+    ".critical{background:#d32f2f;outline:2px solid #000}"   # must-fix-first; orthogonal to disposition
 )
 
 
@@ -221,11 +222,15 @@ def build_report(corrections_path: Path | str, out_path: Path | str, *,
         head_counts = f" ({resolved_n} resolved &middot; {counts.get('open', 0)} open"
         head_counts += f" &middot; {counts['skipped']} skipped)" if counts.get("skipped") else ")"
 
+    n_critical = sum(1 for c in corrections if c.source == "own" and is_critical(c.rationale))
+    crit_note = (f" &middot; <span class='pill critical'>&#9888; {n_critical} CRITICAL</span>"
+                 if n_critical else "")
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'><title>Blunder trends</title>",
         f"<style>{_STYLE}</style></head><body>",
         "<h1>Blunder trends</h1>",
-        f"<p>{own['total']} own-agent blunders{head_counts} &middot; {peer['total']} peer blunders</p>",
+        f"<p>{own['total']} own-agent blunders{head_counts}{crit_note} "
+        f"&middot; {peer['total']} peer blunders</p>",
     ]
     if enrich:
         parts.append("<h2>My agents &mdash; by resolution</h2>")
@@ -271,8 +276,9 @@ def build_report(corrections_path: Path | str, out_path: Path | str, *,
         chosen = _esc(c.chosen_label or c.chosen)
         correct = _esc(c.correct_label or c.correct)
         badge = f"<span class='pill {disp[id(c)]}'>{disp[id(c)]}</span>" if enrich else ""
+        crit = "<span class='pill critical'>&#9888; CRITICAL</span>" if is_critical(c.rationale) else ""
         head = (
-            f"{badge}{_esc(c.category)} &middot; ep {_esc(c.episode_id)} &middot; "
+            f"{crit}{badge}{_esc(c.category)} &middot; ep {_esc(c.episode_id)} &middot; "
             f"turn {_esc(c.decision.get('turn'))} &middot; <code>{chosen}</code> &rarr; <code>{correct}</code>"
         )
         parts.append(f"<details><summary>{head}</summary><p>{_esc(c.rationale)}</p></details>")

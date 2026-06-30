@@ -34,6 +34,14 @@ _FETCH_FILTERS = {
     "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
 }
 
+# The PROBABLE-WHIFF threshold (ADR-0029): a search is softly stood down (`dont-search-a-probable-whiff`)
+# only when its BEST still-reachable target's hypergeometric P(deck still contains it) falls below this.
+# Conservative by design — it must NOT suppress a plausibly-present copy (the refuted ep82524455-f6
+# read: 2 of 3 Staryu hideable in 6 prizes give P ≈ 0.98, far above the bar). Tunable; below it the
+# search's best target is ≥4× more likely prized than in-deck. The SOUND whiff guard (certain P 0) is
+# separate and unconditional.
+_WHIFF_PROB_THRESHOLD = 0.20
+
 
 def _is_reusable_energy(stat, tags) -> bool:
     """A reusable (non-discard) Energy card: hp 0 with a real `energyType`, not tagged
@@ -63,6 +71,25 @@ class FetchMixin:
         wincon = self._wincon_set()
         redundant = bool(wincon) and fetch_set <= wincon and board.wincon_in_hand
         return exhausted, redundant
+
+    def _search_probable_whiff(self, option: dict, tags: list, board) -> bool:
+        """The PROBABILISTIC complement to `_search_signals`' SOUND `search_targets_exhausted`
+        (ADR-0029): a search whose every still-REACHABLE fetch target is UNLIKELY to remain in the deck
+        — the best reachable target's `Board.deck_contains_probability` is below `_WHIFF_PROB_THRESHOLD`,
+        though not provably gone. Mutually exclusive with the sound whiff: it requires a target NOT in
+        `deck_empty_ids` (an empty reachable set is the sound guard's certain whiff, left to it). False
+        off a PLAY / a non-search / when any target is plausibly present (so a copy that could sit in the
+        hidden prizes is never suppressed). Drives the soft `dont-search-a-probable-whiff`."""
+        if option.get("type") != _PLAY:
+            return False
+        fetch_set = self._search_deck_set(tags)
+        if not fetch_set:
+            return False
+        reachable = fetch_set - board.deck_empty_ids
+        if not reachable:
+            return False                          # all provably gone -> the SOUND guard owns this whiff
+        best = max(board.deck_contains_probability(cid) for cid in reachable)
+        return best < _WHIFF_PROB_THRESHOLD
 
     def _search_deck_set(self, tags: list) -> set:
         """The set of card ids in my deck a search with these fetch-filter tags can pull OUT of the
@@ -213,6 +240,21 @@ HYPOTHESES = [
         and not c.board.wincon_in_play and not c.board.wincon_in_hand,
         weight=5, status="testing"),
     Hypothesis(
+        id="fetch-base-before-stranded-payoff",
+        rationale="At a search, when the evolved win-condition payoff is NOT yet deployable — no Line "
+                  "pre-evolution (a base to evolve it from) in play OR hand (`wincon_base_deployable` "
+                  "False) — prefer fetching the base over the payoff. Fetching a payoff you have nothing "
+                  "to evolve from just strands a dead card in hand (and starves a bench-accelerator like "
+                  "Cinderace's Turbo Flare of a recipient); the base unblocks the whole line. The "
+                  "inverse of `prefer-payoff-over-preevo` (which prefers the payoff once you CAN deploy "
+                  "it): this lifts the pre-evolution ABOVE `fetch-the-wincon` (+30) on the payoff when "
+                  "the base is missing, but it is additive (it never zeroes the payoff), so if only the "
+                  "payoff is on offer you still grab it. Fires off the universal Line path + the "
+                  "in-play/hand base signal, so any evolution deck inherits it.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_line_preevo
+        and not c.board.wincon_base_deployable,
+        weight=20, status="testing"),
+    Hypothesis(
         id="fetch-energy-when-starved",
         rationale="When a search lets you choose a card AND your Active has no Energy and you have "
                   "none in hand, take a reusable Basic Energy — you need to power an attack now, and "
@@ -247,6 +289,23 @@ HYPOTHESES = [
                   "below End. (Mirrors `dont-rush-evolve-without-target` for a tutor with no target.)",
         when=lambda c: c.option_type == _PLAY and c.search_targets_exhausted,
         weight=-60, status="testing"),
+    Hypothesis(
+        id="dont-search-a-probable-whiff",
+        rationale="The PROBABILISTIC complement to `dont-search-an-empty-deck` (ADR-0029). That rung is "
+                  "SOUND — it fires only when EVERY fetch target is PROVABLY gone (all copies seen; none "
+                  "could hide in the prizes). But prizes are usually hidden early, so the certain-whiff "
+                  "case is rare; the common one is 'the last Staryu is PROBABLY prized'. This rung reads "
+                  "`Context.search_targets_unlikely` — the search's best still-REACHABLE target has a "
+                  "hypergeometric P(deck still contains it) below `_WHIFF_PROB_THRESHOLD` (each unseen "
+                  "copy split over the hidden prize slots; common/deck_odds.py) — and softly stands the "
+                  "search down. Mutually exclusive with the sound rung (it needs a reachable target) and "
+                  "weighted far ABOVE it (−25 vs −60): a guess, not a fact, so it only tips an "
+                  "already-marginal search (it cancels a lone free-dig `dig-before-commit` +20 endorsement, "
+                  "not a real lacking-need grab — you still dig hard for an unfound win-condition). A "
+                  "plausibly-present copy (the refuted ep82524455-f6 read: 2 of 3 Staryu hideable in 6 "
+                  "prizes → P ≈ 0.98) stays ABOVE the bar, so it is NOT suppressed.",
+        when=lambda c: c.option_type == _PLAY and c.search_targets_unlikely,
+        weight=-25, status="testing"),
     Hypothesis(
         id="dont-tutor-the-held-wincon",
         rationale="A tutor that can fetch ONLY the win-condition (e.g. Mega Signal → a Mega "

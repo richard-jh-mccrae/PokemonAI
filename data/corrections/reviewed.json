@@ -345,7 +345,7 @@
   },
   "82756664-9": {
     "disposition": "covered",
-    "reason": "save-tool-for-the-attacker + protect-ace-spec-tool deliberately hold the one-per-deck ACE SPEC Hero's Cape; agent draws to develop (Lillie's). Turn-1 Cape deploy is a fine tool-timing judgment",
+    "reason": "OVERTURNED 2026-06-30 (ADR-0028): the prior 'deliberately hold the ACE SPEC' rationale was WRONG — 'develop with Lillie's' SHUFFLES the irreplaceable Cape into the deck (the deck runs 6 hand-shuffle Supporters). Doctrine reversed to proactive deploy (survival-turns + anti-shuffle floor); Tool Doctrine build pending re-verifies this and flips disposition to fixed.",
     "round": "2026-06-30"
   },
   "82748422-26": {

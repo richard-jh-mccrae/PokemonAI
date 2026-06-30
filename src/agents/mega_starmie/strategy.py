@@ -7,7 +7,7 @@ ladder-tuned and corrected (ADR-0009). Pure data: no engine, no control flow.
 """
 from common.strategy import Hypothesis, Line, Plan, Strategy
 from common.strategy.context import (
-    _ACTIVE, _ATTACH, _IS_FIRST, _PLAY, _SETUP_ACTIVE, _TO_HAND, _WINCON_ROLES, _YES)
+    _ACTIVE, _ATTACH, _BENCH_MAX, _IS_FIRST, _PLAY, _SETUP_ACTIVE, _TO_HAND, _WINCON_ROLES, _YES)
 
 # --- Card ids (mega_starmie/deck.csv) -------------------------------------
 STARYU, MEGA_STARMIE_EX, CINDERACE = 1030, 1031, 666
@@ -51,6 +51,26 @@ HYPOTHESES = [
         when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _ATTACH)
         and "accel_source" in c.roles,
         weight=30, status="assumed"),
+    Hypothesis(
+        id="develop-turbo-flare-recipient",
+        rationale="Cinderace's Turbo Flare attaches its 3 Basic Energy to BENCHED Pokémon only, so with "
+                  "no Staryu (or benched Mega Starmie ex) on the Bench the acceleration is wasted on an "
+                  "empty Bench. While the accelerator is the Active and the Bench holds no Line "
+                  "recipient (`board.accel_recipient_missing`), developing one is the top setup "
+                  "priority: endorse playing a Line pre-evolution (Staryu) or a bench-filler "
+                  "(Buddy-Buddy Poffin, Function Tag `bench_fill`) to give Turbo Flare a target — and, "
+                  "via the base, the eventual Mega Starmie ex. This enshrines + regression-locks the "
+                  "deck's recipient-first doctrine; it rides ALONGSIDE the general `keep-a-bench` / "
+                  "`prefer-bench-fill-first` reflexes (which already handle the held-bencher cases), so "
+                  "it is behaviour-neutral there and only adds legibility + the bare-Bench framing. The "
+                  "FETCH side — grab the deployable base over a stranded Mega — is the general "
+                  "`fetch-base-before-stranded-payoff`. Stands down once a recipient is benched or the "
+                  "Active isn't the accelerator; never penalises the attack (a positive endorsement of "
+                  "development only), so a turn with no Staryu to find still attacks for the 50.",
+        when=lambda c: c.option_type == _PLAY and c.board.accel_recipient_missing
+        and (c.card_is_line_preevo or "bench_fill" in c.tags)
+        and c.board.my_bench < _BENCH_MAX,
+        weight=20, status="assumed"),
     Hypothesis(
         id="tutor-the-wincon",
         rationale="During setup, dig for the win-condition pieces (Mega Signal / Salvatore / Hilda) "

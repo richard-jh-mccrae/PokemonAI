@@ -98,6 +98,11 @@ def main(argv=None):
         print(f"[{agent}] {len(corrs)} corrections -> {out} "
               f"| {len(changed)} weight change(s), {len(result.proposals)} proposals, "
               f"{len(result.skipped)} skipped")
+        n_critical = sum(p.critical for p in result.proposals) + sum(
+            c.is_critical for c in result.unsatisfied) + sum(c.is_critical for c, _ in result.skipped)
+        if n_critical:
+            print(f"  *** {n_critical} CRITICAL correction(s) flagged — /blunder-buster resolves "
+                  f"these FIRST (blocking) before any other cluster ***")
         sat = result.n_constraints - len(result.unsatisfied)
         if result.n_constraints:
             verb = "fit adopted" if result.fit_adopted else "seeds kept"
@@ -111,15 +116,19 @@ def main(argv=None):
         elif not changed:
             print("  (no weight changes from authored defaults - leverage is in the proposals below)")
         for c in result.unsatisfied:                  # the fit couldn't honour these (conflict / needs a rule)
-            print(f"  UNSATISFIED ep {c.episode_id} frame {c.decision.get('frame')} "
+            mark = "[CRITICAL] " if c.is_critical else ""
+            print(f"  {mark}UNSATISFIED ep {c.episode_id} frame {c.decision.get('frame')} "
                   f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
+            if c.rationale:                            # show it so the CRITICAL marker is visible here too
+                print(f"    rationale: {c.rationale}")
         prop_out = write_proposals(
             REPO / "data" / "proposals" / f"{agent}.json", agent, result.proposals,
             result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"),
             reviewed=dispositioned)
         print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
         for p in result.proposals:
-            print(f"  PROPOSE {p.id} (seed {p.seed_weight}): {p.trigger_sketch}")
+            mark = "[CRITICAL] " if p.critical else ""
+            print(f"  {mark}PROPOSE {p.id} (seed {p.seed_weight}): {p.trigger_sketch}")
             print(f"    rationale: {p.rationale}")
         for c, why in result.skipped:
             print(f"  SKIP frame {c.decision.get('frame')}: {why}")

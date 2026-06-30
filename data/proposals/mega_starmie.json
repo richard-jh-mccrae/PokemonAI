@@ -1,49 +1,21 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-30T16:18:13",
-  "open": [],
-  "skipped": [
+  "generated_at": "2026-06-30T22:31:40",
+  "open": [
     {
-      "episode_id": 82229122,
-      "frame": 45,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82523164,
-      "frame": 55,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82749168,
-      "frame": 21,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82749168,
-      "frame": 62,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82752045,
-      "frame": 80,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82752604,
-      "frame": 61,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82754241,
-      "frame": 41,
-      "reason": "tactical"
-    },
-    {
-      "episode_id": 82754875,
-      "frame": 52,
-      "reason": "tactical"
+      "id": "sequencing-error-82867148-34",
+      "category": "sequencing_error",
+      "episode_id": 82867148,
+      "frame": 34,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Main' (turn 4) to prefer 'Attack with Turbo Flare' over 'Attack with Turbo Flare'",
+      "rationale": "something wrong at this decision point. we have an Ultra Ball in hand. we should have played the ultra ball to fetch a stryu, and then bench it.",
+      "agent_build": "mega_starmie_20260630_6fd8a19",
+      "built_at": "2026-06-30T00:00:00",
+      "critical": false
     }
   ],
+  "skipped": [],
   "reviewed": [
     {
       "episode_id": 81785223,
@@ -352,6 +324,18 @@
       "reason": "attack-last: agent evolves wincon before attacking; human picked bench-fill first — both same turn"
     },
     {
+      "episode_id": 82229122,
+      "frame": 45,
+      "disposition": "covered",
+      "reason": "retreat-to-lethal fires: Pilot retreats to Cinderace to KO the ex-immune Crustle (retest [14]->[16]=correct)"
+    },
+    {
+      "episode_id": 82523164,
+      "frame": 55,
+      "disposition": "covered",
+      "reason": "gust-snipe-synergy: drags the 70HP Dwebble so the 50 snipe finishes the 20HP one (2 prizes); recorded correct [0]=the 20HP Dwebble was a mislabel, Pilot picks [2]=70HP=the rationale's intent"
+    },
+    {
       "episode_id": 82523811,
       "frame": 15,
       "disposition": "covered",
@@ -424,6 +408,18 @@
       "reason": "hold-wincon-dont-shuffle + attach-before-hand-shuffle soundly suppress Lillie's (2 undeployed Megas + unattached energy in hand); agent tutors with Hilda — don't shuffle away your only wincons"
     },
     {
+      "episode_id": 82749168,
+      "frame": 21,
+      "disposition": "covered",
+      "reason": "play-energy-denial gates on opp_active_has_energy: opp Active energyless so no Crushing Hammer; Pilot attacks (retest [1]->[7]=correct)"
+    },
+    {
+      "episode_id": 82749168,
+      "frame": 62,
+      "disposition": "covered",
+      "reason": "snipe-KO scores a full prize (_snipe_ko_prizes): Jetting Blow snipe-KOs the 20HP Dreepy, beating Nebula Beam's chip on the un-KO-able 320HP Active (retest [1]->[0]=correct)"
+    },
+    {
       "episode_id": 82750161,
       "frame": 16,
       "disposition": "covered",
@@ -437,9 +433,21 @@
     },
     {
       "episode_id": 82752045,
+      "frame": 80,
+      "disposition": "covered",
+      "reason": "develop-before-KO already covered by concentrate-energy-on-wincon for evolved benched wincons; here the bench body is a pre-evo and the dev is a marginal Night Stretcher recycle ('might as well') - Pilot takes the prize; value-model judgment, no rule"
+    },
+    {
+      "episode_id": 82752045,
       "frame": 97,
       "disposition": "covered",
       "reason": "concentrate-energy-on-wincon: agent attaches Basic to the most-built benched Mega over the bare one; recorded Ignition->that-Mega avoided. Concentrate-don't-spread realized"
+    },
+    {
+      "episode_id": 82752604,
+      "frame": 61,
+      "disposition": "covered",
+      "reason": "same as f80: concentrate-energy-on-wincon covers the real develop-before-KO case; attaching to a bench pre-evo before fetching its evolution is speculative spread vs the concentrate doctrine - Pilot takes the prize; value-model judgment"
     },
     {
       "episode_id": 82752604,
@@ -466,16 +474,28 @@
       "reason": "unresolvable: options target the LOOKING zone (AreaType 12, Pokegear top-7 reveal); the obs exports no looking/deck list, so the revealed card ids (Lillie's vs Harlequin) are absent from the observation — no rule can identify them. Data limit of the obs, not a rule gap"
     },
     {
+      "episode_id": 82754241,
+      "frame": 41,
+      "disposition": "covered",
+      "reason": "play-energy-denial: wasted-Crushing-Hammer blunder resolved - Pilot no longer plays the Hammer, takes a KO attack instead (retest [0]->[2], a KO)"
+    },
+    {
       "episode_id": 82754875,
       "frame": 8,
       "disposition": "covered",
       "reason": "agent tutors the win-condition via Mega Signal (53: fetch-when-it-fills-a-need + tutor-the-wincon); bulk-draw-to-develop (Lillie's) is a supporter-priority judgment for the value model"
     },
     {
+      "episode_id": 82754875,
+      "frame": 52,
+      "disposition": "covered",
+      "reason": "forward-doom Posture: active_doomed sees Kadabra->Alakazam (hand_size_attacker 20/card) KO; energyless retreat-1 stall target qualifies; attack-last plays Boss's stall before the chip (retest [2]->[0]=correct)"
+    },
+    {
       "episode_id": 82756664,
       "frame": 9,
       "disposition": "covered",
-      "reason": "save-tool-for-the-attacker + protect-ace-spec-tool deliberately hold the one-per-deck ACE SPEC Hero's Cape; agent draws to develop (Lillie's). Turn-1 Cape deploy is a fine tool-timing judgment"
+      "reason": "OVERTURNED 2026-06-30 (ADR-0028): the prior 'deliberately hold the ACE SPEC' rationale was WRONG — 'develop with Lillie's' SHUFFLES the irreplaceable Cape into the deck (the deck runs 6 hand-shuffle Supporters). Doctrine reversed to proactive deploy (survival-turns + anti-shuffle floor); Tool Doctrine build pending re-verifies this and flips disposition to fixed."
     },
     {
       "episode_id": 82756664,
