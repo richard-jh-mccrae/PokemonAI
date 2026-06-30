@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common.strategy import Plan, Strategy
+from common.scouting.read import Read
 
 # Engine vocabulary (option/select/area enum mirrors, KO_SCORE, _ENGINE_TAGS, …) is shared with the
 # doctrine modules, so it lives in common.strategy.context. The three card-archetype doctrines each
@@ -201,6 +202,9 @@ class Board:
                                           # at the upcoming Checkup (0<hp<=10*poison+20*burn), else 0 — a
                                           # free KO I'd get without attacking, so an offensive gust must
                                           # beat THIS too (gusting it off cures it). ADR-0022 #10
+    read: Read | None = None              # the per-decision Scouting Read (ADR-0026); None = Posture off
+                                          # (no Scout wired / pregame). Carried here so every option shares
+                                          # one Read; nothing scores off it in M2.0 (wiring is Posture-OFF).
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -326,6 +330,7 @@ class Decision:
     """A scored decision: the chosen option indices and the per-option OptionTrace."""
     chosen: list
     options: list = field(default_factory=list)
+    read: Read | None = None     # the per-decision Scouting Read (ADR-0026), surfaced for legibility
 
 
 class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
@@ -334,7 +339,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
-                 search_budget=0):
+                 search_budget=0, scout=None):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -346,6 +351,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         self.recoil = recoil or {}                      # attackId -> unconditional self-damage (ADR-0022 #2)
         self.bench_snipe = bench_snipe or {}            # attackId -> opp-bench snipe rider (ADR-0022 #14)
         self.search_budget = search_budget
+        self.scout = scout                              # opponent Scout (ADR-0026); None = Posture off
         self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
 
     def decide(self, obs: dict) -> list[int]:
@@ -373,7 +379,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                                        select.get("minCount", 0), max_count)
         else:
             chosen = order[:max_count]
-        return Decision(chosen=chosen, options=traces)
+        return Decision(chosen=chosen, options=traces, read=board.read)
 
     def _finish_turn_last(self, options: list, traces: list, order: list, max_count: int,
                           select_context: int | None) -> list:
@@ -922,6 +928,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             deck_known_counts=deck_known,
             opp_active_condition_gift=self._opp_active_condition_gift(opp),
             active_condition_ko_prizes=self._active_condition_ko_prizes(opp, oa),
+            read=self.scout.observe(obs) if self.scout else None,   # Posture Read (ADR-0026); None = off
         )
         # Shuffle-Refresh fallback signals (ADR-0024) — computed off the base board, so the hand-card
         # play-scan can read the rest of the board. Only `refresh-when-hand-is-dead` reads them, and it

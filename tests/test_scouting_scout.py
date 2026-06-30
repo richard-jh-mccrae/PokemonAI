@@ -88,3 +88,35 @@ def test_evolution_paths_predict_line_top():
 
     paths = {p.seen_cardId: p.top_cardId for p in read.evolution_paths}
     assert paths.get(RIOLU) == MEGA_LUCARIO   # that basic becomes the win-condition
+
+
+@pytest.mark.req("REQ-SCOUT-0004")
+def test_predicted_dossier_targets_surface_unseen_when_confident():
+    # Recognized Mega Lucario ex (Solrock signature + Mega Lucario), but Riolu is NOT on board. The
+    # dossier's fragile_preevo target (Riolu) is surfaced as a PREDICTED target with seen=False.
+    read = Scout(tiny_artifact()).observe(make_obs(opp_active=MEGA_LUCARIO, opp_bench=[SOLROCK]))
+
+    riolu = [t for t in read.targets if t.cardId == RIOLU]
+    assert riolu, "predicted dossier target was not surfaced"
+    assert riolu[0].role == "fragile_preevo"
+    assert riolu[0].seen is False
+
+
+@pytest.mark.req("REQ-SCOUT-0004")
+def test_predicted_dossier_role_overrides_stat_default_for_on_board_card():
+    # Riolu is on the board AND is the dossier's fragile_preevo target: the archetype-specific role
+    # wins over the observed stat default, and seen=True (it's in play).
+    read = Scout(tiny_artifact()).observe(make_obs(opp_active=RIOLU, opp_bench=[SOLROCK, MEGA_LUCARIO]))
+
+    riolu = [t for t in read.targets if t.cardId == RIOLU]
+    assert riolu and riolu[0].role == "fragile_preevo" and riolu[0].seen is True
+
+
+@pytest.mark.req("REQ-SCOUT-0004")
+def test_no_predicted_intel_below_the_confidence_bar():
+    # An ambiguous board (a card shared by both archetypes) stays below the recognition bar, so the
+    # Read carries only OBSERVED intel (all seen) — no predicted dossier targets leak in.
+    read = Scout(tiny_artifact()).observe(make_obs(opp_bench=[SHARED]))
+
+    assert all(i.seen for i in read.targets + read.threats)
+    assert RIOLU not in {t.cardId for t in read.targets}   # the dossier's predicted target is withheld

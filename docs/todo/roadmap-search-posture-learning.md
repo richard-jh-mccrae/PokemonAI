@@ -133,25 +133,50 @@ the inspector (captured `visualize` sample, no live engine); smoke: tiny balance
 
 ---
 
-## M2 — Posture: wire the Read → play (+ accurate f75)  ·  *the Read is built; this is wiring*
+## M2 — Posture: wire the Read → play  ·  *grilled & scoped 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md), [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)*
 
-**Entry:** M1 (to measure). The Read already exists (`scouting/scout.py`,`read.py`,`scorer.py`,`matchup.py`).
+**Reality check (corrects "the Read is built").** The Read *code* exists
+(`scouting/scout.py`,`read.py`,`scorer.py`,`matchup.py`), but no `artifact.json` was compiled/committed,
+`pilot.py` never referenced the Scout, and the dossier's compiled `threats`/`targets` (the `engine` role)
+were **dead data** — loaded by `artifact.py`, never read by `scout.py` (observed-only intel). So M2 is real
+wiring + finishing the documented predicted-intel layer, not a plug-in.
 
-**Build** — the three seams from [ADR-0008](../adr/0008-pilot-is-a-layered-rules-pipeline.md), **all confidence-gated**
-(unknown opponent → Posture ≈ off; recognised → ramps):
-1. **Generic core** in the Pilot: seek the Read's `targets`, avoid its `threats`, calibrate aggression to
-   favourability. Deck-agnostic, free for every deck. Carry the Read on `Context`.
-2. **Deck-specific Read-conditioned Hypotheses** in `agents/<deck>/strategy.py`.
-3. **Feed the predicted opponent deck into `search_begin`** — *defer the wiring to M3* (it's a Tier-1 input).
+**Entry:** M1 (to measure M2.1b). Artifact compiled+committed (gates M2.0).
 
-**Accurate f75 (the refinement):** the Read names the opponent Archetype → whether Riolu→Mega Lucario is a real line
-*in this matchup* → upgrade M0's generic signal with Read confidence (gate up when recognised, fall back to the
-generic graph when unknown).
+**Track 1 — generic Posture core (deck-agnostic; covers all 122 archetypes).** Scoped to the Read's
+*net-new* levers only — card facts already do generic seek/avoid (ADR-0026). A behavior-neutral staircase:
+1. **M2.0 — wire the Read (Posture-OFF, zero decisions change).** Compile+commit `artifact.json`;
+   instantiate the Scout in `main.py`; carry the Read on **`Board`** (per-decision, not `Context`); declare
+   `my_archetype="Cinderace / Mega Starmie ex"`; emit the Read in the trace. Verified in isolation.
+2. **M2.1a — Scout completes the predicted layer (zero decisions change).** Merge `dossiers[arch]`
+   `threats`/`targets` into the Read (`seen`-flagged); Scout-level lib-free tests + trace.
+3. **M2.1b — the levers (first behavior change; gates on M1).** **A** favorability — coverage-gated
+   aggression↔disruption weight-band scalar, board-dominated, *no* Plan change (STABILIZE stays deferred).
+   **C** accurate development — `γ`-gated modulator (both directions) on M0's forward-evo snipe (boost when
+   the Read confirms the line, suppress when a recognized archetype doesn't run it, generic fallback when
+   unknown). Confidence is a continuous `γ` → unknown opponent `γ→0` → no regression is structural.
 
-**Files:** `pilot.py` (Context carries Read; Posture core), `general_strategy.py`, `agents/<deck>/strategy.py`,
-scouting wiring at `main.py`.
-**Accept:** ladder A/B (M1) — Posture-on ≥ Posture-off vs **recognised** opponents; **unknown** opponent → no regression
-(Posture ≈ off). Decision trace still emits a one-line rationale (legibility).
+**Track 2 — per-archetype Matchup Briefs (head ~8 core strategies; layered on Track 1; ADR-0027).**
+Hand-authored, *objective*, shared per-archetype counterplay (gameplan, tempo, exploitable weakness) the
+auto-Dossier can't derive — committed at `docs/matchups/<slug>.md` + `src/common/scouting/briefs/<slug>.json`
+(beside the artifact, never inside it). Each Brief **self-declares the archetype strings it `covers`** so
+variants route to one Brief. A recognized Brief populates `Board` opponent-property fields (`γ`-gated), read
+by general/deck Hypotheses like the existing card-fact Posture; each agent *relativizes* it. Engine-removal
+lives here. **Division of labor:** `run_meta_tracker.py` owns the meta — it ranks archetypes and exports each
+one's representative `deck.csv`/`deck.txt` (reuse `_representative_build` + `render_txt`) to
+`data/meta/decks/<slug>/`, incl. variant grouping. The new sibling skill **`matchup-genie`** (deck-genie
+flipped to the opponent) owns no meta knowledge: the user points it at **one chosen deck**, and it dumps that
+deck → counterplay research fan-out (deck + close variants) → weakness grill → gated `MATCHUP.md` →
+self-describing Brief. The user walks the ranking in chunks at their own cadence, measure-and-stop; the tail
+gets the generic core alone.
+
+**Seam deferred to M3:** feed the predicted opponent deck into `search_begin` (a Tier-1 input).
+
+**Files:** `tools/meta_tracker/` (artifact compile + deck export), `pilot.py` (Read on `Board`; levers A/C;
+brief-populated opponent fields), `scouting/scout.py` (predicted layer), `scouting/briefs/`,
+`agents/<deck>/strategy.py` (relativizing Hypotheses), `main.py` (Scout wiring), `docs/matchups/`.
+**Accept:** M2.0/M2.1a — suite green, Read in trace, **zero decisions change**. M2.1b — M1 A/B: Posture-on ≥
+off vs **recognised**; **unknown** → no regression (`γ→0`). Trace emits a one-line Posture rationale.
 
 ---
 
@@ -198,12 +223,21 @@ is absent.
 ---
 
 ## Decision log
-- **DE-RISKED:** engine Search API exists (`cg/api.py search_begin/step/end`); the Read is built (`scouting/`).
+- **DE-RISKED:** engine Search API exists (`cg/api.py search_begin/step/end`); the Read *code* is built
+  (`scouting/`) — though M2 grilling found it **unwired** (no compiled artifact, Scout absent from `pilot.py`,
+  predicted-intel layer incomplete; corrected in [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md)).
 - **RESOLVED (M1, grilled 2026-06-28 → [ADR-0021](../adr/0021-prefilter-balances-seats.md)):** M1 is a *pre-filter,
   not the gate*; **extend `tools/sim/battle.py`** (drop `tools/selfplay/`); **seat-balancing is required** (measured
   ~13pt first/second skew; engine has **no seed** → reproducibility is statistical); config via an **env-var experiment
   overlay** factored into `common`; opponent = **same-deck self** now (gauntlet later; random rejected); own-game
   taggable replays via `--save-replays`/`visualize_data()` (M1b), not the cabt-env path.
+- **RESOLVED (M2, grilled 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md),
+  [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)):** the generic Posture core is scoped
+  to the Read's *net-new* levers — **A** favorability (board-dominated weight-band, no Plan change) + **C** `γ`-gated
+  accurate-development modulator on M0; generic seek/avoid stays card-fact; STABILIZE deferred. Wiring is a
+  behavior-neutral staircase (M2.0 Read→`Board` → M2.1a Scout predicted layer → M2.1b levers). Per-archetype
+  counterplay is a hand-authored, shared **Matchup Brief** (≠ the auto-Dossier), produced by a new **`matchup-genie`**
+  skill and consumed via `Board` opponent-property fields; engine-removal lives there.
 - **FOUND (separate blunder):** the Pilot has no `IS_FIRST` handler → it always elects to go first (the worse side),
   a ~13pt self-inflicted loss; tracked for `/blunder-buster`.
 - **OPEN (resolve early, cheap to check):** per-move Tier-1 cost (M3); value-model feature encoding + replay volume (M4).

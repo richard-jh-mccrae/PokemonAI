@@ -31,6 +31,10 @@ class Scout:
             )
             top = candidates[: self.k]
             threats, targets = self._observed_intel()
+            arch = self._confident_archetype(top)        # add the dossier's PREDICTED intel (ADR-0027)
+            if arch is not None:
+                threats = self._merge_intel(threats, self._dossier_intel(arch, "threats"))
+                targets = self._merge_intel(targets, self._dossier_intel(arch, "targets"))
             expected = self._expected_cards(top)
             evolution = self._evolution_paths(top)
             return Read(candidates=top, unknown_mass=unknown_mass,
@@ -101,6 +105,24 @@ class Scout:
         if st:
             return "support"
         return "unknown"
+
+    def _dossier_intel(self, arch: str, key: str) -> list[Intel]:
+        """The recognized archetype's dossier ``threats``/``targets`` as Intel — the PREDICTED layer
+        (ADR-0027). Role is the dossier's archetype-specific label (``engine`` / ``fragile_preevo`` /
+        ``prize_liability`` / ``attacker``); ``seen`` reflects whether the card is on the board now."""
+        entries = (self.artifact.dossiers.get(arch) or {}).get(key) or []
+        return [Intel(cardId=e["cardId"], role=e.get("role", "unknown"),
+                      seen=e["cardId"] in self._opp_in_play)
+                for e in entries if e.get("cardId") is not None]
+
+    @staticmethod
+    def _merge_intel(observed: list[Intel], predicted: list[Intel]) -> list[Intel]:
+        """Merge observed + predicted Intel by ``cardId`` — the dossier (predicted) role wins for a
+        card in both (archetype-specific intel beats the stat default), carrying its ``seen`` flag."""
+        by_id = {i.cardId: i for i in observed}
+        for p in predicted:
+            by_id[p.cardId] = p
+        return list(by_id.values())
 
     def _confident_archetype(self, top) -> str | None:
         if top and top[0][1] >= self.confidence_threshold:
