@@ -57,6 +57,16 @@ all referencing cards by id. Band-independent; per-band frequency is blended int
 single shipped `priors` map.
 _Avoid_: profile, card pool
 
+**Matchup Brief**:
+The hand-authored, *objective* strategic profile of one opponent Archetype — how it wins, its
+tempo, its exploitable weakness, and which Threats / Targets matter against it. Captures the
+strategic understanding the auto-compiled Dossier lacks: the Dossier has the *cards*, the Brief has
+the *gameplan against them*. Shared across all our decks; each agent *relativizes* it to its own
+cards. Authored, not compiled — so it lives beside the artifact, never inside it (the artifact is
+regenerated from the meta and would clobber it).
+_Avoid_: Dossier (the auto-compiled card profile), Doctrine (a deck's own STRATEGY.md or a
+card-mechanic Mixin), scouting report, matchup table (the compiled win-rates)
+
 **Scout**:
 The stateful runtime component (`common/scouting`) that accumulates revealed-card
 evidence across a match and produces the Read each decision. Owns the match-scoped
