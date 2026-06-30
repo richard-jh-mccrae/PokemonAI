@@ -35,6 +35,19 @@ HYPOTHESES = [
         and "energy_accel" in c.tags,
         weight=25, status="assumed"),
     Hypothesis(
+        id="spread-attach-to-the-needy",
+        rationale="At an attach-target select (SelectContext ATTACH_FROM — the engine's recipient-pick "
+                  "step for a multi-attach effect, e.g. Cinderace's Turbo Flare 'attach a Basic Energy "
+                  "to a Benched Pokémon'), put the Energy on a body that still NEEDS it to attack rather "
+                  "than piling a surplus on one already online. The target-pick mirror of "
+                  "`power-up-attacker` (the MAIN-menu attach discipline), so the deck spreads its "
+                  "accelerated Energy across the Bench (a bare Staryu) instead of over-stacking an "
+                  "already-powered attacker (a 3-Energy Mega Starmie ex). Same +15 nudge; fires only on "
+                  "a positively-needy recipient (`attach_from_target_needs`), so it never steals the "
+                  "attach onto an unknown target.",
+        when=lambda c: c.select_context == _ATTACH_FROM and c.attach_from_target_needs,
+        weight=15, status="testing"),
+    Hypothesis(
         id="dont-feed-the-doomed",
         rationale="If your Active will be Knocked Out next turn and you have a benched Pokémon, "
                   "don't sink this Energy into the doomed Active — attach to the successor instead "
@@ -45,16 +58,21 @@ HYPOTHESES = [
     Hypothesis(
         id="dont-waste-discard-energy",
         rationale="A discard-at-end-of-turn Energy (e.g. Ignition Energy — Function Tag `discard_eot`) "
-                  "is wasted unless the Pokémon it goes on attacks THIS turn. Don't attach it to a "
-                  "benched Pokémon (it can't attack this turn), on the first turn going first (you "
-                  "can't attack at all), or when a reusable Basic Energy is already in hand (attach "
-                  "that and save the discard Energy) — except onto your win-condition, where the "
-                  "discard Energy's bulk acceleration (e.g. CCC on an Evolution) is the whole point.",
+                  "is wasted unless the Pokémon it goes on attacks THIS turn AND actually needs the "
+                  "burst. Don't attach it to a benched Pokémon (it can't attack this turn), on the "
+                  "first turn going first (you can't attack at all), when a reusable Basic Energy is "
+                  "already in hand (attach that and save the discard Energy), or onto a non-wincon "
+                  "that can ALREADY afford every attack it has (it gains nothing — the burst is just "
+                  "discarded; e.g. Ignition onto a Cinderace already holding a {W} for its 1-cost "
+                  "Turbo Flare) — except onto your win-condition, where the discard Energy's bulk "
+                  "acceleration (e.g. CCC on an Evolution toward Nebula Beam) is the whole point.",
         when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags and (
             c.attach_target_area == _BENCH                              # benched can't attack this turn
             or c.board.turn <= 1                                        # first turn going first: no attack
             or (c.board.reusable_energy_in_hand                         # a reusable Basic is available …
-                and not (_WINCON_ROLES & set(c.attach_target_roles)))), # … and this isn't the wincon
+                and not (_WINCON_ROLES & set(c.attach_target_roles)))   # … and this isn't the wincon
+            or (not c.attach_target_needs and not c.attach_target_under_max  # already affords every attack …
+                and not (_WINCON_ROLES & set(c.attach_target_roles)))), # … and not the wincon: pure waste
         weight=-60, status="testing"),   # near-imperative: must beat the accel boosts on a wasted attach
     Hypothesis(
         id="build-active-wincon",

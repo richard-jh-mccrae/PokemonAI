@@ -1,10 +1,7 @@
 {
-  "accel-into-main": 27.0,
-  "attach-energy-last": -8.0,
-  "dig-before-commit": 38.0,
-  "dont-waste-discard-energy": -63.0,
-  "evolve-into-wincon": 52.0,
-  "hold-clutch-heal": 63.0,
-  "power-up-attacker": 12.0,
-  "prefer-bench-fill-first": 21.0
+  "dig-before-commit": 22.93,
+  "fetch-a-starter": 11.58,
+  "fetch-the-wincon": 30.42,
+  "prefer-wincon-line-piece": 17.58,
+  "tutor-the-wincon": 27.93
 }

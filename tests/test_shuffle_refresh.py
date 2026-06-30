@@ -12,7 +12,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
-from pilot_helpers import MAIN, PLAY, make_select, opt, poke, state
+from pilot_helpers import MAIN, PLAY, attack_opt, make_select, opt, poke, state
 
 END = 14
 LILLIES = 1227        # a Shuffle-Refresh (shuffle hand into deck, draw 6)
@@ -110,13 +110,14 @@ def test_refresh_stands_down_when_the_deck_holds_no_need():
     assert "refresh-when-hand-is-dead" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- boundary: a Shuffle-Refresh is NOT a dig -> dig-before-commit excludes it (but not plain draw) -
+# --- a Shuffle-Refresh IS a hand-cycling draw -> dig-before-commit endorses it (ADR-0024 reversal) --
 @pytest.mark.req("REQ-GEN-0046")
-def test_dig_before_commit_excludes_a_shuffle_refresh_but_not_a_plain_draw():
-    """A Shuffle-Refresh carries the `draw` tag, but it DESTROYS the hand — it is not a dig, so
-    `dig-before-commit` (which would give any draw/search the +20 early-dig bonus) stands down for it.
-    A plain draw Supporter on the same menu still gets the bonus — the exclusion is specific to
-    `shuffle_hand` (ADR-0024 boundary with the Fetch doctrine)."""
+def test_dig_before_commit_endorses_a_shuffle_refresh_as_a_draw():
+    """A Shuffle-Refresh carries the `draw` tag and refills the hand — playing it to cycle is the strong
+    line, so `dig-before-commit` endorses it like any other draw Supporter. ADR-0024's 'only when the
+    hand is dead' premise was REFUTED 2026-06-30: hoarding the refresh cost ~3:1 in the mega_starmie
+    mirror vs the pre-refactor build. `_finish_turn_last` still tiers it after the Energy attach, and
+    `hold-wincon-dont-shuffle` / `attach-before-hand-shuffle` guard the genuinely-bad shuffles."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINDRAW: CardStat(PLAINDRAW, hp=0),
                                   PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
@@ -125,8 +126,24 @@ def test_dig_before_commit_excludes_a_shuffle_refresh_but_not_a_plain_draw():
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, PLAINDRAW]))
-    assert "dig-before-commit" not in _fired(pilot.explain(obs).options[0])   # the Shuffle-Refresh
-    assert "dig-before-commit" in _fired(pilot.explain(obs).options[1])       # the plain draw card
+    assert "dig-before-commit" in _fired(pilot.explain(obs).options[0])       # the Shuffle-Refresh now endorsed
+    assert "dig-before-commit" in _fired(pilot.explain(obs).options[1])       # the plain draw card too
+
+
+# --- the regression fix: a Shuffle-Refresh is played BEFORE the turn-ending attack (cycle, then KO) -
+@pytest.mark.req("REQ-GEN-0046")
+def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
+    """The post-refactor mirror loss: the agent ATTACKED instead of playing its draw Supporter, forgoing
+    the refill. With the endorsement restored, the Shuffle-Refresh scores positive -> `_finish_turn_last`
+    tiers it (tier 3) BEFORE the attack (tier 4), so the agent cycles its hand THEN attacks the same turn
+    (the engine re-presents the menu after the non-ending refresh)."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    # a live attack and the refresh on the same menu; no held Energy / wincon -> the guards stay silent.
+    obs = make_select([opt(PLAY, index=0), attack_opt(1)], context=MAIN,
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
+    assert pilot.decide(obs) == [0]                                  # play the refresh, not attack first
 
 
 # --- hold-wincon-dont-shuffle: don't shuffle a held win-condition back into the deck ---------------

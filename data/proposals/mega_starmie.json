@@ -1,19 +1,7 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-29T18:21:23",
-  "open": [
-    {
-      "id": "misattachment-82224509-31",
-      "category": "misattachment",
-      "episode_id": 82224509,
-      "frame": 31,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='AttachFrom' (turn 4) to prefer 'Mega Starmie ex' over 'Mega Starmie ex'",
-      "rationale": "dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other benched mon without any energy",
-      "agent_build": "mega_starmie_20260627_93a70be",
-      "built_at": "2026-06-27T00:00:00"
-    }
-  ],
+  "generated_at": "2026-06-30T05:11:30",
+  "open": [],
   "skipped": [
     {
       "episode_id": 82523164,
@@ -63,6 +51,18 @@
       "frame": 29,
       "disposition": "covered",
       "reason": "hold-clutch-heal rewards Wally's Compassion ONLY when active_doomed; here not doomed -> Wally's scores 0, dominated by evolve-into-wincon + digs incl the human's Lillie's. Rule encodes the 'save it for clutch' correction exactly"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 44,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot plays Lillie's Determination first (dig-before-commit), attack deferred — retest [2]->[0]=correct"
+    },
+    {
+      "episode_id": 81904064,
+      "frame": 49,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot plays Pokegear 3.0 first (dig-before-commit) — retest [2]->[0]=correct"
     },
     {
       "episode_id": 81904064,
@@ -120,9 +120,27 @@
     },
     {
       "episode_id": 81906755,
+      "frame": 77,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot develops first (Crushing Hammer play-energy-denial, then Salvatore), attack deferred — retest [6]->[1], first-dev-differs (human wanted Salvatore; both tier-0 same turn)"
+    },
+    {
+      "episode_id": 81906755,
       "frame": 93,
       "disposition": "refuted",
       "reason": "forgoes a KO (tactical ~1000) — over-eager"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 29,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon), KO deferred — retest [6]->[4]=correct"
+    },
+    {
+      "episode_id": 82224509,
+      "frame": 31,
+      "disposition": "refuted",
+      "reason": "mis-tagged: chosen==correct==[0] (structurally unsatisfiable); correct [0] is the over-attach (3-energy Mega). Rationale's intent (attach to the bare Staryu) now realized by the new spread-attach-to-the-needy rule — retest chosen [0]->[1]=bare Staryu"
     },
     {
       "episode_id": 82224509,
@@ -161,10 +179,28 @@
       "reason": "Lillie Determination to dump a weak hand — needs hand-quality eval"
     },
     {
+      "episode_id": 82225138,
+      "frame": 82,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot plays Buddy-Buddy Poffin first (prefer-bench-fill-first) — retest [6]->[0]=correct"
+    },
+    {
+      "episode_id": 82225643,
+      "frame": 11,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot plays Pokegear first (dig-before-commit) over the Ignition attach — retest [1]->[0]=correct"
+    },
+    {
       "episode_id": 82225643,
       "frame": 12,
       "disposition": "covered",
       "reason": "Deferral reason ('needs reactive-disruption/Posture') is now obsolete — play-energy-denial supplies it and FIRES (+20 on both Crushing Hammer copies idx 1/3: energy_denial tag + opponent's energized Riolu — strip it before it becomes Mega Lucario ex). Single-frame retest reports fixed=False (chosen [6]Attack->[0]) ONLY because dig-before-commit ties play-energy-denial at +20 and the tie-break picks the dig first; the Hammer is tier-0 endorsed and the 49.9-dmg attack (< 1000=KO_SCORE) is tier-2 deferred, so attack-last plays the Hammer before the attack this turn — the human's intent (slow the Mega Lucario line). First-dev-differs (cf 81785223-32/44). Covered by play-energy-denial + attack-last sequencing."
+    },
+    {
+      "episode_id": 82225643,
+      "frame": 34,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot plays Pokegear first (dig-before-commit) — retest [5]->[0]=correct"
     },
     {
       "episode_id": 82225643,
@@ -180,9 +216,27 @@
     },
     {
       "episode_id": 82226116,
+      "frame": 70,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon), KO deferred — retest [14]->[11]=correct"
+    },
+    {
+      "episode_id": 82226116,
       "frame": 100,
       "disposition": "covered",
       "reason": "attack-last + attach-discipline: agent attaches to the e0 bench Mega then retreats — develop-then-retreat, same turn"
+    },
+    {
+      "episode_id": 82226759,
+      "frame": 16,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon) — retest [2]->[0]=correct"
+    },
+    {
+      "episode_id": 82226759,
+      "frame": 29,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon) — retest [4]->[0]=correct"
     },
     {
       "episode_id": 82226759,
@@ -204,6 +258,12 @@
     },
     {
       "episode_id": 82227388,
+      "frame": 43,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot digs first (Pokegear), then the Wally's heal (tier-1), attack deferred — retest [12]->[3], first-dev-differs (human wanted the heal; same turn)"
+    },
+    {
+      "episode_id": 82227388,
       "frame": 50,
       "disposition": "covered",
       "reason": "attack-last/tiered: agent develops (a dig/play) before attacking; human wanted Pokegear as the first dev — same-turn ordering nicety"
@@ -213,6 +273,12 @@
       "frame": 4,
       "disposition": "covered",
       "reason": "Resolved by dont-tutor-the-held-wincon: Mega Signal is a wincon-only tutor (fetch-filter tutor_mega -> {Mega Starmie ex} = the deck's lone Mega ex), so with a Mega already in hand Context.search_redundant_wincon fires (-45), cancelling dig-before-commit; real Pilot retest chosen [0]->[1]=correct (attach). Sound: reads the new fetch-filter machinery on the sound deck-knowledge oracle."
+    },
+    {
+      "episode_id": 82228017,
+      "frame": 16,
+      "disposition": "covered",
+      "reason": "attack-last: real Pilot plays Buddy-Buddy Poffin first (bench-fill before Turbo Flare) — retest [2]->[1]=correct"
     },
     {
       "episode_id": 82228640,

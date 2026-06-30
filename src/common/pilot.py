@@ -25,6 +25,10 @@ _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks pr
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, capped below — a sub-prize
 _BENCH_SNIPE_CAP = 0.9     # tiebreak so among equal-outcome KO attacks the one that ALSO snipes a benched
                            # target wins (best total board value), without ever overriding a prize (ADR-0022 #14)
+_RETREAT_POSITION_EPS = 0.001  # positioning tie-break for the retreat-to-lethal lookahead: when retreating
+                           # into a ready benched win-condition takes the SAME KO the spent Active could,
+                           # prefer it (the wincon ends up Active) — tiny so it only breaks an exact tie and
+                           # never overrides a real tactical edge (snipe ≥0.005, efficiency ≥0.1)
 _RESISTANCE = 30           # damage Resistance subtracts when the defender resists the attacker's type. The
                            # amount is the card's PRINTED resistance (e.g. Slowking "Fighting -30") — a
                            # per-card fact, NOT in our data export (CardData/CSV are resistance-TYPE only).
@@ -182,6 +186,13 @@ class Context:
                                            # big attack (Mega Starmie at 1 W can Jetting Blow but not
                                            # Nebula Beam CCC). Gates "keep building the active attacker
                                            # toward its payoff attack". Fail-CLOSED (False when unknown).
+    attach_from_target_needs: bool = False  # at an ATTACH_FROM target-select (the engine's pick-a-
+                                           # recipient step for a multi-attach effect, e.g. Cinderace's
+                                           # Turbo Flare 'attach a Basic to a Benched Pokémon'), THIS
+                                           # option's recipient still NEEDS Energy to attack (carries
+                                           # fewer than its cheapest attack cost) — so spread the forced
+                                           # attach to the bare bench body, not an already-online one.
+                                           # False off ATTACH_FROM (cf. attach_target_needs, the MAIN-menu mirror)
     card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
                                        # pre-evolution that builds toward the win-condition)
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
@@ -375,7 +386,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._gust_stall_target_tactical(obs, select, board, option)
-                    + self._attach_lethal_tactical(obs, select, board, option))
+                    + self._attach_lethal_tactical(obs, select, board, option)
+                    + self._retreat_to_lethal_tactical(obs, board, option))
         ctx = self._context(obs, select, board, option, tactical)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
@@ -454,6 +466,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         first (take the win before digging). 0 otherwise."""
         if option.get("type") != _ATTACH or option.get("inPlayArea") != _ACTIVE:
             return 0
+        if board.turn <= 1:        # turn 1 going first: can't attack this turn (rules.md §first-turn),
+            return 0               # so no attach is lethal — the burst would just be discarded
         opp = self._opp_active(obs)
         opp_hp = (opp or {}).get("hp", 0)
         active_stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
@@ -475,6 +489,66 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         if best_affordable(cur + provided) >= opp_hp:
             return KO_SCORE + self._prize_value(opp)
         return 0
+
+    def _retreat_to_lethal_tactical(self, obs: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for a RETREAT that brings a READY benched win-condition to the Active
+        Spot where its now-affordable attack KOs the opponent's Active THIS turn — the closed-form
+        lookahead that lets the agent retreat a spent opener (e.g. a 1-Energy Cinderace) into the
+        powered win-condition and TAKE the knockout with the right attacker, instead of chipping it
+        away with the spent body. Mirrors `_attach_lethal_tactical` (a develop that unlocks a KO is
+        KO-class), so `_finish_turn_last` and the score compare it on the SAME scale as the Active's
+        own attack:
+
+          - it returns the BEST KO value an affordable attack of a ready benched wincon reaches
+            (KO_SCORE + prize − efficiency + bench-snipe rider), so when that wincon's KO is strictly
+            better (a Jetting Blow 120+50-snipe over a plain chip-KO) the retreat outscores the spent
+            Active's attack and wins; when the Active's own attack is the better KO it stays ahead.
+          - a tiny positioning epsilon breaks an EXACT tie toward the retreat (the wincon ends up
+            Active), never overriding a real tactical edge.
+
+        Never forfeits a knockout: it fires ONLY when a benched wincon actually KOs the current
+        opponent Active (so the prize is still taken, just by the better attacker). 0 when the Active
+        IS the wincon, no benched wincon can KO, or stats are missing."""
+        if option.get("type") != _RETREAT or board.active_is_wincon:
+            return 0
+        opp = self._opp_active(obs)
+        if not (opp and opp.get("hp")):
+            return 0
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        wincon = self._wincon_set()
+        best = 0.0
+        for p in (me.get("bench") or []):
+            if not (p and p.get("id") in wincon):
+                continue
+            energy = len((p.get("energies") or []))
+            best = max(best, self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy))
+        return best + _RETREAT_POSITION_EPS if best > 0 else 0
+
+    def _best_affordable_ko_value(self, obs: dict, board: Board, opp: dict, attacker_id: int | None,
+                                  energy: int) -> float:
+        """The best KO value `attacker_id` (carrying `energy` Energy) reaches against the opponent's
+        Active — KO_SCORE + prize − efficiency + bench-snipe rider, mirroring `_tactical`'s KO branch
+        so a hypothetical attacker is valued exactly like the real one. 0 if no affordable attack
+        knocks the defender out. The shared KO-valuation behind the retreat lookahead."""
+        stat = self.stats.get(attacker_id) if (self.stats and attacker_id is not None) else None
+        opp_hp = (opp or {}).get("hp", 0)
+        if not (stat and opp_hp):
+            return 0.0
+        opp_stat = self.stats.get(opp.get("id")) if self.stats else None
+        best = 0.0
+        for aid in (stat.attacks or ()):
+            cost = self.attack_costs.get(aid, 99)
+            if cost > energy:                                   # can't afford this attack right now
+                continue
+            dmg = self._wr_adjusted(stat, opp_stat, self.attacks.get(aid, 0))
+            if dmg >= opp_hp:
+                val = (KO_SCORE + self._prize_value(opp) - _EFFICIENCY * cost
+                       + self._bench_snipe_bonus(board, aid))
+                best = max(best, val)
+        return best
 
     def _prize_value(self, poke: dict | None) -> int:
         """Prizes a knockout yields — Mega ex 3, ex 2, else 1 (read off the engine CardStat)."""
@@ -554,11 +628,13 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
+        attach_from_needs = self._attach_from_target_needs(obs, select, option)
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
                        attach_target_needs=self._attach_target_needs(at_target),
                        attach_target_under_max=self._attach_target_under_max(at_target),
+                       attach_from_target_needs=attach_from_needs,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
@@ -623,6 +699,22 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         if cost is None:
             return False
         return len((target.get("energies") or [])) < cost
+
+    def _attach_from_target_needs(self, obs: dict, select: dict, option: dict) -> bool:
+        """At an ATTACH_FROM target-select (the engine's recipient-pick step for a multi-attach
+        effect — e.g. Turbo Flare's 'attach a Basic Energy to a Benched Pokémon'), True if the
+        Pokémon THIS option would put the Energy on still needs Energy to attack (carries fewer than
+        its cheapest attack cost). The mirror of `_attach_target_needs` for the target-pick context,
+        so the agent spreads a forced/searched attach to a bare body instead of an already-online one.
+
+        Fail-CLOSED: False off an ATTACH_FROM select or when the recipient can't be resolved — only
+        a positively-needy recipient is endorsed, so an unknown target never steals the attach."""
+        if select.get("context") != _ATTACH_FROM:
+            return False
+        poke = self._option_pokemon(obs, select, option)
+        if not poke:
+            return False
+        return len((poke.get("energies") or [])) < _min_attack_cost(self.stats, poke.get("id"))
 
     def _target_energy(self, obs: dict, select: dict, option: dict) -> int | None:
         """Energy attached to the Pokémon an attack-target option points at — the snipe 'threat'

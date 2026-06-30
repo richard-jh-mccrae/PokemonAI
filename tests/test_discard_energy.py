@@ -41,8 +41,23 @@ def test_fires_when_a_reusable_basic_is_in_hand():
 
 
 def test_does_not_fire_on_the_turbo_flare_line():
-    """Active target, turn>1, no reusable Basic -> attaching to attack THIS turn is correct."""
-    assert not _fires()
+    """Active target that still NEEDS the Energy to attack, turn>1, no reusable Basic -> attaching it to
+    fire THIS turn is correct (the burst pays off), so the rule stands down."""
+    assert not _fires(attach_target_needs=True)
+
+
+def test_fires_on_an_already_powered_non_wincon():
+    """ep82717711-fr18: Active Cinderace already holds enough Energy for its 1-cost Turbo Flare
+    (needs=False) and can't build a bigger attack (under_max=False) and isn't the wincon -> a discard
+    burst on it is pure waste (just discarded at end of turn). Fire, even with no reusable Basic in hand."""
+    assert _fires(attach_target_needs=False, attach_target_under_max=False)
+
+
+def test_does_not_fire_on_a_non_wincon_still_building_a_bigger_attack():
+    """A non-wincon that already affords its cheap attack but is still short of a BIGGER attack
+    (under_max=True) could spend the burst to fire that bigger attack THIS turn -> not pure waste,
+    so the rule stands down (only fires when the target can use nothing more)."""
+    assert not _fires(attach_target_needs=False, attach_target_under_max=True)
 
 
 def test_does_not_fire_onto_the_wincon_even_with_a_basic_in_hand():

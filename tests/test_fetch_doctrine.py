@@ -15,6 +15,7 @@ from common.strategy import Strategy
 from pilot_helpers import DECK, HAND, MAIN, PLAY, TO_HAND, card_opt, make_select, opt, poke, state
 
 DISCARD_SEL = 8         # SelectContext.DISCARD — a cost-discard select (pilot_helpers.DISCARD is the AreaType)
+TO_BENCH = 5            # SelectContext.TO_BENCH — fetch Basics straight onto the Bench (Buddy-Buddy Poffin)
 BASIC, STAGE1 = 700, 800
 SUPPORT, PLAINMON = 850, 860
 COMBO, FILLER = 950, 960
@@ -142,6 +143,26 @@ def test_multi_pick_grab_takes_fewer_than_max_when_no_need_remains():
                       deck=[{"id": BASIC}, {"id": STAGE1}, {"id": STAGE1}],
                       current=state(active=poke(900, energy=1), bench=[]))
     assert pilot.decide(obs) == [0]                                   # only the Basic; no dead second grab
+
+
+# --- bench-fill grab (TO_BENCH): a min0 bench placement must bench the Basics, not whiff to [] -------
+@pytest.mark.req("REQ-GEN-0035")
+def test_bench_fill_grab_benches_basics_at_to_bench():
+    """A Buddy-Poffin-style bench placement (`_TO_BENCH`, up to 2, minCount 0) presents CARD candidates
+    that the `_PLAY`-gated bench reflexes and the `_TO_HAND`-gated fetch rungs never score. Without a
+    bench-context rung every candidate scores 0 and the greedy take-fewer benches NOTHING (returns []);
+    `bench-fill-a-basic` scores the startable Basics so the grab benches them (the post-refactor whiff)."""
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, hp=70),
+                                  STAGE1: CardStat(STAGE1, hp=90, evolvesFrom="Basicmon")})
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    # TO_BENCH, up to 2, minCount 0: two Basics + a non-Basic Stage-1 revealed from the deck.
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1), card_opt(DECK, 2)],
+                      min_count=0, max_count=2, context=TO_BENCH,
+                      deck=[{"id": BASIC}, {"id": BASIC}, {"id": STAGE1}],
+                      current=state(active=poke(900, energy=1), bench=[]))
+    assert sorted(pilot.decide(obs)) == [0, 1]                        # bench both Basics, not [] (no whiff)
+    assert "bench-fill-a-basic" in _fired(pilot.explain(obs).options[0])
+    assert "bench-fill-a-basic" not in _fired(pilot.explain(obs).options[2])  # the Stage-1 isn't a starter
 
 
 # --- whether-to-play (slice 7): a cost_discard fetch is endorsed when it can grab a needed card ---

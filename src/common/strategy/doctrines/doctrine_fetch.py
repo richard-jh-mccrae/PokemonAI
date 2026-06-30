@@ -269,6 +269,22 @@ HYPOTHESES = [
         and c.plan == Plan.SETUP and c.board.my_bench < _THIN_BENCH,
         weight=12, status="testing"),
     Hypothesis(
+        id="bench-fill-a-basic",
+        rationale="At a bench-PLACEMENT grab (a card that puts Basics straight onto the Bench — "
+                  "Buddy-Buddy Poffin's `_TO_BENCH`, or the Set-Up `_SETUP_BENCH` placement), take a "
+                  "startable Basic. The bench-context mirror of `fetch-a-starter` (which is gated to a "
+                  "`_TO_HAND` hand-search): a bench-placement candidate is a CARD-target option, so the "
+                  "`option_type==_PLAY` bench reflexes (keep-a-bench / pre-position-attacker) never see "
+                  "it and EVERY candidate would otherwise score 0 — at which point the greedy take-fewer "
+                  "(min_count 0) benches NOTHING (the Buddy-Poffin whiff that cost ~3:1 in the mirror). A "
+                  "small positive develops the Bench (free bodies, deck-thinning, spread-Energy targets). "
+                  "Skips a multi-prizer (an ex / Mega ex liability — `dont-bench-multiprize` is `_PLAY`-"
+                  "gated so it can't guard a CARD candidate) and stands down once the Bench is full.",
+        when=lambda c: c.select_context in (_TO_BENCH, _SETUP_BENCH) and c.card_is_starter
+        and c.board.my_bench < _BENCH_MAX
+        and not (c.stat and (getattr(c.stat, "ex", False) or getattr(c.stat, "megaEx", False))),
+        weight=12, status="testing"),
+    Hypothesis(
         id="fetch-the-support",
         rationale="When a search lets you choose a card AND you have no engine/support Pokémon in play, "
                   "take one — a Pokémon whose Ability draws, accelerates Energy or searches (Function "

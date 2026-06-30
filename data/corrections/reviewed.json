@@ -247,5 +247,70 @@
     "disposition": "covered",
     "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [2]->[0]=correct). W-route unsatisfiable because the alternative is a 120-dmg attack dominating by score; _finish_turn_last sequences the tier-0 Item PLAY before the tier-2 attack. Covered by play-energy-denial + attack-last sequencing.",
     "round": "2026-06-29"
+  },
+  "81904064-44": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot plays Lillie's Determination first (dig-before-commit), attack deferred — retest [2]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "81904064-49": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot plays Pokegear 3.0 first (dig-before-commit) — retest [2]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "81906755-77": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot develops first (Crushing Hammer play-energy-denial, then Salvatore), attack deferred — retest [6]->[1], first-dev-differs (human wanted Salvatore; both tier-0 same turn)",
+    "round": "2026-06-30"
+  },
+  "82224509-29": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon), KO deferred — retest [6]->[4]=correct",
+    "round": "2026-06-30"
+  },
+  "82225138-82": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot plays Buddy-Buddy Poffin first (prefer-bench-fill-first) — retest [6]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "82225643-11": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot plays Pokegear first (dig-before-commit) over the Ignition attach — retest [1]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "82225643-34": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot plays Pokegear first (dig-before-commit) — retest [5]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "82226116-70": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon), KO deferred — retest [14]->[11]=correct",
+    "round": "2026-06-30"
+  },
+  "82226759-16": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon) — retest [2]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "82226759-29": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon) — retest [4]->[0]=correct",
+    "round": "2026-06-30"
+  },
+  "82227388-43": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot digs first (Pokegear), then the Wally's heal (tier-1), attack deferred — retest [12]->[3], first-dev-differs (human wanted the heal; same turn)",
+    "round": "2026-06-30"
+  },
+  "82228017-16": {
+    "disposition": "covered",
+    "reason": "attack-last: real Pilot plays Buddy-Buddy Poffin first (bench-fill before Turbo Flare) — retest [2]->[1]=correct",
+    "round": "2026-06-30"
+  },
+  "82224509-31": {
+    "disposition": "refuted",
+    "reason": "mis-tagged: chosen==correct==[0] (structurally unsatisfiable); correct [0] is the over-attach (3-energy Mega). Rationale's intent (attach to the bare Staryu) now realized by the new spread-attach-to-the-needy rule — retest chosen [0]->[1]=bare Staryu",
+    "round": "2026-06-30"
   }
 }

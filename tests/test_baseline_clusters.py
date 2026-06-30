@@ -22,7 +22,7 @@ def _ids(hyps):
 CLUSTERS = {
     "energy": (ENERGY_HYPOTHESES, {
         "power-up-attacker", "attach-energy-last", "use-acceleration", "dont-feed-the-doomed",
-        "dont-waste-discard-energy", "build-active-wincon"}),
+        "dont-waste-discard-energy", "build-active-wincon", "spread-attach-to-the-needy"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-the-weakest", "snipe-the-evolving-threat",
         "snipe-the-strongest-evolving-threat"}),

@@ -1,6 +1,8 @@
 # ADR-0024: Shuffle-Refresh is the Fetch comparator's decision (A) only — a dead-hand fallback over keep-value, with a deferred stochastic pull-EV
 
-**Status.** Accepted (grilled 2026-06-29); **Layer A core implemented 2026-06-29** test-first
+**Status.** Accepted (grilled 2026-06-29); **Layer-A premise PARTLY REVERSED 2026-06-30** — the
+`dig-before-commit` boundary guard is removed (see the Update note at the end of this Status block).
+**Layer A core implemented 2026-06-29** test-first
 (`tests/test_shuffle_refresh.py`, REQ-GEN-0042…0046). v1 scope = **Layer A** (the dead-hand fallback):
 the `refresh-when-hand-is-dead` Hypothesis + the `Board.hand_is_dead` (full real-menu play-scan) and
 `deck_holds_a_need` signals; the tag rename `discard_hand`→`shuffle_hand` + the `function_overrides.json`
@@ -9,6 +11,20 @@ bonus). Layer B (stochastic pull-EV), the `hand_disruption` axis, and deck-overr
 seams. Sibling to the **Fetch** doctrine ([ADR-0023](0023-fetch-is-a-shared-value-comparator.md))
 and the **Gust** doctrine ([ADR-0022](0022-gust-is-closed-form-lethal-lookahead.md)); it **reuses**
 the Fetch comparator rather than restating it.
+
+**Update (2026-06-30) — the Layer-A "only when the hand is dead" premise is REFUTED.** The
+`dig-before-commit` boundary guard (a `shuffle_hand` Supporter earns no early-dig bonus) made the
+agent HOARD its draw Supporters: with no positive driver outside a literally-dead hand, a held
+Lillie's / Harlequin scored ≤0, fell below the turn-ending attack in `_finish_turn_last`, and the
+agent attacked instead of refilling — every turn it held one. Measured cost: the post-refactor build
+won only **~24% of a 500-game mirror** vs the pre-refactor build #6 (`757b106`); restoring the
+endorsement recovers it to **~51%** (together with the Buddy-Poffin bench-grab fix — see
+[ADR-0023](0023-fetch-is-a-shared-value-comparator.md)). So `dig-before-commit` now DOES endorse a
+Shuffle-Refresh as the hand-cycling draw it is. The premise was backwards for this deck: the dominant
+misplay is *not refreshing*, not refreshing away a working hand. The two value-protection guards
+(`attach-before-hand-shuffle`, `hold-wincon-dont-shuffle`) + the tier-3 sequencing (refresh after the
+Energy attach, and the one-Supporter slot still prefers a tutor) keep the genuinely-bad shuffles out,
+so the `hand_is_dead` machinery is now a redundant floor — a candidate for retirement (Layer-B work).
 
 **Context.** A **Hand Refresh** supporter throws your whole hand away to draw a fresh one; almost
 every deck runs one, and the dominant misplay is refreshing away a *working* hand. This set's cards —

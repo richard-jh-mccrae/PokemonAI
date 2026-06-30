@@ -15,11 +15,15 @@ HYPOTHESES = [
                   "for a discard-COST search (`cost_discard`, e.g. Ultra Ball pays 2 cards from hand): "
                   "that dig is NOT free, so it earns no free-dig bonus — its real (cost-aware) value "
                   "is left to dedicated rules, and `_finish_turn_last` sequences it as a commitment. "
-                  "Also stands down for a Shuffle-Refresh (`shuffle_hand`, e.g. Lillie's Determination): "
-                  "it DESTROYS the hand to redraw, the opposite of a dig — so it earns no early-dig bonus "
-                  "and is governed by the separate Shuffle-Refresh doctrine (dead-hand fallback), not here.",
+                  "DOES endorse a Shuffle-Refresh (`shuffle_hand`, e.g. Lillie's Determination / "
+                  "Harlequin): it is a hand-cycling DRAW, and playing it most turns to refill is the "
+                  "strong line — ADR-0024's 'only when the hand is dead' premise was REFUTED 2026-06-30 "
+                  "(hoarding the refresh cost ~3:1 in the mega_starmie mirror vs the pre-refactor build). "
+                  "`_finish_turn_last` still tiers it AFTER the Energy attach (tier 3) and the Supporter "
+                  "slot still prefers a tutor, while `attach-before-hand-shuffle` / `hold-wincon-dont-"
+                  "shuffle` guard the genuinely-bad shuffles (held Energy / held win-condition).",
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
         and ("draw" in c.tags or "search" in c.tags)
-        and "cost_discard" not in c.tags and "shuffle_hand" not in c.tags,
+        and "cost_discard" not in c.tags,
         weight=20, status="assumed"),
 ]
