@@ -407,5 +407,25 @@
     "disposition": "covered",
     "reason": "forward-doom Posture: active_doomed sees Kadabra->Alakazam (hand_size_attacker 20/card) KO; energyless retreat-1 stall target qualifies; attack-last plays Boss's stall before the chip (retest [2]->[0]=correct)",
     "round": "2026-06-30"
+  },
+  "82866415-43": {
+    "disposition": "covered",
+    "reason": "deploy-hp-tool + hold-irreplaceable-tool-dont-shuffle deploy the Cape (tier-2) and suppress Lillie's (-30); agent digs (Mega Signal) then attaches the Cape — the ACE SPEC is no longer shuffled away (ADR-0028, first-dev-differs)",
+    "round": "2026-07-01"
+  },
+  "82866415-48": {
+    "disposition": "covered",
+    "reason": "deploy-hp-tool's survival-turns picker targets the benched Staryu (the human's exact label); _finish_turn_last sequences the Cape attach before the attack — retest [6]->[3]=correct. W-route unsatisfiable only because the attack's tactical (209.7) dominates the +40 positional deploy (attack-last)",
+    "round": "2026-07-01"
+  },
+  "82867148-34": {
+    "disposition": "covered",
+    "reason": "degenerate (chosen==correct==Attack); the play-Ultra-Ball-to-develop-a-recipient intent is carried by develop-turbo-flare-recipient + fetch-base-before-stranded-payoff",
+    "round": "2026-07-01"
+  },
+  "82867148-87": {
+    "disposition": "refuted",
+    "reason": "literal Ignition->Staryu dominated by reusable Water->Staryu (dont-waste-discard-energy soundly avoids wasting the one-shot Ignition on a non-attacking bench body); the intent (energy to the Staryu line base over off-line Cinderace) is realized by the W-route-invisible attach_to_needy_line tie-break, retest [7]->[8]=Water->Staryu",
+    "round": "2026-07-01"
   }
 }

@@ -1,20 +1,7 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-30T22:31:40",
-  "open": [
-    {
-      "id": "sequencing-error-82867148-34",
-      "category": "sequencing_error",
-      "episode_id": 82867148,
-      "frame": 34,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 4) to prefer 'Attack with Turbo Flare' over 'Attack with Turbo Flare'",
-      "rationale": "something wrong at this decision point. we have an Ultra Ball in hand. we should have played the ultra ball to fetch a stryu, and then bench it.",
-      "agent_build": "mega_starmie_20260630_6fd8a19",
-      "built_at": "2026-06-30T00:00:00",
-      "critical": false
-    }
-  ],
+  "generated_at": "2026-07-01T00:50:58",
+  "open": [],
   "skipped": [],
   "reviewed": [
     {
@@ -394,6 +381,30 @@
       "frame": 81,
       "disposition": "refuted",
       "reason": "Mis-tagged: correct [2] == chosen [2] (both attach {W} to bench0) — structurally unsatisfiable (no ranking constraint). Rationale's intent (2nd energy to the ACTIVE toward Nebula Beam) is now realized by build-active-wincon, which makes the agent attach to the active win-condition here."
+    },
+    {
+      "episode_id": 82866415,
+      "frame": 43,
+      "disposition": "covered",
+      "reason": "deploy-hp-tool + hold-irreplaceable-tool-dont-shuffle deploy the Cape (tier-2) and suppress Lillie's (-30); agent digs (Mega Signal) then attaches the Cape — the ACE SPEC is no longer shuffled away (ADR-0028, first-dev-differs)"
+    },
+    {
+      "episode_id": 82866415,
+      "frame": 48,
+      "disposition": "covered",
+      "reason": "deploy-hp-tool's survival-turns picker targets the benched Staryu (the human's exact label); _finish_turn_last sequences the Cape attach before the attack — retest [6]->[3]=correct. W-route unsatisfiable only because the attack's tactical (209.7) dominates the +40 positional deploy (attack-last)"
+    },
+    {
+      "episode_id": 82867148,
+      "frame": 34,
+      "disposition": "covered",
+      "reason": "degenerate (chosen==correct==Attack); the play-Ultra-Ball-to-develop-a-recipient intent is carried by develop-turbo-flare-recipient + fetch-base-before-stranded-payoff"
+    },
+    {
+      "episode_id": 82867148,
+      "frame": 87,
+      "disposition": "refuted",
+      "reason": "literal Ignition->Staryu dominated by reusable Water->Staryu (dont-waste-discard-energy soundly avoids wasting the one-shot Ignition on a non-attacking bench body); the intent (energy to the Staryu line base over off-line Cinderace) is realized by the W-route-invisible attach_to_needy_line tie-break, retest [7]->[8]=Water->Staryu"
     },
     {
       "episode_id": 82748422,
