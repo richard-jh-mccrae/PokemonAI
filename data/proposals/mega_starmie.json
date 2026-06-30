@@ -1,11 +1,46 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-06-30T05:11:30",
+  "generated_at": "2026-06-30T16:18:13",
   "open": [],
   "skipped": [
     {
+      "episode_id": 82229122,
+      "frame": 45,
+      "reason": "tactical"
+    },
+    {
       "episode_id": 82523164,
       "frame": 55,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 82749168,
+      "frame": 21,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 82749168,
+      "frame": 62,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 82752045,
+      "frame": 80,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 82752604,
+      "frame": 61,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 82754241,
+      "frame": 41,
+      "reason": "tactical"
+    },
+    {
+      "episode_id": 82754875,
+      "frame": 52,
       "reason": "tactical"
     }
   ],
@@ -75,6 +110,12 @@
       "frame": 6,
       "disposition": "covered",
       "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - develops then attaches Basic"
+    },
+    {
+      "episode_id": 81904451,
+      "frame": 24,
+      "disposition": "covered",
+      "reason": "real Pilot chosen==correct==Play Hilda (tutor the wincon before attacking) — already satisfied; W-route can't read the sequencing"
     },
     {
       "episode_id": 81904451,
@@ -157,14 +198,8 @@
     {
       "episode_id": 82224509,
       "frame": 46,
-      "disposition": "deferred",
-      "reason": "Boss-Orders the pre-evolution of the threat — needs gust + forward-evo/Posture"
-    },
-    {
-      "episode_id": 82224509,
-      "frame": 56,
-      "disposition": "deferred",
-      "reason": "snipe the opponent main attacker by card identity (no energy on it) — needs threat-identity/Posture"
+      "disposition": "refuted",
+      "reason": "forgo-KO: agent takes an available KO of the current Active (attack-last develops then KOs, 1001.1). gust-for-the-ko correctly stands down — gusting+KOing the Riolu pre-evo yields the SAME 1 prize as the free attack KO, so spending Boss's Orders for an equal KO (plus 0.5 forward-denial) is strictly worse"
     },
     {
       "episode_id": 82224509,
@@ -175,8 +210,8 @@
     {
       "episode_id": 82224509,
       "frame": 71,
-      "disposition": "deferred",
-      "reason": "Lillie Determination to dump a weak hand — needs hand-quality eval"
+      "disposition": "covered",
+      "reason": "agent develops via a Pokegear dig before the KO (attack-last preserves the 1002.7 KO); a full Lillie's refresh vs a targeted dig is a hand-quality judgment for the value model (hand_is_dead False)"
     },
     {
       "episode_id": 82225138,
@@ -241,8 +276,8 @@
     {
       "episode_id": 82226759,
       "frame": 64,
-      "disposition": "deferred",
-      "reason": "Harlequin to shrink a big-hand opponent — needs Posture (opponent archetype)"
+      "disposition": "covered",
+      "reason": "play-harlequin-vs-hand-size endorses Harlequin (45, opp Alakazam line) and the agent plays it this turn; the free Crushing Hammer sequences first (tier-0), then Harlequin (tier-3), then the KO (attack-last)"
     },
     {
       "episode_id": 82227388,
@@ -289,8 +324,8 @@
     {
       "episode_id": 82228640,
       "frame": 25,
-      "disposition": "deferred",
-      "reason": "Ignition-vs-Basic on the wincon: a clean min-cost rule would never use Ignition->Nebula Beam (sabotages the deck CCC engine); needs combat lookahead (Tier-1)"
+      "disposition": "covered",
+      "reason": "concentrate-energy-on-wincon + prefer-reusable-over-burst + conserve-ignition: agent attaches a Basic to the active Mega (board-identical to recorded option); Ignition->active now dominated (989<1031)"
     },
     {
       "episode_id": 82228640,
@@ -315,12 +350,6 @@
       "frame": 33,
       "disposition": "covered",
       "reason": "attack-last: agent evolves wincon before attacking; human picked bench-fill first — both same turn"
-    },
-    {
-      "episode_id": 82229122,
-      "frame": 45,
-      "disposition": "deferred",
-      "reason": "Crustle immune to ex; retreat to Cinderace — rationale itself says needs Posture + Tier-1 search"
     },
     {
       "episode_id": 82523811,
@@ -381,6 +410,78 @@
       "frame": 81,
       "disposition": "refuted",
       "reason": "Mis-tagged: correct [2] == chosen [2] (both attach {W} to bench0) — structurally unsatisfiable (no ranking constraint). Rationale's intent (2nd energy to the ACTIVE toward Nebula Beam) is now realized by build-active-wincon, which makes the agent attach to the active win-condition here."
+    },
+    {
+      "episode_id": 82748422,
+      "frame": 26,
+      "disposition": "covered",
+      "reason": "play-energy-denial stands down when active_cheap_attack_kos (Jetting Blow KOs the Active): the strip is moot, Crushing Hammer no longer played; agent develops then takes the KO (attack-last)"
+    },
+    {
+      "episode_id": 82748522,
+      "frame": 15,
+      "disposition": "covered",
+      "reason": "hold-wincon-dont-shuffle + attach-before-hand-shuffle soundly suppress Lillie's (2 undeployed Megas + unattached energy in hand); agent tutors with Hilda — don't shuffle away your only wincons"
+    },
+    {
+      "episode_id": 82750161,
+      "frame": 16,
+      "disposition": "covered",
+      "reason": "dont-tutor-the-held-wincon suppresses Mega Signal (-17): a Mega is already in hand, so it would dig a redundant wincon; agent plays the broader Hilda tutor"
+    },
+    {
+      "episode_id": 82750161,
+      "frame": 59,
+      "disposition": "covered",
+      "reason": "concentrate-energy-on-wincon: agent attaches a reusable Basic to the 1-energy benched Mega (priority wincon); recorded Ignition->bench correctly avoided (dont-waste-discard-energy). Same target, better energy"
+    },
+    {
+      "episode_id": 82752045,
+      "frame": 97,
+      "disposition": "covered",
+      "reason": "concentrate-energy-on-wincon: agent attaches Basic to the most-built benched Mega over the bare one; recorded Ignition->that-Mega avoided. Concentrate-don't-spread realized"
+    },
+    {
+      "episode_id": 82752604,
+      "frame": 88,
+      "disposition": "covered",
+      "reason": "retest fixed (chosen [8]Attack->[2]Attach): concentrate attaches before Nebula Beam; W-route unsatisfiable only because _finish_turn_last sequences the tier-2 attach before the tier-4 attack (attack-last)"
+    },
+    {
+      "episode_id": 82753102,
+      "frame": 9,
+      "disposition": "refuted",
+      "reason": "forgo-KO: the Ignition->Mega attach is LETHAL (_attach_lethal_tactical 1041 = KO-class; Ignition CCC unlocks Nebula Beam this turn); agent correctly takes the KO. Digging Pokegear first would delay a knockout"
+    },
+    {
+      "episode_id": 82753102,
+      "frame": 37,
+      "disposition": "covered",
+      "reason": "CRITICAL fixed: play-energy-denial gates on opp_active_has_energy (Kadabra active 0 energy) so Crushing Hammer no longer played; Harlequin soundly suppressed by hold-wincon-dont-shuffle (2 undeployed Megas) — agent develops instead"
+    },
+    {
+      "episode_id": 82754241,
+      "frame": 11,
+      "disposition": "refuted",
+      "reason": "unresolvable: options target the LOOKING zone (AreaType 12, Pokegear top-7 reveal); the obs exports no looking/deck list, so the revealed card ids (Lillie's vs Harlequin) are absent from the observation — no rule can identify them. Data limit of the obs, not a rule gap"
+    },
+    {
+      "episode_id": 82754875,
+      "frame": 8,
+      "disposition": "covered",
+      "reason": "agent tutors the win-condition via Mega Signal (53: fetch-when-it-fills-a-need + tutor-the-wincon); bulk-draw-to-develop (Lillie's) is a supporter-priority judgment for the value model"
+    },
+    {
+      "episode_id": 82756664,
+      "frame": 9,
+      "disposition": "covered",
+      "reason": "save-tool-for-the-attacker + protect-ace-spec-tool deliberately hold the one-per-deck ACE SPEC Hero's Cape; agent draws to develop (Lillie's). Turn-1 Cape deploy is a fine tool-timing judgment"
+    },
+    {
+      "episode_id": 82756664,
+      "frame": 36,
+      "disposition": "refuted",
+      "reason": "forgo-KO: agent retreats into a ready benched attacker that KOs (retreat-to-lethal 1061); the recorded Hero's Cape attach forgoes that KO. A positional tool-deploy never overrides a knockout"
     }
   ]
 }

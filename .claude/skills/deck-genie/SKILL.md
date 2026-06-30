@@ -90,33 +90,74 @@ Fold in the user's extra context. Then **ask them to confirm the win condition a
 the deck's gameplan** before you spend a research pass — a wrong premise here poisons everything
 downstream.
 
-### Phase 2 · Wide web research (cited)
+### Phase 2 · Aggressive parallel web research (cited — the default, not optional)
 
-Search the web for how this archetype is actually played. Query the payoff + signature cards (e.g.
-"Mega Starmie ex deck guide", "Cinderace Turbo Flare combo"). Look for: the core gameplan, optimal
-sequencing, key combos, standard opening lines, matchup notes, tech-card reasoning. Fetch the 2–4
-best sources and **synthesise with citations** into the doc's Research section — this project cites
-its strategy sources (mirror the `docs/general-strategy.md` bibliography).
+These decks are **well-known, well-documented, highly competitive** meta lists — there is *lots* of
+coverage, and **every single card is in the list on purpose.** The bar here is to know **exactly why
+and how** each card is used, sourced — fast and thorough. So **fan out as many research agents as the
+deck needs and run them concurrently**; a single inline web search is not enough.
 
-These sets can be bleeding-edge with thin coverage. When you can't find solid sourcing, **say so and
-flag the gap as an assumption to confirm** — never paper over it with invented lines. Present the
-findings; the user confirms or corrects. Their correction outranks the web.
+Build **three research streams** from the Phase-0 dump + the Phase-1 overview, then fan them all out
+**at once**:
 
-**Verify card-interaction legality against the actual card text, not the guide.** Web articles
-routinely get tutor targets / evolution eligibility / "this can't be fetched" wrong — e.g.
-confusing "has no Ability" with "has no attacks or effects." When a claim hinges on a rules
-interaction, check it against the engine facts (or an engine probe) and surface the conflict for the
-user rather than adopting it. If the **Workflow** tool is available, a fan-out research pass
-(parallel search angles → deep-read → adversarially verify each claim against the card facts → cited
-synthesis) is a strong fit and catches exactly these misreads; plain inline web search is the
-fallback when subagents aren't available.
+1. **Archetype sweep** — search angles keyed to the payoff + signature cards: core gameplan, optimal
+   sequencing, key combos, standard opening lines (first vs second), matchup notes, tech-card
+   reasoning, and current decklist ratios. (e.g. `"<payoff> deck guide"`, `"<archetype> combo turn 1"`.)
+2. **Per-confusing-card deep dives (point 3)** — list **every card whose purpose isn't self-evident**
+   from its tags + the win condition: off-type tech, a lone 1-of, an attacker that isn't the payoff,
+   anything that makes you ask *"why is THIS here?"* (the canonical case: a **Munkidori in a Dragapult
+   deck**). Give **each** its own agent that web-searches the card **by name in this deck's context**
+   and returns its job, companion cards, setup, sequencing, and anti-patterns. A card you can't
+   explain is a card to deep-dive.
+3. **Trainer-by-trainer purpose (point 4)** — **every** Supporter / Item / Tool / Stadium / special
+   Energy gets a purpose agent. Generic staples get a terse standard purpose; deck-specific or unusual
+   inclusions (and odd counts) get searched. None are skipped — every trainer is there on purpose.
+
+**Primary path — the shipped research workflow** (if the `Workflow` tool is available; invoking this
+skill *is* the opt-in to run it). It fans out all three streams concurrently, deep-reads the sources,
+**adversarially verifies every claim against the engine card facts**, and returns a cited synthesis +
+a list of web-vs-facts `conflicts`:
+
+```
+Workflow({ scriptPath: ".claude/skills/deck-genie/scripts/research.js", args: {
+  deck:            "<deck>",
+  gameplan:        "<the CONFIRMED Phase-1 overview / win condition>",
+  facts:           "<the full Phase-0 dump markdown — ground truth>",
+  angles:          [ { key: "gameplan",   q: "..." }, { key: "combos", q: "..." }, ... ],
+  confusing_cards: [ { name: "Munkidori", why: "off-type; not the payoff" }, ... ],
+  trainers:        [ { name: "Buddy-Buddy Poffin", tags: "search,bench_fill" }, ... ],
+}})
+```
+
+**Fallback — no Workflow:** fan the same three streams out with parallel `Agent` calls (one batch of
+tool calls), then **verify each claim against the engine facts yourself** before adopting it. Don't
+collapse to one sequential search — keep it parallel and exhaustive.
+
+**Land the results in STRATEGY.md §2** with citations (mirror the `docs/general-strategy.md`
+bibliography). The per-card and per-trainer purpose findings **seed the Phase-3 card blocks** so the
+grill opens already knowing each card's researched job — you confirm/refine rather than start cold.
+
+**Guards (unchanged and load-bearing):**
+- **Engine facts override the web.** These are Scarlet & Violet *Mega-era* cards as the **simulator**
+  implements them — stats, costs, attack text and rules deltas differ from the real TCG (and from
+  Pocket). Web guides describe the real game; use them for **purpose and strategy** (which transfer),
+  never for **mechanics** (which the dump owns). The workflow surfaces `conflicts` for you; on the
+  fallback path, **verify card-interaction legality against the actual card text, not the guide** —
+  articles routinely get tutor targets / evolution eligibility wrong (e.g. "has no Ability" ≠ "has no
+  effects"). Surface every conflict to the user.
+- **Thin coverage → flag the gap, never invent.** Some lines are bleeding-edge; if sourcing is thin,
+  say so and mark it an assumption to confirm. Keep the synthesis's `confidence` honest.
+- **The user outranks the web.** Present the findings; their correction wins, and you record why.
 
 ### Phase 3 · Exhaustive card-by-card grill (the heart)
 
-Go through **every** card and lock exactly how it's meant to be used. **Open each card's block with
-its mechanical profile pulled straight from the dump — CardStat (HP / weakness / retreat / prize /
-stage), its `card_functions.json` tags, and the full cost / damage / effect text of every attack and
-ability — so the mechanics are unambiguous before you grill usage.** Read
+Go through **every** card — **every Pokémon AND every trainer/energy** (point 4: no trainer is
+skipped) — and lock exactly how it's meant to be used. **Open each card's block with its mechanical
+profile pulled straight from the dump — CardStat (HP / weakness / retreat / prize / stage), its
+`card_functions.json` tags, and the full cost / damage / effect text of every attack and ability — so
+the mechanics are unambiguous before you grill usage**, *and* with its **researched purpose from Phase
+2** (the per-card / per-trainer findings) on the table — so you open already knowing the card's job
+and grill to confirm/refine, not from cold. Read
 [references/grilling-playbook.md](references/grilling-playbook.md) for the per-category question
 banks and the discipline (one card/branch at a time; resolve it before moving on; build off the
 General Strategy + research and make the user *confirm*, don't lecture). For each card capture:
@@ -132,8 +173,10 @@ Then grill the cross-card structure that wins games:
 
 ### Phase 4 · General-Strategy reconciliation (interleaved with Phase 3)
 
-As each card's usage locks, record its disposition against the General Strategy. For every relevant
-general Hypothesis, pick one:
+The deck-agnostic **baselines + doctrines** under `src/common/strategy` (read in Phase 0) **likely
+already cover most of this deck** (point 5) — draw, search, energy, snipe, promote, retreat, evolution,
+heal, gust, fetch, shuffle-refresh. **Default to `covers-as-is`;** reach for a deck rule only where
+nothing general fits. As each card's usage locks, record its disposition against the General Strategy:
 
 - **covers-as-is** — the general rule already handles this; name it, do nothing.
 - **override-candidate** — the deck wants this rule stronger/weaker/off; record a **seed weight**
@@ -141,9 +184,24 @@ general Hypothesis, pick one:
   points the ladder later tunes — that's allowed; inventing a *final* number is not the goal.
 - **conflicts** — the general rule actively misplays this deck; note why (candidate for override
   to a low/zero weight, or a deck rule that outweighs it).
-- **gap → new deck Hypothesis** — nothing general covers it. Draft it: `id`, `rationale`,
-  plain-English **trigger sketch** (referencing real `Context`/`Board` fields — see
-  [references/authoring.md](references/authoring.md)), seed weight, `status="assumed"`.
+- **gap** — nothing general covers it. Draft the rule (`id`, `rationale`, plain-English **trigger
+  sketch** over real `Context`/`Board` fields — see [references/authoring.md](references/authoring.md),
+  seed weight, `status="assumed"`) and decide **where it lives** by the rule below.
+
+**The expand-vs-override decision (point 6) — where a new rule lives, priority-ordered.** Once the
+outline is solid, compare the deck's target strategy against the general one and, for each gap, pick:
+
+1. **Expand the General Strategy (the priority, when applicable).** If the rule reads **only universal
+   features** (`tags` / `stat` / `board` / `roles`) and would help **any** deck that hits the same
+   situation, it belongs in the general layer — add it to the matching
+   `src/common/strategy/baseline/baseline_<context>.py` cluster (ADR-0025), not the deck. A win here
+   lifts every future deck. Promotion to general is a deliberate, separately-reviewed step — flag it.
+2. **Deck-specific override / replace / diverge (otherwise).** If the rule is genuinely deck-bound —
+   it reads `card_id`s, the deck's `Line`, or deck `roles`, or it must *override/replace* a general
+   rule that misplays this deck — it lives in `src/agents/<deck>/strategy.py` (a deck `Hypothesis`,
+   and/or a weight override in `tuned.json`). This is the deck taking a different route from within
+   its own subdirectory. When unsure which side a rule falls on, **keep it in the deck file** — local
+   is safe; promotion is the deliberate step.
 
 Also fill `roles` (the per-deck intent overlay), `lines`, and `params`. Everything lands in
 STRATEGY.md — nothing executable yet.
@@ -170,6 +228,11 @@ source (never from memory), then pass all three gates before presenting a diff:
 
 Present the diff (strategy.py + the trigger-check test file). The human reviews and commits.
 `status` stays `assumed`/`testing`; the ladder A/B confirms or refutes later.
+
+**End state (point 7): a complete, ladder-ready agent.** When the three gates pass, `src/agents/<deck>/`
+is a packaged agent — `strategy.py` (its own grilled, research-backed doctrine) + `main.py` Bundle —
+that loads, tests green, and survives a full self-match. That is the literal "ready to submit to the
+ladder" bar; the deliverable isn't done until it clears it.
 
 ## Resumability
 

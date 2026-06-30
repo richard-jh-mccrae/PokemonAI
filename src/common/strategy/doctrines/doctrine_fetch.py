@@ -14,8 +14,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 from common.strategy.context import (_BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _PLAY, _SETUP_BENCH,
-                                      _THIN_BENCH, _TO_ACTIVE, _TO_BENCH, _TO_HAND, _WINCON_ROLES)
+                                      _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH, _TO_HAND,
+                                      _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis, Plan
+
+# A reliable-engine Supporter (draw / search / heal) is fuel you keep at a forced discard, unlike a
+# situational `hand_disruption` one (Harlequin: a symmetric shuffle that refills the opponent too).
+_KEEP_ENGINE_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 
 # A deck-search's FETCH FILTER — what set of cards it can pull OUT of the deck, as a predicate over
 # the engine CardStat — keyed by the curated behavioral Function Tag that names the filter (the same
@@ -196,6 +201,18 @@ HYPOTHESES = [
         and not (c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand),
         weight=30, status="testing"),
     Hypothesis(
+        id="prefer-payoff-over-preevo",
+        rationale="At a search, when BOTH the win-condition payoff and one of its own pre-evolutions are "
+                  "on offer, take the PAYOFF — 'Ultra Ball finds your main Pokémon'. `fetch-the-wincon` "
+                  "(+30 on the Mega) otherwise only TIES the pre-evolution's `prefer-wincon-line-piece` "
+                  "(+18) plus `fetch-a-starter` (+12) on the Staryu, and the tie breaks to the first "
+                  "option (a Staryu); this small boost on the payoff itself settles it for the finisher "
+                  "(you can fetch / evolve the pre-evolution later). Gated like `fetch-the-wincon` (stands "
+                  "down once the payoff is in hand or in play), so it never pulls a dead second copy.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_wincon
+        and not c.board.wincon_in_play and not c.board.wincon_in_hand,
+        weight=5, status="testing"),
+    Hypothesis(
         id="fetch-energy-when-starved",
         rationale="When a search lets you choose a card AND your Active has no Energy and you have "
                   "none in hand, take a reusable Basic Energy — you need to power an attack now, and "
@@ -254,7 +271,7 @@ HYPOTHESES = [
                   "`fetch-the-wincon` (the payoff itself) and `fetch-energy-when-starved`.",
         when=lambda c: c.card_is_line_preevo and (
             c.select_context == _TO_HAND
-            or (c.select_context == _TO_ACTIVE and c.board.wincon_in_hand)),
+            or (c.select_context == _TO_ACTIVE and c.board.evolve_to_ready_wincon_available)),
         weight=18, status="testing"),
     Hypothesis(
         id="fetch-a-starter",
@@ -350,12 +367,49 @@ HYPOTHESES = [
     Hypothesis(
         id="keep-key-cards-at-discard",
         rationale="At a cost-discard (e.g. Ultra Ball's 'discard 2 cards from your hand'), don't throw "
-                  "away your engine pieces — a discard-at-end-of-turn burst Energy (Function Tag "
+                  "away your irreplaceable pieces — a discard-at-end-of-turn burst Energy (Function Tag "
                   "`discard_eot`, e.g. Ignition Energy: finite, non-recyclable, the one-attach CCC that "
-                  "powers Nebula Beam) or your win-condition. A negative weight ranks those LAST among "
-                  "the discard candidates, so the agent sheds a redundant Supporter instead. (Which "
-                  "card a search FETCHES is `fetch-the-wincon`; this guards what a cost DISCARDS.)",
+                  "powers Nebula Beam), your win-condition, or your ACE SPEC (one-per-deck, never "
+                  "recoverable — e.g. Hero's Cape; read off `CardStat.aceSpec`). A negative weight ranks "
+                  "those LAST among the discard candidates, so the agent sheds a redundant Supporter "
+                  "instead. (Which card a search FETCHES is `fetch-the-wincon`; this guards what a cost "
+                  "DISCARDS.)",
         when=lambda c: c.select_context == _DISCARD
-        and ("discard_eot" in c.tags or c.card_is_wincon),
+        and ("discard_eot" in c.tags or c.card_is_wincon
+             or bool(c.stat and getattr(c.stat, "aceSpec", False))),
         weight=-30, status="testing"),
+    Hypothesis(
+        id="discard-the-redundant-tutor",
+        rationale="At a forced discard, shed a tutor whose job is already done — a `rush_evolve` / "
+                  "`tutor_mega` search (its purpose is getting the win-condition line online: Salvatore "
+                  "rush-evolves toward the Mega, Mega Signal fetches it) once the win-condition is "
+                  "ALREADY in hand (`board.wincon_in_hand`). You can evolve / play it on your own terms, "
+                  "so a second dig for it is dead weight — pitch it before a still-useful card. A "
+                  "positive weight ranks it among the discards; stays silent for a flexible Supporter "
+                  "(Hilda is plain `search` — it also finds Energy, so it keeps its value).",
+        when=lambda c: c.select_context == _DISCARD and c.board.wincon_in_hand
+        and ("rush_evolve" in c.tags or "tutor_mega" in c.tags),
+        weight=20, status="testing"),
+    Hypothesis(
+        id="discard-the-dead-opener",
+        rationale="At a forced discard, shed a setup-only opener you can no longer play — a card whose "
+                  "only way into play is its game-start Ability (Function Tag `opener`, e.g. Cinderace's "
+                  "Explosiveness; no Raboot line to hard-play it). Once the game is under way a held copy "
+                  "is a dead card (the mirror of `never-fetch-cinderace`, which never TAKES one), so it "
+                  "is the best thing to pitch. A positive weight ranks it among the discards.",
+        when=lambda c: c.select_context == _DISCARD and "opener" in c.tags,
+        weight=20, status="testing"),
+    Hypothesis(
+        id="keep-engine-supporter-at-discard",
+        rationale="At a forced discard, keep your reliable engine Supporters — a draw / search / heal "
+                  "Supporter (Lillie's Determination, Hilda, Wally's Compassion) is the fuel that keeps "
+                  "the deck running, so rank it BELOW a neutral card (a spare Energy) and a situational "
+                  "`hand_disruption` Supporter (Harlequin — a symmetric shuffle that also refills the "
+                  "opponent) as the thing to pitch. A small negative, so the +discard junk rules (dead "
+                  "opener / redundant tutor) still out-pitch it; it only protects the engine over filler "
+                  "when those aren't on offer.",
+        when=lambda c: c.select_context == _DISCARD and c.stat is not None
+        and getattr(c.stat, "cardType", None) == _SUPPORTER
+        and bool(_KEEP_ENGINE_TAGS & set(c.tags)) and "hand_disruption" not in c.tags,
+        weight=-8, status="testing"),
 ]

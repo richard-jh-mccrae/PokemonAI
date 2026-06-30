@@ -25,9 +25,15 @@ the tacit knowledge out of them and pin it to the Pilot's decision model.
 
 **Before grilling a card, put its full mechanical profile on the table from the dump** — the
 CardStat row, its `card_functions.json` function tags, and the exact cost/damage/effect text of its
-attacks and abilities. The grill is about *usage*; the mechanics must already be explicit, pulled
-from the engine + tags, never recalled from memory. A card you can't see the stats and tags for is a
-card you can't grill.
+attacks and abilities — **plus its researched purpose from Phase 2** (the per-card deep dive or
+per-trainer finding: its job, companions, setup, anti-patterns). The grill is about *usage*; the
+mechanics must already be explicit, pulled from the engine + tags, never recalled from memory, and the
+research means you **open with a sharp hypothesis to confirm/refine, not an open question into the
+void.** A card you can't see the stats, tags, and researched purpose for is a card you can't grill.
+
+**Cover every trainer (point 4).** After the Pokémon plan is locked, walk **every** Supporter / Item /
+Tool / Stadium / special Energy — none is skipped. The Phase-2 trainer pass already pinned each one's
+purpose and priority; the grill confirms it and resolves the sequencing/priority order between them.
 
 Keep these straight (from [docs/card-functions.md](../../../docs/card-functions.md)) — they never
 overlap, and the grill assigns each card all three where relevant:

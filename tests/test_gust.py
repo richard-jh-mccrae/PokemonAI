@@ -36,6 +36,15 @@ WEAK_ATTACKER = 905  # my Active: a 10-damage attacker that can't KO a 20-HP bod
 ITEM_GUST = 1183   # a synthetic Item gust (cardType ITEM) — doesn't cost the one Supporter slot
 FIGHT_GUST = 906   # my Active: a Fighting attacker (120) — to exercise Resistance in the gust oracle
 RESIST_BENCHIE = 710  # opp benched mon: HP 100, RESISTS Fighting (survives 120-30=90) — a false KO
+SNIPER_WINCON = 907  # my Active: a win-condition whose attack ALSO snipes the bench (Jetting Blow-like)
+DWEB_HI = 720      # opp benched, KO-able, whose removal lets my snipe finish DWEB_LO (the 2-prize line)
+DWEB_LO = 721      # opp benched, KO-able, low HP — finished by the 50 snipe only if DWEB_HI is gusted
+A_SNIPE_G = 104    # my Active's snipe attack id (120 damage + 50 bench rider)
+MY_FRAGILE = 908   # my Active: 130 HP — KO'd by the opponent's FORWARD hand-size evolution, not its now
+KADA = 911         # opp Active: a weak pre-evo (30 dmg) that EVOLVES into a hand-size attacker
+ALAK = 912         # the hand_size_attacker KADA evolves into (Alakazam: 20 dmg/card via handSizeDamage)
+STALL1 = 711       # opp benched body: energyless, retreat 1 — a valid stall target (can't pay retreat)
+PSYCHIC = 7        # an energy type for the opp pre-evo
 WATER, LIGHTNING, FIRE, FIGHTING = 3, 4, 2, 6
 SUPPORTER, ITEM = 3, 1   # CardType values (cg/api.py)
 
@@ -61,8 +70,19 @@ _STATS = DictCardStatProvider({
     WEAK_ATTACKER: CardStat(WEAK_ATTACKER, energyType=WATER, minAttackCost=1, minCostDamage=10),
     FIGHT_GUST: CardStat(FIGHT_GUST, energyType=FIGHTING, minAttackCost=1, minCostDamage=120),
     RESIST_BENCHIE: CardStat(RESIST_BENCHIE, hp=100, resistance=FIGHTING),
+    SNIPER_WINCON: CardStat(SNIPER_WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120,
+                            attacks=(A_SNIPE_G,)),
+    DWEB_HI: CardStat(DWEB_HI, hp=70),
+    DWEB_LO: CardStat(DWEB_LO, hp=20),
+    MY_FRAGILE: CardStat(MY_FRAGILE, energyType=WATER, hp=130, minAttackCost=1, minCostDamage=50),
+    KADA: CardStat(KADA, name="TKadabra", hp=80, energyType=PSYCHIC, maxDamage=30,
+                   minAttackCost=1, minCostDamage=30),                  # opp Active: a weak pre-evo …
+    ALAK: CardStat(ALAK, name="TAlakazam", evolvesFrom="TKadabra", hp=140, minAttackCost=1,
+                   handSizeDamage=20),                                  # … that evolves into a hand-size KO
+    STALL1: CardStat(STALL1, hp=70, retreatCost=1),                     # energyless retreat-1 stall body
 })
-_TAGS = CardFunctions({BOSS: ["gust"], ITEM_GUST: ["gust"], TUTOR: ["search"]})
+_TAGS = CardFunctions({BOSS: ["gust"], ITEM_GUST: ["gust"], TUTOR: ["search"],
+                       ALAK: ["hand_size_attacker"]})
 
 
 def _pilot():
@@ -354,7 +374,67 @@ def test_gust_oracle_respects_resistance_no_false_ko():
     assert p.decide(obs) == [1]
 
 
+@pytest.mark.req("REQ-GUST-0002")
+def test_gust_target_prefers_the_two_prize_snipe_synergy():
+    """Two equal-prize KO-able targets, but gusting the 70-HP one lets my Active's 50 bench-snipe
+    finish the 20-HP one for a SECOND prize, while gusting the 20-HP one leaves the snipe unable to
+    reach the 70-HP body. Drag up the target that banks 2 prizes (ep82523164 f55)."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(SNIPER_WINCON, energy=1),
+                      opp_bench=[poke(DWEB_HI, hp=70), poke(DWEB_LO, hp=20)]))
+    p = Pilot(Strategy(roles={SNIPER_WINCON: ["win_condition"]}), deck=[1] * 60,
+              general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS,
+              attacks={A_SNIPE_G: 120}, attack_costs={A_SNIPE_G: 1}, bench_snipe={A_SNIPE_G: 50})
+    opts = p.explain(obs).options
+    assert opts[0].tactical > opts[1].tactical   # the 70-HP gust enables the 2-prize snipe synergy
+    assert p.decide(obs) == [0]
+
+
+# --- forward-doom Posture: anticipate the opponent's next-turn EVOLUTION threat (ep82754875 f52) ---
+
+@pytest.mark.req("REQ-GUST-0003")
+def test_active_doomed_by_forward_hand_size_evolution():
+    """Posture: the opp's Active (Kadabra, 30 dmg) can EVOLVE into a hand_size_attacker (Alakazam,
+    20 dmg/card) whose Powerful Hand KOs my 130-HP Active next turn. `active_doomed` must see the
+    forward threat — handCount 10 → 20 × (10 − 1 played) = 180 ≥ 130 — though Kadabra's own attack
+    can't (ep82754875 f52). We play AS IF the opponent evolves and attaches."""
+    obs = make_select([opt(END)],
+                      current=state(active=poke(MY_FRAGILE, hp=130),
+                                    opp_active=poke(KADA, energy=1), opp_hand_count=10))
+    assert _pilot()._board(obs).active_doomed is True
+
+
+@pytest.mark.req("REQ-GUST-0003")
+def test_not_doomed_when_hand_too_small_for_the_forward_attacker():
+    """Control: a 1-card hand (0 after the evolution is played) → 20 × 0 = 0 forward damage, and
+    Kadabra's own 30 < 130, so my Active is NOT doomed. The threat is the hand SIZE, not the bare
+    evolution — the read stays quiet when the hand can't back it up."""
+    obs = make_select([opt(END)],
+                      current=state(active=poke(MY_FRAGILE, hp=130),
+                                    opp_active=poke(KADA, energy=1), opp_hand_count=1))
+    assert _pilot()._board(obs).active_doomed is False
+
+
 # --- tier-5 defensive stall-gust: strand an energyless high-retreat body (ADR-0022) ---------------
+
+@pytest.mark.req("REQ-GUST-0003")
+def test_stall_gust_strands_an_energyless_retreat_one_body_when_forward_doomed():
+    """f52 end to end: doomed by the forward Kadabra→Alakazam, no KO available, and the opp's benched
+    body is ENERGYLESS retreat-1 — it still can't pay that retreat (no Energy to discard), so play
+    Boss's to strand it and buy a turn. The energyless retreat-1 target now qualifies (was retreat≥2)."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(MY_FRAGILE, energy=1, hp=130),
+                      opp_active=poke(KADA, energy=1),
+                      opp_bench=[poke(STALL1, hp=70, energy=0)],
+                      hand=[BOSS], opp_hand_count=10))
+    p = _pilot()
+    assert "gust-for-the-stall" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]
+
 
 @pytest.mark.req("REQ-GUST-0003")
 def test_gust_for_the_stall_fires_when_stuck_with_an_energyless_high_retreat_target():
