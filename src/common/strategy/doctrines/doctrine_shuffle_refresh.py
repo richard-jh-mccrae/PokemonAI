@@ -102,6 +102,23 @@ HYPOTHESES = [
         and c.board.wincon_in_hand and not c.board.wincon_in_play,
         weight=-25, status="assumed"),
     Hypothesis(
+        id="hold-wincon-with-base-dont-shuffle",
+        rationale="Strengthen the hold (`hold-wincon-dont-shuffle`) when the held win-condition has a "
+                  "base ALREADY IN PLAY to evolve it onto next turn — a Line pre-evolution on the Bench "
+                  "(`line_preevo_in_play`, e.g. a benched Staryu under a Mega Starmie ex in hand). Then "
+                  "the shuffle is not a mere recoverable tempo cost: it shuffles away the payoff of a "
+                  "concrete, imminent evolution (the base is being built — energise it, evolve it, "
+                  "attack), so HOLD it firmly and take the board action (a developing attack / attach) "
+                  "this turn instead. Stacks on the base hold (−25) to net the `shuffle_hand` PLAY below "
+                  "0 even against `dig-before-commit` (+20) + `refresh-when-hand-is-dead` (+8) — so "
+                  "`_finish_turn_last` tiers it BELOW the attack (the develop-then-deploy line), the "
+                  "ep82867148 f52 shape (3 Mega in hand, a benched Staryu, Turbo Flare available). "
+                  "Narrow: a base in PLAY plus the payoff in hand is the high-confidence deploy-soon "
+                  "case; with no base in play the moderate base hold still allows a dead-hand refill.",
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
+        and c.board.wincon_in_hand and c.board.line_preevo_in_play and not c.board.wincon_in_play,
+        weight=-15, status="testing"),
+    Hypothesis(
         id="refresh-when-hand-is-dead",
         rationale="Play a Shuffle-Refresh (Function Tag `shuffle_hand`, e.g. Lillie's Determination / "
                   "Judge — 'shuffle your hand into your deck, then draw') ONLY when your hand is dead: no "

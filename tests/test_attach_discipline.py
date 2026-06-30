@@ -10,11 +10,12 @@ import pytest
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
-from common.strategy import Strategy
+from common.strategy import Line, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
 ATTACH, HAND, ACTIVE, BENCH, MAIN = 8, 2, 4, 5, 0
 MEGA, STARYU, WATER, IGNITION = 1031, 1030, 3, 17
+CINDERACE = 666       # an off-line opener/accelerator — NOT on the win-condition Line
 
 
 def _fired(trace):
@@ -80,3 +81,28 @@ def test_prefer_reusable_basic_over_ignition_onto_the_wincon():
     assert "prefer-reusable-over-burst" in _fired(dec.options[0])     # the Ignition attach: penalised
     assert "prefer-reusable-over-burst" not in _fired(dec.options[1])  # the Water attach: clean
     assert p.decide(obs) == [1]                                       # attach the reusable Water
+
+
+@pytest.mark.req("REQ-GEN-0016")
+def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
+    """Among EQUAL-score needy bench attaches, the decide()-ordering tie-break feeds a win-condition
+    LINE base (a Staryu) before an off-line body (a benched Cinderace) — build the line, don't dribble
+    onto a spent opener. A W-route-invisible nicety (no score changes). ep82867148 f87."""
+    funcs = CardFunctions({IGNITION: ["discard_eot"]})
+    stats = DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
+                       maxDamageCost=3, evolvesFrom="Staryu"),
+        STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, maxDamageCost=1),
+        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, minAttackCost=1, maxDamageCost=1),
+        WATER: CardStat(WATER, name="Water", energyType=2)})
+    strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], CINDERACE: ["accel_source"]},
+                     lines=[Line(path=[STARYU, MEGA], payoff=MEGA)])
+    p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
+              attacks={}, attack_costs={})
+    # bench: the off-line Cinderace at the LOWER index, the Line base Staryu after — both bare/needy.
+    bench = [{"id": CINDERACE, "energies": [], "hp": 160}, {"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, [{"id": WATER}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])   # ->Cinderace, ->Staryu
+    t0, t1 = p.explain(obs).options
+    assert t0.score == t1.score                                      # genuinely a SCORE tie ...
+    assert t1.attach_to_needy_line and not t0.attach_to_needy_line   # ... broken by the Line-base flag
+    assert p.decide(obs) == [1]                                      # so the Staryu (Line base) is fed, not Cinderace

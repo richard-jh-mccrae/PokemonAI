@@ -152,6 +152,10 @@ class Board:
     in_play_ids: frozenset = field(default_factory=frozenset)  # card ids of my in-play Pokémon
                                        # (Active + Bench) — a hand copy of one is a redundant duplicate
                                        # (its need already met), the keep-value floor `discard-the-redundant`
+    hand_duplicate_ids: frozenset = field(default_factory=frozenset)  # card ids I hold 2+ copies of in
+                                       # hand, EXCLUDING fungible Energy — the extra copy of an effect card
+                                       # is the lowest-keep pitch at a forced discard (`discard-the-hand-
+                                       # duplicate`), so a singleton disruptor is never shed over a duplicate
     hand_is_dead: bool = False         # no non-refresh card in hand yields any positive-scoring play
                                        # this turn (each virtually scored through the real pipeline) — the
                                        # Shuffle-Refresh fallback gate (ADR-0024): refresh only a dead hand
@@ -302,6 +306,11 @@ class Context:
     attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
                                            # survival-turns picker chose (== board.tool_deploy_slot) —
                                            # the proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
+    attach_target_is_line_member: bool = False  # this attach option's recipient is on a win-condition
+                                           # Line (a pre-evolution or the payoff) — building it advances
+                                           # the win-condition. Read by `_option_trace` into
+                                           # `OptionTrace.attach_to_needy_line`, the decide()-only attach
+                                           # tie-break (feed the Line base over an off-line opener)
     attach_from_target_needs: bool = False  # at an ATTACH_FROM target-select (the engine's pick-a-
                                            # recipient step for a multi-attach effect, e.g. Cinderace's
                                            # Turbo Flare 'attach a Basic to a Benched Pokémon'), THIS
@@ -325,6 +334,9 @@ class Context:
     card_is_redundant: bool = False    # this option's card duplicates a Pokémon already in play (its
                                        # need is met) — the lowest keep-value, preferred at a forced
                                        # discard (`discard-the-redundant`)
+    card_is_hand_duplicate: bool = False  # this option's card is one I hold 2+ copies of in hand (a
+                                       # redundant effect card; fungible Energy excluded) — the keep-value
+                                       # floor `discard-the-hand-duplicate` pitches it before a singleton
     fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
                                        # card I currently lack (best grab value > 0, scored by the SAME
                                        # grab rungs) — the whether-to-play endorsement (`fetch-when-it-
@@ -391,6 +403,11 @@ class OptionTrace:
     fired: list                  # [(Hypothesis, effective_weight)] whose trigger fired
     tactical: float = 0.0
     deferred: bool = False       # a turn-ending attack held behind beneficial development (attack-last)
+    attach_to_needy_line: bool = False  # this option attaches Energy to a NEEDY win-condition Line body
+                                 # (a base that builds the payoff) — a decide()-only ORDERING tie-break
+                                 # (`_evaluate`): among EQUAL-score attaches, feed the Line base before an
+                                 # off-line opener. W-route-invisible (like attack-last), so it never
+                                 # enters the weight fit. ep82867148 f87 (a Staryu over a benched Cinderace)
 
 
 @dataclass
@@ -442,7 +459,12 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         board = self._board(obs, select)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
         max_count = select.get("maxCount", 0)
-        order = sorted(range(len(options)), key=lambda i: traces[i].score, reverse=True)
+        # Primary key = score; the secondary key breaks an EXACT score tie toward an attach that feeds a
+        # needy win-condition Line body (the Line base over an off-line opener — ep82867148 f87). A
+        # decide()-only ordering nicety (W-route-invisible, like attack-last): it never changes a score,
+        # so it can't enter the weight fit / featurization.
+        order = sorted(range(len(options)),
+                       key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
         order = self._finish_turn_last(options, traces, order, max_count, select.get("context"))
         if max_count > 1 and select.get("context") in _GRAB_CONTEXTS:   # greedy gap-update + take-fewer
             chosen = self._greedy_grab(obs, select, board, traces, options,
@@ -535,7 +557,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         score = sum(w for _, w in fired) + tactical
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
-                           fired=fired, tactical=tactical)
+                           fired=fired, tactical=tactical,
+                           attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs)
 
     def _weight(self, h) -> float:
         """Effective weight: a machine-written override by id, else the authored default
@@ -674,20 +697,26 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
           - a tiny positioning epsilon breaks an EXACT tie toward the retreat (the wincon ends up
             Active), never overriding a real tactical edge.
 
-        Never forfeits a knockout: it fires ONLY when a benched attacker actually KOs the current
-        opponent Active (so the prize is still taken, just by the better attacker). Fires for a SPENT
-        opener Active swapping into the ready wincon, AND for a win-condition Active that CAN'T KO the
-        opponent — e.g. its damage is prevented by an Ability (Crustle's ex-lock): retreat into a
-        benched NON-ex attacker (a Cinderace) that can. So it stands down only when the Active IS the
-        win-condition AND can already KO (just attack), or no benched body can KO, or stats are missing."""
+        Never forfeits a knockout: it fires ONLY when a benched attacker KOs the current opponent
+        Active for a KO STRICTLY BETTER than the one my CURRENT Active can already take (so the prize is
+        still taken, by the better attacker). Fires for a SPENT opener Active that can't KO swapping into
+        the ready wincon, AND for any Active that CAN'T KO the opponent — e.g. its damage is prevented by
+        an Ability (Crustle's ex-lock): retreat into a benched NON-ex attacker (a Cinderace) that can. So
+        it stands down whenever my current Active can ALREADY take this KO (or a better one) — just
+        attack, don't waste the retreat (and don't strand a fragile body / its own attack), the
+        ep82867148 f62 shape: a Cinderace that already KOs must not retreat into an energised Staryu it
+        would rather evolve. Also stands down when no benched body KOs, or stats are missing."""
         if option.get("type") != _RETREAT:
             return 0
         opp = self._opp_active(obs)
         if not (opp and opp.get("hp")):
             return 0
-        my_active_stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
-        if board.active_is_wincon and self._can_ko(my_active_stat, opp):
-            return 0                                     # a wincon Active that can KO: just attack
+        # The best KO the CURRENT Active can already take this turn (0 if it can't — incl. an ex-immune
+        # defender, which `_best_affordable_ko_value` zeroes). Retreating to another attacker is worth it
+        # ONLY for a strictly better KO; taking the SAME prize with a benched body wastes the Active's
+        # attack and the turn and exposes a fragile body.
+        my_active_ko = self._best_affordable_ko_value(
+            obs, board, opp, board.my_active_id, board.my_active_energy)
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -698,7 +727,9 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                 continue
             energy = len((p.get("energies") or []))
             best = max(best, self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy))
-        return best + _RETREAT_POSITION_EPS if best > 0 else 0
+        if best <= my_active_ko:                         # the Active already takes this KO (or better):
+            return 0                                     # just attack — don't waste the retreat
+        return best + _RETREAT_POSITION_EPS
 
     def _best_affordable_ko_value(self, obs: dict, board: Board, opp: dict, attacker_id: int | None,
                                   energy: int) -> float:
@@ -788,6 +819,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         card_is_support = bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags)))
         card_is_top_fetch_priority = cid is not None and cid == board.top_fetch_priority_id
         card_is_redundant = cid is not None and cid in board.in_play_ids
+        card_is_hand_duplicate = cid is not None and cid in board.hand_duplicate_ids
         fetch_fills_a_need = (option.get("type") == _PLAY
                               and self._fetch_fills_a_need(board, tags, plan))
         is_attack = option.get("type") == _ATTACK
@@ -809,6 +841,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                               and self._promote_target_kos(obs, select, option))
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
+        at_is_line_member = bool(
+            at_target and at_target.get("id") in (self._line_preevo_set() | self._wincon_set()))
         attach_target_is_priority_wincon = (
             option.get("type") == _ATTACH and board.priority_wincon_slot is not None
             and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.priority_wincon_slot)
@@ -826,11 +860,14 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
+                       attach_target_is_line_member=at_is_line_member,
                        attach_from_target_needs=attach_from_needs,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
-                       card_is_redundant=card_is_redundant, fetch_fills_a_need=fetch_fills_a_need,
+                       card_is_redundant=card_is_redundant,
+                       card_is_hand_duplicate=card_is_hand_duplicate,
+                       fetch_fills_a_need=fetch_fills_a_need,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
                        target_is_strongest_forward=target_is_strongest_forward,
@@ -994,6 +1031,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             support_in_play=self._support_in_play(me),
             in_play_ids=frozenset(p.get("id") for p in ((me.get("active") or []) + (me.get("bench") or []))
                                   if p and p.get("id") is not None),
+            hand_duplicate_ids=self._hand_duplicate_ids(me),
             top_fetch_priority_id=self._top_fetch_priority_id(select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
@@ -1308,6 +1346,23 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             if stat and stat.hp == 0 and stat.energyType not in (None, 0) and "discard_eot" not in tags:
                 return True
         return False
+
+    def _hand_duplicate_ids(self, me: dict) -> frozenset:
+        """Card ids I hold 2+ copies of in hand, EXCLUDING fungible Energy (Basic / Special). The
+        keep-value floor `discard-the-hand-duplicate` reads this: a second copy of an effect card
+        (Supporter / Item / Pokémon) is the lowest-keep pitch at a forced discard — keep one, shed the
+        rest — so a singleton disruptor (a lone Boss's Orders / Harlequin) is never discarded over a
+        duplicate. Energy is excluded because a spare Energy is always a future attach, never redundant."""
+        counts = Counter(c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None)
+        out = set()
+        for cid, n in counts.items():
+            if n < 2:
+                continue
+            stat = self.stats.get(cid) if self.stats else None
+            if stat and getattr(stat, "cardType", None) in (_BASIC_ENERGY, _SPECIAL_ENERGY):
+                continue                                  # fungible Energy: a spare is never a redundant pitch
+            out.add(cid)
+        return frozenset(out)
 
     def _incoming_active_damage(self, ma: dict | None, oa: dict | None) -> int:
         """Closed-form estimate of the damage the opponent's Active would deal to my Active next turn

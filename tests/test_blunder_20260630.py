@@ -143,6 +143,23 @@ def test_retreat_lethal_does_not_fire_when_the_active_is_the_wincon():
     assert pilot.explain(obs).options[1].tactical == 0
 
 
+@pytest.mark.req("REQ-GEN-0050")
+def test_retreat_lethal_stands_down_when_the_active_already_takes_an_equal_ko():
+    """ep82867148 f62: the Active (a Cinderace) ALREADY KOs the opponent, and a benched body would take
+    only the SAME single-prize KO — so retreat-to-lethal stands down (it fires ONLY for a STRICTLY
+    BETTER KO). Don't waste the Active's attack and strand an energised base you would rather evolve."""
+    pilot = _pilot()
+    attack = attack_opt(20)                                          # Cinderace Turbo Flare 50 -> KO (opp 10)
+    cur = state(active=poke(CINDER, energy=1, hp=160),
+                bench=[poke(PREEVO, energy=4, hp=70)],               # an energised Staryu: also KOs, but only
+                opp_active=poke(OPP, hp=10))                          # the SAME 1-prize KO (no snipe edge)
+    obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
+    traces = pilot.explain(obs)
+    assert traces.options[0].tactical >= KO_SCORE                    # the Active's own attack is a KO
+    assert traces.options[1].tactical == 0                           # retreat carries no EXTRA value -> stand down
+    assert pilot.decide(obs) == [0]                                  # just attack with the Active
+
+
 # ----------------------------------------------- spread-attach-to-the-needy (ATTACH_FROM)
 @pytest.mark.req("REQ-GEN-0051")
 def test_spread_attach_to_the_needy_at_attach_from():
