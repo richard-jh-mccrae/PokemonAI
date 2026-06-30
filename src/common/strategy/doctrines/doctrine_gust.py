@@ -14,8 +14,9 @@ from common.strategy.context import (KO_SCORE, _BENCH, _CARD, _EVOLVING_THREAT_D
                                       _SUPPORTER, _SWITCH)
 from common.strategy.strategy import Hypothesis, Plan
 
-_STALL_RETREAT = 2           # retreat cost that makes a stranded energyless body a real tempo cost — the
-                             # defensive stall-gust only bothers with a target this expensive to retreat
+_STALL_RETREAT = 1           # min retreat cost of a STRANDABLE energyless body: with no Energy of its own
+                             # to discard, it can't pay ANY retreat cost (≥1), so the opponent must first
+                             # spend a turn's attach to retreat it — a real tempo cost even at 1 (ep82754875)
 _EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so it
                              # never overrides a real prize difference)
 
@@ -63,7 +64,39 @@ class GustMixin:
         if not self._can_ko(my_stat, target):
             return 0
         return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
-                + self._gust_forward_denial(target))
+                + self._gust_forward_denial(target) + self._gust_snipe_synergy(board, my_stat, target))
+
+    def _gust_snipe_synergy(self, board, my_stat, target: dict) -> int:
+        """Extra prize when KOing the gusted target ALSO lets my bench-snipe rider finish a SECOND
+        benched Pokémon — a 2-prize gust+snipe (ep82523164 f55: drag up the 70-HP Dwebble so Jetting
+        Blow KOs it AND the 50 snipe finishes the 20-HP Dwebble, over dragging the 20-HP one where the
+        snipe reaches nothing). Among my Active's attacks that KO the target, the best snipe-KO prize
+        over the bench that REMAINS after the target is dragged Active. A full prize (not a tie-break),
+        so it correctly prefers the 2-prize line; never overrides a higher-prize target. 0 otherwise.
+
+        Args:
+            board: the per-decision Board (``opp_bench`` snapshot).
+            my_stat: my Active's CardStat (its attacks + riders).
+            target: the benched Pokémon this gust option drags Active.
+
+        Returns:
+            The best extra snipe-KO prize enabled by gusting this target (0 if none).
+        """
+        t_hp = (target or {}).get("hp", 0)
+        t_stat = self.stats.get(target.get("id")) if (self.stats and target) else None
+        if not (my_stat and t_hp):
+            return 0
+        others, removed = [], False                      # the bench left after the target is dragged Active
+        for entry in board.opp_bench:
+            if not removed and tuple(entry) == (target.get("id"), t_hp):
+                removed = True
+                continue
+            others.append(tuple(entry))
+        best = 0
+        for aid in (getattr(my_stat, "attacks", None) or ()):
+            if self._wr_adjusted(my_stat, t_stat, self.attacks.get(aid, 0)) >= t_hp:   # this attack KOs it
+                best = max(best, self._snipe_ko_prizes(others, self.bench_snipe.get(aid, 0)))
+        return best
 
     def _gust_forward_denial(self, target: dict) -> float:
         """Sub-prize tie-break: removing a target whose evolution LINE becomes an attacker
@@ -170,6 +203,22 @@ class GustMixin:
                 return True
         return False
 
+    def _stall_target_is_keystone(self, opp: dict | None) -> bool:
+        """True if a stall-gust target (energyless, high-retreat benched body) is the opponent's KEY
+        attacker — an ex / Mega ex (their win-condition-class Pokémon). Stranding their main attacker
+        Active, where it can't attack and costs a full turn to retreat, is high-value disruption — far
+        more than stranding a generic wall — so it can win the Supporter slot over a redundant dig
+        (ep82751468 f57, the mirror: gust their bench Mega Starmie ex). Closed-form off engine stats."""
+        if not (self.stats and opp):
+            return False
+        for b in (opp.get("bench") or []):
+            if not b or (b.get("energies") or []):
+                continue
+            stat = self.stats.get(b.get("id"))
+            if stat and stat.retreatCost >= _STALL_RETREAT and (stat.ex or stat.megaEx):
+                return True
+        return False
+
 
 # ── the two tunable positional weights (the rest of the doctrine is the Tactical layer above) ──
 HYPOTHESES = [
@@ -212,4 +261,20 @@ HYPOTHESES = [
         and c.board.stall_target_exists
         and not c.board.opp_active_condition_gift,
         weight=10, status="assumed"),
+    Hypothesis(
+        id="gust-to-strand-the-key-attacker",
+        rationale="When the defensive stall-gust target is the opponent's KEY attacker — an energyless, "
+                  "high-retreat ex / Mega ex (`stall_target_is_keystone`) — stranding IT Active is far "
+                  "stronger disruption than stranding a generic wall: their win-condition can't attack "
+                  "and they burn a full turn retreating it. Stacks on `gust-for-the-stall` so the gust "
+                  "Supporter beats a redundant dig for the Supporter slot (the mirror: drag up their "
+                  "benched Mega Starmie ex instead of a wasted Salvatore — ep82751468 f57). Same firm "
+                  "guards (Active doomed, no KO available, not a condition-cure gift); a real KO still "
+                  "outranks it on tactical, so it never forgoes a knockout.",
+        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
+        and c.board.active_doomed
+        and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
+        and c.board.stall_target_is_keystone
+        and not c.board.opp_active_condition_gift,
+        weight=20, status="testing"),
 ]

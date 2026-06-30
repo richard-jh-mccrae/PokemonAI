@@ -232,18 +232,21 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
     assert pilot.decide(noko) == [1]                  # no KO to forfeit -> evolve the Active first
 
 
-# --- snipe-the-weakest: pick the lowest-HP bench target (closest to a knockout / prize) ----------
+# --- snipe-for-the-ko: a bench snipe that KNOCKS OUT the target (HP <= rider) is a free prize ------
 @pytest.mark.req("REQ-GEN-0018")
-def test_snipe_the_weakest_prefers_the_lowest_hp_bench_target():
+def test_snipe_for_the_ko_prefers_the_killable_bench_target():
+    # My Active's snipe rider is 50 (attack id 11). The 50-HP body dies to it (a prize); the 140/300
+    # bodies only chip. snipe-for-the-ko outranks every positional priority — take the knockout.
+    stats = DictCardStatProvider({700: CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  stats=DictCardStatProvider({}), attacks={11: 50})
+                  stats=stats, attacks={11: 120}, bench_snipe={11: 50})
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1),
                        card_opt(BENCH, 2, player=1)], context=DAMAGE,
                       current=state(active=poke(700, energy=1),
                                     opp_bench=[poke(900, hp=140), poke(901, hp=50), poke(902, hp=300)]))
-    assert pilot.decide(obs) == [1]                                  # the 50-HP target (weakest)
-    assert "snipe-the-weakest" in _fired(pilot.explain(obs).options[1])
-    assert "snipe-the-weakest" not in _fired(pilot.explain(obs).options[2])   # the 300-HP wall
+    assert pilot.decide(obs) == [1]                                  # the 50-HP target (a KO = prize)
+    assert "snipe-for-the-ko" in _fired(pilot.explain(obs).options[1])
+    assert "snipe-for-the-ko" not in _fired(pilot.explain(obs).options[2])   # the 300-HP wall: no KO
 
 
 @pytest.mark.req("REQ-GEN-0018")

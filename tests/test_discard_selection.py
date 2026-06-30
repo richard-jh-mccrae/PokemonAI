@@ -1,0 +1,70 @@
+"""Discard SELECTION at a forced cost-discard (the b7e483a wasted_resource blunders).
+
+Pitch the dead weight — a redundant tutor (its win-condition already in hand) and a setup-only opener
+you can no longer play — while protecting the ACE SPEC and keeping the reliable engine Supporters over
+filler / a situational hand-disruption card.
+"""
+import pytest
+
+from common.cards import CardFunctions
+from common.pilot import Pilot
+from common.scouting.provider import CardStat, DictCardStatProvider
+from common.strategy import Strategy
+from common.strategy.general_strategy import GENERAL_STRATEGY
+
+DISCARD = 8
+MEGA, STARYU, CINDERACE, SALVATORE, HILDA, LILLIES, HARLEQUIN, WALLYS, CAPE, WATER = (
+    1031, 1030, 666, 1189, 1225, 1227, 1223, 1229, 1159, 3)
+
+
+def _fired(t):
+    return {h.id for h, _ in t.fired}
+
+
+def _setup(hand_ids):
+    stats = DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True),
+        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, cardType=0),
+        SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
+        HILDA: CardStat(HILDA, name="Hilda", cardType=3),
+        LILLIES: CardStat(LILLIES, name="Lillie's", cardType=3),
+        HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),
+        WALLYS: CardStat(WALLYS, name="Wally's", cardType=3),
+        CAPE: CardStat(CAPE, name="Hero's Cape", aceSpec=True, hpBonus=100, cardType=2),
+        WATER: CardStat(WATER, name="Water", energyType=2),
+    })
+    funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
+                           LILLIES: ["draw", "shuffle_hand"], WALLYS: ["heal", "clutch_heal"],
+                           HARLEQUIN: ["draw", "hand_disruption", "shuffle_hand"], CINDERACE: ["opener"]})
+    strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
+                            HILDA: ["tutor"]})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    hand = [{"id": cid} for cid in hand_ids]
+    opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
+    obs = {"current": {"players": [{"active": [None], "bench": [], "hand": hand},
+                                   {"active": [None], "bench": []}], "yourIndex": 0, "turn": 4},
+           "select": {"context": DISCARD, "minCount": 2, "maxCount": 2, "option": opts}}
+    return pilot, obs
+
+
+@pytest.mark.req("REQ-GEN-0023")
+def test_discards_the_redundant_tutor_and_protects_the_ace_spec_and_engine():
+    # Mega in hand -> Salvatore (rush_evolve) is redundant. Keep the ACE SPEC and the engine Supporters;
+    # pitch Salvatore and the spare Water.
+    pilot, obs = _setup([MEGA, CAPE, WALLYS, WATER, SALVATORE])           # idx: 0..4
+    sel = obs["select"]
+    dec = pilot.explain(obs)
+    assert "discard-the-redundant-tutor" in _fired(dec.options[4])        # Salvatore
+    assert "keep-key-cards-at-discard" in _fired(dec.options[1])          # Hero's Cape (ACE SPEC)
+    assert set(pilot.decide(obs)) == {4, 3}                               # Salvatore + Water, not Cape/Wally's
+
+
+@pytest.mark.req("REQ-GEN-0023")
+def test_discards_the_dead_opener_and_the_disruption_card_over_the_engine():
+    # Post-opening: Cinderace is dead in hand; Harlequin (hand_disruption) is filler. Keep Lillie's + Hilda.
+    pilot, obs = _setup([LILLIES, HILDA, HARLEQUIN, CINDERACE])           # idx: 0..3
+    dec = pilot.explain(obs)
+    assert "discard-the-dead-opener" in _fired(dec.options[3])            # Cinderace
+    assert "keep-engine-supporter-at-discard" in _fired(dec.options[0])   # Lillie's: kept
+    assert "keep-engine-supporter-at-discard" not in _fired(dec.options[2])  # Harlequin: disruption, fodder
+    assert set(pilot.decide(obs)) == {3, 2}                               # Cinderace + Harlequin

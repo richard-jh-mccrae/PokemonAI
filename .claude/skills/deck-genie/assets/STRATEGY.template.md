@@ -32,6 +32,14 @@ Cards still to grill: <list>. Open questions: <list>.
 <How the archetype is played per the web: gameplan, key combos, standard lines, matchups, tech
 choices. Mark anything thinly-sourced as an assumption to confirm. Cite every source.>
 
+**Confusing-card purposes** (point 3 — why each non-obvious card is in the deck):
+- **<Card>:** <its job + companion cards + setup, from the per-card deep dive>
+
+**Trainer purposes** (point 4 — every trainer, its specific job + priority/sequencing):
+- **<Trainer>:** <why this deck runs it (and this count); fetch targets / priority order>
+
+**Web-vs-engine conflicts surfaced:** <guide claims the engine facts contradict — or "none">
+
 **Sources:** <name — URL> · <name — URL>
 
 ## 3 · Card-by-card
@@ -61,13 +69,16 @@ One block per card. Repeat for all <total> cards. (Facts auto-filled from the du
 | `dig-before-commit` | covers-as-is / override / conflicts / — | — | <…> |
 | … | … | … | … |
 
-## 6 · New deck Hypotheses (drafts — trigger sketches, NOT lambdas yet)
+## 6 · New Hypotheses (drafts — trigger sketches, NOT lambdas yet)
 
-### `<deck-hyp-id>` · seed weight <w> · status: assumed
+### `<hyp-id>` · seed weight <w> · status: assumed
 > <rationale — plain competitive reasoning, as it will read in the decision trace>
 
 **Trigger sketch:** <plain English referencing real Context/Board fields — e.g. "on a SETUP PLAY of
 a card tagged `accel_source`">. **Reads:** <fields>. **Fires:** <plan/context>.
+**Lives in:** <`src/common/strategy/baseline/baseline_<context>.py` (GENERAL — universal; the priority
+when it reads only tags/stat/board/roles) | `src/agents/<deck>/strategy.py` (DECK — reads card_ids /
+the Line / deck roles, or overrides a misplaying general rule)>. **Why here:** <one line>.
 
 ## 7 · Roles, Lines, params (the executable shape, pre-code)
 

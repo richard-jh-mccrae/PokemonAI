@@ -5,7 +5,8 @@ direction). Samples are real card text from `data/EN_Card_Data.csv`.
 """
 import pytest
 
-from common.scouting.provider import parse_attack_bench_snipe, parse_attack_recoil
+from common.scouting.provider import (
+    parse_attack_bench_snipe, parse_attack_hand_size, parse_attack_recoil)
 
 
 @pytest.mark.req("REQ-GUST-0006")
@@ -52,3 +53,21 @@ def test_parse_attack_recoil(text, expected):
 ])
 def test_parse_attack_bench_snipe(text, expected):
     assert parse_attack_bench_snipe(text) == expected
+
+
+@pytest.mark.req("REQ-GUST-0006")
+@pytest.mark.parametrize("text,expected", [
+    # Alakazam (743) Powerful Hand — 2 counters/card = 20 damage/card (counters ignore Weakness/Resistance)
+    ("Place 2 damage counters on your opponent's Active Pokémon for each card in your hand.", 20),
+    ("Place 1 damage counter on your opponent's Active Pokémon for each card in your hand.", 10),
+    # direct "damage for each card in your hand" -> the printed per-card damage
+    ("This attack does 20 damage for each card in your hand.", 20),
+    ("This attack does 30 more damage for each card in your hand.", 30),
+    # NOT a hand-size attacker: per-Energy / per-counter scaling, or no rider -> 0
+    ("This attack does 50 more damage for each Energy attached to your opponent's Active Pokémon.", 0),  # Alakazam(245)
+    ("Place 2 damage counters on your opponent's Active Pokémon for each Energy attached to it.", 0),
+    ("This Pokémon also does 50 damage to itself.", 0),                  # recoil, not a hand-size rider
+    ("", 0),
+])
+def test_parse_attack_hand_size(text, expected):
+    assert parse_attack_hand_size(text) == expected

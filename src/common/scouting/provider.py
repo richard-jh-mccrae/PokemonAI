@@ -27,6 +27,10 @@ class CardStat:
                                        # parsed from attack text — the engine has no structured field.
                                        # The central "sensible place" so Tactical survival math can ask
                                        # "does my nuke leave me a free KO?" without per-agent wiring.
+    handSizeDamage: int = 0            # per-card damage of a "for each card in your hand" attack
+                                       # (Alakazam's Powerful Hand: 2 counters/card = 20), parsed from
+                                       # attack text — the printed `damage` is 0, so this is the only
+                                       # way the forward-doom / Posture read sees the threat. ep82754875
     maxDamage: int = 0
     maxDamageCost: int | None = None   # energy count of the HIGHEST-damage attack (None if unknown) —
                                        # the mirror of minAttackCost: "fully online" means enough Energy
@@ -70,6 +74,13 @@ class DictCardStatProvider:
         st = self._stats.get(card_id)
         return self._forward.max_forward_damage(st.name) if st else 0
 
+    def forward_card_ids(self, card_id: int) -> frozenset[int]:
+        """Card ids the card's evolution line evolves INTO (see ``_ForwardIndex.forward_card_ids``)."""
+        if self._forward is None:
+            self._forward = _build_forward_index(self._stats)
+        st = self._stats.get(card_id)
+        return self._forward.forward_card_ids(st.name) if st else frozenset()
+
 
 # Matches ONLY the unconditional Tool phrasing "The Pokémon this card is attached to gets +N HP"
 # (Hero's Cape). A restricted variant inserts a qualifier — "The Cynthia's Pokémon …", "The {G}
@@ -103,6 +114,13 @@ def _parse_tool_hp_bonus(card) -> int:
 _RECOIL_RE = re.compile(r"This Pok.mon (?:also )?does (\d+) damage to itself\.?$")
 _BENCH_SNIPE_RE = re.compile(
     r"This attack also does (\d+) damage to 1 of your opponent.s Benched Pok.mon\.?$")
+# A "for each card in your hand" attacker (Alakazam's Powerful Hand): its printed `damage` is 0, so the
+# threat is invisible without parsing the text. Counter-placement ("Place N damage counters …") is N×10
+# damage and ignores Weakness/Resistance; the rarer "does N damage for each card …" is direct damage.
+_HAND_SIZE_COUNTERS_RE = re.compile(
+    r"Place (\d+) damage counters? on your opponent.s Active Pok.mon for each card in your hand\.?$")
+_HAND_SIZE_DAMAGE_RE = re.compile(r"does (\d+) (?:more )?damage for each card in your hand\.?$")
+_DAMAGE_PER_COUNTER = 10
 
 
 def _sentences(text: str) -> list[str]:
@@ -137,6 +155,29 @@ def parse_attack_bench_snipe(text: str) -> int:
     return 0
 
 
+def parse_attack_hand_size(text: str) -> int:
+    """Per-card DAMAGE of a 'for each card in your hand' attack — the threat the printed `damage` (0)
+    hides. Alakazam's Powerful Hand "Place 2 damage counters … for each card in your hand" → 2×10 = 20;
+    a direct "does N damage for each card in your hand" → N. Counter placement ignores Weakness/
+    Resistance (counters are not 'damage'). 0 for any other attack. The forward-doom / Posture read
+    multiplies this by the opponent's hand size (ep82754875 f52).
+
+    Args:
+        text: the attack's free-text effect.
+
+    Returns:
+        The per-card damage (counter count × 10, or direct damage), else 0.
+    """
+    for sent in _sentences(text):
+        m = _HAND_SIZE_COUNTERS_RE.match(sent)
+        if m:
+            return int(m.group(1)) * _DAMAGE_PER_COUNTER
+        m = _HAND_SIZE_DAMAGE_RE.search(sent)
+        if m:
+            return int(m.group(1))
+    return 0
+
+
 def _build_cache(card_data, attacks) -> dict[int, CardStat]:
     """Pure transform: engine card/attack records -> ``{cardId: CardStat}``.
 
@@ -145,10 +186,12 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
     dmg: dict[int, int] = {}
     cost: dict[int, int] = {}
     recoil_by_aid: dict[int, int] = {}
+    hand_size_by_aid: dict[int, int] = {}
     for a in attacks:
         dmg.setdefault(a.attackId, a.damage)
         cost.setdefault(a.attackId, len(getattr(a, "energies", None) or []))
         recoil_by_aid.setdefault(a.attackId, parse_attack_recoil(getattr(a, "text", "") or ""))
+        hand_size_by_aid.setdefault(a.attackId, parse_attack_hand_size(getattr(a, "text", "") or ""))
     cache: dict[int, CardStat] = {}
     for c in card_data:
         max_dmg = max((dmg.get(aid, 0) for aid in c.attacks), default=0)
@@ -169,6 +212,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             ex=bool(c.ex), megaEx=bool(c.megaEx), aceSpec=bool(getattr(c, "aceSpec", False)),
             hpBonus=_parse_tool_hp_bonus(c),
             recoil=int(recoil),
+            handSizeDamage=int(max((hand_size_by_aid.get(aid, 0) for aid in c.attacks), default=0)),
             maxDamage=int(max_dmg), maxDamageCost=max_dmg_cost,
             attacks=tuple(c.attacks),
             minAttackCost=(min(costs) if costs else None), minCostDamage=int(cheap_dmg),
@@ -194,28 +238,43 @@ class _ForwardIndex:
     def __init__(self, cache: dict[int, CardStat]):
         self._maxdmg: dict[str, int] = {}        # name -> max printed damage over all its printings
         self._children: dict[str, set[str]] = {}  # parent name -> child names (evolvesFrom == parent)
+        self._name_ids: dict[str, set[int]] = {}  # name -> every card id printed under it
         for st in cache.values():
             if not st.name:
                 continue
+            self._name_ids.setdefault(st.name, set()).add(st.cardId)
             if st.maxDamage > self._maxdmg.get(st.name, 0):
                 self._maxdmg[st.name] = st.maxDamage
             if st.evolvesFrom:
                 self._children.setdefault(st.evolvesFrom, set()).add(st.name)
+
+    def _descendant_names(self, name: str | None) -> set[str]:
+        """The forms ``name`` can evolve INTO (descendants only, multi-hop). Cycle-guarded."""
+        seen, stack = set(), list(self._children.get(name or "", ()))
+        while stack:
+            child = stack.pop()
+            if child in seen:
+                continue
+            seen.add(child)
+            stack.extend(self._children.get(child, ()))
+        return seen
 
     def max_forward_damage(self, name: str | None) -> int:
         """Max printed damage over the forms ``name`` can evolve INTO (descendants only, multi-hop);
         0 if it is a dead end. Cycle-guarded, so a malformed line can't loop."""
         if not name:
             return 0
-        best, seen, stack = 0, set(), list(self._children.get(name, ()))
-        while stack:
-            child = stack.pop()
-            if child in seen:
-                continue
-            seen.add(child)
-            best = max(best, self._maxdmg.get(child, 0))
-            stack.extend(self._children.get(child, ()))
-        return best
+        return max((self._maxdmg.get(d, 0) for d in self._descendant_names(name)), default=0)
+
+    def forward_card_ids(self, name: str | None) -> frozenset[int]:
+        """Every card id of every form ``name`` can evolve INTO (descendants only, multi-hop, all
+        printings) — so a consumer can ask whether a benched pre-evolution's line eventually reaches
+        an ``ex`` / a card carrying a given Function Tag (e.g. a hand-size attacker). Empty for a dead
+        end. Cycle-guarded (delegates to ``_descendant_names``)."""
+        ids: set[int] = set()
+        for d in self._descendant_names(name):
+            ids |= self._name_ids.get(d, set())
+        return frozenset(ids)
 
 
 def _build_forward_index(cache: dict[int, CardStat]) -> _ForwardIndex:
@@ -247,3 +306,9 @@ class EngineCardStatProvider:
         self._ensure_cache()
         st = self._cache.get(card_id)
         return self._forward.max_forward_damage(st.name) if st else 0
+
+    def forward_card_ids(self, card_id: int) -> frozenset[int]:
+        """Card ids the card's evolution line evolves INTO (see ``_ForwardIndex.forward_card_ids``)."""
+        self._ensure_cache()
+        st = self._cache.get(card_id)
+        return self._forward.forward_card_ids(st.name) if st else frozenset()

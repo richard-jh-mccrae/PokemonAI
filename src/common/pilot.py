@@ -25,6 +25,23 @@ _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks pr
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, capped below — a sub-prize
 _BENCH_SNIPE_CAP = 0.9     # tiebreak so among equal-outcome KO attacks the one that ALSO snipes a benched
                            # target wins (best total board value), without ever overriding a prize (ADR-0022 #14)
+_ENERGIZED_SNIPE_TIER = 100000  # an energized benched target is a strictly higher snipe TIER than any
+                           # bare one — it can attack SOONER (imminence), so it is sniped before a
+                           # larger but not-yet-powered latent threat (ADR-0020's energized priority).
+                           # Within a tier, threat magnitude (below) orders the choice, so among
+                           # several energized bodies the biggest attacker is still hit first.
+_HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evolution line CERTAINLY
+                           # reaches a hand-size attacker (e.g. Kadabra → Alakazam "Powerful Hand": 2
+                           # damage counters per card in hand) — the opponent's latent win-condition,
+                           # whose printed damage (10) hides it. A card-fact (the `hand_size_attacker`
+                           # Function Tag), so it outranks a bigger raw-damage SUPPORT line (Dunsparce →
+                           # Dudunsparce) without a meta-DB guess. Below the energized tier and the KO.
+_PREVENT_EX_SNIPE_BOOST = 500  # snipe-rank boost for a benched body whose line reaches a Pokémon that
+                           # PREVENTS my ex attacker's damage (Function Tag `prevent_ex_damage`, e.g.
+                           # Dwebble → Crustle) — a HARD COUNTER to an ex-reliant deck: once it evolves
+                           # my Mega Starmie ex can't touch it, so snipe the fragile pre-evolution NOW
+                           # even over a bigger printed-damage body that I CAN still answer in combat
+                           # (ep82225138 f46: Dwebble over a 300-HP Mega Kangaskhan ex wall). Card-fact.
 _RETREAT_POSITION_EPS = 0.001  # positioning tie-break for the retreat-to-lethal lookahead: when retreating
                            # into a ready benched win-condition takes the SAME KO the spent Active could,
                            # prefer it (the wincon ends up Active) — tiny so it only breaks an exact tie and
@@ -123,14 +140,45 @@ class Board:
     bench_threat_present: bool = False  # at a DAMAGE select, some benched snipe target already carries
                                         # Energy (an imminent attacker) — so the evolving-threat snipe
                                         # stands down: snipe-the-threat (energized) is the priority
+    snipe_damage: int = 0              # at a DAMAGE select, the bench-snipe rider my Active's attack
+                                       # deals (Jetting Blow = 50; max over my Active's attacks) — the
+                                       # closed-form KO test for a snipe target (rider >= target HP, as
+                                       # bench snipes ignore Weakness/Resistance). 0 off a Damage select
+    strongest_threat_rank: float = 0.0  # at a DAMAGE select, the greatest snipe THREAT RANK among the
+                                        # benched targets (`_target_threat_rank`: max own/forward attack
+                                        # damage, +card-fact boost for a line that certainly reaches a
+                                        # hand-size attacker) — the body to snipe when none can be KO'd.
+                                        # 0 off a Damage select
     bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
                                        # enough Energy to attack — a finisher to retreat into
+    evolve_to_ready_wincon_available: bool = False  # the win-condition is in hand AND a benched
+                                       # pre-evolution already carries enough Energy that evolving it
+                                       # THIS turn yields a ready attacker — so at a promote, bringing up
+                                       # that pre-evolution to evolve is worthwhile. False when the only
+                                       # pre-evolution is bare (evolving it just exposes a dead 0-Energy
+                                       # wincon — then promote a staller/accelerator instead, ep82753102 f120)
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
+    priority_wincon_slot: tuple | None = None  # (AreaType, index) of the ONE win-condition Pokémon to
+                                       # concentrate Energy on — the wincon carrying the MOST Energy
+                                       # while still short of its biggest attack (closest to its payoff
+                                       # hit). The Active is skipped when it can already KO (its turn is
+                                       # done — build the successor). None when no buildable wincon
     stall_target_exists: bool = False  # the opponent has an energyless, high-retreat benched Pokémon —
                                        # a candidate to strand Active with a defensive stall-gust (ADR-0022)
+    stall_target_is_keystone: bool = False  # that stall target is the opponent's KEY attacker (an ex /
+                                       # Mega ex) — stranding their win-condition Active is high-value
+                                       # disruption, worth the Supporter over a redundant dig (ADR-0022)
     opp_has_energy_in_play: bool = False  # the opponent has Energy on any Pokémon (Active or Bench) — a
-                                          # target an energy-denial Item (Crushing Hammer) can strip; the
-                                          # whether-to-play gate for `play-energy-denial` (no Energy -> it whiffs)
+                                          # target an energy-denial Item (Crushing Hammer) can strip
+    opp_active_has_energy: bool = False   # the opponent's ACTIVE carries Energy — the imminent attacker,
+                                          # the worthwhile energy-denial target. The whether-to-play gate
+                                          # for `play-energy-denial`: stripping a benched SUPPORT's lone
+                                          # Energy (active empty) is a wasted coin-flip Item (ep82753102 f37)
+    opp_has_hand_size_attacker: bool = False  # the opponent has a Pokémon in play (or in a committed
+                                          # evolution line) that SCALES its damage with hand size (a
+                                          # `hand_size_attacker` — Alakazam's Powerful Hand). Shrinking
+                                          # their hand (Harlequin) cuts its damage — the `play-harlequin-
+                                          # vs-hand-size` gate. A card-fact Posture read, not a meta guess
     deck_empty_ids: frozenset = field(default_factory=frozenset)  # MY card ids the deck is PROVABLY
                                           # empty of. Stateless mode: every copy seen OUTSIDE the deck
                                           # (hand + discard + board incl. attached/stacks + a face-up
@@ -186,6 +234,10 @@ class Context:
                                            # big attack (Mega Starmie at 1 W can Jetting Blow but not
                                            # Nebula Beam CCC). Gates "keep building the active attacker
                                            # toward its payoff attack". Fail-CLOSED (False when unknown).
+    attach_target_is_priority_wincon: bool = False  # this attach option puts the Energy on the ONE
+                                           # win-condition to concentrate on (== board.priority_wincon_slot)
+                                           # — the most-built buildable wincon. Gates `concentrate-energy-
+                                           # on-wincon` so the deck loads one attacker instead of spreading.
     attach_from_target_needs: bool = False  # at an ATTACH_FROM target-select (the engine's pick-a-
                                            # recipient step for a multi-attach effect, e.g. Cinderace's
                                            # Turbo Flare 'attach a Basic to a Benched Pokémon'), THIS
@@ -222,6 +274,17 @@ class Context:
                                                # dangerous on the Bench (its forward damage is the
                                                # greatest, and a real threat) — the priority evolving
                                                # snipe (Riolu→Mega Lucario over Makuhita→Hariyama)
+    target_kos: bool = False           # the bench snipe KNOCKS OUT this target (rider >= its HP; bench
+                                       # snipes ignore Weakness/Resistance) — a free PRIZE, the top snipe
+    promote_target_kos: bool = False   # at a TO_ACTIVE promote, the benched Pokémon this option brings
+                                       # up can KNOCK OUT the opponent's Active this turn (its cheapest
+                                       # attack reaches the defender's HP) — promote it to take the prize
+                                       # from the front (esp. an accelerator that ALSO loads the bench)
+    target_is_top_threat: bool = False  # this snipe target carries the greatest threat rank on the Bench
+                                        # (== board.strongest_threat_rank) — the biggest attacker (or
+                                        # latent attacker) to chip when no KO is available. Unlike the
+                                        # flat weakest/forward priorities, the rank sees already-evolved
+                                        # ex attackers and hand-size lines, and never picks a SUPPORT body
     target_forward_damage: int | None = None  # Evolving Threat signal (ADR-0020): max damage the
                                               # snipe target's evolution line eventually reaches
                                               # (None off a Damage option / no chain / no provider)
@@ -355,11 +418,14 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         def _tier(i: int) -> int:
             o = options[i]
             t = o.get("type")
-            if t in (_ATTACH, _PLAY) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach: an ATTACH
-                return 0                                                  # that unlocks a KO, or a game-winning
+            if t in (_ATTACH, _PLAY, _RETREAT) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach
+                return 0                                                  # that unlocks a KO, a game-winning
                                                                           # gust Supporter (KO_SCORE-class
-                                                                          # _gust_tactical) — take the win,
-                                                                          # don't dig first (REQ-GUST-0001)
+                                                                          # _gust_tactical), or a RETREAT into
+                                                                          # a benched attacker that takes the
+                                                                          # KO (retreat-to-lethal, e.g. swap
+                                                                          # off an ex-locked wall) — take the
+                                                                          # win, don't dig first (REQ-GUST-0001)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
                 return 4
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
@@ -402,8 +468,10 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
 
     def _tactical(self, obs: dict, board: Board, option: dict) -> float:
         """Closed-form combat value (Tier-0): printed damage (x2 on Weakness) vs the opponent
-        Active's HP. A knockout dominates; otherwise the chip is worth its damage. Among equal-outcome
-        KO attacks, a bench-snipe rider on a worthwhile target adds a sub-prize bonus (#14), and a
+        Active's HP. A knockout dominates; otherwise the chip is worth its damage. A bench-snipe rider
+        that KNOCKS OUT a benched Pokémon banks a full PRIZE — it is a knockout, scored KO_SCORE-class
+        like any other (ADR-0022 #14, ep82749168 f62: a 120+50-snipe that finishes a benched Dreepy
+        beats a 210 chip on an un-KO-able Active); a rider that only chips adds a sub-prize tiebreak. A
         game-winning KO whose forced recoil is a SIMULTANEOUS double-KO is a draw, not a win (#2)."""
         if option.get("type") != _ATTACK:
             return 0
@@ -411,13 +479,19 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         dmg = self.attacks.get(attack_id, 0)
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
+        if self._ability_prevents_damage(self.stats.get(self._my_active_id(obs)) if self.stats else None,
+                                         (opp or {}).get("id")):
+            return 0                                     # the defender's Ability prevents my ex damage
         dmg = self._weakness_adjusted(obs, opp, dmg)
         eff = _EFFICIENCY * self.attack_costs.get(attack_id, 0)   # cheaper of equal outcomes wins
+        snipe_ko = self._snipe_ko_prizes(board.opp_bench, self.bench_snipe.get(attack_id, 0))
         if hp and dmg >= hp:
             if self._is_simultaneous_draw(board, attack_id, self._prize_value(opp)):
                 return dmg - eff                            # a simultaneous double-KO is a DRAW, not a win
-            return (KO_SCORE + self._prize_value(opp) - eff  # among KOs, prefer higher-prize then cheaper
-                    + self._bench_snipe_bonus(board, attack_id))  # then the one that also snipes a bench
+            bonus = snipe_ko or self._bench_snipe_bonus(board, attack_id)  # a snipe-KO is a full prize;
+            return KO_SCORE + self._prize_value(opp) - eff + bonus        # else a sub-prize chip tiebreak
+        if snipe_ko:                                        # the Active survives, but the snipe rider KOs a
+            return KO_SCORE + snipe_ko - eff                # benched Pokémon — a guaranteed PRIZE this turn
         return dmg - eff
 
     def _bench_snipe_bonus(self, board: Board, attack_id) -> float:
@@ -430,6 +504,24 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         if rider <= 0 or not board.opp_bench:
             return 0
         return min(_BENCH_SNIPE_CAP, _BENCH_SNIPE * rider)
+
+    def _snipe_ko_prizes(self, opp_bench, rider: int) -> int:
+        """Max prize among the opponent's benched Pokémon a bench-snipe ``rider`` KNOCKS OUT — bench HP
+        ``<= rider`` (bench snipes ignore Weakness/Resistance, ADR-0022). A snipe that finishes a benched
+        Pokémon banks a PRIZE this turn, so the Tactical layer credits it as a knockout. ``opp_bench`` is
+        the ``Board.opp_bench`` ``((cardId, hp), …)`` snapshot. 0 when the rider hits nothing.
+
+        Args:
+            opp_bench: the opponent's bench as ``((cardId, hp), …)``.
+            rider: the attack's bench-snipe damage.
+
+        Returns:
+            The greatest prize value among the benched Pokémon the rider KOs (0 if none).
+        """
+        if rider <= 0:
+            return 0
+        return max((self._prize_value({"id": cid}) for cid, hp in opp_bench if hp and hp <= rider),
+                   default=0)
 
     def _is_simultaneous_draw(self, board: Board, attack_id, opp_active_prize: int) -> bool:
         """True iff a game-winning KO with this attack is actually a DRAW (ADR-0022 #2): its UNCONDITIONAL
@@ -506,22 +598,27 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
           - a tiny positioning epsilon breaks an EXACT tie toward the retreat (the wincon ends up
             Active), never overriding a real tactical edge.
 
-        Never forfeits a knockout: it fires ONLY when a benched wincon actually KOs the current
-        opponent Active (so the prize is still taken, just by the better attacker). 0 when the Active
-        IS the wincon, no benched wincon can KO, or stats are missing."""
-        if option.get("type") != _RETREAT or board.active_is_wincon:
+        Never forfeits a knockout: it fires ONLY when a benched attacker actually KOs the current
+        opponent Active (so the prize is still taken, just by the better attacker). Fires for a SPENT
+        opener Active swapping into the ready wincon, AND for a win-condition Active that CAN'T KO the
+        opponent — e.g. its damage is prevented by an Ability (Crustle's ex-lock): retreat into a
+        benched NON-ex attacker (a Cinderace) that can. So it stands down only when the Active IS the
+        win-condition AND can already KO (just attack), or no benched body can KO, or stats are missing."""
+        if option.get("type") != _RETREAT:
             return 0
         opp = self._opp_active(obs)
         if not (opp and opp.get("hp")):
             return 0
+        my_active_stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        if board.active_is_wincon and self._can_ko(my_active_stat, opp):
+            return 0                                     # a wincon Active that can KO: just attack
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
         me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
-        wincon = self._wincon_set()
         best = 0.0
         for p in (me.get("bench") or []):
-            if not (p and p.get("id") in wincon):
+            if not p:
                 continue
             energy = len((p.get("energies") or []))
             best = max(best, self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy))
@@ -537,6 +634,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         opp_hp = (opp or {}).get("hp", 0)
         if not (stat and opp_hp):
             return 0.0
+        if self._ability_prevents_damage(stat, (opp or {}).get("id")):
+            return 0.0                                   # an ex attacker can't damage this defender
         opp_stat = self.stats.get(opp.get("id")) if self.stats else None
         best = 0.0
         for aid in (stat.attacks or ()):
@@ -625,8 +724,18 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             target_forward_damage is not None and board.strongest_forward_bench is not None
             and target_forward_damage == board.strongest_forward_bench
             and target_forward_damage >= _EVOLVING_THREAT_DMG)
+        target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp)
+        target_rank = self._target_threat_rank(obs, select, option)
+        target_is_top_threat = (target_rank is not None and target_rank > 0
+                                and board.strongest_threat_rank > 0
+                                and target_rank == board.strongest_threat_rank)
+        promote_target_kos = (select.get("context") == _TO_ACTIVE
+                              and self._promote_target_kos(obs, select, option))
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
+        attach_target_is_priority_wincon = (
+            option.get("type") == _ATTACH and board.priority_wincon_slot is not None
+            and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.priority_wincon_slot)
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
         return Context(plan=plan, select_context=select.get("context"),
@@ -634,6 +743,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
                        attach_target_needs=self._attach_target_needs(at_target),
                        attach_target_under_max=self._attach_target_under_max(at_target),
+                       attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_from_target_needs=attach_from_needs,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
@@ -643,6 +753,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
                        target_is_strongest_forward=target_is_strongest_forward,
                        target_forward_damage=target_forward_damage,
+                       target_kos=target_kos, target_is_top_threat=target_is_top_threat,
+                       promote_target_kos=promote_target_kos,
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
@@ -776,7 +888,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             turn=state.get("turn", 0),
             energy_attached=bool(state.get("energyAttached")),
             hand_startable=self._hand_startable(me.get("hand") or []),
-            active_doomed=self._active_doomed(ma, oa),
+            active_doomed=self._active_doomed(ma, oa, opp),
             incoming_active_damage=self._incoming_active_damage(ma, oa),
             active_cheap_attack_kos=self._active_cheap_attack_kos(ma, oa),
             gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp),
@@ -794,10 +906,18 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             bench_threat_present=self._bench_threat_present(obs, select),
+            snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
+            strongest_threat_rank=self._strongest_threat_rank(obs, select),
             bench_wincon_ready=self._bench_wincon_ready(me),
+            evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
+            priority_wincon_slot=self._priority_wincon_slot(
+                me, self._active_cheap_attack_kos(ma, oa)),
             stall_target_exists=self._stall_target_exists(opp),
+            stall_target_is_keystone=self._stall_target_is_keystone(opp),
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
+            opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
+            opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
             deck_empty_ids=deck_empty,
             deck_known_counts=deck_known,
             opp_active_condition_gift=self._opp_active_condition_gift(opp),
@@ -846,6 +966,62 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         return any(p and p.get("id") in preevos for p in board)
 
     # (Fetch doctrine greedy multi-pick + its gap helpers are in doctrine_fetch.FetchMixin, above.)
+    def _evolve_to_ready_wincon_available(self, me: dict) -> bool:
+        """True if the win-condition is in hand AND a benched pre-evolution can become a READY attacker
+        THIS turn — its Energy (which the evolved Pokémon inherits) PLUS the one manual attach you can
+        still make this turn (a reusable Basic in hand) reaches the win-condition's cheapest attack cost.
+        So at a promote it is worth bringing up that pre-evolution to evolve. False when the only
+        pre-evolution stays bare even after that attach (no Energy on it AND none in hand) — evolving it
+        would just expose a dead 0-Energy win-condition, so a staller/accelerator should be promoted
+        instead (ep82753102 f120: bare Staryu, no Energy in hand -> Cinderace; ep82226116 f94: bare
+        Staryu but a Water in hand -> evolve, the Mega comes online)."""
+        if not self._wincon_in_hand(me):
+            return False
+        preevos = self._line_preevo_set()
+        wincon = self._wincon_set()
+        if not (preevos and wincon):
+            return False
+        thresh = min((_min_attack_cost(self.stats, w) for w in wincon), default=1)
+        extra = 1 if self._has_reusable_energy(me.get("hand") or []) else 0   # one manual attach this turn
+        return any(p and p.get("id") in preevos and len(p.get("energies") or []) + extra >= thresh
+                   for p in (me.get("bench") or []))
+
+    def _promote_target_kos(self, obs: dict, select: dict, option: dict) -> bool:
+        """At a TO_ACTIVE promote, True if the benched Pokémon this option brings up can Knock Out the
+        opponent's Active this turn — its cheapest attack reaches the defender's HP (shared `_can_ko`
+        oracle). Promoting it takes the prize from the front (and, for an accelerator, also loads the
+        Bench). Fail-closed when stats / the target are missing."""
+        poke = self._option_pokemon(obs, select, option)
+        if not poke:
+            return False
+        stat = self.stats.get(poke.get("id")) if self.stats else None
+        return self._can_ko(stat, self._opp_active(obs))
+
+    def _priority_wincon_slot(self, me: dict, active_lethal: bool) -> tuple | None:
+        """(AreaType, index) of the ONE win-condition Pokémon to concentrate Energy on — among my
+        win-condition bodies still short of their biggest attack (`_attach_target_under_max`), the one
+        ALREADY carrying the most Energy (closest to firing its payoff hit). The Active is skipped when
+        it can already Knock Out the opponent's Active (`active_lethal` — its turn is done, build the
+        successor), so a powered Active hands the Energy to the benched wincon. None when no buildable
+        wincon exists. Backs `concentrate-energy-on-wincon` (load one attacker, don't spread)."""
+        wincon = self._wincon_set()
+        if not wincon:
+            return None
+        best = None                                  # (energy, area, index)
+        active = (me.get("active") or [])
+        if not active_lethal:
+            for i, p in enumerate(active):
+                if p and p.get("id") in wincon and self._attach_target_under_max(p):
+                    e = len(p.get("energies") or [])
+                    if best is None or e > best[0]:
+                        best = (e, _ACTIVE, i)
+        for i, p in enumerate(me.get("bench") or []):
+            if p and p.get("id") in wincon and self._attach_target_under_max(p):
+                e = len(p.get("energies") or [])
+                if best is None or e > best[0]:
+                    best = (e, _BENCH, i)
+        return (best[1], best[2]) if best else None
+
     def _bench_wincon_ready(self, me: dict) -> bool:
         """True if a benched win-condition / primary attacker already carries enough Energy to attack
         (>= its cheapest attack cost) — a powered finisher worth retreating into."""
@@ -898,6 +1074,73 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
                     return True
         return False
 
+    def _snipe_damage(self, obs: dict, my_active_id: int | None, select: dict | None) -> int:
+        """The bench-snipe rider my Active's attack deals at a DAMAGE select — max over my Active's
+        attacks (Jetting Blow 50). The DAMAGE select carries no attackId, but a snipe always comes
+        from my Active, so its biggest snipe rider is the damage a chosen target would take. 0 off a
+        Damage select / no Active / no snipe attack. Bench snipes ignore Weakness/Resistance, so this
+        is the exact KO test (`rider >= target HP`)."""
+        if not select or select.get("context") != _DAMAGE:
+            return 0
+        stat = self.stats.get(my_active_id) if (self.stats and my_active_id is not None) else None
+        if not stat:
+            return 0
+        return max((self.bench_snipe.get(aid, 0) for aid in (stat.attacks or ())), default=0)
+
+    def _target_threat_rank(self, obs: dict, select: dict, option: dict) -> float | None:
+        """Snipe-priority THREAT rank for a benched DAMAGE target (None off a Damage/bench option).
+
+        Higher = snipe first when no KO is available. The rank is the body's eventual attack power —
+        max of its OWN printed damage (so an already-evolved ex attacker like Dragapult ex 200 / Mega
+        Lucario ex 270 is seen, which the descendants-only `forward_max_damage` misses) and its
+        forward-evolution damage — plus two tiny tie-breaks (more-evolved by own damage so Drakloak >
+        Dreepy on the same line; energized = sooner). A line that CERTAINLY reaches a hand-size
+        attacker gets `_HAND_SIZE_ATTACKER_BOOST` (the latent Alakazam, hidden by its 10 printed
+        damage). This is the single threat order behind `snipe-the-top-threat`; it never rewards a
+        low-HP SUPPORT body the flat `snipe-the-weakest` would."""
+        if (select.get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return None
+        poke = self._option_pokemon(obs, select, option)
+        cid = (poke or {}).get("id")
+        if cid is None:
+            return None
+        stat = self.stats.get(cid) if self.stats else None
+        own = stat.maxDamage if stat else 0
+        fwd = self._target_forward_damage(obs, select, option) or 0
+        rank = float(max(own, fwd))
+        rank += 0.001 * own                                   # more-evolved tie-break (Drakloak>Dreepy)
+        if self.functions:
+            line = {cid} | self._forward_card_ids(cid)
+            if any("hand_size_attacker" in self.functions.tags(i) for i in line):
+                rank += _HAND_SIZE_ATTACKER_BOOST
+            my_active = self.stats.get(self._my_active_id(obs)) if self.stats else None
+            if (my_active and (my_active.ex or my_active.megaEx)      # I attack with an ex/Mega ex …
+                    and any("prevent_ex_damage" in self.functions.tags(i) for i in line)):  # … it can't touch
+                rank += _PREVENT_EX_SNIPE_BOOST                        # this line once it evolves — kill it now
+        if poke.get("energies"):                              # energized = imminent: a higher snipe tier
+            rank += _ENERGIZED_SNIPE_TIER
+        return rank
+
+    def _forward_card_ids(self, cid: int | None) -> frozenset:
+        """Card ids the snipe target's evolution line evolves INTO (provider primitive; empty when no
+        provider / dead-end / unknown id)."""
+        fci = getattr(self.stats, "forward_card_ids", None)
+        return fci(cid) if (fci is not None and cid is not None) else frozenset()
+
+    def _strongest_threat_rank(self, obs: dict, select: dict | None) -> float:
+        """Greatest `_target_threat_rank` among the benched DAMAGE targets — the body to snipe when no
+        KO is on the menu. 0 off a Damage select."""
+        if not select or select.get("context") != _DAMAGE:
+            return 0.0
+        best = 0.0
+        for o in (select.get("option") or []):
+            if o.get("type") == _CARD and o.get("area") == _BENCH:
+                r = self._target_threat_rank(obs, select, o)
+                if r is not None and r > best:
+                    best = r
+        return best
+
     def _wincon_in_play(self, me: dict) -> bool:
         """True if my win-condition is already in play — a Strategy Line payoff or a card carrying the
         `win_condition` / `primary_attacker` Role sitting on my Active or Bench. Lets a 'fetch the
@@ -939,20 +1182,74 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
         # opponent attacks ME: opp Active = attacker, my Active = defender (Weakness AND Resistance).
         return int(self._wr_adjusted(opp_stat, self.stats.get(ma.get("id")), opp_stat.maxDamage or 0))
 
-    def _active_doomed(self, ma: dict | None, oa: dict | None) -> bool:
-        """True if the opponent's Active can Knock Out my Active next turn — its biggest attack
-        (doubled when my Active is Weak to the attacker's type) >= my Active's remaining HP. A
-        closed-form threat estimate off engine stats (attack-affordability refinement is future)."""
+    def _active_doomed(self, ma: dict | None, oa: dict | None, opp: dict | None = None) -> bool:
+        """True if the opponent can Knock Out my Active next turn — its biggest CURRENT attack OR, by
+        Posture, the attack its Active reaches by EVOLVING (play as if it will), >= my Active's HP. A
+        closed-form threat estimate off engine stats. The forward term catches a hand_size_attacker
+        (Alakazam) whose printed damage is 0 but whose Powerful Hand KOs through the evolution
+        (ep82754875 f52); ``opp`` omitted → current-board only (the forward term needs the hand size)."""
         my_hp = (ma or {}).get("hp", 0)
-        return bool(my_hp) and self._incoming_active_damage(ma, oa) >= my_hp
+        if not my_hp:
+            return False
+        threat = max(self._incoming_active_damage(ma, oa), self._forward_incoming_damage(ma, oa, opp))
+        return threat >= my_hp
+
+    def _forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None) -> int:
+        """Worst-case incoming damage if the opponent EVOLVES their Active's line next turn — the
+        Posture read (play AS IF they evolve; ep82754875 f52: Kadabra → Alakazam, whose Powerful Hand
+        places 2 counters per card in hand = 20 dmg/card and KOs my 130-HP Cinderace, though Kadabra's
+        own attack can't). For each form the opp Active evolves INTO that is a ``hand_size_attacker``,
+        damage is ``handSizeDamage × the opp's hand`` (counters ignore Weakness/Resistance), gated to a
+        forward attack the opp could afford next turn (its Active's Energy + one attach). The opp spends
+        ≥1 card to play the evolution, so the hand is counted one short. 0 when unknown / no such line.
+
+        Args:
+            ma: my Active Pokémon dict.
+            oa: the opponent's Active Pokémon dict (the line that would evolve).
+            opp: the opponent player dict (for ``handCount``); None → 0 (no forward read).
+
+        Returns:
+            The greatest forward hand-size KO threat to my Active (0 if none).
+        """
+        if not (self.stats and self.functions and ma and oa and opp):
+            return 0
+        if not self.stats.get(ma.get("id")):
+            return 0
+        hand = max(0, (opp.get("handCount", 0) or 0) - 1)   # ≥1 card spent to play the evolution
+        oa_energy = len(oa.get("energies") or [])
+        best = 0
+        for fid in self._forward_card_ids(oa.get("id")):
+            fstat = self.stats.get(fid)
+            if not fstat or "hand_size_attacker" not in self.functions.tags(fid):
+                continue
+            if (fstat.minAttackCost or 0) > oa_energy + 1:   # unaffordable even with next turn's attach
+                continue
+            best = max(best, (fstat.handSizeDamage or 0) * hand)   # counter damage ignores Weakness/Resist
+        return best
+
+    def _ability_prevents_damage(self, attacker_stat, defender_id: int | None) -> bool:
+        """True if the DEFENDER's Ability prevents all damage from my attacker — the ex / Mega-ex
+        damage lock (Function Tag `prevent_ex_damage`, e.g. Crustle's 'Mysterious Rock Inn': prevent
+        all damage from your opponent's {ex} Pokémon). My ex / Mega-ex attacker does 0 to it, so the
+        closed-form combat math must zero its damage (else the agent whiff-attacks an immune wall and
+        the right answer — retreat to a NON-ex attacker — is never surfaced). False for a non-ex
+        attacker, an untagged defender, or no function table."""
+        if not (attacker_stat and (attacker_stat.ex or attacker_stat.megaEx)):
+            return False
+        if defender_id is None or not self.functions:
+            return False
+        return "prevent_ex_damage" in self.functions.tags(defender_id)
 
     def _can_ko(self, my_stat, defender: dict | None) -> bool:
         """My Active's CHEAPEST attack would Knock Out `defender` this turn — its cheapest-cost attack
         damage, doubled when the defender is Weak to my Active's type, >= the defender's remaining HP.
         The shared closed-form KO oracle (ADR-0022) behind both the current-Active KO checks and the
-        gust whether-to-play signal. Fail-closed when stats / HP are missing."""
+        gust whether-to-play signal. Fail-closed when stats / HP are missing, and 0 when the defender's
+        Ability prevents my (ex) attacker's damage (`_ability_prevents_damage`)."""
         hp = (defender or {}).get("hp", 0)
         if not (my_stat and hp):
+            return False
+        if self._ability_prevents_damage(my_stat, (defender or {}).get("id")):
             return False
         d_stat = self.stats.get(defender.get("id")) if self.stats else None
         dmg = self._wr_adjusted(my_stat, d_stat, my_stat.minCostDamage or 0)
@@ -969,6 +1266,23 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin):
     # (The gust Board-signal builders — `_active_ko_prizes`, `_opp_active_condition_gift`,
     # `_active_condition_ko_prizes`, `_gust_best_ko_prizes`, `_stall_target_exists` — are in
     # doctrine_gust.GustMixin; `_board` calls them as `self.…`.)
+    def _opp_has_hand_size_attacker(self, opp: dict | None) -> bool:
+        """True if the opponent has a Pokémon in play whose own card OR its forward-evolution line
+        reaches a hand-size attacker (a `hand_size_attacker` Function Tag — e.g. Alakazam's Powerful
+        Hand, '2 damage counters per card in your hand'). Detects both the revealed attacker AND a
+        committed line still building toward it (Kadabra → Alakazam). Card-fact Posture for
+        `play-harlequin-vs-hand-size`; needs the function table. False otherwise."""
+        if not (self.functions and opp):
+            return False
+        for p in (opp.get("active") or []) + (opp.get("bench") or []):
+            cid = p.get("id") if p else None
+            if cid is None:
+                continue
+            for i in {cid} | self._forward_card_ids(cid):
+                if "hand_size_attacker" in self.functions.tags(i):
+                    return True
+        return False
+
     def _opp_has_energy_in_play(self, opp: dict | None) -> bool:
         """True if any of the opponent's Pokémon (Active or Bench) carries Energy — a target an
         energy-denial Item (Function Tag `energy_denial`, e.g. Crushing Hammer) can strip. The

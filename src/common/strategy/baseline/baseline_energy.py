@@ -9,6 +9,33 @@ from common.strategy.strategy import Hypothesis, Plan
 
 HYPOTHESES = [
     Hypothesis(
+        id="concentrate-energy-on-wincon",
+        rationale="Concentrate Energy on ONE win-condition attacker rather than spreading it thin. "
+                  "`power-up-attacker` fires on any bare body (so the agent dribbles one Energy onto "
+                  "each, and `build-active-wincon` only sees the Active), leaving a benched Mega Starmie "
+                  "ex stuck a turn from its payoff. This fires on the win-condition carrying the MOST "
+                  "Energy while still short of its biggest attack (`board.priority_wincon_slot`) — the "
+                  "one closest to online — so the third Energy tops up the 2-Energy Mega before a bare "
+                  "Staryu or an empty second Mega. The Active is skipped once it can already KO (its "
+                  "turn is done — feed the benched successor). Above `power-up-attacker` (+15) so the "
+                  "concentrate beats the spread.",
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_is_priority_wincon,
+        weight=25, status="testing"),
+    Hypothesis(
+        id="prefer-reusable-over-burst",
+        rationale="When attaching to your win-condition and a REUSABLE Basic Energy is in hand, prefer "
+                  "it over a discard-at-end-of-turn burst Energy (`discard_eot`, e.g. Ignition): both "
+                  "advance the attacker by one, but the burst is a finite one-shot best saved for the "
+                  "turn that genuinely needs its bulk (CCC -> Nebula Beam in a single attach). A small "
+                  "nudge that only breaks the Basic-vs-Ignition tie toward the reusable Energy — a "
+                  "burst that UNLOCKS a knockout this turn is tactical (KO_SCORE via the lethal-attach "
+                  "lookahead) and still dominates, so this never blocks the Ignition you actually need. "
+                  "Fills the gap `dont-waste-discard-energy` leaves (it exempts the win-condition), and "
+                  "co-fires harmlessly with a deck's own conserve rule.",
+        when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags
+        and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.board.reusable_energy_in_hand,
+        weight=-12, status="testing"),
+    Hypothesis(
         id="power-up-attacker",
         rationale="Attach an Energy every turn — building energy toward an attack is the core "
                   "tempo of the game; without a steady stream of attachments your attackers never "

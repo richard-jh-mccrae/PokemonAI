@@ -137,9 +137,9 @@ def test_dont_rush_evolve_without_a_preevolution_in_play():
     assert "dont-rush-evolve-without-target" not in _fired(pilot2.explain(has_preevo).options[0])
 
 
-# ---------------------------------------------------------------- snipe-the-strongest-evolving-threat
+# ---------------------------------------------------------------- snipe-the-top-threat (unified rank)
 @pytest.mark.req("REQ-GEN-0028")
-def test_snipe_the_strongest_evolving_threat_breaks_the_evolving_tie():
+def test_snipe_the_top_threat_breaks_the_evolving_tie_on_the_strongest_line():
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=30, evolvesFrom=None),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
@@ -147,31 +147,31 @@ def test_snipe_the_strongest_evolving_threat_breaks_the_evolving_tie():
         674: CardStat(674, name="Hariyama", maxDamage=210, evolvesFrom="Makuhita"),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # Two no-Energy evolving threats; Makuhita is the WEAKEST (lower HP). Without the new rule the
-    # weakest+evolving stack would win; the strongest forward line (Riolu->Mega Lucario 270) must win.
+    # Two no-Energy evolving threats; Makuhita is the WEAKEST (lower HP). The unified threat rank picks
+    # the strongest forward line (Riolu->Mega Lucario 270 over Makuhita->Hariyama 210), never the weakest.
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700),
                                     opp_bench=[poke(444, hp=60), poke(333, hp=90)]))  # idx0 Makuhita(weakest), idx1 Riolu
     riolu = pilot.explain(obs).options[1]
-    assert "snipe-the-strongest-evolving-threat" in _fired(riolu)
+    assert "snipe-the-top-threat" in _fired(riolu)
     assert pilot.decide(obs) == [1]                       # Riolu (strongest forward) over weakest Makuhita
 
 
 @pytest.mark.req("REQ-GEN-0028")
-def test_strongest_evolving_threat_stands_down_when_an_energized_threat_is_present():
+def test_top_threat_picks_the_energized_body_over_a_bigger_latent_line():
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=30, evolvesFrom=None),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
         900: CardStat(900, name="Zubat", maxDamage=30),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # An energized benched threat is present -> snipe-the-threat takes priority; the evolving rule
-    # stands down so it can't out-stack the imminent attacker.
+    # An energized benched body is present -> it is the higher snipe tier (imminent); the bigger but
+    # latent Riolu line stands below it, so the top-threat pick is the energized attacker.
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700),
                                     opp_bench=[poke(333, hp=90), poke(900, energy=1, hp=80)]))
-    for o in pilot.explain(obs).options:
-        assert "snipe-the-strongest-evolving-threat" not in _fired(o)
+    latent, energized = pilot.explain(obs).options
+    assert "snipe-the-top-threat" in _fired(energized) and "snipe-the-top-threat" not in _fired(latent)
     assert pilot.decide(obs) == [1]                       # the energized threat is sniped
 
 
@@ -283,20 +283,20 @@ def test_play_energy_denial_stands_down_when_the_opponent_has_no_energy():
 
 
 @pytest.mark.req("REQ-GEN-0031")
-def test_play_energy_denial_still_takes_the_lethal_ko():
-    """KO must still win: with a genuine lethal on the menu, the free strip goes first but the KO is
-    only deferred one slot (taken on the re-presented menu) — a positional weight never forfeits a KO."""
+def test_energy_denial_stands_down_when_you_can_already_ko_the_active():
+    """Don't burn the energy-denial Item on a body you're about to KO — stripping the Energy off an
+    Active your cheapest attack already Knocks Out is worthless, so HOLD the Item and just take the KO
+    (ep82748422 f26: Crushing Hammer is wasted when Jetting Blow will KO the Active anyway)."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)
-    lethal = attack_opt(11)                               # 120 vs a 100-HP Active -> KO
+    lethal = attack_opt(11)                               # 120 vs a 100-HP Active -> KO (active_cheap_attack_kos)
     obs = make_select([play_crush, lethal, opt(END)],
                       current=state(active=poke(WINCON, energy=3, hp=330),
                                     opp_active=poke(OPP, energy=2, hp=100), hand=[CRUSH]))
     traces = pilot.explain(obs)
     assert traces.options[1].tactical >= KO_SCORE         # the attack is genuinely lethal
-    assert "play-energy-denial" in _fired(traces.options[0])
-    assert pilot.decide(obs) == [0]                       # strip FIRST (free) ...
-    assert traces.options[1].deferred                     # ... the KO is held one slot, not forfeited
+    assert "play-energy-denial" not in _fired(traces.options[0])  # the strip is moot -> hold the Item
+    assert pilot.decide(obs) == [1]                       # just take the KO, save the Crushing Hammer
 
 
 # --------------------- deck-knowledge (sound): dont-search-an-empty-deck + dont-tutor-the-held-wincon

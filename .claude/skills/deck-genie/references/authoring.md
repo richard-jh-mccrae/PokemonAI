@@ -32,12 +32,15 @@ These files drift; read them now, don't trust this doc's snapshot of them:
 | covers-as-is | nothing — the General Strategy already fires |
 | override-candidate (seed weight) | a `{hyp_id: weight}` entry — seed it in `src/agents/<deck>/tuned.json` (the machine-overrides file `main.py` loads), or as a deck Hypothesis re-stating the id only if it must be deck-conditional |
 | conflicts | override the offending id toward `0`, and/or a deck Hypothesis that outweighs it — document why |
-| gap → new Hypothesis | a new `Hypothesis(...)` in `strategy.py` (deck-specific) or, if the trigger reads only universal `tags`/`roles`/`board`/`stat` and helps *any* deck, propose it for the matching `src/common/strategy/baseline/baseline_<context>.py` cluster (ADR-0025) instead |
+| gap → new Hypothesis | **GENERAL (the priority):** if the trigger reads only universal `tags`/`roles`/`board`/`stat` and helps *any* deck, add it to the matching `src/common/strategy/baseline/baseline_<context>.py` cluster (ADR-0025) — flag the promotion for separate review. **DECK (otherwise):** a new `Hypothesis(...)` in `strategy.py` when it reads `card_id`s / the Line / deck roles, or must override a misplaying general rule |
 | Role / Line / param | fill `roles={cardId: [...]}`, `lines=[Line(path=[...], payoff=...)]`, `params={...}` |
 
-Deck-specific (reads `card_id`s / deck `roles` / the deck's Line) → `strategy.py`. Universal (reads
-only tags/stat/board) → the matching `strategy/baseline/baseline_<context>.py` cluster. When unsure,
-keep it in the deck file; promotion to general is a deliberate, separately-reviewed step.
+This is the §4 expand-vs-override decision, made executable. **Default toward expanding the General
+Strategy** — a universal rule (reads only tags/stat/board/roles) lifts every future deck, so it's the
+priority when it applies; it goes in the matching `strategy/baseline/baseline_<context>.py` cluster.
+Only genuinely deck-bound rules (read `card_id`s / deck `roles` / the deck's Line, or override a
+general rule that misplays *this* deck) go in `strategy.py`. When unsure, keep it in the deck file —
+local is safe; promotion to general is a deliberate, separately-reviewed step.
 
 ## 3 · Gate 1 — per-Hypothesis trigger checks (the from-scratch Verifier)
 

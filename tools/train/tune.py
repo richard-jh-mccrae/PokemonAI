@@ -32,7 +32,8 @@ def _build_pilot(agent: str):
     from common.cards import CardFunctions
     from common.strategy.general_strategy import GENERAL_STRATEGY
     from common.pilot import Pilot
-    from common.scouting.provider import EngineCardStatProvider
+    from common.scouting.provider import (
+        EngineCardStatProvider, parse_attack_bench_snipe, parse_attack_recoil)
 
     agent_dir = REPO / "src" / "agents" / agent
     spec = importlib.util.spec_from_file_location(f"{agent}_strategy", agent_dir / "strategy.py")
@@ -42,11 +43,13 @@ def _build_pilot(agent: str):
     deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
     attacks = all_attack()
     seeds = {h.id: h.weight for h in (*GENERAL_STRATEGY.hypotheses, *strategy.hypotheses)}
-    pilot = Pilot(
-        strategy, deck, general_strategy=GENERAL_STRATEGY,
-        stats=EngineCardStatProvider(), functions=CardFunctions.load(),
-        attacks={a.attackId: a.damage for a in attacks},
+    pilot = Pilot(                                 # mirror main.py EXACTLY — incl. recoil + bench_snipe,
+        strategy, deck, general_strategy=GENERAL_STRATEGY,   # else the W-route featurizes a pilot whose
+        stats=EngineCardStatProvider(), functions=CardFunctions.load(),  # snipe rider / draw-guard differ
+        attacks={a.attackId: a.damage for a in attacks},     # from runtime (snipe-for-the-ko never fires)
         attack_costs={a.attackId: len(a.energies) for a in attacks},
+        recoil={a.attackId: parse_attack_recoil(a.text) for a in attacks},
+        bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in attacks},
     )
     return pilot, seeds
 

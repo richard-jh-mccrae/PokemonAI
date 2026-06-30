@@ -22,12 +22,13 @@ def _ids(hyps):
 CLUSTERS = {
     "energy": (ENERGY_HYPOTHESES, {
         "power-up-attacker", "attach-energy-last", "use-acceleration", "dont-feed-the-doomed",
-        "dont-waste-discard-energy", "build-active-wincon", "spread-attach-to-the-needy"}),
+        "dont-waste-discard-energy", "build-active-wincon", "spread-attach-to-the-needy",
+        "concentrate-energy-on-wincon", "prefer-reusable-over-burst"}),
     "snipe": (SNIPE_HYPOTHESES, {
-        "snipe-the-threat", "snipe-the-weakest", "snipe-the-evolving-threat",
-        "snipe-the-strongest-evolving-threat"}),
+        "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker"}),
-    "promote": (PROMOTE_HYPOTHESES, {"promote-the-ready-wincon", "promote-the-staller"}),
+    "promote": (PROMOTE_HYPOTHESES, {
+        "promote-the-accelerator-for-the-ko", "promote-the-ready-wincon", "promote-the-staller"}),
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker"}),
     "tool": (TOOL_HYPOTHESES, {
         "save-tool-for-the-attacker", "protect-ace-spec-tool", "deploy-hp-tool-on-breakpoint"}),
@@ -36,7 +37,7 @@ CLUSTERS = {
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit"}),
-    "disruption": (DISRUPTION_HYPOTHESES, {"play-energy-denial"}),
+    "disruption": (DISRUPTION_HYPOTHESES, {"play-energy-denial", "play-harlequin-vs-hand-size"}),
 }
 
 

@@ -94,9 +94,12 @@ HYPOTHESES = [
                   "held Energy) and `keep-key-cards-at-discard` (which guards a cost-discard): this "
                   "guards the hand-shuffle of the PAYOFF itself. Moderate — it nets negative against "
                   "`dig-before-commit` but is NOT absolute, so a genuinely dead hand still refills (the "
-                  "win-condition returns to the deck, recoverable; only a tempo cost).",
+                  "win-condition returns to the deck, recoverable; only a tempo cost). Stands down when "
+                  "the win-condition is already in PLAY (`wincon_in_play`): the hand copy is then a "
+                  "redundant duplicate, safe to shuffle away — don't protect a dead second payoff (the "
+                  "ep82226759 Harlequin shape: a Mega Starmie ex Active with a second copy in hand).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.wincon_in_hand,
+        and c.board.wincon_in_hand and not c.board.wincon_in_play,
         weight=-25, status="assumed"),
     Hypothesis(
         id="refresh-when-hand-is-dead",

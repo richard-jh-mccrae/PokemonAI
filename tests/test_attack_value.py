@@ -66,16 +66,45 @@ def test_bench_snipe_bonus_is_silent_with_no_benched_target():
 
 
 @pytest.mark.req("REQ-GUST-0007")
-def test_bench_snipe_bonus_never_overrides_a_prize():
-    """The bonus is sub-prize: even a big (120) snipe on a 1-prize KO stays BELOW a 2-prize KO's floor,
-    so the snipe tiebreak can never override real prize value."""
+def test_bench_snipe_chip_bonus_never_overrides_a_prize():
+    """A snipe that only CHIPS (rider < the benched HP) is a sub-prize tiebreak: even a big (120) chip
+    on a 1-prize KO stays BELOW a 2-prize KO's floor, so it can never override real prize value."""
     p = _pilot(attacks={A_SNIPE: 120}, attack_costs={A_SNIPE: 1}, bench_snipe={A_SNIPE: 120})
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
-                                    opp_active=poke(OPP, hp=100),       # 1-prize Active
-                                    opp_bench=[poke(OPP_BENCH, hp=60)]))
-    val = p.explain(obs).options[0].tactical       # KO_SCORE + 1 prize + capped snipe
+                                    opp_active=poke(OPP, hp=100),        # 1-prize Active
+                                    opp_bench=[poke(OPP_BENCH, hp=200)]))  # 200 > 120 rider → chip, not a KO
+    val = p.explain(obs).options[0].tactical       # KO_SCORE + 1 prize + capped chip bonus
     assert KO_SCORE + 1 <= val < KO_SCORE + 2      # above the 1-prize floor, below a 2-prize KO
+
+
+@pytest.mark.req("REQ-GUST-0007")
+def test_snipe_ko_of_a_bench_pokemon_banks_a_full_prize():
+    """A bench-snipe rider that KNOCKS OUT a benched Pokémon banks a PRIZE — it is a knockout, scored
+    KO_SCORE-class — so it beats a bigger chip that KOs nothing (ep82749168 f62: Jetting Blow 120 + 50
+    snipe finishes a 20-HP Dreepy, over a 210 Nebula Beam that only chips an un-KO-able 320-HP Active)."""
+    p = _pilot(attacks={A_PLAIN: 210, A_SNIPE: 120}, attack_costs={A_PLAIN: 3, A_SNIPE: 1},
+               bench_snipe={A_SNIPE: 50})
+    obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
+                      current=state(active=poke(MY_ATK, energy=3),
+                                    opp_active=poke(OPP, hp=320),         # neither attack KOs the Active
+                                    opp_bench=[poke(OPP_BENCH, hp=20)]))  # snipe 50 >= 20 → a KO = a prize
+    opts = p.explain(obs).options
+    assert opts[1].tactical >= KO_SCORE           # the snipe-KO is a knockout (a prize), not a chip
+    assert opts[1].tactical > opts[0].tactical    # and it beats the 210 chip that KOs nothing
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0007")
+def test_snipe_that_only_chips_a_survivor_is_not_a_ko():
+    """Control: the rider does NOT reach the benched HP (50 < 60) → a chip, not a knockout → with no
+    KO of the Active either, the attack stays a plain chip (well below KO_SCORE)."""
+    p = _pilot(attacks={A_SNIPE: 120}, attack_costs={A_SNIPE: 1}, bench_snipe={A_SNIPE: 50})
+    obs = make_select([attack_opt(A_SNIPE)],
+                      current=state(active=poke(MY_ATK, energy=1),
+                                    opp_active=poke(OPP, hp=320),         # not a KO of the Active
+                                    opp_bench=[poke(OPP_BENCH, hp=60)]))  # 60 > 50 rider → chip only
+    assert p.explain(obs).options[0].tactical < KO_SCORE
 
 
 # --- #2 simultaneous-draw guard: a game-winning KO whose recoil double-KOs is a DRAW, not a win ----
