@@ -151,11 +151,31 @@ style; skip only the ones that don't apply to serial mode):
 
 2. **See how the agent actually decided** (the live trace, ADR-0019). Each Correction may embed
    `live_trace` — the `@T` Decision Telemetry the **shipped** agent emitted at that exact decision
-   (`opts[].score / tac / fired:[[hyp_id, weight]]`, `chosen`, `margin`). Read it per cluster member
-   to ground authoring in the agent's *real* reasoning: which hypotheses fired on the chosen vs the
-   correct option, and by what margin. (If `live_trace` is null, run
+   (`opts[].score / tac / fired:[[hyp_id, weight]]`, `chosen`, `margin`, and **`lethal`**). Read it per
+   cluster member to ground authoring in the agent's *real* reasoning: which hypotheses fired on the
+   chosen vs the correct option, and by what margin. (If `live_trace` is null, run
    `python tools/train/backfill_obs.py` once the game's `episode-<id>-agent-<seat>-logs.json` is
    collected, or rely on the obs re-derivation.)
+
+   **Read `live_trace.lethal` FIRST — it can pre-empt the whole analysis (ADR-0030).** It is the
+   **Lethal Solver**'s verdict: `null` when no guaranteed this-turn win was locked, else
+   `{step, kind, why}` (`kind` ∈ `direct` / `unlock` / `evolve`). The Solver runs **before** Hypothesis
+   scoring and **short-circuits** it — `pilot.py` `_evaluate` returns early on a lock, so on a lethal
+   decision `opts[].fired` / `score` did **not** drive the choice (don't be misled by them). A lethal
+   blunder is therefore **NOT weight-tunable, and no `when()` Hypothesis can fix it** — the Solver
+   overrides scoring; the fix lives in the Solver (`src/common/strategy/lethal.py`). Two shapes:
+   - **`lethal: null` but a win existed** (typically `missed_win` / `missed_ko`) → `find_lethal_line`
+     failed to detect it: extend the closed-form generator (a missing win-shape / unlock kind) or its
+     soundness gate.
+   - **`lethal` non-null but the human rejects the pick** → the Solver over-fired (a false / wrong
+     lock): tighten `_attack_wins` / the win-gate.
+   Resolve it in-session by editing the Solver **plus a focused unit test in `tests/test_lethal.py`** (a
+   step-4b-style infra fix, **not** a Hypothesis). The **retest** (step 6, which re-runs `explain()` and
+   now carries `lethal`) is the before/after proof; suite-green (step 7) is the guard. The Hypothesis
+   **Verifier (step 5) does not gate a Solver-code fix** — skip it for these clusters; the retest + suite
+   are the gate. Terminal outcome is still `fixed` (Solver now handles it, with its test) / `covered`
+   (the Solver already handles it — name the branch, confirm with the real Pilot) / `refuted` (the
+   "missed win" is a KO-forgoing mislabel — [[forgo-ko-corrections-are-refuted]]).
 
 3. **Read the feature catalog** (author against the LIVE source, never memory):
    - `src/common/pilot.py` — the `Context` / `Board` fields a `when(ctx)` may read.
@@ -164,6 +184,10 @@ style; skip only the ones that don't apply to serial mode):
    - `src/common/strategy/baseline/baseline_*.py` (deck-agnostic rules, clustered by decision-context;
      ADR-0025) + `src/agents/<deck>/strategy.py` — existing Hypotheses as **style examples** (mirror
      their shape).
+   - `src/common/strategy/lethal.py` — the **Lethal Solver** (ADR-0030). Where a lethal-layer blunder
+     (`live_trace.lethal` set, or `null` on a missed win — step 2) is fixed: `find_lethal_line` (win
+     detection + unlock kinds) and `_attack_wins` (soundness). The Solver short-circuits scoring, so
+     these are **code fixes here + a `tests/test_lethal.py` test**, never a `when()` Hypothesis.
 
 4. **Author the candidate `when()`** from the cluster's RATIONALES (the authoring spec):
    - Prefer **universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s.

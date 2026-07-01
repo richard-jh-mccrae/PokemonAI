@@ -206,8 +206,10 @@ def test_benchless_agent_refreshes_over_a_redundant_wincon_tutor():
     play_lillies = opt(PLAY, area=HAND, index=0)
     attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
     play_signal = opt(PLAY, area=HAND, index=2)
-    # Empty Bench, Active Mega fully powered (3 E), a held Water, Mega Signal, Lillie's. No base anywhere.
-    benchless = state(active=poke(WINCON, energy=3, hp=170), bench=[],
+    # Empty MY Bench, Active Mega fully powered (3 E), a held Water, Mega Signal, Lillie's. No base
+    # anywhere. The opponent keeps a benched body, so KO'ing their Active is NOT lethal (this is a
+    # setup decision, not a win-this-turn — ADR-0030); prizes not last, so no Lethal Line locks.
+    benchless = state(active=poke(WINCON, energy=3, hp=170), bench=[], opp_bench=[poke(678, hp=330)],
                       opp_active=poke(678, hp=180), hand=[LILLIES, WATER, MEGA_SIGNAL], prizes=5)
     obs = make_select([play_lillies, attach_water, play_signal, attack_opt(NEBULA), opt(14)],
                       current=benchless)
