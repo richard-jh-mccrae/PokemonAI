@@ -121,11 +121,12 @@ HYPOTHESES = [
         and c.attach_target_area == _ACTIVE and bool(_WINCON_ROLES & set(c.attach_target_roles))
         and c.board.reusable_energy_in_hand and c.board.active_cheap_attack_kos,
         weight=-40, status="assumed"),
-    # NOTE: Hero's Cape (ACE SPEC, +100 HP) deployment is now the deck-agnostic
-    # `deploy-hp-tool-on-breakpoint` in common/strategy/baseline/baseline_tool.py — it reads the per-Tool HP off
-    # `CardStat.hpBonus` (parsed +100 for the Cape) and the weakness-aware `incoming_active_damage`,
-    # so every deck running an unconditional +HP Tool inherits the breakpoint deploy without
-    # hardcoding the bonus. The ACE SPEC scarcity reluctance is the general `protect-ace-spec-tool`.
+    # NOTE: Hero's Cape (ACE SPEC, +100 HP) deployment is now the deck-agnostic Tool doctrine
+    # `deploy-hp-tool` in common/strategy/doctrines/doctrine_tool.py (ADR-0028; the old
+    # breakpoint rule was REVERSED). It reads the per-Tool HP off `CardStat.hpBonus` and picks a
+    # target by survival-turns board-math (proactive anti-shuffle deploy, not a breakpoint), so
+    # every deck running an unconditional +HP Tool inherits it. The ACE SPEC scarcity reluctance is
+    # the general `protect-ace-spec-tool`; `save-tool-for-the-attacker` guards off-line bodies.
     # NOTE: discard-Energy discipline (don't waste Ignition) is the deck-agnostic
     # `dont-waste-discard-energy` in common/strategy/baseline/baseline_energy.py — it fires off the `discard_eot`
     # Function Tag, so every deck that runs Ignition (or any discard-at-EOT Energy) inherits it.

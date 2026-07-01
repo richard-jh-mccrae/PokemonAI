@@ -390,6 +390,12 @@ recursion / discard-fed deck) is the preferred pitch. Outranks `discard-the-redu
 > At a forced discard, shed a card whose need is met first — v1 signal: a hand copy of a Pokémon already
 in play (`card_is_redundant`). The keep-value mirror of the grab side. **Source:** ADR-0023.
 
+#### `discard-the-hand-duplicate` · weight 12 · status: assumed
+> At a forced discard, pitch a card held in **2+ copies** (fungible Basic Energy excluded) before a
+singleton — a keep-value floor: the duplicate is the cheapest thing to lose. Ranks below the redundant/
+fodder rungs and above keeping a singleton disruptor. **Reads:** `_DISCARD` + `Context.card_is_hand_duplicate`
+(`Board.hand_duplicate_ids`). **Source:** PR#9 critical batch C4 (2026-07-01).
+
 ### Shipped earlier — partial instances of the comparator (status: testing)
 
 These seven Hypotheses pre-date this build; the doctrine unifies them (each is one importance rung or one
@@ -497,9 +503,13 @@ and no Pokémon PLAY is a (non-discouraged) development out — a bare bench-dev
 scored in SETUP, so it counts structurally. The scan is gated behind a refresh actually being in hand,
 so the common decision pays nothing.
 
-The two existing guards stay as explicit keep-value **floors** beside the comparator:
-`hold-wincon-dont-shuffle` (−25) for the *wincon-in-hand-but-not-playable-this-turn* case, and
-`attach-before-hand-shuffle` (−60) for held energy + sequencing.
+Three explicit keep-value **floors** stand beside the comparator:
+`hold-wincon-dont-shuffle` (−25) for the *wincon-in-hand-but-not-playable-this-turn* case,
+`attach-before-hand-shuffle` (−60) for held energy + sequencing, and
+`hold-wincon-with-base-dont-shuffle` (−15, PR#9 critical batch C5) which **strengthens the hold** when
+the held wincon already has a Line pre-evolution in play (`wincon in hand` + `line_preevo_in_play`) — it
+stacks additively with `hold-wincon-dont-shuffle` (net −40), because a wincon you can evolve into next
+turn is worth even more not to shuffle away.
 
 **Deferred (designed-in seams, not built):** **Layer B — stochastic pull-EV** (the "what can I expect
 to pull" pillar): a hypergeometric over the deck-tracker's exact `deck_known_counts`, live only
@@ -509,6 +519,52 @@ the shuffle **growing** the deck by the returned hand (a subtlety a fetch lacks)
 offensive axis** (Judge / Harlequin wreck the opponent's hand — a term scaling with the opponent's hand
 size). **Deck-override** is mostly the existing `_weight` by-id path; no new seam.
 
+## Tool doctrine — shipped (ADR-0028)
+
+The doctrine for a **+HP Pokémon Tool** (Function Tag `tool` + a parsed `CardStat.hpBonus > 0`, e.g.
+Hero's Cape +100, ACE SPEC, irreplaceable). It **reverses** the old reactive hold-for-breakpoint rule:
+because a deck that shuffles its own hand (`shuffle_hand` Supporters) would otherwise bury the one-of ACE
+SPEC back in the deck, the Cape is deployed **PROACTIVELY** onto the body that carries the game. The value
+model is closed-form **survival-turns board-math** (a Doctrine trait, not a tunable weight), so it lives in
+`doctrines/doctrine_tool.py` + a Pilot-side `ToolMixin`. Glossary: **Irreplaceable Tool / Survival Window**
+in [src/common/CONTEXT.md](../src/common/CONTEXT.md).
+
+**Survival-turns picker** (`_tool_deploy_slot`, `ToolMixin`): `survival_turns = ceil(hp / incoming)`;
+the boost earns its slot when `survival_turns(hp + hpBonus) − survival_turns(hp) ≥ 1`. Incoming is the
+**predicted next attacker** (`opp_best_attack_vs` — the hardest-hitting opponent body that can afford to
+attack next turn, weakness-adjusted; benched bodies of mine take bench-snipe only). Priority: **(1)** the
+win-condition body that gains the most turns (incl. the doomed→benched-successor redirect); **(2)** else the
+proactive anti-shuffle default — park it on the Active win-condition so a hand-shuffle can't bury it, unless
+that Active dies anyway; **(3)** else a non-win-condition **wall**, but only if the boost buys it a real
+survival turn.
+
+#### `deploy-hp-tool` · weight 40 · status: assumed
+> Equip the +HP Tool onto the body the survival-turns picker chose (`attach_is_tool_deploy_target`). A
+positive weight → tier-2 attach → sequenced **before** a tier-3 hand-shuffle Supporter (the root-cause fix:
+a ≤0 equip drops to tier 4, below the shuffle). Positional, so a lethal KO still outranks it.
+
+#### `hold-irreplaceable-tool-dont-shuffle` · weight −30 · status: assumed
+> Don't play a `shuffle_hand` Supporter while holding an unattached **irreplaceable** Tool (ACE SPEC, not
+recoverable from discard) with no good deploy target — the belt to `deploy-hp-tool`'s suspenders. **Reads:**
+`Board.irreplaceable_tool_in_hand`.
+
+#### `save-tool-for-the-attacker` · weight −15 *(tuned −12)* · status: testing
+> Don't fritter a Tool onto an **off-role** body (a spent opener / accelerator). RE-SCOPED (ADR-0028): stands
+**down** on the picker's chosen deploy target (`attach_is_tool_deploy_target`), so it fires only on a
+picker-rejected off-line body — never on a wincon Line piece.
+
+#### `protect-ace-spec-tool` · weight −10 *(tuned −7)* · status: testing
+> Extra reluctance to spend an **ACE SPEC** Tool on an off-role body; stacks additively on
+`save-tool-for-the-attacker`, reads the structural `aceSpec` fact, and is likewise re-scoped to stand down on
+the picker's chosen target.
+
+**Accepted limitation (branch 3, decision 5(d)).** When the wincon line is only benched (so branch 1 can't
+select it — benched bodies take 0 non-snipe incoming), branch 3 deploys even the irreplaceable Cape onto a
+present-survival **off-line wall** (e.g. a turn-1 Active Cinderace) it can never transfer off. Two corrections
+land here (`82227388-7`, `82756664-9`) and are **accepted as-is** (`refuted`): proactive-deploy beats holding
+into six self-shuffle Supporters, at the known cost of occasionally spending the ACE SPEC on a non-wincon body.
+A "carrier retains the Cape's value" gate is a deferred refinement. See ADR-0028 post-build note.
+
 ## Designed, not yet seeded
 
 | Rule | Needs | Source |
@@ -516,16 +572,11 @@ size). **Deck-override** is mostly the existing `_weight` by-id path; no new sea
 | `gust-the-damaged` — **superseded** by the full **Gust (Boss's Orders)** doctrine above (board-only, KO-gated; the already-damaged case is just one KO-able target) | — see ADR-0022 | F9 — JustInBasil (Gusting) |
 | Damage-boost "crosses an OHKO line" (e.g. Maximum Belt +50 vs ex) | a damage **breakpoint model** + meta stat table; per-tool damage bonus is unstructured (free text), like `hpBonus` | F10 / F11 — JustInBasil (Damage) |
 
-Two **closed-form breakpoints** have landed, both built on the same weakness-doubled incoming-damage
-estimate (`Board.incoming_active_damage`: the opponent's biggest attack, doubled on my Active's
-Weakness):
+One **closed-form breakpoint** stays here; the +HP-Tool half graduated into its own doctrine:
 - `Board.active_doomed` (incoming ≥ my Active's remaining HP), consumed by `dont-feed-the-doomed`.
-- **`deploy-hp-tool-on-breakpoint`** — the **HP-boost half** of the OHKO-line model: deploy a +HP
-  Pokémon Tool the turn its boost lifts a doomed win-condition Active *above* the incoming hit
-  (`incoming < my_active_hp + hpBonus`). The per-Tool HP is `CardStat.hpBonus`, parsed from the Tool's
-  free skill text (the engine has no structured field) — only the **unconditional** "+N HP" phrasing,
-  so a conditionally-restricted Tool parses to 0 and is never over-credited. Generalises to any
-  unconditional +HP Tool and any weakness — e.g. Hero's Cape (+100) on Mega Starmie ex (330 → 430).
+- **`deploy-hp-tool-on-breakpoint` was REVERSED and removed** ([ADR-0028](adr/0028-tool-deploy-is-survival-turns-board-math.md)):
+  the reactive "hold for an HP breakpoint" rule lost the one-of ACE SPEC to self-shuffle. It is now the
+  **Tool doctrine** below — a proactive survival-turns deploy, not a breakpoint gate. See `## Tool doctrine`.
 
 The **damage-boost half** still waits on a damage breakpoint model + attack-affordability +
 opponent-Bench targeting ([ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)); the

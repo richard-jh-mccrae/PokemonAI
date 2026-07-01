@@ -100,16 +100,21 @@ numbers, no reuse or tunability).
   **never crashes or times out**: a bad hypothesis or malformed observation degrades to a legal
   fallback.
 
-## Posture — the Read changes play *(designed; wiring pending)*
+## Posture — the Read changes play *(Read wired onto the Board; generic-core lever A shipped)*
 
 [Scouting](scouting.md) already produces the **Read** (recognised opponent Archetype +
 confidence, threats, targets). **Posture** consumes it through the seams above, all
 **confidence-gated** (unknown opponent → Posture ≈ off; recognised → ramps up):
 
-1. a deck-agnostic generic core in the Pilot — seek `targets`, avoid `threats`, calibrate
-   aggression to favourability (strength across matchups, free for every deck);
-2. deck-specific Read-conditioned Hypotheses;
-3. feeding the Read's predicted opponent deck into `search_begin` (Tier-1).
+1. **SHIPPED** — a deck-agnostic generic core in the Pilot: the Read is on `Board`
+   (`Board.read`/`favorability`/`posture_confidence`, M2.0 / PR#7) and lever A
+   (**calibrate aggression to favourability**) is live via `disrupt-when-unfavored`
+   ([baseline_disruption.py](../src/common/strategy/baseline/baseline_disruption.py)), fed by the
+   deck's own `my_archetype` declaration (M2.1b / PR#8). Kill-switch: `main.py` `posture=` param.
+2. **pending** — deck-specific Read-conditioned Hypotheses;
+3. **pending** — feeding the Read's predicted opponent deck into `search_begin` (Tier-1).
+
+See [ADR-0026](adr/0026-posture-generic-core-is-net-new-read-levers.md).
 
 ## Training — three jobs ([ADR-0009](adr/0009-training-methodology.md))
 
@@ -174,7 +179,9 @@ tools/
   **decision trace** (`Pilot.explain` → which Hypotheses fired, for the writeup); `Context` carries
   the engine `CardStat`; the Tier-0 Tactical Evaluator applies **Weakness ×2** (Active only);
   `CardFunctions`; mega_starmie wired end-to-end.
-- **Designed, not yet wired**: Posture (the Read → play); the richer Tactical Evaluator
-  (Jetting-Blow bench-snipe / wall-disruption); the [General Strategy](general-strategy.md) roadmap
-  (board-state rules); the `tools/train` + `tools/selfplay` loop and the Base Value Model. These
-  are the next slices.
+- **Partially wired**: Posture (the Read → play) — the Read is on the `Board` and generic-core
+  lever A (favourability → `disrupt-when-unfavored`) is shipped (PR#7/#8, ADR-0026); deck-specific
+  Read-conditioned Hypotheses and Tier-1 search-feeding remain.
+- **Designed, not yet wired**: the richer Tactical Evaluator (Jetting-Blow bench-snipe /
+  wall-disruption); the [General Strategy](general-strategy.md) roadmap (board-state rules); the
+  `tools/train` + `tools/selfplay` loop and the Base Value Model. These are the next slices.

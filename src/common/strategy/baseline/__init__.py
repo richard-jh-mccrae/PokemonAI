@@ -4,8 +4,9 @@ a `doctrines/` doctrine, which owns closed-form code). A findability split only:
 everything as one flat sum, so cluster boundaries and order are runtime-irrelevant.
 
 Mirrors the `doctrines/__init__` idiom — re-export each cluster's `HYPOTHESES` under an aliased name —
-and, because there are 11 clusters (vs. 3 doctrines), additionally owns the combined
+and, because there are 10 clusters (vs. 4 doctrines), additionally owns the combined
 `BASELINE_HYPOTHESES` roster so `general_strategy` stays a clean baseline + doctrines assembly.
+(The 11th cluster, Tool, was promoted to the Tool DOCTRINE — `doctrines/doctrine_tool.py`, ADR-0028.)
 """
 from common.strategy.baseline.baseline_bench import HYPOTHESES as BENCH_HYPOTHESES
 from common.strategy.baseline.baseline_disruption import HYPOTHESES as DISRUPTION_HYPOTHESES

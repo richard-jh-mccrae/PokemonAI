@@ -111,11 +111,31 @@ target picker, the next-promotion predictor), one `CardStat` field (`benchSnipeD
 `hold-irreplaceable-tool-dont-shuffle` Hypothesis, the positive `deploy-*` deploy rungs, the re-scoped
 `save-tool`/`protect-ace-spec` guards, the removal of `deploy-hp-tool-on-breakpoint`, and tests
 (test-first; the tagged frames 82866415 / 82867148 become regression cases). The reactive doctrine in
-STRATEGY.md §3 is rewritten; reviewed.json `82756664-9`'s refutation is **overturned** (its disposition
-flips to fixed when the code lands), while `82756664-36` (KO outranks a positional Cape deploy) **stands**
+STRATEGY.md §3 is rewritten; while `82756664-36` (KO outranks a positional Cape deploy) **stands**
 and is preserved by decision 5. **Accepted residual exposure:** proactive deploy gives up a small amount
 to opponent Tool removal — accepted as far cheaper than the self-shuffle loss, and revisitable once the
 Read/Posture can see a tool-remover (**deferred seams:** gust-reachability for bench incoming; tool-removal
 awareness; the damage-boost OHKO-line model for Maximum Belt et al., a noted sibling). Glossary in
 [src/common/CONTEXT.md](../../src/common/CONTEXT.md); doctrine in
 [STRATEGY.md §3](../../src/agents/mega_starmie/STRATEGY.md).
+
+**Post-build note (2026-07-01) — accepted branch-(3) limitation (decision 5(d)).** Retesting the
+Cape corrections through the shipped Pilot (`pilot.explain`, runtime `tuned.json`) shows decision 5(d)
+— the non-wincon **wall** rung, `_best_gain_slot(wincon=False)` at `doctrine_tool.py:172` — fires
+whenever an off-line Active gains a survival turn *and* the wincon line is only **benched** (benched
+bodies take `bench_snipe`-only incoming, so decision 5(a/c) can't select them). Two corrections land
+here and are **both accepted as-is** (dispositioned `refuted`, reviewed.json `82227388-7` + `82756664-9`):
+- **`82227388-7`** (turn-1 Active Cinderace 160hp, bench 2× Staryu, opp Cinderace affords Turbo Flare 50):
+  the wall gains 2 turns (`survival_gain(160,50,100)=2`), so the Cape deploys on Cinderace rather than
+  holding. We accept proactive-deploy over hold (six self-shuffle Supporters make holding the riskier line).
+- **`82756664-9`** (Active Cinderace 130hp, benched Staryu): the Cape deploys on the Cinderace wall over
+  the human's benched Staryu. The *original shuffle-away blunder is gone*, but branch(3) targets the
+  present-survival wall over the future-wincon line piece. Accepted; note the anti-shuffle argument does
+  **not** favour Cinderace over the (equally shuffle-safe) Staryu here — this is purely present-survival >
+  future value.
+
+**Known cost we are choosing to bear:** Cinderace is a terminal Stage-2 (`←Raboot`, a separate Fire line),
+so a Cape on it can **never** transfer up to Mega Starmie ex — branch(3) treats the one-of ACE SPEC like a
+fungible +HP tool. A future refinement (deferred, not scheduled) would add a "carrier retains the Cape's
+value" gate (wincon or a body that can transfer it up) before branch(3) commits an **irreplaceable** tool;
+until then `82227388-7`/`82756664-9` stand refuted by explicit decision, not fixed.

@@ -344,9 +344,9 @@
     "round": "2026-06-30"
   },
   "82756664-9": {
-    "disposition": "covered",
-    "reason": "OVERTURNED 2026-06-30 (ADR-0028): the prior 'deliberately hold the ACE SPEC' rationale was WRONG — 'develop with Lillie's' SHUFFLES the irreplaceable Cape into the deck (the deck runs 6 hand-shuffle Supporters). Doctrine reversed to proactive deploy (survival-turns + anti-shuffle floor); Tool Doctrine build pending re-verifies this and flips disposition to fixed.",
-    "round": "2026-06-30"
+    "disposition": "refuted",
+    "reason": "ADR-0028 tradeoff ACCEPTED (2026-07-01, retested through the real Pilot): the original shuffle-away blunder IS gone — the Pilot no longer plays Lillie's; it deploys the Cape. But branch(3) of _tool_deploy_slot (survival-turns wall) targets the Active Cinderace (130hp, gains a turn vs incoming) over the human's benched Staryu, because the benched wincon-line Staryu takes 0 incoming so branch(1) can't select it. We accept branch(3)'s present-survival targeting over save-for-the-wincon-line: the exact body (Cinderace vs Staryu) is overruled by the doctrine. NB the anti-shuffle argument does NOT favour Cinderace over Staryu here (both are shuffle-safe) — this is purely present-survival > future-wincon value; the residual suboptimality (ACE SPEC on a non-transferable off-line wall) is a known, accepted limitation of branch(3).",
+    "round": "2026-07-01"
   },
   "82748422-26": {
     "disposition": "covered",
@@ -426,6 +426,11 @@
   "82867148-87": {
     "disposition": "refuted",
     "reason": "literal Ignition->Staryu dominated by reusable Water->Staryu (dont-waste-discard-energy soundly avoids wasting the one-shot Ignition on a non-attacking bench body); the intent (energy to the Staryu line base over off-line Cinderace) is realized by the W-route-invisible attach_to_needy_line tie-break, retest [7]->[8]=Water->Staryu",
+    "round": "2026-07-01"
+  },
+  "82227388-7": {
+    "disposition": "refuted",
+    "reason": "ADR-0028 tradeoff ACCEPTED (2026-07-01, ground-truthed via retest FIXED=False). Turn-1 Active Cinderace (160hp, 1W), bench 2x Staryu, Hero's Cape (+100 ACE SPEC) in hand, opp Cinderace can afford Turbo Flare (50). Human wanted End (hold the Cape for the main attacker). Branch(3) of _tool_deploy_slot deploys it on Cinderace: opp incoming 50, _survival_gain(160,50,100)=2>=1, so the wall 'gains a turn'; branch(1) can't pick a benched Staryu (0 incoming) and branch(2) skips (Cinderace not the wincon). We ACCEPT branch(3)'s proactive survival-turns deploy over holding — the deck runs 6 hand-shuffle Supporters that would otherwise bury the one-of ACE SPEC, so parking it on the surviving body beats a bare hold. Known accepted limitation: Cinderace is a terminal Stage-2 (<-Raboot) so the Cape can't ride up to Mega Starmie ex; branch(3) treats the ACE SPEC like a fungible +HP tool. Kept as-is by design decision, not fixed.",
     "round": "2026-07-01"
   }
 }
