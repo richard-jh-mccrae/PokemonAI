@@ -22,6 +22,7 @@ from common.scouting.matchup import matchup_favorability
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 from common.strategy.lethal import LethalLine, LethalMixin
+from common.strategy.planner import PlannerMixin, TurnLine
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
@@ -458,11 +459,14 @@ class Decision:
     options: list = field(default_factory=list)
     read: Read | None = None     # the per-decision Scouting Read (ADR-0026), surfaced for legibility
     lethal: LethalLine | None = None  # the locked guaranteed-win line this turn (ADR-0030), or None
+    planned: TurnLine | None = None   # the committed Turn Line this turn (ADR-0031), or None — the
+                                      # below-win Goal-Ladder plan the Planner steered this decision toward
 
 
-class Pilot(LethalMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
-    """Composed from four doctrine mixins (gust / fetch / shuffle-refresh / tool) — each contributes its closed-form
-    Pilot-side methods; the shared Sense→Plan→Score→Act core is defined here. See common/strategy/."""
+class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+    """Composed from the Lethal Solver + Turn Planner (ADR-0030/0031) and four doctrine mixins (gust /
+    fetch / shuffle-refresh / tool) — each contributes its closed-form Pilot-side methods; the shared
+    Sense→Plan→Score→Act core is defined here. See common/strategy/."""
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
@@ -482,6 +486,10 @@ class Pilot(LethalMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         self.posture = posture                          # ADR-0026 kill-switch: False forces γ=0 + neutral
                                                         # favorability → both levers off (the A/B baseline)
         self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
+        self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
+                                                        # (fingerprint, TurnLine|None); re-planned on a reveal
+        self._planning = False                          # reentrancy guard: True while an engine sim re-runs
+                                                        # the policy, so plan_turn stays closed-form (no nested search)
 
     def decide(self, obs: dict) -> list[int]:
         """The highest-scoring legal selection (the grader hot path): the deck on the initial
@@ -503,6 +511,9 @@ class Pilot(LethalMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         lethal = self.find_lethal_line(obs, select, board, options, traces)  # ADR-0030: take the win now
         if lethal is not None:
             return Decision(chosen=lethal.next_step, options=traces, read=board.read, lethal=lethal)
+        planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0031: the below-win Goal Ladder
+        if planned is not None:
+            return Decision(chosen=planned.next_step, options=traces, read=board.read, planned=planned)
         max_count = select.get("maxCount", 0)
         # Primary key = score; the secondary key breaks an EXACT score tie toward an attach that feeds a
         # needy win-condition Line body (the Line base over an off-line opener — ep82867148 f87). A

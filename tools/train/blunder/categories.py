@@ -12,10 +12,12 @@ CATEGORIES: tuple[str, ...] = (
     "missed_win",            # a winning / closing line was available, not taken
     "missed_ko",             # a valuable KO (threat / engine Pokemon) available, not taken
     "bad_target",            # attacked or effect-targeted the wrong Pokemon
+    "wrong_attack",          # used the wrong attack (a better attack served the turn's need)
     "prize_mismanagement",   # poor prize-trade math (traded down, wrong prizes)
     # resources
     "misattachment",         # energy / tool placed on the wrong Pokemon
     "wasted_resource",       # supporter/item/ability/card spent for little or negative value
+    "wrong_supporter",       # played the wrong supporter (a better one served the turn's need)
     # tempo & board
     "slow_setup",            # too slow developing the win-condition
     "missed_evolution",      # a beneficial evolution was available and not made (evolve when able)

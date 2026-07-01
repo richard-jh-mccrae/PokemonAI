@@ -268,6 +268,33 @@ the opponent's deck/hand/prizes/face-down Active), so its verdict is trusted onl
 _Avoid_: rollout (implies a random playout; this is exact deterministic stepping), Base Value Model
 (the learned win-prob estimator — the Engine Search is exact rules, not learned), Scout/Read
 
+**Turn Planner**:
+The eager whole-turn optimizer that runs FIRST at the start of my turn — the generalization of the
+**Lethal Solver** from the *win* goal to a **Goal Ladder**. It generates a few **Candidate Turn Lines**
+by working backward from a closed, prioritized set of **Turn Goals**, simulates each through the
+**Engine Search** to its end-of-turn board, ranks them by a leaf evaluation (the Tier-0 board heuristic
+now; the Base Value Model later), and commits to the best — planning the whole turn *before* the first
+action, then executing it one step per decision. **Heuristic, not sound** (only its top rung, the
+Lethal Line, is guaranteed); plans THIS turn only (multi-turn tempo / prize-math is a separate problem).
+Realises the designed **Tier-1 Search** (ADR-0008 M3).
+_Avoid_: Plan (the coarse turn-MODE `SETUP`/`RACE`/…; the Turn Planner is the concrete action
+optimizer, not the mode), Lethal Solver (the win-only special case it subsumes), search (bare)
+
+**Turn Goal**:
+One achievable outcome on the current turn, drawn from the CLOSED, PRIORITIZED **Goal Ladder** the Turn
+Planner works backward from — win (the Lethal) › KO the opponent's key threat › KO the Active for the
+most prizes › stabilise (heal / deny an incoming KO) then attack › develop optimally toward the
+win-condition. The ladder *is* the objective; the leaf evaluation breaks ties within a goal.
+_Avoid_: Plan (the mode), win-condition (the deck's Line payoff, a Role — not a per-turn goal), Posture
+(opponent-driven aggression calibration, not a turn goal)
+
+**Turn Line**:
+The ordered sequence of THIS turn's actions that achieves a **Turn Goal** (attach / evolve / retreat /
+play / attack, in order) — the generalization of a **Lethal Line** (which is exactly the Turn Line for
+the *win* goal). Generated backward from the goal, scored by simulating it through the Engine Search to
+end-of-turn, and executed one step per decision as the engine re-opens the menu.
+_Avoid_: Lethal Line (the win-goal special case), Plan (the mode), plan / sequence (too generic)
+
 **Incoming**:
 The closed-form estimate of the worst damage the opponent can deal to one of my bodies next turn —
 from their best **affordable** attacker (one whose attached Energy can pay an attack now, allowing for

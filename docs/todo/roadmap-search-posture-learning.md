@@ -187,10 +187,20 @@ off vs **recognised**; **unknown** → no regression (`γ→0`). Trace emits a o
 
 ---
 
-## M3 — Tier-1 Search: escalation under a budget  ·  *Search API exists; build the policy*
+## M3 — Tier-1 Search: escalation under a budget  ·  *Search API exists; build the policy*  ·  **first slices BUILT**
+
+**Status.** The entry trigger fired (multi-step-sequencing corrections) and the first M3 slices ship: the
+**Lethal Solver** ([ADR-0030](../adr/0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md),
+the sound win-this-turn case) and the **Turn Planner**
+([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md), the general
+Goal-Ladder case: goal-directed candidate generation → engine-sim to end-of-turn → leaf-eval ranking,
+layer-on-top). Build (2)'s "leaf eval = the Tier-0 score initially" is realized as the closed-form leaf
+scalar; the **always-engine-sim** budget question is retired by the cost spike (`search_step`≈0.1 ms).
+Remaining M3: the general escalation policy on *arbitrary* effectful decisions, feeding Posture's predicted
+opponent deck into `search_begin`, and the Tier-1 telemetry wiring.
 
 **Entry trigger:** Tier-0 rules **plateau** — new corrections become "an extra ply would have caught it"
-(multi-step tactical) rather than "a rule was missing." M1 ladder to validate.
+(multi-step tactical) rather than "a rule was missing." M1 ladder to validate. *(Fired 2026-07-01.)*
 
 **Build**
 1. **Escalation policy** in `pilot.py`: with `search_budget>0`, escalate to the engine Search API **only when it can
