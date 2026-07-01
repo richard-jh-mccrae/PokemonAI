@@ -2,7 +2,7 @@
 select (ADR-0025). Ready wincon first; otherwise a disposable staller over a bare pre-evolution.
 Pure data, no Mixin.
 """
-from common.strategy.context import _TO_ACTIVE
+from common.strategy.context import _SWITCH, _TO_ACTIVE
 from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
@@ -20,11 +20,19 @@ HYPOTHESES = [
         weight=50, status="testing"),
     Hypothesis(
         id="promote-the-ready-wincon",
-        rationale="When your Active is Knocked Out and a benched win-condition is already powered up "
-                  "enough to attack, promote IT — bring your live attacker to the front rather than a "
-                  "pre-evolution or a staller.",
-        when=lambda c: c.select_context == _TO_ACTIVE and c.card_is_wincon
-        and c.board.bench_wincon_ready,
+        rationale="When you bring up a new Active — a forced promote after a Knock Out (TO_ACTIVE) OR "
+                  "the new-Active pick when you retreat (SWITCH) — promote the READY win-condition, "
+                  "your live attacker, rather than a pre-evolution or a staller. Fires per-option on "
+                  "the BEST benched wincon to promote (`is_best_promote_target` == the most-built "
+                  "ready wincon, `board.best_promote_slot`): so among several Mega Starmie ex it picks "
+                  "the 3-Energy, Hero's-Cape one that can KO — not a bare 0-Energy copy or whichever "
+                  "sits at bench slot 0 (ep83007714 f104 promote, f92 retreat). (Previously read a "
+                  "board-level 'some wincon is ready' flag at TO_ACTIVE only, so it rewarded every "
+                  "wincon option equally and never fired at SWITCH.) Below "
+                  "`promote-the-accelerator-for-the-ko` (+50), which promotes a KO-capable accelerator "
+                  "over the wincon to keep the wincon fresh (ep82756664 f97).",
+        when=lambda c: c.select_context in (_TO_ACTIVE, _SWITCH) and c.card_is_wincon
+        and c.is_best_promote_target,
         weight=40, status="testing"),
     Hypothesis(
         id="promote-the-staller",

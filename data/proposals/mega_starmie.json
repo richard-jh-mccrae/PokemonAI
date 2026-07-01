@@ -1,6 +1,6 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-07-01T00:50:58",
+  "generated_at": "2026-07-01T11:34:38",
   "open": [],
   "skipped": [],
   "reviewed": [
@@ -237,6 +237,12 @@
       "frame": 64,
       "disposition": "covered",
       "reason": "play-harlequin-vs-hand-size endorses Harlequin (45, opp Alakazam line) and the agent plays it this turn; the free Crushing Hammer sequences first (tier-0), then Harlequin (tier-3), then the KO (attack-last)"
+    },
+    {
+      "episode_id": 82227388,
+      "frame": 7,
+      "disposition": "refuted",
+      "reason": "ADR-0028 tradeoff ACCEPTED (2026-07-01, ground-truthed via retest FIXED=False). Turn-1 Active Cinderace (160hp, 1W), bench 2x Staryu, Hero's Cape (+100 ACE SPEC) in hand, opp Cinderace can afford Turbo Flare (50). Human wanted End (hold the Cape for the main attacker). Branch(3) of _tool_deploy_slot deploys it on Cinderace: opp incoming 50, _survival_gain(160,50,100)=2>=1, so the wall 'gains a turn'; branch(1) can't pick a benched Staryu (0 incoming) and branch(2) skips (Cinderace not the wincon). We ACCEPT branch(3)'s proactive survival-turns deploy over holding — the deck runs 6 hand-shuffle Supporters that would otherwise bury the one-of ACE SPEC, so parking it on the surviving body beats a bare hold. Known accepted limitation: Cinderace is a terminal Stage-2 (<-Raboot) so the Cape can't ride up to Mega Starmie ex; branch(3) treats the ACE SPEC like a fungible +HP tool. Kept as-is by design decision, not fixed."
     },
     {
       "episode_id": 82227388,
@@ -505,14 +511,32 @@
     {
       "episode_id": 82756664,
       "frame": 9,
-      "disposition": "covered",
-      "reason": "OVERTURNED 2026-06-30 (ADR-0028): the prior 'deliberately hold the ACE SPEC' rationale was WRONG — 'develop with Lillie's' SHUFFLES the irreplaceable Cape into the deck (the deck runs 6 hand-shuffle Supporters). Doctrine reversed to proactive deploy (survival-turns + anti-shuffle floor); Tool Doctrine build pending re-verifies this and flips disposition to fixed."
+      "disposition": "refuted",
+      "reason": "ADR-0028 tradeoff ACCEPTED (2026-07-01, retested through the real Pilot): the original shuffle-away blunder IS gone — the Pilot no longer plays Lillie's; it deploys the Cape. But branch(3) of _tool_deploy_slot (survival-turns wall) targets the Active Cinderace (130hp, gains a turn vs incoming) over the human's benched Staryu, because the benched wincon-line Staryu takes 0 incoming so branch(1) can't select it. We accept branch(3)'s present-survival targeting over save-for-the-wincon-line: the exact body (Cinderace vs Staryu) is overruled by the doctrine. NB the anti-shuffle argument does NOT favour Cinderace over Staryu here (both are shuffle-safe) — this is purely present-survival > future-wincon value; the residual suboptimality (ACE SPEC on a non-transferable off-line wall) is a known, accepted limitation of branch(3)."
     },
     {
       "episode_id": 82756664,
       "frame": 36,
       "disposition": "refuted",
       "reason": "forgo-KO: agent retreats into a ready benched attacker that KOs (retreat-to-lethal 1061); the recorded Hero's Cape attach forgoes that KO. A positional tool-deploy never overrides a knockout"
+    },
+    {
+      "episode_id": 83007714,
+      "frame": 7,
+      "disposition": "covered",
+      "reason": "FIXED in the real Pilot by the new prefer-active-attach-in-setup (+8): energy now goes to the ACTIVE Cinderace, not the benched Staryu (the regression is gone; retest chosen [4]->[3]). W-route stays UNSATISFIED only because the literal correct labels Ignition->Cinderace, which is UNSOUND turn-1-going-first (Ignition is discard_eot -> discarded EOT unused; dont-waste-discard-energy sinks it -60), so the Pilot soundly attaches the reusable Basic->Cinderace [3] instead. Both put the energy on Cinderace = the human intent. Mirrors covered precedent 81903490-49."
+    },
+    {
+      "episode_id": 83007714,
+      "frame": 22,
+      "disposition": "covered",
+      "reason": "Degenerate record (chosen==correct==[1]); the real Pilot already picks the Mega Starmie ex over the Staryu at this Turbo-Flare AttachFrom via spread-attach-to-the-needy (+15, retest FIXED=True). The rationale's '3 energy on Staryu' complaint is the frame-7 manual misattach, whose root is fixed by prefer-active-attach-in-setup."
+    },
+    {
+      "episode_id": 83007714,
+      "frame": 135,
+      "disposition": "covered",
+      "reason": "attack-last (attack-is-turn-ender-develop-first): the match-winning Nebula Beam KO (tac 1002.7, 2 prizes = last 2) is DEFERRED behind play-energy-denial's Crushing Hammer but NEVER forfeited — _finish_turn_last tiers the tier-0 Item PLAY before the tier-4 attack, so the KO is taken same turn and the win lands. The 'take it immediately' is satisfied in outcome. Matches many ledger precedents (e.g. 82525101 f92/f102)."
     }
   ]
 }

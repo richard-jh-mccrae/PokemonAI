@@ -182,6 +182,13 @@ class Board:
                                         # 0 off a Damage select
     bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
                                        # enough Energy to attack — a finisher to retreat into
+    best_promote_slot: tuple | None = None  # (AreaType, index) of MY benched win-condition best to bring
+                                       # to the Active Spot at a promote/switch — the READY one (Energy >=
+                                       # its cheapest attack cost) carrying the MOST Energy (closest to its
+                                       # payoff hit; a Hero's Cape-bulked 3-Energy Mega over a 1-Energy one).
+                                       # None when no benched wincon is ready. Backs `promote-the-powered-
+                                       # attacker` so a promote/switch brings up the built attacker, not a
+                                       # bare same-name copy or bench-slot-0 (ep83007714 f92/f104)
     evolve_to_ready_wincon_available: bool = False  # the win-condition is in hand AND a benched
                                        # pre-evolution already carries enough Energy that evolving it
                                        # THIS turn yields a ready attacker — so at a promote, bringing up
@@ -356,6 +363,11 @@ class Context:
                                        # up can KNOCK OUT the opponent's Active this turn (its cheapest
                                        # attack reaches the defender's HP) — promote it to take the prize
                                        # from the front (esp. an accelerator that ALSO loads the bench)
+    is_best_promote_target: bool = False  # at a TO_ACTIVE promote OR a SWITCH (my retreat's new-Active
+                                       # pick), this option brings up the benched Pokémon at
+                                       # board.best_promote_slot — the most-built ready win-condition. The
+                                       # per-option flag `promote-the-powered-attacker` fires on, so the
+                                       # promote/switch brings up the 3-Energy Mega, not a bare copy
     target_is_top_threat: bool = False  # this snipe target carries the greatest threat rank on the Bench
                                         # (== board.strongest_threat_rank) — the biggest attacker (or
                                         # latent attacker) to chip when no KO is available. Unlike the
@@ -839,6 +851,10 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                                 and target_rank == board.strongest_threat_rank)
         promote_target_kos = (select.get("context") == _TO_ACTIVE
                               and self._promote_target_kos(obs, select, option))
+        is_best_promote_target = (
+            select.get("context") in (_TO_ACTIVE, _SWITCH) and board.best_promote_slot is not None
+            and option.get("playerIndex", state.get("yourIndex", 0)) == state.get("yourIndex", 0)
+            and (option.get("area"), option.get("index")) == board.best_promote_slot)
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
         at_is_line_member = bool(
@@ -874,6 +890,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
                        promote_target_kos=promote_target_kos,
+                       is_best_promote_target=is_best_promote_target,
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
@@ -1039,6 +1056,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
             strongest_threat_rank=self._strongest_threat_rank(obs, select, read, gamma),
             bench_wincon_ready=self._bench_wincon_ready(me),
+            best_promote_slot=self._best_promote_slot(me),
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             priority_wincon_slot=self._priority_wincon_slot(
@@ -1194,6 +1212,24 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         return any(p and p.get("id") in wincon
                    and len(p.get("energies") or []) >= _min_attack_cost(self.stats, p.get("id"))
                    for p in (me.get("bench") or []))
+
+    def _best_promote_slot(self, me: dict) -> tuple | None:
+        """(_BENCH, index) of the benched win-condition best to bring to the Active Spot — the READY
+        one (Energy >= its cheapest attack cost) carrying the MOST Energy (closest to its payoff hit),
+        so a promote/switch picks the built attacker over a bare same-name copy. None when no benched
+        win-condition is ready. The per-option picker behind `promote-the-powered-attacker`; a bench-
+        index tiebreak keeps it deterministic. Distinct from `_priority_wincon_slot` (which targets the
+        one still UNDER its max attack for Energy concentration — the opposite end of the build)."""
+        wincon = self._wincon_set()
+        if not wincon:
+            return None
+        best = None                                   # (energy, index)
+        for i, p in enumerate(me.get("bench") or []):
+            if p and p.get("id") in wincon:
+                e = len(p.get("energies") or [])
+                if e >= _min_attack_cost(self.stats, p.get("id")) and (best is None or e > best[0]):
+                    best = (e, i)
+        return (_BENCH, best[1]) if best else None
 
     def _weakest_snipe_hp(self, obs: dict, select: dict | None) -> int | None:
         """Least HP among the benched Pokémon a DAMAGE select can snipe — the target closest to a

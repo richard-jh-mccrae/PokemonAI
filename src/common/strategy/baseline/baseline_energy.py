@@ -47,6 +47,24 @@ HYPOTHESES = [
         and c.attach_target_needs,
         weight=15, status="assumed"),
     Hypothesis(
+        id="prefer-active-attach-in-setup",
+        rationale="Given the choice of WHERE to put the turn's manual Energy, prefer the ACTIVE "
+                  "attacker over a benched pre-evolution. The Active can use the Energy THIS turn "
+                  "(attack / an accelerator's attack like Turbo Flare); a benched pre-evolution "
+                  "cannot attack and may be several steps from its payoff. `power-up-attacker` fires "
+                  "on every needy body equally, so Active-vs-Bench is a dead heat that the "
+                  "`attach_to_needy_line` tie-break then resolves toward the benched Line base — "
+                  "dumping the Energy on a Staryu while the Active Cinderace (opener / accelerator) "
+                  "goes bare (ep83007714 f7). This small nudge feeds the Active instead. Fires only "
+                  "when the Active still NEEDS Energy to attack (so it never over-stacks a finished "
+                  "Active) and is NOT doomed (a doomed Active hands the Energy to its successor — "
+                  "`dont-feed-the-doomed`). Small (+8) so it only breaks the Active-vs-Bench tie and "
+                  "never overrides a real priority (concentrate/build/accel).",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _ATTACH
+        and c.attach_target_area == _ACTIVE and c.attach_target_needs
+        and not c.board.active_doomed,
+        weight=8, status="testing"),
+    Hypothesis(
         id="attach-energy-last",
         rationale="Attach Energy late in the turn — it is the one irreversible setup action, so "
                   "play your draw, search and development first to reveal the best target before "
@@ -77,10 +95,24 @@ HYPOTHESES = [
     Hypothesis(
         id="dont-feed-the-doomed",
         rationale="If your Active will be Knocked Out next turn and you have a benched Pokémon, "
-                  "don't sink this Energy into the doomed Active — attach to the successor instead "
-                  "so you aren't rebuilding from nothing after it falls.",
-        when=lambda c: c.select_context == _ATTACH_FROM and c.option_area == _ACTIVE
-        and c.board.active_doomed and c.board.my_bench > 0,
+                  "don't sink this Energy into the doomed Active — attach to the successor (or just "
+                  "retreat into it) instead, so you aren't rebuilding from nothing after it falls. "
+                  "Fires at BOTH the ATTACH_FROM recipient-pick (a multi-attach effect targeting the "
+                  "Active) AND the open-menu manual ATTACH onto the Active. The open-menu branch is "
+                  "gated to a NON-win-condition Active (a spent opener like Cinderace): a doomed "
+                  "win-condition Active may still be worth building (`build-active-wincon`), but "
+                  "burning the turn's Energy on a doomed spent opener you're about to retreat is pure "
+                  "waste — e.g. attaching an Ignition to a doomed Cinderace one frame before retreating "
+                  "it into a ready benched Mega Starmie ex (ep83007714 f65). Sinks the attach below "
+                  "zero so the Retreat-into-the-successor (`retreat-to-ready-attacker`) is taken instead. "
+                  "The open-menu branch fires ONLY on an OFF-LINE doomed Active (`not "
+                  "attach_target_is_line_member`): a doomed pre-evolution on the win-condition Line "
+                  "(a Staryu about to evolve into Mega Starmie ex) KEEPS the Energy through evolution, "
+                  "so feeding it — even before a hand-shuffle — is correct (ep82522726 f7), not waste.",
+        when=lambda c: c.board.active_doomed and c.board.my_bench > 0 and (
+            (c.select_context == _ATTACH_FROM and c.option_area == _ACTIVE)
+            or (c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
+                and not c.attach_target_is_line_member)),
         weight=-30, status="assumed"),
     Hypothesis(
         id="dont-waste-discard-energy",

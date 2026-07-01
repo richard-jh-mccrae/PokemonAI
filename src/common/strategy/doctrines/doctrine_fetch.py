@@ -389,6 +389,24 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and c.fetch_fills_a_need,
         weight=8, status="testing"),
     Hypothesis(
+        id="hold-costly-fetch-when-line-assembled",
+        rationale="Cost-net a DISCARD-cost fetch (Ultra Ball pays 2 cards) against a marginal need: "
+                  "when your win-condition line is ALREADY assembled — the payoff in hand "
+                  "(`wincon_in_hand`) AND a base to evolve it deployable (`wincon_base_deployable`) — "
+                  "the only body the fetch can still pull is a redundant duplicate (a 2nd Staryu), not "
+                  "worth pitching two cards for. `fetch-when-it-fills-a-need` fires a flat +8 off any "
+                  "positive grab (a thin-Bench starter) blind to the 2-card cost, so on turn 1 with "
+                  "the line already in hand it plays Ultra Ball over End and tosses the supporters "
+                  "(ep83007714 f8). This cancels that endorsement (nets the fetch below End) for a "
+                  "`cost_discard` fetch in that set-up state. Fires ONLY on a discard-cost fetch (free "
+                  "fetches — Buddy-Buddy Poffin, Pokégear — are untouched) and only once the line is "
+                  "assembled (a search for the still-missing win-condition is never suppressed), so it "
+                  "holds the wasteful Ultra Ball without ever blocking a dig you need. The general "
+                  "cost-netting the fetch value model still defers; this is its sound, bounded case.",
+        when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_fills_a_need
+        and c.board.wincon_in_hand and c.board.wincon_base_deployable,
+        weight=-12, status="testing"),
+    Hypothesis(
         id="fetch-deck-priority",
         rationale="Tier-3 escape hatch (ADR-0023): when the deck declares an explicit ordered "
                   "`Strategy.fetch_priority`, grab the highest-priority card on that list that the "

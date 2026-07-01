@@ -432,5 +432,20 @@
     "disposition": "refuted",
     "reason": "ADR-0028 tradeoff ACCEPTED (2026-07-01, ground-truthed via retest FIXED=False). Turn-1 Active Cinderace (160hp, 1W), bench 2x Staryu, Hero's Cape (+100 ACE SPEC) in hand, opp Cinderace can afford Turbo Flare (50). Human wanted End (hold the Cape for the main attacker). Branch(3) of _tool_deploy_slot deploys it on Cinderace: opp incoming 50, _survival_gain(160,50,100)=2>=1, so the wall 'gains a turn'; branch(1) can't pick a benched Staryu (0 incoming) and branch(2) skips (Cinderace not the wincon). We ACCEPT branch(3)'s proactive survival-turns deploy over holding — the deck runs 6 hand-shuffle Supporters that would otherwise bury the one-of ACE SPEC, so parking it on the surviving body beats a bare hold. Known accepted limitation: Cinderace is a terminal Stage-2 (<-Raboot) so the Cape can't ride up to Mega Starmie ex; branch(3) treats the ACE SPEC like a fungible +HP tool. Kept as-is by design decision, not fixed.",
     "round": "2026-07-01"
+  },
+  "83007714-7": {
+    "disposition": "covered",
+    "reason": "FIXED in the real Pilot by the new prefer-active-attach-in-setup (+8): energy now goes to the ACTIVE Cinderace, not the benched Staryu (the regression is gone; retest chosen [4]->[3]). W-route stays UNSATISFIED only because the literal correct labels Ignition->Cinderace, which is UNSOUND turn-1-going-first (Ignition is discard_eot -> discarded EOT unused; dont-waste-discard-energy sinks it -60), so the Pilot soundly attaches the reusable Basic->Cinderace [3] instead. Both put the energy on Cinderace = the human intent. Mirrors covered precedent 81903490-49.",
+    "round": "2026-07-01"
+  },
+  "83007714-22": {
+    "disposition": "covered",
+    "reason": "Degenerate record (chosen==correct==[1]); the real Pilot already picks the Mega Starmie ex over the Staryu at this Turbo-Flare AttachFrom via spread-attach-to-the-needy (+15, retest FIXED=True). The rationale's '3 energy on Staryu' complaint is the frame-7 manual misattach, whose root is fixed by prefer-active-attach-in-setup.",
+    "round": "2026-07-01"
+  },
+  "83007714-135": {
+    "disposition": "covered",
+    "reason": "attack-last (attack-is-turn-ender-develop-first): the match-winning Nebula Beam KO (tac 1002.7, 2 prizes = last 2) is DEFERRED behind play-energy-denial's Crushing Hammer but NEVER forfeited — _finish_turn_last tiers the tier-0 Item PLAY before the tier-4 attack, so the KO is taken same turn and the win lands. The 'take it immediately' is satisfied in outcome. Matches many ledger precedents (e.g. 82525101 f92/f102).",
+    "round": "2026-07-01"
   }
 }
