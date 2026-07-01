@@ -137,6 +137,7 @@ STRATEGY = Strategy(
                 role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
     params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority
-            "search_budget": 0},          # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
+            "search_budget": 0,           # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
+            "my_archetype": "Cinderace / Mega Starmie ex"},  # Posture favorability key (ADR-0026 lever A)
     hypotheses=HYPOTHESES,
 )
