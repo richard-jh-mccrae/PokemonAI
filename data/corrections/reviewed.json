@@ -452,5 +452,10 @@
     "disposition": "covered",
     "reason": "Resolved by game-winning-attack-first sequencing + active_can_ko heal gate (this round). The correct option (Nebula Beam) is a lethal tactical KO that the real Pilot now takes immediately instead of the energy-stripping Wally's Compassion; W-route classifies it as tactical (combat term), so record it covered by the tactical layer.",
     "round": "2026-07-01"
+  },
+  "83037962-70": {
+    "disposition": "covered",
+    "reason": "re-measured through the shipped Pilot: chosen==correct ([2] attach->Cinderace scores 45 vs 35 for the benched Mega); the misattachment blunder no longer reproduces. Prize-race capability is aspirational (no live regression) — see docs/todo/deferred-multi-turn-criticals.md",
+    "round": "2026-07-01"
   }
 }

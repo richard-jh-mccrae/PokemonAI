@@ -30,6 +30,7 @@ BENCHIE = 700   # opponent's benched body (1 prize, harmless)
 BIGATK = 701    # opponent's benched body that KOs my Mega next turn (the survival threat)
 THREAT = 680    # opponent's Active: KO-able now (70 HP) but a 210-damage glass cannon that dooms me next turn
 WALLYS = 1229   # Wally's Compassion — clutch_heal (heals a Mega ex to full, bounces its Energy to hand)
+HILDA = 1225    # Hilda — a Supporter that searches an Energy (+ an Evolution) into hand (tutor_energy)
 JETTING = 11    # attack id: cost 1, 120 damage
 NEBULA = 10     # attack id: cost 3, 210 damage (the big attack an extra Energy unlocks)
 STARYU = 12     # Staryu's own attack: cost 1, 20 damage (can't KO)
@@ -57,10 +58,11 @@ def _stats():
     })
 
 
-def _pilot(**kw):
+def _pilot(functions=None, **kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
+    default = CardFunctions({WALLYS: ["heal", "clutch_heal"], HILDA: ["search", "tutor_energy"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({WALLYS: ["heal", "clutch_heal"]}),
+                 functions=default if functions is None else functions,
                  attacks={JETTING: 120, NEBULA: 210, STARYU: 20, OPEN_ATK: 30},
                  attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, OPEN_ATK: 1}, **kw)
 
@@ -319,4 +321,62 @@ def test_stabilize_stands_down_when_the_active_is_not_doomed():
                        opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
                        attack_opt(JETTING), opt(END)], current=board)
     assert not pilot._board(obs).active_doomed
+    assert pilot.explain(obs).planned is None
+
+
+# ------------------------------------------- Supporter-enabled KO line (4298): the tutor supplies the attach
+@pytest.mark.req("REQ-PLANNER-0021")
+def test_energy_tutor_supporter_unlocks_an_otherwise_missed_ko_is_planned_and_taken():
+    """Tracer (corpus 4298 shape): my Active is a spent opener; a benched Mega Starmie has NO Energy, so
+    it can't KO and no retreat-KO line exists — the hand holds no Energy to attach. But it holds Hilda, a
+    Supporter that searches an Energy into hand (``tutor_energy``). Playing Hilda supplies the attach, so
+    retreat-into-Mega + that attach unlocks Jetting Blow (120) = a 1-prize KO the greedy scorer can't see
+    (no single option scores it, and the enabling first step is a Supporter, not a retreat/evolve). The
+    Planner recognises the ``ko_for_prizes`` line and plays Hilda now."""
+    pilot = _pilot()
+    play_hilda = opt(PLAY, area=HAND, index=0)
+    board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
+                  opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
+                  hand=[HILDA], prizes=2, opp_prizes=2)                 # no Energy in hand — Hilda fetches it
+    obs = make_select([play_hilda, attack_opt(OPEN_ATK), opt(END)], current=board)
+
+    d = pilot.explain(obs)
+    assert d.planned is not None                       # a KO-for-prizes line was found
+    assert d.planned.goal == "ko_for_prizes"
+    assert d.planned.next_step == [0]                  # its next step is playing the energy tutor
+    assert pilot.decide(obs) == [0]                    # ... and the Pilot takes it
+
+
+@pytest.mark.req("REQ-PLANNER-0021")
+def test_energy_tutor_line_generalizes_to_any_tutor_energy_supporter():
+    """The Supporter-enabled KO line is driven by the ``tutor_energy`` *tag*, not by Hilda's id: the
+    same 4298-shape line fires for any of the nine deck-search-Energy Trainers now carrying the tag
+    (Energy Search, Colress's Tenacity, Crispin, …). Same board, a different tutor id — the Planner
+    still plays it to supply the attach that unlocks the retreat→attach→KO. Guards against a
+    regression that hardcodes a single card."""
+    energy_search = 1119                               # a tutor_energy sibling (Item) — not Hilda
+    pilot = _pilot(functions=CardFunctions({energy_search: ["search", "tutor_energy"]}))
+    board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
+                  opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
+                  hand=[energy_search], prizes=2, opp_prizes=2)   # no Energy in hand — the tutor fetches it
+    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(OPEN_ATK), opt(END)], current=board)
+
+    d = pilot.explain(obs)
+    assert d.planned is not None and d.planned.goal == "ko_for_prizes"
+    assert d.planned.next_step == [0]                  # play the (non-Hilda) energy tutor
+    assert pilot.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-PLANNER-0022")
+def test_energy_tutor_stands_down_when_the_turns_attach_is_already_spent():
+    """Soundness: the tutor-energy line only works because the fetched Energy can be attached THIS turn.
+    If the turn's one Energy attach is already spent (``energyAttached``), Hilda's Energy can't reach the
+    Mega and the KO isn't reachable this turn — so the Planner must NOT commit a line it can't execute.
+    Same board as the tracer, but the attach is gone: ``planned is None`` and the tuned scoring decides."""
+    pilot = _pilot()
+    board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
+                  opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
+                  hand=[HILDA], prizes=2, opp_prizes=2)
+    board["energyAttached"] = True                     # this turn's one Energy attach is already spent
+    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(OPEN_ATK), opt(END)], current=board)
     assert pilot.explain(obs).planned is None

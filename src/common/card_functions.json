@@ -435,7 +435,8 @@
 "recycle"
 ],
 "1100": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1102": [
 "dig",
@@ -463,7 +464,8 @@
 "recycle"
 ],
 "1119": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1120": [
 "energy_denial"
@@ -505,7 +507,8 @@
 "energy_accel"
 ],
 "1142": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1145": [
 "search",
@@ -566,14 +569,16 @@
 "draw"
 ],
 "1194": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1197": [
 "hand_disruption"
 ],
 "1198": [
 "energy_accel",
-"search"
+"search",
+"tutor_energy"
 ],
 "1199": [
 "draw",
@@ -598,7 +603,8 @@
 "search"
 ],
 "1206": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1207": [
 "draw"
@@ -621,7 +627,8 @@
 "draw"
 ],
 "1215": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1216": [
 "draw"
@@ -650,7 +657,8 @@
 "draw"
 ],
 "1225": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1227": [
 "draw",
@@ -667,7 +675,8 @@
 "search"
 ],
 "1232": [
-"search"
+"search",
+"tutor_energy"
 ],
 "1233": [
 "search"

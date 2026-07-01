@@ -135,3 +135,21 @@ def test_critical_0cbc_stabilize_then_ko_is_fixed_on_its_real_replay_state():
     decision = pilot.explain(fx["obs"])
     assert decision.planned is not None and decision.planned.goal == "stabilize_then_ko"
     assert decision.chosen == fx["correct"]        # the agent now heals-and-KOs (plays Wally's) as the human marked
+
+
+@pytest.mark.req("REQ-PLANNER-0023")
+def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
+    """CRITICAL 4298 ('our agent needs to start planning its turn ahead of time … it can KO opponent's
+    Active via Hilda for energy grab, attach to Mega Starmie, retreat to Mega Starmie, and Jetting Blow'):
+    on the ACTUAL captured state, the agent played Crushing Hammer ([1]) instead of Hilda ([2]). Cinderace
+    is Active with no Energy and two benched Mega Starmie ex sit at 0 Energy — no single option scores a
+    KO, and the enabling first step is a *Supporter* (Hilda tutors an Energy into hand), which the
+    retreat/evolve generator never produced. Replayed through the shipped Pilot, the Turn Planner's
+    tutor-energy line commits Hilda — the human's ``correct`` move — so the fetched Energy can then power
+    the retreat→Jetting-Blow KO. A hard regression gate on the real state, like 7f48 and 0cbc."""
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_4298.json").read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    decision = pilot.explain(fx["obs"])
+    assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # the Planner acted
+    assert "energy tutor" in decision.planned.rationale                                # via the Supporter line
+    assert decision.chosen == fx["correct"]        # the agent now plays Hilda (the energy grab) as the human marked

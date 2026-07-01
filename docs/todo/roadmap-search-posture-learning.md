@@ -197,7 +197,11 @@ Goal-Ladder case: goal-directed candidate generation → engine-sim to end-of-tu
 layer-on-top). Build (2)'s "leaf eval = the Tier-0 score initially" is realized as the closed-form leaf
 scalar; the **always-engine-sim** budget question is retired by the cost spike (`search_step`≈0.1 ms).
 Remaining M3: the general escalation policy on *arbitrary* effectful decisions, feeding Posture's predicted
-opponent deck into `search_begin`, and the Tier-1 telemetry wiring.
+opponent deck into `search_begin`, and the Tier-1 telemetry wiring. **Two multi-turn CRITICALs are parked
+here** — captured, fixtured, and characterised in
+[deferred-multi-turn-criticals.md](deferred-multi-turn-criticals.md): `a21472` (multi-turn attack-sequence —
+a **live gap**) needs this deep search; `b4649` (prize-race/tempo — re-measured as **already covered** by
+tuned scoring) is the exemplar for the **Prize-Race Planner** and needs the M4 value model, not a lock.
 
 **Entry trigger:** Tier-0 rules **plateau** — new corrections become "an extra ply would have caught it"
 (multi-step tactical) rather than "a rule was missing." M1 ladder to validate. *(Fired 2026-07-01.)*

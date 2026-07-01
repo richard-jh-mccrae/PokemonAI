@@ -30,6 +30,20 @@ ORACLE = [
     # curated overrides the probe can't reach (function_overrides.json) — guard they ship:
     ("Munkidori", "heal"),                      # Adrena-Brain: move counters off mine
     ("Munkidori", "spread"),                    # Adrena-Brain: ...onto the opponent's
+    # tutor_energy — deck-search an Energy card into hand (a `search` refinement, curated in
+    # function_overrides.json; the probe only sees the generic DECK→HAND move). Enables the Turn
+    # Planner's Supporter-enabled KO line (ADR-0031). Discard-pile energy retrieval stays `recycle`,
+    # a top-N look stays `dig`, and Pokémon energy-tutor attacks/abilities are out of scope (not a
+    # Trainer play-event) — none of those carry this tag.
+    ("Energy Search", "tutor_energy"),          # Item: search a Basic Energy → hand
+    ("Energy Search Pro", "tutor_energy"),      # Item (ACE SPEC): any # of Basic Energy → hand
+    ("Fighting Gong", "tutor_energy"),          # Item: a Basic {F} Energy or {F} Basic → hand
+    ("Colress’s Tenacity", "tutor_energy"),     # Supporter: a Stadium + an Energy → hand
+    ("Crispin", "tutor_energy"),                # Supporter: 2 Basic Energy → 1 to hand, 1 attached
+    ("Larry’s Skill", "tutor_energy"),          # Supporter: Pokémon + Supporter + Basic Energy → hand
+    ("Ethan's Adventure", "tutor_energy"),      # Supporter: Ethan's Pokémon / Basic {R} Energy → hand
+    ("Hilda", "tutor_energy"),                  # Supporter: an Evolution + an Energy → hand (fixed 4298)
+    ("Firebreather", "tutor_energy"),           # Supporter: up to 7 Basic {R} Energy → hand
     ("Enhanced Hammer", "energy_denial"),       # discards opponent's Special Energy
     ("Sacred Ash", "recycle"),                  # Pokémon from discard back to deck
     ("Telepath Psychic Energy", "search"),      # special Energy that tutors on attach (probe can't reach)

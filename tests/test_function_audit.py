@@ -96,6 +96,47 @@ def test_look_and_take_dig_and_draw_are_supported():
 
 
 @pytest.mark.req("REQ-FUNC-0012")
+def test_tutor_energy_tag_without_a_deck_search_energy_cue_is_unsupported():
+    # `tutor_energy` is a deck-search-Energy-into-hand refinement of `search`. On a discard-pile
+    # retrieval (recycle) there is no "search your deck … Energy … into your hand" cue → suspect mistag.
+    unsupported, _ = audit_card(["tutor_energy"], "Put a Basic Energy card from your discard pile into your hand.")
+    assert "tutor_energy" in unsupported
+
+
+@pytest.mark.req("REQ-FUNC-0012")
+def test_deck_search_energy_into_hand_without_tag_is_flagged_missing_tutor_energy():
+    # Energy Search / Hilda shape: a clear deck-search for an Energy card into hand → suspect miss.
+    text = "Search your deck for a Basic Energy card, reveal it, and put it into your hand. Then, shuffle your deck."
+    _, missing = audit_card(["search"], text)
+    assert "tutor_energy" in missing
+
+
+@pytest.mark.req("REQ-FUNC-0012")
+def test_deck_search_energy_tagged_tutor_energy_is_supported():
+    # the genuine tutor is tagged → neither unsupported (cue present) nor missing (tag present)
+    text = "Search your deck for an Energy card, reveal them, and put them into your hand. Then, shuffle your deck."
+    unsupported, missing = audit_card(["search", "tutor_energy"], text)
+    assert "tutor_energy" not in unsupported and "tutor_energy" not in missing
+
+
+@pytest.mark.req("REQ-FUNC-0012")
+def test_discard_pile_energy_retrieval_is_recycle_not_tutor_energy():
+    # boundary: energy from the DISCARD pile is `recycle`, never `tutor_energy` (which is deck-search)
+    text = "Put up to 2 Basic Energy cards from your discard pile into your hand."
+    _, missing = audit_card([], text)
+    assert "recycle" in missing and "tutor_energy" not in missing
+
+
+@pytest.mark.req("REQ-FUNC-0012")
+def test_top_n_look_for_energy_is_dig_not_tutor_energy():
+    # boundary: Bug Catching Set looks at the top 7 (a `dig`) — not a guaranteed "search your deck"
+    text = ("Look at the top 7 cards of your deck. You may reveal up to 2 in any combination of {G} "
+            "Pokémon and Basic {G} Energy cards you find there and put them into your hand.")
+    _, missing = audit_card(["dig", "draw"], text)
+    assert "tutor_energy" not in missing
+
+
+@pytest.mark.req("REQ-FUNC-0012")
 def test_non_behavioral_tags_are_ignored_by_the_text_audit():
     # the audit only judges behavioral tags; any other label (e.g. a leftover structural one) is
     # not in the cue set, so it's never flagged "unsupported"

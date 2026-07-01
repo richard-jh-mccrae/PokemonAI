@@ -5,9 +5,10 @@ the **Turn Planner** ([planner.py](../../src/common/strategy/planner.py), `Plann
 composed into the Pilot, running after the Lethal Solver and before the tuned scoring). Built the whole
 ladder: **(0)** the cost spike measured `search_step`≈0.1 ms → ~0.05 ms/line → **always-engine-sim** (no
 selective-escalation code); **(1)** the **KO-for-prizes** goal — multi-step enabling lines (retreat into a
-benched attacker, or evolve the Active, then this turn's one attach) that unlock a KO the greedy scorer
-misses, gated **layer-on-top** (only when no status-quo KO exists), which caught the `7f48` / `4298`
-shapes; **(2)** the **leaf-eval scalar** (prizes dominant + survival vs a glossary-faithful **Incoming** +
+benched attacker, evolve the Active, or **play an energy-tutor Supporter** — Hilda, `tutor_energy` — that
+fetches into hand the attachable Energy the line lacks, then this turn's one attach) that unlock a KO the
+greedy scorer misses, gated **layer-on-top** (only when no status-quo KO exists), which caught the `7f48`
+/ `4298` shapes; **(2)** the **leaf-eval scalar** (prizes dominant + survival vs a glossary-faithful **Incoming** +
 threat removed), with the hard-rung invariant (a positional score can never outrank a prize); **(3)** the
 **Engine-Search** primitive (`_simulate_line` / `_engine_leaf_value`) that steps a candidate then re-runs
 the policy on each intermediate `SearchState` to my end-of-turn board, proven to round-trip a real
@@ -15,15 +16,18 @@ observation; **(4)** the **turn-scoped committed-plan cache** + re-plan-on-revea
 sim never nests a search, with the engine sharpening the committed line's value. Also built the **stabilize-then-KO** goal (heal a doomed Mega ex to full with a `clutch_heal`, bounce its
 Energy, re-attach, still take a NON-winning KO — fires despite a status-quo KO, unlike the layer-on-top
 KO-for-prizes gate; the winning-KO case stays owned by the Lethal Solver upstream). Gated by
-`REQ-PLANNER-0001..0020` ([tests/test_planner.py](../../tests/test_planner.py),
+`REQ-PLANNER-0001..0023` ([tests/test_planner.py](../../tests/test_planner.py),
 [tests/test_planner_engine.py](../../tests/test_planner_engine.py)); the verdict rides in Decision
 Telemetry (`planned`). Verified on real games (6 mirror games, 0 crashes, the Planner committing + engine-
-ranking live) AND on the actual replay states of the CRITICALs that named the feature: **`7f48`
-(retreat→attach→KO for 2 prizes) and `0cbc` (heal-then-KO) are both FIXED and gated as real-state
-regressions** ([tests/fixtures/corrections/](../../tests/fixtures/corrections/)); the third in-scope one
-(`4298`) needs a **Supporter-enabled** KO line (the generator does retreat/evolve today), and the two
-multi-turn corrections (`a21472`, `b4649`) remain out of scope. **Remaining (deferred, per the build
-ladder):** the Supporter-enabled KO generation (`4298`); the full selective-override *margin*
+ranking live) AND on the actual replay states of the CRITICALs that named the feature: **all three
+in-scope CRITICALs are FIXED and gated as real-state regressions** — `7f48` (retreat→attach→KO for 2
+prizes), `0cbc` (heal-then-KO), and `4298` (play Hilda for the energy grab → retreat → Jetting-Blow KO)
+([tests/fixtures/corrections/](../../tests/fixtures/corrections/)); the two multi-turn corrections
+(`a21472`, `b4649`) remain out of scope — captured, re-measured, and fixtured for a future session in
+[docs/todo/deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) (`a21472` is still a
+live gap; `b4649` re-measured as already covered by tuned scoring). **Remaining (deferred, per the build ladder):** tagging the
+sibling energy-tutors beyond Hilda (a card-data sweep — 22 other cards search an Energy into hand) and the
+evolve-via-Supporter variant of the same line; the full selective-override *margin*
 comparison (commit only when a line **clearly beats** the status-quo develop line by engine-sim value) is
 tuning-gated on the M1 A/B ladder, so v1 ships the conservative "otherwise-missed KO" gate; observable
 multi-candidate engine *ranking*; the develop-order fold-in / full unification; the **Base Value Model**

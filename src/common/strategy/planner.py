@@ -193,6 +193,9 @@ class PlannerMixin:
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra)
                 kind = "evolve"
+            elif o.get("type") == _PLAY:
+                cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player)
+                kind = "energy tutor"
             else:
                 continue
             if cand is None:
@@ -228,6 +231,22 @@ class PlannerMixin:
             if best is None or cand > best:           # prefer more prizes, then survival (bool > bool)
                 best = cand
         return best
+
+    def _supporter_ko_candidate(self, obs, select, board, option, opp, opp_player):
+        """``(prizes, active_survives)`` if playing a **tutor-energy Supporter** (Hilda: search an Energy
+        into hand — the ``tutor_energy`` tag) unlocks an otherwise-missed retreat→attach→KO. The Supporter
+        SUPPLIES the attachable Energy the plain retreat line lacks: with that fetched Energy modelled as
+        this turn's one attach, a benched body KOs the opponent's Active after a retreat. The enabling
+        first step here is the Supporter, not a retreat/evolve — no closed-form hook scores it, so it is
+        net-new (corpus 4298). Fires ONLY when no reusable Energy is already in hand (else the plain
+        retreat line covers it) AND the turn's one attach is still available (else the fetched Energy can't
+        power the KO this turn). None otherwise. Reuses the sound retreat-KO valuation."""
+        if board.energy_attached or board.reusable_energy_in_hand:
+            return None
+        cid = self._option_card_id(obs, select, option)
+        if cid is None or not (self.functions and "tutor_energy" in self.functions.tags(cid)):
+            return None
+        return self._retreat_ko_candidate(obs, board, opp, opp_player, extra=1)
 
     def _evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int):
         """``(prizes, active_survives)`` if EVOLVING the Active unlocks a KO of the opponent's Active this

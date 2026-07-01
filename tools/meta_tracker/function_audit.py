@@ -25,6 +25,10 @@ def _counter_move(t: str) -> bool:
 _CUES = {
     "draw":            lambda t: "draw" in t or ("look at" in t and "into your hand" in t),
     "search":          lambda t: "search your deck" in t,
+    # a `search` refinement: deck-search specifically for an Energy card *into hand* (the Turn
+    # Planner's tutor-energy KO line). Deck-search only — discard-pile energy retrieval is `recycle`
+    # and a top-N look is `dig`, neither of which says "search your deck".
+    "tutor_energy":    lambda t: "search your deck" in t and "energy" in t and "into your hand" in t,
     "dig":             lambda t: "look at the top" in t or "look at the bottom" in t,
     "heal":            lambda t: "heal" in t or ("remove" in t and "damage counter" in t)
                                  or _counter_move(t),
@@ -62,7 +66,7 @@ BEHAVIORAL = frozenset(_CUES)
 _MISSING_CUES = {
     tag: _CUES[tag] for tag in
     ("poison", "burn", "sleep", "paralyze", "confuse", "spread", "search", "dig",
-     "hand_disruption", "recycle", "energy_denial")
+     "hand_disruption", "recycle", "energy_denial", "tutor_energy")
 }
 _MISSING_CUES["heal"] = lambda t: _counter_move(t) or ("heal" in t and "damage" in t)
 

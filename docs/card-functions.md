@@ -160,10 +160,13 @@ ex/Mega-ex, trainer type, ACE SPEC — are *not* here; the runtime reads them of
 | `rush_evolve` | setup | A card that **evolves a Pokémon ahead of the normal schedule** — even the turn its pre-evolution was played (Salvatore: search a no-Ability Pokémon and evolve onto a matching pre-evo). High tempo: it brings the win-condition online a turn early. | Curated seed (`function_overrides.json`): the evolve-bypass isn't probe-derived, but is readable from card text. |
 | `clutch_heal` | board | A heal that also **bounces the healed Pokémon's attached Energy back to hand** (Wally's Compassion) — a *defensive* save, not a value heal: it recovers both the Pokémon and its Energy from a Knock Out, but disarms it until re-powered. The Pilot reads it (`hold-clutch-heal`) to hold it until the Active is doomed, then play it first and re-power the same turn. | Curated seed (`function_overrides.json`): the energy-bounce clause is readable from card text, refining the probe's plain `heal`. |
 | `bench_fill` | setup | A card that **fetches Basics straight onto your Bench** (Buddy-Buddy Poffin) — fast bench development *and* deck-thinning in one play. The Pilot reads it (`prefer-bench-fill-first`) to sequence it ahead of hand-refill tutors in a thin deck, so every later draw/search is higher quality. | Curated seed (`function_overrides.json`): the deck→bench placement is readable from card text (refines the probe's plain `search`, which only sees `DECK→HAND`). |
+| `tutor_energy` | resource | A deck-search specifically for an **Energy card into hand** (Hilda, Energy Search, Energy Search Pro, Fighting Gong, Colress's Tenacity, Crispin, Larry's Skill, Ethan's Adventure, Firebreather) — the attachable Energy that the Turn Planner's *Supporter-enabled KO line* needs. The Planner reads it (`_supporter_ko_candidate`, ADR-0031) to play the tutor first, then retreat→attach→KO the same turn. **Deck-search only**: discard-pile energy retrieval is `recycle`, a top-N look (Bug Catching Set) is `dig`, and a Pokémon's energy-tutor *attack/ability* (Gimmighoul, Eevee, …) is out of scope — it isn't a Trainer play-event and would misfire the Planner. | Curated seed (`function_overrides.json`): refines the probe's plain `search`, which only sees the generic `DECK→HAND` move, not that the fetched card is an Energy. |
 
 `search` is a *direct* deck tutor (`DECK→HAND`); a "look at top N, take 1" is `dig`+`draw`, not
-`search`. `bench_guard` is a real card-function — passive, so override-supplied for now, but
-text-derivable. **`stall` is a different kind of label: a *play-role*, not a card-function** — it
+`search`. `tutor_energy` refines `search` to a deck-search *for an Energy card into hand* — the
+attachable fuel the Turn Planner's Supporter-enabled KO line needs; discard-pile energy retrieval
+stays `recycle` and a top-N look stays `dig`, so neither carries it. `bench_guard` is a real
+card-function — passive, so override-supplied for now, but text-derivable. **`stall` is a different kind of label: a *play-role*, not a card-function** — it
 depends on *how a card is piloted* (turns alive, attacks declined, tempo bought), which isn't in
 the text or a single-card probe. It ships as a **small curated seed** (the obvious meta walls);
 real coverage needs a **replay-usage** signal (per-card turns-in-play / attack-rate / survival)
@@ -301,7 +304,9 @@ plain Item — are now omitted, so the table is smaller than the old structural-
   `hand_disruption` (Xerosic's Machinations, Team Rocket's Archer), `recycle` (Sacred Ash, Kyogre,
   Levincia), `energy_denial` (Enhanced Hammer), `heal` (Wally's Compassion), Munkidori's
   counter-move `heal`+`spread`, plus the **override-only** tags `bench_guard` (Battle Cage),
-  `opener` (Cinderace's Explosiveness — a startable non-Basic), and the curated `stall` seed
+  `opener` (Cinderace's Explosiveness — a startable non-Basic), `tutor_energy` (the nine
+  deck-search-Energy-into-hand Trainers — a `search` refinement the probe can't derive, feeding the
+  Turn Planner's Supporter-enabled KO line), and the curated `stall` seed
   (Mega Kangaskhan ex, Dudunsparce, Meowth ex). They union in at build
   time and are guarded by the golden oracle; extend the file as the meta-verification flags more.
 - Optional future polish (not blocking): richer probing of conditional Abilities; regenerating
