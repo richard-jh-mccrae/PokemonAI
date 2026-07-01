@@ -424,6 +424,21 @@ HYPOTHESES = [
         when=lambda c: c.select_context == _DISCARD and c.card_is_redundant,
         weight=20, status="testing"),
     Hypothesis(
+        id="discard-the-hand-duplicate",
+        rationale="At a forced discard, shed a card you hold MULTIPLE copies of in hand before a "
+                  "singleton — keep one copy (its effect is preserved); the extra is redundant THIS "
+                  "turn (you play one Supporter per turn; a second evolution payoff needs a second base "
+                  "you don't have). The hand-internal mirror of `discard-the-redundant` (an in-play "
+                  "duplicate): reads `Context.card_is_hand_duplicate` (2+ in hand, fungible Energy "
+                  "excluded — a spare Energy is always a future attach, never redundant). A positive "
+                  "weight ranks the duplicate ABOVE a singleton as the pitch, so the lone DISRUPTORS "
+                  "the flat keep-floors miss — a single Boss's Orders / Harlequin, which score 0 at a "
+                  "discard and would lose the index tie-break — are protected over a duplicate engine "
+                  "Supporter. Pairs with `keep-key-cards-at-discard`: a duplicate win-condition still "
+                  "nets negative (−30 + this), so a redundant 3rd Mega Starmie ex is never the pitch.",
+        when=lambda c: c.select_context == _DISCARD and c.card_is_hand_duplicate,
+        weight=12, status="testing"),
+    Hypothesis(
         id="keep-key-cards-at-discard",
         rationale="At a cost-discard (e.g. Ultra Ball's 'discard 2 cards from your hand'), don't throw "
                   "away your irreplaceable pieces — a discard-at-end-of-turn burst Energy (Function Tag "

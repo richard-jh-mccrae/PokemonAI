@@ -20,6 +20,8 @@ BASIC, STAGE1 = 700, 800
 SUPPORT, PLAINMON = 850, 860
 COMBO, FILLER = 950, 960
 DUP, NEEDED = 770, 790
+HANDDUP, HSINGLE, DUPENERGY = 771, 772, 773
+SUPPORTER_CT, BASIC_ENERGY_CT = 3, 5       # CardType.SUPPORTER / CardType.BASIC_ENERGY
 FODDER, KEEPCARD = 780, 781
 WINC = 1031
 ULTRA = 2001
@@ -149,6 +151,34 @@ def test_fetch_base_rule_never_zeroes_the_payoff():
                       deck=[{"id": PAYP}, {"id": 860}],
                       current=state(active=poke(666, energy=1), bench=[], hand=[]))
     assert pilot.decide(obs) == [0]                                   # still grab the payoff
+
+
+# --- discard-the-hand-duplicate: shed a hand-internal duplicate before a singleton disruptor ------
+@pytest.mark.req("REQ-GEN-0038")
+def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singleton():
+    """The hand-internal mirror of `discard-the-redundant`: among cards you must pitch, shed one you
+    hold 2+ copies of in hand (keep one) before a SINGLETON — so a lone disruptor (which the flat
+    keep-floors miss, scoring 0) is never discarded over a duplicate engine card."""
+    stats = DictCardStatProvider({HANDDUP: CardStat(HANDDUP, hp=0, cardType=SUPPORTER_CT),
+                                  HSINGLE: CardStat(HSINGLE, hp=0, cardType=SUPPORTER_CT)})
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    # forced to discard one of {HANDDUP, HANDDUP, HSINGLE}: pitch a duplicate copy, keep the singleton.
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)], context=DISCARD_SEL,
+                      current=state(hand=[HANDDUP, HANDDUP, HSINGLE]))
+    assert pilot.decide(obs) in ([0], [1])                            # a duplicate copy, not the singleton
+    assert "discard-the-hand-duplicate" in _fired(pilot.explain(obs).options[0])
+    assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[2])
+
+
+@pytest.mark.req("REQ-GEN-0038")
+def test_discard_the_hand_duplicate_excludes_fungible_energy():
+    """A spare Basic Energy is fungible — always a future attach, never a redundant pitch — so the
+    hand-duplicate floor excludes it even when several are held."""
+    stats = DictCardStatProvider({DUPENERGY: CardStat(DUPENERGY, hp=0, cardType=BASIC_ENERGY_CT)})
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
+                      current=state(hand=[DUPENERGY, DUPENERGY]))
+    assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[0])
 
 
 # --- prefer-good-in-discard: a deck redirects the pitch to its discard-synergy fodder ------------

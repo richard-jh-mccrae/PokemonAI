@@ -11,12 +11,13 @@ from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
-from common.strategy import Strategy
+from common.strategy import Line, Strategy
 from pilot_helpers import MAIN, PLAY, attack_opt, make_select, opt, poke, state
 
 END = 14
 LILLIES = 1227        # a Shuffle-Refresh (shuffle hand into deck, draw 6)
 WINC = 1031           # the win-condition payoff (a Mega ex)
+STARYU = 1030         # the win-condition's Line base (a pre-evolution to deploy the payoff onto)
 BASIC = 700
 PLAINMON = 900        # a vanilla Active body (not the win-condition)
 ULTRA = 2001          # a cost_discard tutor (Ultra Ball: keep-value 0, no dig-before-commit bonus)
@@ -179,3 +180,40 @@ def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
     assert "hold-wincon-dont-shuffle" not in _fired(pilot.explain(obs).options[0])
+
+
+# --- hold-wincon-with-base-dont-shuffle: a benched base to evolve the held wincon -> hold firmly ----
+@pytest.mark.req("REQ-GEN-0047")
+def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
+    """The held win-condition has its Line BASE already on the Bench (deploy-soon), so the shuffle
+    would bury an imminent evolution — the stronger hold fires (stacks on the moderate base hold) so
+    the agent takes a board action this turn instead of refilling. ep82867148 f52."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
+                     lines=[Line(path=[STARYU, WINC], payoff=WINC)])
+    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(STARYU)],
+                                    hand=[LILLIES, WINC]))
+    assert "hold-wincon-with-base-dont-shuffle" in _fired(pilot.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0047")
+def test_hold_wincon_with_base_silent_when_no_base_is_in_play():
+    """No Line base in play -> the stronger hold stays silent; only the moderate `hold-wincon-dont-
+    shuffle` fires, so a genuinely dead hand can still refill (the base hold is NOT absolute)."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
+                     lines=[Line(path=[STARYU, WINC], payoff=WINC)])
+    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,                  # bench body is NOT the base
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES, WINC]))
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "hold-wincon-with-base-dont-shuffle" not in fired
+    assert "hold-wincon-dont-shuffle" in fired

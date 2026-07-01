@@ -44,6 +44,9 @@ _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # an option that knocks out the target dominates a mere chip
 _SUPPORTER = 3             # CardType.SUPPORTER — a gust on this card costs the one-per-turn Supporter slot
+_BASIC_ENERGY = 5          # CardType.BASIC_ENERGY — fungible Energy: a spare is always a future attach,
+_SPECIAL_ENERGY = 6        # CardType.SPECIAL_ENERGY — …never a redundant pitch, so excluded from the
+                           # hand-duplicate discard signal (cf. `discard-the-hand-duplicate`)
 _BENCH_MAX = 5             # a full Bench holds 5 — a bench-filler can place nothing once you're here
 _THIN_BENCH = 2            # below this many benched Pokémon the board is underdeveloped — a starter need
 _OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
@@ -59,6 +62,6 @@ __all__ = [
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_DAMAGE", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_ZONE",
-    "KO_SCORE", "_SUPPORTER", "_BENCH_MAX", "_THIN_BENCH", "_OPENER_TAG", "_STARTER_ROLE",
-    "_WINCON_ROLES", "_ENGINE_TAGS", "_EVOLVING_THREAT_DMG",
+    "KO_SCORE", "_SUPPORTER", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
+    "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_EVOLVING_THREAT_DMG",
 ]
