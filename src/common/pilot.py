@@ -116,6 +116,13 @@ class Board:
     active_cheap_attack_kos: bool = False  # my Active's CHEAPEST attack would KO the opponent's Active
                                            # this turn (closed-form) — so a costly burst Energy
                                            # (e.g. Ignition->Nebula) is unnecessary; the cheap attack does it
+    active_can_ko: bool = False    # my Active's BEST affordable attack (given its CURRENT Energy) would
+                                   # KO the opponent's Active this turn — the superset of
+                                   # active_cheap_attack_kos that also sees a loaded Active whose BIG
+                                   # attack (not its cheapest) reaches the KO (Mega Starmie at CCC: Nebula
+                                   # Beam 210 KOs where Jetting Blow 120 doesn't). Gates the survival
+                                   # `hold-clutch-heal`: with a KO on the board there is nothing to survive
+                                   # FOR — take the prize, don't heal-and-stall (ep83037962 f78 missed win)
     gust_best_ko_prizes: int = 0   # best prizes among the opponent's benched Pokémon my Active could KO
                                    # after gusting one to the Active Spot (0 if none) — the whether-to-play
                                    # gate for a gust Supporter (Boss's Orders). ADR-0022.
@@ -156,6 +163,13 @@ class Board:
                                        # hand, EXCLUDING fungible Energy — the extra copy of an effect card
                                        # is the lowest-keep pitch at a forced discard (`discard-the-hand-
                                        # duplicate`), so a singleton disruptor is never shed over a duplicate
+    energy_placeable: bool = False     # some in-play Pokémon can still absorb Energy productively (it
+                                       # carries fewer Energy than its highest-damage attack costs). When
+                                       # False, a held Energy has no useful home this turn (every body is
+                                       # maxed / the Bench is empty), so shuffling it away costs nothing —
+                                       # gates `attach-before-hand-shuffle` off so it can't veto a needed
+                                       # bench-finding hand-refresh (ep83038055 f40). Fail-open (True when
+                                       # stats are unavailable).
     hand_is_dead: bool = False         # no non-refresh card in hand yields any positive-scoring play
                                        # this turn (each virtually scored through the real pipeline) — the
                                        # Shuffle-Refresh fallback gate (ADR-0024): refresh only a dead hand
@@ -313,6 +327,20 @@ class Context:
     attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
                                            # survival-turns picker chose (== board.tool_deploy_slot) —
                                            # the proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
+    attach_feeds_firing_accel: bool = False  # this ATTACH puts Energy on an ACTIVE accelerator
+                                           # (`accel_source` Role, e.g. Cinderace) that still NEEDS it to
+                                           # fire its acceleration attack this turn (Turbo Flare, cost 1),
+                                           # with a bench recipient to receive the accelerated Energy
+                                           # (`not accel_recipient_missing`) and NO ready benched
+                                           # win-condition to retreat into instead (`not
+                                           # bench_wincon_ready`). Feeding it multiplies — one manual
+                                           # attach becomes several on the Bench — so it beats manually
+                                           # loading one benched body one Energy at a time, even when the
+                                           # accelerator is doomed (use its acceleration one last time;
+                                           # ep83037962 f70). Gates `feed-the-firing-accelerator` and
+                                           # stands `dont-feed-the-doomed` down (the accelerator isn't a
+                                           # "spent" opener). Off when a ready benched attacker exists —
+                                           # then retreat into it (the ep83007714 f65 retreat case).
     attach_target_is_line_member: bool = False  # this attach option's recipient is on a win-condition
                                            # Line (a pre-evolution or the payoff) — building it advances
                                            # the win-condition. Read by `_option_trace` into
@@ -477,7 +505,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         # so it can't enter the weight fit / featurization.
         order = sorted(range(len(options)),
                        key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
-        order = self._finish_turn_last(options, traces, order, max_count, select.get("context"))
+        order = self._finish_turn_last(obs, board, options, traces, order, max_count,
+                                       select.get("context"))
         if max_count > 1 and select.get("context") in _GRAB_CONTEXTS:   # greedy gap-update + take-fewer
             chosen = self._greedy_grab(obs, select, board, traces, options,
                                        select.get("minCount", 0), max_count)
@@ -485,14 +514,18 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             chosen = order[:max_count]
         return Decision(chosen=chosen, options=traces, read=board.read)
 
-    def _finish_turn_last(self, options: list, traces: list, order: list, max_count: int,
-                          select_context: int | None) -> list:
+    def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
+                          max_count: int, select_context: int | None) -> list:
         """Sequence the turn's commitments LAST. The engine re-presents the open turn menu after each
         non-ending action, so the whole turn still happens — which means you should take the most
         informative, reversible actions first and the irreversible ones last:
 
           tier 0  free informative development — draw / search, fill the Bench, evolve a benched
-                  Pokémon, play a Pokémon (and an attach / gust that UNLOCKS a KO — take the win).
+                  Pokémon, play a Pokémon (and an attach / gust that UNLOCKS a KO — take the win). A
+                  GAME-WINNING attack (a KO that takes my last prize) also sits here: when this action
+                  wins the match there is nothing to develop FOR, so take it immediately rather than
+                  dig/develop first (a non-winning KO still develops-first — the whole point of
+                  attack-last is intact; ep83037962 f78).
                   Free, and reveals a better target before you commit.
           tier 1  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
                   so commit it AFTER the free Item digs (a Pokégear may upgrade which Supporter you
@@ -511,6 +544,15 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             return order
         ko_available = any(options[i].get("type") == _ATTACK and traces[i].tactical >= KO_SCORE
                            for i in order)
+
+        def _wins_now(i: int) -> bool:
+            """This ATTACK is a KO that takes my LAST prize — it wins the match, so it goes first
+            (nothing to develop for). Conservative: the opponent's Active KO for prizes >= mine
+            (a snipe-only win falls back to develop-first — no regression, just unoptimised)."""
+            if options[i].get("type") != _ATTACK or traces[i].tactical < KO_SCORE:
+                return False
+            return (board.my_prizes_remaining > 0
+                    and self._prize_value(self._opp_active(obs)) >= board.my_prizes_remaining)
 
         def _cost_discard(i: int) -> bool:
             cid = traces[i].card_id
@@ -536,6 +578,8 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                                                                           # KO (retreat-to-lethal, e.g. swap
                                                                           # off an ex-locked wall) — take the
                                                                           # win, don't dig first (REQ-GUST-0001)
+            if t == _ATTACK and _wins_now(i):                        # a game-winning KO: take the win now,
+                return 0                                             # don't dig/develop first (ep83037962 f78)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
                 return 4
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
@@ -552,7 +596,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
 
         if any(_tier(i) < 4 for i in order):                         # legibility: mark the held-back attacks
             for i in order:
-                if options[i].get("type") == _ATTACK:
+                if options[i].get("type") == _ATTACK and _tier(i) == 4:  # a winning attack (tier 0) is NOT held
                     traces[i].deferred = True
         return sorted(order, key=_tier)                             # stable -> within a tier, score order
 
@@ -866,6 +910,10 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             option.get("type") == _ATTACH and board.tool_deploy_slot is not None
             and "tool" in tags and getattr(stat, "hpBonus", 0) > 0
             and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.tool_deploy_slot)
+        attach_feeds_firing_accel = (
+            option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
+            and "accel_source" in at_roles and self._attach_target_needs(at_target)
+            and not board.accel_recipient_missing and not board.bench_wincon_ready)
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
@@ -876,6 +924,7 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
+                       attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
                        attach_from_target_needs=attach_from_needs,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
@@ -1034,11 +1083,13 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
             active_doomed=self._active_doomed(ma, oa, opp),
             incoming_active_damage=self._incoming_active_damage(ma, oa),
             active_cheap_attack_kos=self._active_cheap_attack_kos(ma, oa),
+            active_can_ko=self._active_can_ko(ma, oa),
             gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp),
             active_ko_prizes=self._active_ko_prizes(ma, oa),
             my_prizes_remaining=len(me.get("prize") or []),
             opp_prizes_remaining=len(opp.get("prize") or []),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
+            energy_placeable=self._energy_placeable(me),
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
@@ -1367,6 +1418,24 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in wincon for p in board)
 
+    def _energy_placeable(self, me: dict) -> bool:
+        """True if any of my in-play Pokémon can still absorb Energy productively — it carries fewer
+        Energy than its highest-damage attack costs (so a manual attach builds it toward a bigger
+        attack). When False, a held Energy has no useful home this turn (every body is maxed, or the
+        Bench is empty and the Active is fully powered), so shuffling it away with a hand-refresh costs
+        nothing. Fail-OPEN (True) when stats are unavailable — only SUPPRESS the held-Energy guard when
+        we can positively confirm no body can use the Energy (ep83038055 f40)."""
+        if not self.stats:
+            return True
+        for p in (me.get("active") or []) + (me.get("bench") or []):
+            if not p:
+                continue
+            stat = self.stats.get(p.get("id"))
+            cost = getattr(stat, "maxDamageCost", None) if stat else None
+            if cost and len(p.get("energies") or []) < cost:
+                return True
+        return False
+
     def _has_reusable_energy(self, hand: list) -> bool:
         """True if a **reusable** (non-discard) Energy is in hand — a *typed* Energy card (hp 0 with a
         real `energyType`) that is not tagged `discard_eot`. Used to prefer a Basic over a
@@ -1493,6 +1562,24 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         if not (self.stats and ma and oa):
             return False
         return self._can_ko(self.stats.get(ma.get("id")), oa)
+
+    def _active_can_ko(self, ma: dict | None, oa: dict | None) -> bool:
+        """True if my Active's BEST attack it can currently AFFORD (given its attached Energy) KOs the
+        opponent's Active this turn. Unlike `_active_cheap_attack_kos` (cheapest attack only), this scans
+        every affordable attack — so a fully-loaded Active whose BIGGEST attack (not its cheapest) reaches
+        the KO is seen: Mega Starmie at CCC KOs with Nebula Beam (210) though its cheapest Jetting Blow
+        (120) can't. Weakness/Resistance-adjusted; 0 when the defender's Ability prevents my ex damage.
+        Backs `Board.active_can_ko` (the survival-heal suppressor). Fail-closed on missing stats/HP."""
+        if not (self.stats and ma and oa):
+            return False
+        stat = self.stats.get(ma.get("id"))
+        opp_hp = oa.get("hp", 0)
+        if not (stat and opp_hp) or self._ability_prevents_damage(stat, oa.get("id")):
+            return False
+        opp_stat = self.stats.get(oa.get("id"))
+        energy = len(ma.get("energies") or [])
+        return any(self._wr_adjusted(stat, opp_stat, self.attacks.get(aid, 0)) >= opp_hp
+                   for aid in (stat.attacks or ()) if self.attack_costs.get(aid, 99) <= energy)
 
     # (The gust Board-signal builders — `_active_ko_prizes`, `_opp_active_condition_gift`,
     # `_active_condition_ko_prizes`, `_gust_best_ko_prizes`, `_stall_target_exists` — are in

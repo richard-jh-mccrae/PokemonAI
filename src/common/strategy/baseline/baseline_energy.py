@@ -112,7 +112,8 @@ HYPOTHESES = [
         when=lambda c: c.board.active_doomed and c.board.my_bench > 0 and (
             (c.select_context == _ATTACH_FROM and c.option_area == _ACTIVE)
             or (c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
-                and not c.attach_target_is_line_member)),
+                and not c.attach_target_is_line_member
+                and not c.attach_feeds_firing_accel)),   # a firing accelerator isn't "spent" — feed it
         weight=-30, status="assumed"),
     Hypothesis(
         id="dont-waste-discard-energy",
@@ -152,4 +153,44 @@ HYPOTHESES = [
         and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.attach_target_under_max
         and not ("discard_eot" in c.tags and c.board.active_cheap_attack_kos),
         weight=20, status="testing"),
+    Hypothesis(
+        id="dont-overbuild-the-doomed-wincon",
+        rationale="Stop piling Energy onto a DOOMED win-condition Active that can ALREADY attack this "
+                  "turn — build the benched successor instead. `concentrate-energy-on-wincon` (+25) and "
+                  "`build-active-wincon` (+20) both keep loading the Active win-condition toward its "
+                  "BIGGEST attack (Mega Starmie's CCC Nebula Beam), but if that Active will be Knocked "
+                  "Out next turn it never lives to fire it — the extra Energy (the 2nd/3rd attach beyond "
+                  "the cheapest attack it can already make) is buried with it. So when the Active is the "
+                  "wincon PAYOFF, is doomed, already affords its cheapest attack (`not attach_target_"
+                  "needs` — it still attacks THIS turn for the trade), and a Bench exists to build, sink "
+                  "this attach below the successor's `power-up-attacker` (+15): the Energy goes to the "
+                  "body that will still be alive to use it (ep83037962 f48 — 2nd Water onto a doomed "
+                  "210-HP Mega instead of the benched Staryu). This is the payoff-side complement of "
+                  "`dont-feed-the-doomed` (which guards an OFF-line doomed opener but deliberately "
+                  "exempts the win-condition Line): a pre-evolution keeps its Energy THROUGH evolution "
+                  "so is still worth feeding, but the fully-evolved payoff does not. Weighted to cancel "
+                  "the concentrate+build stack (−45); a burst that UNLOCKS a lethal THIS turn is still "
+                  "KO_SCORE tactical and dominates, so it never blocks a genuinely game-winning attach.",
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
+        and bool(_WINCON_ROLES & set(c.attach_target_roles))
+        and c.board.active_doomed and not c.attach_target_needs
+        and c.board.my_bench > 0,
+        weight=-45, status="testing"),
+    Hypothesis(
+        id="feed-the-firing-accelerator",
+        rationale="Feed the turn's manual Energy to an ACTIVE accelerator (a Pokémon whose attack "
+                  "accelerates Energy to the Bench — `accel_source` Role, e.g. Cinderace's Turbo Flare: "
+                  "attach 3 Basic Energy to your Benched Pokémon) when it still NEEDS that Energy to "
+                  "fire (Turbo Flare costs 1) — one manual attach becomes SEVERAL on the Bench, far more "
+                  "than dribbling one Energy onto a benched body that can't attack anyway. This holds "
+                  "even when the accelerator is DOOMED: use its acceleration one last time to power the "
+                  "successor before it falls (the prize math — they still have to Knock Out the loaded "
+                  "wincon after taking the accelerator; ep83037962 f70, a peer mirror line). Fires off "
+                  "`attach_feeds_firing_accel` (accelerator Active + needs Energy + a bench recipient "
+                  "present + no ready benched wincon to retreat into instead), so it stays clear of the "
+                  "retreat-into-a-ready-attacker case (ep83007714 f65). Strong (+35) — it must beat "
+                  "`concentrate-energy-on-wincon` (+25) loading a bench body directly; and it stands "
+                  "`dont-feed-the-doomed` down (a firing accelerator is not a spent opener).",
+        when=lambda c: c.attach_feeds_firing_accel,
+        weight=35, status="testing"),
 ]

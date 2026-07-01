@@ -80,9 +80,14 @@ HYPOTHESES = [
                   "attach AND below 0. Belt-and-suspenders: `_finish_turn_last` ALSO tiers any "
                   "`shuffle_hand` Supporter structurally (tier 3, after the tier-2 Energy attach), so "
                   "the attach precedes the shuffle even if this weight ever fails to fire; the weight "
-                  "additionally GATES whether to refresh at all (don't, while a held Energy is unplaced).",
+                  "additionally GATES whether to refresh at all (don't, while a held Energy is unplaced). "
+                  "Stands down when the held Energy has NO placeable home this turn (`not "
+                  "energy_placeable` — every in-play body is already maxed, or the Bench is empty and the "
+                  "Active fully powered): then shuffling it away costs nothing, so this must not veto a "
+                  "bench-finding refresh (ep83038055 f40).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.reusable_energy_in_hand and not c.board.energy_attached,
+        and c.board.reusable_energy_in_hand and not c.board.energy_attached
+        and c.board.energy_placeable,
         weight=-60, status="testing"),
     Hypothesis(
         id="hold-wincon-dont-shuffle",
@@ -137,4 +142,26 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.hand_is_dead and c.board.deck_holds_a_need,
         weight=8, status="testing"),
+    Hypothesis(
+        id="hold-successor-when-doomed",
+        rationale="Don't shuffle the hand away with a `shuffle_hand` Supporter when your Active "
+                  "win-condition is DOOMED and the hand holds the successor to rebuild with — the "
+                  "win-condition in hand (`wincon_in_hand`) PLUS a Line base already in play "
+                  "(`line_preevo_in_play`, a benched Staryu to evolve it onto next turn). This is the "
+                  "case the other holds miss: `hold-wincon-dont-shuffle` / `hold-wincon-with-base-dont-"
+                  "shuffle` both stand down once the win-condition is in PLAY (they treat the hand copy "
+                  "as a redundant duplicate) — but when that in-play copy is about to be Knocked Out, "
+                  "the hand copy is NOT redundant, it is the NEXT attacker you deploy after the Active "
+                  "falls. And the dead-hand scan is fooled: post-attach, with a just-benched Staryu "
+                  "under evolution sickness, no card is playable THIS action so `refresh-when-hand-is-"
+                  "dead` (+8) fires though the hand holds a Mega + Energy you need NEXT turn. So refuse "
+                  "the shuffle: hold the successor and take the board action (the develop-then-attack) "
+                  "instead (ep83037962 f49 — Harlequin gambling away a benchable Mega Starmie ex + two "
+                  "Water). Weighted (−35) to net the refresh below 0 even against `dig-before-commit` "
+                  "(+20) + `refresh-when-hand-is-dead` (+8), so `_finish_turn_last` tiers it below the "
+                  "attack. Narrow (doomed + payoff in hand + base in play), so a healthy board still "
+                  "cycles a dead hand freely.",
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
+        and c.board.active_doomed and c.board.wincon_in_hand and c.board.line_preevo_in_play,
+        weight=-35, status="testing"),
 ]

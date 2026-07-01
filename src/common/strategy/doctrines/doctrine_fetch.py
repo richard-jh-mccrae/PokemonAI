@@ -60,8 +60,13 @@ class FetchMixin:
     def _search_signals(self, option: dict, tags: list, board) -> tuple[bool, bool]:
         """The two deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
         (every card it can fetch is provably gone from the deck) and whether it is a REDUNDANT
-        wincon-tutor (it can fetch ONLY the win-condition, which is already in hand). Both False off
-        a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`)."""
+        wincon-tutor (it can fetch ONLY the win-condition, which you can't usefully deploy a second
+        of). Both False off a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`).
+
+        The wincon-tutor is redundant when a copy is already in HAND (a second is a dead dig) OR the
+        win-condition is already IN PLAY with no base to evolve another onto (`not
+        wincon_base_deployable` — no Line pre-evolution in play or hand): fetching a second Mega you
+        cannot deploy burns the turn while a real need (a Bench body) goes unmet (ep83038055 f40)."""
         if option.get("type") != _PLAY:
             return False, False
         fetch_set = self._search_deck_set(tags)
@@ -69,7 +74,9 @@ class FetchMixin:
             return False, False
         exhausted = all(cid in board.deck_empty_ids for cid in fetch_set)
         wincon = self._wincon_set()
-        redundant = bool(wincon) and fetch_set <= wincon and board.wincon_in_hand
+        wincon_undeployable_in_play = board.wincon_in_play and not board.wincon_base_deployable
+        redundant = (bool(wincon) and fetch_set <= wincon
+                     and (board.wincon_in_hand or wincon_undeployable_in_play))
         return exhausted, redundant
 
     def _search_probable_whiff(self, option: dict, tags: list, board) -> bool:
@@ -309,14 +316,18 @@ HYPOTHESES = [
     Hypothesis(
         id="dont-tutor-the-held-wincon",
         rationale="A tutor that can fetch ONLY the win-condition (e.g. Mega Signal → a Mega "
-                  "Evolution ex, the deck's lone Mega being the payoff) is redundant once the "
-                  "win-condition is already in hand — it would only dig a second, dead copy. Stand "
-                  "it down (read off `Context.search_redundant_wincon`: the search's fetch-set ⊆ the "
-                  "win-condition set AND `wincon_in_hand`) so the agent develops / attaches instead "
-                  "of burning the turn on a useless dig. Mirrors the deck's `tutor-the-wincon` gate "
-                  "(`not wincon_in_hand`) but ACTIVELY penalises, cancelling `dig-before-commit`'s "
-                  "blanket endorsement of any search. Stays silent for a flexible tutor (Ultra Ball "
-                  "can also fetch a pre-evolution / opener, so its fetch-set isn't ⊆ the wincon).",
+                  "Evolution ex, the deck's lone Mega being the payoff) is redundant when you can't "
+                  "usefully deploy a second: a copy is already in HAND (a dead second dig), OR the "
+                  "win-condition is already IN PLAY with no base to evolve another onto (an empty "
+                  "Bench, no Line pre-evolution in hand — ep83038055 f40, where a benchless agent dug "
+                  "a useless second Mega over a bench-finding refresh). Stand it down (read off "
+                  "`Context.search_redundant_wincon`: fetch-set ⊆ the win-condition set AND either "
+                  "`wincon_in_hand` or `wincon_in_play and not wincon_base_deployable`) so the agent "
+                  "develops / attaches / refreshes instead of burning the turn on a useless dig. "
+                  "Mirrors the deck's `tutor-the-wincon` gate but ACTIVELY penalises, cancelling "
+                  "`dig-before-commit`'s blanket endorsement of any search. Stays silent for a "
+                  "flexible tutor (Ultra Ball can also fetch a pre-evolution / opener, so its "
+                  "fetch-set isn't ⊆ the wincon).",
         when=lambda c: c.option_type == _PLAY and c.search_redundant_wincon,
         weight=-45, status="testing"),
     Hypothesis(

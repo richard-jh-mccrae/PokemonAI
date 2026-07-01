@@ -104,6 +104,22 @@ verify + **commit**, or test + **record refuted/covered**) → tag more (appende
 `/blunder-buster` again (prior clusters auto-drop; reviewed ones stay excluded; only the new patterns
 appear). **Commit authored Hypotheses before the next round** so re-featurization sees them.
 
+## Progress narration (required checkpoints)
+
+Every run — serial or parallel — prints these checkpoints as they happen (caveman-lite, per user
+style; skip only the ones that don't apply to serial mode):
+
+1. **Start.** First line of the run: `working` (or `working on <deck>` if deck name known).
+2. **After clustering** (end of step 1). Print the category breakdown — one line per category with
+   its blunder count, e.g. `categories: bad-target x3, sequencing_error x2, missed_evolution x1`.
+3. **Before fan-out** (parallel mode Phase 2 start only). State that agents spawn now, one per SOFT
+   cluster/category, working independently: e.g. `spawning N agents, one per category, working
+   independent`.
+4. **Per-agent finish** (parallel mode, as each Phase-2 agent returns). Name the category/cluster
+   that just finished: e.g. `bad-target done` / `sequencing_error done`.
+5. **All done** (step 11 completion gate passes, open set empty). One final line, e.g. `all done —
+   open set empty`.
+
 ## Steps
 
 > Steps 2–10 run **per cluster**. After step 1 builds the full cluster worklist, loop 2–10 over

@@ -447,5 +447,10 @@
     "disposition": "covered",
     "reason": "attack-last (attack-is-turn-ender-develop-first): the match-winning Nebula Beam KO (tac 1002.7, 2 prizes = last 2) is DEFERRED behind play-energy-denial's Crushing Hammer but NEVER forfeited — _finish_turn_last tiers the tier-0 Item PLAY before the tier-4 attack, so the KO is taken same turn and the win lands. The 'take it immediately' is satisfied in outcome. Matches many ledger precedents (e.g. 82525101 f92/f102).",
     "round": "2026-07-01"
+  },
+  "83037962-78": {
+    "disposition": "covered",
+    "reason": "Resolved by game-winning-attack-first sequencing + active_can_ko heal gate (this round). The correct option (Nebula Beam) is a lethal tactical KO that the real Pilot now takes immediately instead of the energy-stripping Wally's Compassion; W-route classifies it as tactical (combat term), so record it covered by the tactical layer.",
+    "round": "2026-07-01"
   }
 }

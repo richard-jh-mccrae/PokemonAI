@@ -24,7 +24,8 @@ CLUSTERS = {
     "energy": (ENERGY_HYPOTHESES, {
         "power-up-attacker", "attach-energy-last", "use-acceleration", "dont-feed-the-doomed",
         "dont-waste-discard-energy", "build-active-wincon", "spread-attach-to-the-needy",
-        "concentrate-energy-on-wincon", "prefer-reusable-over-burst", "prefer-active-attach-in-setup"}),
+        "concentrate-energy-on-wincon", "prefer-reusable-over-burst", "prefer-active-attach-in-setup",
+        "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker"}),
