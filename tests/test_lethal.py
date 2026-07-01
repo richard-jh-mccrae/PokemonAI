@@ -11,6 +11,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
+from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
 
 END = 14  # OptionType.END (not exported by pilot_helpers)
@@ -238,3 +239,31 @@ def test_strict_execute_only_holds_across_the_turns_two_decisions():
     obs2 = make_select([play_wallys, attack_opt(NEBULA), opt(END)], current=after)
     assert pilot.explain(obs2).lethal is not None
     assert pilot.decide(obs2) == [1]                            # the finishing KO, NOT Wally's
+
+
+# ------------------------------------------------------- telemetry: the verdict rides in the @T record
+@pytest.mark.req("REQ-LETHAL-0011")
+def test_lethal_verdict_is_emitted_in_decision_telemetry():
+    """The Solver's verdict must ride in the @T Decision Telemetry (ADR-0019) — the SAME `to_record`
+    feeds the live stderr line, the correction's `live_trace`, and the tuner's retest — so a blunder
+    correction on a lethal decision carries the solver's data for the blunder-buster to analyze. A
+    locked line surfaces its step + kind + rationale; a non-lethal decision surfaces `lethal: None`
+    (the key is always present so corrections can filter on it)."""
+    pilot = _pilot()
+    won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
+                prizes=1, opp_prizes=2)
+    rec = to_record(pilot.explain(make_select([attack_opt(JETTING), opt(END)], current=won)))
+    assert rec["lethal"] == {"step": [0], "kind": "direct", "why": "lethal: this KO wins the match"}
+
+    safe = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=330),
+                 opp_bench=[poke(OPP, hp=120)], prizes=3, opp_prizes=2)
+    rec_none = to_record(pilot.explain(make_select([attack_opt(JETTING), opt(END)], current=safe)))
+    assert "lethal" in rec_none and rec_none["lethal"] is None
+
+    # an enabling-step lock carries its own kind, so a correction can tell a develop-unlock apart.
+    unlock = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=180),
+                   opp_bench=[poke(OPP, hp=180)], hand=[WALLYS, WATER], prizes=1, opp_prizes=2)
+    obs_u = make_select([opt(PLAY, area=HAND, index=0),
+                         opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                         attack_opt(JETTING), opt(END)], current=unlock)
+    assert to_record(pilot.explain(obs_u))["lethal"]["kind"] == "unlock"

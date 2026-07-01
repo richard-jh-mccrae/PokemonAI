@@ -112,6 +112,14 @@ every turn, *before* normal scoring.
   inherently fuzzy, and must *not* be locked-and-committed; it is a separate Prize-Race Planner (the 4th
   CRITICAL `b4649ba9c304`).
 
+**Telemetry.** The Solver's verdict — the locked `step`, its `kind` (`direct` / `unlock` / `evolve`),
+and the `rationale`, or `null` when no win was locked — rides in the per-decision **Decision Telemetry**
+(`@T` stderr line, [ADR-0019](0019-submissions-are-traceable-and-tracked.md)) via the shared
+`common.telemetry.to_record`. Because that one serializer feeds the live line, a blunder Correction's
+`live_trace`, **and** the tuner's retest ([retest.py](../../tools/train/tuner/retest.py)), a correction
+on a lethal decision carries the solver's data for analysis without extra plumbing — the field is always
+present so corrections can filter on it (`REQ-LETHAL-0011`).
+
 **Consequences.** The Pilot gains an eager, first-class **Lethal Solver** and its first use of **Tier-1
 Engine Search**; the Tactical Evaluator's closed-form KO math is repurposed as the Solver's candidate
 generator. The Pilot gains **turn-scoped committed-plan state** (a locked Lethal Line) beside its

@@ -28,10 +28,13 @@ from common.strategy.context import _ACTIVE, _ATTACH, _ATTACK, _EVOLVE, _MAIN, _
 @dataclass
 class LethalLine:
     """A locked, guaranteed win on the current turn: the option index(es) to take at THIS decision
-    (``next_step``) plus a one-line rationale for the legibility trace. A multi-step line surfaces one
-    step per decision as the engine re-opens the turn menu."""
+    (``next_step``), a one-line ``rationale`` for the legibility trace, and a ``kind`` tag (``direct``
+    / ``unlock`` / ``evolve``) so the Decision Telemetry (ADR-0019) lets a blunder correction be
+    filtered and clustered by *how* the win was reached. A multi-step line surfaces one step per
+    decision as the engine re-opens the turn menu."""
     next_step: list
     rationale: str = ""
+    kind: str = ""
 
 
 class LethalMixin:
@@ -55,7 +58,7 @@ class LethalMixin:
         #    that KOs a benched 1-prize body but leaves a 2-prize ex Active is NOT a win.
         for i, o in enumerate(options):
             if o.get("type") == _ATTACK and self._attack_wins(obs, board, o, opp):
-                return LethalLine(next_step=[i], rationale="lethal: this KO wins the match")
+                return LethalLine(next_step=[i], rationale="lethal: this KO wins the match", kind="direct")
 
         # The enabling develops below each unlock a KO of the opponent's ACTIVE (via the closed-form
         # hooks). That active-KO wins iff it takes my last prize or the opponent has no bench to promote
@@ -68,7 +71,8 @@ class LethalMixin:
         #    develop; the finishing attack follows when the engine re-opens the turn menu.
         for i, o in enumerate(options):
             if o.get("type") in (_ATTACH, _RETREAT) and traces[i].tactical >= KO_SCORE:
-                return LethalLine(next_step=[i], rationale="lethal (unlock): a develop enables the winning KO")
+                return LethalLine(next_step=[i], kind="unlock",
+                                  rationale="lethal (unlock): a develop enables the winning KO")
         # 3) An EVOLVE of the Active that brings a bigger attacker online — no closed-form hook scores
         #    it, so look it up: the evolved form (the option's in-hand card) inherits the Active's
         #    Energy and its best affordable attack must KO. Evolving then attacking is legal the same
@@ -77,7 +81,8 @@ class LethalMixin:
             if o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 evolved_id = self._option_card_id(obs, select, o)
                 if self._best_affordable_ko_value(obs, board, opp, evolved_id, board.my_active_energy) > 0:
-                    return LethalLine(next_step=[i], rationale="lethal (evolve): evolving enables the winning KO")
+                    return LethalLine(next_step=[i], kind="evolve",
+                                      rationale="lethal (evolve): evolving enables the winning KO")
         return None
 
     def _attack_wins(self, obs, board, option, opp) -> bool:
