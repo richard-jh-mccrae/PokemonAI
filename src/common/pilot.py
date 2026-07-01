@@ -21,6 +21,7 @@ from common.scouting.matchup import matchup_favorability
 # own their Hypotheses AND their Pilot-side code (a `*Mixin` this Pilot inherits) — see those modules.
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
+from common.strategy.lethal import LethalLine, LethalMixin
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
@@ -456,9 +457,10 @@ class Decision:
     chosen: list
     options: list = field(default_factory=list)
     read: Read | None = None     # the per-decision Scouting Read (ADR-0026), surfaced for legibility
+    lethal: LethalLine | None = None  # the locked guaranteed-win line this turn (ADR-0030), or None
 
 
-class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+class Pilot(LethalMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
     """Composed from four doctrine mixins (gust / fetch / shuffle-refresh / tool) — each contributes its closed-form
     Pilot-side methods; the shared Sense→Plan→Score→Act core is defined here. See common/strategy/."""
 
@@ -498,6 +500,9 @@ class Pilot(GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
         options = select.get("option") or []
         board = self._board(obs, select)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
+        lethal = self.find_lethal_line(obs, select, board, options, traces)  # ADR-0030: take the win now
+        if lethal is not None:
+            return Decision(chosen=lethal.next_step, options=traces, read=board.read, lethal=lethal)
         max_count = select.get("maxCount", 0)
         # Primary key = score; the secondary key breaks an EXACT score tie toward an attach that feeds a
         # needy win-condition Line body (the Line base over an off-line opener — ep82867148 f87). A

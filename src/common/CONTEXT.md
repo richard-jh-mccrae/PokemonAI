@@ -228,6 +228,46 @@ target) by engine-computed outcomes (KO / bench-snipe / prize math), not authore
 numbers. Hypotheses bias it.
 _Avoid_: AttackPlan (the deck-specific instance in `demos/rules-based-lucario.py`), damage table
 
+**Lethal**:
+A win available on the CURRENT turn — a reachable sequence of this-turn actions that takes my last
+Prize(s) or leaves the opponent with no Pokémon in play, provable **with certainty** from known
+information (board + hand + closed-form damage + the sound deck oracle; coins forced to their worst
+outcome). *Sound by definition*: a merely-likely win, or one that needs an unknown draw or an
+unforced coin, is **not** a Lethal — so the Pilot may safely commit to it. Multi-turn prize-race
+planning is a separate problem, out of scope here.
+_Avoid_: winning move (too vague — a Lethal is the whole guaranteed win, not one good option), KO
+(one knockout; a Lethal may need several enabling steps first), prize race (the deferred multi-turn
+tempo problem)
+
+**Lethal Line**:
+The specific ORDERED list of this-turn actions that realises a Lethal — the enabling develops
+(attach / evolve / retreat / gust / …) ending in the turn-closing attack. The **shortest** confirmed
+line is the one taken ("take exactly those decisions"). Once locked it is authoritative: the Pilot
+executes its steps and takes nothing outside it that turn.
+_Avoid_: Plan (the turn-mode `SETUP`/`RACE`/…; a Lethal Line is a concrete action list), combo,
+sequence (too generic)
+
+**Lethal Solver**:
+The eager, deck-agnostic Pilot routine that runs at the START of every turn: it works **backward
+from prizes** to generate candidate Lethal Lines by closed-form KO math, confirms a candidate by
+forward-simulating it through the **Engine Search** (winner `result` == me), and LOCKS the first
+confirmed line for execution. Sound by construction — it never locks a false Lethal (misses cost a
+turn; a phantom win loses the game). Subsumes the scattered per-action lethal lookaheads.
+_Avoid_: Tactical Evaluator (scores *all* combat options; the Lethal Solver only seeks a guaranteed
+win), Posture (opponent-driven), bare "search"
+
+**Engine Search**:
+The simulator's own forward lookahead, exposed to the agent (`search_begin` / `search_step` /
+`search_end` / `search_release`, `cg/api.py`): it forks an INDEPENDENT copy of the position from an
+observation's `search_begin_input` — the live game is untouched — and plays hypothetical moves,
+returning the exact resulting State, including `result` (the winner). The authority behind Lethal
+confirmation; `manual_coin` forces coin outcomes for worst-case (sound) checks. Realises the design's
+**Tier-1 Search** seam (Tier-0 = closed-form). It requires *predicted* hidden zones (my deck/prizes,
+the opponent's deck/hand/prizes/face-down Active), so its verdict is trusted only for outcomes
+**invariant** to those predictions.
+_Avoid_: rollout (implies a random playout; this is exact deterministic stepping), Base Value Model
+(the learned win-prob estimator — the Engine Search is exact rules, not learned), Scout/Read
+
 **Incoming**:
 The closed-form estimate of the worst damage the opponent can deal to one of my bodies next turn —
 from their best **affordable** attacker (one whose attached Energy can pay an attack now, allowing for
