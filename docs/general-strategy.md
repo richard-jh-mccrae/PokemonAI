@@ -188,6 +188,50 @@ Among knockouts, prefer the **higher-prize target** — a KO yields `Mega ex →
 mapping; see below.) **Source:** F1 / F3 — TCG Protectors (Prize Trade); JustInBasil; PokeBeach
 ("Small is Good").
 
+### `energy-recover-credit` *(2026-07-02, mega_lucario deck-genie)*
+An attack with an **energy-recover rider** ("Attach up to N Basic {X} Energy cards from your
+discard pile…" — `AttackStat.recoverN/recoverEnergyType/recoverTarget`; pool-verified 6: Aura Jab,
+Pick and Stick, Regi Charge ×3, Abundant Harvest) is credited `_ENERGY_RECOVER` (75) per Energy it
+would ACTUALLY re-attach — `min(N, matching Basic fuel in my open discard)`, 0 when its target scope
+has no recipient (bench-targeted with an empty Bench). Attacking IS the acceleration for these
+decks, so a fueled Aura Jab (130 + load 3) outweighs a bare bigger chip (Mega Brave 270) while an
+unfueled one doesn't. Inside the KO branch the credit is **sub-prize** (0.25/Energy, cap 0.75) —
+"the cheaper KO that also develops" — never overriding a real prize difference.
+
+### `boost-lethal` — the damage-boost OHKO-line model *(2026-07-03, mega_lucario deck-genie)*
+The **breakpoint model** that was deferred here is now closed-form. Card facts: `CardStat.damageBoost/
+damageBoostType/damageBoostVsEx` parse the Trainer families ("During this turn, attacks used by your
+[{X}] Pokémon do N more damage to your opponent's Active [{ex}]" — Premium Power Pro; the attached-Tool
+variant — Maximum Belt; pool-verified 4, the multi-mode Kieran fail-closed). Live state: a match-scoped
+`TurnBoostTracker` (transients.py) accumulates this-turn boost PLAYs from the log stream; an attached
+Tool is read off the holder. The damage oracle applies each gated boost **before W/R** (both directions
+— the opponent's Power Pro play is as visible as mine), and `_boost_lethal_tactical` scores a PLAY/ATTACH
+that CROSSES an affordable KO line as KO_SCORE-class (a Power-Pro-class Item may cross with k held
+copies together; fires only when no affordable attack already KOs; skips a simultaneous-draw crossing).
+The {ex} defender gate includes Mega ex — rulebook.txt:337.
+
+### `recoil-doom` *(2026-07-03, mega_lucario deck-genie)*
+A NON-KO attack whose unconditional recoil FLIPS my currently-safe Active into a free KO (outright
+self-KO, or post-recoil HP inside `_active_doomed` re-asked at hp−recoil) is charged `_RECOIL_DOOM`
+(100, combat-scale) — Wild Press 210 self-70 is a fine prize trade (the KO branch is never charged)
+but not a chip that leaves an 80-HP body for nothing. An already-doomed Active is never charged
+(chip big before it dies).
+
+### Attack conditions — bench-partner gate *(2026-07-03, mega_lucario deck-genie)*
+`AttackStat.requiresBench` ("If you don't have <X> on your Bench, this attack does nothing" —
+pool-verified 2: Cosmic Beam needs Lunatone, Guardian Burst needs Uxie AND Azelf) + the live
+`atk_bench_names` context zero the attack's **exact/min** damage when the condition is unmet on the
+board — so scoring (not just the Lethal floor) sees the 0, and the phantom KO vs a low-HP Active dies.
+The **max** bound keeps printed damage: Incoming is a worst case and the opponent can bench the
+partner before attacking.
+
+### `self-lock-cost` *(2026-07-02, mega_lucario deck-genie)*
+An attack that locks itself (or all its user's attacks) for my next turn (`nextTurnSameAttackLock` /
+`nextTurnSelfLock` — Mega Brave class) is charged `_LOCK_COST` (40) **only when a lock-free attack
+was also affordable**: burning the nuke's cooldown on a non-KO turn wastes the turn it would KO. A
+lone locking attack is never charged (chipping still beats passing — Riolu's Accelerating Stab).
+Sub-prize (−0.3) inside the KO branch: among equal-prize KOs, keep the big attack off cooldown.
+
 ## Gust (Boss's Orders) — implemented (ADR-0022)
 
 The doctrine for a **gust** — force the opponent to switch a benched Pokémon into their Active Spot
@@ -614,7 +658,7 @@ A "carrier retains the Cape's value" gate is a deferred refinement. See ADR-0028
 | Rule | Needs | Source |
 |---|---|---|
 | `gust-the-damaged` — **superseded** by the full **Gust (Boss's Orders)** doctrine above (board-only, KO-gated; the already-damaged case is just one KO-able target) | — see ADR-0022 | F9 — JustInBasil (Gusting) |
-| Damage-boost "crosses an OHKO line" (e.g. Maximum Belt +50 vs ex) | a damage **breakpoint model** + meta stat table; per-tool damage bonus is unstructured (free text), like `hpBonus` | F10 / F11 — JustInBasil (Damage) |
+| ~~Damage-boost "crosses an OHKO line" (e.g. Maximum Belt +50 vs ex)~~ — **BUILT 2026-07-03**: see `boost-lethal` in the Combat section (parsed card facts + `TurnBoostTracker` + oracle boosts + the crossing tactical) | — | F10 / F11 — JustInBasil (Damage) |
 
 One **closed-form breakpoint** stays here; the +HP-Tool half graduated into its own doctrine:
 - `Board.active_doomed` (incoming ≥ my Active's remaining HP), consumed by `dont-feed-the-doomed`.

@@ -89,8 +89,16 @@ _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category)
 **Attack Effect**:
 The per-attack, machine-readable effect facts of a *single* attack — its damage and energy cost plus
 the **effect modifiers** that bend the closed-form damage math: ignores-Ability / ignores-Weakness /
-ignores-Resistance, self-recoil, bench-snipe rider, hand-size scaling, "no damage to the Active", and
-conditional / coin-flip damage. **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
+ignores-Resistance, self-recoil, bench-snipe rider, hand-size scaling, "no damage to the Active",
+conditional / coin-flip damage, the **energy-recover rider** ("attach up to N Basic {X} Energy
+from your discard pile" — the Aura Jab / Regi Charge class: the Tactical layer credits the
+recoverable fuel as development value, and charges a **self-lock cost** on a next-turn-locking nuke
+when a lock-free attack was affordable), and the **bench-partner condition** ("does nothing without
+<X> on your Bench" — the oracle zeroes exact/min on the live board; "max" keeps printed since the
+opponent can bench the partner first). The card-tier sibling for Trainers is the **damage-boost
+fact** (`CardStat.damageBoost` — Premium Power Pro / Maximum Belt: this-turn plays tracked
+match-scoped by `TurnBoostTracker`, attached Tools read off the holder, both priced before W/R and
+crossing-checked by the boost-lethal tactical). **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
 card-tier structural stats (`CardStat`) and the behavioral, card-level `Function Tag`. Consumed by the
 closed-form (**Tier-0**) combat math so the agent picks the right attack *before* paying the Engine
 Search sim budget — e.g. Mega Starmie ex's Nebula Beam lands through Crustle's ex-damage immunity

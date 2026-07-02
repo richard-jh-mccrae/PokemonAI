@@ -47,6 +47,25 @@ HYPOTHESES = [
         and c.is_best_promote_target,
         weight=40, status="testing"),
     Hypothesis(
+        id="dont-promote-into-their-prize-reach",
+        rationale="At a forced promote (TO_ACTIVE), soften promoting a win-condition whose OWN prize "
+                  "value covers the opponent's remaining prizes (`card_prize_value >= "
+                  "opp_prizes_remaining`, e.g. a 3-prize Mega ex vs an opponent at 2-3) — KOing it "
+                  "hands them the game in one hit, so the wincon should stay benched while a 1-prize "
+                  "body soaks (make them take six individual prizes, not two Megas). The per-option "
+                  "penalty complement of `interpose-the-cheap-attacker-to-preserve-the-wincon` (+50 on "
+                  "the cheap body): that rule needs one of its three drivers; this one bites whenever "
+                  "the prize math alone is fatal, netting `promote-the-ready-wincon` (+40) down to +20 "
+                  "so ANY viable alternative (interpose +50, staller +20) outranks the fatal promote. "
+                  "Stands down when the promoted wincon can itself KO right away "
+                  "(`promote_target_kos` — trading KOs while ahead on the exchange is fine), when the "
+                  "opponent needs only ONE prize (any KO wins for them — lead the strongest body), and "
+                  "when we're CLOSING (my_prizes_remaining <= 2: exposure is how you finish).",
+        when=lambda c: c.select_context == _TO_ACTIVE and c.card_is_wincon
+        and c.card_prize_value >= c.board.opp_prizes_remaining >= 2
+        and not c.promote_target_kos and c.board.my_prizes_remaining > 2,
+        weight=-20, status="assumed"),
+    Hypothesis(
         id="promote-the-staller",
         rationale="When Active is KO'd and you can neither promote a powered wincon nor evolve a benched "
                   "pre-evolution into a ready attacker this turn, promote a disposable opener/wall "
