@@ -10,6 +10,15 @@ import json
 from pathlib import Path
 
 
+def authored_seeds(general_strategy, strategy) -> dict:
+    """The authored-EFFECTIVE seed baseline (ADR-0035): Hypothesis defaults merged with the deck's
+    authored ``Strategy.weight_overrides`` — the layer the fit starts from and ``sparse_overrides``
+    diffs against, so tuned.json stays exactly the genuine learned deltas."""
+    seeds = {h.id: h.weight for h in (*general_strategy.hypotheses, *strategy.hypotheses)}
+    seeds.update(strategy.weight_overrides)
+    return seeds
+
+
 def sparse_overrides(weights: dict, seeds: dict) -> dict:
     """Keep only weights that differ (after rounding) from the authored seed, so tuned.json
     records the genuine deltas the Pilot will actually apply — not a full snapshot that no-ops

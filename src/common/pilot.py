@@ -702,9 +702,12 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs)
 
     def _weight(self, h) -> float:
-        """Effective weight: a machine-written override by id, else the authored default
-        (0 disables). ADR-0008 tunables: shared defaults -> per-deck/machine overrides."""
-        return self.overrides.get(h.id, h.weight)
+        """Effective weight, resolved by id (0 disables): the learned override (tuned.json) over
+        the deck's authored seed override (Strategy.weight_overrides, ADR-0035) over the authored
+        default. ADR-0008 tunables: shared defaults -> per-deck/machine overrides."""
+        if h.id in self.overrides:
+            return self.overrides[h.id]
+        return self.strategy.weight_overrides.get(h.id, h.weight)
 
     def _tactical(self, obs: dict, board: Board, option: dict) -> float:
         """Closed-form combat value (Tier-0): printed damage (x2 on Weakness) vs the opponent

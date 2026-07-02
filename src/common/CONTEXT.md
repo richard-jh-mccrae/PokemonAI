@@ -233,8 +233,9 @@ _Avoid_: the Strategy Category (the competition), Plan, "hard-coded logic"
 The deck-agnostic baseline of Hypotheses shipped in `common/`, applied to every deck beneath
 its own Strategy — generic competence (tempo, prize-awareness) keyed on universal Function Tags
 and engine card stats. The Pilot scores it together with the deck Strategy; a deck specialises
-or disables one of its rules by overriding the weight **by id** (learned from replays/training,
-not authored).
+or disables one of its rules by overriding the weight **by id** — an **authored seed override**
+(declared in the deck's Strategy, doctrine-driven) or a **learned override** (tuner-written,
+from replays/training); the learned layer wins.
 _Avoid_: Strategy (the per-deck doctrine), Playbook, Posture (the opponent-driven generic core)
 
 **Doctrine**:
@@ -367,3 +368,41 @@ The single deck-agnostic, replay-trained estimator of win probability from a gam
 the project's one learned component, used as Search leaf-evaluation or Score tiebreaker
 and gated by the Read's confidence.
 _Avoid_: policy (it scores states, not moves), RL agent, neural net, card embedding
+
+### Strategy lifecycle
+
+**Fold**:
+Moving a deck Hypothesis into the General Strategy because its trigger vocabulary is (or has
+become) universal — Roles / Function Tags / Board signals / params, no card ids — under a
+card-name-free id; the deck's declarations remain its opt-in (ADR-0034). Score-equal for the
+origin deck by the Score-Diff Gate; a residual band difference becomes an authored weight
+override. Covers the retire-into-an-existing-successor case too (a NOTE names the successor).
+_Avoid_: promotion / expansion (older phrasings), migration (direction-ambiguous), deletion
+(loses the provenance)
+
+**Alignment Pass**:
+The recurring reconciliation of one deck's Strategy against the *current* General Strategy and
+Pilot systems — Folds, vocabulary/wiring modernization, and Disposition refresh — scoped by the
+deck's Alignment Ledger and gated by the Score-Diff Gate (ADR-0036).
+_Avoid_: tuning (weight fitting from Corrections, ADR-0018), refactor (a shape-only code change),
+sync (too vague)
+
+**Alignment Ledger**:
+The per-deck record of the General-Strategy state (commit) the deck was last aligned against —
+the diff base that scopes the next Alignment Pass.
+_Avoid_: Progress checklist (deck-genie's authoring resumability), changelog
+
+**Disposition**:
+The recorded verdict of reconciling one deck card/rule against the General Strategy —
+`covers-as-is` / `override-candidate` / `conflicts` / `gap`. Authored by deck-genie, kept current
+by Alignment Passes; lives in the deck's STRATEGY.md.
+_Avoid_: status (a Hypothesis' test journey), verdict (the blunder Verifier's output)
+
+**Score-Diff Gate**:
+The mechanical behavior-neutrality proof for a Strategy/Pilot change: replay a recorded corpus
+(Correction `obs`, replay films) through the pre- and post-change Pilot and diff per-frame —
+`scores` mode (per-option scores identical; the Fold bar) or `choice` mode (chosen option
+identical; the vocabulary-fix bar). Intended divergences are enumerated and justified, and
+escalate to match-level A/B.
+_Avoid_: divergence replay (unshipped synonym), A/B (match-level winrate evidence — the
+complementary gate), regression test (a fixed assert on one state)

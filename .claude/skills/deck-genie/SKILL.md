@@ -198,11 +198,15 @@ outline is solid, compare the deck's target strategy against the general one and
    assigning the Role — the rule stays silent for decks that don't (precedent: the entire
    mega_starmie fold, 2026-07-02 — the deck now ships `hypotheses=[]`). A deck-intent judgment with
    no structural derivation becomes a **param** a general selector honors (`preferred_start` →
-   `honor-preferred-start`). Per-deck strength stays tunable by id via `tuned.json` (ADR-0009).
+   `honor-preferred-start`). Per-deck strength: a doctrine-driven seed goes in
+   `Strategy.weight_overrides` (ADR-0035 — never hand-edit `tuned.json`, the tuner rewrites it);
+   the learned layer stays `tuned.json` by id (ADR-0009).
 2. **Deck Hypothesis (the justified exception).** Only when the trigger genuinely needs deck-local
    knowledge NO declaration (Role / Line / param / tag) can carry — and say WHY in the rationale.
    A shipped deck rule is a standing **folding candidate**: once its vocabulary proves general,
    fold it (score-equality gated via `tools/sim/score_diff.py` — capture before, diff after).
+   Upkeep after authoring — folds, new-vocabulary adoption, disposition refresh — is
+   `/deck-align`'s job (ADR-0036), ledger-tracked per deck in `aligned.json`.
 
 Also fill `roles` (the per-deck intent overlay), `lines`, and `params`. Everything lands in
 STRATEGY.md — nothing executable yet.
