@@ -30,7 +30,8 @@ CLUSTERS = {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker"}),
     "promote": (PROMOTE_HYPOTHESES, {
-        "promote-the-accelerator-for-the-ko", "promote-the-ready-wincon", "promote-the-staller"}),
+        "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
+        "promote-the-ready-wincon", "promote-the-staller"}),
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
         "evolve-into-wincon", "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
