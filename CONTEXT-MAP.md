@@ -7,6 +7,7 @@
 - [Agent Checks](./tools/sim/CONTEXT.md) — pre-submission harness (`tools/sim/`) that drives the real cabt simulator to verify an agent's **Playability** and **Deployability** before upload.
 - [Training](./tools/train/CONTEXT.md) — offline tooling (`tools/train/`) that turns **Replays** into learning signal; first component is the **blunder inspector** (`blunder_correction`), which emits **Corrections**.
 - [Submission & Tracking](./tools/submit/CONTEXT.md) — builds a traceable **Submission** (a **Bundle** + its **Manifest** / **Agent Brief**), uploads it to the Simulation competition, and tracks each agent's state against its **Performance** over time (**Agent History**, **Performance Log**, **Dashboard**).
+- [Arena](./tools/arena/CONTEXT.md) — public web app (`tools/arena/`) where a **Visitor** plays a live **PvC Match** against an agent on the real cabt engine and leaves a **Rating**; every game is captured as a Tuner-usable replay under `data/replays/PvC/`.
 
 ## Relationships
 
@@ -20,4 +21,5 @@
 - **Training → Submission & Tracking**: each Submission ships the Tuner's `tuned.json` plus a `tuned.meta.json` provenance sidecar, and the agent's **Decision Telemetry** feeds **Corrections** — see [ADR-0018](./docs/adr/0018-applying-tuner-output.md), [ADR-0009](./docs/adr/0009-training-methodology.md).
 - **Agent Checks → Submission & Tracking**: `submit` gates on **Deployability** / **Playability** before uploading — see [ADR-0010](./docs/adr/0010-local-agent-verification-on-cabt-env.md).
 - **Submission & Tracking → Strategy Writeup**: **Agent History** + **Performance Log** + **Dashboard** are the evidence base for the Strategy-category Writeup — see [ADR-0012](./docs/adr/0012-optimize-for-strategy-category.md). The Writeup's required structure (Kaggle's Winning Model Documentation Guidelines) mapped to our artifacts: [docs/writeup-guidelines.md](./docs/writeup-guidelines.md).
+- **Arena → Training**: PvC replays are captured on the cabt-env path (per-frame agent `obs`, like the Self-play Corpus) so the blunder inspector can tag them and the Tuner can replay them; the **Rating** embedded in each replay triages which games get tagged first.
 - **Shared vocabulary**: `Archetype`, `Main-line` / `Sub-line` / `Engine Pokémon`, `Meta`, `Rank Band` are defined in **Meta Tracker** and reused verbatim by **Agent Runtime**. Avoid redefining them.

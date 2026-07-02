@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match — Battle the Bot</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="arena.css">
+<link rel="stylesheet" href="play.css">
+</head>
+<body class="page-play">
+
+<div id="banner" hidden></div>
+
+<header class="topbar">
+  <span class="brand">Arena</span>
+  <span id="vs" class="muted"></span>
+  <span id="turn" class="muted"></span>
+  <button type="button" class="link-btn" id="concede">Concede</button>
+</header>
+
+<main id="board">
+  <section class="side" id="opp-side">
+    <div class="stats" id="opp-stats"></div>
+    <div class="active-row" id="opp-active"></div>
+    <div class="bench" id="opp-bench"></div>
+  </section>
+
+  <section id="ticker-wrap">
+    <div id="ticker" aria-live="polite"></div>
+    <details id="history">
+      <summary>history</summary>
+      <ul id="history-list"></ul>
+    </details>
+  </section>
+
+  <section class="side" id="you-side">
+    <div class="active-row" id="you-active"></div>
+    <div class="bench" id="you-bench"></div>
+    <div class="stats" id="you-stats"></div>
+  </section>
+</main>
+
+<footer id="dock">
+  <div class="hand" id="hand"></div>
+  <div class="prompt" id="prompt"></div>
+  <div class="options" id="options"></div>
+  <div class="confirm-row" id="confirm-row" hidden>
+    <button type="button" class="btn" id="skip-btn" hidden>Skip</button>
+    <button type="button" class="btn btn-primary" id="confirm-btn" disabled>Confirm</button>
+  </div>
+</footer>
+
+<div id="overlay" hidden>
+  <div class="overlay-card">
+    <h2 id="end-title"></h2>
+    <p class="forfeit-note" id="end-note"></p>
+
+    <div id="rating-form">
+      <label for="misplay">Did the bot misplay? What happened?</label>
+      <textarea id="misplay" maxlength="2000"></textarea>
+
+      <label>When?</label>
+      <div class="segmented" id="phase-seg">
+        <button type="button" data-phase="early">Early game</button>
+        <button type="button" data-phase="mid">Mid game</button>
+        <button type="button" data-phase="late">Late game</button>
+      </div>
+
+      <label for="comments">Anything else?</label>
+      <textarea id="comments" maxlength="2000"></textarea>
+
+      <div class="overlay-actions">
+        <button type="button" class="btn btn-primary" id="rating-submit">Submit</button>
+        <a href="#" id="rating-skip">Skip</a>
+        <div class="form-error" id="rating-error"></div>
+      </div>
+    </div>
+
+    <div id="thanks" class="thanks" hidden>
+      <p>Thanks — every game helps train the bot.</p>
+      <a class="btn btn-primary btn-big" href="deck.html">Play again</a>
+    </div>
+  </div>
+</div>
+
+<script src="play.js"></script>
+</body>
+</html>

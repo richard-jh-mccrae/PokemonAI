@@ -37,6 +37,8 @@ htmlcov/
 /data/replays/
 # score_diff captures are build-specific local artifacts (tools/sim/score_diff.py)
 /data/score_diff/
+# fetched card scans (tools/arena/images.py) — per-host, never committed
+/tools/arena/static/cards/
 *.pdf
 .claude/settings.local.json
 /tmp/

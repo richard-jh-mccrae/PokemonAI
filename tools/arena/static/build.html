@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deck builder — Battle the Bot</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="arena.css">
+<link rel="stylesheet" href="build.css">
+</head>
+<body class="page-build">
+<main>
+
+  <header class="build-top">
+    <div class="build-row1">
+      <div class="build-id">
+        <div class="build-title" id="title">Deck builder</div>
+        <div class="build-count warn" id="count">0/60</div>
+      </div>
+      <div class="build-actions">
+        <button type="button" class="link-btn" id="clear">Clear</button>
+        <button type="button" class="btn btn-primary" id="start" disabled>Start</button>
+      </div>
+    </div>
+    <div class="build-problems" id="problems" aria-live="polite"></div>
+    <div class="build-errors" id="start-error" aria-live="polite"></div>
+  </header>
+
+  <section class="deck-pane">
+    <div class="deck-sec" id="sec-pokemon" hidden>
+      <h2>Pokémon</h2>
+      <div class="deck-rows"></div>
+    </div>
+    <div class="deck-sec" id="sec-trainer" hidden>
+      <h2>Trainer</h2>
+      <div class="deck-rows"></div>
+    </div>
+    <div class="deck-sec" id="sec-energy" hidden>
+      <h2>Energy</h2>
+      <div class="deck-rows"></div>
+    </div>
+    <p class="hint" id="deck-empty">Deck is empty — add cards from the pool below.</p>
+  </section>
+
+  <section class="pool">
+    <h2>Card pool</h2>
+    <p class="hint">Every card below is legal in this competition — this is the
+      complete pool.</p>
+    <div class="search-row">
+      <input type="search" id="search" placeholder="Search cards…" autocomplete="off">
+      <select id="sort" aria-label="Sort cards">
+        <option value="name">Name</option>
+        <option value="hp">HP</option>
+        <option value="damage">Damage</option>
+      </select>
+    </div>
+    <div class="segmented tabs" id="tabs">
+      <button type="button" data-f="all" class="selected">All</button>
+      <button type="button" data-f="pokemon">Pokémon</button>
+      <button type="button" data-f="trainer">Trainer</button>
+      <button type="button" data-f="energy">Energy</button>
+    </div>
+    <div class="chip-row" id="chips" hidden></div>
+    <div id="pool-list"></div>
+    <p class="hint" id="pool-more" hidden></p>
+    <button type="button" class="btn" id="pool-more-btn" hidden></button>
+  </section>
+
+</main>
+
+<div class="sheet-wrap" id="sheet-wrap" hidden>
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="s-name">
+    <div class="sheet-head">
+      <div class="sheet-id">
+        <div class="sheet-name" id="s-name"></div>
+        <div class="sheet-sub muted" id="s-sub"></div>
+      </div>
+      <button type="button" class="link-btn" id="sheet-close" aria-label="Close">✕</button>
+    </div>
+    <div class="sheet-body" id="s-body"></div>
+    <div class="sheet-foot">
+      <button type="button" class="step" id="s-minus" aria-label="Remove one">−</button>
+      <span class="cnt" id="s-count">0</span>
+      <button type="button" class="step" id="s-plus" aria-label="Add one">+</button>
+    </div>
+  </div>
+</div>
+
+<script src="build.js"></script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pick a deck — Battle the Bot</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="arena.css">
+</head>
+<body class="page-deck">
+<main>
+  <h1>Pick a deck</h1>
+
+  <div class="field">
+    <input type="text" id="name" maxlength="40" placeholder="Your name (optional)" autocomplete="off">
+  </div>
+
+  <h2>Presets</h2>
+  <div class="presets" id="presets" role="radiogroup" aria-label="Preset decks">
+    <span class="muted" id="presets-loading">Loading…</span>
+  </div>
+  <div class="hint" id="preset-edits"></div>
+
+  <h2>Or bring your own</h2>
+  <textarea id="deck-text" maxlength="20000" spellcheck="false"
+            placeholder="Paste your deck list here…"></textarea>
+  <div class="upload-row">
+    <button type="button" class="btn" id="upload-btn">Upload .txt</button>
+    <input type="file" id="file" accept=".txt" hidden>
+  </div>
+  <p class="hint">From Limitless Deck Builder: <strong>Share → Copy as Text</strong>,
+    paste here — or upload the saved .txt.</p>
+  <p class="hint">Only this competition's card pool is legal — not every card on
+    Limitless exists here. Pasted decks are checked and any off-pool card is
+    flagged. Every legal card is browsable in the
+    <a href="build.html?from=empty">deck builder</a>.</p>
+  <div class="deck-status" id="deck-status" aria-live="polite"></div>
+
+  <div class="upload-row" style="margin-top: 20px;">
+    <button type="button" class="btn btn-primary" id="build-btn">Build your own deck</button>
+  </div>
+
+  <div class="start-row">
+    <button type="button" class="btn btn-primary btn-big" id="start" disabled>Start</button>
+    <div class="form-error" id="start-error" aria-live="polite"></div>
+  </div>
+</main>
+
+<script>
+'use strict';
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const nameEl = $('name');
+  const presetsEl = $('presets');
+  const textEl = $('deck-text');
+  const statusEl = $('deck-status');
+  const startBtn = $('start');
+  const startErr = $('start-error');
+
+  let selectedPreset = null;
+  let debounceTimer = null;
+  let checkSeq = 0;      // ignore stale /api/deck responses
+
+  function updateStart() {
+    startBtn.disabled = !(selectedPreset || textEl.value.trim());
+  }
+
+  function setStatus(nodes) {
+    statusEl.textContent = '';
+    for (const n of nodes) statusEl.appendChild(n);
+  }
+
+  function line(cls, text) {
+    const s = document.createElement('span');
+    s.className = cls;
+    s.textContent = text;
+    return s;
+  }
+
+  // --- presets ---------------------------------------------------------------
+  fetch('/api/presets')
+    .then((r) => r.json())
+    .then((data) => {
+      presetsEl.textContent = '';
+      const editsEl = $('preset-edits');
+      for (const p of data.presets || []) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'preset';
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', 'false');
+        b.dataset.id = p.id;
+        b.textContent = p.title;
+        b.addEventListener('click', () => selectPreset(p.id));
+        presetsEl.appendChild(b);
+        // tweak-a-preset link into the in-app builder (name read at click time)
+        if (editsEl.childNodes.length) editsEl.appendChild(document.createTextNode(' · '));
+        const a = document.createElement('a');
+        a.href = '#';
+        a.textContent = 'edit ' + p.title;
+        a.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          location = 'build.html?from=' + encodeURIComponent(p.id)
+                   + '&visitor=' + encodeURIComponent(nameEl.value.trim());
+        });
+        editsEl.appendChild(a);
+      }
+      if (!presetsEl.children.length) {
+        presetsEl.appendChild(line('muted', 'No presets — paste a deck below.'));
+      }
+    })
+    .catch(() => {
+      presetsEl.textContent = '';
+      presetsEl.appendChild(line('muted', 'Could not load presets — paste a deck below.'));
+    });
+
+  function selectPreset(id) {
+    selectedPreset = selectedPreset === id ? null : id;   // tap again to deselect
+    for (const b of presetsEl.querySelectorAll('.preset')) {
+      const on = b.dataset.id === selectedPreset;
+      b.classList.toggle('selected', on);
+      b.setAttribute('aria-checked', String(on));
+    }
+    if (selectedPreset) {           // preset wins: clear the pasted deck
+      textEl.value = '';
+      setStatus([]);
+      clearTimeout(debounceTimer);
+      checkSeq++;
+    }
+    startErr.textContent = '';
+    updateStart();
+  }
+
+  function clearPreset() {
+    if (!selectedPreset) return;
+    selectedPreset = null;
+    for (const b of presetsEl.querySelectorAll('.preset')) {
+      b.classList.remove('selected');
+      b.setAttribute('aria-checked', 'false');
+    }
+  }
+
+  // --- paste / upload ---------------------------------------------------------
+  textEl.addEventListener('input', () => {
+    clearPreset();                  // pasting clears preset selection
+    startErr.textContent = '';
+    updateStart();
+    clearTimeout(debounceTimer);
+    const text = textEl.value.trim();
+    if (!text) { setStatus([]); checkSeq++; return; }
+    debounceTimer = setTimeout(() => validateDeck(text), 600);
+  });
+
+  function validateDeck(text) {
+    const seq = ++checkSeq;
+    fetch('/api/deck', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (seq !== checkSeq) return;
+        if (res.ok) {
+          setStatus([line('ok', '✓ ' + res.cards + ' cards')]);
+        } else {
+          setStatus((res.problems || ['deck not accepted']).map((p) => line('problem', p)));
+        }
+      })
+      .catch(() => {
+        if (seq === checkSeq) setStatus([line('problem', 'Could not check the deck — is the server up?')]);
+      });
+  }
+
+  $('build-btn').addEventListener('click', () => {
+    location = 'build.html?from=empty&visitor=' + encodeURIComponent(nameEl.value.trim());
+  });
+
+  $('upload-btn').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      textEl.value = String(reader.result || '');
+      textEl.dispatchEvent(new Event('input'));   // clears preset + validates
+    };
+    reader.readAsText(f);
+    e.target.value = '';   // allow re-uploading the same file
+  });
+
+  // --- start ------------------------------------------------------------------
+  startBtn.addEventListener('click', () => {
+    startErr.textContent = '';
+    const body = {};
+    const name = nameEl.value.trim();
+    if (name) body.visitor = name;
+    if (selectedPreset) body.preset = selectedPreset;
+    else {
+      const text = textEl.value.trim();
+      if (!text) return;
+      body.deck_text = text;
+    }
+    startBtn.disabled = true;
+    startBtn.textContent = 'Starting…';
+    fetch('/api/tables', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && data.table_id) {
+          location = 'play.html?table=' + encodeURIComponent(data.table_id)
+                   + '&vs=' + encodeURIComponent(data.agent || '');
+          return;
+        }
+        startErr.textContent = '';
+        if (r.status === 400 && data.problems) {
+          for (const p of data.problems) startErr.appendChild(line('', p));
+        } else {
+          startErr.textContent = data.error || 'Could not start the match — try again.';
+        }
+        resetStart();
+      })
+      .catch(() => {
+        startErr.textContent = 'Could not reach the server — try again.';
+        resetStart();
+      });
+  });
+
+  function resetStart() {
+    startBtn.textContent = 'Start';
+    updateStart();
+  }
+})();
+</script>
+</body>
+</html>

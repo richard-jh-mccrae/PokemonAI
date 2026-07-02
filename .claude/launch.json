@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arena",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "--app-dir", "tools", "arena.server:app", "--port", "8123"],
+      "port": 8123
+    }
+  ]
+}

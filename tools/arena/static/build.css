@@ -1,0 +1,301 @@
+/* Arena — deck builder (build.html only). Builds on arena.css variables/classes. */
+
+.page-build main {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 0 16px 80px;
+}
+.page-build h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin: 22px 0 8px;
+}
+
+/* --- sticky header --------------------------------------------------------- */
+
+.build-top {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0 8px;
+}
+.build-row1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.build-id { flex: 1 1 auto; min-width: 0; }
+.build-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.build-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.build-count.ok { color: var(--good); }
+.build-count.warn { color: var(--warn); }
+.build-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.build-problems {
+  font-size: 0.8rem;
+  color: var(--warn);
+  margin-top: 2px;
+}
+.build-problems:empty { display: none; }
+.build-errors {
+  color: var(--bad);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+.build-errors span { display: block; }
+.build-errors:empty { display: none; }
+
+/* --- card rows (deck pane + pool) ------------------------------------------ */
+
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  margin-bottom: 6px;
+}
+.row-count {
+  flex: none;
+  min-width: 2.1em;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row-thumb {
+  flex: none;
+  width: 32px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+.row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.row-name .nm {
+  display: block;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row-name .row-meta {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.steppers {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+.step {
+  width: 42px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.step:disabled { opacity: 0.35; }
+.in-deck {
+  flex: none;
+  min-width: 1.7em;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: #fff;
+}
+
+/* --- pool ------------------------------------------------------------------- */
+
+.search-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#search {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--font);
+}
+#search:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+#sort {
+  flex: none;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.85rem;
+}
+#sort:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.tabs { margin-bottom: 10px; }
+
+/* contextual filter chips: the row scrolls, the page doesn't */
+.chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  margin-bottom: 8px;
+  scrollbar-width: none;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+.chip-row[hidden] { display: none; }
+.chip-sep {
+  flex: none;
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 3px;
+  background: var(--line);
+}
+
+#pool-more { text-align: center; }
+#pool-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+#pool-more-btn[hidden] { display: none; }
+
+/* --- detail sheet ------------------------------------------------------------ */
+
+.sheet-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+.sheet-wrap[hidden] { display: none; }
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.7);
+}
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 620px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  padding: 16px 18px calc(16px + env(safe-area-inset-bottom));
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sheet-id { min-width: 0; }
+.sheet-img {
+  display: block;
+  width: 100%;
+  max-width: min(85vw, 340px);
+  margin: 12px auto 4px;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.sheet-name { font-size: 1.15rem; font-weight: 700; }
+.sheet-sub { font-size: 0.82rem; }
+.sheet-stats { margin: 8px 0 6px; font-size: 0.9rem; }
+.atk {
+  border-top: 1px dashed var(--line);
+  padding: 8px 0;
+}
+.atk-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.atk-name { font-weight: 600; flex: 1 1 auto; min-width: 0; }
+.atk-dmg { flex: none; font-weight: 700; }
+.atk-cost { color: var(--muted); font-size: 0.78rem; }
+.atk-text,
+.sheet-effect {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.sheet-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.evo-link {
+  color: var(--accent);
+  padding: 0;
+  font-size: inherit;
+  text-align: left;
+}
+.evo-link:hover { text-decoration: underline; }
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.sheet-foot .cnt {
+  font-size: 1.2rem;
+  font-weight: 700;
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.sheet-foot .step { width: 58px; height: 44px; }

@@ -1,0 +1,49 @@
+/* Arena — match board card images (play.html only). Builds on arena.css. */
+
+/* --- hand: mini card images with a caption ---------------------------------- */
+
+.chip.card-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 5px 4px;
+  border-radius: 8px;
+}
+.card-chip .chip-img {
+  display: block;
+  width: 64px;
+  border-radius: 4px;
+}
+.card-chip .chip-name {
+  display: block;
+  max-width: 68px;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* staged stays obvious on image chips */
+.chip.card-chip.staged {
+  outline: 2px solid var(--accent);
+  box-shadow: 0 0 10px rgba(91, 157, 255, 0.5);
+}
+.chip.staged .chip-name { color: #fff; }
+
+/* --- board: card scan as the mon face ---------------------------------------- */
+
+.mon .mon-art {
+  display: block;
+  width: 56px;
+  margin: 0 auto 4px;
+  border-radius: 4px;
+}
+.mon.active-mon .mon-art { width: 72px; }
+
+/* target highlight must read clearly over card art */
+.mon.highlight {
+  outline: 3px solid var(--accent);
+  box-shadow: 0 0 14px rgba(91, 157, 255, 0.85);
+}
