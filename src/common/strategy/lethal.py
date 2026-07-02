@@ -93,7 +93,7 @@ class LethalMixin:
         aid = option.get("attackId")
         hp = (opp or {}).get("hp", 0)
         my_stat = self.stats.get(self._my_active_id(obs)) if self.stats else None
-        prevented = self._ability_prevents_damage(my_stat, (opp or {}).get("id"))
+        prevented = self._ability_prevents_damage(my_stat, (opp or {}).get("id"), aid)
         dmg = 0 if prevented else self._weakness_adjusted(obs, opp, self.attacks.get(aid, 0))
         active_ko = bool(hp and dmg >= hp)
         if active_ko and self._is_simultaneous_draw(board, aid, self._prize_value(opp)):

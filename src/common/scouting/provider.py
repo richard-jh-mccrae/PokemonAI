@@ -19,6 +19,12 @@ class CardStat:
     megaEx: bool = False
     aceSpec: bool = False              # ACE SPEC — one-per-deck, irreplaceable; read off CardStat for
                                        # 'protect the ACE SPEC' rules (e.g. Hero's Cape)
+    hasAbility: bool = False           # a Pokémon carrying an Ability (engine CardData.skills, hp > 0) —
+                                       # e.g. Cinderace's Explosiveness. The structural basis for a
+                                       # rush-evolve tutor's fetch-filter: Salvatore fetches only an
+                                       # ability-LESS Evolution ("a card that has no Abilities and evolves
+                                       # from 1 of your Pokémon"), so this excludes an ability-bearing
+                                       # Evolution from its whiff/redundancy target set (cf _FETCH_FILTERS).
     hpBonus: int = 0                   # flat HP a Pokémon Tool grants its holder (e.g. Hero's Cape +100),
                                        # parsed from skill text — the engine has no structured field.
                                        # The primitive behind the general +HP-tool breakpoint model.
@@ -125,6 +131,12 @@ _HAND_SIZE_COUNTERS_RE = re.compile(
     r"Place (\d+) damage counters? on your opponent.s Active Pok.mon for each card in your hand\.?$")
 _HAND_SIZE_DAMAGE_RE = re.compile(r"does (\d+) (?:more )?damage for each card in your hand\.?$")
 _DAMAGE_PER_COUNTER = 10
+# An attack whose damage "isn't affected by ... any effects on your opponent's Active Pokémon" (Mega
+# Starmie's Nebula Beam, Crustle's Superb Scissors). Such an attack bypasses a damage-PREVENTION Ability
+# on the Active (Crustle's Mysterious Rock Inn), which the closed-form combat math otherwise treats as an
+# absolute wall. `[^.]*` keeps the clause within one sentence; `.` covers the é / apostrophe (cross-platform).
+_IGNORES_ACTIVE_EFFECTS_RE = re.compile(
+    r"isn.t affected by[^.]*effects on your opponent.s Active Pok.mon")
 
 
 def _sentences(text: str) -> list[str]:
@@ -157,6 +169,16 @@ def parse_attack_bench_snipe(text: str) -> int:
         if m:
             return int(m.group(1))
     return 0
+
+
+def parse_attack_ignores_active_effects(text: str) -> bool:
+    """True if this attack's damage IGNORES any effects on the opponent's Active Pokémon, e.g. Mega
+    Starmie's Nebula Beam "This attack's damage isn't affected by Weakness or Resistance, or by any
+    effects on your opponent's Active Pokémon." → True. Such an attack lands its full damage THROUGH a
+    defender's damage-prevention Ability on the Active (Crustle's Mysterious Rock Inn, which zeroes
+    ex-attack damage) — the ep83054602 f17 missed win. Any other attack → False (the SAFE direction:
+    under-crediting never wrongly upgrades a whiff to a KO)."""
+    return bool(_IGNORES_ACTIVE_EFFECTS_RE.search((text or "").replace("\n", " ")))
 
 
 def parse_attack_hand_size(text: str) -> int:
@@ -216,6 +238,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         cache[c.cardId] = CardStat(
             cardId=c.cardId, name=c.name, hp=int(c.hp),
             ex=bool(c.ex), megaEx=bool(c.megaEx), aceSpec=bool(getattr(c, "aceSpec", False)),
+            hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # a Pokémon with an Ability skill
             hpBonus=_parse_tool_hp_bonus(c),
             recoil=int(recoil),
             handSizeDamage=int(max((hand_size_by_aid.get(aid, 0) for aid in c.attacks), default=0)),

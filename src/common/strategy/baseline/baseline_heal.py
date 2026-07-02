@@ -23,4 +23,19 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "clutch_heal" in c.tags
         and c.board.active_doomed and not c.board.active_can_ko,
         weight=60, status="testing"),
+    Hypothesis(
+        id="dont-waste-clutch-heal",
+        rationale="The negative complement of `hold-clutch-heal`: a `clutch_heal` (Wally's Compassion) "
+                  "bounces ALL the healed Pokémon's Energy back to hand — a real cost the raw score "
+                  "otherwise ignores. When the Active is NOT doomed there is nothing to survive FOR, so "
+                  "playing it only strips your own Energy (wasting a fresh attach — the exact 'attach "
+                  "then Wally's' blunder — and your turn's Supporter) for no gain. Penalize it below "
+                  "End/develop so the initiative is kept. Gated on `not active_doomed`, the mirror of "
+                  "the reward gate, so the two never fire together and this can NEVER touch a genuine "
+                  "clutch save: when doomed, `hold-clutch-heal` (+60) or the stabilize-then-KO planner "
+                  "line owns the heal; when not doomed, hold it (ep83054602 f32 — Wally's over End with "
+                  "2 Energy on the Active; ep81904064 f29 human corrected Wally's -> develop).",
+        when=lambda c: c.option_type == _PLAY and "clutch_heal" in c.tags
+        and not c.board.active_doomed,
+        weight=-40, status="testing"),
 ]

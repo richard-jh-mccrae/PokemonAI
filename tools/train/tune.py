@@ -33,7 +33,8 @@ def _build_pilot(agent: str):
     from common.strategy.general_strategy import GENERAL_STRATEGY
     from common.pilot import Pilot
     from common.scouting.provider import (
-        EngineCardStatProvider, parse_attack_bench_snipe, parse_attack_recoil)
+        EngineCardStatProvider, parse_attack_bench_snipe,
+        parse_attack_ignores_active_effects, parse_attack_recoil)
 
     agent_dir = REPO / "src" / "agents" / agent
     spec = importlib.util.spec_from_file_location(f"{agent}_strategy", agent_dir / "strategy.py")
@@ -50,6 +51,7 @@ def _build_pilot(agent: str):
         attack_costs={a.attackId: len(a.energies) for a in attacks},
         recoil={a.attackId: parse_attack_recoil(a.text) for a in attacks},
         bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in attacks},
+        ignores_active_effects={a.attackId: parse_attack_ignores_active_effects(a.text) for a in attacks},
     )
     return pilot, seeds
 

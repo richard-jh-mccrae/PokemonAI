@@ -6,7 +6,8 @@ direction). Samples are real card text from `data/EN_Card_Data.csv`.
 import pytest
 
 from common.scouting.provider import (
-    parse_attack_bench_snipe, parse_attack_hand_size, parse_attack_recoil)
+    parse_attack_bench_snipe, parse_attack_hand_size,
+    parse_attack_ignores_active_effects, parse_attack_recoil)
 
 
 @pytest.mark.req("REQ-GUST-0006")
@@ -71,3 +72,20 @@ def test_parse_attack_bench_snipe(text, expected):
 ])
 def test_parse_attack_hand_size(text, expected):
     assert parse_attack_hand_size(text) == expected
+
+
+@pytest.mark.req("REQ-LETHAL-0012")
+@pytest.mark.parametrize("text,expected", [
+    # Mega Starmie ex Nebula Beam — bypasses effects on the opponent's Active (Crustle's prevent Ability)
+    ("This attack's damage isn't affected by Weakness or Resistance, or by any effects on your "
+     "opponent's Active Pokémon.", True),
+    # Crustle Superb Scissors — the shorter phrasing of the same clause
+    ("This attack's damage isn't affected by any effects on your opponent's Active Pokémon.", True),
+    # NOT the clause: Weakness/Resistance only, a bench-snipe, a recoil, no rider -> False (the Ability still walls it)
+    ("This attack's damage isn't affected by Weakness or Resistance.", False),      # W/R only, not effects
+    ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon.", False),  # Jetting Blow
+    ("This Pokémon also does 50 damage to itself.", False),                         # recoil
+    ("", False),
+])
+def test_parse_attack_ignores_active_effects(text, expected):
+    assert parse_attack_ignores_active_effects(text) == expected

@@ -187,3 +187,52 @@ def test_attach_from_target_needs_signal_is_off_outside_attach_from():
                 bench=[poke(WINCON, energy=3, hp=330), poke(PREEVO, energy=0, hp=70)])
     obs = make_select([bare], context=0, current=cur)        # MAIN, not ATTACH_FROM
     assert "spread-attach-to-the-needy" not in _fired(pilot.explain(obs).options[0])
+
+
+# ----------------------------------------------- concentrate-accel-on-one-line-body (ATTACH_FROM)
+@pytest.mark.req("REQ-GEN-0051")
+def test_concentrate_accel_on_one_line_body_at_attach_from():
+    """ep83116081-fr21: Turbo Flare offers two Staryu recipients — one already carrying 1 Energy, one
+    bare. `spread-attach-to-the-needy` reads the 1-Energy Staryu as 'done' (it clears Staryu's own
+    1-cost attack), but the deck's payoff is the 3-Energy Mega — so CONCENTRATE the accelerated Energy
+    on the started Staryu to bring ONE body online, don't spread onto the bare one."""
+    pilot = _pilot()
+    started = card_opt(BENCH, 0)     # bench[0] = Staryu, 1 Energy (closest to the Mega payoff)
+    bare = card_opt(BENCH, 1)        # bench[1] = Staryu, 0 Energy
+    cur = state(active=poke(CINDER, energy=1, hp=160),
+                bench=[poke(PREEVO, energy=1, hp=70), poke(PREEVO, energy=0, hp=70)])
+    obs = make_select([started, bare], context=ATTACH_FROM, current=cur)
+    traces = pilot.explain(obs)
+    assert "concentrate-accel-on-one-line-body" in _fired(traces.options[0])       # the started body
+    assert "concentrate-accel-on-one-line-body" not in _fired(traces.options[1])   # the bare body
+    assert pilot.decide(obs) == [0]
+
+    # The EVOLVED win-condition (Mega) is preferred over a MORE-energised pre-evo — it's the actual
+    # attacker (no evolution step), so concentrate on it (ep83007714-fr22 wants the Mega, not the Staryu).
+    cur2 = state(active=poke(CINDER, energy=1, hp=160),
+                 bench=[poke(WINCON, energy=1, hp=330), poke(PREEVO, energy=2, hp=70)])
+    obs2 = make_select([card_opt(BENCH, 0), card_opt(BENCH, 1)], context=ATTACH_FROM, current=cur2)
+    assert pilot.decide(obs2) == [0]     # the Mega, though the Staryu carries more Energy
+
+
+# ----------------------------------------------- conserve-burst-when-no-ko (discard_eot vs un-KO-able Active)
+@pytest.mark.req("REQ-GEN-0051")
+def test_conserve_burst_when_the_opponent_cannot_be_koed_even_maxed():
+    """ep83116501-fr70: the Active Mega Starmie can't KO the opponent's Active even fully powered
+    (Nebula Beam 210 < 300 HP). Don't burn the one-shot Ignition to reach Nebula — attach the reusable
+    Basic (Jetting Blow 120 + a snipe is as useful and KEEPS the Ignition for a turn it can finish)."""
+    pilot = _pilot()
+    ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)     # Ignition -> Active
+    water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # Basic {W} -> Active
+    cur = state(active=poke(WINCON, energy=0, hp=330), opp_active=poke(OPP, hp=300),
+                hand=[IGNITION, WATER])
+    obs = make_select([ign, water, opt(END)], context=0, current=cur)
+    traces = pilot.explain(obs)
+    assert "conserve-burst-when-no-ko" in _fired(traces.options[0])       # penalises the Ignition burst
+    assert "conserve-burst-when-no-ko" not in _fired(traces.options[1])   # not the reusable Basic
+    assert pilot.decide(obs) == [1]                                       # attach the Basic, keep Ignition
+
+    # Control: a KO-able Active (60 HP < 210 maxed) — the burst DOES buy the KO, so the exemption holds.
+    cur2 = state(active=poke(WINCON, energy=0, hp=330), opp_active=poke(OPP, hp=60), hand=[IGNITION, WATER])
+    obs2 = make_select([ign, water, opt(END)], context=0, current=cur2)
+    assert "conserve-burst-when-no-ko" not in _fired(pilot.explain(obs2).options[0])

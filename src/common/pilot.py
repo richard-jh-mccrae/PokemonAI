@@ -125,6 +125,12 @@ class Board:
                                    # Beam 210 KOs where Jetting Blow 120 doesn't). Gates the survival
                                    # `hold-clutch-heal`: with a KO on the board there is nothing to survive
                                    # FOR — take the prize, don't heal-and-stall (ep83037962 f78 missed win)
+    active_maxed_kos: bool = False # my Active's BIGGEST attack (fully powered, ignoring current Energy)
+                                   # would KO the opponent's Active — so the opp Active is un-KO-able this
+                                   # turn even MAXED when False. Distinct from active_can_ko (current
+                                   # Energy): gates whether a one-shot burst (Ignition) is worth spending
+                                   # to reach the big attack — if even maxed it can't KO, the burst buys
+                                   # nothing, so conserve it (ep83116501 f70)
     gust_best_ko_prizes: int = 0   # best prizes among the opponent's benched Pokémon my Active could KO
                                    # after gusting one to the Active Spot (0 if none) — the whether-to-play
                                    # gate for a gust Supporter (Boss's Orders). ADR-0022.
@@ -222,6 +228,11 @@ class Board:
                                        # while still short of its biggest attack (closest to its payoff
                                        # hit). The Active is skipped when it can already KO (its turn is
                                        # done — build the successor). None when no buildable wincon
+    attach_from_concentrate_slot: tuple | None = None  # (AreaType, index) of the Line body to load at an
+                                       # ATTACH_FROM (Turbo Flare recipient) select — the win-condition-Line
+                                       # member carrying the MOST Energy while still short of the payoff's
+                                       # biggest-attack cost, so accelerated Energy CONCENTRATES on one body
+                                       # toward the Mega payoff instead of spreading. None when none exists.
     stall_target_exists: bool = False  # the opponent has an energyless, high-retreat benched Pokémon —
                                        # a candidate to strand Active with a defensive stall-gust (ADR-0022)
     stall_target_is_keystone: bool = False  # that stall target is the opponent's KEY attacker (an ex /
@@ -355,6 +366,10 @@ class Context:
                                            # fewer than its cheapest attack cost) — so spread the forced
                                            # attach to the bare bench body, not an already-online one.
                                            # False off ATTACH_FROM (cf. attach_target_needs, the MAIN-menu mirror)
+    attach_from_target_is_concentrate: bool = False  # at ATTACH_FROM, THIS option's recipient is the Line
+                                           # body to concentrate accelerated Energy on (== board.attach_from_
+                                           # concentrate_slot) — build ONE body toward the Mega payoff, the
+                                           # concentrate counterpart of attach_from_target_needs' spread
     card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
                                        # pre-evolution that builds toward the win-condition)
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
@@ -470,7 +485,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
-                 search_budget=0, scout=None, posture=True):
+                 ignores_active_effects=None, search_budget=0, scout=None, posture=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -481,6 +496,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         self.attack_costs = attack_costs or {}          # attackId -> Energy count (efficiency tiebreak)
         self.recoil = recoil or {}                      # attackId -> unconditional self-damage (ADR-0022 #2)
         self.bench_snipe = bench_snipe or {}            # attackId -> opp-bench snipe rider (ADR-0022 #14)
+        self.ignores_active_effects = ignores_active_effects or {}   # attackId -> True if its damage
+                                            # ignores any EFFECTS on the opp's Active (Nebula Beam) — so a
+                                            # defender's damage-prevention Ability (Crustle) doesn't apply
         self.search_budget = search_budget
         self.scout = scout                              # opponent Scout (ADR-0026); None = Posture off
         self.posture = posture                          # ADR-0026 kill-switch: False forces γ=0 + neutral
@@ -651,8 +669,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
         if self._ability_prevents_damage(self.stats.get(self._my_active_id(obs)) if self.stats else None,
-                                         (opp or {}).get("id")):
+                                         (opp or {}).get("id"), attack_id):
             return 0                                     # the defender's Ability prevents my ex damage
+                                                         # (unless THIS attack ignores the Active's effects)
         dmg = self._weakness_adjusted(obs, opp, dmg)
         eff = _EFFICIENCY * self.attack_costs.get(attack_id, 0)   # cheaper of equal outcomes wins
         snipe_ko = self._snipe_ko_prizes(board.opp_bench, self.bench_snipe.get(attack_id, 0))
@@ -933,6 +952,11 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
+        attach_from_concentrate = (select.get("context") == _ATTACH_FROM
+                                   and board.attach_from_concentrate_slot is not None
+                                   and (option.get("area"), option.get("index"))
+                                   == board.attach_from_concentrate_slot)   # ATTACH_FROM encodes the
+                                   # recipient in area/index (not inPlayArea/inPlayIndex — cf _option_pokemon)
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
@@ -943,6 +967,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
                        attach_from_target_needs=attach_from_needs,
+                       attach_from_target_is_concentrate=attach_from_concentrate,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
@@ -1030,6 +1055,39 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             return False
         return len((poke.get("energies") or [])) < _min_attack_cost(self.stats, poke.get("id"))
 
+    def _attach_from_concentrate_slot(self, me: dict) -> tuple | None:
+        """(AreaType, index) of the win-condition-Line body to CONCENTRATE accelerated Energy on at an
+        ATTACH_FROM (Turbo Flare recipient) select — among my in-play Line members (`_line_member_set`:
+        Staryu AND Mega Starmie ex) still short of the payoff's biggest-attack cost, the one ALREADY
+        carrying the most Energy, so the deck loads ONE body toward the Mega payoff (Nebula Beam, 3
+        Energy) instead of dribbling one Energy onto each bare Staryu (`spread-attach-to-the-needy`
+        reads a 1-Energy Staryu as 'done' because it clears Staryu's OWN 1-cost attack — the wrong
+        frame for a Line whose real payoff is the evolved Mega). A body at/over the payoff cost is
+        skipped (don't over-stack a ready attacker). None when no buildable Line body exists (ep83116081
+        f21). Deterministic: most-Energy wins, index breaks a tie."""
+        members = self._line_member_set()
+        if not members:
+            return None
+        wincon = self._wincon_set()
+        payoff_cost = 0
+        for line in self.strategy.lines:                  # how much Energy the built body ultimately wants
+            st = self.stats.get(line.payoff) if self.stats else None
+            payoff_cost = max(payoff_cost, (getattr(st, "maxDamageCost", 0) or 0) if st else 0)
+        best = None                                       # ((is_wincon, energy), area, index)
+        for area, bodies in ((_ACTIVE, me.get("active") or []), (_BENCH, me.get("bench") or [])):
+            for i, p in enumerate(bodies):
+                if not p or p.get("id") not in members:
+                    continue
+                e = len((p.get("energies") or []))
+                if payoff_cost and e >= payoff_cost:      # already at the payoff cost — don't over-stack it
+                    continue
+                # prefer the EVOLVED win-condition (the actual attacker, no evolution step) over a
+                # pre-evolution, then the one carrying the most Energy (ep83007714 f22 wants the Mega).
+                rank = (p.get("id") in wincon, e)
+                if best is None or rank > best[0]:
+                    best = (rank, area, i)
+        return (best[1], best[2]) if best else None
+
     def _target_energy(self, obs: dict, select: dict, option: dict) -> int | None:
         """Energy attached to the Pokémon an attack-target option points at — the snipe 'threat'
         signal: a benched Pokémon already carrying Energy is closest to attacking. Defined only for
@@ -1079,6 +1137,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         ma = next((p for p in (me.get("active") or []) if p), None)
         oa = next((p for p in (opp.get("active") or []) if p), None)
         prizes = obs.get("own_prizes")             # exact prize multiset from the deck-tracker, or None
+        if prizes:                                 # keys are card ids: coerce str->int so a JSON-captured
+            prizes = {int(k): v for k, v in prizes.items()}   # obs (a Correction) matches the int decklist
+
         deck_empty = self._deck_empty_ids(me, prizes)
         deck_known = self._deck_known_counts(me, prizes)
         deck_odds_map = self._deck_contains_prob(me, deck_known)   # probabilistic complement (ADR-0029)
@@ -1087,6 +1148,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         my_arch = self.strategy.params.get("my_archetype")
         fav, cov = (matchup_favorability(self.scout.artifact, my_arch, read.candidates)
                     if (self.posture and self.scout and read and my_arch) else (0.5, 0.0))
+        active_doomed = self._active_doomed(ma, oa, opp)
+        active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
         board = Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
@@ -1096,10 +1159,11 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             turn=state.get("turn", 0),
             energy_attached=bool(state.get("energyAttached")),
             hand_startable=self._hand_startable(me.get("hand") or []),
-            active_doomed=self._active_doomed(ma, oa, opp),
+            active_doomed=active_doomed,
             incoming_active_damage=self._incoming_active_damage(ma, oa),
-            active_cheap_attack_kos=self._active_cheap_attack_kos(ma, oa),
+            active_cheap_attack_kos=active_lethal,
             active_can_ko=self._active_can_ko(ma, oa),
+            active_maxed_kos=self._active_maxed_kos(ma, oa),
             gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp),
             active_ko_prizes=self._active_ko_prizes(ma, oa),
             my_prizes_remaining=len(me.get("prize") or []),
@@ -1127,7 +1191,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             priority_wincon_slot=self._priority_wincon_slot(
-                me, self._active_cheap_attack_kos(ma, oa)),
+                me, active_lethal, active_doomed),
+            attach_from_concentrate_slot=self._attach_from_concentrate_slot(me),
             stall_target_exists=self._stall_target_exists(opp),
             stall_target_is_keystone=self._stall_target_is_keystone(opp),
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
@@ -1245,19 +1310,24 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         stat = self.stats.get(poke.get("id")) if self.stats else None
         return self._can_ko(stat, self._opp_active(obs))
 
-    def _priority_wincon_slot(self, me: dict, active_lethal: bool) -> tuple | None:
+    def _priority_wincon_slot(self, me: dict, active_lethal: bool,
+                              active_doomed: bool = False) -> tuple | None:
         """(AreaType, index) of the ONE win-condition Pokémon to concentrate Energy on — among my
         win-condition bodies still short of their biggest attack (`_attach_target_under_max`), the one
         ALREADY carrying the most Energy (closest to firing its payoff hit). The Active is skipped when
         it can already Knock Out the opponent's Active (`active_lethal` — its turn is done, build the
-        successor), so a powered Active hands the Energy to the benched wincon. None when no buildable
-        wincon exists. Backs `concentrate-energy-on-wincon` (load one attacker, don't spread)."""
+        successor) OR when it is `active_doomed` (it won't survive to fire the payoff, so building it
+        for the future is wasted — hand the Energy to a healthy benched wincon instead; a this-turn
+        attack off the doomed Active is the Tactical/Planner layer's job, not this positional rule).
+        So a powered/dying Active hands the Energy to the benched wincon. None when no buildable wincon
+        exists (e.g. only the doomed Active is short) — concentrate then stands down. Backs
+        `concentrate-energy-on-wincon` (load one attacker, don't spread; ep83116501 f89)."""
         wincon = self._wincon_set()
         if not wincon:
             return None
         best = None                                  # (energy, area, index)
         active = (me.get("active") or [])
-        if not active_lethal:
+        if not active_lethal and not active_doomed:
             for i, p in enumerate(active):
                 if p and p.get("id") in wincon and self._attach_target_under_max(p):
                     e = len(p.get("energies") or [])
@@ -1543,17 +1613,26 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             best = max(best, (fstat.handSizeDamage or 0) * hand)   # counter damage ignores Weakness/Resist
         return best
 
-    def _ability_prevents_damage(self, attacker_stat, defender_id: int | None) -> bool:
+    def _ability_prevents_damage(self, attacker_stat, defender_id: int | None,
+                                 attack_id: int | None = None) -> bool:
         """True if the DEFENDER's Ability prevents all damage from my attacker — the ex / Mega-ex
         damage lock (Function Tag `prevent_ex_damage`, e.g. Crustle's 'Mysterious Rock Inn': prevent
         all damage from your opponent's {ex} Pokémon). My ex / Mega-ex attacker does 0 to it, so the
         closed-form combat math must zero its damage (else the agent whiff-attacks an immune wall and
         the right answer — retreat to a NON-ex attacker — is never surfaced). False for a non-ex
-        attacker, an untagged defender, or no function table."""
+        attacker, an untagged defender, or no function table.
+
+        EXEMPTION (ep83054602 f17): when `attack_id` is given and that attack's damage IGNORES effects
+        on the opponent's Active (`ignores_active_effects`, e.g. Mega Starmie's Nebula Beam — "isn't
+        affected by any effects on your opponent's Active Pokémon"), the prevention Ability is such an
+        effect, so it does NOT apply — the attack lands its full damage. Callers pass `attack_id` only
+        when the defender IS the opponent's Active (where the 'on your opponent's Active' clause bites)."""
         if not (attacker_stat and (attacker_stat.ex or attacker_stat.megaEx)):
             return False
         if defender_id is None or not self.functions:
             return False
+        if attack_id is not None and self.ignores_active_effects.get(attack_id):
+            return False                                 # this attack bypasses the Active's effects
         return "prevent_ex_damage" in self.functions.tags(defender_id)
 
     def _can_ko(self, my_stat, defender: dict | None) -> bool:
@@ -1590,12 +1669,35 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             return False
         stat = self.stats.get(ma.get("id"))
         opp_hp = oa.get("hp", 0)
-        if not (stat and opp_hp) or self._ability_prevents_damage(stat, oa.get("id")):
+        if not (stat and opp_hp):
             return False
         opp_stat = self.stats.get(oa.get("id"))
         energy = len(ma.get("energies") or [])
-        return any(self._wr_adjusted(stat, opp_stat, self.attacks.get(aid, 0)) >= opp_hp
+        # Prevention is checked PER-ATTACK: an attack that ignores the Active's effects (Nebula Beam)
+        # bypasses the defender's damage-prevention Ability (Crustle), so it still reaches the KO.
+        return any(not self._ability_prevents_damage(stat, oa.get("id"), aid)
+                   and self._wr_adjusted(stat, opp_stat, self.attacks.get(aid, 0)) >= opp_hp
                    for aid in (stat.attacks or ()) if self.attack_costs.get(aid, 99) <= energy)
+
+    def _active_maxed_kos(self, ma: dict | None, oa: dict | None) -> bool:
+        """True if my Active's BIGGEST-damage attack (fully powered, IGNORING current Energy) would KO
+        the opponent's Active — weakness-adjusted, respecting a damage-prevention Ability (with the
+        per-attack ignore-effects exemption). Unlike `_active_can_ko` (best AFFORDABLE attack now), this
+        asks 'could I KO if I loaded up?': when False the opponent's Active is un-KO-able this turn even
+        maxed, so spending a one-shot discard-EOT burst (Ignition) to reach the big attack buys no KO —
+        conserve it and use a reusable Energy for the cheap attack instead (ep83116501 f70). Fail-closed
+        on missing stats/HP/attacks."""
+        if not (self.stats and ma and oa):
+            return False
+        stat = self.stats.get(ma.get("id"))
+        opp_hp = oa.get("hp", 0)
+        if not (stat and opp_hp and stat.attacks):
+            return False
+        best_aid = max(stat.attacks, key=lambda a: self.attacks.get(a, 0))   # the biggest printed attack
+        if self._ability_prevents_damage(stat, oa.get("id"), best_aid):
+            return False
+        opp_stat = self.stats.get(oa.get("id"))
+        return self._wr_adjusted(stat, opp_stat, self.attacks.get(best_aid, 0)) >= opp_hp
 
     # (The gust Board-signal builders — `_active_ko_prizes`, `_opp_active_condition_gift`,
     # `_active_condition_ko_prizes`, `_gust_best_ko_prizes`, `_stall_target_exists` — are in
