@@ -12,10 +12,8 @@ from common.strategy.strategy import Hypothesis
 EVOLVING_THREAT_DMG = 100
 
 HYPOTHESES = [
-    # --- unified threat order (ADR-0020 follow-up): a benched KO is a PRIZE; else snipe the
-    # biggest attacker. Supersedes the four flat priorities below (kept for back-compat / other
-    # decks) by firing higher — `_target_threat_rank` sees already-evolved ex attackers and hand-size
-    # lines the flat rules miss, never picks a low-HP SUPPORT body. ---
+    # --- unified threat order (ADR-0020 follow-up): bench KO = PRIZE; else snipe biggest attacker.
+    # Supersedes 4 flat priorities below (kept back-compat) — `_target_threat_rank` sees evolved ex + hand-size lines, never picks low-HP SUPPORT. ---
     Hypothesis(
         id="snipe-for-the-ko",
         rationale="If a damage-select's snipe rider KOs the target (remaining HP <= rider, which ignores "
@@ -40,11 +38,6 @@ HYPOTHESES = [
                   "targets above bare ones) as the legible imminence signal on top of it.",
         when=lambda c: c.select_context == _DAMAGE and c.target_is_threat,
         weight=20, status="testing"),
-    # NOTE: flat `snipe-the-weakest` / `snipe-the-evolving-threat` / `snipe-the-strongest-evolving-
-    # threat` priorities were RETIRED — `snipe-the-top-threat` (unified `_target_threat_rank`)
-    # subsumes all three: sees already-evolved ex attackers (printed damage, which the descendants-
-    # only forward signal scored 0), tiers energized bodies above bare ones, never piles onto a
-    # low-HP SUPPORT mon like `snipe-the-weakest` did (round-b7e483a bad-target blunders). Genuine
-    # knockout is `snipe-for-the-ko`. `EVOLVING_THREAT_DMG` floor below stays (Read consumer +
-    # `target_is_strongest_forward` may still reference it).
+    # NOTE: flat `snipe-the-weakest`/`snipe-the-evolving-threat`/`snipe-the-strongest-evolving-threat`
+    # RETIRED — `snipe-the-top-threat` subsumes all 3 (round-b7e483a bad-target blunders). `EVOLVING_THREAT_DMG` floor stays (Read consumer may still ref it).
 ]

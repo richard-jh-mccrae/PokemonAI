@@ -22,31 +22,19 @@ from common.strategy.strategy import Hypothesis, Plan
 # situational `hand_disruption` one (Harlequin: symmetric shuffle refills opponent too).
 _KEEP_ENGINE_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 
-# A deck-search's FETCH FILTER — set of cards it can pull OUT of deck, as a predicate over
-# the engine CardStat — keyed by the curated behavioral Function Tag naming the filter (same
-# escape-hatch tags as `bench_fill`; structural categories like megaEx stay on CardStat, runtime
-# reads them here instead of duplicating as tags). Shared basis for deck-knowledge
-# whiff/redundancy signals: a search whose every legal target is provably gone (or already held)
-# is a dead card. Extend per new search card by adding its filter tag + predicate.
+# FETCH FILTER: cards a search can pull OUT of deck, predicate over CardStat, keyed by Function Tag.
+# Shared basis for whiff/redundancy signals (all targets gone/held = dead card). Add filter tag+predicate per new search card.
 _FETCH_FILTERS = {
     "bench_fill": lambda st: st.hp > 0 and not st.evolvesFrom,    # Basic Pokémon (Buddy-Buddy Poffin)
     "tutor_mega": lambda st: bool(getattr(st, "megaEx", False)),  # a Mega Evolution ex (Mega Signal)
     "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
-    # Rush-evolve tutor (Salvatore) pulls only ability-LESS Evolution — "a card that has no
-    # Abilities and evolves from 1 of your Pokémon." So whiff set = my deck's ability-less
-    # evolutions (e.g. Mega Starmie ex, but NOT ability-bearing Cinderace). Board-blind by design:
-    # sound whiff over-includes an unreachable line (no base in play), which only makes
-    # certain-whiff HARDER to assert — never a false suppression. (Cf `dont-rush-evolve-without-target`,
-    # which handles no-target-IN-PLAY case; this handles target-not-IN-DECK case — ep83117367.)
+    # Rush-evolve tutor (Salvatore): only ability-LESS Evolutions (e.g. Mega Starmie ex, not Cinderace).
+    # Board-blind by design -> over-includes, never false-suppresses. Cf `dont-rush-evolve-without-target` (in-play case); this = not-in-DECK case, ep83117367.
     "rush_evolve": lambda st: bool(st.evolvesFrom) and not getattr(st, "hasAbility", False),
 }
 
-# PROBABLE-WHIFF threshold (ADR-0029): a search softly stands down (`dont-search-a-probable-whiff`)
-# only when its BEST still-reachable target's hypergeometric P(deck still contains it) falls below this.
-# Conservative by design — must NOT suppress a plausibly-present copy (refuted ep82524455-f6
-# read: 2 of 3 Staryu hideable in 6 prizes give P ~= 0.98, far above the bar). Tunable; below it
-# search's best target is >=4x more likely prized than in-deck. SOUND whiff guard (certain P 0) is
-# separate and unconditional.
+# PROBABLE-WHIFF threshold (ADR-0029): `dont-search-a-probable-whiff` fires when best reachable target's
+# hypergeometric P(still in deck) < this. Conservative (refuted ep82524455-f6: P~=0.98 stays above bar). SOUND whiff (P=0) is separate/unconditional.
 _WHIFF_PROB_THRESHOLD = 0.20
 
 

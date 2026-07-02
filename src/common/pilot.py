@@ -17,9 +17,8 @@ from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief
 
-# Engine vocab (option/select/area enum mirrors, KO_SCORE, _ENGINE_TAGS, …) shared w/ doctrine modules ->
-# lives in common.strategy.context. The three card-archetype doctrines own their Hypotheses + Pilot-side
-# code (a `*Mixin` this Pilot inherits) — see those modules.
+# Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
+# Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 from common.strategy.lethal import LethalLine, LethalMixin
@@ -32,32 +31,20 @@ _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, c
 _BENCH_SNIPE_CAP = 0.9     # tiebreak so among equal-outcome KO attacks the one that ALSO snipes a benched
                            # target wins (best total board value), without ever overriding a prize (ADR-0022 #14)
 _ENERGIZED_SNIPE_TIER = 100000  # energized benched target is strictly higher snipe TIER than any
-                           # bare one — can attack SOONER (imminence) -> sniped before a
-                           # larger but not-yet-powered latent threat (ADR-0020's energized priority).
-                           # Within a tier, threat magnitude (below) orders the choice, so among
-                           # several energized bodies the biggest attacker still hit first.
+                           # bare one — attacks SOONER (imminence), sniped before a bigger latent
+                           # threat (ADR-0020). Within a tier, threat magnitude orders the choice.
 _HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evolution line CERTAINLY
-                           # reaches a hand-size attacker (e.g. Kadabra → Alakazam "Powerful Hand": 2
-                           # damage counters per card in hand) — opponent's latent win-condition,
-                           # hidden by printed damage (10). Card-fact (the `hand_size_attacker`
-                           # Function Tag) -> outranks a bigger raw-damage SUPPORT line (Dunsparce →
-                           # Dudunsparce) without a meta-DB guess. Below the energized tier and the KO.
+                           # reaches a hand-size attacker (Kadabra→Alakazam "Powerful Hand") — latent
+                           # win-condition hidden by low printed damage. `hand_size_attacker` Function Tag.
 _PREVENT_EX_SNIPE_BOOST = 500  # snipe-rank boost for a benched body whose line reaches a Pokémon that
-                           # PREVENTS my ex attacker's damage (Function Tag `prevent_ex_damage`, e.g.
-                           # Dwebble → Crustle) — a HARD COUNTER to an ex-reliant deck: once it evolves
-                           # my Mega Starmie ex can't touch it -> snipe the fragile pre-evolution NOW
-                           # even over a bigger printed-damage body I CAN still answer in combat
-                           # (ep82225138 f46: Dwebble over a 300-HP Mega Kangaskhan ex wall). Card-fact.
+                           # PREVENTS my ex attacker's damage (`prevent_ex_damage`, e.g. Dwebble→Crustle) —
+                           # hard counter once evolved, snipe the fragile pre-evo NOW (ep82225138 f46).
 _RETREAT_POSITION_EPS = 0.001  # positioning tie-break for retreat-to-lethal lookahead: when retreating
-                           # into a ready benched win-condition takes the SAME KO the spent Active could,
-                           # prefer it (wincon ends up Active) — tiny so it only breaks an exact tie,
-                           # never overrides a real tactical edge (snipe ≥0.005, efficiency ≥0.1)
+                           # into a ready wincon takes the SAME KO the spent Active could, prefer it (wincon
+                           # ends up Active) — tiny, only breaks exact ties, never beats a real edge.
 _RESISTANCE = 30           # damage Resistance subtracts when defender resists attacker's type.
-                           # Amount is the card's PRINTED resistance (e.g. Slowking "Fighting -30") —
-                           # a per-card fact, NOT in our data export (CardData/CSV are resistance-TYPE only).
-                           # In THIS set it's uniform -30: verified by probing 47 resistant Pokémon
-                           # through the simulator (tools/sim/probe_resistance.py) + printed cards, all
-                           # -30. Applied AFTER Weakness (rules.md §5). Revisit if a card ever prints other.
+                           # Printed per-card fact, not in CSV (type only) — verified uniform -30 across 47
+                           # resistant Pokémon via tools/sim/probe_resistance.py. Applied AFTER Weakness.
 
 # Posture confidence (ADR-0026): continuous γ ∈ [0,1] the generic-core levers scale by. Ramp the
 # Read's top posterior over [LO, HI], discount by unmatched mass -> unknown opponent → γ≈0.
@@ -120,18 +107,11 @@ class Board:
                                            # this turn (closed-form) — costly burst Energy
                                            # (e.g. Ignition->Nebula) unnecessary; cheap attack does it
     active_can_ko: bool = False    # my Active's BEST affordable attack (given CURRENT Energy) would
-                                   # KO opponent's Active this turn — superset of
-                                   # active_cheap_attack_kos, also sees a loaded Active whose BIG
-                                   # attack (not cheapest) reaches the KO (Mega Starmie at CCC: Nebula
-                                   # Beam 210 KOs where Jetting Blow 120 doesn't). Gates survival
-                                   # `hold-clutch-heal`: with a KO on board, nothing to survive
-                                   # FOR — take the prize, don't heal-and-stall (ep83037962 f78 missed win)
+                                   # KO opp Active this turn — superset of active_cheap_attack_kos, sees BIG
+                                   # attacks too. Gates `hold-clutch-heal`: KO on board -> take it, no heal-stall (ep83037962 f78)
     active_maxed_kos: bool = False # my Active's BIGGEST attack (fully powered, ignoring current Energy)
-                                   # would KO opponent's Active — opp Active un-KO-able this
-                                   # turn even MAXED when False. Distinct from active_can_ko (current
-                                   # Energy): gates whether a one-shot burst (Ignition) worth spending
-                                   # to reach big attack — if even maxed it can't KO, burst buys
-                                   # nothing, conserve it (ep83116501 f70)
+                                   # would KO opp Active — False means un-KO-able even maxed. Gates whether
+                                   # a burst (Ignition) is worth spending; if maxed can't KO, conserve it (ep83116501 f70)
     gust_best_ko_prizes: int = 0   # best prizes among opponent's benched Pokémon my Active could KO
                                    # after gusting one to Active Spot (0 if none) — whether-to-play
                                    # gate for a gust Supporter (Boss's Orders). ADR-0022.
@@ -155,13 +135,11 @@ class Board:
     line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
                                        # play — so there's something a rush-evolve tutor can evolve
     wincon_base_deployable: bool = False  # a Line pre-evolution (a base to evolve payoff from) is in
-                                       # play OR in hand — evolved payoff is deployable. When
-                                       # False, fetching payoff just strands it: prefer the base
-                                       # (`fetch-base-before-stranded-payoff`)
+                                       # play OR in hand — evolved payoff deployable. False -> fetching
+                                       # payoff strands it: prefer base (`fetch-base-before-stranded-payoff`)
     accel_recipient_missing: bool = False  # my Active is a bench-accelerator (an `accel_source`-role
-                                       # Pokémon, e.g. Cinderace's Turbo Flare) AND no Line member sits
-                                       # on my Bench to receive accelerated Energy — accel
-                                       # wasted, developing a recipient is top setup priority
+                                       # Pokémon, e.g. Cinderace Turbo Flare) AND no Line member on my Bench
+                                       # to receive it — accel wasted, developing a recipient is top priority
     support_in_play: bool = False      # an engine/support Pokémon (a draw/accel/search Ability, see
                                        # _ENGINE_TAGS) on my Active/Bench — gap gate for
                                        # `fetch-the-support` (with an engine online, no need to tutor one)
@@ -169,16 +147,11 @@ class Board:
                                        # (Active + Bench) — a hand copy of one is a redundant duplicate
                                        # (need already met), keep-value floor `discard-the-redundant`
     hand_duplicate_ids: frozenset = field(default_factory=frozenset)  # card ids I hold 2+ copies of in
-                                       # hand, EXCLUDING fungible Energy — extra copy of an effect card
-                                       # is lowest-keep pitch at a forced discard (`discard-the-hand-
-                                       # duplicate`), so a singleton disruptor never shed over a duplicate
+                                       # hand, EXCLUDING fungible Energy — lowest-keep pitch at a forced
+                                       # discard (`discard-the-hand-duplicate`); singleton never shed over dup
     energy_placeable: bool = False     # some in-play Pokémon can still absorb Energy productively (it
-                                       # carries fewer Energy than its highest-damage attack costs). When
-                                       # False, held Energy has no useful home this turn (every body
-                                       # maxed / Bench empty), so shuffling it away costs nothing —
-                                       # gates `attach-before-hand-shuffle` off so it can't veto a needed
-                                       # bench-finding hand-refresh (ep83038055 f40). Fail-open (True when
-                                       # stats unavailable).
+                                       # carries fewer Energy than its highest-damage attack costs). False ->
+                                       # no useful home this turn, `attach-before-hand-shuffle` can't veto a needed refresh (ep83038055 f40). Fail-open.
     hand_is_dead: bool = False         # no non-refresh card in hand yields any positive-scoring play
                                        # this turn (each virtually scored through real pipeline) —
                                        # Shuffle-Refresh fallback gate (ADR-0024): refresh only a dead hand
@@ -188,43 +161,31 @@ class Board:
     weakest_bench_hp: int | None = None  # least HP among opponent's benched snipe targets at a
                                          # DAMAGE select — target closest to a knockout
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among opponent's
-                                                # benched snipe targets at a DAMAGE select — most
-                                                # dangerous latent evolving threat (Riolu→Mega Lucario
-                                                # 270 over Makuhita→Hariyama 210). None off a Damage select
+                                                # benched snipe targets at a DAMAGE select — most dangerous
+                                                # latent evolving threat (Riolu→Mega Lucario over Hariyama). None off a Damage select
     bench_threat_present: bool = False  # at a DAMAGE select, some benched snipe target already carries
                                         # Energy (an imminent attacker) — evolving-threat snipe
                                         # stands down: snipe-the-threat (energized) is the priority
     snipe_damage: int = 0              # at a DAMAGE select, bench-snipe rider my Active's attack
-                                       # deals (Jetting Blow = 50; max over my Active's attacks) —
-                                       # closed-form KO test for a snipe target (rider >= target HP, as
-                                       # bench snipes ignore Weakness/Resistance). 0 off a Damage select
+                                       # deals (max over my Active's attacks) — closed-form KO test for a
+                                       # snipe target (rider >= target HP; ignores W/R). 0 off a Damage select
     strongest_threat_rank: float = 0.0  # at a DAMAGE select, greatest snipe THREAT RANK among
-                                        # benched targets (`_target_threat_rank`: max own/forward attack
-                                        # damage, +card-fact boost for a line that certainly reaches a
-                                        # hand-size attacker) — body to snipe when none can be KO'd.
-                                        # 0 off a Damage select
+                                        # benched targets (`_target_threat_rank`: max own/forward damage,
+                                        # +boost for a hand-size-attacker line) — snipe pick when none KO'd. 0 off a Damage select
     bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
                                        # enough Energy to attack — a finisher to retreat into
     best_promote_slot: tuple | None = None  # (AreaType, index) of MY benched win-condition best to bring
-                                       # to Active Spot at a promote/switch — READY one (Energy >=
-                                       # cheapest attack cost) carrying MOST Energy (closest to its
-                                       # payoff hit; a Hero's Cape-bulked 3-Energy Mega over a 1-Energy one).
-                                       # None when no benched wincon ready. Backs `promote-the-powered-
-                                       # attacker` so promote/switch brings up the built attacker, not a
-                                       # bare same-name copy or bench-slot-0 (ep83007714 f92/f104)
+                                       # to Active at a promote/switch — READY (Energy >= cheapest attack)
+                                       # AND most-Energy. Backs `promote-the-powered-attacker`, not a bare copy/slot-0 (ep83007714 f92/f104)
     evolve_to_ready_wincon_available: bool = False  # win-condition in hand AND a benched
-                                       # pre-evolution already carries enough Energy that evolving it
-                                       # THIS turn yields a ready attacker — at a promote, bringing up
-                                       # that pre-evolution to evolve is worthwhile. False when the only
-                                       # pre-evolution is bare (evolving it just exposes a dead 0-Energy
-                                       # wincon — then promote a staller/accelerator instead, ep82753102 f120)
+                                       # pre-evo already carries enough Energy that evolving THIS turn yields
+                                       # a ready attacker — worth promoting to evolve. False -> bare pre-evo, promote staller/accel instead (ep82753102 f120)
     bench_wincon_prize_value: int = 0  # greatest prize value among my BENCHED win-conditions (Mega ex 3 /
                                        # ex 2 / else 1), 0 if none — prize I keep OFF the front line by
                                        # interposing a cheaper attacker at a forced promote (prize denial)
     bench_wincon_underpowered: bool = False  # a benched win-condition carries fewer Energy than its
-                                       # highest-damage attack costs (CardStat.maxDamageCost) — can't
-                                       # yet fire payoff, so an accelerator promote can power it off the
-                                       # Bench, which promoting the finisher directly (one attach/turn) can't
+                                       # highest-damage attack costs — can't yet fire payoff, so an accel
+                                       # promote can power it off-Bench, which promoting the finisher directly can't
     basic_energy_in_deck: bool = False  # my deck can still yield a Basic Energy (a Basic-Energy id not
                                        # known-exhausted) — fuel gate for an accelerator promote
                                        # (Cinderace's Turbo Flare fetches Basic Energy to the Bench)
@@ -238,15 +199,11 @@ class Board:
     irreplaceable_tool_in_hand: bool = False  # an ACE SPEC (one-per-deck, unrecoverable) Tool is in
                                        # my hand — anti-shuffle belt (never shuffle it away)
     priority_wincon_slot: tuple | None = None  # (AreaType, index) of the ONE win-condition Pokémon to
-                                       # concentrate Energy on — wincon carrying MOST Energy
-                                       # while still short of biggest attack (closest to its payoff
-                                       # hit). Active skipped when it can already KO (its turn is
-                                       # done — build the successor). None when no buildable wincon
+                                       # concentrate Energy on — most-Energy wincon still short of biggest
+                                       # attack. Active skipped if it can already KO. None when no buildable wincon
     attach_from_concentrate_slot: tuple | None = None  # (AreaType, index) of the Line body to load at an
-                                       # ATTACH_FROM (Turbo Flare recipient) select — win-condition-Line
-                                       # member carrying MOST Energy while still short of payoff's
-                                       # biggest-attack cost, so accelerated Energy CONCENTRATES on one body
-                                       # toward the Mega payoff instead of spreading. None when none exists.
+                                       # ATTACH_FROM (Turbo Flare recipient) select — Line member with MOST
+                                       # Energy still short of payoff cost, so accel CONCENTRATES not spreads. None when none exists.
     stall_target_exists: bool = False  # opponent has an energyless, high-retreat benched Pokémon —
                                        # candidate to strand Active with a defensive stall-gust (ADR-0022)
     stall_target_is_keystone: bool = False  # that stall target is opponent's KEY attacker (an ex /
@@ -255,45 +212,26 @@ class Board:
     opp_has_energy_in_play: bool = False  # opponent has Energy on any Pokémon (Active or Bench) —
                                           # a target an energy-denial Item (Crushing Hammer) can strip
     opp_active_has_energy: bool = False   # opponent's ACTIVE carries Energy — the imminent attacker,
-                                          # the worthwhile energy-denial target. Whether-to-play gate
-                                          # for `play-energy-denial`: stripping a benched SUPPORT's lone
-                                          # Energy (active empty) is a wasted coin-flip Item (ep82753102 f37)
+                                          # the worthwhile energy-denial target. Gate for `play-energy-denial`:
+                                          # stripping a benched SUPPORT's lone Energy is a wasted Item (ep82753102 f37)
     opp_has_hand_size_attacker: bool = False  # opponent has a Pokémon in play (or in a committed
                                           # evolution line) that SCALES damage with hand size (a
-                                          # `hand_size_attacker` — Alakazam's Powerful Hand). Shrinking
-                                          # their hand (Harlequin) cuts its damage — `play-harlequin-
-                                          # vs-hand-size` gate. A card-fact Posture read, not a meta guess
+                                          # `hand_size_attacker`, e.g. Alakazam) — `play-harlequin-vs-hand-size` gate. Card-fact, not meta guess
     deck_empty_ids: frozenset = field(default_factory=frozenset)  # MY card ids the deck is PROVABLY
-                                          # empty of. Stateless mode: every copy seen OUTSIDE the deck
-                                          # (hand + discard + board incl. attached/stacks + a face-up
-                                          # prize) reaches the 60-card count. With the deck-tracker
-                                          # annotation (`obs['own_prizes']`) it's EXACT (prize-aware:
-                                          # also includes cards entirely PRIZED). Either way
-                                          # sound — never probabilistic. Queried by `deck_definitely_empty_of`.
+                                          # empty of. Stateless: every copy seen OUTSIDE the deck reaches the
+                                          # 60-count. With `obs['own_prizes']` it's EXACT. Sound, never probabilistic. Queried by `deck_definitely_empty_of`.
     deck_known_counts: dict | None = None  # EXACT count of each card still in my deck, once the
-                                          # deck-tracker has anchored the prizes (deck = decklist −
-                                          # visible − prizes); None until first search reveal.
-                                          # Backs the POSITIVE `deck_definitely_has` (STAGED: v1 wires no
-                                          # positive-fetch consumer — ADR-0023 keeps the oracle an
-                                          # availability gate; positive fetch endorsement is the planned
-                                          # reader — so this is intentionally read-only-from-tests today).
+                                          # deck-tracker anchored prizes (decklist − visible − prizes); None
+                                          # until first search reveal. Backs `deck_definitely_has` (ADR-0023, staged: no consumer wired yet, tests-only).
     deck_contains_odds: dict | None = None  # PROBABILISTIC {cardId: P(deck still holds ≥1 copy)} —
-                                          # complement to the SOUND deck_definitely_empty_of (ADR-0029,
-                                          # common/deck_odds.py). Each card's unseen copies (decklist −
-                                          # visible) split hypergeometrically over hidden prize slots;
-                                          # collapses to exact 1.0/0.0 once tracker resolves the prizes
-                                          # (reuses deck_known_counts). None when uncomputable (no deck /
-                                          # no deckCount) — then signal stays silent. Read via
-                                          # `deck_contains_probability`; consulted by Fetch doctrine's
-                                          # `dont-search-a-probable-whiff`, never replacing sound guard.
+                                          # complement to the SOUND deck_definitely_empty_of (ADR-0029): unseen
+                                          # copies split hypergeometrically over hidden prizes; collapses to 1.0/0.0 once resolved. Feeds `dont-search-a-probable-whiff`.
     opp_active_condition_gift: bool = False  # opponent's Active carries ANY special condition
-                                          # (poison/burn/sleep/paralyze/confuse) — gusting it off to the
-                                          # bench would CLEAR it (a free cure). Guard suppresses
-                                          # the stall-gust so we never rescue a condition. ADR-0022 #10
+                                          # (poison/burn/sleep/paralyze/confuse) — gusting it to bench would
+                                          # CLEAR it (free cure). Guard suppresses stall-gust so we never rescue a condition. ADR-0022 #10
     active_condition_ko_prizes: int = 0   # prizes from opponent's CURRENT Active dying to poison/burn
-                                          # at upcoming Checkup (0<hp<=10*poison+20*burn), else 0 — a
-                                          # free KO I'd get without attacking, so an offensive gust must
-                                          # beat THIS too (gusting it off cures it). ADR-0022 #10
+                                          # at upcoming Checkup, else 0 — free KO without attacking, so an
+                                          # offensive gust must beat THIS too (gusting cures it). ADR-0022 #10
     read: Read | None = None              # per-decision Scouting Read (ADR-0026); None = Posture off
                                           # (no Scout wired / pregame). Carried here so every option shares
                                           # one Read; nothing scores off it in M2.0 (wiring is Posture-OFF).
@@ -305,8 +243,7 @@ class Board:
                                           # coverage = favorability mostly the 0.5 default -> trust it less.
     brief: Brief | None = None            # matched hand-authored Matchup Brief for the recognized
                                           # opponent (ADR-0027, covers-routed); None = unrecognized / no
-                                          # covering Brief / Posture off. Behavior-neutral: carried for a
-                                          # future γ-gated consumer, nothing scores off it yet.
+                                          # covering Brief / Posture off. Behavior-neutral: nothing scores off it yet.
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -342,11 +279,8 @@ class Context:
     card_id: int | None
     option_area: int | None = None  # AreaType of option's target (4=active, 5=bench) — attach targeting
     card_stranded_evolution: bool = False  # this option's card is an evolution that can NEVER be
-                                       # deployed from hand in THIS deck: its previous-stage chain
-                                       # (CardStat.evolvesFrom names) can't reach a Basic using only
-                                       # cards on the deck list (a Stage-2 Explosiveness opener with
-                                       # no Stage 1 — Cinderace without Raboot). Deck-static; gates
-                                       # `dont-fetch-the-setup-only-opener`.
+                                       # deployed from hand in THIS deck: its evolvesFrom chain can't reach a
+                                       # Basic on the deck list (Stage-2 opener with no Stage 1). Deck-static; gates `dont-fetch-the-setup-only-opener`.
     params: dict = field(default_factory=dict)  # deck's Strategy.params, passed through so a
                                        # general rule can honor a deck-declared intent (e.g.
                                        # `preferred_start` -> `honor-preferred-start`). Read-only.
@@ -356,47 +290,26 @@ class Context:
     attach_target_needs: bool = False  # receiving Pokémon still needs Energy to attack (fewer
                                        # than its cheapest attack cost) — gates "attach to the needy"
     attach_target_under_max: bool = False  # receiving Pokémon carries fewer Energy than its
-                                           # HIGHEST-damage attack costs — can't yet fire its
-                                           # big attack (Mega Starmie at 1 W can Jetting Blow but not
-                                           # Nebula Beam CCC). Gates "keep building the active attacker
-                                           # toward its payoff attack". Fail-CLOSED (False when unknown).
+                                           # HIGHEST-damage attack costs — can't yet fire its big attack
+                                           # (1 W can Jetting Blow but not Nebula Beam CCC). Fail-CLOSED (False when unknown).
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
-                                           # — most-built buildable wincon. Gates `concentrate-energy-
-                                           # on-wincon` so the deck loads one attacker instead of spreading.
+                                           # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
     attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
                                            # survival-turns picker chose (== board.tool_deploy_slot) —
                                            # proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
     attach_feeds_firing_accel: bool = False  # this ATTACH puts Energy on an ACTIVE accelerator
-                                           # (`accel_source` Role, e.g. Cinderace) that still NEEDS it to
-                                           # fire its acceleration attack this turn (Turbo Flare, cost 1),
-                                           # with a bench recipient to receive accelerated Energy
-                                           # (`not accel_recipient_missing`) and NO ready benched
-                                           # win-condition to retreat into instead (`not
-                                           # bench_wincon_ready`). Feeding it multiplies — one manual
-                                           # attach becomes several on the Bench — beats manually
-                                           # loading one benched body one Energy at a time, even when the
-                                           # accelerator is doomed (use its acceleration one last time;
-                                           # ep83037962 f70). Gates `feed-the-firing-accelerator` and
-                                           # stands `dont-feed-the-doomed` down (accelerator isn't a
-                                           # "spent" opener). Off when a ready benched attacker exists —
-                                           # then retreat into it (the ep83007714 f65 retreat case).
+                                           # (`accel_source` Role, e.g. Cinderace) that still NEEDS it to fire
+                                           # its accel attack, w/ a bench recipient and no ready wincon to retreat into. Multiplies Energy even if doomed (ep83037962 f70); off if a ready attacker exists (ep83007714 f65).
     attach_target_is_line_member: bool = False  # this attach option's recipient is on a win-condition
-                                           # Line (a pre-evolution or the payoff) — building it advances
-                                           # the win-condition. Read by `_option_trace` into
-                                           # `OptionTrace.attach_to_needy_line`, the decide()-only attach
-                                           # tie-break (feed the Line base over an off-line opener)
+                                           # Line (a pre-evolution or the payoff) — building it advances the
+                                           # wincon. Read into `OptionTrace.attach_to_needy_line`, the decide()-only tie-break (Line base over off-line opener)
     attach_from_target_needs: bool = False  # at an ATTACH_FROM target-select (engine's pick-a-
-                                           # recipient step for a multi-attach effect, e.g. Cinderace's
-                                           # Turbo Flare 'attach a Basic to a Benched Pokémon'), THIS
-                                           # option's recipient still NEEDS Energy to attack (carries
-                                           # fewer than its cheapest attack cost) — spread the forced
-                                           # attach to the bare bench body, not an already-online one.
-                                           # False off ATTACH_FROM (cf. attach_target_needs, the MAIN-menu mirror)
+                                           # recipient step for a multi-attach effect, e.g. Turbo Flare),
+                                           # THIS recipient still NEEDS Energy — spread to the bare body, not an online one. False off ATTACH_FROM (cf attach_target_needs)
     attach_from_target_is_concentrate: bool = False  # at ATTACH_FROM, THIS option's recipient is the Line
                                            # body to concentrate accelerated Energy on (== board.attach_from_
-                                           # concentrate_slot) — build ONE body toward the Mega payoff, the
-                                           # concentrate counterpart of attach_from_target_needs' spread
+                                           # concentrate_slot) — build ONE body, the counterpart of attach_from_target_needs' spread
     card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
                                        # pre-evolution that builds toward the win-condition)
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
@@ -417,29 +330,24 @@ class Context:
                                        # redundant effect card; fungible Energy excluded) — keep-value
                                        # floor `discard-the-hand-duplicate` pitches it before a singleton
     fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
-                                       # card I currently lack (best grab value > 0, scored by the SAME
-                                       # grab rungs) — whether-to-play endorsement (`fetch-when-it-
-                                       # fills-a-need`). False off a PLAY / a non-fetch / a need-less fetch
+                                       # card I currently lack (best grab value > 0, same grab rungs) —
+                                       # whether-to-play endorsement (`fetch-when-it-fills-a-need`). False off a non-fetch/need-less fetch
     target_energy: int | None = None  # attack-target snipe signal: Energy on the targeted benched
                                       # Pokémon (None off a Damage/bench-target option)
     target_is_threat: bool = False  # attack target already carries Energy -> closest to attacking
     target_hp: int | None = None    # HP of targeted benched Pokémon (None off a Damage option)
     target_is_weakest: bool = False  # this snipe target has least HP on opponent's Bench
     target_is_strongest_forward: bool = False  # this snipe target's evolution line is the most
-                                               # dangerous on the Bench (forward damage is the
-                                               # greatest, and a real threat) — priority evolving
-                                               # snipe (Riolu→Mega Lucario over Makuhita→Hariyama)
+                                               # dangerous on the Bench (forward damage greatest, real
+                                               # threat) — priority evolving snipe (Riolu→Mega Lucario over Hariyama)
     target_kos: bool = False           # the bench snipe KNOCKS OUT this target (rider >= its HP; bench
                                        # snipes ignore Weakness/Resistance) — a free PRIZE, top snipe
     promote_target_kos: bool = False   # at a TO_ACTIVE promote, benched Pokémon this option brings
-                                       # up can KNOCK OUT opponent's Active this turn (cheapest
-                                       # attack reaches defender's HP) — promote it to take the prize
-                                       # from the front (esp. an accelerator that ALSO loads the bench)
+                                       # up can KNOCK OUT opp's Active this turn (cheapest attack reaches
+                                       # HP) — promote it to take the prize from the front (esp. an accelerator that also loads the bench)
     is_best_promote_target: bool = False  # at a TO_ACTIVE promote OR a SWITCH (my retreat's new-Active
-                                       # pick), this option brings up the benched Pokémon at
-                                       # board.best_promote_slot — most-built ready win-condition. The
-                                       # per-option flag `promote-the-powered-attacker` fires on, so the
-                                       # promote/switch brings up the 3-Energy Mega, not a bare copy
+                                       # pick), this option brings up board.best_promote_slot — most-built
+                                       # ready wincon. `promote-the-powered-attacker` fires so it's the built Mega, not a bare copy
     card_prize_value: int = 1          # prizes a KO of THIS option's card yields (Mega ex 3 / ex 2
                                        # / else 1) — cost of exposing it; interpose rule promotes a
                                        # body whose value is below the benched wincon's
@@ -450,10 +358,8 @@ class Context:
                                        # opponent's Active on its Weakness (x2 chip) — a favourable
                                        # sacrifice (Cinderace's Fire into a Fire-weak Archaludon/Duraludon)
     target_is_top_threat: bool = False  # this snipe target carries greatest threat rank on the Bench
-                                        # (== board.strongest_threat_rank) — biggest attacker (or
-                                        # latent attacker) to chip when no KO available. Unlike the
-                                        # flat weakest/forward priorities, rank sees already-evolved
-                                        # ex attackers and hand-size lines, never picks a SUPPORT body
+                                        # (== board.strongest_threat_rank) — biggest (or latent) attacker to
+                                        # chip when no KO available. Sees evolved ex/hand-size lines, never picks a SUPPORT body
     target_forward_damage: int | None = None  # Evolving Threat signal (ADR-0020): max damage
                                               # snipe target's evolution line eventually reaches
                                               # (None off a Damage option / no chain / no provider)
@@ -461,28 +367,20 @@ class Context:
     tags: list = field(default_factory=list)
     stat: object | None = None     # option card's engine CardStat (hp/weakness/prize value/…)
     board: Board = field(default_factory=Board)   # per-decision board summary (same for all options)
-    # NOTE: is_attack/tactical/is_ko are a documented deck-Hypothesis trigger surface (deck-genie
-    # authoring.md); no SHIPPED rule reads them yet (sequencing core uses OptionTrace copies) ->
-    # kept intentionally — don't prune as dead without updating that authoring vocabulary.
+    # NOTE: is_attack/tactical/is_ko = documented deck-Hypothesis trigger surface (deck-genie
+    # authoring.md); no shipped rule reads them yet — don't prune as dead without updating that doc.
     is_attack: bool = False
     tactical: float = 0.0          # option's closed-form combat value (>= KO_SCORE on a knockout)
     is_ko: bool = False            # this option is an attack that knocks out opponent's Active
     search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
-                                   # fetch target (by fetch-filter, see doctrine_fetch._FETCH_FILTERS) is
-                                   # PROVABLY gone from deck — so it whiffs. SOUND (built on
-                                   # Board.deck_empty_ids); False off a search / unknown filter
+                                   # fetch target (see doctrine_fetch._FETCH_FILTERS) is PROVABLY gone from
+                                   # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / unknown filter
     search_redundant_wincon: bool = False  # this option PLAYS a tutor that can fetch ONLY the
-                                   # win-condition AND win-condition already in hand — so it
-                                   # would only dig a redundant copy (e.g. Mega Signal with a Mega in
-                                   # hand). False off a search / a tutor that can fetch anything else
+                                   # win-condition AND wincon already in hand — so it'd only dig a redundant
+                                   # copy (Mega Signal with a Mega in hand). False off a search / a tutor that can fetch anything else
     search_targets_unlikely: bool = False  # this option PLAYS a search whose every still-REACHABLE
-                                   # fetch target is PROBABLY (not provably) prized — best target's
-                                   # hypergeometric P(deck still contains it) is below the whiff
-                                   # threshold (ADR-0029, `Board.deck_contains_probability`). The
-                                   # PROBABILISTIC complement to `search_targets_exhausted`: mutually
-                                   # exclusive with it (requires a reachable target), so the sound
-                                   # guard owns the CERTAIN whiff and this softly tips a LIKELY one.
-                                   # False off a search / when a target is plausibly present
+                                   # fetch target is PROBABLY (not provably) prized — P(deck contains it)
+                                   # below whiff threshold (ADR-0029). PROBABILISTIC complement to search_targets_exhausted; mutually exclusive with it.
 
 
 @dataclass
@@ -497,10 +395,8 @@ class OptionTrace:
     tactical: float = 0.0
     deferred: bool = False       # a turn-ending attack held behind beneficial development (attack-last)
     attach_to_needy_line: bool = False  # this option attaches Energy to a NEEDY win-condition Line body
-                                 # (a base that builds the payoff) — a decide()-only ORDERING tie-break
-                                 # (`_evaluate`): among EQUAL-score attaches, feed Line base before an
-                                 # off-line opener. W-route-invisible (like attack-last), never
-                                 # enters the weight fit. ep82867148 f87 (a Staryu over a benched Cinderace)
+                                 # (a base that builds the payoff) — decide()-only ORDERING tie-break: among
+                                 # EQUAL-score attaches, feed Line base first. W-route-invisible, never enters weight fit. ep82867148 f87
 
 
 @dataclass
@@ -537,9 +433,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         self.recoil = recoil or {}                      # attackId -> unconditional self-damage (ADR-0022 #2)
         self.bench_snipe = bench_snipe or {}            # attackId -> opp-bench snipe rider (ADR-0022 #14)
         self.ignores_active_effects = ignores_active_effects or {}   # attackId -> True if its damage
-                                            # ignores EFFECTS on opp's Active (Nebula Beam) —
-                                            # narrow pre-compendium signal; kept as LEGACY feed:
-                                            # `_attack_stat`'s synth honors it when attack_stats absent
+                                            # ignores EFFECTS on opp's Active (Nebula Beam) — narrow
+                                            # pre-compendium signal; LEGACY feed for `_attack_stat`'s synth when attack_stats absent
         self.attack_stats = attack_stats or {}          # attackId -> AttackStat (ADR-0032) — effect
                                                         # record behind damage oracle; when absent the
                                                         # legacy dicts synthesize an equivalent
@@ -584,10 +479,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         if planned is not None:
             return Decision(chosen=planned.next_step, options=traces, read=board.read, planned=planned)
         max_count = select.get("maxCount", 0)
-        # Primary key = score; secondary key breaks an EXACT score tie toward an attach that feeds a
-        # needy win-condition Line body (Line base over an off-line opener — ep82867148 f87). A
-        # decide()-only ordering nicety (W-route-invisible, like attack-last): never changes a score,
-        # so can't enter the weight fit / featurization.
+        # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
+        # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
         order = sorted(range(len(options)),
                        key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
         order = self._finish_turn_last(obs, board, options, traces, order, max_count,
@@ -656,13 +549,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             o = options[i]
             t = o.get("type")
             if t in (_ATTACH, _PLAY, _RETREAT) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach
-                return 0                                                  # that unlocks a KO, a game-winning
-                                                                          # gust Supporter (KO_SCORE-class
-                                                                          # _gust_tactical), or a RETREAT into
-                                                                          # a benched attacker that takes the
-                                                                          # KO (retreat-to-lethal, e.g. swap
-                                                                          # off an ex-locked wall) — take the
-                                                                          # win, don't dig first (REQ-GUST-0001)
+                return 0    # unlocks a KO, or a gust/retreat-to-lethal swap — take the win, don't dig first (REQ-GUST-0001)
             if t == _ATTACK and _wins_now(i):                        # a game-winning KO: take the win now,
                 return 0                                             # don't dig/develop first (ep83037962 f78)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
@@ -721,9 +608,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         attack_id = option.get("attackId")
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
-        # Damage oracle (ADR-0032): per-attack — prevention/W/R each pierced by the attack's own
-        # ignore flags, and a prevented ACTIVE hit (0) no longer hides bench-snipe credit below.
-        # Context makes a visible-state scaler (Mind Ruler, Powerful Hand) score its EXACT damage.
+        # Damage oracle (ADR-0032): prevention/W/R pierced by the attack's own ignore flags; a
+        # prevented ACTIVE hit (0) no longer hides bench-snipe credit below. Context scores scalers exactly.
         dmg = self.predicted_damage(self._my_active_id(obs), attack_id, opp,
                                     context=self._damage_context(obs))
         eff = _EFFICIENCY * self.attack_costs.get(attack_id, 0)   # cheaper of equal outcomes wins
@@ -792,9 +678,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         my_prize = self._prize_value({"id": board.my_active_id})
         return my_prize >= op                                # my self-KO gives them their last prize too
 
-    # Gust doctrine's whether-to-play lethal (`_gust_tactical`), SWITCH target-select, and the
-    # gust Board signals live in common.strategy.doctrines.doctrine_gust (GustMixin). `_attach_lethal_tactical`
-    # below is the general lethal-ATTACH lookahead (not gust) — stays in the core Tactical layer.
+    # Gust doctrine's whether-to-play lethal, SWITCH target-select, and Board signals live in
+    # doctrine_gust (GustMixin). `_attach_lethal_tactical` below is the general (non-gust) lethal-ATTACH lookahead.
     def _attach_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for an ATTACH that UNLOCKS a knockout this turn — attaching this Energy
         to my Active win-condition lets its best now-affordable attack KO the opponent's Active (e.g.
@@ -865,10 +750,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         opp = self._opp_active(obs)
         if not (opp and opp.get("hp")):
             return 0
-        # Best KO the CURRENT Active can already take this turn (0 if it can't — incl. an ex-immune
-        # defender, which `_best_affordable_ko_value` zeroes). Retreating to another attacker is worth it
-        # ONLY for a strictly better KO; taking the SAME prize with a benched body wastes the Active's
-        # attack and the turn, exposes a fragile body.
+        # Best KO the CURRENT Active can already take (0 if not, incl. ex-immune). Retreat is worth it
+        # ONLY for a strictly better KO; same prize via a benched body wastes the Active's attack + turn.
         my_active_ko = self._best_affordable_ko_value(
             obs, board, opp, board.my_active_id, board.my_active_energy)
         state = obs.get("current") or {}
@@ -1212,11 +1095,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        search_redundant_wincon=redundant_wincon,
                        search_targets_unlikely=search_unlikely)
 
-    # Fetch doctrine's comparator/oracle (`_grab_value_of` = `fetch_value`), deck-knowledge
-    # whiff/redundant signals (`_search_signals`/`_search_deck_set`), whether-to-play lookahead
-    # (`_fetch_fills_a_need`), and greedy multi-pick (`_greedy_grab`/`_virtual_grab_board` +
-    # `_top_fetch_priority_id`/`_is_support_id`/`_support_in_play`) live in
-    # common.strategy.doctrines.doctrine_fetch (FetchMixin).
+    # Fetch doctrine's comparator/oracle, deck-knowledge whiff/redundant signals, whether-to-play
+    # lookahead, and greedy multi-pick live in doctrine_fetch (FetchMixin).
     def _attach_target(self, obs: dict, option: dict) -> dict | None:
         """The Pokémon an attach option puts Energy on — encoded as `inPlayArea`/`inPlayIndex`
         (distinct from `area`/`index`, which point at the Energy card in hand). None when absent."""
@@ -1361,9 +1241,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
         ma = next((p for p in (me.get("active") or []) if p), None)
         oa = next((p for p in (opp.get("active") or []) if p), None)
-        # OPPONENT-as-attacker context, cached per decision (ADR-0032 P1): every Incoming
-        # estimate below (`_predicted_max_damage`) prices their scalers off THEIR visible state —
-        # hand/bench/Active-Energy and their open discard (an opp Kyogre's Riptide is exact)
+        # OPPONENT-as-attacker context, cached per decision (ADR-0032 P1): Incoming estimates price
+        # their scalers off THEIR visible state — hand/bench/Energy/discard (opp Kyogre's Riptide is exact)
         self._opp_attack_context = self._damage_context(obs, attacker_is_me=False)
         prizes = obs.get("own_prizes")             # exact prize multiset from deck-tracker, or None
         if prizes:                                 # keys are card ids: coerce str->int so a JSON-captured
@@ -1448,10 +1327,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             board = replace(board,                      # Tool is in hand (common case pays nothing)
                             tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
-        # Shuffle-Refresh fallback signals (ADR-0024) — computed off base board, so the hand-card
-        # play-scan can read the rest of the board. Only `refresh-when-hand-is-dead` reads them, and
-        # fires only on a `shuffle_hand` option, so skip the (whole-menu) scan unless a refresh is in
-        # hand — common case pays nothing. plan gates the deck's grab-value.
+        # Shuffle-Refresh fallback signals (ADR-0024) — only `refresh-when-hand-is-dead` reads them,
+        # fires only on a `shuffle_hand` option, so skip the whole-menu scan unless a refresh is in hand.
         if not self._has_shuffle_refresh(me):
             return board
         plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
@@ -1459,9 +1336,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        deck_holds_a_need=self._deck_holds_a_need(board, plan),
                        hand_is_dead=self._hand_is_dead(obs, select, board))
 
-    # Shuffle-Refresh doctrine's signals (`_has_shuffle_refresh`, `_deck_holds_a_need`,
-    # `_hand_is_dead`) live in common.strategy.doctrines.doctrine_shuffle_refresh (ShuffleRefreshMixin);
-    # `_board` calls them.
+    # Shuffle-Refresh doctrine's signals live in doctrine_shuffle_refresh (ShuffleRefreshMixin); `_board` calls them.
 
     def _wincon_set(self) -> set:
         """Card ids that ARE the win-condition — a Strategy Line payoff or a card carrying the
@@ -2024,8 +1899,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         # per-attack oracle (ADR-0032): prevention/W/R + attack's own ignore flags in one place
         return self.predicted_damage(ma.get("id"), best_aid, oa) >= opp_hp
 
-    # (Gust Board-signal builders — `_active_ko_prizes`, `_opp_active_condition_gift`,
-    # `_active_condition_ko_prizes`, `_gust_best_ko_prizes`, `_stall_target_exists` — are in
+    # (Gust Board-signal builders — _active_ko_prizes, _opp_active_condition_gift, etc. — are in
     # doctrine_gust.GustMixin; `_board` calls them as `self.…`.)
     def _opp_has_hand_size_attacker(self, opp: dict | None) -> bool:
         """True if the opponent has a Pokémon in play whose own card OR its forward-evolution line

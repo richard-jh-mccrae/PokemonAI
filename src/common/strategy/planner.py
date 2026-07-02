@@ -35,10 +35,8 @@ def _prune_none(v):
         return [_prune_none(x) for x in v]
     return v
 
-# Leaf-eval term weights (ADR-0031 decision 4). Prizes are KO_SCORE-weighted and DOMINANT — sum of
-# every positional term caps below one prize, so a positional score can never outrank a real KO
-# (hard-rung invariant, decision 3). Seeded + tunable; Base Value Model (ADR-0007) replaces the
-# whole scalar later.
+# Leaf-eval term weights (ADR-0031 decision 4). Prizes KO_SCORE-weighted + DOMINANT — positional terms
+# sum below one prize, never outrank real KO (hard-rung invariant, decision 3). Base Value Model (ADR-0007) replaces later.
 _PLANNER_SURVIVAL_W = 50.0     # my Active survives predicted Incoming after the line (full turn)
 _PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by the KO …
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize

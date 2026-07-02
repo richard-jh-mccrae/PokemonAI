@@ -66,10 +66,8 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
     elif attack.scaleVar and attack.scalePerUnit and (context or {}).get(attack.scaleVar) is not None:
         dmg += attack.scalePerUnit * context[attack.scaleVar]
     if attack.hiddenPerUnit and attack.hiddenSample:
-        # hidden-state deck-discard scaler (Hammer-lanche class): units are hidden card ORDER, but
-        # with EXACT deck facts (tracker-anchored deck) the distribution is known: pigeonhole floor
-        # is SOUND (any `sample` cards off deck of N with F fuel hit >= sample-(N-F)), hypergeometric
-        # mean prices "exact", ceiling caps at min(sample, F).
+        # hidden-state deck-discard scaler (Hammer-lanche class): hidden ORDER but EXACT deck facts ->
+        # distribution known: pigeonhole floor SOUND (>= sample-(N-F)), hypergeometric mean "exact", ceiling min(sample,F).
         units = (context or {}).get("hidden_units")
         deck_n = (context or {}).get("atk_deck_count")
         fuel = ((context or {}).get("atk_deck_basic_by_type") or {}).get(attack.hiddenEnergyType) \
