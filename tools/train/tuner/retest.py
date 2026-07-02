@@ -28,5 +28,11 @@ def retest(correction, pilot, *, tier: int = 0) -> dict:
         "correct": list(correction.correct),
         "margin_before": (before or {}).get("margin"),
         "margin_after": after["margin"] if after else None,
+        # Layer verdicts (ADR-0030/0031), lifted so a solver/planner fix's proof is one glance —
+        # when either is non-null, scoring did NOT drive that side's pick (pilot returns early).
+        "lethal_before": (before or {}).get("lethal"),
+        "lethal_after": after.get("lethal") if after else None,
+        "planned_before": (before or {}).get("planned"),
+        "planned_after": after.get("planned") if after else None,
         "fixed": fixed,
     }

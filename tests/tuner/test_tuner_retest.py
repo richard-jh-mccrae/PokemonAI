@@ -31,3 +31,21 @@ def test_retest_reports_fixed_only_when_correct_now_wins():
     tuned = retest(corr, Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60, overrides={"boost": 50.0}))
     assert tuned["chosen_after"] == [1] and tuned["fixed"] is True     # fix makes correct win
     assert tuned["after"]["opts"][1]["fired"] == [["boost", 50.0]]     # live-format trace
+
+
+def test_retest_surfaces_layer_verdicts():
+    """REQ-TUNER-0015: the summary lifts the lethal/planned layer verdicts (ADR-0030/0031) out of
+    the before/after records — a solver/planner fix's proof is one glance, no trace digging."""
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=MAIN,
+                      current=state(hand=[111, 222]))
+    planned = {"step": [1], "goal": "ko_for_prizes", "why": "retreat->attach->KO"}
+    corr = _correction(obs, correct=[1],
+                       live_trace={"chosen": [0], "margin": 0, "lethal": None, "planned": planned})
+
+    r = retest(corr, Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
+    assert r["planned_before"] == planned and r["lethal_before"] is None
+    assert r["planned_after"] is None and r["lethal_after"] is None    # plain pilot commits nothing
+
+    legacy = retest(_correction(obs, correct=[1], live_trace={"chosen": [0], "margin": 0}),
+                    Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
+    assert legacy["planned_before"] is None                            # pre-planner trace degrades

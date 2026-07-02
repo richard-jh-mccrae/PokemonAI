@@ -28,6 +28,9 @@ DEFAULT_REVIEWED = DEFAULT_ROOT / "reviewed.json"
 
 # The disposition vocabulary. `refuted` also drops from the weight fit (bad label must not
 # pressure weights); `deferred` / `covered` just held off the fresh-work surfaces.
+# `deferred` = evidenced CAPABILITY-GAP only (/blunder-buster mandate): fix is a designed-but-unbuilt
+# roadmap layer, recorded w/ real-Pilot re-measure + fixture + docs/todo definition-of-done.
+# A merely-missing signal/tag/enum is never deferred -> it is built (step 4b).
 DISPOSITIONS = ("refuted", "deferred", "covered")
 
 

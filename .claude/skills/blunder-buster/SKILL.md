@@ -1,6 +1,6 @@
 ---
 name: blunder-buster
-description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), gates each with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — nothing is punted to a future run or "deferred". Corrections whose rationale carries the uppercase CRITICAL marker are surfaced first and resolved one at a time, blocking the rest of the run until each reaches a terminal outcome. Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
+description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), routes Lethal-Solver/Turn-Planner-layer blunders (live_trace lethal/planned) to code fixes in that layer instead of weights or when() rules, gates each rule with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — or, solely when the sound fix is a designed-but-unbuilt roadmap capability (e.g. multi-turn search), an evidenced capability-gap (real-Pilot re-measure + state fixture + todo definition-of-done + ledger); nothing is silently punted to a future run. Corrections whose rationale carries the uppercase CRITICAL marker are surfaced first and resolved one at a time, blocking the rest of the run until each reaches a terminal outcome. Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
 ---
 
 # blunder-buster — corrections → verified Strategy improvements
@@ -18,28 +18,49 @@ you do **not** punt anything to a "future run." See the completion mandate below
 A `/blunder-buster` run is **finished only when the open set is empty** — when every still-open
 correction has reached exactly one **terminal outcome**, with evidence:
 
-- **fixed** — a verified `when()` Hypothesis now fires it (Verifier `passed` + retest `fixed`), diff placed.
+- **fixed** — a verified `when()` Hypothesis now fires it (Verifier `passed` + retest `fixed`), diff
+  placed. (Solver/Planner-layer blunders count as `fixed` via their code fix + gated test — step 2.)
 - **covered** — an existing Hypothesis already handles it; you **name** that Hypothesis, confirmed
   against the **real Pilot `decide()`** (not the W-route).
 - **refuted** — a bad correction (forgoes a KO / high-value attack), **proven with a test**; dropped
   from the weight fit. See [[forgo-ko-corrections-are-refuted]].
+- **capability-gap** — the ONE sanctioned defer-shape, narrowly scoped: the *sound* fix is a
+  **designed-but-unbuilt roadmap layer** — multi-turn search across ≥2 of my turns, opponent
+  prize-trajectory modelling, the M4 value model (`docs/todo/roadmap-search-posture-learning.md`) —
+  and hacking it into an existing layer is explicitly forbidden (e.g. multi-turn onto the closed-form
+  Turn Planner, `docs/todo/deferred-multi-turn-criticals.md`). **A missing signal/tag/enum is NOT a
+  capability-gap** — that is step 4b, build it now. Reaching this outcome requires **evidence, not a
+  punt** — all four artifacts, in-session (the `a21472`/`b4649` pattern):
+  1. **Re-measure through the real Pilot first** — the blunder may already be covered (`b4649`
+     lesson: re-measured `covered`, no gap left to defer).
+  2. **Fixture the state** (`tests/fixtures/corrections/<name>.json`) so the future build gates on it.
+  3. **A `docs/todo/` entry with a definition-of-done** — which test proves it, which layer builds it.
+  4. **Ledger it**: `python tools/train/review_correction.py <episode>-<frame> deferred
+     "capability-gap: <layer> — see docs/todo/<file>"` so it stops resurfacing as fresh work.
+  A CRITICAL correction landing here is still a **hard stop** — present the four artifacts and get
+  explicit human acknowledgement before recording it (same as a CRITICAL `refuted`).
 
 "Open" = every `missing_hypothesis` proposal in `data/proposals/<deck>.json` `open[]` **plus** every
 `UNSATISFIED` line `tune.py` prints. Each lands in exactly one cluster and is carried through to one
-of the three outcomes above.
+of the outcomes above.
 
-**There is no `deferred`, no "future run", no "leave for later".** If the *only* blocker is a missing
-signal — a `Context`/`Board` field, a function tag, or an enum the `when()` would need but that
-doesn't exist yet — you **build that infra in-session** (step 4b), then author the rule. "Needs infra"
-is a reason to **build**, never to skip. Do **not** report blunder busting finished while any
-correction is still unresolved.
+**There is no bare `deferred`, no "future run", no "leave for later".** If the *only* blocker is a
+missing signal — a `Context`/`Board` field, a function tag, or an enum the `when()` would need but
+that doesn't exist yet — you **build that infra in-session** (step 4b), then author the rule. "Needs
+infra" is a reason to **build**, never to skip. The evidenced **capability-gap** above is the sole
+exception, and it is not a punt: it produces a re-measure, a fixture, a definition-of-done, and a
+ledger entry — in-session. Do **not** report blunder busting finished while any correction is still
+unresolved.
 
 > **Why no defer:** every prior round's "deferred" pile silently became permanent backlog. The
 > Verifier + real Pilot make in-session resolution cheap, and a missing signal is usually one
-> `Context` field. Resolve it now.
+> `Context` field. Resolve it now. (The capability-gap shape exists because the opposite failure is
+> real too: bolting multi-turn onto a this-turn layer to satisfy the mandate — worse than an
+> evidenced, gated defer.)
 
 (Legacy `deferred` entries already in `data/corrections/reviewed.json` are **debt** under this
-mandate: any run that re-surfaces or touches one must re-resolve it to fixed / covered / refuted.)
+mandate: any run that re-surfaces or touches one must re-resolve it to fixed / covered / refuted —
+or upgrade it to an evidenced capability-gap by producing all four artifacts.)
 
 ## CRITICAL corrections — resolve first, block the run (read this second)
 
@@ -60,19 +81,20 @@ source (H proposal, W-route `UNSATISFIED`, or `skipped`/tactical).
    **list it back to the human up front** — each critical correction's id, episode/frame, and
    rationale. This is the "pause": you surface the cohort and start on it, not on the rest.
 2. **Work the cohort first, one at a time.** Carry each critical correction through steps 2–10 to a
-   **terminal outcome** (fixed / covered / refuted) **before starting the next critical one, and
-   before *any* non-critical cluster.** No batching the cohort with normal clusters; no interleaving
-   non-critical work "while you think about it."
+   **terminal outcome** (fixed / covered / refuted / evidenced capability-gap) **before starting the
+   next critical one, and before *any* non-critical cluster.** No batching the cohort with normal
+   clusters; no interleaving non-critical work "while you think about it."
 3. **Checkpoint each.** When a critical correction reaches its outcome, **stop and present it**
    explicitly — the authored `when()` + Verifier `passed` + retest `fixed`, or the **named** covering
-   Hypothesis (confirmed against the real Pilot), or the refutation test — and confirm it's resolved
-   before moving on. "Pay special attention" = each critical item is its own reviewed checkpoint, not
-   a line in a batch summary.
-4. **A CRITICAL that would be `refuted` is a HARD STOP.** If the only sound outcome is `refuted` (it
-   forgoes a KO / is dominated — [[forgo-ko-corrections-are-refuted]]), do **not** silently file it.
-   Present the refutation proof and **stop for explicit human acknowledgement** before recording it:
-   the human flagged this must-fix, so "your critical correction is actually wrong" is *their* call,
-   not the skill's. (A non-critical correction still auto-records `refuted` per step 10.)
+   Hypothesis (confirmed against the real Pilot), or the refutation test, or the four capability-gap
+   artifacts — and confirm it's resolved before moving on. "Pay special attention" = each critical
+   item is its own reviewed checkpoint, not a line in a batch summary.
+4. **A CRITICAL that would be `refuted` — or `capability-gap` — is a HARD STOP.** If the only sound
+   outcome is `refuted` (it forgoes a KO / is dominated — [[forgo-ko-corrections-are-refuted]]) or an
+   evidenced capability-gap, do **not** silently file it. Present the proof (refutation test / four
+   artifacts) and **stop for explicit human acknowledgement** before recording it: the human flagged
+   this must-fix, so "your critical correction is actually wrong / can't be built this session" is
+   *their* call, not the skill's. (A non-critical correction still auto-records per step 10.)
 
 **Parallel mode:** the CRITICAL cohort **never fans out.** Resolve it **serially in Phase 1, ahead of
 the parallel batch** — Phase 1 setup → drive every CRITICAL correction to terminal (steps 4–11 each,
@@ -96,11 +118,12 @@ There is **one append-only log**; you don't manage per-round files. Each run re-
 once a rule *satisfies* it. A `refuted` or `covered` correction you resolved by judgement (not by a
 firing rule) would otherwise resurface every run, so record it in `data/corrections/reviewed.json`
 (step 10); `tune.py` then excludes it from `open[]` / `UNSATISFIED` and lists it under
-`reviewed (excluded)`. **`refuted` and `covered` are the only set-aside outcomes** — both are
-terminal resolutions reached by **testing**, not punts.
+`reviewed (excluded)`. **`refuted`, `covered`, and the evidenced `capability-gap` (ledgered as
+`deferred` with its four artifacts) are the only set-aside outcomes** — all are terminal resolutions
+reached by **testing**, not punts.
 
 So the loop is: tag corrections → `/blunder-buster` → **resolve every open correction** (author +
-verify + **commit**, or test + **record refuted/covered**) → tag more (appended to the same log) →
+verify + **commit**, or test + **record refuted/covered/capability-gap**) → tag more (appended to the same log) →
 `/blunder-buster` again (prior clusters auto-drop; reviewed ones stay excluded; only the new patterns
 appear). **Commit authored Hypotheses before the next round** so re-featurization sees them.
 
@@ -151,7 +174,8 @@ style; skip only the ones that don't apply to serial mode):
 
 2. **See how the agent actually decided** (the live trace, ADR-0019). Each Correction may embed
    `live_trace` — the `@T` Decision Telemetry the **shipped** agent emitted at that exact decision
-   (`opts[].score / tac / fired:[[hyp_id, weight]]`, `chosen`, `margin`, and **`lethal`**). Read it per
+   (`opts[].score / tac / fired:[[hyp_id, weight]]`, `chosen`, `margin`, **`lethal`**, and
+   **`planned`**). Read it per
    cluster member to ground authoring in the agent's *real* reasoning: which hypotheses fired on the
    chosen vs the correct option, and by what margin. (If `live_trace` is null, run
    `python tools/train/backfill_obs.py` once the game's `episode-<id>-agent-<seat>-logs.json` is
@@ -177,6 +201,39 @@ style; skip only the ones that don't apply to serial mode):
    (the Solver already handles it — name the branch, confirm with the real Pilot) / `refuted` (the
    "missed win" is a KO-forgoing mislabel — [[forgo-ko-corrections-are-refuted]]).
 
+   **Then read `live_trace.planned` — the Turn Planner triage (ADR-0031), the same logic one layer
+   down.** It is the Planner's committed **Turn Line** at this decision: `null` when it didn't commit,
+   else `{step, goal, why}` (`goal` ∈ `ko_for_prizes` / `stabilize_then_ko` / …). The Planner runs after
+   the Lethal Solver and **before** Hypothesis scoring, and a commit **short-circuits scoring the same
+   way** (`pilot.py` returns the line's next step directly) — on a `planned` decision, `opts[].fired` /
+   `score` did **not** drive the choice either. A planner-shaped blunder is therefore **NOT
+   weight-tunable, and no `when()` Hypothesis can fix it** — the fix lives in the Planner
+   (`src/common/strategy/planner.py`). Two shapes (mirror the lethal ones):
+   - **`planned: null` but the rationale describes a this-turn multi-step line** to a better
+     end-of-turn state (retreat→attach→KO, heal-then-KO, tutor→enable→KO — corrections that say
+     "should have planned / sequenced the turn") → the **Goal Ladder missed the line**: extend a
+     goal's line *generator* (or add the missing goal), or fix the leaf-eval that ranks lines.
+   - **`planned` non-null but the human rejects the pick** → the Planner **over-committed** (wrong
+     goal ranking, a bad line, a leaf-eval slip): tighten that goal's generator / the commit gate.
+   Resolve in-session by editing the Planner **plus a focused test in `tests/strategy/test_planner.py`
+   / `test_planner_engine.py`**, gating the correction's real state as a fixture
+   (`tests/fixtures/corrections/` — the `7f48`/`0cbc`/`4298` pattern). The Verifier does **not** gate a
+   Planner-code fix — the retest (which surfaces `planned_before/after`) + suite-green are the gate.
+   Terminal outcomes unchanged: `fixed` / `covered` (name the goal/branch, confirm with the real
+   Pilot) / `refuted`.
+
+   **You do not hand-grep for the over-commit half** — `tune.py` tags each `PROPOSE` / `UNSATISFIED` /
+   `SKIP` line `[PLANNED]` / `[LETHAL]` (plus a banner), and `data/proposals/<deck>.json` `open[]` /
+   `skipped[]` entries carry `"planner_committed"` / `"lethal_locked"` when the live trace shows that
+   layer drove the shipped pick. Only the over-commit half is auto-taggable: the
+   `null`-but-should-have-planned half is your step-2 read of the rationale.
+
+   **If the better line spans MORE than this turn** (≥2 of my turns, or the opponent's prize
+   trajectory — "KO over 3 turns", prize-race sacrifice reads), it is beyond the Planner's designed
+   this-turn scope. Do **not** bolt multi-turn onto the closed-form Planner
+   (`docs/todo/deferred-multi-turn-criticals.md`) — that correction is a **capability-gap**: follow
+   the carve-out in the completion mandate above.
+
 3. **Read the feature catalog** (author against the LIVE source, never memory):
    - `src/common/pilot.py` — the `Context` / `Board` fields a `when(ctx)` may read.
    - `src/cg/api.py` — `SelectContext` / `OptionType` / `AreaType` / `EnergyType` enums.
@@ -188,6 +245,11 @@ style; skip only the ones that don't apply to serial mode):
      (`live_trace.lethal` set, or `null` on a missed win — step 2) is fixed: `find_lethal_line` (win
      detection + unlock kinds) and `_attack_wins` (soundness). The Solver short-circuits scoring, so
      these are **code fixes here + a `tests/strategy/test_lethal.py` test**, never a `when()` Hypothesis.
+   - `src/common/strategy/planner.py` — the **Turn Planner** (ADR-0031). Where a planner-layer blunder
+     (`live_trace.planned` set, or `null` on a this-turn multi-step line — step 2) is fixed: the Goal
+     Ladder's line generators, the leaf-eval, the commit gate. Commits short-circuit scoring like the
+     Solver, so these too are **code fixes + a `tests/strategy/test_planner*.py` test + a fixtured
+     correction state**, never a `when()` Hypothesis.
 
 4. **Author the candidate `when()`** from the cluster's RATIONALES (the authoring spec):
    - Prefer **universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s.
@@ -222,7 +284,10 @@ style; skip only the ones that don't apply to serial mode):
    `retest(correction, pilot_with([candidate]))` from `train.tuner.retest` re-derives the decision
    in the **same `@T` format** as the live log and diffs it against the embedded `live_trace`:
    show `chosen_before → chosen_after`, `margin_before → margin_after`, and require `fixed` (the
-   `correct` option is now chosen). This is the before/after proof the blunder is addressed.
+   `correct` option is now chosen). For a Solver/Planner-layer fix, also show the lifted
+   `lethal_before → lethal_after` / `planned_before → planned_after` verdicts — the proof the layer
+   now commits (or no longer over-commits) the line. This is the before/after proof the blunder is
+   addressed.
 
 7. **Suite-green.** `python -m pytest tests/ -q` — must not break Playability / existing behavior
    (and must include any new signal's test from step 4b).
@@ -255,16 +320,21 @@ style; skip only the ones that don't apply to serial mode):
       weight fit so the bad label stops pressuring weights. (See [[forgo-ko-corrections-are-refuted]].)
     - `covered` — already handled by an existing Hypothesis; **name it**, and confirm with the real
       Pilot `decide()` that it actually fires (not just the W-route).
-    There is **no `deferred`.** A correction blocked only by a missing signal is **not** set aside —
-    you built the infra in step 4b and authored the rule. Next `tune.py` run excludes the recorded
-    set-asides (shown under `reviewed (excluded)`), so the next round only surfaces genuinely new work.
+    - `deferred` — **only** for an evidenced **capability-gap** (see the completion mandate): all four
+      artifacts exist (real-Pilot re-measure, state fixture, `docs/todo/` entry with a
+      definition-of-done, this ledger line), and the reason names the layer + the todo doc.
+    There is **no bare `deferred`.** A correction blocked only by a missing signal is **not** set
+    aside — you built the infra in step 4b and authored the rule. Next `tune.py` run excludes the
+    recorded set-asides (shown under `reviewed (excluded)`), so the next round only surfaces genuinely
+    new work.
 
 11. **Completion gate — prove the open set is empty.** Re-run `python tools/train/tune.py
     --agent <deck>` and confirm that **no unresolved correction remains**: every line is either one you
-    committed a fix for (drops on this reconciliation) or one recorded `refuted`/`covered` in the
-    ledger (`reviewed (excluded)`). Produce a **terminal-outcome ledger** — one line per open
-    correction, its outcome (fixed / covered / refuted) and the evidence (Verifier+retest id / named
-    Hypothesis / refutation test). **Only when every correction has an outcome may you report blunder
+    committed a fix for (drops on this reconciliation) or one recorded `refuted`/`covered`/
+    capability-gap-`deferred` in the ledger (`reviewed (excluded)`). Produce a **terminal-outcome
+    ledger** — one line per open correction, its outcome (fixed / covered / refuted / capability-gap)
+    and the evidence (Verifier+retest id / named Hypothesis / refutation test / the four
+    capability-gap artifacts). **Only when every correction has an outcome may you report blunder
     busting finished.** If any correction is still unresolved, you are **not** done — return to step 2
     for it. Do not say "the rest are for a future run."
     - **Refresh the trend dashboard.** `python tools/train/blunder_report.py` rebuilds
@@ -371,7 +441,8 @@ editing shared `pilot.py`, and the cluster drops to the serial tail. Read-only *
    record `refuted`/`covered` set-asides (10), and run the **step-11 completion gate** — re-run
    `tune.py`, prove the open set empty. **Reconcile against the Phase-1 full worklist:** every cluster
    id maps to exactly one terminal outcome — `fixed` (diff present **and** union-verified) / `covered`
-   / `refuted` / `re-queued-serial`. A missing / null / timed-out / `needs-serialization` result is
+   / `refuted` / `capability-gap` (serial only — its fixtures + todo-doc are shared writes) /
+   `re-queued-serial`. A missing / null / timed-out / `needs-serialization` result is
    **re-queued to the serial tail, never dropped** — do not let "all *reported* clusters passed"
    vacuously pass over a dead agent. Human commits.
 
@@ -398,10 +469,13 @@ fan-out-then-converge schedule.
   gate: the Verifier still gates every cluster, the join's **union-verify + full `pytest` + step-11**
   must pass over the **merged** tree, and a dead/failed agent **re-queues serial** — never a silently
   dropped correction.
-- The Verifier is non-negotiable: **no commit without `passed`**.
+- The Verifier is non-negotiable: **no commit without `passed`** — except Solver/Planner-layer code
+  fixes (step 2), which it cannot gate: there the fixtured regression test + retest + suite-green are
+  the gate, and **a layer-driven decision is never "fixed" with a weight or `when()`**.
 - **Exhaustive or not finished.** Every open correction must reach a terminal outcome
-  (fixed / covered / refuted) **this session**; the run is finished only when the open set is empty
-  (step 11). No `deferred`, no "future run", no leaving a correction unanalyzed.
+  (fixed / covered / refuted / evidenced capability-gap) **this session**; the run is finished only
+  when the open set is empty (step 11). No bare `deferred`, no "future run", no leaving a correction
+  unanalyzed.
 - **Don't invent `ctx` features in a `when()`** — read only what `Context` / `Board` actually expose.
   If a rule genuinely needs a signal that isn't there, **add it to the proper layer first** (step 4b,
   with a test) — never fabricate a field the Pilot doesn't compute.
