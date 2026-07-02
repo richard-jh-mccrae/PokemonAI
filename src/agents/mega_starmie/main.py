@@ -15,6 +15,7 @@ from common.scouting.provider import (
     parse_attack_ignores_active_effects, parse_attack_recoil)
 from common.scouting.scout import Scout
 from common.scouting.artifact import load_artifact
+from common.scouting.briefs import load_briefs
 from strategy import STRATEGY
 
 
@@ -38,6 +39,7 @@ _overrides, _params = load_overrides_and_params(STRATEGY.params)
 _provider = EngineCardStatProvider()   # shared by the Pilot (stats) and the Scout (threat/target resolution)
 _scout = Scout(load_artifact(), provider=_provider)   # opponent recognition -> the Read (M2.0/ADR-0026);
                                                       # artifact is bundled + load is fail-safe to empty -> Posture off
+_briefs = load_briefs()   # hand-authored Matchup Briefs (ADR-0027); covers-routed onto Board, empty -> inert
 _pilot = Pilot(
     STRATEGY,
     _read_deck(),
@@ -52,6 +54,7 @@ _pilot = Pilot(
     ignores_active_effects=_ignores_active_effects,
     search_budget=_params.get("search_budget", 0),   # Tier from params (Strategy default or overlay; ADR-0019/0021)
     scout=_scout,                                     # opponent recognition → the Read on Board (ADR-0026)
+    briefs=_briefs,                                   # matched Matchup Brief on Board (ADR-0027), covers-routed
     posture=_params.get("posture", True),             # ADR-0026 kill-switch (overlay can force Posture off for A/B)
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
