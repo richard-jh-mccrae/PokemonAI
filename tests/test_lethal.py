@@ -267,3 +267,37 @@ def test_lethal_verdict_is_emitted_in_decision_telemetry():
                          opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
                          attack_opt(JETTING), opt(END)], current=unlock)
     assert to_record(pilot.explain(obs_u))["lethal"]["kind"] == "unlock"
+
+
+@pytest.mark.req("REQ-LETHAL-0012")
+def test_ignore_effects_attack_bypasses_a_prevent_damage_ability_for_the_win():
+    """ep83054602 f17: the opponent's Active has a 'prevent all damage from your {ex} Pokémon' Ability
+    (Crustle's Mysterious Rock Inn, Function Tag `prevent_ex_damage`). My cheap Jetting Blow is walled,
+    but Nebula Beam "isn't affected by any effects on your opponent's Active Pokémon" — so it lands its
+    210 THROUGH the Ability and KOs the 150-HP Active. The opponent's Bench is empty, so that KO WINS.
+    The Solver must see it ONLY because Nebula Beam carries `ignores_active_effects`; without the signal
+    both ex attacks read as walled and the win is invisible (the missed-win blunder)."""
+    EX_ATTACKER, CRUSTLE = 901, 345
+    stats = DictCardStatProvider({
+        EX_ATTACKER: CardStat(EX_ATTACKER, name="Mega Starmie ex", hp=330, energyType=3, ex=True,
+                              megaEx=True, minAttackCost=1, minCostDamage=120, maxDamage=210,
+                              maxDamageCost=3, attacks=(JETTING, NEBULA)),
+        CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, energyType=7),
+    })
+    funcs = CardFunctions({CRUSTLE: ["prevent_ex_damage"]})
+
+    def build(ignore):
+        return Pilot(Strategy(roles={EX_ATTACKER: ["win_condition", "primary_attacker"]}),
+                     deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
+                     attacks={JETTING: 120, NEBULA: 210}, attack_costs={JETTING: 1, NEBULA: 3},
+                     ignores_active_effects=ignore)
+
+    # 4 Energy -> both attacks affordable; opp Crustle 150 HP with an empty Bench (KO = win); prizes not last.
+    won = state(active=poke(EX_ATTACKER, energy=4, hp=330), opp_active=poke(CRUSTLE, hp=150),
+                opp_bench=[], prizes=3, opp_prizes=2)
+    obs = make_select([attack_opt(JETTING), attack_opt(NEBULA), opt(END)], current=won)
+
+    assert build({}).explain(obs).lethal is None        # without the signal: both ex attacks walled, no win seen
+    d = build({NEBULA: True}).explain(obs)              # with it: Nebula bypasses the Ability -> empty-bench win
+    assert d.lethal is not None and d.lethal.next_step == [1]
+    assert build({NEBULA: True}).decide(obs) == [1]     # ... and the Pilot takes Nebula Beam, not Jetting Blow

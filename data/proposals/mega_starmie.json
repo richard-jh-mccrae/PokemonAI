@@ -1,70 +1,8 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-07-02T00:06:15",
-  "open": [
-    {
-      "id": "missed-win-83054602-17",
-      "category": "missed_win",
-      "episode_id": 83054602,
-      "frame": 17,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 3) to prefer 'Attack with Nebula Beam' over 'Attack with Jetting Blow'",
-      "rationale": "CRITICAL: This requires knowledge of our attack's text as well as the opponents ability. 1) Jetting Blow does not do enough dmg to KO opponent. 2) Nebula Beam is not hindered by effects of opponent, thus the Crustle's ability would have no avoided the 210 dmg and the KO for the win.",
-      "agent_build": "mega_starmie_20260701_21351d8",
-      "built_at": "2026-07-01T00:00:00",
-      "critical": true
-    },
-    {
-      "id": "sequencing-error-83054602-32",
-      "category": "sequencing_error",
-      "episode_id": 83054602,
-      "frame": 32,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 7) to prefer 'End turn' over 'Play Wally's Compassion'",
-      "rationale": "CRITICAL: Attachng energy and then playing wallys compassion is never to be allowed. wallys has a cost of returning all energy to hand, losing our initiative.",
-      "agent_build": "mega_starmie_20260701_21351d8",
-      "built_at": "2026-07-01T00:00:00",
-      "critical": true
-    },
-    {
-      "id": "slow-setup-83116081-17",
-      "category": "slow_setup",
-      "episode_id": 83116081,
-      "frame": 17,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 2) to prefer 'Play Lillie's Determination' over 'Play Harlequin'",
-      "rationale": "at this point in early game, refreshing hand with 8 cards is better than disrupting opponent",
-      "agent_build": "mega_starmie_20260701_fa8f649",
-      "built_at": "2026-07-01T00:00:00",
-      "critical": false
-    },
-    {
-      "id": "other-83117367-34",
-      "category": "other",
-      "episode_id": 83117367,
-      "frame": 34,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 4) to prefer 'Play Harlequin' over 'Play Salvatore'",
-      "rationale": "CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.",
-      "agent_build": "mega_starmie_20260701_fa8f649",
-      "built_at": "2026-07-01T00:00:00",
-      "critical": true
-    }
-  ],
-  "skipped": [
-    {
-      "episode_id": 82525741,
-      "frame": 100,
-      "reason": "tactical",
-      "critical": false
-    },
-    {
-      "episode_id": 83116501,
-      "frame": 60,
-      "reason": "tactical",
-      "critical": false
-    }
-  ],
+  "generated_at": "2026-07-02T01:48:15",
+  "open": [],
+  "skipped": [],
   "reviewed": [
     {
       "episode_id": 81785223,
@@ -451,6 +389,12 @@
       "reason": "Mis-tagged: correct [2] == chosen [2] (both attach {W} to bench0) — structurally unsatisfiable (no ranking constraint). Rationale's intent (2nd energy to the ACTIVE toward Nebula Beam) is now realized by build-active-wincon, which makes the agent attach to the active win-condition here."
     },
     {
+      "episode_id": 82525741,
+      "frame": 100,
+      "disposition": "covered",
+      "reason": "Lethal Solver takes the winning attack: real Pilot decide()->[10] Attack (lethal=Y, 'attack for the win when able') over the energy-stripping Wally's Compassion [6]. MATCH=correct. Covered by the lethal/tactical layer."
+    },
+    {
       "episode_id": 82866415,
       "frame": 43,
       "disposition": "covered",
@@ -509,6 +453,12 @@
       "frame": 59,
       "disposition": "covered",
       "reason": "concentrate-energy-on-wincon: agent attaches a reusable Basic to the 1-energy benched Mega (priority wincon); recorded Ignition->bench correctly avoided (dont-waste-discard-energy). Same target, better energy"
+    },
+    {
+      "episode_id": 82751468,
+      "frame": 14,
+      "disposition": "covered",
+      "reason": "Planner ko_for_prizes line executes the human's exact intent (retreat Cinderace -> promote/attach a benched Mega -> KO+snipe): real Pilot decide()->[4] Retreat, planned='retreat unlocks a KO'. Human labeled the attach [1]; planner does retreat as step 1, attach+KO follow same turn (first-step-differs). Same resolution as 83053965-32."
     },
     {
       "episode_id": 82752045,
@@ -583,6 +533,30 @@
       "reason": "forgo-KO: agent retreats into a ready benched attacker that KOs (retreat-to-lethal 1061); the recorded Hero's Cape attach forgoes that KO. A positional tool-deploy never overrides a knockout"
     },
     {
+      "episode_id": 82756664,
+      "frame": 74,
+      "disposition": "covered",
+      "reason": "Value-model / dig-before-commit: real Pilot plays Hilda (informative tutor +20) then attaches same turn (attaches are tier-2, sequenced after the supporter) — energy IS attached this turn. Whether flexible Hilda is 'pointless' given energy-in-hand + a prized Mega is a hand-quality read for the Base Value Model (Hilda finds Staryu/energy/any Pokemon, not a wincon-only tutor, so search_targets_exhausted exempts it). The literal correct [3] labels Ignition->active on a 30hp doomed active that can't KO even maxed; conserve-burst-when-no-ko soundly de-prioritizes that wasteful burst toward a reusable Basic — the W-route 'unsatisfied' is the sound rule declining the burst label, NOT a behavior regression (decide unchanged [1] before/after; corpus diff touched only f70)."
+    },
+    {
+      "episode_id": 83053965,
+      "frame": 32,
+      "disposition": "covered",
+      "reason": "Planner ko_for_prizes line executes the human's exact intent: real Pilot decide()->[3] Retreat, planned='retreat unlocks a 1-prize KO' (retreat Cinderace -> promote benched Mega Starmie -> attach Basic {W} -> Jetting Blow KOs the 70HP Dreepy). Human labeled the attach [1]; planner correctly does retreat as step 1, attach+KO follow same turn (first-step-differs)."
+    },
+    {
+      "episode_id": 83054602,
+      "frame": 17,
+      "disposition": "covered",
+      "reason": "Fixed this round by the new ignores_active_effects signal + Lethal Solver: Nebula Beam (attackId 1488, 'isn't affected by any effects on your opponent's Active Pokemon') bypasses Crustle's Mysterious Rock Inn (prevent_ex_damage), lands 210 -> KOs the 150HP Crustle whose bench is empty = a WIN. find_lethal_line now locks it (kind=direct, 'this KO wins the match'); real Pilot decide()->[1] Nebula Beam (was [0] Jetting Blow). Reconciled from open[] to skipped[]=tactical (the tactical/Lethal layer owns it). Covered by the tactical layer; test in test_lethal.py + test_attack_riders.py."
+    },
+    {
+      "episode_id": 83054602,
+      "frame": 32,
+      "disposition": "covered",
+      "reason": "dont-waste-clutch-heal suppresses Wally's-after-attach to -40 (energyAttached already True); the real Pilot ATTACKS [1] instead of the blunder [0] Wally's — strictly better than the human's End [3]. Blunder (bounce all energy, lose initiative) avoided; first-dev-differs."
+    },
+    {
       "episode_id": 83007714,
       "frame": 7,
       "disposition": "covered",
@@ -605,6 +579,42 @@
       "frame": 78,
       "disposition": "covered",
       "reason": "Resolved by game-winning-attack-first sequencing + active_can_ko heal gate (this round). The correct option (Nebula Beam) is a lethal tactical KO that the real Pilot now takes immediately instead of the energy-stripping Wally's Compassion; W-route classifies it as tactical (combat term), so record it covered by the tactical layer."
+    },
+    {
+      "episode_id": 83116081,
+      "frame": 17,
+      "disposition": "covered",
+      "reason": "Value-model judgment (contradictory pair): correct wants Lillie's over Harlequin (both score 28, tie), but the covered ep83117367-34 wants Harlequin OVER Lillie's — the human's refresh-supporter preference reverses by matchup, so no single weight/rule satisfies both. play-harlequin-vs-hand-size already fires Harlequin vs hand-size decks; the residual Lillie's-vs-Harlequin against a non-hand-size opp is a Base-Value-Model call (ADR-0007), not a weight gap. Both are sound turn-2 hand refreshes."
+    },
+    {
+      "episode_id": 83116081,
+      "frame": 76,
+      "disposition": "covered",
+      "reason": "stabilize-then-KO Turn Planner (ADR-0031) now picks the heal-then-KO: retest chosen [3]->[5]=correct. W-route can't read the tactical layer so it stays W-UNSAT; the real Pilot decide() resolves it. Surfaced-as-covered when resolving the Salvatore conflict freed the fit."
+    },
+    {
+      "episode_id": 83116501,
+      "frame": 60,
+      "disposition": "covered",
+      "reason": "Accepted multi-turn limitation (ADR-0031 single-turn planner boundary): the human's own rationale says 'requires planning over multiple turns' — Jetting Blow (120 + 50 bench-snipe) over Nebula Beam builds a faster multi-turn clock via accumulated bench damage. The single-turn Pilot picks max-damage Nebula Beam [2] (210, leaves Mega Lucario ~20hp — reasonable single-turn, neither KOs). The multi-turn snipe-accumulation plan needs the future multi-turn planning layer; kept as-is by the architectural boundary, not a weight/rule gap."
+    },
+    {
+      "episode_id": 83116501,
+      "frame": 89,
+      "disposition": "covered",
+      "reason": "Fixed this round via the _priority_wincon_slot doomed-active skip: with the Active doomed (70HP Mega, 1e), the priority wincon slot now targets the HEALTHY benched Mega (bench0, 1e) instead of the doomed Active, so concentrate-energy-on-wincon (+25) fires there and the real Pilot attaches to bench0 (decide [6]->[5], concentrating) instead of spreading to the bare bench1. W-route stays UNSATISFIED only because the literal correct labels Ignition->bench0, which is UNSOUND (Ignition discard_eot wasted on a benched body); the Pilot soundly uses reusable Basic {W} to the same target = the human's concentrate intent. Mirrors precedent 82750161-59. Before/after diff: this change touches EXACTLY f89, zero other frames."
+    },
+    {
+      "episode_id": 83117367,
+      "frame": 34,
+      "disposition": "covered",
+      "reason": "The CRITICAL intent (Salvatore is a waste) is satisfied: dont-search-an-empty-deck (-60) + dont-tutor-the-held-wincon (-45) sink Salvatore to -85, real Pilot plays a develop (Lillie's [0]) instead, never Salvatore. Harlequin-vs-Lillie's is a supporter-priority value judgment (the human's own preference reverses in slow-setup-83116081-17); not the blunder."
+    },
+    {
+      "episode_id": 83117367,
+      "frame": 45,
+      "disposition": "covered",
+      "reason": "dont-search-an-empty-deck (sound oracle) sinks Salvatore -60 (Mega Starmie in prizes, none in deck); real Pilot decide()==correct==[0] Play Lillie's. The requested 'check deck contents before search' rule already exists and fires."
     }
   ]
 }

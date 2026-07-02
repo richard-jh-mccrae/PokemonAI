@@ -32,6 +32,13 @@ _FETCH_FILTERS = {
     "bench_fill": lambda st: st.hp > 0 and not st.evolvesFrom,    # Basic Pokémon (Buddy-Buddy Poffin)
     "tutor_mega": lambda st: bool(getattr(st, "megaEx", False)),  # a Mega Evolution ex (Mega Signal)
     "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
+    # a rush-evolve tutor (Salvatore) pulls only an ability-LESS Evolution — "a card that has no
+    # Abilities and evolves from 1 of your Pokémon". So its whiff set = my deck's ability-less
+    # evolutions (e.g. Mega Starmie ex, but NOT ability-bearing Cinderace). Board-blind by design:
+    # the sound whiff over-includes an unreachable line (no base in play), which only makes the
+    # certain-whiff HARDER to assert — never a false suppression. (Cf `dont-rush-evolve-without-target`,
+    # which handles the no-target-IN-PLAY case; this handles the target-not-IN-DECK case — ep83117367.)
+    "rush_evolve": lambda st: bool(st.evolvesFrom) and not getattr(st, "hasAbility", False),
 }
 
 # The PROBABLE-WHIFF threshold (ADR-0029): a search is softly stood down (`dont-search-a-probable-whiff`)

@@ -1,0 +1,138 @@
+"""Blunder round 2026-07-02 (mega_starmie) — the Salvatore search-whiff fix (/blunder-buster, ep83117367).
+
+Salvatore is a rush-evolve tutor: "search your deck for a card that has no Abilities and evolves from
+1 of your Pokémon, and put it onto that Pokémon to evolve it." Its only fetch target in this deck is
+Mega Starmie ex (Staryu → Mega; Cinderace is excluded — it carries the Explosiveness Ability). So once
+every Mega Starmie ex is prized/played, Salvatore whiffs even with a Staryu in play.
+
+This round wires that into the SOUND deck-oracle: a `rush_evolve` fetch-filter (over the new
+`CardStat.hasAbility`) so `dont-search-an-empty-deck` sees Salvatore, and a reachability gate on the
+POSITIVE endorsements (`prefer-rush-evolve-tutor`, the deck's `tutor-the-wincon`) so the −60 whiff
+penalty is no longer cancelled. Lib-free synthetic obs; one engine test pins the `hasAbility` mapping.
+"""
+import pytest
+
+from common.cards import CardFunctions
+from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.pilot import Pilot
+from common.scouting.provider import CardStat, DictCardStatProvider
+from common.strategy import Line, Strategy
+from common.strategy.doctrines.doctrine_fetch import _FETCH_FILTERS
+from pilot_helpers import HAND, PLAY, make_select, opt, poke, state
+
+END = 14
+WINCON = 900       # ability-LESS Mega ex — Salvatore-fetchable (Staryu → Mega Starmie ex)
+ABIL_EVO = 901     # an Evolution WITH an Ability (Cinderace-like) — NOT Salvatore-fetchable
+PREEVO = 800       # a Basic pre-evolution (Staryu-like)
+FILLER = 99        # non-Pokémon deck filler (absent from stats)
+SALVATORE = 1189   # tags: search + rush_evolve
+
+
+def _fired(o):
+    return {h.id for h, _ in o.fired}
+
+
+def _stats():
+    return DictCardStatProvider({
+        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+                         maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
+                         evolvesFrom="Staryu", hasAbility=False, energyType=3),
+        ABIL_EVO: CardStat(ABIL_EVO, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
+                           minAttackCost=1, attacks=(12,), evolvesFrom="Raboot", hasAbility=True),
+        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
+                         minAttackCost=1, attacks=(13,), evolvesFrom=None, hasAbility=False),
+    })
+
+
+def _pilot(deck):
+    return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"]},
+                          lines=[Line(path=[PREEVO, WINCON], payoff=WINCON, role="win_condition")]),
+                 deck=deck, general_strategy=GENERAL_STRATEGY, stats=_stats(),
+                 functions=CardFunctions({SALVATORE: ["search", "rush_evolve"]}),
+                 attacks={10: 210, 11: 120, 12: 50, 13: 20},
+                 attack_costs={10: 3, 11: 1, 12: 1, 13: 1})
+
+
+def _ctx(pilot, obs, i):
+    select = obs["select"]
+    return pilot._context(obs, select, pilot._board(obs, select), select["option"][i], 0.0)
+
+
+# ---------------------------------------------------------------- the rush_evolve fetch-filter
+@pytest.mark.req("REQ-GEN-0032")
+def test_rush_evolve_filter_takes_ability_less_evolutions_only():
+    st = _stats()
+    f = _FETCH_FILTERS["rush_evolve"]
+    assert f(st.get(WINCON)) is True        # an ability-less Evolution — Salvatore can fetch it
+    assert f(st.get(ABIL_EVO)) is False     # has an Ability (Explosiveness) — excluded
+    assert f(st.get(PREEVO)) is False       # a Basic (no evolvesFrom) — not an evolution
+
+
+@pytest.mark.req("REQ-GEN-0032")
+def test_search_deck_set_for_salvatore_is_the_ability_less_evolution_only():
+    # Deck holds BOTH an ability-less Mega and an ability-bearing Cinderace; Salvatore reaches only
+    # the former (the ability-bearing one is not a legal rush-evolve target).
+    pilot = _pilot([WINCON] * 3 + [ABIL_EVO] * 4 + [PREEVO] * 3 + [FILLER] * 50)
+    assert pilot._search_deck_set(["search", "rush_evolve"]) == {WINCON}
+
+
+# ---------------------------------------------------------------- dont-search-an-empty-deck on Salvatore
+@pytest.mark.req("REQ-GEN-0032")
+def test_salvatore_stands_down_when_its_evolution_is_gone_from_the_deck():
+    # 3 Mega ex (Salvatore's only target), all accounted OUTSIDE the deck (discard) -> Salvatore whiffs,
+    # even though a Staryu is in play to evolve. The ep83117367 shape.
+    pilot = _pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
+    play_salv = opt(PLAY, area=HAND, index=0)
+    gone = state(active=poke(PREEVO, hp=70), bench=[poke(PREEVO, hp=70)],
+                 discard=[WINCON, WINCON, WINCON], hand=[SALVATORE], prizes=6)
+    obs = make_select([play_salv, opt(END)], current=gone)
+    c = _ctx(pilot, obs, 0)
+    assert c.search_targets_exhausted
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "dont-search-an-empty-deck" in fired          # the sound whiff guard fires
+    assert "prefer-rush-evolve-tutor" not in fired        # the positive endorsement is gated off
+    assert pilot.decide(obs) == [1]                       # End beats the guaranteed-whiff Salvatore
+
+
+@pytest.mark.req("REQ-GEN-0032")
+def test_salvatore_is_endorsed_while_a_copy_could_still_be_in_the_deck():
+    # Only 2 of 3 Mega ex accounted; the 3rd could sit in the 6 hidden prizes -> NOT a certain whiff.
+    # The rush-evolve tutor keeps its endorsement (sound: never suppress a plausibly-present target).
+    pilot = _pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
+    play_salv = opt(PLAY, area=HAND, index=0)
+    maybe = state(active=poke(PREEVO, hp=70), bench=[poke(PREEVO, hp=70)],
+                  discard=[WINCON, WINCON], hand=[SALVATORE], prizes=6)
+    obs = make_select([play_salv, opt(END)], current=maybe)
+    c = _ctx(pilot, obs, 0)
+    assert not c.search_targets_exhausted
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "dont-search-an-empty-deck" not in fired
+    assert "prefer-rush-evolve-tutor" in fired            # a reachable target -> still preferred
+
+
+# ---------------------------------------------------------------- own_prizes str-key coercion (JSON obs)
+@pytest.mark.req("REQ-GEN-0032")
+def test_own_prizes_string_keys_are_coerced_to_ints():
+    # A Correction's obs is JSON, so its own_prizes keys are STRINGS ("900"), while the decklist is
+    # int-keyed. The Pilot must coerce, else the resolved prize never matches and the oracle is blind.
+    pilot = _pilot([WINCON] * 3 + [FILLER] * 57)
+    st = state(active=poke(WINCON, energy=1, hp=330), discard=[WINCON], hand=[SALVATORE],
+               prizes=6, deck_count=53)                   # 2 of 3 Mega seen; the 3rd is prized
+    obs = make_select([opt(PLAY, area=HAND, index=0), opt(END)], current=st)
+    obs["own_prizes"] = {str(WINCON): 1}                  # JSON string key (as on disk)
+    board = pilot._board(obs, obs["select"])
+    assert board.deck_definitely_empty_of(WINCON)         # 3 − 2 seen − 1 prized == 0
+
+
+# ---------------------------------------------------------------- hasAbility provider mapping (engine)
+@pytest.mark.req("REQ-GEN-0032")
+def test_cardstat_has_ability_is_set_from_engine_skills():
+    try:
+        from common.scouting.provider import EngineCardStatProvider
+        stats = EngineCardStatProvider()
+        cinderace = stats.get(666)
+    except Exception as e:                                # native engine unavailable in this env
+        pytest.skip(f"engine card data unavailable: {e}")
+    assert cinderace is not None and cinderace.hasAbility is True    # Cinderace — Explosiveness
+    assert stats.get(1031).hasAbility is False                       # Mega Starmie ex — no Ability
+    assert stats.get(1030).hasAbility is False                       # Staryu — a Basic, no Ability

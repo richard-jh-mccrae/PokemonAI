@@ -23,9 +23,14 @@ HYPOTHESES = [
                   "play to evolve — without an evolution target the rush-evolve does nothing — AND "
                   "when the payoff is already in hand: you can evolve directly this turn, so spending "
                   "a tutor (and a second copy from the deck) to do the same is wasteful (mirrors "
-                  "`tutor-the-wincon`'s `not wincon_in_hand` gate).",
+                  "`tutor-the-wincon`'s `not wincon_in_hand` gate). ALSO stands down when the tutor's "
+                  "evolution target is provably GONE from the deck (`search_targets_exhausted`, the "
+                  "sound deck-oracle over its `rush_evolve` fetch-filter): with an in-play Staryu but "
+                  "every Mega Starmie ex prized/played, Salvatore whiffs — don't endorse it (ep83117367). "
+                  "Without this gate the +30 would swamp `dont-search-an-empty-deck`'s −60.",
         when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "rush_evolve" in c.tags
-        and c.board.line_preevo_in_play and not c.board.wincon_in_hand,
+        and c.board.line_preevo_in_play and not c.board.wincon_in_hand
+        and not c.search_targets_exhausted,
         weight=30, status="testing"),
     Hypothesis(
         id="dont-rush-evolve-without-target",

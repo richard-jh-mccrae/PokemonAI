@@ -93,6 +93,20 @@ HYPOTHESES = [
         when=lambda c: c.select_context == _ATTACH_FROM and c.attach_from_target_needs,
         weight=15, status="testing"),
     Hypothesis(
+        id="concentrate-accel-on-one-line-body",
+        rationale="The CONCENTRATE counterpart of `spread-attach-to-the-needy` at an ATTACH_FROM "
+                  "(bench-accelerator recipient) select: pile the accelerated Energy onto the ONE "
+                  "win-condition-Line body already closest to the payoff (`attach_from_concentrate_slot` "
+                  "— the Line member carrying the most Energy, still short of the Mega's biggest-attack "
+                  "cost) rather than dribbling one Energy onto each bare Staryu. `spread-attach-to-the-"
+                  "needy` reads a 1-Energy Staryu as 'done' (it clears Staryu's OWN 1-cost attack), but "
+                  "the deck's real payoff is the evolved Mega Starmie ex at 3 Energy (Nebula Beam) — so "
+                  "fill ONE Staryu toward that before starting another (ep83116081 f21). Above the spread "
+                  "nudge (+20 > +15) so the started body wins the recipient pick; when every Line body is "
+                  "bare it fires on the first, still starting exactly one.",
+        when=lambda c: c.attach_from_target_is_concentrate,
+        weight=20, status="testing"),
+    Hypothesis(
         id="dont-feed-the-doomed",
         rationale="If your Active will be Knocked Out next turn and you have a benched Pokémon, "
                   "don't sink this Energy into the doomed Active — attach to the successor (or just "
@@ -134,6 +148,22 @@ HYPOTHESES = [
             or (not c.attach_target_needs and not c.attach_target_under_max  # already affords every attack …
                 and not (_WINCON_ROLES & set(c.attach_target_roles)))), # … and not the wincon: pure waste
         weight=-60, status="testing"),   # near-imperative: must beat the accel boosts on a wasted attach
+    Hypothesis(
+        id="conserve-burst-when-no-ko",
+        rationale="`dont-waste-discard-energy` EXEMPTS the win-condition — a burst Energy's bulk "
+                  "acceleration (Ignition CCC toward Nebula Beam) is normally the whole point. But when "
+                  "the opponent's Active can't be Knocked Out this turn even by my BIGGEST attack fully "
+                  "powered (`not board.active_maxed_kos`, e.g. Nebula Beam 210 vs a 230-HP Mega Lucario), "
+                  "reaching that big attack buys NO KO — so don't spend the one-shot discard-EOT Energy "
+                  "on it. Attach the reusable Basic instead (its cheap attack — Jetting Blow 120 + a "
+                  "50-snipe — is at least as useful and KEEPS the Ignition for a turn it can finish the "
+                  "job; ep83116501 f70). Fires only on a `discard_eot` attach to the ACTIVE win-condition "
+                  "with a reusable Basic in hand as the alternative, so it never strips a genuinely "
+                  "KO-enabling burst (that keeps its exemption via `active_maxed_kos`).",
+        when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags
+        and c.attach_target_area == _ACTIVE and bool(_WINCON_ROLES & set(c.attach_target_roles))
+        and not c.board.active_maxed_kos and c.board.reusable_energy_in_hand,
+        weight=-30, status="testing"),
     Hypothesis(
         id="build-active-wincon",
         rationale="Keep attaching Energy to the ACTIVE win-condition until it can fire its BIGGEST "
@@ -193,4 +223,20 @@ HYPOTHESES = [
                   "`dont-feed-the-doomed` down (a firing accelerator is not a spent opener).",
         when=lambda c: c.attach_feeds_firing_accel,
         weight=35, status="testing"),
+    Hypothesis(
+        id="dont-attach-discard-energy-turn1",
+        rationale="Never attach a `discard_eot` Energy (Ignition Energy — 'discard it at the end of "
+                  "your turn') on turn 1 going first (`board.turn <= 1`): the starting player CANNOT "
+                  "attack on turn 1 (rules.md §first-turn), so the burst Energy is discarded at end of "
+                  "turn having powered NOTHING — pure waste of your one manual attach (rules.md:31). "
+                  "A hard penalty because it must dominate the accelerator rewards "
+                  "(`feed-the-firing-accelerator` +35 / deck `accel-into-main` +30) that otherwise "
+                  "reward feeding the Active accelerator (Cinderace) an Ignition it cannot fire this "
+                  "turn — the exact regression the human flagged (ep83053965 f6). Gated on `turn <= 1` "
+                  "(the sound, engine-verifiable 'cannot attack' case), so it never touches a real "
+                  "attacking turn where Ignition unlocks a big attack (that stays `dont-waste-discard-"
+                  "energy`'s softer call).",
+        when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags
+        and c.board.turn <= 1,
+        weight=-60, status="testing"),
 ]

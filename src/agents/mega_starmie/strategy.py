@@ -77,9 +77,13 @@ HYPOTHESES = [
                   "by playing a tutor. (Choosing WHICH card a search pulls is the deck-agnostic "
                   "`fetch-the-wincon` / `fetch-energy-when-starved` in common/strategy/doctrines/doctrine_fetch.py.) "
                   "Stands down once the win-condition is already in hand — no need to dig for a copy "
-                  "you're holding.",
+                  "you're holding — AND when the tutor's entire fetch-set is provably GONE from the "
+                  "deck (`search_targets_exhausted`): a wincon-only tutor (Salvatore rush-evolves the "
+                  "Mega, Mega Signal fetches it) with every Mega Starmie ex prized/played can dig up "
+                  "nothing, so endorsing it burns the turn on a whiff (ep83117367). A flexible tutor "
+                  "(Hilda / Ultra Ball — still finds Energy / any Pokémon) keeps its endorsement.",
         when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles
-        and not c.board.wincon_in_hand,
+        and not c.board.wincon_in_hand and not c.search_targets_exhausted,
         weight=25, status="assumed"),
     Hypothesis(
         id="prefer-going-second",

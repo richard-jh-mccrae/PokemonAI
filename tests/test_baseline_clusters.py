@@ -25,7 +25,9 @@ CLUSTERS = {
         "power-up-attacker", "attach-energy-last", "use-acceleration", "dont-feed-the-doomed",
         "dont-waste-discard-energy", "build-active-wincon", "spread-attach-to-the-needy",
         "concentrate-energy-on-wincon", "prefer-reusable-over-burst", "prefer-active-attach-in-setup",
-        "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator"}),
+        "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator",
+        "dont-attach-discard-energy-turn1", "concentrate-accel-on-one-line-body",
+        "conserve-burst-when-no-ko"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker"}),
@@ -35,7 +37,7 @@ CLUSTERS = {
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
         "evolve-into-wincon", "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
-    "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal"}),
+    "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit"}),
     "disruption": (DISRUPTION_HYPOTHESES, {
