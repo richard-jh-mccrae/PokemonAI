@@ -44,7 +44,7 @@ def test_basic_energy_maps_by_element():
 
 @req
 def test_apostrophe_is_normalized():
-    # straight apostrophe in input; pool stores the curly form (id 1182)
+    # straight apostrophe in input; pool stores curly form (id 1182)
     deck, problems = resolve_deck("1 Boss's Orders PAL 172")
     assert problems == [] and deck == [1182]
 
@@ -57,7 +57,7 @@ def test_absent_card_is_a_problem():
 
 @req
 def test_ambiguous_card_is_a_problem():
-    assert len(EEVEE) > 1                                        # guard: name really is ambiguous
+    assert len(EEVEE) > 1                                        # guard: name is really ambiguous
     _, problems = resolve_deck("1 Eevee ZZZ 999")               # printing matches none
     assert problems and "ambiguous" in problems[0]
 
@@ -66,7 +66,7 @@ def test_ambiguous_card_is_a_problem():
 def test_real_limitless_deck_hard_fails_on_absent_card(tmp_path):
     src = REPO / "data" / "decks" / "limitless_dragpult.txt"
     if not src.exists():
-        pytest.skip("needs local Limitless decklist; data/ is gitignored")  # not on a clean checkout/CI
+        pytest.skip("needs local Limitless decklist; data/ is gitignored")  # not on clean checkout/CI
     with pytest.raises(ConvertError) as e:
         convert_to_csv(src, "x", dest_root=tmp_path)
     assert any("Special Red Card" in p for p in e.value.problems)

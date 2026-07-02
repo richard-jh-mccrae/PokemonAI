@@ -30,7 +30,7 @@ def test_tune_routes_to_weights_and_proposals():
 
     result = tune([corr_w, corr_h], pilot, seeds={"likes-111": 10.0, "likes-222": 10.0})
 
-    assert result.fit_adopted                                                   # the fit beat the seeds
+    assert result.fit_adopted                                                   # fit beat the seeds
     assert result.overrides["likes-222"] > result.overrides["likes-111"]       # W lifted correct
     assert len(result.proposals) == 1 and "missed-win" in result.proposals[0].id
     assert not result.skipped
@@ -53,4 +53,4 @@ def test_fit_not_adopted_when_it_cannot_beat_the_seeds():
     assert result.base_satisfied == 1
     assert not result.fit_adopted                                              # drift bought nothing
     assert result.overrides == seeds                                           # priors kept
-    assert len(result.unsatisfied) == 1                                        # the conflict is surfaced
+    assert len(result.unsatisfied) == 1                                        # conflict surfaced

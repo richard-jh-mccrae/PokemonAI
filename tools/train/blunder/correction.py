@@ -19,7 +19,7 @@ from .decisions import Decision
 
 SOURCES = ("own", "peer")
 
-CRITICAL_MARKER = "CRITICAL"                     # uppercase token in a rationale = must-fix-first
+CRITICAL_MARKER = "CRITICAL"                     # uppercase token in rationale = must-fix-first
 _CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
 
 
@@ -39,30 +39,30 @@ def _derive_id(data: dict) -> str:
 
 @dataclass(frozen=True)
 class Correction:
-    id: str                     # unique id (for edit/remove in the review list)
+    id: str                     # unique id (edit/remove in review list)
     # identity / provenance
-    source: str                 # "own" (our submission) | "peer" (another team's game of our deck)
+    source: str                 # "own" (our submission) | "peer" (other team's game w/ our deck)
     episode_id: int | None
     seat: int                   # whose Decision this is
     agent: str                  # deck build (own) / archetype label (peer)
     submission_id: int | None   # own ladder games only; None for local self-play
     agent_version: str | None   # build id (e.g. git short-sha) -- timeline key for non-ladder games
-    episode_time: str | None    # when the match was played
+    episode_time: str | None    # when match was played
     tagged_at: str              # when this Correction was authored (ISO)
     # the decision -- embedded, self-contained snapshot (state)
     decision: dict              # frame, turn, select_context, select_type, options, current
     # judgment
     chosen: list[int]           # positional indices into options (auto from replay)
     chosen_label: str
-    correct: list[int]          # the better legal option positions (mandatory)
+    correct: list[int]          # better legal option positions (mandatory)
     correct_label: str
     category: str               # closed human vocab (mandatory)
-    attribution: str | None     # learning-surface link (derived by the Tuner; ADR-0017)
+    attribution: str | None     # learning-surface link (derived by Tuner; ADR-0017)
     rationale: str              # free prose
-    obs: dict | None = None     # the agent observation (int-enum) for the Tuner to replay the Pilot
-    agent_build: str | None = None  # submission-folder stem of the build that played (traceability)
-    built_at: str | None = None     # that build's timestamp (ISO), parsed from the stem
-    live_trace: dict | None = None  # the live @T Decision Telemetry record this game emitted (ADR-0019)
+    obs: dict | None = None     # agent observation (int-enum) so Tuner can replay Pilot
+    agent_build: str | None = None  # submission-folder stem of build that played (traceability)
+    built_at: str | None = None     # that build's timestamp (ISO), parsed from stem
+    live_trace: dict | None = None  # live @T Decision Telemetry record this game emitted (ADR-0019)
 
     @property
     def is_critical(self) -> bool:
@@ -78,7 +78,7 @@ class Correction:
         if not data.get("id"):                 # backfill ids for pre-id records
             data["id"] = _derive_id(data)
         if not data.get("agent") and data.get("agent_build"):
-            from .provenance import parse_build_stem   # agent_build is authoritative for which deck played
+            from .provenance import parse_build_stem   # agent_build is authoritative for deck played
             data["agent"] = parse_build_stem(data["agent_build"]).get("agent") or data.get("agent", "")
         return cls(**data)
 

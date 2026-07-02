@@ -11,16 +11,16 @@ from .utils import to_dataclass, json_to_dataclass
 class AreaType(IntEnum):
     DECK = 1,
     HAND = 2,
-    DISCARD = 3, # Discard Pile
-    ACTIVE = 4, # Active Spot
+    DISCARD = 3, # discard pile
+    ACTIVE = 4, # active spot
     BENCH = 5,
     PRIZE = 6,
     STADIUM = 7,
     ENERGY = 8,
     TOOL = 9,
-    PRE_EVOLUTION = 10, # The pre-evolved form of the Pokémon in play.
+    PRE_EVOLUTION = 10, # pre-evolved form of the in-play Pokemon
     PLAYER = 11,
-    LOOKING = 12, # The card you are looking.
+    LOOKING = 12, # card currently being looked at
 
 class EnergyType(IntEnum):
     COLORLESS = 0,
@@ -33,13 +33,13 @@ class EnergyType(IntEnum):
     DARKNESS = 7,
     METAL = 8,
     DRAGON = 9,
-    RAINBOW = 10, # Every Types
-    TEAM_ROCKET = 11, # PSYCHIC and DARKNESS 
+    RAINBOW = 10, # all types
+    TEAM_ROCKET = 11, # PSYCHIC + DARKNESS
 
 class CardType(IntEnum):
     POKEMON = 0,
     ITEM = 1,
-    TOOL = 2, # Pokémon Tool
+    TOOL = 2, # Pokemon Tool
     SUPPORTER = 3,
     STADIUM = 4,
     BASIC_ENERGY = 5,
@@ -66,321 +66,321 @@ class SelectType(IntEnum):
     SPECIAL_CONDITION = 10, # OptionType: SPECIAL_CONDITION
     
 class SelectContext(IntEnum):
-    MAIN = 0, # Main. Main selection.
-    SETUP_ACTIVE_POKEMON = 1, # Card. Select the Pokémon to put into your Active Spot during Set Up.
-    SETUP_BENCH_POKEMON = 2, # Card. Select the Pokémon to put onto your Bench during Set Up.
-    SWITCH = 3, # Card. Select the Pokémon to swap with the one in your Active Spot.
-    TO_ACTIVE = 4, # Card. Select the Pokémon to put into your Active Spot.
-    TO_BENCH = 5, # Card. Select the Pokémon to put onto your Bench.
-    TO_FIELD = 6, # Card. Select the Pokémon to put into play.
-    TO_HAND = 7, # Card. Select the card to add to your hand.
-    DISCARD = 8, # Card. Select the card to discard.
-    TO_DECK = 9, # Card. Select the card to return to your deck.
-    TO_DECK_BOTTOM = 10, # Card. Select the card to return to the bottom of your deck.
-    TO_PRIZE = 11, # Card. Select the card to add to your prize.
-    NOT_MOVE = 12, # Card. Select the card to remain where it is.
-    DAMAGE_COUNTER = 13, # Card. Select the Pokémon to place damage counters on.
-    DAMAGE_COUNTER_ANY = 14, # Card. Select the Pokémon to place damage counters on using the effect that lets you place them as you like.
-    DAMAGE = 15, # Card. Select the Pokémon to deal damage.
-    REMOVE_DAMAGE_COUNTER = 16, # Card. Select the Pokémon to remove damage counters from.
-    HEAL = 17, # Card. Select the Pokémon to heal.
-    EVOLVES_FROM = 18, # Card. Select the Pokémon to evolve from.
-    EVOLVES_TO = 19, # Card. Select the Pokémon to evolve into.
-    DEVOLVE = 20, # Card. Select the Pokémon to devolve.
-    ATTACH_FROM = 21, # Card. Select the Pokémon to attach the card to.
-    ATTACH_TO = 22, # Card. Select the card to attach to the Pokémon.
-    DETACH_FROM = 23, # Card. Select the Pokémon to remove the card from.
-    LOOK = 24, # Card. Select the card to look at.
-    EFFECT_TARGET = 25, # Card. Select the card to apply the effect to.
-    DISCARD_ENERGY_CARD = 26, # AttachedCard. Select the Energy card to discard.
-    DISCARD_TOOL_CARD = 27, # AttachedCard. Select the Pokémon tool to trash.
-    SWITCH_ENERGY_CARD = 28, # AttachedCard. Select the energy card to replace.
-    DISCARD_CARD_OR_ATTACHED_CARD = 29, # CardOrAttachedCard. Select the card to discard.
-    DISCARD_ENERGY = 30, # Energy. Select the energy to discard.
-    TO_HAND_ENERGY = 31, # Energy. Select the energy to return to your hand.
-    TO_DECK_ENERGY = 32, # Energy. Select the energy to return to the deck.
-    SWITCH_ENERGY = 33, # Energy. Select the energy to switch.
-    SKILL_ORDER = 34, # Skill. Select the order of effect activation.
-    ATTACK = 35, # Attack. Select the Attack to use.
-    DISABLE_ATTACK = 36, # Attack. Select the Attack to disable.
-    EVOLVE = 37, # Evolve. Select the Pokémon that is the evolution source and the Pokémon that is the evolution target.
-    DRAW_COUNT = 38, # Count. Select how many cards to draw.
-    DAMAGE_COUNTER_COUNT = 39, # Count. Select how many damage counters to place.
-    REMOVE_DAMAGE_COUNTER_COUNT = 40, # Count. Select how many damage counters to remove.
-    IS_FIRST = 41, # YesNo. Would you like to go first?
-    MULLIGAN = 42, # YesNo. Would you like to redraw the cards?
-    ACTIVATE = 43, # YesNo. Would you like to activate the effect?
-    FIRST_EFFECT = 44, # YesNo. Would you like to select the first effect?
-    MORE_DEVOLVE = 45, # YesNo. Do you want to devolve it further?
-    COIN_HEAD = 46, # YesNo. Do you want to choose heads?
-    AFFECT_SPECIAL_CONDITION = 47, # SpecialCondition. Choose the special condition to affect.
-    RECOVER_SPECIAL_CONDITION = 48, # SpecialCondition. Choose the special condition to recover.
-    # Please note that new elements may be appended to the Enum during the competition.
+    MAIN = 0, # Main. main selection.
+    SETUP_ACTIVE_POKEMON = 1, # Card. pick Pokemon for Active Spot during Set Up.
+    SETUP_BENCH_POKEMON = 2, # Card. pick Pokemon for Bench during Set Up.
+    SWITCH = 3, # Card. pick Pokemon to swap into Active Spot.
+    TO_ACTIVE = 4, # Card. pick Pokemon to put in Active Spot.
+    TO_BENCH = 5, # Card. pick Pokemon to put on Bench.
+    TO_FIELD = 6, # Card. pick Pokemon to put into play.
+    TO_HAND = 7, # Card. pick card to add to hand.
+    DISCARD = 8, # Card. pick card to discard.
+    TO_DECK = 9, # Card. pick card to return to deck.
+    TO_DECK_BOTTOM = 10, # Card. pick card to return to bottom of deck.
+    TO_PRIZE = 11, # Card. pick card to add to prize.
+    NOT_MOVE = 12, # Card. pick card that stays put.
+    DAMAGE_COUNTER = 13, # Card. pick Pokemon to place damage counters on.
+    DAMAGE_COUNTER_ANY = 14, # Card. pick Pokemon to place damage counters on (free placement effect).
+    DAMAGE = 15, # Card. pick Pokemon to deal damage to.
+    REMOVE_DAMAGE_COUNTER = 16, # Card. pick Pokemon to remove damage counters from.
+    HEAL = 17, # Card. pick Pokemon to heal.
+    EVOLVES_FROM = 18, # Card. pick the pre-evolution Pokemon.
+    EVOLVES_TO = 19, # Card. pick the evolution target.
+    DEVOLVE = 20, # Card. pick Pokemon to devolve.
+    ATTACH_FROM = 21, # Card. pick Pokemon the card attaches to.
+    ATTACH_TO = 22, # Card. pick card to attach to the Pokemon.
+    DETACH_FROM = 23, # Card. pick Pokemon to remove the card from.
+    LOOK = 24, # Card. pick card to look at.
+    EFFECT_TARGET = 25, # Card. pick card the effect applies to.
+    DISCARD_ENERGY_CARD = 26, # AttachedCard. pick Energy card to discard.
+    DISCARD_TOOL_CARD = 27, # AttachedCard. pick Pokemon Tool to trash.
+    SWITCH_ENERGY_CARD = 28, # AttachedCard. pick energy card to replace.
+    DISCARD_CARD_OR_ATTACHED_CARD = 29, # CardOrAttachedCard. pick card to discard.
+    DISCARD_ENERGY = 30, # Energy. pick energy to discard.
+    TO_HAND_ENERGY = 31, # Energy. pick energy to return to hand.
+    TO_DECK_ENERGY = 32, # Energy. pick energy to return to deck.
+    SWITCH_ENERGY = 33, # Energy. pick energy to switch.
+    SKILL_ORDER = 34, # Skill. pick order effects activate in.
+    ATTACK = 35, # Attack. pick the Attack to use.
+    DISABLE_ATTACK = 36, # Attack. pick the Attack to disable.
+    EVOLVE = 37, # Evolve. pick evolution source Pokemon + target Pokemon.
+    DRAW_COUNT = 38, # Count. pick how many cards to draw.
+    DAMAGE_COUNTER_COUNT = 39, # Count. pick how many damage counters to place.
+    REMOVE_DAMAGE_COUNTER_COUNT = 40, # Count. pick how many damage counters to remove.
+    IS_FIRST = 41, # YesNo. go first?
+    MULLIGAN = 42, # YesNo. redraw?
+    ACTIVATE = 43, # YesNo. activate the effect?
+    FIRST_EFFECT = 44, # YesNo. pick the first effect?
+    MORE_DEVOLVE = 45, # YesNo. devolve further?
+    COIN_HEAD = 46, # YesNo. choose heads?
+    AFFECT_SPECIAL_CONDITION = 47, # SpecialCondition. pick special condition to affect.
+    RECOVER_SPECIAL_CONDITION = 48, # SpecialCondition. pick special condition to recover.
+    # more elements may get appended to this Enum during the competition
 
 class OptionType(IntEnum):
-    # number (int):Count.
-    NUMBER = 0, # Number to select.
+    # number (int): count.
+    NUMBER = 0, # pick a number.
 
-    YES = 1, # Select Yes.
+    YES = 1, # pick Yes.
 
-    NO = 2, # Select No.
+    NO = 2, # pick No.
 
-    # area (AreaType):Area where the card is located.
-    # index (int):Index within the area.
-    # playerIndex (int):The owning player of the card.
-    CARD = 3, # Card to select.
+    # area (AreaType): where the card is.
+    # index (int): index within the area.
+    # playerIndex (int): owning player.
+    CARD = 3, # pick a card.
 
-    # area (AreaType):Area of the attached Pokémon.
-    # index (int):Index within the area of the attached Pokémon.
-    # playerIndex (int):The owning player of the Pokémon.
-    # toolIndex (int):Index within the tool.
-    TOOL_CARD = 4, # Pokémon Tool Card to select.
+    # area (AreaType): area of the attached Pokemon.
+    # index (int): its index within the area.
+    # playerIndex (int): owning player of the Pokemon.
+    # toolIndex (int): index within the tool.
+    TOOL_CARD = 4, # pick a Pokemon Tool Card.
 
-    # area (AreaType):Area of the attached Pokémon.
-    # index (int):Index within the area of the attached Pokémon.
-    # playerIndex (int):The owning player of the Pokémon.
-    # energyIndex (int):Index within the energy card.
-    ENERGY_CARD = 5, # Energy Card to select.
+    # area (AreaType): area of the attached Pokemon.
+    # index (int): its index within the area.
+    # playerIndex (int): owning player of the Pokemon.
+    # energyIndex (int): index within the energy card.
+    ENERGY_CARD = 5, # pick an Energy Card.
 
-    # area (AreaType):Area of the attached Pokémon.
-    # index (int):Index within the area of the attached Pokémon.
-    # playerIndex (int):The owning player of the Pokémon.
-    # energyIndex (int):Index within the energy card.
-    # count (int):How many energy units does it correspond to?
-    ENERGY = 6, # Energy to select.
+    # area (AreaType): area of the attached Pokemon.
+    # index (int): its index within the area.
+    # playerIndex (int): owning player of the Pokemon.
+    # energyIndex (int): index within the energy card.
+    # count (int): how many energy units it's worth.
+    ENERGY = 6, # pick energy.
 
-    # index (int):Index within the hand.
-    PLAY = 7, # Play a card from your hand.
+    # index (int): index within the hand.
+    PLAY = 7, # play a card from hand.
 
-    # area (AreaType):Area of the card to attach.
-    # index (int):Index within the area of the card to attach.
-    # inPlayArea (AreaType):Area of the Pokémon on the field.
-    # inPlayIndex (int):Index within the area of the Pokémon on the field.
-    ATTACH = 8, # Attach a card to a Pokémon.
+    # area (AreaType): area of the card to attach.
+    # index (int): its index within the area.
+    # inPlayArea (AreaType): area of the target Pokemon on the field.
+    # inPlayIndex (int): its index within the area.
+    ATTACH = 8, # attach a card to a Pokemon.
 
-    # area (AreaType):Area of the evolved card.
-    # index (int):Index within the area of the evolved card.
-    # inPlayArea (AreaType):Area of the Pokémon on the field.
-    # inPlayIndex (int):Index within the area of the Pokémon on the field.
-    EVOLVE = 9, # Select an Evolution.
+    # area (AreaType): area of the evolved card.
+    # index (int): its index within the area.
+    # inPlayArea (AreaType): area of the target Pokemon on the field.
+    # inPlayIndex (int): its index within the area.
+    EVOLVE = 9, # pick an evolution.
 
-    # area (AreaType):Area where the card is located.
-    # index (int):Index within the area.
-    ABILITY = 10, # Use an Ability.
+    # area (AreaType): where the card is.
+    # index (int): index within the area.
+    ABILITY = 10, # use an Ability.
 
-    # area (AreaType):Area where the card is located.
-    # index (int):Index within the area.
-    DISCARD = 11, # Discard a card in play.
+    # area (AreaType): where the card is.
+    # index (int): index within the area.
+    DISCARD = 11, # discard a card in play.
 
-    RETREAT = 12, # Retreat Active Pokémon.
+    RETREAT = 12, # retreat Active Pokemon.
 
-    # attackId (int):Attack ID
-    ATTACK = 13, # Select an Attack.
+    # attackId (int): Attack ID.
+    ATTACK = 13, # pick an Attack.
 
-    END = 14, # Turn End.
+    END = 14, # end turn.
 
-    # cardId (int):Card ID. When the Card ID is 0, it means handling a Special Condition.
-    # serial (int):Card serial
-    SKILL = 15, # Select the order of card skills.
+    # cardId (int): Card ID. 0 means it's handling a Special Condition instead.
+    # serial (int): card serial.
+    SKILL = 15, # pick order of card skills.
 
-    # specialConditionType (SpecialConditionType):Special Condition Type
-    SPECIAL_CONDITION = 16, # Select the Special Condition.
+    # specialConditionType (SpecialConditionType): which condition.
+    SPECIAL_CONDITION = 16, # pick the Special Condition.
 
 class LogType(IntEnum):
     # playerIndex (int)
-    SHUFFLE = 0, # Shuffle deck.
+    SHUFFLE = 0, # shuffle deck.
 
     # playerIndex (int)
-    # hasBasicPokemon (bool):If false, then no Basic Pokémon exist.
+    # hasBasicPokemon (bool): false -> no Basic Pokemon exist.
     HAS_BASIC_POKEMON = 1,
 
     # playerIndex (int)
-    TURN_START = 2, # Start turn.
+    TURN_START = 2, # start turn.
 
     # playerIndex (int)
-    TURN_END = 3, # End turn.
+    TURN_END = 3, # end turn.
 
     # playerIndex (int)
-    # cardId (int):Drawn card ID
-    # serial (int):Drawn card serial
-    DRAW = 4, # Drew a card from deck.
+    # cardId (int): drawn card ID
+    # serial (int): drawn card serial
+    DRAW = 4, # drew a card from deck.
 
     # playerIndex (int)
-    DRAW_REVERSE = 5, # Your opponent drew a card from their deck.
+    DRAW_REVERSE = 5, # opponent drew a card from their deck.
 
     # playerIndex (int)
-    # cardId (int):Moved card. ID
-    # serial (int):Moved card. serial
-    # fromArea (AreaType):Area before movement.
-    # toArea (AreaType):Area after movement.
-    MOVE_CARD = 6, # A card moved.
+    # cardId (int): moved card ID
+    # serial (int): moved card serial
+    # fromArea (AreaType): area before move.
+    # toArea (AreaType): area after move.
+    MOVE_CARD = 6, # a card moved.
 
     # playerIndex (int)
-    # fromArea (AreaType):Area before movement.
-    # toArea (AreaType):Area after movement.
-    MOVE_CARD_REVERSE = 7, # A card moved face-down.
+    # fromArea (AreaType): area before move.
+    # toArea (AreaType): area after move.
+    MOVE_CARD_REVERSE = 7, # a card moved face-down.
 
     # playerIndex (int)
-    # cardIdActive (int):Moving to the Bench Pokémon ID
-    # serialActive (int):Moving to the Bench Pokémon serial
-    # cardIdBench (int):Moving to the Active Pokémon ID
-    # serialBench (int):Moving to the Active Pokémon serial
-    SWITCH = 8, # Pokémon were switched.
+    # cardIdActive (int): ID of Pokemon moving to Bench
+    # serialActive (int): serial of Pokemon moving to Bench
+    # cardIdBench (int): ID of Pokemon moving to Active
+    # serialBench (int): serial of Pokemon moving to Active
+    SWITCH = 8, # Pokemon were switched.
 
     # playerIndex (int)
-    # cardIdBefore (int):Pokémon before change. ID
-    # serialBefore (int):Pokémon before change. serial
-    # cardIdAfter (int):Pokémon after change. ID
-    # serialAfter (int):Pokémon after change. serial
-    CHANGE = 9, # Change the Pokémon.
+    # cardIdBefore (int): Pokemon before change, ID
+    # serialBefore (int): Pokemon before change, serial
+    # cardIdAfter (int): Pokemon after change, ID
+    # serialAfter (int): Pokemon after change, serial
+    CHANGE = 9, # Pokemon changed.
 
     # playerIndex (int)
-    # cardId (int):Played card ID
-    # serial (int):Played card serial
-    PLAY = 10, # Played a card from hand.
+    # cardId (int): played card ID
+    # serial (int): played card serial
+    PLAY = 10, # played a card from hand.
 
     # playerIndex (int)
-    # cardId (int):Attached card ID
-    # serial (int):Attached card serial
-    # cardIdTarget (int):Pokémon card ID
-    # serialTarget (int):Pokémon card serial
-    ATTACH = 11, # Attached a card to a Pokémon.
+    # cardId (int): attached card ID
+    # serial (int): attached card serial
+    # cardIdTarget (int): Pokemon card ID
+    # serialTarget (int): Pokemon card serial
+    ATTACH = 11, # attached a card to a Pokemon.
 
     # playerIndex (int)
-    # cardId (int):Evolved card ID
-    # serial (int):Evolved card serial
-    # cardIdTarget (int):Pokémon card ID
-    # serialTarget (int):Pokémon card serial
-    EVOLVE = 12, # Evolved a Pokémon.
+    # cardId (int): evolved card ID
+    # serial (int): evolved card serial
+    # cardIdTarget (int): Pokemon card ID
+    # serialTarget (int): Pokemon card serial
+    EVOLVE = 12, # evolved a Pokemon.
 
     # playerIndex (int)
-    # cardId (int):Devolved card ID
-    # serial (int):Devolved card serial
-    # cardIdTarget (int):Pokémon card ID
-    # serialTarget (int):Pokémon card serial
-    DEVOLVE = 13, # Devolved a Pokémon.
+    # cardId (int): devolved card ID
+    # serial (int): devolved card serial
+    # cardIdTarget (int): Pokemon card ID
+    # serialTarget (int): Pokemon card serial
+    DEVOLVE = 13, # devolved a Pokemon.
 
     # playerIndex (int)
-    # cardId (int):Attached card ID
-    # serial (int):Attached card serial
-    # cardIdBefore (int):Pokémon that were attached with cards. ID
-    # serialBefore (int):Pokémon that were attached with cards. serial
-    # cardIdAfter (int):Pokémon that were newly attached with cards. ID
-    # serialAfter (int):Pokémon that were newly attached with cards. serial
-    MOVE_ATTACHED = 14, # Move the attached card.
+    # cardId (int): attached card ID
+    # serial (int): attached card serial
+    # cardIdBefore (int): ID of Pokemon that held the cards before
+    # serialBefore (int): serial of Pokemon that held the cards before
+    # cardIdAfter (int): ID of Pokemon newly holding the cards
+    # serialAfter (int): serial of Pokemon newly holding the cards
+    MOVE_ATTACHED = 14, # moved the attached card.
 
     # playerIndex (int)
-    # cardId (int):Pokémon that use attack. ID
-    # serial (int):Pokémon that use attack. serial
-    # attackId (int):Attack ID
-    ATTACK = 15, # Pokémon Attack.
+    # cardId (int): ID of attacking Pokemon
+    # serial (int): serial of attacking Pokemon
+    # attackId (int): Attack ID
+    ATTACK = 15, # Pokemon attacked.
 
     # playerIndex (int)
-    # cardId (int):HP changed card ID
-    # serial (int):HP changed card serial
-    # value (int):Amount of change.
-    # putDamageCounter (bool):True if the HP change is due to the effect of placing a damage counter.
-    HP_CHANGE = 16, # A Pokémon’s HP changed.
+    # cardId (int): HP-changed card ID
+    # serial (int): HP-changed card serial
+    # value (int): amount of change.
+    # putDamageCounter (bool): true if change came from placing a damage counter.
+    HP_CHANGE = 16, # a Pokemon's HP changed.
 
     # playerIndex (int)
-    # isRecover (bool):If true, the special condition has been recovered.
+    # isRecover (bool): true if the special condition got cured.
     # cardId (int): ID
     # serial (int): serial
-    POISONED = 17, # Poisoned.
+    POISONED = 17, # poisoned.
 
     # playerIndex (int)
-    # isRecover (bool):If true, the special condition has been recovered.
+    # isRecover (bool): true if the special condition got cured.
     # cardId (int): ID
     # serial (int): serial
-    BURNED = 18, # Burned.
+    BURNED = 18, # burned.
 
     # playerIndex (int)
-    # isRecover (bool):If true, the special condition has been recovered.
+    # isRecover (bool): true if the special condition got cured.
     # cardId (int): ID
     # serial (int): serial
-    ASLEEP = 19, # Fell asleep.
+    ASLEEP = 19, # fell asleep.
 
     # playerIndex (int)
-    # isRecover (bool):If true, the special condition has been recovered.
+    # isRecover (bool): true if the special condition got cured.
     # cardId (int): ID
     # serial (int): serial
-    PARALYZED = 20, # Paralyzed.
+    PARALYZED = 20, # paralyzed.
 
     # playerIndex (int)
-    # isRecover (bool):If true, the special condition has been recovered.
+    # isRecover (bool): true if the special condition got cured.
     # cardId (int): ID
     # serial (int): serial
-    CONFUSED = 21, # Confused.
+    CONFUSED = 21, # confused.
 
     # playerIndex (int)
-    # head (bool):True if coin is head.
-    COIN = 22, # Result of the coin flip.
+    # head (bool): true if coin landed heads.
+    COIN = 22, # coin flip result.
 
-    # result (int):If 0, the player with player index 0 wins; if 1, the player with player index 1 wins; if 2, it's a draw.
-    # reason (int):1: 0 Prize cards. 2: Start turn with 0 deck cards. 3: No Pokémon in Active Spot. 4: A card effect.
-    RESULT = 23, # Result of the match.
-    
-    # Please note that new elements may be appended to the Enum during the competition.
+    # result (int): 0 -> player 0 wins, 1 -> player 1 wins, 2 -> draw.
+    # reason (int): 1 = 0 prize cards. 2 = started turn with 0 deck cards. 3 = no Pokemon in Active Spot. 4 = card effect.
+    RESULT = 23, # match result.
+
+    # more elements may get appended to this Enum during the competition
 
 #endregion Enums
 
 
-# Please note that new attributes may be appended to each class during the competition.
+# classes may get new attributes appended during the competition
 
 #region Observation class
 
 @dataclass
 class Card:
     id: int  # CardData ID.
-    serial: int  # Serial Number: A unique value assigned to each card in the match.
-    playerIndex: int  # Represents which player's card.
+    serial: int  # serial number: unique per card in the match.
+    playerIndex: int  # which player owns the card.
 
 @dataclass
 class Pokemon:
     id: int  # CardData ID.
-    serial: int  # Serial Number: A unique value assigned to each card in the match.
-    hp: int  # Current HP.
-    maxHp: int  # Current Max HP.
-    appearThisTurn: bool  # True if played this turn.
-    energies: list[EnergyType]  # Energies Array
-    energyCards: list[Card]  # Attached Energy Card Array
-    tools: list[Card]  # Attached Pokémon Tool Array
-    preEvolution: list[Card]  # Pre-evolution Card Array
- 
+    serial: int  # serial number: unique per card in the match.
+    hp: int  # current HP.
+    maxHp: int  # current max HP.
+    appearThisTurn: bool  # true if played this turn.
+    energies: list[EnergyType]  # energies array
+    energyCards: list[Card]  # attached energy card array
+    tools: list[Card]  # attached Pokemon Tool array
+    preEvolution: list[Card]  # pre-evolution card array
+
 @dataclass
 class PlayerState:
-    active: list[Pokemon | None]  # Active Pokémon (None if the card is facedown). The array size is either 0 or 1.
-    bench: list[Pokemon]  # Bench Pokémon.
-    benchMax: int  # Maximum Bench Count.
-    deckCount: int  # Remaining Cards in Deck.
-    discard: list[Card]  # Discard pile Card Array.
-    prize: list[Card | None]  # Prize cards (None if the card is facedown). The first element is the bottom of the prize, and the last element is the top.
-    handCount: int  # Number of Cards in Hand.
-    hand: list[Card] | None  # Hand Card Array. None for the opponent.
-    poisoned: bool # Active Pokémon is Poisoned.
-    burned: bool # Active Pokémon is Burned.
-    asleep: bool # Active Pokémon is Asleep.
-    paralyzed: bool # Active Pokémon is Paralyzed.
-    confused: bool # Active Pokémon is Confused.
+    active: list[Pokemon | None]  # active Pokemon (None if facedown). size 0 or 1.
+    bench: list[Pokemon]  # bench Pokemon.
+    benchMax: int  # max bench count.
+    deckCount: int  # cards remaining in deck.
+    discard: list[Card]  # discard pile card array.
+    prize: list[Card | None]  # prize cards (None if facedown). first elem = bottom of prize, last = top.
+    handCount: int  # number of cards in hand.
+    hand: list[Card] | None  # hand card array. None for the opponent.
+    poisoned: bool # active Pokemon is Poisoned.
+    burned: bool # active Pokemon is Burned.
+    asleep: bool # active Pokemon is Asleep.
+    paralyzed: bool # active Pokemon is Paralyzed.
+    confused: bool # active Pokemon is Confused.
 
 @dataclass
 class State:
-    turn: int  # Turn Count: 1 indicates the first turn for the starting player. 2 indicates the first turn for the second player. 3 indicates the second turn for the starting player. 0 denotes a time before the starting player's first turn.
-    turnActionCount: int  # Number of Actions Taken This Turn.
-    yourIndex: int  # Which player is making the selection? (Your Player Index.) 0 or 1.
-    firstPlayer: int  # Starting Player Index. When the starting player has not been determined, the value is -1.
-    supporterPlayed: bool  # True if a supporter has already been used this turn.
-    stadiumPlayed: bool  # True if a stadium has already been used this turn.
-    energyAttached: bool  # True if the manual Energy attachment for this turn has already been used.
-    retreated: bool  # True if retreated this turn.
-    result: int # Win player index. -1 if not battle finished.
-    stadium: list[Card]  # Stadium Card. The array size is either 0 or 1.
-    looking: list[Card | None] | None  # Looking cards (None if the card is facedown). None if not looking cards.
-    players: list[PlayerState]  # An array of player states. The number of elements is 2.
+    turn: int  # turn count: 1 = starting player's 1st turn, 2 = 2nd player's 1st turn, 3 = starting player's 2nd turn... 0 = before starting player's first turn.
+    turnActionCount: int  # actions taken this turn.
+    yourIndex: int  # your player index (who's making the selection). 0 or 1.
+    firstPlayer: int  # starting player index. -1 if not yet determined.
+    supporterPlayed: bool  # true if a supporter already used this turn.
+    stadiumPlayed: bool  # true if a stadium already used this turn.
+    energyAttached: bool  # true if manual energy attach already used this turn.
+    retreated: bool  # true if retreated this turn.
+    result: int # winning player index. -1 if battle not finished.
+    stadium: list[Card]  # stadium card. size 0 or 1.
+    looking: list[Card | None] | None  # cards being looked at (None entry = facedown). None if not looking at any.
+    players: list[PlayerState]  # per-player states, always 2 elements.
 
 @dataclass
 class Option:
-    type: OptionType  # Use this parameter to determine which option it is.
+    type: OptionType  # tells you which option this is.
     number: int | None = None
     area: AreaType | None = None
     index: int | None = None
@@ -397,20 +397,20 @@ class Option:
 
 @dataclass
 class SelectData:
-    type: SelectType  # Selection type.
-    context: SelectContext  # What is being selected?
-    minCount: int  # Minimum number of selections. It can also be 0.
-    maxCount: int  # Maximum number of selections. Never exceeds len(option).
-    remainDamageCounter: int  # Remaining number of damage counters that can be placed.
-    remainEnergyCost: int  # Used when the type is Energy. The remaining required energy count.
-    option: list[Option]  # Array of options.
-    deck: list[Card] | None  # An array of cards; None unless selecting cards from the deck.
-    contextCard: Card | None  # Which card is the selection concerning? This is sent when the context is "Activate"; otherwise, it is null.
-    effect: Card | None  # The card that is activating the effect currently being processed.
-    
+    type: SelectType  # selection type.
+    context: SelectContext  # what's being selected.
+    minCount: int  # min selections, can be 0.
+    maxCount: int  # max selections, never exceeds len(option).
+    remainDamageCounter: int  # damage counters still placeable.
+    remainEnergyCost: int  # type Energy only: remaining required energy count.
+    option: list[Option]  # array of options.
+    deck: list[Card] | None  # card array; None unless selecting from the deck.
+    contextCard: Card | None  # card the selection concerns; sent for context "Activate", else null.
+    effect: Card | None  # card activating the effect currently being processed.
+
 @dataclass
 class Log:
-    type: LogType  # Use this parameter to determine which log it is.
+    type: LogType  # tells you which log this is.
     playerIndex: int | None = None
     hasBasicPokemon: bool | None = None
     cardId: int | None = None
@@ -437,57 +437,57 @@ class Log:
     
 @dataclass
 class Observation:
-    select: SelectData | None  # Selection information. At the time of the initial deck selection, it will be None.
-    logs: list[Log]  # Events that have occurred since the last selection.
-    current: State | None  # Current state. At the time of the initial deck selection, it will be None.
-    search_begin_input: str | None = None # Input to the search_begin function.
+    select: SelectData | None  # selection info. None during initial deck selection.
+    logs: list[Log]  # events since the last selection.
+    current: State | None  # current state. None during initial deck selection.
+    search_begin_input: str | None = None # input to the search_begin function.
 
 #endregion Observation class
 
 @dataclass
 class SearchState:
-    observation: Observation  # New observation. search_begin_input is None.
-    searchId: int  #  Search state ID.
+    observation: Observation  # new observation. search_begin_input is None.
+    searchId: int  # search state ID.
     
 @dataclass
 class ApiResult:
-    state: SearchState | None # Search state.
-    error: int # Error if not 0.
+    state: SearchState | None # search state.
+    error: int # error code if not 0.
 
-# Abilities and effects at the time of card play.
+# abilities and effects present at time of card play.
 @dataclass
 class Skill:
-    name: str  # Skill name.
-    text: str  # Explanation.
+    name: str  # skill name.
+    text: str  # explanation.
 
 @dataclass
 class CardData:
     cardId: int  # Card ID.
-    name: str  # Card name.
-    cardType: CardType  # Card type
-    retreatCost: int  # Energy cost required to retreat.
-    hp: int  # Pokémon HP.
-    weakness: EnergyType | None  # Pokémon weakness.
-    resistance: EnergyType | None  # Pokémon resistance.
-    energyType: EnergyType  # Pokémon or Basic Energy type.
-    basic: bool # True if Basic Pokémon.
-    stage1: bool # True if Stage1 Pokémon.
-    stage2: bool # True if Stage2 Pokémon.
-    ex: bool # True if Pokémon ex(include Mega Evolution Pokémon ex). When your Pokémon ex is Knocked Out, your opponent takes 2 prize cards(exclude Mega Evolution Pokémon ex).
-    megaEx: bool # True if Mega Evolution Pokémon ex. When your Mega Evolution Pokémon ex is Knocked Out, your opponent takes 3 prize cards.
-    tera: bool  # True if Tera Pokémon. Tera Pokémon take no damage from attacks as long as they are on the Bench.
-    aceSpec: bool  # True if ACE SPEC. You can't have more than 1 ACE SPEC card in your deck.
-    evolvesFrom: str | None  # If the Pokémon has evolved, then the name of its pre-evolution. Otherwise, None.
-    skills: list[Skill]  # The skills that the card has.
+    name: str  # card name.
+    cardType: CardType  # card type
+    retreatCost: int  # energy cost to retreat.
+    hp: int  # Pokemon HP.
+    weakness: EnergyType | None  # Pokemon weakness.
+    resistance: EnergyType | None  # Pokemon resistance.
+    energyType: EnergyType  # Pokemon or Basic Energy type.
+    basic: bool # true if Basic Pokemon.
+    stage1: bool # true if Stage1 Pokemon.
+    stage2: bool # true if Stage2 Pokemon.
+    ex: bool # true if Pokemon ex (incl. Mega Evolution Pokemon ex). KO'd ex gives opponent 2 prizes (Mega ex excluded from this count).
+    megaEx: bool # true if Mega Evolution Pokemon ex. KO'd Mega ex gives opponent 3 prizes.
+    tera: bool  # true if Tera Pokemon. Tera Pokemon on the Bench take no attack damage.
+    aceSpec: bool  # true if ACE SPEC. deck can hold at most 1 ACE SPEC card.
+    evolvesFrom: str | None  # pre-evolution name if evolved, else None.
+    skills: list[Skill]  # skills this card has.
     attacks: list[int]  # IDs of usable attacks.
 
 @dataclass
 class Attack:
     attackId: int  # Attack ID.
-    name: str  # Attack name.
-    text: str  # Explanation.
-    damage: int  # Attack damage
-    energies: list[EnergyType]  # Energy required to use.
+    name: str  # attack name.
+    text: str  # explanation.
+    damage: int  # attack damage
+    energies: list[EnergyType]  # energy required to use.
     
 
 #region functions

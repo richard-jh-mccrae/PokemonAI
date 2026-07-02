@@ -30,12 +30,12 @@ from .probe_cards import (
     _OPT_EVOLVE, _OPT_PLAY, evolution_chain, find_play_option)
 
 _DECK_SIZE = 60
-_OPT_CARD = 3       # OptionType.CARD — a select target (area+index+playerIndex)
+_OPT_CARD = 3       # OptionType.CARD - a select target (area+index+playerIndex)
 _OPT_ATTACH = 8     # OptionType.ATTACH
 _OPT_RETREAT = 12   # OptionType.RETREAT
 _CTX_SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON
 _CTX_SETUP_BENCH = 2    # SelectContext.SETUP_BENCH_POKEMON
-_CTX_SWITCH = 3         # SelectContext.SWITCH — pick the bench body after a retreat
+_CTX_SWITCH = 3         # SelectContext.SWITCH - pick bench body after a retreat
 _CTX_REMOVE_DMG = 16    # SelectContext.REMOVE_DAMAGE_COUNTER
 _CTX_HEAL = 17          # SelectContext.HEAL
 _LOG_HP_CHANGE = 16
@@ -43,8 +43,8 @@ _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyT
 _TYPE_INT = {"colorless": 0, "grass": 1, "fire": 2, "water": 3, "lightning": 4,
              "psychic": 5, "fighting": 6, "darkness": 7, "metal": 8, "dragon": 9}
 
-_DEFAULT_MEGA = 678   # Mega Lucario ex — the single-hop line (Riolu -> Mega), run-validated
-_CHIP_MIN_HP = 150    # only chip bodies this sturdy (a frail pre-evo must never be KO'd)
+_DEFAULT_MEGA = 678   # Mega Lucario ex - single-hop line (Riolu -> Mega), run-validated
+_CHIP_MIN_HP = 150    # only chip bodies this sturdy (frail pre-evo must never be KO'd)
 _STURDY_MIN_HP = 180  # bench bodies that can safely take one chip
 
 
@@ -293,7 +293,7 @@ def _capture_resolution(battle_select, obs, me):
             for s in offered_heal_targets(obs, me):
                 if s not in offered:
                     offered.append(s)
-        # prefer a damaged own body so optional heals fire
+        # prefer damaged own body so optional heals fire
         players = cur["players"]
         for i, o in enumerate(sel["option"]):
             if (o.get("type") == _OPT_CARD and o.get("playerIndex") == me
@@ -394,14 +394,14 @@ def probe_heal_restriction(target_id: int, cards: dict[int, dict], *, me: int = 
                 elif mega_b is not None:
                     want = None
                     if not mega_b["active"] and not mega_b["damaged"]:
-                        want = "mega"                       # bring the Mega up for its chip
+                        want = "mega"                       # bring Mega up for its chip
                     elif (mega_b["active"] and mega_b["damaged"]
                           and len((cur["players"][me].get("active") or [{}])[0].get("energies") or [])
                           > (cards.get(mega_b["id"], {}).get("retreat") or 0)
                           and any(not b["mega"] and not b["active"]
                                   and (b["damaged"] or (b["maxHp"] or 0) >= _CHIP_MIN_HP)
                                   for b in board)):
-                        want = "non_mega"                   # tuck the damaged Mega behind
+                        want = "non_mega"                   # tuck damaged Mega behind
                     if want:
                         ro = next((i for i, o in enumerate(obs["select"]["option"])
                                    if o.get("type") == _OPT_RETREAT), None)
@@ -411,7 +411,7 @@ def probe_heal_restriction(target_id: int, cards: dict[int, dict], *, me: int = 
                             continue
                 obs = _end_turn_opt(battle_select, obs)
             else:
-                # opponent: fuel up, chip my undamaged sturdy Active, otherwise pass
+                # opponent: fuel up, chip my undamaged sturdy Active, else pass
                 if not cur.get("energyAttached"):
                     ai = _attach_any_energy(obs, cards)
                     if ai is not None:
@@ -488,7 +488,7 @@ def observe_restriction_table(cards: dict[int, dict], table: dict[int, list[dict
                     "source": rec.get("source")}
                 last = None
             else:
-                last = got["error"]        # a valid record the board can't classify
+                last = got["error"]        # a valid record board can't classify
             break
         if last:
             errors[cid] = last

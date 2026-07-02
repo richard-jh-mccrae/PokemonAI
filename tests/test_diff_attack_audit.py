@@ -45,7 +45,7 @@ def _rec(aid, attacker, scenario, defender, dealt, *, printed=None, coin=None, s
 @pytest.mark.req("REQ-AUDIT-0011")
 def test_matching_measurements_confirm_the_oracle():
     recs = [_rec(1488, 1031, "prevent_ex", 345, 210),   # Nebula pierces — engine agrees
-            _rec(1487, 1031, "prevent_ex", 345, 0)]     # Jetting prevented — engine agrees
+            _rec(1487, 1031, "prevent_ex", 345, 0)]     # Jetting prevented, engine agrees
     out = diff_records(recs, ATTACKS, STATS, FUNCS)
     assert len(out["matched"]) == 2 and not out["gaps"]
 
@@ -69,11 +69,11 @@ def test_scaler_gap_classified_for_formula_tier():
 
 @pytest.mark.req("REQ-AUDIT-0011")
 def test_conditional_outcome_within_modeled_bounds_is_a_bounded_match():
-    # Best Punch dealt 0 in this game (tails). Exact (printed 40) disagrees — but 0 lies within
-    # the modeled [0, 40]: Lethal reads the floor, Incoming the ceiling. Bounded-correct, no gap.
+    # Best Punch dealt 0 this game (tails). Exact (printed 40) disagrees — but 0 lies within
+    # modeled [0, 40]: Lethal reads the floor, Incoming the ceiling. Bounded-correct, no gap.
     out = diff_records([_rec(142, 50, "vanilla", 9, 0)], ATTACKS, STATS, FUNCS)
     assert not out["gaps"] and out["matched"][0].get("bounded") is True
-    # dealt OUTSIDE the bounds is still a real gap
+    # dealt OUTSIDE bounds is still a real gap
     bad = diff_records([_rec(142, 50, "vanilla", 9, 90)], ATTACKS, STATS, FUNCS)
     assert len(bad["gaps"]) == 1
 
@@ -85,13 +85,13 @@ def test_coin_fork_records_diff_against_their_bound():
     out = diff_records(recs, ATTACKS, STATS, FUNCS)
     assert len(out["matched"]) == 2 and not out["gaps"]
     bad = diff_records([_rec(142, 50, "vanilla", 9, 60, coin="max")], ATTACKS, STATS, FUNCS)
-    assert bad["gaps"][0]["coin"] == "max"                  # a wrong ceiling is a visible gap
+    assert bad["gaps"][0]["coin"] == "max"                  # wrong ceiling is a visible gap
 
 
 @pytest.mark.req("REQ-AUDIT-0011")
 def test_sweep_records_diff_with_attacker_side_context():
     rec = _rec(123, 50, "vanilla", 9, 210, sweep={"var": "hand", "step": 2})
-    rec["myHandSize"] = 7                                    # 30 x 7 = 210 — the formula agrees
+    rec["myHandSize"] = 7                                    # 30 x 7 = 210 — formula agrees
     out = diff_records([rec], ATTACKS, STATS, FUNCS)
     assert len(out["matched"]) == 1 and not out["gaps"]
 
@@ -102,7 +102,7 @@ def test_errors_live_coins_and_unknown_attacks_are_classified_skips():
     live_coin["coinLogs"] = 1
     recs = [_rec(5, 9, "vanilla", None, 0, error="no basic-first chain"),
             live_coin,
-            _rec(999, 9, "vanilla", 9, 40)]             # unknown attack id -> skip, not crash
+            _rec(999, 9, "vanilla", 9, 40)]             # unknown attack id -> skip, no crash
     out = diff_records(recs, ATTACKS, STATS, FUNCS)
     reasons = sorted(s["reason"] for s in out["skipped"])
     assert reasons == ["coin_rng_live", "error_ledger", "no_attack_record"]

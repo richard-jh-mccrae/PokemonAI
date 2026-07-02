@@ -35,11 +35,11 @@ def test_dataset_episode_page_last_page_has_no_token(monkeypatch):
 
 
 def test_manifest_slug_is_owner_qualified():
-    # Regression: the CLI 403s on an unqualified slug; we must keep the owner.
+    # Regression: CLI 403s on an unqualified slug; must keep the owner.
     row = {"daily_dataset_slug": "pokemon-tcg-ai-battle-episodes-2026-06-22",
            "daily_dataset_url": "https://www.kaggle.com/datasets/kaggle/pokemon-tcg-ai-battle-episodes-2026-06-22"}
     assert fetch._manifest_slug(row) == "kaggle/pokemon-tcg-ai-battle-episodes-2026-06-22"
-    # Fallback to kaggle/ owner when URL is missing.
+    # Fallback to kaggle/ owner when URL missing.
     assert fetch._manifest_slug({"daily_dataset_slug": "foo"}) == "kaggle/foo"
     assert fetch._manifest_slug({}) is None
 

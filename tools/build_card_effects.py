@@ -46,7 +46,7 @@ DEFAULT_OUT = (Path(__file__).resolve().parents[1]
 DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "meta_tracker" / "effect_overrides.json"
 DEFAULT_OBSERVED = Path(__file__).resolve().parent / "meta_tracker" / "observed_restrictions.json"
 _TRAINER_CATS = {"item", "supporter", "stadium", "tool"}
-_COMBAT_PASSES = 4   # heal aligns ~1-in-N combat games (same rationale as the functions builder)
+_COMBAT_PASSES = 4   # heal aligns ~1-in-N combat games (same rationale as functions builder)
 
 
 def probe_trainer_records(cards: dict, *, limit: int | None = None,
@@ -73,7 +73,7 @@ def probe_trainer_records(cards: dict, *, limit: int | None = None,
 
 def _load_overrides(path) -> dict[int, list[dict]]:
     p = Path(path)
-    if p.exists():  # numeric keys only → the "_note" key documents the file
+    if p.exists():  # numeric keys only → "_note" key documents the file
         return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()
                 if k.lstrip("-").isdigit()}
     return {}

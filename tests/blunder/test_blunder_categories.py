@@ -7,7 +7,7 @@ def test_category_vocab_is_closed_and_includes_agreed_terms():
     are members and unknown strings (incl. the renamed-away `missed_lethal`) are rejected."""
     assert "missed_win" in CATEGORIES                       # renamed from missed_lethal
     assert {"overextension", "misattachment", "bad_retreat", "other"} <= set(CATEGORIES)
-    # added by process when sequencing_error was found to swallow these distinct kinds
+    # added when sequencing_error found to swallow these distinct kinds
     assert {"missed_evolution", "missed_disruption"} <= set(CATEGORIES)
     assert {"wrong_supporter", "wrong_attack"} <= set(CATEGORIES)  # wrong-choice vs wasted/bad_target
 

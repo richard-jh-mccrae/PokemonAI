@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.getcwd())  # the extracted Bundle
 
 # Silence kaggle_environments' noisy one-time env discovery: INFO logging (global disable — the
-# library resets its own logger level on import) + the native open_spiel stderr dump (fd-level).
+# library resets its own logger level on import) + native open_spiel stderr dump (fd-level).
 logging.disable(logging.INFO)
 sys.stdout.flush()
 sys.stderr.flush()

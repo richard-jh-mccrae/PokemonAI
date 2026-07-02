@@ -29,16 +29,16 @@ def _ctx(**kw):
 
 def test_evolve_into_wincon_fires_only_on_an_evolve_into_the_wincon():
     assert bool(_evolve.when(_ctx(option_type=_EVOLVE, roles=["win_condition"])))
-    assert not _evolve.when(_ctx(option_type=_EVOLVE, roles=["starter"]))     # evolve into a non-wincon
-    assert not _evolve.when(_ctx(option_type=_PLAY, roles=["win_condition"]))  # a play, not an evolve
+    assert not _evolve.when(_ctx(option_type=_EVOLVE, roles=["starter"]))     # evolve into non-wincon
+    assert not _evolve.when(_ctx(option_type=_PLAY, roles=["win_condition"]))  # a play, not evolve
 
 
 def test_prefer_rush_evolve_tutor_fires_on_a_setup_rush_evolve_play():
     have_preevo = Board(line_preevo_in_play=True)                       # a pre-evolution to evolve
     assert bool(_rush.when(_ctx(tags=["rush_evolve"], board=have_preevo)))
     assert not _rush.when(_ctx(tags=["rush_evolve"], plan=Plan.RACE, board=have_preevo))  # setup only
-    assert not _rush.when(_ctx(tags=["search"], board=have_preevo))     # a plain tutor, not rush_evolve
+    assert not _rush.when(_ctx(tags=["search"], board=have_preevo))     # plain tutor, not rush_evolve
     assert not _rush.when(_ctx(tags=["rush_evolve"]))                   # no pre-evo in play -> stands down
-    # payoff already in hand -> evolve directly; don't waste a tutor (mirrors tutor-the-wincon's gate)
+    # payoff already in hand -> evolve directly; don't waste tutor (mirrors tutor-the-wincon's gate)
     assert not _rush.when(_ctx(tags=["rush_evolve"],
                                board=Board(line_preevo_in_play=True, wincon_in_hand=True)))

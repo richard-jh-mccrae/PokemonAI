@@ -51,7 +51,7 @@ class OwnCardModel:
     def __init__(self, deck) -> None:
         self.decklist: Counter = Counter(int(c) for c in deck)
         self._prizes: Counter | None = None       # exact prize multiset once anchored (else None)
-        self._anchor_remaining: int | None = None  # prizes_remaining at the last anchor
+        self._anchor_remaining: int | None = None  # prizes_remaining at last anchor
         self._last_turn: int | None = None
 
     def reset(self) -> None:
@@ -75,7 +75,7 @@ class OwnCardModel:
     # -- internals -------------------------------------------------------------------------------
     def _observe(self, obs: dict) -> None:
         select = obs.get("select")
-        if select is None:                         # the initial deck-submission step == match start
+        if select is None:                         # initial deck-submission step == match start
             self.reset()
             return
         state = obs.get("current") or {}
@@ -87,35 +87,35 @@ class OwnCardModel:
 
         turn = state.get("turn")
         if self._last_turn is not None and turn is not None and turn < self._last_turn:
-            self.reset()                           # turn went backwards -> a new match (local harness)
+            self.reset()                           # turn went backwards -> new match (local harness)
         self._last_turn = turn
 
         visible = self._visible(me, select)
         if any(visible[c] > self.decklist.get(c, 0) for c in visible):
-            self._prizes = None                    # a foreign / inconsistent state -> never trust it
+            self._prizes = None                    # foreign / inconsistent state -> never trust it
             return
         remaining = len(me.get("prize") or [])
-        hidden = self.decklist - visible           # the deck ∪ prizes multiset (everything unseen)
+        hidden = self.decklist - visible           # deck ∪ prizes multiset (everything unseen)
 
         revealed = self._revealed_full_deck(select, me)
-        if revealed is not None:                   # a full deck reveal -> (re)anchor the prizes exactly
+        if revealed is not None:                   # full deck reveal -> (re)anchor prizes exactly
             prizes = self.decklist - revealed - visible
             if sum(prizes.values()) == remaining and all(v >= 0 for v in prizes.values()):
                 self._prizes, self._anchor_remaining = prizes, remaining
                 return                             # anchored — done
-            # a partial / filtered reveal (size mismatch): fall through, keep any prior anchor
+            # partial / filtered reveal (size mismatch): fall through, keep prior anchor
 
         if self._prizes is None:
             return                                 # nothing to maintain yet
         if remaining == self._anchor_remaining:
             if not self._consistent(self._prizes, hidden, remaining):
-                self._prizes = None                # a prized card surfaced -> desync, drop it
+                self._prizes = None                # prized card surfaced -> desync, drop it
         elif remaining < self._anchor_remaining:   # a prize was taken since the anchor
-            candidate = self._prizes & hidden      # the prizes still possibly hidden (taken ones left)
+            candidate = self._prizes & hidden      # prizes still possibly hidden (taken ones left)
             if sum(candidate.values()) == remaining and self._consistent(candidate, hidden, remaining):
                 self._prizes, self._anchor_remaining = candidate, remaining   # uniquely reconciled
             else:
-                self._prizes = None                # ambiguous -> fall back until the next reveal
+                self._prizes = None                # ambiguous -> fall back until next reveal
         else:                                      # prizes grew -> impossible -> desync
             self._prizes = None
 

@@ -21,17 +21,16 @@ def _is_pokemon(stat) -> bool:
 HYPOTHESES = [
     Hypothesis(
         id="dont-bench-multiprize",
-        rationale="Avoid putting a 2-prize (ex) or 3-prize (Mega ex) Pokémon into play during "
-                  "setup unless it's your win-condition attacker — every benched multi-prizer is "
-                  "an easy multi-prize knockout the opponent can target.",
+        rationale="Avoid putting a 2-prize (ex) or 3-prize (Mega ex) Pokémon into play during setup "
+                  "unless it's your win-condition attacker — every benched multi-prizer is an easy "
+                  "multi-prize knockout for the opponent.",
         when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _EVOLVE)
         and _multi_prize(c.stat) and not (_WINCON_ROLES & set(c.roles)),
         weight=-15, status="assumed"),
     Hypothesis(
         id="keep-a-bench",
-        rationale="Never leave yourself with an empty Bench — if your Active is Knocked Out and "
-                  "you have no Pokémon to promote, you lose on the spot. With an empty Bench, "
-                  "develop a Basic.",
+        rationale="Never leave yourself with an empty Bench — if the Active is Knocked Out with no "
+                  "Pokémon to promote, you lose on the spot, so develop a Basic.",
         when=lambda c: c.board.my_bench == 0 and c.option_type == _PLAY and _is_pokemon(c.stat),
         weight=60, status="assumed"),
     Hypothesis(
@@ -42,20 +41,13 @@ HYPOTHESES = [
         weight=25, status="assumed"),
     Hypothesis(
         id="develop-the-accel-recipient",
-        rationale="A bench-accelerator in the Active Spot (an `accel_source`-Role Pokémon whose "
-                  "attack loads the BENCH, e.g. Cinderace's Turbo Flare) accelerates onto NOTHING "
-                  "while the Bench holds no win-condition-Line recipient "
-                  "(`board.accel_recipient_missing`). Developing one is then the top setup priority: "
-                  "endorse playing a Line pre-evolution or a bench-filler (Function Tag `bench_fill`) "
-                  "to give the acceleration a target — and, via the base, the eventual payoff. Rides "
-                  "ALONGSIDE the `keep-a-bench` / `prefer-bench-fill-first` reflexes (which already "
-                  "handle the held-bencher cases); the FETCH side — grab the deployable base over a "
-                  "stranded payoff — is `fetch-base-before-stranded-payoff` (its general pair since "
-                  "2026-06-30). Stands down once a recipient is benched or the Active isn't the "
-                  "accelerator; a positive endorsement of development only, so a turn with no "
-                  "recipient to find still attacks. Folded from mega_starmie "
-                  "`develop-turbo-flare-recipient` (same trigger + weight) — the signal was already "
-                  "general Board vocabulary.",
+        rationale="An `accel_source`-Role Active (e.g. Cinderace's Turbo Flare, which loads the Bench) "
+                  "accelerates onto nothing while the Bench holds no win-condition-Line recipient "
+                  "(`board.accel_recipient_missing`), so endorse playing a Line pre-evolution or "
+                  "`bench_fill` card as top setup priority to give it a target. Stands down once a "
+                  "recipient is benched or the Active isn't the accelerator; pairs with the FETCH-side "
+                  "`fetch-base-before-stranded-payoff` and folds mega_starmie's "
+                  "`develop-turbo-flare-recipient` (same trigger + weight).",
         when=lambda c: c.option_type == _PLAY and c.board.accel_recipient_missing
         and (c.card_is_line_preevo or "bench_fill" in c.tags)
         and c.board.my_bench < _BENCH_MAX,

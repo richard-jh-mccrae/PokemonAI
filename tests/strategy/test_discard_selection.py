@@ -49,8 +49,8 @@ def _setup(hand_ids):
 
 @pytest.mark.req("REQ-GEN-0023")
 def test_discards_the_redundant_tutor_and_protects_the_ace_spec_and_engine():
-    # Mega in hand -> Salvatore (rush_evolve) is redundant. Keep the ACE SPEC and the engine Supporters;
-    # pitch Salvatore and the spare Water.
+    # Mega in hand -> Salvatore (rush_evolve) redundant. Keep ACE SPEC + engine Supporters;
+    # pitch Salvatore + spare Water.
     pilot, obs = _setup([MEGA, CAPE, WALLYS, WATER, SALVATORE])           # idx: 0..4
     sel = obs["select"]
     dec = pilot.explain(obs)
@@ -61,7 +61,7 @@ def test_discards_the_redundant_tutor_and_protects_the_ace_spec_and_engine():
 
 @pytest.mark.req("REQ-GEN-0023")
 def test_discards_the_dead_opener_and_the_disruption_card_over_the_engine():
-    # Post-opening: Cinderace is dead in hand; Harlequin (hand_disruption) is filler. Keep Lillie's + Hilda.
+    # Post-opening: Cinderace dead in hand; Harlequin (hand_disruption) is filler. Keep Lillie's + Hilda.
     pilot, obs = _setup([LILLIES, HILDA, HARLEQUIN, CINDERACE])           # idx: 0..3
     dec = pilot.explain(obs)
     assert "discard-the-dead-opener" in _fired(dec.options[3])            # Cinderace

@@ -30,7 +30,7 @@ def test_build_correction_embeds_snapshot_and_judgment():
     assert corr.episode_id == d.episode_id and corr.seat == d.seat
     # embedded, self-contained snapshot
     assert corr.decision["select_context"] == "Main"
-    assert corr.decision["current"]["players"]        # full board travels with it
+    assert corr.decision["current"]["players"]        # full board travels along
     assert len(corr.decision["options"]) == len(d.options)
 
 
@@ -104,6 +104,6 @@ def test_corrections_have_unique_ids_and_legacy_records_get_stable_ids():
     b = build_correction(d, source="own", agent="x", correct=[4], category="missed_win", rationale="r")
     assert a.id and b.id and a.id != b.id
 
-    legacy = a.to_dict(); legacy.pop("id")                 # simulate a pre-id record
+    legacy = a.to_dict(); legacy.pop("id")                 # simulate pre-id record
     assert Correction.from_dict(dict(legacy)).id == Correction.from_dict(dict(legacy)).id  # stable
     assert Correction.from_dict(dict(legacy)).id           # non-empty

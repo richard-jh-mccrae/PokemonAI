@@ -75,7 +75,7 @@ def test_general_strategy_assembles_baseline_plus_doctrines_with_no_loss_or_dup(
 
 @pytest.mark.req("REQ-GEN-0025")
 def test_attach_before_hand_shuffle_stays_in_the_shuffle_doctrine_not_baseline_energy():
-    # Doctrine cohesion outranks the decision-context axis: this ATTACH rule belongs to the
+    # Doctrine cohesion outranks decision-context axis: this ATTACH rule belongs to
     # Shuffle-Refresh doctrine's sequencing story, not baseline_energy (ADR-0025).
     assert "attach-before-hand-shuffle" in _ids(REFRESH_HYPOTHESES)
     assert "attach-before-hand-shuffle" not in _ids(BASELINE_HYPOTHESES)

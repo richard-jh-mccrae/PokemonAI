@@ -21,10 +21,10 @@ def test_iter_decisions_yields_taggable_decisions_from_film():
     assert len(decisions) == 43
 
     first = decisions[0]
-    assert first.seat == 0               # current.yourIndex (the acting player)
+    assert first.seat == 0               # current.yourIndex (acting player)
     assert first.turn == 0
     assert first.select_context == "IsFirst"
-    assert first.chosen == [0]           # selection read from the NEXT film frame (offset +1)
+    assert first.chosen == [0]           # selection read from NEXT film frame (offset +1)
 
 
 def test_decision_embeds_selfcontained_full_info_snapshot():
@@ -39,10 +39,10 @@ def test_decision_embeds_selfcontained_full_info_snapshot():
     assert len(players) == 2
     assert all(len(p["hand"]) == 7 for p in players)
 
-    # the Main decision exposes the real legal move set
+    # Main decision exposes the real legal move set
     assert {o["type"] for o in main.options} >= {"Play", "End"}
 
-    # snapshot is independent of the source replay: mutating the film must NOT
+    # snapshot independent of source replay: mutating film must NOT
     # change an already-extracted Decision.
     captured = main.current["turn"]
     replay["steps"][0][0]["visualize"][main.frame]["current"]["turn"] = 999
@@ -56,5 +56,5 @@ def test_decision_carries_pilot_ready_obs_aligned_to_its_options():
     main = next(d for d in iter_decisions(load_replay(FIXTURE)) if d.select_context == "Main")
     assert main.obs is not None
     assert isinstance(main.obs["select"]["type"], int)                  # int enum = Pilot-ready
-    assert len(main.obs["select"]["option"]) == len(main.options)       # aligned to the Decision
+    assert len(main.obs["select"]["option"]) == len(main.options)       # aligned to Decision
     assert all(0 <= c < len(main.obs["select"]["option"]) for c in main.chosen)

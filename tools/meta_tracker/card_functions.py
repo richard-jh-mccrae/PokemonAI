@@ -16,12 +16,12 @@ from __future__ import annotations
 # Engine enum codes mirrored locally so this module stays lib-free (cg/api.py).
 _LOG_DRAW = 4                  # LogType.DRAW
 _LOG_MOVE_CARD = 6             # LogType.MOVE_CARD
-_LOG_MOVE_REVERSE = 7          # LogType.MOVE_CARD_REVERSE (an opponent's hidden card moved)
-_LOG_SWITCH = 8                # LogType.SWITCH (an Active Pokémon was swapped)
-_LOG_ATTACH = 11               # LogType.ATTACH (a card attached to a Pokémon)
+_LOG_MOVE_REVERSE = 7          # LogType.MOVE_CARD_REVERSE (opponent's hidden card moved)
+_LOG_SWITCH = 8                # LogType.SWITCH (Active Pokémon swapped)
+_LOG_ATTACH = 11               # LogType.ATTACH (card attached to a Pokémon)
 _LOG_HP_CHANGE = 16            # LogType.HP_CHANGE (value>0 & not a damage counter = heal)
-# Each Special Condition → its own tag (purpose-specific, not a vague `status`): poison/burn are
-# chip-damage attrition; sleep/paralyze lock the Active out of attacking/retreating; confuse deters.
+# Each Special Condition -> own tag (purpose-specific, not vague `status`): poison/burn are
+# chip-damage attrition; sleep/paralyze lock Active out of attacking/retreating; confuse deters.
 _CONDITION_TAG = {17: "poison", 18: "burn", 19: "sleep", 20: "paralyze", 21: "confuse"}
 _AREA_DECK = 1                 # AreaType.DECK
 _AREA_HAND = 2                 # AreaType.HAND
@@ -30,7 +30,7 @@ _AREA_ACTIVE = 4               # AreaType.ACTIVE
 _AREA_BENCH = 5                # AreaType.BENCH
 _AREA_ENERGY = 8               # AreaType.ENERGY (Energy attached to a Pokémon)
 _AREA_LOOK = 12                # AreaType.LOOKING (cards being looked at)
-_INTO_PLAY = frozenset((2, 4, 5))   # HAND / ACTIVE / BENCH — destinations of a fetch
+_INTO_PLAY = frozenset((2, 4, 5))   # HAND / ACTIVE / BENCH — fetch destinations
 _CTX_DAMAGE_COUNTER_ANY = 14   # SelectContext.DAMAGE_COUNTER_ANY
 
 
@@ -48,40 +48,40 @@ def classify_functions(card: dict, *, probe: dict | None = None,
             t = lg.get("type")
             mine = lg.get("playerIndex") == actor
             if t == _LOG_SWITCH:
-                tags.add("switch" if mine else "gust")   # my Active out vs forcing the opponent's
+                tags.add("switch" if mine else "gust")   # my Active out vs forcing opponent's
                 continue
             cond = _CONDITION_TAG.get(t)
             if cond and not lg.get("isRecover"):
-                tags.add(cond)               # the specific Special Condition inflicted (poison/burn/…)
+                tags.add(cond)               # specific Special Condition inflicted (poison/burn/…)
                 continue
             if not mine:                 # opponent-side moves my card *forced* during its resolution
                 if t in (_LOG_MOVE_CARD, _LOG_MOVE_REVERSE):
                     frm, to = lg.get("fromArea"), lg.get("toArea")
                     if frm == _AREA_HAND and to in (_AREA_DECK, _AREA_DISCARD):
-                        tags.add("hand_disruption")   # shuffled/discarded the opponent's hand (Iono/Judge)
+                        tags.add("hand_disruption")   # shuffled/discarded opponent's hand (Iono/Judge)
                     elif frm == _AREA_ENERGY and to == _AREA_DISCARD:
-                        tags.add("energy_denial")     # knocked an Energy off the opponent (Hammer)
+                        tags.add("energy_denial")     # knocked an Energy off opponent (Hammer)
                 continue                 # other opponent events aren't this card's own function
             if t == _LOG_DRAW:
                 tags.add("draw")
             elif t == _LOG_MOVE_CARD:
                 frm, to = lg.get("fromArea"), lg.get("toArea")
                 if _AREA_LOOK in (frm, to):
-                    tags.add("dig")          # looked at / reordered the deck top (or bottom)
+                    tags.add("dig")          # looked at / reordered deck top (or bottom)
                 if frm == _AREA_DECK and to in (_AREA_HAND, _AREA_BENCH, _AREA_ACTIVE):
-                    tags.add("search")       # tutored a specific card *straight* out of the deck
+                    tags.add("search")       # tutored a specific card *straight* out of deck
                 elif frm == _AREA_LOOK and to == _AREA_HAND:
-                    tags.add("draw")         # took a card from a looked-at set (Drakloak) = dig+draw, not a tutor
+                    tags.add("draw")         # took card from a looked-at set (Drakloak) = dig+draw, not tutor
                 elif frm == _AREA_DISCARD and to in _INTO_PLAY:
                     tags.add("recycle")      # pulled a card back out of my discard (Night Stretcher)
             elif t == _LOG_ATTACH and card.get("category") != "tool":
-                tags.add("energy_accel")     # a non-Tool card attaching = put Energy into play
+                tags.add("energy_accel")     # non-Tool card attaching = put Energy into play
             elif t == _LOG_HP_CHANGE and (lg.get("value") or 0) > 0 and not lg.get("putDamageCounter"):
                 tags.add("heal")             # my Pokémon's HP went up = removed damage
         if _CTX_DAMAGE_COUNTER_ANY in (probe.get("contexts") or []):
-            tags.add("spread")           # free damage-counter placement (the Dragapult class)
+            tags.add("spread")           # free damage-counter placement (Dragapult class)
 
-    # --- Curated overrides (escape hatch: union, for what the probe can't reach) ---
+    # --- Curated overrides (escape hatch: union, for what probe can't reach) ---
     tags |= set(overrides or [])
 
     return sorted(tags)

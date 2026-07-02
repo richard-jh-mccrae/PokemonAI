@@ -53,7 +53,7 @@ def test_fetch_the_wincon_prefers_the_payoff_at_a_search():
                                   MEGA: CardStat(MEGA, megaEx=True, hp=330)})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # active carries Energy -> not energy-starved, so only fetch-the-wincon is in play here.
+    # active carries Energy -> not starved -> only fetch-the-wincon in play here
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": STARYU}, {"id": MEGA}],
                       current=state(active=poke(CINDERACE, energy=1)))
@@ -64,7 +64,7 @@ def test_fetch_the_wincon_prefers_the_payoff_at_a_search():
 
 @pytest.mark.req("REQ-GEN-0013")
 def test_fetch_the_wincon_yields_to_energy_when_starved():
-    # adversarial-review fix: a wincon you cannot power does nothing — when starved, energy wins.
+    # adversarial-review fix: unpowered wincon does nothing -> when starved, energy wins
     stats = DictCardStatProvider({MEGA: CardStat(MEGA, megaEx=True, hp=330),
                                   BASIC_W: CardStat(BASIC_W, energyType=WATER)})
     pilot = Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}),
@@ -78,7 +78,7 @@ def test_fetch_the_wincon_yields_to_energy_when_starved():
 
 @pytest.mark.req("REQ-GEN-0013")
 def test_fetch_the_wincon_stands_down_when_the_payoff_is_already_in_play():
-    # adversarial-review fix: don't pull a dead second copy when the win-condition is already in play.
+    # adversarial-review fix: don't pull a dead 2nd copy when the win-condition's already in play
     stats = DictCardStatProvider({MEGA: CardStat(MEGA, megaEx=True, hp=330)})
     pilot = Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}),
                   deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -93,7 +93,7 @@ def test_fetch_the_wincon_stands_down_when_the_payoff_is_already_in_play():
 def test_fetch_energy_when_starved_takes_a_reusable_basic():
     stats = DictCardStatProvider({700: CardStat(700, hp=70), BASIC_W: CardStat(BASIC_W, energyType=WATER)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # starved: Active has 0 Energy and none in hand -> take the Energy over the Pokémon.
+    # starved: Active has 0 Energy, none in hand -> take the Energy over the Pokémon
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": 700}, {"id": BASIC_W}],
                       current=state(active=poke(900, energy=0), hand=[]))
@@ -119,7 +119,7 @@ def test_fetch_energy_when_starved_skips_a_discard_energy_for_a_reusable_one():
 def test_fetch_energy_when_starved_is_off_when_energy_is_already_in_hand():
     stats = DictCardStatProvider({BASIC_W: CardStat(BASIC_W, energyType=WATER)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # a reusable Energy already sits in hand -> not starved -> the rule does not fire.
+    # reusable Energy already in hand -> not starved -> rule doesn't fire
     obs = make_select([card_opt(DECK, 0)], context=TO_HAND, deck=[{"id": BASIC_W}],
                       current=state(active=poke(900, energy=0), hand=[BASIC_W]))
     assert "fetch-energy-when-starved" not in _fired(pilot.explain(obs).options[0])
@@ -130,7 +130,7 @@ def test_fetch_energy_when_starved_is_off_when_energy_is_already_in_hand():
 def test_prefer_bench_fill_first_sequences_the_thinner_ahead_of_a_tutor():
     funcs = CardFunctions({POFFIN: ["search", "bench_fill"], HILDA: ["search"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, functions=funcs)
-    # SETUP, both are search plays (dig-before-commit fires on each); the bench-filler is sequenced first.
+    # SETUP, both are search plays (dig-before-commit fires on each); bench-filler sequenced first
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
                       current=state(hand=[HILDA, POFFIN]))
     assert pilot.decide(obs) == [1]                                  # Buddy-Buddy Poffin first
@@ -140,18 +140,18 @@ def test_prefer_bench_fill_first_sequences_the_thinner_ahead_of_a_tutor():
 
 @pytest.mark.req("REQ-GEN-0015")
 def test_prefer_bench_fill_first_stands_down_on_a_full_bench():
-    # adversarial-review fix: a bench-filler can place nothing on a full Bench -> don't promote it.
+    # adversarial-review fix: bench-filler places nothing on a full Bench -> don't promote it
     funcs = CardFunctions({POFFIN: ["search", "bench_fill"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, functions=funcs)
-    full = [poke(701), poke(702), poke(703), poke(704), poke(705)]            # 5 = a full Bench
+    full = [poke(701), poke(702), poke(703), poke(704), poke(705)]            # 5 = full Bench
     obs = make_select([opt(PLAY, area=HAND, index=0)], current=state(bench=full, hand=[POFFIN]))
     assert pilot._board(obs).my_bench == 5
     assert "prefer-bench-fill-first" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- chip discipline is now structural: attack-last sequences dev first; with no dev, take the chip --
-# (the old `build-before-attack` / `dont-chip-with-a-doomed-active` chip-penalty rules were removed —
-#  they suppressed a useful chip below End when no development was available.)
+# --- chip discipline now structural: attack-last sequences dev first; no dev -> take the chip --
+# (old `build-before-attack` / `dont-chip-with-a-doomed-active` chip-penalty rules removed —
+#  they suppressed a useful chip below End when no dev was available.)
 @pytest.mark.req("REQ-GEN-0016")
 def test_development_still_beats_a_weak_chip_via_attack_last():
     stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30),
@@ -166,7 +166,7 @@ def test_development_still_beats_a_weak_chip_via_attack_last():
 
 @pytest.mark.req("REQ-GEN-0016")
 def test_a_weak_chip_is_taken_when_no_development_is_available():
-    # the removal's point: with nothing better to do, chip — don't end the turn doing nothing.
+    # point of the removal: nothing better to do -> chip, don't end turn doing nothing
     stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30),
                                   900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)})
     strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])
@@ -179,8 +179,8 @@ def test_a_weak_chip_is_taken_when_no_development_is_available():
 # --- the leak guard: board-commit intent rules must not fire on a fetch sub-selection ------------
 @pytest.mark.req("REQ-GEN-0017")
 def test_board_intent_rules_do_not_leak_onto_search_options():
-    # The fetched card's `search` / `energy_accel` tags now resolve at a ToHand search, but the
-    # board-commit intent rules (which govern plays, not which card a search pulls) must stay silent.
+    # fetched card's `search` / `energy_accel` tags now resolve at a ToHand search, but
+    # board-commit intent rules (govern plays, not which card a search pulls) must stay silent
     funcs = CardFunctions({222: ["search", "energy_accel"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, functions=funcs)
     obs = make_select([card_opt(DECK, 0)], context=TO_HAND, deck=[{"id": 222}],
@@ -201,9 +201,9 @@ def test_attack_last_sequences_development_before_the_turn_ending_attack():
     obs = make_select([attack_opt(11), opt(PLAY)], context=MAIN,
                       current=state(active=poke(700, energy=1), opp_active=poke(900, hp=40)))
     d = pilot.explain(obs)
-    assert d.options[0].tactical >= KO_SCORE          # the attack is a KO (50 >= 40) …
-    assert pilot.decide(obs) == [1]                   # … but the +30 development goes first
-    assert d.options[0].deferred                      # the KO is held back, never dropped
+    assert d.options[0].tactical >= KO_SCORE          # attack is a KO (50 >= 40) ...
+    assert pilot.decide(obs) == [1]                   # ...but the +30 development goes first
+    assert d.options[0].deferred                      # KO held back, never dropped
 
 
 @pytest.mark.req("REQ-GEN-0017")
@@ -235,8 +235,8 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
 # --- snipe-for-the-ko: a bench snipe that KNOCKS OUT the target (HP <= rider) is a free prize ------
 @pytest.mark.req("REQ-GEN-0018")
 def test_snipe_for_the_ko_prefers_the_killable_bench_target():
-    # My Active's snipe rider is 50 (attack id 11). The 50-HP body dies to it (a prize); the 140/300
-    # bodies only chip. snipe-for-the-ko outranks every positional priority — take the knockout.
+    # Active's snipe rider is 50 (attack id 11). 50-HP body dies to it (a prize); 140/300
+    # bodies only chip. snipe-for-the-ko outranks every positional priority -> take the knockout
     stats = DictCardStatProvider({700: CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, attacks={11: 120}, bench_snipe={11: 50})
@@ -246,14 +246,14 @@ def test_snipe_for_the_ko_prefers_the_killable_bench_target():
                                     opp_bench=[poke(900, hp=140), poke(901, hp=50), poke(902, hp=300)]))
     assert pilot.decide(obs) == [1]                                  # the 50-HP target (a KO = prize)
     assert "snipe-for-the-ko" in _fired(pilot.explain(obs).options[1])
-    assert "snipe-for-the-ko" not in _fired(pilot.explain(obs).options[2])   # the 300-HP wall: no KO
+    assert "snipe-for-the-ko" not in _fired(pilot.explain(obs).options[2])   # 300-HP wall: no KO
 
 
 @pytest.mark.req("REQ-GEN-0018")
 def test_snipe_the_threat_outranks_the_weakest():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=DictCardStatProvider({}), attacks={11: 50})
-    # idx0 carries Energy (a live threat, high HP); idx1 is the weakest. threat (20) > weakest (15).
+    # idx0 carries Energy (live threat, high HP); idx1 is weakest. threat (20) > weakest (15)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700, energy=1),
                                     opp_bench=[poke(900, energy=2, hp=200), poke(901, hp=50)]))
@@ -327,7 +327,7 @@ def test_retreat_to_ready_attacker_never_overrides_a_knockout():
     obs = make_select([attack_opt(11), opt(12)], context=MAIN,
                       current=state(active=poke(CINDERACE, energy=2, hp=60),
                                     bench=[poke(MEGA, energy=3, hp=330)], opp_active=poke(900, hp=40)))
-    assert pilot.decide(obs) == [0]                                  # the chip is now lethal -> take the KO
+    assert pilot.decide(obs) == [0]                                  # chip is now lethal -> take the KO
 
 
 # --- save-tool-for-the-attacker: don't equip a Tool to an off-role Pokémon ------------------------
@@ -342,7 +342,7 @@ def test_save_tool_for_the_attacker_declines_an_offrole_target():
     obs = make_select([cape, opt(14)], context=MAIN,                 # opt(14) = End turn
                       current=state(active=poke(CINDERACE, energy=1, hp=160), hand=[HEROCAPE]))
     assert "save-tool-for-the-attacker" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                                  # save the Cape -> End, don't equip Cinderace
+    assert pilot.decide(obs) == [1]                                  # save Cape -> End, don't equip Cinderace
 
 
 @pytest.mark.req("REQ-GEN-0020")
@@ -357,13 +357,13 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
     funcs = CardFunctions({CINDERACE: ["opener"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
                   attacks={11: 30})
-    # step 1: drew Mega; Active is the staller Cinderace, benched Staryu(e1) -> evolve the Staryu first
+    # step 1: drew Mega; Active is the staller Cinderace, benched Staryu(e1) -> evolve Staryu first
     evolve = {"type": 9, "area": HAND, "index": 0, "inPlayArea": BENCH, "inPlayIndex": 0}
     obs1 = make_select([evolve, opt(12), attack_opt(11), opt(14)], context=MAIN,
                        current=state(active=poke(CINDERACE, energy=1, hp=120),
                                      bench=[poke(STARYU, energy=1)], hand=[MEGA], opp_active=poke(999, hp=120)))
     assert pilot.decide(obs1) == [0]                                  # evolve Staryu -> Mega
-    # step 2: the Staryu is now a benched Mega(e1) -> retreat the staller into it
+    # step 2: Staryu now a benched Mega(e1) -> retreat the staller into it
     obs2 = make_select([opt(12), attack_opt(11), opt(14)], context=MAIN,
                        current=state(active=poke(CINDERACE, energy=1, hp=120),
                                      bench=[poke(MEGA, energy=1)], opp_active=poke(999, hp=120)))
@@ -385,4 +385,4 @@ def test_dig_before_the_irreversible_energy_attach_even_with_no_attack():
     dig = {"type": PLAY, "index": 0}                                  # play the search card (hand[0])
     obs = make_select([attach, dig, opt(14)], context=MAIN,
                       current=state(active=poke(CINDERACE, energy=0, hp=160), hand=[DIG, BASIC_W]))
-    assert pilot.decide(obs) == [1]                                  # dig (tier 0) before the attach (tier 2)
+    assert pilot.decide(obs) == [1]                                  # dig (tier 0) before attach (tier 2)

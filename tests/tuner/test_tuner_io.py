@@ -13,14 +13,14 @@ def test_written_overrides_change_the_pilots_decision(tmp_path):
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=MAIN,
                       current=state(hand=[111, 222]))
 
-    assert Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60).decide(obs) == [0]  # tie → first
+    assert Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60).decide(obs) == [0]  # tie -> first
 
     path = tmp_path / "tuned.json"
     write_overrides({"boost": 50.0}, path)
     assert load_overrides(path) == {"boost": 50.0}
 
     pilot = Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60, overrides=load_overrides(path))
-    assert pilot.decide(obs) == [1]      # the boosted Hypothesis now favors option 1
+    assert pilot.decide(obs) == [1]      # boosted Hypothesis now favors option 1
 
 
 def test_sparse_overrides_keeps_only_changed_weights():
@@ -40,5 +40,5 @@ def test_authored_seeds_merge_weight_overrides_as_the_baseline():
                     weight_overrides={"g": 30.0})
     seeds = authored_seeds(general, deck)
     assert seeds == {"g": 30.0, "d": 10.0}
-    assert sparse_overrides({"g": 30.0, "d": 10.0}, seeds) == {}   # fit == authored → no delta ships
-    assert sparse_overrides({"g": 35.0}, seeds) == {"g": 35.0}     # a genuine learned delta ships
+    assert sparse_overrides({"g": 30.0, "d": 10.0}, seeds) == {}   # fit == authored -> no delta ships
+    assert sparse_overrides({"g": 35.0}, seeds) == {"g": 35.0}     # genuine learned delta ships

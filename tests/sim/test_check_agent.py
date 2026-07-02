@@ -8,7 +8,7 @@ from sim.check_agent import check_contents, check_legality
 from conftest import require_kaggle_environments
 
 REPO = Path(__file__).resolve().parents[2]
-# Self-contained agent fixtures (so tests don't depend on a deletable source agent under
+# Self-contained agent fixtures (tests don't depend on a deletable source agent under
 # src/agents/). `mega_starmie` is a complete, legal, shippable agent copied here.
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 LEGAL_DECK = FIXTURE_AGENTS / "mega_starmie" / "deck.csv"
@@ -33,7 +33,7 @@ def test_contents_passes_when_main_and_deck_present(tmp_path):
 def test_contents_bundle_requires_engine_and_common(tmp_path):
     (tmp_path / "main.py").write_text("")
     (tmp_path / "deck.csv").write_text("3\n")
-    # the extracted Bundle must also carry the shared cg/ and common/ packages
+    # extracted Bundle must also carry shared cg/ and common/ packages
     result = check_contents(tmp_path, required=("main.py", "deck.csv", "cg", "common"))
     assert not result.ok
     assert "cg" in result.detail and "common" in result.detail
@@ -59,7 +59,7 @@ def test_legality_fails_with_the_specific_rule(tmp_path):
     deck.write_text("\n".join(["3"] * 60) + "\n")  # 60 basic Energy => no Basic Pokemon
     result = check_legality(deck)
     assert not result.ok
-    assert "Basic" in result.detail  # decoded errorType 3, not a generic message
+    assert "Basic" in result.detail  # decoded errorType 3, not generic message
 
 
 @pytest.mark.req("REQ-SIM-0003")
@@ -77,7 +77,7 @@ def test_playability_loads_sibling_modules_from_agent_dir():
     require_kaggle_environments()
     from sim.check_agent import check_playability
 
-    # main.py does `from helper import OK` — only resolvable if the agent dir is on sys.path
+    # main.py does `from helper import OK` — only resolvable if agent dir is on sys.path
     agent_dir = REPO / "tests" / "fixtures" / "agents" / "sibling"
     result = check_playability(agent_dir, syspath_roots=[], matches=1)
     assert result.ok, result.detail
@@ -155,6 +155,6 @@ def test_cli_runs_a_real_agent_through_playability():
     out = proc.stdout + proc.stderr
     assert proc.returncode == 0, out
     assert "[PASS] playability" in out
-    assert "OpenSpiel exception" not in out        # noisy kaggle_environments import is muted
+    assert "OpenSpiel exception" not in out        # noisy kaggle_environments import muted
     assert "Successfully loaded OpenSpiel" not in out
-    assert "Logging error" not in out              # and the import doesn't break logging
+    assert "Logging error" not in out              # import doesn't break logging either

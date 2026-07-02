@@ -26,8 +26,8 @@ from .store import DEFAULT_ROOT
 
 DEFAULT_REVIEWED = DEFAULT_ROOT / "reviewed.json"
 
-# The disposition vocabulary. `refuted` is also dropped from the weight fit (a bad label must not
-# pressure the weights); `deferred` / `covered` are merely held off the fresh-work surfaces.
+# The disposition vocabulary. `refuted` also drops from the weight fit (bad label must not
+# pressure weights); `deferred` / `covered` just held off the fresh-work surfaces.
 DISPOSITIONS = ("refuted", "deferred", "covered")
 
 

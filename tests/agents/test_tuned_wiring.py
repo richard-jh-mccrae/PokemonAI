@@ -47,7 +47,7 @@ def test_unknown_override_key_is_silently_ignored():
     Hypothesis never reaches a weight, so it changes nothing."""
     h = Hypothesis("real", "", when=lambda c: c.card_id == 222, weight=0)
     pilot = Pilot(Strategy(hypotheses=[h]), deck=[1] * 60, overrides={"ghost": 99.0})
-    assert pilot._weight(h) == 0          # 'ghost' never applied; the real Hypothesis keeps its default
+    assert pilot._weight(h) == 0          # 'ghost' never applied; real Hypothesis keeps its default
 
 
 def test_authored_seed_override_sits_between_default_and_learned():

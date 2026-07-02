@@ -47,7 +47,7 @@ def test_submit_uploads_latest_builds_exact_zip_and_records(tmp_path):
                  upload_fn=lambda z, m: uploads.append((z, m)), when=datetime(2026, 6, 25, 14, 30, 5))
 
     zip_path, msg = uploads[0]
-    assert Path(zip_path) == out / f"{built['artifact']}.zip"   # the EXACT prior build, not a re-package
+    assert Path(zip_path) == out / f"{built['artifact']}.zip"   # EXACT prior build, not a re-package
     assert msg == row["message"] and row["submitted_at"].startswith("2026-06-25")
     assert read_history(history)[0]["submission_id"] == built["submission_id"]
 

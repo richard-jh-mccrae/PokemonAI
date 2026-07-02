@@ -26,7 +26,7 @@ class ProposedHypothesis:
     frame: object = None
     agent_build: str | None = None
     built_at: str | None = None
-    critical: bool = False    # rationale carries the CRITICAL marker (resolve first; /blunder-buster gate)
+    critical: bool = False    # rationale carries CRITICAL marker (resolve first; /blunder-buster gate)
 
 
 def _slug(text: str) -> str:

@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
 
-# Kaggle caps a submission archive at 197.7 MiB.
+# Kaggle caps submission archive at 197.7 MiB.
 MAX_SUBMISSION_MIB = 197.7
 MAX_SUBMISSION_BYTES = int(MAX_SUBMISSION_MIB * 1024 * 1024)
 
@@ -69,7 +69,7 @@ def _read_deck(deck_path: Path) -> list[int]:
     return [int(x) for x in lines]
 
 
-# Engine deck-legality codes (cg StartData.errorType); see ADR-0010.
+# Engine deck-legality codes (cg StartData.errorType); see ADR-0010
 _DECK_ERRORS = {
     1: "invalid card ID in deck",
     2: "more than 4 cards share a name (excluding basic Energy)",
@@ -86,7 +86,7 @@ def check_legality(deck_path: Path) -> StageResult:
         return StageResult(False, "legality", f"unreadable deck.csv: {e}")
     if len(deck) != 60:
         return StageResult(False, "legality", f"expected 60 integer rows, got {len(deck)}")
-    from cg.game import battle_finish, battle_start  # lazy: loads the native engine
+    from cg.game import battle_finish, battle_start  # lazy: loads native engine
 
     _, start = battle_start(deck, list(deck))
     if start.errorPlayer >= 0:
@@ -147,9 +147,9 @@ def _suppressed_output():
 def _import_make():
     """Import kaggle_environments.make, muting its noisy one-time env discovery.
 
-    Three noise sources: INFO logging (the library resets its own logger to INFO on import,
-    so a plain setLevel loses the race — `logging.disable` is a global override it can't
-    beat); a native (C++) open_spiel dump to the stderr fd (needs fd-level redirect); and
+    Three noise sources: INFO logging (library resets its own logger to INFO on import,
+    so plain setLevel loses the race — `logging.disable` is a global override it can't
+    beat); a native (C++) open_spiel dump to stderr fd (needs fd-level redirect); and
     pydantic Field-deprecation warnings from its werewolf env (Python `warnings`, so neither
     of the above catches them — needs `catch_warnings`).
     """
@@ -172,10 +172,10 @@ def _run_match(agent_dir: Path, syspath_roots):
     """One self-play cabt match; returns (statuses, env)."""
     make = _import_make()  # lazy + quiet: heavy dependency
 
-    # agent_dir first so the agent's own sibling modules (e.g. strategy.py) resolve, as on the grader
+    # agent_dir first so agent's own sibling modules (e.g. strategy.py) resolve, as on grader
     with _syspath([agent_dir, *syspath_roots]), _chdir(agent_dir):
         seats = [_load_agent(agent_dir, f"_seat{i}") for i in range(2)]
-        env = make("cabt")  # debug=False so the env records agent errors as status=ERROR
+        env = make("cabt")  # debug=False so env records agent errors as status=ERROR
         env.run(seats)
     return [s["status"] for s in env.state], env
 
@@ -239,7 +239,7 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
     work_dir = Path(work_dir)
     zip_path = package(name, work_dir / "dist", agents_root=agents_root)
 
-    size = zip_path.stat().st_size  # the archive is what Kaggle receives
+    size = zip_path.stat().st_size  # archive is what Kaggle receives
     if size > MAX_SUBMISSION_BYTES:
         return StageResult(
             False, "deployability",
@@ -265,8 +265,8 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
 
 def _agent_name(raw: str) -> str:
     """Accept a bare agent name or a path to its dir (either separator); return the bare name."""
-    # Normalize Windows-style backslashes first: on Linux '\' is a valid filename char, not a
-    # separator, so Path(r"a\b\c").name would return the whole string. Works on both OSes.
+    # Normalize Windows-style backslashes first: on Linux '\' is valid filename char, not a
+    # separator, so Path(r"a\b\c").name would return whole string. Works on both OSes.
     return Path(str(raw).replace("\\", "/")).name or str(raw)
 
 
@@ -315,7 +315,7 @@ def main(argv=None) -> int:
     name = _agent_name(args.name)  # accept a path (e.g. tab-completed) or a bare name
 
     sys.path.insert(0, str(REPO / "tools"))  # so check_deployability can import submit.package
-    sys.path.insert(0, str(MS))  # so the in-process stages can import cg / common
+    sys.path.insert(0, str(MS))  # so in-process stages can import cg / common
     report = check_agent(
         name,
         agents_root=args.agents_root,

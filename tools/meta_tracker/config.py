@@ -23,11 +23,11 @@ REPORTS_DIR = REPO / "reports"
 DASHBOARD = REPORTS_DIR / "meta_dashboard.html"
 
 # --- Deck export ---------------------------------------------------------
-EXPORT_TOP_N = 10            # clusters exported to DECKS_DIR (head of the play-rate ranking; ADR-0027)
+EXPORT_TOP_N = 10            # clusters exported to DECKS_DIR (head of play-rate ranking; ADR-0027)
 
 # --- Rank bands (percentile of the ladder, by participant rating) --------
-# Contiguous over the top 50%; episodes below 50th percentile are the "lower
-# rated" tier and are dropped. (name, low_pct_inclusive, high_pct_exclusive).
+# Contiguous over top 50%; episodes below 50th percentile are "lower rated"
+# tier, dropped. (name, low_pct_inclusive, high_pct_exclusive).
 BANDS: list[tuple[str, float, float]] = [
     ("Elite", 0.0, 2.0),
     ("High", 2.0, 10.0),
@@ -37,7 +37,7 @@ BANDS: list[tuple[str, float, float]] = [
 # --- Download budget (per run) -------------------------------------------
 DAILY_EPISODE_CAP = 1500       # max new episode files downloaded per run (override with --cap)
 LIST_PAGES_PER_DATASET = 5     # file-listing pages scanned per dataset per run (~200 ids/page).
-                               # Kept small + cursor-resumed across runs to avoid ListDatasetFiles 403s.
+                               # Kept small + cursor-resumed across runs, avoids ListDatasetFiles 403s.
 
 # --- Politeness / robustness ---------------------------------------------
 REQUEST_SLEEP_S = 0.3        # pause between CLI calls
@@ -51,9 +51,9 @@ MAX_MAIN_LINES = 3           # up to three main lines name an archetype
 SETTLED_MIN_EPISODES = 30    # sigma proxy: a submission is "settled" past this
 
 # Consistency / tech "engine" Pokémon that should never *name* an archetype —
-# they appear across many decks and are win-condition-agnostic. Forced to
-# sub-line (still shown in usage stats). Matched by exact name or "<name> "
-# prefix (so "Fezandipiti" also catches "Fezandipiti ex"). Editable list.
+# appear across many decks, win-condition-agnostic. Forced to sub-line
+# (still shown in usage stats). Matched by exact name or "<name> " prefix
+# (so "Fezandipiti" also catches "Fezandipiti ex"). Editable list.
 ENGINE_POKEMON = {
     "Dudunsparce", "Budew", "Munkidori", "Fezandipiti",
     "Squawkabilly", "Kirlia", "Mimikyu",

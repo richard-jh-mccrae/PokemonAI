@@ -14,8 +14,8 @@ from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from pilot_helpers import DECK, HAND, MAIN, PLAY, TO_HAND, card_opt, make_select, opt, poke, state
 
-DISCARD_SEL = 8         # SelectContext.DISCARD — a cost-discard select (pilot_helpers.DISCARD is the AreaType)
-TO_BENCH = 5            # SelectContext.TO_BENCH — fetch Basics straight onto the Bench (Buddy-Buddy Poffin)
+DISCARD_SEL = 8         # SelectContext.DISCARD — cost-discard select (pilot_helpers.DISCARD is the AreaType)
+TO_BENCH = 5            # SelectContext.TO_BENCH — fetch Basics straight to Bench (Buddy-Buddy Poffin)
 BASIC, STAGE1 = 700, 800
 SUPPORT, PLAINMON = 850, 860
 COMBO, FILLER = 950, 960
@@ -43,7 +43,7 @@ def test_fetch_a_starter_prefers_a_basic_when_the_board_is_thin():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": STAGE1}, {"id": BASIC}],
                       current=state(active=poke(900, energy=1), bench=[]))
-    assert pilot.decide(obs) == [1]                                   # the Basic, not the Stage-1
+    assert pilot.decide(obs) == [1]                                   # Basic, not Stage-1
     assert "fetch-a-starter" in _fired(pilot.explain(obs).options[1])
     assert "fetch-a-starter" not in _fired(pilot.explain(obs).options[0])
 
@@ -61,7 +61,7 @@ def test_fetch_the_support_grabs_an_engine_piece_when_none_is_in_play():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": PLAINMON}, {"id": SUPPORT}],
                       current=state(active=poke(900, energy=1), bench=[poke(701), poke(702)]))
-    assert pilot.decide(obs) == [1]                                   # the engine piece, not the vanilla
+    assert pilot.decide(obs) == [1]                                   # engine piece, not vanilla
     assert "fetch-the-support" in _fired(pilot.explain(obs).options[1])
     assert "fetch-the-support" not in _fired(pilot.explain(obs).options[0])
 
@@ -79,7 +79,7 @@ def test_fetch_deck_priority_grabs_the_decks_top_listed_candidate():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": FILLER}, {"id": COMBO}],
                       current=state(active=poke(900, energy=1), bench=[poke(701), poke(702)]))
-    assert pilot.decide(obs) == [1]                                   # COMBO — top of the deck's list
+    assert pilot.decide(obs) == [1]                                   # COMBO — deck-list top
     assert "fetch-deck-priority" in _fired(pilot.explain(obs).options[1])
     assert "fetch-deck-priority" not in _fired(pilot.explain(obs).options[0])
 
@@ -91,10 +91,10 @@ def test_discard_the_redundant_sheds_a_duplicate_already_in_play():
     already satisfied — here a duplicate of a Pokémon already in play — over one you still lack."""
     stats = DictCardStatProvider({DUP: CardStat(DUP, hp=90), NEEDED: CardStat(NEEDED, hp=90)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # forced to discard one of {DUP, NEEDED}: DUP is already benched (redundant); NEEDED is not in play.
+    # forced to discard one of {DUP, NEEDED}: DUP already benched (redundant); NEEDED not in play.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(bench=[poke(DUP)], hand=[DUP, NEEDED]))
-    assert pilot.decide(obs) == [0]                                   # pitch the redundant duplicate
+    assert pilot.decide(obs) == [0]                                   # pitch redundant duplicate
     assert "discard-the-redundant" in _fired(pilot.explain(obs).options[0])
     assert "discard-the-redundant" not in _fired(pilot.explain(obs).options[1])
 
@@ -118,7 +118,7 @@ def test_fetch_prefers_the_base_when_the_payoff_is_not_yet_deployable():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": BASEP}, {"id": PAYP}],
                       current=state(active=poke(666, energy=1), bench=[], hand=[]))
-    assert pilot.decide(obs) == [0]                                   # the deployable base, not the payoff
+    assert pilot.decide(obs) == [0]                                   # deployable base, not payoff
 
 
 @pytest.mark.req("REQ-GEN-0039")
@@ -133,7 +133,7 @@ def test_fetch_takes_the_payoff_once_a_base_is_in_hand():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": BASEP}, {"id": PAYP}],
                       current=state(active=poke(666, energy=1), bench=[], hand=[BASEP]))
-    assert pilot.decide(obs) == [1]                                   # the payoff — a base is in hand
+    assert pilot.decide(obs) == [1]                                   # payoff — base is in hand
     assert "fetch-base-before-stranded-payoff" not in _fired(pilot.explain(obs).options[0])
 
 
@@ -150,7 +150,7 @@ def test_fetch_base_rule_never_zeroes_the_payoff():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": PAYP}, {"id": 860}],
                       current=state(active=poke(666, energy=1), bench=[], hand=[]))
-    assert pilot.decide(obs) == [0]                                   # still grab the payoff
+    assert pilot.decide(obs) == [0]                                   # still grabs payoff
 
 
 # --- discard-the-hand-duplicate: shed a hand-internal duplicate before a singleton disruptor ------
@@ -162,10 +162,10 @@ def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singl
     stats = DictCardStatProvider({HANDDUP: CardStat(HANDDUP, hp=0, cardType=SUPPORTER_CT),
                                   HSINGLE: CardStat(HSINGLE, hp=0, cardType=SUPPORTER_CT)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # forced to discard one of {HANDDUP, HANDDUP, HSINGLE}: pitch a duplicate copy, keep the singleton.
+    # forced to discard one of {HANDDUP, HANDDUP, HSINGLE}: pitch a dup copy, keep the singleton.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)], context=DISCARD_SEL,
                       current=state(hand=[HANDDUP, HANDDUP, HSINGLE]))
-    assert pilot.decide(obs) in ([0], [1])                            # a duplicate copy, not the singleton
+    assert pilot.decide(obs) in ([0], [1])                            # dup copy, not singleton
     assert "discard-the-hand-duplicate" in _fired(pilot.explain(obs).options[0])
     assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[2])
 
@@ -191,7 +191,7 @@ def test_prefer_good_in_discard_pitches_the_decks_fodder_card():
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(hand=[FODDER, KEEPCARD]))
-    assert pilot.decide(obs) == [0]                                   # pitch the deck's discard-synergy card
+    assert pilot.decide(obs) == [0]                                   # pitch deck's discard-synergy card
     assert "prefer-good-in-discard" in _fired(pilot.explain(obs).options[0])
     assert "prefer-good-in-discard" not in _fired(pilot.explain(obs).options[1])
 
@@ -210,7 +210,7 @@ def test_multi_pick_grab_dedups_a_satisfied_need():
                       min_count=0, max_count=2, context=TO_HAND,
                       deck=[{"id": WINC}, {"id": WINC}, {"id": BASIC}],
                       current=state(active=poke(900, energy=1), bench=[]))
-    assert sorted(pilot.decide(obs)) == [0, 2]                        # one wincon + the Basic, not [0, 1]
+    assert sorted(pilot.decide(obs)) == [0, 2]                        # one wincon + Basic, not [0, 1]
 
 
 # --- multi-pick (take-fewer): with minCount 0, stop grabbing once nothing is still needed ---------
@@ -226,7 +226,7 @@ def test_multi_pick_grab_takes_fewer_than_max_when_no_need_remains():
                       min_count=0, max_count=2, context=TO_HAND,
                       deck=[{"id": BASIC}, {"id": STAGE1}, {"id": STAGE1}],
                       current=state(active=poke(900, energy=1), bench=[]))
-    assert pilot.decide(obs) == [0]                                   # only the Basic; no dead second grab
+    assert pilot.decide(obs) == [0]                                   # only Basic; no dead 2nd grab
 
 
 # --- bench-fill grab (TO_BENCH): a min0 bench placement must bench the Basics, not whiff to [] -------
@@ -239,14 +239,14 @@ def test_bench_fill_grab_benches_basics_at_to_bench():
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, hp=70),
                                   STAGE1: CardStat(STAGE1, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # TO_BENCH, up to 2, minCount 0: two Basics + a non-Basic Stage-1 revealed from the deck.
+    # TO_BENCH, up to 2, minCount 0: two Basics + a non-Basic Stage-1 revealed from deck.
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1), card_opt(DECK, 2)],
                       min_count=0, max_count=2, context=TO_BENCH,
                       deck=[{"id": BASIC}, {"id": BASIC}, {"id": STAGE1}],
                       current=state(active=poke(900, energy=1), bench=[]))
     assert sorted(pilot.decide(obs)) == [0, 1]                        # bench both Basics, not [] (no whiff)
     assert "bench-fill-a-basic" in _fired(pilot.explain(obs).options[0])
-    assert "bench-fill-a-basic" not in _fired(pilot.explain(obs).options[2])  # the Stage-1 isn't a starter
+    assert "bench-fill-a-basic" not in _fired(pilot.explain(obs).options[2])  # Stage-1 isn't a starter
 
 
 # --- whether-to-play (slice 7): a cost_discard fetch is endorsed when it can grab a needed card ---
@@ -322,14 +322,14 @@ def test_dont_fetch_the_setup_only_opener_requires_the_stranded_evolution_chain(
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": OPENER}, {"id": BASIC}], current=state(hand=[]))
 
-    # no Raboot in the deck list -> the opener can never be deployed from hand -> penalised.
+    # no Raboot in deck list -> opener can never deploy from hand -> penalised.
     stranded = Pilot(Strategy(), deck=[OPENER] * 4 + [1] * 56,
                      general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     assert "dont-fetch-the-setup-only-opener" in _fired(stranded.explain(obs).options[0])
     assert "dont-fetch-the-setup-only-opener" not in _fired(stranded.explain(obs).options[1])
-    assert stranded.decide(obs) == [1]                    # take the line piece, never the opener
+    assert stranded.decide(obs) == [1]                    # take line piece, never the opener
 
-    # Raboot (a Basic here) in the deck -> the opener is evolvable from hand -> no penalty.
+    # Raboot (a Basic here) in deck -> opener evolvable from hand -> no penalty.
     fed = Pilot(Strategy(), deck=[OPENER] * 4 + [RABOOT] * 4 + [1] * 52,
                 general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     assert "dont-fetch-the-setup-only-opener" not in _fired(fed.explain(obs).options[0])
@@ -341,7 +341,7 @@ def test_stranded_chain_check_walks_the_full_previous_stage_chain():
     OPENER, RABOOT = 666, 667
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
-        RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),  # its own base missing
+        RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),  # own base missing
         BASIC: CardStat(BASIC, hp=70)})
     funcs = CardFunctions({OPENER: ["opener"]})
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
@@ -366,4 +366,4 @@ def test_fetch_the_support_never_endorses_a_stranded_support():
                       deck=[{"id": OPENER}, {"id": LIVEMON}], current=state(hand=[]))
     stranded, live = pilot.explain(obs).options
     assert "fetch-the-support" not in _fired(stranded)   # dead grab, engine tag notwithstanding
-    assert "fetch-the-support" in _fired(live)           # a deployable support keeps the rung
+    assert "fetch-the-support" in _fired(live)           # deployable support keeps the rung

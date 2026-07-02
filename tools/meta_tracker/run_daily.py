@@ -49,7 +49,7 @@ def run(*, only_bands: list[str] | None = None, episode_cap: int | None = None,
         lb = fetch.leaderboard()
         manifest = fetch.episodes_index()
     except fetch.RateLimitError as e:
-        log(f"[meta] {e} — try again in a few minutes.")
+        log(f"[meta] {e} -- try again in a few minutes.")
         total = episode_count(conn); conn.close()
         return {"added": 0, "filtered": 0, "downloads": 0, "errors": 1, "total": total}
 
@@ -59,7 +59,7 @@ def run(*, only_bands: list[str] | None = None, episode_cap: int | None = None,
     cutoffs = rating_cutoffs(lb)
     log("[meta] band cutoffs: " + ", ".join(f"{b}>={s:.0f}" for b, s in cutoffs))
     log(f"[meta] {len(manifest)} daily datasets in index (cap {cap} this run)")
-    per_day = max(1, cap // max(len(manifest), 1))  # spread across days so the trend has points
+    per_day = max(1, cap // max(len(manifest), 1))  # spread across days so trend has points
     existing = {row[0] for row in conn.execute("SELECT episode_id FROM episodes")}
 
     added = filtered = unranked = errors = downloads = 0
@@ -70,7 +70,7 @@ def run(*, only_bands: list[str] | None = None, episode_cap: int | None = None,
             slug = day["slug"]
             if dataset_complete(conn, slug):
                 continue
-            token = get_dataset_cursor(conn, slug)  # resume paging where we left off
+            token = get_dataset_cursor(conn, slug)  # resume paging where left off
             day_new, day_dl, pages = 0, 0, 0
             try:
                 while pages < config.LIST_PAGES_PER_DATASET and downloads < cap and day_dl < per_day:
@@ -84,7 +84,7 @@ def run(*, only_bands: list[str] | None = None, episode_cap: int | None = None,
                         try:
                             rp = fetch.download_dataset_episode(slug, eid, td)
                             downloads += 1; day_dl += 1
-                            # stamp the episode with the dataset's date (replays carry no timestamp)
+                            # stamp episode with dataset's date (replays carry no timestamp)
                             rec = parse_replay(rp, created_at=day["date"], end_time=day["date"])
                             Path(rp).unlink(missing_ok=True)  # extracts-only
                             existing.add(eid)
@@ -96,14 +96,14 @@ def run(*, only_bands: list[str] | None = None, episode_cap: int | None = None,
                             rec.band, rec.sampled_rating = band, rating
                             if upsert_episode(conn, rec, today):
                                 added += 1; day_new += 1
-                        except Exception as ex:  # noqa: BLE001 - keep the run going
+                        except Exception as ex:  # noqa: BLE001 - keep run going
                             log(f"  ! episode {eid}: {ex}"); errors += 1
                     save_dataset_cursor(conn, slug, token, today)
-                    if token is None:  # listed to the end of this day
+                    if token is None:  # listed to end of this day
                         mark_dataset_complete(conn, slug, today); break
             except fetch.RateLimitError as e:
-                log(f"[meta] {e} — stopping; re-run in a few minutes."); errors += 1
-                break  # do not cascade through remaining datasets (deepens the penalty)
+                log(f"[meta] {e} -- stopping; re-run in a few minutes."); errors += 1
+                break  # don't cascade through remaining datasets (deepens the penalty)
             except fetch.FetchError as e:
                 log(f"  ! list {slug}: {e}"); errors += 1
             log(f"  [{day['date']}] +{day_new} kept · run: {downloads} dl / {added} kept / "

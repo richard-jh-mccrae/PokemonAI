@@ -39,14 +39,14 @@ def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFA
     The brief highlights any deck change versus this agent's previous build.
     """
     sid = submission_id if submission_id is not None else next_submission_id(builds)
-    prev = _previous_build(builds, Path(name).name)        # baseline for the change callouts
+    prev = _previous_build(builds, Path(name).name)        # baseline for change callouts
     prev_hyps = ({"strategy": prev.get("strategy_hyps", []), "general": prev.get("general_hyps", [])}
                  if prev else None)
     zip_path = package(name, Path(out), agents_root=agents_root,
                        prev_deck=(prev or {}).get("deck"),
                        prev_build_id=(prev or {}).get("submission_id"),
                        prev_hyps=prev_hyps)
-    manifest = build_manifest(Path(out) / Path(name).name)   # the exact staged bundle that shipped
+    manifest = build_manifest(Path(out) / Path(name).name)   # exact staged bundle that shipped
     prov = manifest["provenance"]
     row = {
         "submission_id": sid,
@@ -57,13 +57,13 @@ def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFA
         "built_at": prov["built_at"],
         "manifest_digest": manifest_digest(manifest),
         "summary": summary(manifest),
-        "deck": manifest["deck"],  # full decklist — the baseline the *next* build diffs against
-        # slim Hypothesis rows (id/effective/status) — the baseline the *next* build diffs weights against
+        "deck": manifest["deck"],  # full decklist — baseline the *next* build diffs against
+        # slim Hypothesis rows (id/effective/status) — baseline the *next* build diffs weights against
         "strategy_hyps": _hyp_slim(manifest["strategy"]["hypotheses"]),
         "general_hyps": _hyp_slim(manifest["general_strategy"]["hypotheses"]),
         "submitted_at": None,      # filled by `submit`
         "message": None,           # the `-m` text `submit` sent
         "kaggle_ref": None,        # filled by `collect` once Kaggle assigns it
     }
-    append_history(builds, row)    # local ledger; submit promotes the chosen one to agent_history
+    append_history(builds, row)    # local ledger; submit promotes chosen one to agent_history
     return row

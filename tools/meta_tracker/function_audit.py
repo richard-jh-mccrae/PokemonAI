@@ -16,18 +16,18 @@ prints the report is ``tools/audit_card_functions.py``. Heuristic, not a gate �
 from __future__ import annotations
 
 # A damage-counter *move* (off mine, onto the opponent's) is self-heal + snipe — the Munkidori
-# class. We reuse `heal`+`spread` for it (no new vocabulary), so the cues below recognize it.
+# class. Reuse `heal`+`spread` for it (no new vocabulary), so cues below recognize it.
 def _counter_move(t: str) -> bool:
     return "damage counter" in t and "move" in t
 
 # Behavioral tag → broad predicate: is there *any* supporting cue? (the false-positive / unsupported
-# check). The table is behavioral-only — structural facts (ex/trainer-type/ACE SPEC) aren't tagged.
+# check). Table is behavioral-only — structural facts (ex/trainer-type/ACE SPEC) aren't tagged.
 _CUES = {
     "draw":            lambda t: "draw" in t or ("look at" in t and "into your hand" in t),
     "search":          lambda t: "search your deck" in t,
     # a `search` refinement: deck-search specifically for an Energy card *into hand* (the Turn
     # Planner's tutor-energy KO line). Deck-search only — discard-pile energy retrieval is `recycle`
-    # and a top-N look is `dig`, neither of which says "search your deck".
+    # and a top-N look is `dig`, neither says "search your deck".
     "tutor_energy":    lambda t: "search your deck" in t and "energy" in t and "into your hand" in t,
     "dig":             lambda t: "look at the top" in t or "look at the bottom" in t,
     "heal":            lambda t: "heal" in t or ("remove" in t and "damage counter" in t)
@@ -40,8 +40,8 @@ _CUES = {
     "sleep":           lambda t: "asleep" in t,
     "paralyze":        lambda t: "paralyzed" in t,
     "confuse":         lambda t: "confused" in t,
-    # placing counters on the bench / "in any way" / moving onto the opponent — but not *preventing*
-    # them (Battle Cage protects the bench; that's the opposite of spread).
+    # placing counters on bench / "in any way" / moving onto opponent — but not *preventing*
+    # them (Battle Cage protects the bench; opposite of spread).
     "spread":          lambda t: "damage counter" in t and "prevent" not in t
                                  and ("bench" in t or "in any way" in t
                                       or ("move" in t and "opponent" in t)),
@@ -49,11 +49,11 @@ _CUES = {
     # denial = discarding the *opponent's* Energy ("Energy from 1 of your opponent's Pokémon"),
     # not self-mill ("Energy card you discarded") — require the "energy from … opponent" shape.
     "energy_denial":   lambda t: "discard" in t and "energy from" in t and "opponent" in t,
-    # the opponent's hand is reset/discarded (Iono/Judge/Xerosic: "opponent … their hand … discard/
-    # shuffle") — but never a discard-*pile* clause (Levincia/Neutralization Zone reference that).
+    # opponent's hand reset/discarded (Iono/Judge/Xerosic: "opponent … their hand … discard/
+    # shuffle") — never a discard-*pile* clause (Levincia/Neutralization Zone reference that).
     "hand_disruption": lambda t: ("opponent" in t or "each player" in t) and "hand" in t
                                  and ("shuffle" in t or "discard" in t) and "discard pile" not in t,
-    # *retrieving* from the discard pile (into a hand/deck/bench, yours or — both-player stadiums —
+    # *retrieving* from discard pile (into hand/deck/bench, yours or — both-player stadiums —
     # theirs), but never the negated "can't be put … from the discard pile" (Neutralization Zone).
     "recycle":         lambda t: "discard pile" in t and "can't" not in t
                                  and ("into your" in t or "into their" in t or "onto your bench" in t),
@@ -61,7 +61,7 @@ _CUES = {
 BEHAVIORAL = frozenset(_CUES)
 
 # High-precision cues for the *missing* check (a tag the probe likely dropped). Only tags whose
-# phrasing rarely false-matches; `heal` is included *only* via specific phrasings (counter-move or
+# phrasing rarely false-matches; `heal` included *only* via specific phrasings (counter-move or
 # "heal … damage"), never the bare word, so it doesn't over-flag.
 _MISSING_CUES = {
     tag: _CUES[tag] for tag in
@@ -78,7 +78,7 @@ def audit_card(tags, text: str) -> tuple[list[str], list[str]]:
     ``missing`` — a strong, unambiguous text cue with no matching tag (suspect probe miss). Pure;
     case-insensitive; tolerant of empty text.
     """
-    t = (text or "").lower().replace("’", "'")   # normalize curly apostrophe so cues match
+    t = (text or "").lower().replace("’", "'")   # normalize curly apostrophe -> cues match
     have = set(tags)
     unsupported = sorted(tag for tag in have if tag in BEHAVIORAL and not _CUES[tag](t))
     missing = sorted(tag for tag, cue in _MISSING_CUES.items() if tag not in have and cue(t))

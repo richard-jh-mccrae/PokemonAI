@@ -6,8 +6,8 @@
   pwsh -File tools/meta_tracker/register_task.ps1 -Time 03:30
 
 .NOTES
-  The task runs as the current user. Provide Kaggle credentials so the CLI can
-  authenticate non-interactively, preferably via the user profile token file:
+  Task runs as current user. Provide Kaggle credentials so CLI can
+  authenticate non-interactively, preferably via user profile token file:
       mkdir $env:USERPROFILE\.kaggle
       Set-Content $env:USERPROFILE\.kaggle\access_token 'KGAT_xxx'
   (KAGGLE_API_TOKEN as a *user* environment variable also works.)

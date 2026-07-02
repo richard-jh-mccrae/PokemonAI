@@ -34,19 +34,19 @@ def test_probe_deck_is_60_and_contains_target():
 
 @pytest.mark.req("REQ-FUNC-0004")
 def test_probe_deck_has_a_basic_pokemon_to_be_startable():
-    deck = build_probe_deck(ITEM, _pool())     # an Item target → deck needs a filler basic
+    deck = build_probe_deck(ITEM, _pool())     # Item target -> deck needs a filler basic
     assert BASIC_MON in deck
 
 
 @pytest.mark.req("REQ-FUNC-0004")
 def test_normal_target_gets_several_legal_copies():
     deck = build_probe_deck(ITEM, _pool())
-    assert 1 < deck.count(ITEM) <= 4           # several copies (drawable) but within the 4-copy rule
+    assert 1 < deck.count(ITEM) <= 4           # several copies (drawable), within 4-copy rule
 
 
 @pytest.mark.req("REQ-FUNC-0004")
 def test_ace_spec_target_is_a_single_copy():
-    deck = build_probe_deck(ACE, _pool())      # ACE SPEC: at most one per deck
+    deck = build_probe_deck(ACE, _pool())      # ACE SPEC: max one per deck
     assert deck.count(ACE) == 1
     assert len(deck) == 60
 
@@ -56,7 +56,7 @@ def test_probe_deck_has_pokemon_for_fetch_effects():
     pool = _pool()
     deck = build_probe_deck(ITEM, pool)
     n_pokemon = sum(pool.get(c, {}).get("category") == "pokemon" for c in deck)
-    assert n_pokemon >= 2      # search/fetch effects need Pokémon in the deck to find
+    assert n_pokemon >= 2      # search/fetch effects need Pokémon in deck to find
 
 
 @pytest.mark.req("REQ-FUNC-0004")
@@ -64,9 +64,9 @@ def test_probe_deck_prefers_high_hp_basics():
     pool = {3: {"category": "basic_energy", "name": "E"}, 200: {"category": "item", "name": "T"}}
     for i, hp in enumerate([40, 60, 90, 120, 200, 330]):
         pool[10 + i] = {"category": "pokemon", "stage": "basic", "name": f"B{hp}", "hp": hp}
-    deck = build_probe_deck(200, pool)     # _BENCH_BASICS of 6 basics → the highest-HP ones
-    assert 15 in deck                      # hp 330 (highest) is seeded (survives chip damage)
-    assert 10 not in deck                  # hp 40 (lowest) is left out
+    deck = build_probe_deck(200, pool)     # _BENCH_BASICS of 6 basics -> highest-HP ones win
+    assert 15 in deck                      # hp 330 (highest) seeded (survives chip damage)
+    assert 10 not in deck                  # hp 40 (lowest) left out
 
 
 @pytest.mark.req("REQ-FUNC-0004")
@@ -76,8 +76,8 @@ def test_probe_deck_search_fodder_adds_frail_basic_and_supporter():
     for i, hp in enumerate([40, 60, 90, 120, 200, 330]):
         pool[10 + i] = {"category": "pokemon", "stage": "basic", "name": f"B{hp}", "hp": hp}
     deck = build_probe_deck(200, pool, search_fodder=True)
-    assert 10 in deck       # hp 40 (frail) → a target for HP-capped searches ("<=70 HP")
-    assert 300 in deck      # a Supporter → a target for Supporter-fetch searches
+    assert 10 in deck       # hp 40 (frail) -> target for HP-capped searches ("<=70 HP")
+    assert 300 in deck      # a Supporter -> target for Supporter-fetch searches
     plain = build_probe_deck(200, pool)               # default: neither (sturdy bench only)
     assert 10 not in plain and 300 not in plain
 
@@ -88,20 +88,20 @@ def test_probe_deck_low_hp_picks_fragile_basics():
     for i, hp in enumerate([40, 60, 90, 120, 200, 330]):
         pool[10 + i] = {"category": "pokemon", "stage": "basic", "name": f"B{hp}", "hp": hp}
     deck = build_probe_deck(200, pool, low_hp=True)   # attrition pass wants fragile mons (get KO'd)
-    assert 10 in deck                      # hp 40 (lowest) is seeded → KO'd → stocks my discard
-    assert 15 not in deck                  # hp 330 (highest) is left out
+    assert 10 in deck                      # hp 40 (lowest) seeded -> KO'd -> stocks discard
+    assert 15 not in deck                  # hp 330 (highest) left out
 
 
 @pytest.mark.req("REQ-FUNC-0004")
 def test_probe_deck_has_distinct_basics_for_a_bench():
-    pool = dict(_pool())                                          # add two more distinct basics
+    pool = dict(_pool())                                          # add 2 more distinct basics
     pool[110] = {"category": "pokemon", "stage": "basic", "name": "Basic Two"}
     pool[111] = {"category": "pokemon", "stage": "basic", "name": "Basic Three"}
     deck = build_probe_deck(ITEM, pool)
     distinct_basics = {c for c in set(deck)
                        if pool.get(c, {}).get("category") == "pokemon"
                        and pool[c].get("stage") == "basic"}
-    assert len(distinct_basics) >= 2     # a bench of *different* Pokémon enables gust/switch probing
+    assert len(distinct_basics) >= 2     # bench of *different* Pokémon enables gust/switch probing
 
 
 # --- find_play_option -------------------------------------------------------------
@@ -131,7 +131,7 @@ def test_find_play_option_none_when_target_not_in_hand():
 
 @pytest.mark.req("REQ-FUNC-0005")
 def test_find_play_option_ignores_non_play_options():
-    # an ATTACK option (type 13) at index 1 must not be mistaken for playing TARGET
+    # ATTACK option (type 13) at index 1 must not be mistaken for playing TARGET
     obs = _obs(options=[{"type": 13, "index": 1}], hand=[OTHER, TARGET])
     assert find_play_option(obs, TARGET) is None
 
@@ -152,7 +152,7 @@ def test_extract_probe_tolerates_missing_select():
 
 @pytest.mark.req("REQ-FUNC-0005")
 def test_probe_record_feeds_the_classifier():
-    # a play that drew a card AND raised a free damage-counter placement
+    # play that drew a card AND raised a free damage-counter placement
     obs_after = {"logs": [{"type": 4, "playerIndex": 0}], "select": {"context": 14}}
     rec = extract_probe(obs_after, actor=0)
     tags = classify_functions({"category": "supporter"}, probe=rec)
@@ -161,22 +161,22 @@ def test_probe_record_feeds_the_classifier():
 
 @pytest.mark.req("REQ-FUNC-0007")
 def test_attack_turn_logs_keeps_only_the_attacking_turn():
-    # the capture must not bleed into a LATER turn whose re-energize ATTACH(11) would be a
+    # capture must not bleed into a LATER turn whose re-energize ATTACH(11) would be a
     # false `energy_accel` (the Blaziken bug). Keep [first ATTACK .. next turn boundary).
     logs = [
         {"type": 11},                  # pre-attack energize (before ATTACK) -> dropped
         {"type": 15},                  # ATTACK (kept from here)
         {"type": 16, "value": -50},    # its damage -> kept
         {"type": 3},                   # TURN_END -> boundary
-        {"type": 11},                  # a later turn's re-energize -> dropped (the false accel)
-        {"type": 15},                  # a later attack -> dropped
+        {"type": 11},                  # later turn's re-energize -> dropped (the false accel)
+        {"type": 15},                  # later attack -> dropped
     ]
     assert [l["type"] for l in _attack_turn_logs(logs)] == [15, 16]
 
 
 @pytest.mark.req("REQ-FUNC-0007")
 def test_attack_turn_logs_without_boundary_keeps_to_end():
-    # game ended on the attack (no TURN_END) -> keep everything from the ATTACK (spread counters)
+    # game ended on the attack (no TURN_END) -> keep everything from ATTACK (spread counters)
     logs = [{"type": 15}, {"type": 16}, {"type": 16}, {"type": 23}]
     assert [l["type"] for l in _attack_turn_logs(logs)] == [15, 16, 16, 23]
 
@@ -185,7 +185,7 @@ def test_attack_turn_logs_without_boundary_keeps_to_end():
 def test_build_pokemon_deck_matches_attack_energy():
     deck = build_pokemon_deck(500, [5, 5])         # cheapest attack costs 2 Psychic (EnergyType 5)
     assert len(deck) == 60
-    assert deck.count(500) == 4                     # the target Pokémon
+    assert deck.count(500) == 4                     # target Pokémon
     assert set(deck) == {500, 5}                    # rest is Psychic basic Energy (card id 5)
 
 
@@ -193,27 +193,27 @@ def test_build_pokemon_deck_matches_attack_energy():
 def test_setup_active_option_finds_target_in_hand():
     obs = {"select": {"option": [{"index": 0}, {"index": 1}]},
            "current": {"yourIndex": 0, "players": [{"hand": [{"id": 111}, {"id": 222}]}, {}]}}
-    assert _setup_active_option(obs, 222) == 1      # the option whose hand card is the target
+    assert _setup_active_option(obs, 222) == 1      # option whose hand card is the target
     assert _setup_active_option(obs, 999) is None
 
 
 @pytest.mark.req("REQ-FUNC-0005")
 def test_damaged_option_indices_targets_hurt_pokemon():
-    # a heal target choice: my Active is damaged (opt 0), my Bench[0] is full (opt 1)
+    # heal target choice: my Active is damaged (opt 0), my Bench[0] is full (opt 1)
     obs = {"select": {"option": [
         {"type": 3, "area": 4, "index": 0, "playerIndex": 0},     # ACTIVE — 90/120
         {"type": 3, "area": 5, "index": 0, "playerIndex": 0},     # BENCH[0] — full
     ]}, "current": {"players": [
         {"active": [{"hp": 90, "maxHp": 120}], "bench": [{"hp": 70, "maxHp": 70}]}, {},
     ]}}
-    assert _damaged_option_indices(obs) == [0]      # only the hurt Pokémon (so the heal shows)
+    assert _damaged_option_indices(obs) == [0]      # only the hurt Pokémon (so heal shows)
 
 
 # --- find_ability_option (Phase 2b: Pokémon abilities) ----------------------------
 
 @pytest.mark.req("REQ-FUNC-0008")
 def test_find_ability_option_locates_target_active():
-    # an ATTACK option must not be mistaken for the target's ABILITY (type 10) on my Active
+    # ATTACK option must not be mistaken for the target's ABILITY (type 10) on my Active
     obs = {"select": {"option": [
         {"type": 13, "attackId": 1},
         {"type": 10, "area": 4, "index": 0, "playerIndex": 0},
@@ -237,7 +237,7 @@ def test_find_ability_option_matches_benched_target():
 
 @pytest.mark.req("REQ-FUNC-0008")
 def test_find_ability_option_defaults_player_to_me():
-    # ABILITY options are always your own → a missing playerIndex means "me"
+    # ABILITY options always own -> missing playerIndex means "me"
     obs = {"select": {"option": [{"type": 10, "area": 4, "index": 0}]},
            "current": {"players": [{"active": [{"id": 555}], "bench": []}, {}]}}
     assert find_ability_option(obs, 555, me=0) == 0
@@ -250,7 +250,7 @@ def _evo_data():
         10: {"name": "Dreepy", "evolvesFrom": None},
         11: {"name": "Drakloak", "evolvesFrom": "Dreepy"},
         12: {"name": "Dragapult ex", "evolvesFrom": "Drakloak"},
-        99: {"name": "Dreepy", "evolvesFrom": None},     # a reprint: same name, higher id
+        99: {"name": "Dreepy", "evolvesFrom": None},     # reprint: same name, higher id
     }
 
 
@@ -261,12 +261,12 @@ def test_evolution_chain_walks_basic_first():
 
 @pytest.mark.req("REQ-FUNC-0009")
 def test_evolution_chain_basic_is_a_singleton():
-    assert evolution_chain(10, _evo_data()) == [10]      # a Basic has no pre-evolution
+    assert evolution_chain(10, _evo_data()) == [10]      # Basic has no pre-evolution
 
 
 @pytest.mark.req("REQ-FUNC-0009")
 def test_evolution_chain_resolves_preevo_by_lowest_id():
-    assert evolution_chain(11, _evo_data()) == [10, 11]  # Dreepy → id 10, not the reprint 99
+    assert evolution_chain(11, _evo_data()) == [10, 11]  # Dreepy -> id 10, not reprint 99
 
 
 @pytest.mark.req("REQ-FUNC-0009")
@@ -275,12 +275,12 @@ def test_build_evolution_deck_stacks_chain_and_matching_energy():
     assert len(deck) == 60
     assert deck.count(10) == 4 and deck.count(11) == 4 and deck.count(12) == 4
     assert set(deck) == {10, 11, 12, 2, 5}               # rest is Fire(id 2) + Psychic(id 5) energy
-    assert 10 in deck                                    # the Basic → a legal start
+    assert 10 in deck                                    # Basic -> legal start
 
 
 @pytest.mark.req("REQ-FUNC-0009")
 def test_find_evolve_option_locates_evolution_in_hand():
-    # a PLAY option must not be mistaken for the EVOLVE (type 9) that puts card 11 into play
+    # PLAY option must not be mistaken for the EVOLVE (type 9) that puts card 11 into play
     obs = {"select": {"option": [
         {"type": 7, "index": 0},
         {"type": 9, "area": 2, "index": 1, "inPlayArea": 4, "inPlayIndex": 0},

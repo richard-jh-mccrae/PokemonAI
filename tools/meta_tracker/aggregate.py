@@ -85,7 +85,7 @@ def merge_map(eps: list[dict]) -> dict[str, str]:
             freq[name] += 1
     prim = {n: (primary[n].most_common(1)[0][0] if primary[n] else None) for n in mains}
 
-    # Each archetype -> the maximal superset sharing its primary (defines clusters).
+    # Each archetype -> maximal superset sharing its primary (defines clusters).
     direct: dict[str, str] = {}
     for a in mains:
         best = None

@@ -17,7 +17,7 @@ from .featurize import Featurization
 @dataclass
 class Constraint:
     deltas: dict          # hyp_id -> +1 (favors correct) | -1 (favors chosen)
-    tactical_delta: float  # combat-term advantage for correct (a fixed bias, not tunable)
+    tactical_delta: float  # combat-term advantage for correct (fixed bias, not tunable)
 
 
 def ranking_constraint(feat: Featurization) -> Constraint:
@@ -28,15 +28,15 @@ def ranking_constraint(feat: Featurization) -> Constraint:
     return Constraint(deltas=deltas, tactical_delta=feat.tactical_delta)
 
 
-# Fit defaults (docs/weights.md). DEFAULT_REG is the L2 pull back to the authored seed each epoch —
-# it keeps the fit legible and makes a *non-separable* corpus converge to a finite minimiser instead
-# of pumping a weight to infinity (the old raw perceptron drove `power-up-attacker` to 156; a
-# perpetually-violated push now settles at ≈ push/reg). It is also the **conservatism knob**: the
-# default is deliberately high so a contradictory corpus cannot buy a couple of extra satisfied ranks
-# by gutting a doctrine weight (e.g. `accel-into-main` 30→2) — that overfit is rejected and the seeds
-# are kept. Lower it (CLI `--reg`) to let clean, consistent corrections move weights more freely; the
-# ladder (ADR-0009) is the ultimate arbiter of magnitude. CLAMP is the hard band backstop (>100 is
-# reserved combat-scale, docs/weights.md). MARGIN_TARGET keeps a satisfied rank off the knife-edge.
+# Fit defaults (docs/weights.md). DEFAULT_REG = L2 pull back to authored seed each epoch - keeps fit
+# legible, makes a *non-separable* corpus converge to a finite minimiser instead of pumping a weight
+# to infinity (old raw perceptron drove `power-up-attacker` to 156; a perpetually-violated push now
+# settles at ~push/reg). Also the **conservatism knob**: default is deliberately high so a
+# contradictory corpus can't buy a couple extra satisfied ranks by gutting a doctrine weight (e.g.
+# `accel-into-main` 30->2) - that overfit gets rejected, seeds kept. Lower it (CLI `--reg`) to let
+# clean, consistent corrections move weights more freely; ladder (ADR-0009) is the ultimate arbiter
+# of magnitude. CLAMP = hard band backstop (>100 is reserved combat-scale, docs/weights.md).
+# MARGIN_TARGET keeps a satisfied rank off the knife-edge.
 DEFAULT_REG = 0.25
 _CLAMP = 100.0
 _MARGIN_TARGET = 1.0
@@ -81,7 +81,7 @@ def fit_weights(constraints: list[Constraint], seeds: dict, *, lr: float = 1.0, 
             weights.setdefault(hid, 0.0)
     seed0 = {hid: float(seeds.get(hid, 0.0)) for hid in weights}
 
-    best = dict(weights)                              # the seeds are the first candidate
+    best = dict(weights)                              # seeds are the first candidate
     best_j = _objective(constraints, weights, seed0, target, reg)
     for _ in range(epochs):
         violated = False

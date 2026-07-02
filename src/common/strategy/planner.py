@@ -35,14 +35,14 @@ def _prune_none(v):
         return [_prune_none(x) for x in v]
     return v
 
-# Leaf-eval term weights (ADR-0031 decision 4). Prizes are KO_SCORE-weighted and DOMINANT — the sum of
-# every positional term is capped below one prize, so a positional score can never outrank a real KO
-# (the hard-rung invariant, decision 3). Seeded + tunable; the Base Value Model (ADR-0007) replaces the
+# Leaf-eval term weights (ADR-0031 decision 4). Prizes are KO_SCORE-weighted and DOMINANT — sum of
+# every positional term caps below one prize, so a positional score can never outrank a real KO
+# (hard-rung invariant, decision 3). Seeded + tunable; Base Value Model (ADR-0007) replaces the
 # whole scalar later.
-_PLANNER_SURVIVAL_W = 50.0     # my Active survives the predicted Incoming after the line (a full turn)
-_PLANNER_THREAT_W = 0.1        # per-point value of the threat magnitude removed by the KO …
+_PLANNER_SURVIVAL_W = 50.0     # my Active survives predicted Incoming after the line (full turn)
+_PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by the KO …
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize
-_PLANNER_DEV_W = 1.0           # development toward the win-condition (seeded; exercised from P3 on)
+_PLANNER_DEV_W = 1.0           # dev toward win-condition (seeded; exercised from P3 on)
 
 
 @dataclass
@@ -73,14 +73,14 @@ class PlannerMixin:
         launches a nested search."""
         if select.get("context") != _MAIN or select.get("maxCount", 0) != 1:
             return None
-        if self._planning:                            # mid engine-sim: closed-form only, never nest a search
+        if self._planning:                            # mid engine-sim: closed-form only, never nest search
             return self._closed_form_plan(obs, select, board, options, traces)
         fp = self._plan_fingerprint(obs, select)
         if self._turn_plan is not None and self._turn_plan[0] == fp:
-            return self._turn_plan[1]                 # cache hit: re-plan only on a reveal (fingerprint change)
+            return self._turn_plan[1]                 # cache hit: re-plan only on reveal (fingerprint change)
         line = self._closed_form_plan(obs, select, board, options, traces)
         if line is not None:
-            line = self._engine_rank(obs, line)       # Tier-1 sharpen the value on the exact end-of-turn board
+            line = self._engine_rank(obs, line)       # Tier-1: sharpen value on exact end-of-turn board
         self._turn_plan = (fp, line)
         return line
 
@@ -112,7 +112,7 @@ class PlannerMixin:
             return None
         if not any(o.get("type") == _ATTACK and t.tactical >= KO_SCORE
                    for o, t in zip(options, traces)):
-            return None                               # no KO on the menu -> nothing to preserve; defer to hold-clutch-heal
+            return None                               # no KO on menu -> nothing to preserve; defer to hold-clutch-heal
         opp = self._opp_active(obs)
         active_stat = (self.stats.get(board.my_active_id)
                        if (self.stats and board.my_active_id is not None) else None)
@@ -129,9 +129,9 @@ class PlannerMixin:
                 continue
             healed_hp, energy_total = cand
             if healed_hp <= board.incoming_active_damage:
-                continue                              # this heal can't outlast the Incoming
+                continue                              # heal can't outlast the Incoming
             if self._best_affordable_ko_value(obs, board, opp, board.my_active_id, energy_total) <= 0:
-                continue                              # the heal's Energy cost would forfeit the KO
+                continue                              # heal's Energy cost would forfeit the KO
             value = self._leaf_value(prizes=self._prize_value(opp), active_survives=True,
                                      threat_removed=self._threat_magnitude(opp))
             return TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
@@ -175,7 +175,7 @@ class PlannerMixin:
             healed = max_hp if amount == "all" else min(max_hp, board.my_active_hp + int(amount or 0))
             rider = clause.get("rider")
             if rider == "bounce_energy_to_hand":
-                energy_total = attach                 # all Energy bounced; only the re-attach pays
+                energy_total = attach                 # all Energy bounced; only re-attach pays
             elif rider == "discard_own_energy":
                 energy_total = max(0, board.my_active_energy - 1) + attach
             else:
@@ -274,7 +274,7 @@ class PlannerMixin:
                 continue
             energy = len(p.get("energies") or [])
             if self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy) > 0:
-                continue                              # retreat alone already KOs — the existing hook owns it
+                continue                              # retreat alone already KOs — existing hook owns it
             if not (extra and self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy + extra) > 0):
                 continue
             cand = (self._prize_value(opp), self._survives_after_ko(p.get("id"), p.get("hp", 0), opp_player))
@@ -312,10 +312,10 @@ class PlannerMixin:
         if self._best_affordable_ko_value(obs, board, opp, evolved_id, energy + extra) <= 0:
             return None
         estat = self.stats.get(evolved_id) if self.stats else None
-        my_hp = getattr(estat, "hp", 0) or 0          # evolved max HP — the P3 engine-sim resolves damage exactly
+        my_hp = getattr(estat, "hp", 0) or 0          # evolved max HP — P3 engine-sim resolves damage exactly
         return (self._prize_value(opp), self._survives_after_ko(evolved_id, my_hp, opp_player))
 
-    # ---- leaf evaluation (ADR-0031 decision 4): a scalar over the resulting end-of-turn board ---------
+    # ---- leaf evaluation (ADR-0031 decision 4): scalar over the resulting end-of-turn board ---------
     def _leaf_value(self, *, prizes: float, active_survives: bool, threat_removed: float = 0.0,
                     development: float = 0.0) -> float:
         """The leaf-eval scalar over a resulting board: prizes taken (dominant, KO_SCORE-weighted) +
@@ -390,7 +390,7 @@ class PlannerMixin:
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
-        if result == my_index:                            # the line wins outright — dominant
+        if result == my_index:                            # line wins outright — dominant
             return KO_SCORE * (start_prizes + 1)
         prizes_taken = max(0, start_prizes - len(me.get("prize") or []))
         active = next((p for p in (me.get("active") or []) if p), None)
@@ -441,7 +441,7 @@ class PlannerMixin:
                 o = st.observation
                 c = o.current
                 if c is None or c.result != -1 or o.select is None or c.yourIndex != my_index:
-                    break                                 # game over, or my turn has ended
+                    break                                 # game over, or my turn ended
                 st = cgapi.search_step(st.searchId, list(self.decide(_prune_none(asdict(o)))))
             end = _prune_none(asdict(st.observation))
             result = st.observation.current.result if st.observation.current else -1

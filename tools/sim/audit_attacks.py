@@ -51,7 +51,7 @@ _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyT
 _SWEEP_POINTS = ({"var": "energy", "step": 1}, {"var": "energy", "step": 2},
                  {"var": "hand", "step": 2}, {"var": "hand", "step": 4})
 
-# Engine vocabulary (mirrors cg/api.py enums; kept as ints so unit tests stay lib-free).
+# Engine vocab (mirrors cg/api.py enums; kept as ints so unit tests stay lib-free).
 _OPT_YES, _OPT_NO, _OPT_PLAY, _OPT_ATTACH, _OPT_EVOLVE, _OPT_ATTACK, _OPT_END = 1, 2, 7, 8, 9, 13, 14
 _CTX_MAIN, _CTX_SETUP_ACTIVE, _CTX_SETUP_BENCH = 0, 1, 2
 _CTX_MULLIGAN, _CTX_ACTIVATE, _CTX_FIRST_EFFECT, _CTX_COIN_HEAD = 42, 43, 44, 46
@@ -285,6 +285,7 @@ _POOL = None      # lazy plain-dict card pool
 _ATTACKS = None   # lazy {attackId: {"name","damage","energies","owner"}}
 
 
+
 def card_pool() -> dict[int, dict]:
     """Plain-dict card pool from the engine (built once) — feeds the pure helpers."""
     global _POOL
@@ -313,7 +314,7 @@ def attack_index() -> dict[int, dict]:
         for c in sorted(all_card_data(), key=lambda c: c.cardId, reverse=True):
             for aid in c.attacks:
                 if aid in _ATTACKS:
-                    _ATTACKS[aid]["owner"] = c.cardId      # reverse-sorted -> lowest id sticks
+                    _ATTACKS[aid]["owner"] = c.cardId      # reverse-sorted -> lowest id wins
     return _ATTACKS
 
 
@@ -420,7 +421,7 @@ def _sub_select(obs):
     if ctx in (_CTX_ACTIVATE, _CTX_FIRST_EFFECT):
         return _yes_no(obs, True)
     if ctx == _CTX_SETUP_BENCH:
-        return list(range(sel.get("maxCount", 0)))         # bench every spare: snipe targets
+        return list(range(sel.get("maxCount", 0)))         # bench every spare -- snipe targets
     return _generic_advance(sel)
 
 
@@ -455,7 +456,7 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
         cur = obs.get("current") or {}
         if cur.get("result", -1) != -1:
             reason = next((l.get("reason") for l in reversed(obs.get("logs") or [])
-                           if l.get("type") == 23), None)         # RESULT log carries the why
+                           if l.get("type") == 23), None)         # RESULT log carries why
             raise _Timeout(f"match ended before the attack could fire "
                            f"(result={cur.get('result')}, reason={reason}, "
                            f"turn={cur.get('turn')})")
@@ -502,11 +503,11 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
             if (tip and atk_opt is not None and len(attached) >= len(cost) + extra_energy
                     and opp_ready):
                 if not board_snapshot(obs, 1)["bench"] and bench_wait > 0:
-                    bench_wait -= 1                        # give the snipe rider a target
+                    bench_wait -= 1                        # give snipe rider a target
                     obs = battle_select(_end_turn(obs))
                     continue
                 if delay_left > 0:
-                    delay_left -= 1                        # hand-size sweep: wait a turn
+                    delay_left -= 1                        # hand-size sweep -- wait a turn
                     obs = battle_select(_end_turn(obs))
                     continue
                 return obs
@@ -624,7 +625,7 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
     atk_chain = evolution_chain(attacker_id, cards)
     def_chain = evolution_chain(plan["defender"], cards)
     own = cards[attacker_id].get("energyType") or 3         # colorless attacker -> Water
-    fill = [e or own for e in info["energies"]] or [own]    # colorless cost -> own type: effect
+    fill = [e or own for e in info["energies"]] or [own]    # colorless cost -> own type effect
     atk_deck = build_side_deck(atk_chain, fill)             # clauses reference their own Energy
     battle_start, battle_select, battle_finish = _engine()
     for attempt in range(6):                                # fresh shuffle when setup misses;
@@ -729,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
     for n, aid in enumerate(targets, 1):
         records = audit_attack(aid, sweep=args.sweep)
         existing = merge_records(existing, records)
-        save_measurements(args.out, existing)               # write-through: crash-safe batches
+        save_measurements(args.out, existing)               # write-through -- crash-safe batches
         for r in records:
             tag = f"ERROR {r['error']}" if "error" in r else (
                 f"dealt {r['dealtActive']}{'+' + str(r['dealtBench']) if r['dealtBench'] else ''}"

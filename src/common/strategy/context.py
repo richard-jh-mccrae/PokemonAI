@@ -7,56 +7,56 @@ modules only need these scalars + Function-Tag / Role name sets.
 """
 
 # ── OptionType (cg/api.py) ──
-_PLAY = 7     # play a card from hand (encoded as a bare hand `index`, no `area`)
-_ATTACH = 8   # attach an Energy (the one irreversible per-turn commitment)
+_PLAY = 7     # play card from hand (bare hand `index`, no `area`)
+_ATTACH = 8   # attach Energy (the one irreversible per-turn commitment)
 _EVOLVE = 9   # evolve a Pokémon in play
-_RETREAT = 12 # swap the Active out (changes which Pokémon can attack)
-_CARD = 3     # a card-target option (e.g. an attack's snipe target, a gust SWITCH target)
-_YES = 1      # the "redraw the cards?" affirmative at a Mulligan select
+_RETREAT = 12 # swap Active out -> changes who can attack
+_CARD = 3     # card-target option (attack snipe target, gust SWITCH target)
+_YES = 1      # "redraw the cards?" affirmative at a Mulligan select
 _ATTACK = 13  # attack (the turn-ender)
 _END = 14     # end the turn
 
 # ── SelectContext (cg/api.py) ──
-_MAIN = 0         # the open turn menu (play/attach/evolve/retreat/attack/end); attack-last applies here
-_SETUP_ACTIVE = 1 # SETUP_ACTIVE_POKEMON — choose which Pokémon takes the Active Spot during Set Up
+_MAIN = 0         # open turn menu (play/attach/evolve/retreat/attack/end); attack-last applies here
+_SETUP_ACTIVE = 1 # SETUP_ACTIVE_POKEMON — pick who takes Active Spot during Set Up
 _SETUP_BENCH = 2  # SETUP_BENCH_POKEMON — place a benched Pokémon during Set Up
-_SWITCH = 3       # swap into the Active Spot (my own retreat OR a Boss's gust target)
-_TO_ACTIVE = 4    # promote a benched Pokémon to the Active Spot
-_TO_BENCH = 5     # fetch a Pokémon straight onto the Bench (Buddy-Buddy Poffin)
-_TO_HAND = 7      # a search: choose which card to add to your hand
-_DISCARD = 8      # choose which card(s) to discard (e.g. Ultra Ball's cost)
-_DAMAGE = 15      # choose which Pokémon an attack deals damage to (a bench snipe)
-_ATTACH_FROM = 21 # choose the Pokémon to attach an Energy to
-_IS_FIRST = 41    # IS_FIRST — the coin-toss "Would you like to go first?" (YesNo)
-_NO = 2           # OptionType.NO — decline (the _YES sibling; the coin-toss "go second" option)
+_SWITCH = 3       # swap into Active Spot (own retreat OR a Boss's gust target)
+_TO_ACTIVE = 4    # promote a benched Pokémon to Active Spot
+_TO_BENCH = 5     # fetch a Pokémon straight onto Bench (Buddy-Buddy Poffin)
+_TO_HAND = 7      # search: pick which card to add to hand
+_DISCARD = 8      # pick which card(s) to discard (e.g. Ultra Ball's cost)
+_DAMAGE = 15      # pick which Pokémon an attack damages (bench snipe)
+_ATTACH_FROM = 21 # pick the Pokémon to attach Energy to
+_IS_FIRST = 41    # IS_FIRST — coin-toss "Would you like to go first?" (YesNo)
+_NO = 2           # OptionType.NO — decline (the _YES sibling; coin-toss "go second" option)
 _MULLIGAN = 42    # "Would you like to redraw the cards?"
 
-# fetch-grab selects: a maxCount>1 here is a single multi-pick resolved GREEDILY with gap-update +
+# fetch-grab selects: maxCount>1 here = single multi-pick resolved GREEDILY w/ gap-update +
 # take-fewer (not static top-N) so a satisfied need isn't double-grabbed (ADR-0023). Others stay top-N.
 _GRAB_CONTEXTS = frozenset({_TO_HAND, _TO_BENCH, _SETUP_BENCH})
 
 # ── AreaType (cg/api.py) ──
 _HAND = 2     # AreaType.HAND
-_DECK = 1     # AreaType.DECK — a search candidate; ids are revealed in the select's `deck` list
+_DECK = 1     # AreaType.DECK — search candidate; ids revealed in select's `deck` list
 _ACTIVE = 4   # AreaType.ACTIVE
 _BENCH = 5    # AreaType.BENCH
 _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player-dict zone key
 
 # ── scoring / classification vocabulary ──
-KO_SCORE = 1000            # an option that knocks out the target dominates a mere chip
-_SUPPORTER = 3             # CardType.SUPPORTER — a gust on this card costs the one-per-turn Supporter slot
-_BASIC_ENERGY = 5          # CardType.BASIC_ENERGY — fungible Energy: a spare is always a future attach,
-_SPECIAL_ENERGY = 6        # CardType.SPECIAL_ENERGY — …never a redundant pitch, so excluded from the
+KO_SCORE = 1000            # a KO option dominates a mere chip
+_SUPPORTER = 3             # CardType.SUPPORTER — gust on this card costs the one-per-turn Supporter slot
+_BASIC_ENERGY = 5          # CardType.BASIC_ENERGY — fungible Energy: spare = always a future attach,
+_SPECIAL_ENERGY = 6        # CardType.SPECIAL_ENERGY — …never a redundant pitch, so excluded from
                            # hand-duplicate discard signal (cf. `discard-the-hand-duplicate`)
-_BENCH_MAX = 5             # a full Bench holds 5 — a bench-filler can place nothing once you're here
-_THIN_BENCH = 2            # below this many benched Pokémon the board is underdeveloped — a starter need
-_OPENER_TAG = "opener"     # Function Tag: a card whose Ability opens the Active Spot (Explosiveness)
-_STARTER_ROLE = "starter"  # deck Role: a card the deck intends to open with
+_BENCH_MAX = 5             # full Bench holds 5 — bench-filler places nothing once you're here
+_THIN_BENCH = 2            # below this many benched Pokémon board's underdeveloped — a starter need
+_OPENER_TAG = "opener"     # Function Tag: card whose Ability opens Active Spot (Explosiveness)
+_STARTER_ROLE = "starter"  # deck Role: card the deck intends to open with
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
 _ENGINE_TAGS = frozenset({"energy_accel", "draw", "search", "dig"})  # a "support/engine" Pokémon's
-                           # Ability does one of these — the `fetch-the-support` importance signal and
-                           # the `support_in_play` gap gate (an engine already online needs no tutor)
-_EVOLVING_THREAT_DMG = 100 # an evolution line "becomes an attacker" at >= this damage (ADR-0020)
+                           # Ability does one of these — the `fetch-the-support` importance signal +
+                           # `support_in_play` gap gate (an engine already online needs no tutor)
+_EVOLVING_THREAT_DMG = 100 # evolution line "becomes an attacker" at >= this dmg (ADR-0020)
 
 __all__ = [
     "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_NO", "_ATTACK", "_END",

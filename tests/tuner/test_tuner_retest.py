@@ -26,8 +26,8 @@ def test_retest_reports_fixed_only_when_correct_now_wins():
 
     base = retest(corr, Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60))
     assert base["chosen_after"] == [0] and base["fixed"] is False     # blunder still occurs
-    assert base["chosen_before"] == [0]                                # from the live trace
+    assert base["chosen_before"] == [0]                                # from live trace
 
     tuned = retest(corr, Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60, overrides={"boost": 50.0}))
-    assert tuned["chosen_after"] == [1] and tuned["fixed"] is True     # the fix makes correct win
+    assert tuned["chosen_after"] == [1] and tuned["fixed"] is True     # fix makes correct win
     assert tuned["after"]["opts"][1]["fired"] == [["boost", 50.0]]     # live-format trace

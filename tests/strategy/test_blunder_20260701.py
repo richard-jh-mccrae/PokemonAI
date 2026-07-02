@@ -72,7 +72,7 @@ def test_dont_overbuild_the_doomed_wincon_feeds_the_bench_successor():
     pilot = _pilot()
     to_active = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     to_bench = opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)
-    # Active wincon at 1 W (already Jetting-Blow-able), doomed (opp's 210 >= my 210 HP); a benched Staryu.
+    # Active wincon at 1 W (Jetting-Blow-ready already), doomed (opp 210 >= my 210 HP); a benched Staryu.
     doomed = state(active=poke(WINCON, energy=1, hp=210), bench=[poke(PREEVO, energy=0, hp=70)],
                    opp_active=poke(678, hp=210), hand=[WATER])
     obs = make_select([to_active, to_bench], current=doomed)
@@ -86,7 +86,7 @@ def test_dont_overbuild_the_doomed_wincon_feeds_the_bench_successor():
     obs_h = make_select([to_active, to_bench], current=healthy)
     assert not pilot._board(obs_h).active_doomed
     assert "dont-overbuild-the-doomed-wincon" not in _fired(pilot.explain(obs_h).options[0])
-    assert pilot.decide(obs_h) == [0]                                       # keep building the Active
+    assert pilot.decide(obs_h) == [0]                                       # keep building Active
 
 
 # ---------------------------------------------------------- f49: hold-successor-when-doomed
@@ -96,16 +96,16 @@ def test_hold_successor_when_doomed_refuses_to_shuffle_away_the_next_attacker():
     onto — refuse the Harlequin shuffle (it would gamble the rebuild away) and attack instead (f49)."""
     pilot = _pilot()
     play_harlequin = opt(PLAY, area=HAND, index=0)
-    attack = attack_opt(JETTING)                                # Jetting Blow is available (1 W attached)
+    attack = attack_opt(JETTING)                                # Jetting Blow available (1 W attached)
     doomed = state(active=poke(WINCON, energy=1, hp=100), bench=[poke(PREEVO, energy=0, hp=70)],
                    opp_active=poke(678, hp=210), hand=[HARLEQUIN, WINCON])
     obs = make_select([play_harlequin, attack], current=doomed)
     b = pilot._board(obs)
     assert b.active_doomed and b.wincon_in_hand and b.line_preevo_in_play  # the premise
     assert "hold-successor-when-doomed" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                             # attack; don't shuffle the successor away
+    assert pilot.decide(obs) == [1]                             # attack; don't shuffle successor away
 
-    # Control — a HEALTHY Active: the hand copy is a redundant duplicate, the shuffle is fine (stands down).
+    # Control — HEALTHY Active: hand copy is a redundant dupe, shuffle's fine (rule stands down).
     healthy = state(active=poke(WINCON, energy=1, hp=330), bench=[poke(PREEVO, energy=0, hp=70)],
                     opp_active=poke(678, hp=210), hand=[HARLEQUIN, WINCON])
     obs_h = make_select([play_harlequin, attack], current=healthy)
@@ -121,7 +121,7 @@ def test_active_can_ko_sees_the_big_affordable_attack_not_just_the_cheapest():
     loaded = state(active=poke(WINCON, energy=3, hp=70), opp_active=poke(678, hp=180))
     b = pilot._board(make_select([opt(14)], current=loaded))
     assert b.active_can_ko                                       # Nebula (210) KOs the 180-HP Active
-    assert not b.active_cheap_attack_kos                         # Jetting Blow (120) alone does not
+    assert not b.active_cheap_attack_kos                         # Jetting Blow (120) alone doesn't
 
 
 @pytest.mark.req("REQ-GEN-0036")
@@ -132,7 +132,7 @@ def test_clutch_heal_stands_down_and_the_game_winning_attack_is_taken_now():
     now stands down (active_can_ko), and a game-winning attack is tier-0 (taken over the dig)."""
     pilot = _pilot()
     play_salvatore = opt(PLAY, area=HAND, index=0)              # a +20 dig (would sequence tier 1)
-    play_wallys = opt(PLAY, area=HAND, index=1)                 # clutch_heal (+60 when not gated)
+    play_wallys = opt(PLAY, area=HAND, index=1)                 # clutch_heal (+60 when ungated)
     nebula = attack_opt(NEBULA)                                 # the game-winning KO
     won = state(active=poke(WINCON, energy=3, hp=70), bench=[poke(PREEVO, hp=70)],
                 opp_active=poke(678, hp=180), hand=[SALVATORE, WALLYS], prizes=3)
@@ -140,10 +140,10 @@ def test_clutch_heal_stands_down_and_the_game_winning_attack_is_taken_now():
     traces = pilot.explain(obs)
     assert traces.options[2].tactical >= KO_SCORE               # Nebula is lethal
     assert "hold-clutch-heal" not in _fired(traces.options[1])  # the survival heal stands down
-    assert not traces.options[2].deferred                       # the winning attack is NOT held back
+    assert not traces.options[2].deferred                       # winning attack is NOT held back
     assert pilot.decide(obs) == [2]                             # take the win now
 
-    # Control — the SAME doomed Active that CANNOT KO (opp too healthy): the clutch heal still fires.
+    # Control — SAME doomed Active but CANNOT KO (opp too healthy): clutch heal still fires.
     cant = state(active=poke(WINCON, energy=3, hp=70), bench=[poke(PREEVO, hp=70)],
                  opp_active=poke(678, hp=330), hand=[SALVATORE, WALLYS], prizes=3)
     obs_c = make_select([play_salvatore, play_wallys, nebula, opt(14)], current=cant)
@@ -168,12 +168,12 @@ def test_feed_the_firing_accelerator_over_a_bench_body_even_when_doomed():
     b = pilot._board(obs)
     assert b.active_doomed and not b.bench_wincon_ready and not b.accel_recipient_missing
     active_ctx = pilot.explain(obs).options[0]
-    assert "feed-the-firing-accelerator" in _fired(active_ctx)   # fires only on attach_feeds_firing_accel
-    assert "dont-feed-the-doomed" not in _fired(active_ctx)     # the firing accelerator is exempt
+    assert "feed-the-firing-accelerator" in _fired(active_ctx)   # only fires on attach_feeds_firing_accel
+    assert "dont-feed-the-doomed" not in _fired(active_ctx)     # firing accelerator is exempt
     assert pilot.decide(obs) == [0]                             # feed the accelerator
 
-    # Control — a READY benched wincon exists (retreat into it instead): the feed stands down and
-    # dont-feed-the-doomed fires again (the ep83007714 f65 shape, cleanly separated by bench_wincon_ready).
+    # Control — READY benched wincon exists (retreat into it instead): feed stands down,
+    # dont-feed-the-doomed fires again (ep83007714 f65 shape, cleanly split by bench_wincon_ready).
     ready = state(active=poke(ACCEL, energy=0, hp=210),
                   bench=[poke(WINCON, energy=1, hp=330)],           # a ready Mega (1 W = Jetting Blow)
                   opp_active=poke(678, hp=190), hand=[WATER])
@@ -193,7 +193,7 @@ def test_energy_placeable_is_false_when_every_body_is_maxed():
     maxed = pilot._board(make_select([opt(14)], current=state(active=poke(WINCON, energy=3, hp=170))))
     assert not maxed.energy_placeable
     building = pilot._board(make_select([opt(14)], current=state(active=poke(WINCON, energy=1, hp=170))))
-    assert building.energy_placeable                            # 1 E < Nebula's 3 -> can still build
+    assert building.energy_placeable                            # 1 E < Nebula's 3 -> still can build
 
 
 @pytest.mark.req("REQ-GEN-0038")
@@ -207,8 +207,8 @@ def test_benchless_agent_refreshes_over_a_redundant_wincon_tutor():
     attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
     play_signal = opt(PLAY, area=HAND, index=2)
     # Empty MY Bench, Active Mega fully powered (3 E), a held Water, Mega Signal, Lillie's. No base
-    # anywhere. The opponent keeps a benched body, so KO'ing their Active is NOT lethal (this is a
-    # setup decision, not a win-this-turn — ADR-0030); prizes not last, so no Lethal Line locks.
+    # anywhere. Opp keeps a benched body, so KO'ing their Active is NOT lethal (setup decision,
+    # not win-this-turn — ADR-0030); prizes not last, so no Lethal Line locks.
     benchless = state(active=poke(WINCON, energy=3, hp=170), bench=[], opp_bench=[poke(678, hp=330)],
                       opp_active=poke(678, hp=180), hand=[LILLIES, WATER, MEGA_SIGNAL], prizes=5)
     obs = make_select([play_lillies, attach_water, play_signal, attack_opt(NEBULA), opt(14)],
@@ -216,12 +216,12 @@ def test_benchless_agent_refreshes_over_a_redundant_wincon_tutor():
     b = pilot._board(obs)
     assert not b.energy_placeable and not b.wincon_base_deployable and b.wincon_in_play
     traces = pilot.explain(obs).options
-    assert "attach-before-hand-shuffle" not in _fired(traces[0])   # the held Water has no home -> no veto
+    assert "attach-before-hand-shuffle" not in _fired(traces[0])   # held Water has no home -> no veto
     assert "dont-tutor-the-held-wincon" in _fired(traces[2])       # Mega Signal digs a dead 2nd Mega
     assert pilot.decide(obs) == [0]                                # play Lillie's to find a Bench
 
-    # Control — a benched Staryu (a base to deploy a 2nd Mega): Mega Signal is NOT redundant, and the
-    # held Energy IS placeable (the Staryu needs it), so both guards behave as before.
+    # Control — benched Staryu (a base to deploy a 2nd Mega): Mega Signal NOT redundant, held
+    # Energy IS placeable (Staryu needs it) -> both guards behave as before.
     with_base = state(active=poke(WINCON, energy=3, hp=170), bench=[poke(PREEVO, energy=0, hp=70)],
                       opp_active=poke(678, hp=180), hand=[LILLIES, WATER, MEGA_SIGNAL], prizes=5)
     obs_b = make_select([play_lillies, attach_water, play_signal, attack_opt(NEBULA), opt(14)],
@@ -229,3 +229,4 @@ def test_benchless_agent_refreshes_over_a_redundant_wincon_tutor():
     bb = pilot._board(obs_b)
     assert bb.energy_placeable and bb.wincon_base_deployable
     assert "dont-tutor-the-held-wincon" not in _fired(pilot.explain(obs_b).options[2])
+

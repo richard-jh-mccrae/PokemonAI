@@ -46,7 +46,7 @@ def test_real_replay_decks_compile_and_recognize(tmp_path):
     read = Scout(artifact).observe(_obs_revealing(sorted(set(d1))))
     assert read.candidates and read.candidates[0][0] == a1
 
-    # Reset across matches: a prior match's reveal must not bleed into the next.
+    # Reset across matches: a prior match's reveal must not bleed into next.
     scout = Scout(artifact)
     scout.observe(_obs_revealing(sorted(set(d0)), turn=9))
     read2 = scout.observe(_obs_revealing(sorted(set(d1)), turn=1))

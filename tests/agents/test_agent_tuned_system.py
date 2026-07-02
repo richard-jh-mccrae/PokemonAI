@@ -20,8 +20,8 @@ sys.path.insert(0, str(REPO / "tools"))
 from submit.package import package  # noqa: E402
 
 AGENT = "mega_starmie"
-TARGET = "power-up-attacker"   # a real General Strategy Hypothesis id (general_strategy.py)
-AUTHORED = 15.0               # its authored seed weight
+TARGET = "power-up-attacker"   # real General Strategy Hypothesis id (general_strategy.py)
+AUTHORED = 15.0               # authored seed weight
 
 pytestmark = pytest.mark.skipif(
     not (REPO / "src" / "agents" / AGENT / "main.py").exists(),
@@ -39,7 +39,7 @@ _PROBE = (
 
 def _run_bundle(bundle: Path, env_extra: dict | None = None) -> dict:
     """Import the bundled agent in a clean subprocess (cwd = bundle) and read back the probe."""
-    env = {**os.environ, "PYTHONPATH": str(bundle), **(env_extra or {})}   # resolve from the bundle only
+    env = {**os.environ, "PYTHONPATH": str(bundle), **(env_extra or {})}   # resolve from bundle only
     proc = subprocess.run([sys.executable, "-c", _PROBE], cwd=bundle, env=env,
                           capture_output=True, text=True, timeout=180)
     assert proc.returncode == 0, f"bundle import failed:\n{proc.stderr}"
@@ -50,7 +50,7 @@ def _run_bundle(bundle: Path, env_extra: dict | None = None) -> dict:
 def test_packaged_agent_applies_tuned_weight_override(tmp_path):
     """REQ-TUNER-0011: the deployable agent loads tuned.json and its weights reach _weight —
     an override changes the effective weight; an empty file falls back to the authored seed."""
-    package(AGENT, tmp_path)            # stages the exact shipped bundle at tmp_path/<agent>
+    package(AGENT, tmp_path)            # stages exact shipped bundle at tmp_path/<agent>
     bundle = tmp_path / AGENT
 
     (bundle / "tuned.json").write_text("{}", encoding="utf-8")
@@ -61,7 +61,7 @@ def test_packaged_agent_applies_tuned_weight_override(tmp_path):
     (bundle / "tuned.json").write_text(json.dumps({TARGET: 999.0}), encoding="utf-8")
     tuned = _run_bundle(bundle)
     assert tuned["overrides"] == {TARGET: 999.0}
-    assert tuned["w"] == 999.0          # the shipped agent actually applies the diff
+    assert tuned["w"] == 999.0          # shipped agent actually applies the diff
 
 
 def test_packaged_agent_applies_experiment_overlay(tmp_path):
@@ -74,4 +74,4 @@ def test_packaged_agent_applies_experiment_overlay(tmp_path):
     overlay = tmp_path / "exp.json"
     overlay.write_text(json.dumps({"overrides": {TARGET: 7.0}}), encoding="utf-8")
     out = _run_bundle(bundle, env_extra={"AGENT_OVERLAY": str(overlay)})
-    assert out["w"] == 7.0              # the overlay weight reached _weight, over the empty tuned.json
+    assert out["w"] == 7.0              # overlay weight reached _weight, over empty tuned.json

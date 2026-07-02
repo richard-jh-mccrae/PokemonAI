@@ -80,7 +80,7 @@ def test_report_html_is_offline_and_lists_categories_with_drilldown(tmp_path):
 
     assert out.exists()
     assert "missed_win" in txt and "overextension" in txt
-    assert "had exact lethal, passed" in txt              # drill-down shows the rationale
+    assert "had exact lethal, passed" in txt              # drill-down shows rationale
     assert "<details>" in txt and "<summary>" in txt      # expandable
     assert "http" not in txt                              # offline: no CDN / external refs
 
@@ -137,7 +137,7 @@ def test_report_enriched_badges_a_refuted_blunder_and_splits_resolved(tmp_path):
     assert "pill refuted" in txt and ">refuted<" in txt   # disposition badge rendered
     assert "by resolution" in txt                         # the new section
     assert "1 resolved" in txt and "0 open" in txt        # header split
-    assert "http" not in txt                              # still fully offline
+    assert "http" not in txt                              # still offline
 
 
 def test_report_marks_fixed_when_deck_tuned_and_no_longer_open(tmp_path):
@@ -179,6 +179,7 @@ def test_avg_blunders_per_game_normalizes_by_distinct_tagged_game():
     assert stats["b1"]["blunders"] == 3 and stats["b1"]["games"] == 2 and stats["b1"]["avg"] == 1.5
     assert stats["b2"]["avg"] == 1.0
     assert "peer" not in stats and stats["b1"]["blunders"] == 3        # peer not folded into b1
+
 
 
 def test_report_renders_avg_blunders_per_game_section(tmp_path):

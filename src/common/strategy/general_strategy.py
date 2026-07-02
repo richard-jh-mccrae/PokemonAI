@@ -21,7 +21,7 @@ from common.strategy.doctrines import (FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRES
                                        TOOL_HYPOTHESES)
 from common.strategy.strategy import Strategy
 
-# The full deck-agnostic strategy = baseline clusters + the four doctrines (one flat scored list;
+# Full deck-agnostic strategy = baseline clusters + four doctrines (one flat scored list;
 # ADR-0008/0025).
 GENERAL_STRATEGY = Strategy(
     name="general",

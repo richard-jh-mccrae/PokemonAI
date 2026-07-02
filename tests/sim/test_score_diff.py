@@ -30,7 +30,7 @@ def test_identical_records_diff_clean_in_both_modes():
 
 
 def test_renamed_fired_ids_do_not_diff():
-    """The fold case: same scores, different rule ids -> clean."""
+    """Fold case: same scores, different rule ids -> clean."""
     a = _record()
     b = _record()
     b["opts"][0]["fired"] = [["renamed-general-rule", 10.0]]
@@ -74,7 +74,7 @@ def test_slim_keeps_comparable_fields_only():
 
 def test_corrections_corpus_yields_committed_obs():
     items = list(corrections_corpus(REPO / "data" / "corrections"))
-    assert len(items) >= 200                       # the committed correction rounds
+    assert len(items) >= 200                       # committed correction rounds
     key, obs = items[0]
     assert key.startswith("corr:")
     assert isinstance(obs, dict) and "select" in obs

@@ -17,9 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 ATTACK, PLAY, ATTACH, CARD, END, YES, NO = 13, 7, 8, 3, 14, 1, 2
 
-# Shaymin (Grass) — a type Sigilyph neither resists (Fighting) nor is weak to (Lightning), so the
-# ONLY modifier on the hit is Reflect's transient −40 (the Okidogi first draft measured 0: the
-# engine composed resistance −30 THEN Reflect −40 on the 70 — itself a confirmation, but not clean).
+# Shaymin (Grass) — type Sigilyph neither resists (Fighting) nor is weak to (Lightning), so
+# ONLY modifier on the hit is Reflect's transient −40 (Okidogi first draft measured 0: engine
+# composed resistance −30 THEN Reflect −40 on the 70 — itself a confirmation, but not clean).
 ATTACKER, ATK_ENERGY, ATK_AID, PRINTED = 45, 1, 43, 50     # Shaymin: Rear Kick 50 (plain)
 DEFENDER, DEF_ENERGY, DEF_AID, REDUCTION = 591, 5, 849, 40  # Sigilyph: Reflect — "takes 40 less"
 
@@ -60,7 +60,7 @@ def _choose(obs, key, want_attack):
     attacks = [i for i, o in enumerate(opts) if o.get("type") == ATTACK]
     if attacks:
         return next(([i] for i in attacks if opts[i].get("attackId") == want_attack), [attacks[0]])
-    if any(o.get("type") in (YES, NO) for o in opts):  # mulligan
+    if any(o.get("type") in (YES, NO) for o in opts):  # mulligan check
         want = YES if key not in _hand_ids(obs, seat) else NO
         return next(([i] for i, o in enumerate(opts) if o.get("type") == want), [0])
     if _my_active(obs, seat) is not None:
@@ -98,7 +98,7 @@ def test_engine_confirms_next_turn_reduction():
             d = next((p for p in ((pl[1] or {}).get("active") or []) if p), None) if len(pl) > 1 else None
             hp = d.get("hp") if (d and d.get("id") == DEFENDER) else None
             if hp is not None and prev_hp is not None and hp < prev_hp:
-                dealt.append(prev_hp - hp)             # one hit on the shielded/unshielded Sigilyph
+                dealt.append(prev_hp - hp)             # one hit on shielded/unshielded Sigilyph
             prev_hp = hp
             mine = _seat(obs) == 0
             obs = battle_select(_choose(obs, ATTACKER if mine else DEFENDER,
@@ -107,8 +107,8 @@ def test_engine_confirms_next_turn_reduction():
                 break
     finally:
         battle_finish()
-    # Sigilyph attacks every turn (its Wonder-Shine-class move), so EVERY hit it takes lands under
-    # the fresh shield: printed 70 − 40 = 30. Any unshielded hit would read 70 — the engine's
-    # numbers, not ours, decide.
+    # Sigilyph attacks every turn (its Wonder-Shine-class move), so EVERY hit lands under the
+    # fresh shield: printed 70 − 40 = 30. Any unshielded hit would read 70 — engine's numbers,
+    # not ours, decide.
     assert dealt, "no hit landed — driver failure, not a model verdict"
     assert all(d == PRINTED - REDUCTION for d in dealt), f"dealt {dealt}, want {PRINTED - REDUCTION}"

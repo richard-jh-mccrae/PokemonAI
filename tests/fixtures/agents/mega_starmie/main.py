@@ -26,7 +26,7 @@ def _read_deck() -> list[int]:
         return [int(x) for x in fh.read().split("\n")[:60]]
 
 
-# Built once at import (the pregame window): eager-load the engine-derived tables.
+# Built once at import (pregame window): eager-load engine-derived tables.
 _all_attacks = all_attack()
 _attacks = {a.attackId: a.damage for a in _all_attacks}
 _attack_costs = {a.attackId: len(a.energies) for a in _all_attacks}
@@ -34,13 +34,13 @@ _recoil = {a.attackId: parse_attack_recoil(a.text) for a in _all_attacks}       
 _bench_snipe = {a.attackId: parse_attack_bench_snipe(a.text) for a in _all_attacks}  # ADR-0022 #14
 _attack_stats = build_attack_stats(_all_attacks, load_attack_overrides())   # ADR-0032: per-attack
                                                    # effect records — text seeds + engine-audited overrides
-                                                   # (subsumes the narrow ignores_active_effects feed)
-# weight overrides (tuned.json, ADR-0018) + params (Strategy.params, ADR-0019), with an optional
-# offline experiment overlay layered on top for local A/B (env AGENT_OVERLAY; ADR-0021). Inert on the grader.
+                                                   # (subsumes narrow ignores_active_effects feed)
+# weight overrides (tuned.json, ADR-0018) + params (Strategy.params, ADR-0019), plus optional
+# offline experiment overlay on top for local A/B (env AGENT_OVERLAY; ADR-0021). Inert on grader.
 _overrides, _params = load_overrides_and_params(STRATEGY.params)
-_provider = EngineCardStatProvider()   # shared by the Pilot (stats) and the Scout (threat/target resolution)
+_provider = EngineCardStatProvider()   # shared by Pilot (stats) and Scout (threat/target resolution)
 _scout = Scout(load_artifact(), provider=_provider)   # opponent recognition -> the Read (M2.0/ADR-0026);
-                                                      # artifact is bundled + load is fail-safe to empty -> Posture off
+                                                      # artifact bundled + load fail-safe to empty -> Posture off
 _briefs = load_briefs()   # hand-authored Matchup Briefs (ADR-0027); covers-routed onto Board, empty -> inert
 _pilot = Pilot(
     STRATEGY,
@@ -56,7 +56,7 @@ _pilot = Pilot(
     bench_snipe=_bench_snipe,
     attack_stats=_attack_stats,
     search_budget=_params.get("search_budget", 0),   # Tier from params (Strategy default or overlay; ADR-0019/0021)
-    scout=_scout,                                     # opponent recognition → the Read on Board (ADR-0026)
+    scout=_scout,                                     # opponent recognition -> the Read on Board (ADR-0026)
     briefs=_briefs,                                   # matched Matchup Brief on Board (ADR-0027), covers-routed
     posture=_params.get("posture", True),             # ADR-0026 kill-switch (overlay can force Posture off for A/B)
 )
@@ -66,9 +66,9 @@ _MODEL = OwnCardModel(_pilot.deck)   # match-scoped own-card tracker; resolves p
 
 
 def agent(obs_dict: dict) -> list[int]:
-    _MODEL.observe(obs_dict)                    # maintain the exact own-card model (sound; never raises)
-    obs_dict["own_prizes"] = _MODEL.prize_export()   # annotate -> Board derives the exact deck (None = fall back)
-    decision = _pilot.explain(obs_dict)        # same choice as decide(); also yields the trace
+    _MODEL.observe(obs_dict)                    # maintain exact own-card model (sound; never raises)
+    obs_dict["own_prizes"] = _MODEL.prize_export()   # annotate -> Board derives exact deck (None = fall back)
+    decision = _pilot.explain(obs_dict)        # same choice as decide(); also yields trace
     if _TELEMETRY:
         telemetry.emit(decision, tier=_TIER)
     return decision.chosen

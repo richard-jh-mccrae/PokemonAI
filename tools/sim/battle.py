@@ -25,7 +25,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 _SERVER = Path(__file__).with_name("_agent_server.py")
 _WORKER = Path(__file__).with_name("_battle_worker.py")
-_MAX_STEPS = 5000          # a runaway-game backstop; a real Match resolves in ~100s of steps
+_MAX_STEPS = 5000          # runaway-game backstop; a real Match resolves in ~100s of steps
 
 
 @dataclass(frozen=True)
@@ -164,7 +164,7 @@ def format_report(a: dict, b: dict, t: dict, *, elapsed: float, jobs: int, mode:
         f"  {sid_a} win-rate {rate * 100:.0f}%   (95% CI {lo * 100:.0f}-{hi * 100:.0f}%)"
         "  -- ladder is the real judge",
     ]
-    if "by_seat" in t:                                  # seat-balanced run: keep the seat effect visible (ADR-0021)
+    if "by_seat" in t:                                  # seat-balanced run: keep seat effect visible (ADR-0021)
         s = t["by_seat"]
         lines.append(f"  seat split  {sid_a} as seat 0: {s[0]['a_wins']}/{s[0]['n']}   "
                      f"as seat 1: {s[1]['a_wins']}/{s[1]['n']}")
@@ -192,10 +192,10 @@ class AgentServer:
 
     def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None):
         env = dict(os.environ, AGENT_NO_TELEMETRY="1", PYTHONIOENCODING="utf-8")
-        if overlay:                                   # the config under test, as an absolute path (cwd=bundle)
+        if overlay:                                   # config under test, as absolute path (cwd=bundle)
             env["AGENT_OVERLAY"] = str(Path(overlay).resolve())
         else:
-            env.pop("AGENT_OVERLAY", None)            # a baseline contestant must not inherit a stray overlay
+            env.pop("AGENT_OVERLAY", None)            # baseline contestant must not inherit a stray overlay
         self.proc = subprocess.Popen(
             [sys.executable, str(_SERVER), *(str(p) for p in extra_syspath)],
             cwd=str(bundle), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -234,7 +234,7 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
     from cg.game import battle_finish, battle_start, battle_select
 
     obs, start = battle_start(deck_a, deck_b)
-    if start.errorPlayer >= 0:                     # an illegal deck never gets to play -> it loses
+    if start.errorPlayer >= 0:                     # illegal deck never gets to play -> loses
         battle_finish()
         return MatchResult(winner=1 - start.errorPlayer, crashed=(start.errorPlayer,))
 
@@ -245,19 +245,19 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
         for _ in range(_MAX_STEPS):
             cur = obs.get("current") or {}
             res = cur.get("result")
-            if res is not None and res != -1:      # engine verdict: 0/1 winner, anything else a draw
+            if res is not None and res != -1:      # engine verdict: 0/1 winner, else a draw
                 winner = res if res in (0, 1) else None
                 break
             if obs.get("select") is None:
                 break
             seat = cur.get("yourIndex", 0)
             choice = servers[seat].act(obs)
-            if choice is None:                     # the seat crashed -> the other seat wins
+            if choice is None:                     # seat crashed -> other seat wins
                 winner, crashed = 1 - seat, (seat,)
                 break
             try:
                 obs = battle_select(choice)
-            except Exception:                      # an illegal selection is a loss, same as a crash
+            except Exception:                      # illegal selection is a loss, same as a crash
                 winner, crashed = 1 - seat, (seat,)
                 break
     finally:
@@ -272,7 +272,7 @@ def _play_seated(server_a, server_b, deck_a, deck_b, a_seat: int) -> BattleMatch
     if a_seat == 0:
         res = play_match(server_a, server_b, deck_a, deck_b)
     else:
-        res = play_match(server_b, server_a, deck_b, deck_a)   # A sits engine seat 1
+        res = play_match(server_b, server_a, deck_b, deck_a)   # A sits in engine seat 1
     return to_battle_match(a_seat, res)
 
 
@@ -292,7 +292,7 @@ def _run_serial(dir_a: Path, dir_b: Path, deck_a, deck_b, n, extra_syspath,
     try:
         for a_seat in seat_plan(n):
             results.append(_play_seated(a, b, deck_a, deck_b, a_seat))
-            if not a.alive():                      # a crash killed the server -> respawn for the next Match
+            if not a.alive():                      # crash killed the server -> respawn for next Match
                 a = AgentServer(dir_a, extra_syspath, overlay=overlay_a)
             if not b.alive():
                 b = AgentServer(dir_b, extra_syspath, overlay=overlay_b)
@@ -310,7 +310,7 @@ def run_battle(dir_a: Path, dir_b: Path, deck_a, deck_b, n, *, jobs=1,
     if jobs <= 1 or n <= 1:
         return _run_serial(dir_a, dir_b, deck_a, deck_b, n, extra_syspath, overlay_a, overlay_b)
     procs = []
-    plan = seat_plan(n)                            # split seats GLOBALLY, then hand each worker its slice,
+    plan = seat_plan(n)                            # split seats GLOBALLY, hand each worker its slice,
     i = 0                                          # so odd per-worker shares can't all tilt the same way
     for share in _split(n, jobs):
         seats = ",".join(str(s) for s in plan[i:i + share])
@@ -378,7 +378,7 @@ def main(argv=None) -> int:
     import tempfile
     import time
 
-    sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]   # standalone CLI: import submit / cg
+    sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]   # standalone CLI: needs submit / cg
 
     from submit.build import DEFAULT_BUILDS, DEFAULT_OUT
     from submit.history import read_history

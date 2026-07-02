@@ -62,7 +62,7 @@ def main() -> None:
     n_text = 0
     for cid, (name, text) in texts.items():
         if not text.strip():
-            continue                       # vanilla card (no rules text) → nothing to cross-check
+            continue                       # vanilla card (no rules text) -> nothing to cross-check
         n_text += 1
         u, m = audit_card(table.get(cid, []), text)
         for tag in u:

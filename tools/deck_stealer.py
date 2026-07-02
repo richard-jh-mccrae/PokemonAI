@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tools"))  # make `meta_tracker` importable
+sys.path.insert(0, str(REPO / "tools"))  # makes `meta_tracker` importable
 
 from meta_tracker.parse import parse_replay  # noqa: E402
 

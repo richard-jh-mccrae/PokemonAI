@@ -52,7 +52,7 @@ def _trend_fig(episodes: list[dict], top_names: list[str]) -> go.Figure:
         if not d:
             continue
         by_date_total[d] += 1
-        for nm in {ep["arch0"], ep["arch1"]}:            # by archetype, not individual Pokémon
+        for nm in {ep["arch0"], ep["arch1"]}:            # by archetype not individual Pokémon
             by_date_name[nm][d] += 1
     dates = sorted(by_date_total)[-30:]
     fig = go.Figure()
@@ -170,7 +170,7 @@ def build_dashboard(db_path=None, out_path=None) -> Path:
                        f"<p class=sub>generated {now}</p></body></html>", encoding="utf-8")
         return out
 
-    eps = apply_merge(eps, merge_map(eps))  # fold subset-variant archetypes into their cluster
+    eps = apply_merge(eps, merge_map(eps))  # fold subset-variant archetypes into cluster
 
     by_band: dict[str, list[dict]] = {b: [] for b in _BAND_ORDER}
     for ep in eps:

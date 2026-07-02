@@ -10,7 +10,7 @@ KIRLIA, GARDEVOIR = 100, 101
 
 @pytest.mark.req("REQ-SCOUT-0001")
 def test_signature_card_spikes_its_archetype():
-    # Solrock is near-exclusive to Mega Lucario ex; seeing it should settle the read.
+    # Solrock is near-exclusive to Mega Lucario ex; seeing it settles the read.
     priors = {"Mega Lucario ex": 0.5, "Gardevoir ex": 0.5}
     card_inclusion = {
         "Mega Lucario ex": {SOLROCK: 0.95, MEGA_LUCARIO: 1.0},
@@ -26,7 +26,7 @@ def test_signature_card_spikes_its_archetype():
 
 @pytest.mark.req("REQ-SCOUT-0003")
 def test_unrecognized_cards_raise_unknown_mass():
-    # A common card that belongs to no tracked archetype should look "off-meta".
+    # A common card belonging to no tracked archetype should look "off-meta".
     priors = {"Mega Lucario ex": 0.5, "Gardevoir ex": 0.5}
     card_inclusion = {"Mega Lucario ex": {SOLROCK: 0.95}, "Gardevoir ex": {GARDEVOIR: 1.0}}
     ROGUE = 9999
@@ -39,7 +39,7 @@ def test_unrecognized_cards_raise_unknown_mass():
 
 @pytest.mark.req("REQ-SCOUT-0002")
 def test_corroborating_evidence_sharpens_posterior():
-    # Seeing more of an archetype's cards should only increase its posterior.
+    # Seeing more of an archetype's cards only increases its posterior.
     priors = {"Mega Lucario ex": 0.5, "Gardevoir ex": 0.5}
     card_inclusion = {
         "Mega Lucario ex": {SOLROCK: 0.6, MEGA_LUCARIO: 0.9, RIOLU: 0.9},

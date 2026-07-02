@@ -12,7 +12,7 @@ def test_tags_returns_assigned_tags():
 
 @pytest.mark.req("REQ-PILOT-0008")
 def test_unknown_card_has_no_tags():
-    # Partial/additive: a card the table hasn't tagged yet just has none.
+    # Partial/additive: a card the table hasn't tagged yet has none.
     assert CardFunctions({}).tags(99999) == []
 
 

@@ -71,9 +71,9 @@ def avg_blunders_per_game(corrections) -> dict:
 
 
 # --- Resolution view: tag each blunder with its /blunder-buster terminal outcome ----------------
-# `fixed` is implicit — auto-reconciliation (ADR-0018) dropped it from `open[]` because a committed
-# rule now satisfies it; `covered`/`refuted`/`deferred` come from the reviewed ledger; `open` still
-# needs a rule; `skipped` is the tactical / no-obs pile the tuner can't route.
+# `fixed` implicit — auto-reconciliation (ADR-0018) dropped it from `open[]` since a committed
+# rule now satisfies it; `covered`/`refuted`/`deferred` come from reviewed ledger; `open` still
+# needs a rule; `skipped` = tactical / no-obs pile the tuner can't route.
 _RESOLVED = ("fixed", "covered", "refuted", "deferred")
 _DISP_ORDER = ("fixed", "covered", "refuted", "deferred", "open", "skipped")
 
@@ -152,7 +152,7 @@ def _per_game_table(stats: dict) -> str:
     """Avg blunders-per-game by build, chronological — the over-time blunder-density trend."""
     if not stats:
         return "<p class='muted'>none</p>"
-    rows_data = sorted(  # chronological by built_at, then build id
+    rows_data = sorted(  # chronological: built_at, then build id
         ((slot.get("built_at") or "", build, slot["games"], slot["blunders"], slot["avg"])
          for build, slot in stats.items()),
         key=lambda r: (r[0], str(r[1])),

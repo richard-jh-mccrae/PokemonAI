@@ -15,7 +15,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # make `meta_tracker` importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # makes `meta_tracker` importable
 
 from meta_tracker.cards import load_cards            # noqa: E402
 from meta_tracker.compile_scouting import compile_artifact  # noqa: E402

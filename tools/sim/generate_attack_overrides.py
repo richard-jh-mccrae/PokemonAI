@@ -69,21 +69,21 @@ def derive_overrides(records: list[dict], parsed: dict,
         if texts and "use it as this attack" in (texts.get(aid) or ""):
             continue                                     # copy-attack: measurements don't transfer
         delta: dict = {}
-        # 1) measured coin bounds — vanilla-panel forks only (no W/R baked into the dealt number)
+        # 1) measured coin bounds — vanilla-panel forks only (no W/R baked into dealt number)
         forks = {r["coin"]: r["dealtActive"] for r in recs
                  if r.get("coin") and r.get("scenario") == "vanilla"}
         if "min" in forks and "max" in forks:
             lo, hi = int(forks["min"]), int(forks["max"])
             if (st.damageMin, st.damageMax) != (lo, hi):
                 delta["damageMin"], delta["damageMax"] = lo, hi
-        # 2) fixed effect damage — printed 0, one constant across >=2 modifier scenarios
+        # 2) fixed effect damage — printed 0, constant across >=2 modifier scenarios
         plain = [r for r in recs if not r.get("coin") and not r.get("sweep")
                  and not r.get("coinLogs") and r.get("scenario") in _PANEL]
         vals = {int(r["dealtActive"]) for r in plain}
         if (st.damage == 0 and not st.scaleVar and len(plain) >= 2 and len(vals) == 1
                 and vals != {0}):
             delta["damage"] = vals.pop()
-        # 3) sweep-fitted visible-state scaler — exact linear fit, parser missed it
+        # 3) sweep-fitted visible-state scaler — exact linear fit parser missed
         if not st.scaleVar:
             for var, (scale_var, field) in _SWEEP_VARS.items():
                 pts = [(int(r.get(field, 0)), int(r["dealtActive"])) for r in plain

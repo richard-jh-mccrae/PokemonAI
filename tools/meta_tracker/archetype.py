@@ -21,8 +21,8 @@ class Line:
     """One evolution line present in a deck."""
     top_id: int          # highest-stage card present (the attacker)
     top_name: str
-    members: list[int]   # all card ids in the line, present in the deck
-    investment: int      # copies of the top-stage card
+    members: list[int]   # all card ids in the line, present in deck
+    investment: int      # copies of top-stage card
     stage_rank: int      # 0/1/2
     exclass: bool        # top is ex / Mega-ex
     attacker: bool       # top has a printed damaging attack
@@ -95,7 +95,7 @@ def classify(deck_ids: list[int], cards: dict[int, dict] | None = None) -> Arche
     lines = evolution_lines(dict(counts), cards)
 
     # Main candidates = non-engine lines ranked by investment (a win-condition may
-    # deal 0 printed damage and attack via an ability/effect, e.g. Alakazam).
+    # deal 0 printed damage and attack via ability/effect, e.g. Alakazam).
     candidates = sorted((l for l in lines if not is_engine(l.top_name)), key=_rank_key, reverse=True)
     mains = [l for l in candidates if l.investment >= config.MAIN_LINE_MIN_COPIES][:config.MAX_MAIN_LINES]
     if not mains:  # never produce a nameless archetype

@@ -53,7 +53,7 @@ class LethalMixin:
             return None
         opp = self._opp_active(obs)
 
-        # 1) A KO already on the menu that WINS this turn — the shortest line (one step). Judged by the
+        # 1) A KO already on the menu that WINS this turn — shortest line (one step). Judged by the
         #    attack's OWN prize yield (`_attack_wins`), never a coarse "some KO exists" guess: a snipe
         #    that KOs a benched 1-prize body but leaves a 2-prize ex Active is NOT a win.
         for i, o in enumerate(options):
@@ -61,22 +61,22 @@ class LethalMixin:
                 return LethalLine(next_step=[i], rationale="lethal: this KO wins the match", kind="direct")
 
         # The enabling develops below each unlock a KO of the opponent's ACTIVE (via the closed-form
-        # hooks). That active-KO wins iff it takes my last prize or the opponent has no bench to promote
-        # — under-counting any snipe the unlocked attack also lands, which is conservative (still sound).
+        # hooks). That active-KO wins iff it takes my last prize or opponent has no bench to promote
+        # — under-counts any snipe the unlocked attack also lands, which is conservative (still sound)
         if not (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench):
             return None
 
         # 2) An Energy attach (`_attach_lethal_tactical`) or a retreat into a ready benched attacker
         #    (`_retreat_to_lethal_tactical`) that unlocks that KO — both KO_SCORE-class. Take the
-        #    develop; the finishing attack follows when the engine re-opens the turn menu.
+        #    develop; finishing attack follows when the engine re-opens the turn menu.
         for i, o in enumerate(options):
             if o.get("type") in (_ATTACH, _RETREAT) and traces[i].tactical >= KO_SCORE:
                 return LethalLine(next_step=[i], kind="unlock",
                                   rationale="lethal (unlock): a develop enables the winning KO")
         # 3) An EVOLVE of the Active that brings a bigger attacker online — no closed-form hook scores
-        #    it, so look it up: the evolved form (the option's in-hand card) inherits the Active's
-        #    Energy and its best affordable attack must KO. Evolving then attacking is legal the same
-        #    turn (rules.md §evolution). Reuses the shared KO valuation for soundness.
+        #    it, so look it up: evolved form (the option's in-hand card) inherits the Active's
+        #    Energy, its best affordable attack must KO. Evolving then attacking legal same
+        #    turn (rules.md §evolution). Reuses shared KO valuation for soundness.
         for i, o in enumerate(options):
             if o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 evolved_id = self._option_card_id(obs, select, o)
@@ -93,11 +93,11 @@ class LethalMixin:
         simultaneous double-KO is a draw, not a win (ADR-0022 #2), so it never wins here."""
         aid = option.get("attackId")
         hp = (opp or {}).get("hp", 0)
-        # The damage oracle (ADR-0032): per-attack prevention/W/R — an ignore-flag attack (Nebula
+        # Damage oracle (ADR-0032): per-attack prevention/W/R — an ignore-flag attack (Nebula
         # Beam) KOs through a prevent_ex_damage wall the old attack-blind path zeroed. bound="min"
-        # = the sound FLOOR: a coin/conditional attack ("If tails, does nothing") contributes its
+        # = sound FLOOR: a coin/conditional attack ("If tails, does nothing") contributes its
         # worst case, so a merely-likely KO can never lock a phantom Lethal (the one catastrophic
-        # error — CONTEXT.md *Lethal*: coins forced to their worst outcome). The context term stays
+        # error — CONTEXT.md *Lethal*: coins forced to worst outcome). Context term stays
         # sound under "min": a visible-state scaler (hand size, attached Energy) is EXACT.
         dmg = self.predicted_damage(self._my_active_id(obs), aid, opp, bound="min",
                                     context=self._damage_context(obs))
@@ -108,7 +108,7 @@ class LethalMixin:
                         + self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(aid)))
         if prizes_taken >= board.my_prizes_remaining:
             return True
-        return active_ko and not board.opp_bench       # the KO leaves them no Pokémon to promote
+        return active_ko and not board.opp_bench       # KO leaves them no Pokémon to promote
 
     def _engine_confirms_win(self, obs, line_steps):
         """Tier-1 (ADR-0030): forward-simulate ``line_steps`` — a list of per-select index lists, the

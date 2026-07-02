@@ -18,5 +18,5 @@ def test_write_meta_stamps_count_and_stable_corrections_hash(tmp_path):
     assert meta["corrections_count"] == 3
     assert meta["tuned_at"].startswith("2026-06-25")
     assert len(meta["corrections_hash"]) == 12
-    # the hash is order-independent (corrections sorted by id) so the same set always agrees
+    # hash is order-independent (corrections sorted by id) -> same set always agrees
     assert meta["corrections_hash"] == corrections_hash([SimpleNamespace(id=i) for i in "cab"])

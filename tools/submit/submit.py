@@ -13,7 +13,7 @@ from pathlib import Path
 from submit.build import DEFAULT_BUILDS, DEFAULT_HISTORY, DEFAULT_OUT
 from submit.history import append_history, read_history
 
-COMPETITION = "pokemon-tcg-ai-battle"   # the Simulation track — the agent's graded slug (ADR-0019)
+COMPETITION = "pokemon-tcg-ai-battle"   # the Simulation track — agent's graded slug (ADR-0019)
 
 
 def compose_message(row: dict) -> str:
@@ -40,7 +40,7 @@ def _resolve(rows: list[dict], build_id: int | None) -> dict:
     if not rows:
         raise SystemExit("no builds yet — run `build <agent>` first")
     if build_id is None:
-        return rows[-1]                                  # default: the most recent build
+        return rows[-1]                                  # default: most recent build
     row = next((r for r in rows if r["submission_id"] == build_id), None)
     if row is None:
         raise SystemExit(f"no build #{build_id} in the ledger")
@@ -52,7 +52,7 @@ def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILD
            check_fn=None, upload_fn=None) -> dict:
     """Upload the chosen build (default: latest) and record it. Raises SystemExit *before*
     uploading on any gate failure."""
-    row = dict(_resolve(read_history(builds), build_id))   # copy: don't mutate the ledger entry
+    row = dict(_resolve(read_history(builds), build_id))   # copy: don't mutate ledger entry
     zip_path = Path(out) / f"{row['artifact']}.zip"
     if not zip_path.exists():
         raise SystemExit(f"build #{row['submission_id']} artifact missing: {zip_path} (rebuild it)")

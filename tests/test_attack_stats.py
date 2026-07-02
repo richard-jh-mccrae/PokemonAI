@@ -15,7 +15,7 @@ from common.scouting.provider import (
 
 @pytest.mark.req("REQ-DMG-0001")
 @pytest.mark.parametrize("text,expected", [
-    # Nebula Beam (1488) / Demolish — the full triple: Weakness + Resistance + effects
+    # Nebula Beam (1488) / Demolish — full triple: Weakness + Resistance + effects
     ("This attack's damage isn't affected by Weakness or Resistance, or by any effects on your "
      "opponent's Active Pokémon.", (True, True, True)),
     # Shred / Sonic Edge / Superb Scissors / Spiky Hopper — effects only
@@ -32,10 +32,10 @@ from common.scouting.provider import (
      "isn't affected by Weakness.", (True, False, False)),
     # Cynthia's Gible / Naclstack / Landorus Rock Tumble — Resistance only
     ("This attack's damage isn't affected by Resistance.", (False, True, False)),
-    # Conkeldurr Gutsy Swing — ignores Energy COST, not damage -> no damage flag
+    # Conkeldurr Gutsy Swing — ignores Energy COST not damage -> no damage flag
     ("If this Pokémon is affected by a Special Condition, ignore all Energy in this attack's cost.",
      (False, False, False)),
-    # no ignore phrasing at all
+    # no ignore phrasing
     ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon.", (False, False, False)),
     ("", (False, False, False)),
 ])
@@ -67,13 +67,13 @@ def test_build_attack_stats_folds_damage_cost_riders_and_flags():
     stats = build_attack_stats(attacks)
     jetting, nebula, recoiler, powerful = stats[1487], stats[1488], stats[7], stats[1072]
     assert isinstance(nebula, AttackStat)
-    # Jetting Blow: plain damage + the bench rider, no ignore flags
+    # Jetting Blow: plain damage + bench rider, no ignore flags
     assert (jetting.damage, jetting.cost, jetting.benchSnipe) == (120, 1, 50)
     assert (jetting.ignoresWeakness, jetting.ignoresResistance, jetting.ignoresEffects) == (False, False, False)
-    # Nebula Beam: the full ignore triple
+    # Nebula Beam: full ignore triple
     assert (nebula.damage, nebula.cost) == (210, 3)
     assert (nebula.ignoresWeakness, nebula.ignoresResistance, nebula.ignoresEffects) == (True, True, True)
-    # riders fold in via the existing parsers
+    # riders fold in via existing parsers
     assert recoiler.recoil == 30
     assert powerful.handSizeDamage == 20
 
@@ -86,7 +86,7 @@ def test_build_attack_stats_tolerates_missing_text():
 
 @pytest.mark.req("REQ-DMG-0007")
 @pytest.mark.parametrize("text,printed,expected", [
-    # Best Punch (142) — "If tails, does nothing": the sound floor is 0
+    # Best Punch (142) — "If tails, does nothing": sound floor is 0
     ("Flip a coin. If tails, this attack does nothing.", 40, (0, 40)),
     # Cosmic Beam (980) / Sawk — a NON-coin does-nothing condition floors to 0 too
     ("If you don't have Lunatone on your Bench, this attack does nothing. This attack's damage "
@@ -95,7 +95,7 @@ def test_build_attack_stats_tolerates_missing_text():
     ("Flip a coin. If heads, this attack does 20 more damage.", 10, (10, 30)),
     # Superpower (144) — optional bonus: declining keeps printed; ceiling includes it
     ("You may do 30 more damage. If you do, this Pokémon also does 30 damage to itself.", 50, (50, 80)),
-    # deterministic attacks carry NO bounds (None -> the printed damage is exact)
+    # deterministic attacks carry NO bounds (None -> printed damage is exact)
     ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon.", 120, None),
     ("", 210, None),
 ])
@@ -116,10 +116,10 @@ def test_build_folds_damage_bounds():
 
 @pytest.mark.req("REQ-DMG-0009")
 @pytest.mark.parametrize("text,expected", [
-    # Mind Ruler (123) — damage per card in the OPPONENT's hand
+    # Mind Ruler (123) — damage per card in OPPONENT's hand
     ("This attack does 30 damage for each card in your opponent's hand.",
      ("def_hand", 30, False, None)),
-    # Psychic (339) — bonus damage per Energy on the opponent's Active
+    # Psychic (339) — bonus damage per Energy on opponent's Active
     ("This attack does 50 more damage for each Energy attached to your opponent's Active Pokémon.",
      ("def_active_energy", 50, False, None)),
     # own-Energy family (13 attacks) — per Energy attached to THIS Pokémon
@@ -128,13 +128,13 @@ def test_build_folds_damage_bounds():
     # Powerful Hand (1072) — COUNTERS per card in MY hand: counters bypass W/R AND prevention
     ("Place 2 damage counters on your opponent's Active Pokémon for each card in your hand.",
      ("atk_hand", 20, True, None)),
-    # Riptide (1042) — per Basic {W} Energy in the ATTACKER's discard (visible for BOTH players)
+    # Riptide (1042) — per Basic {W} Energy in ATTACKER's discard (visible for BOTH players)
     ("This attack does 20 damage for each Basic {W} Energy card in your discard pile. Then, "
      "shuffle those cards into your deck.", ("atk_discard_energy", 20, False, 3)),
-    # 446 — per ANY Energy card in the attacker's discard (no type filter)
+    # 446 — per ANY Energy card in attacker's discard (no type filter)
     ("This attack does 20 more damage for each Energy card in your discard pile.",
      ("atk_discard_energy", 20, False, None)),
-    # 15 — COUNTERS per Basic {G} Energy in the attacker's discard
+    # 15 — COUNTERS per Basic {G} Energy in attacker's discard
     ("Put 2 damage counters on 1 of your opponent's Pokémon for each Basic {G} Energy card in "
      "your discard pile. Then, shuffle those Energy cards into your deck.",
      ("atk_discard_energy", 20, True, 1)),
@@ -156,18 +156,18 @@ def test_build_folds_scaling_and_counter_scalers_get_ignore_flags():
     assert (stats[123].scaleVar, stats[123].scalePerUnit) == ("def_hand", 30)
     assert stats[123].ignoresWeakness is False                  # damage-type scaling: W/R apply
     assert (stats[1072].scaleVar, stats[1072].scalePerUnit) == ("atk_hand", 20)
-    # counters are not damage: they bypass Weakness, Resistance AND damage-prevention effects
+    # counters aren't damage: bypass Weakness, Resistance AND damage-prevention effects
     assert (stats[1072].ignoresWeakness, stats[1072].ignoresResistance,
             stats[1072].ignoresEffects) == (True, True, True)
 
 
 @pytest.mark.req("REQ-DMG-0010")
 @pytest.mark.parametrize("text,expected", [
-    # Crustle 345 / Sylveon 330 — Sylveon carries NO prevent_ex_damage tag: the parsed field
+    # Crustle 345 / Sylveon 330 — Sylveon carries NO prevent_ex_damage tag: parsed field
     # closes that gap
     ("Prevent all damage done to this Pokémon by attacks from your opponent's Pokémon {ex}.",
      ("ex", 0, 0, None)),
-    # Farigiraf ex 83 — the narrower Basic-ex variant
+    # Farigiraf ex 83 — narrower Basic-ex variant
     ("Prevent all damage done to this Pokémon by attacks from your opponent's Basic Pokémon {ex}.",
      ("basic_ex", 0, 0, None)),
     # Drednaw 158 — threshold prevention
@@ -191,7 +191,7 @@ def test_parse_card_defense(text, expected):
 def test_parse_hidden_deck_discard_scalers():
     from common.scouting.provider import parse_attack_hidden_scale
     # Mega Abomasnow ex Hammer-lanche (1046): top 6 of MY deck, 100 per Basic {W} discarded —
-    # the {W} filter lets exact deck facts compute a pigeonhole floor / EV
+    # {W} filter lets exact deck facts compute a pigeonhole floor / EV
     assert parse_attack_hidden_scale(
         "Discard the top 6 cards of your deck, and this attack does 100 damage for each Basic {W} "
         "Energy card that you discarded in this way.") == (100, 6, 3)
@@ -220,7 +220,7 @@ def test_build_folds_hidden_scale():
 @pytest.mark.req("REQ-DMG-0012")
 def test_parse_effect_damage_family():
     from common.scouting.provider import parse_attack_effect_damage
-    # chosen-target fixed effect damage: printed 0, the text carries the number
+    # chosen-target fixed effect damage: printed 0, text carries the number
     assert parse_attack_effect_damage(
         "This attack does 100 damage to 1 of your opponent's Pokémon. (Don't apply Weakness and "
         "Resistance for Benched Pokémon.)") == (100, False)
@@ -262,7 +262,7 @@ def test_build_applies_effect_damage_only_to_printed_zero():
     # optional pay-for-bonus (Raichu-class): "to have this attack do N more damage"
     ("You may put all Energy attached to this Pokémon into your hand to have this attack do 80 "
      "more damage.", 80, (80, 160)),
-    # a for-each bonus is a SCALER, not a flat bonus — must not parse as bounds
+    # for-each bonus is a SCALER not a flat bonus — must not parse as bounds
     ("This attack does 30 more damage for each card in your opponent's hand.", 0, None),
 ])
 def test_generic_bonus_bounds(text, printed, expected):
@@ -343,7 +343,7 @@ def test_parse_attack_transients():
     assert parse_attack_transients(
         "During your opponent's next turn, the Defending Pokémon can't retreat.",
         "Bind") == {"retreat_lock": True}
-    # coin-gated transients are NOT tracked (can't know the flip): ledger
+    # coin-gated transients NOT tracked (can't know the flip): ledger
     assert parse_attack_transients(
         "Flip a coin. If heads, during your opponent's next turn, prevent all damage done to this "
         "Pokémon by attacks.", "Gamble") == {}
@@ -361,12 +361,12 @@ def test_build_folds_transients():
 
 @pytest.mark.req("REQ-DMG-0003")
 def test_overrides_beat_parsed_values():
-    # the audit / a human corrects a parse miss: override wins, untouched fields survive
+    # audit / a human corrects a parse miss: override wins, untouched fields survive
     attacks = [_Attack(70, 130, 3, "This attack's damage isn't affected by any effects on your "
                                    "opponent's Active Pokémon.")]
     stats = build_attack_stats(attacks, overrides={70: {"ignoresEffects": False, "recoil": 20},
                                                    999: {"damage": 50}})   # unknown id ignored
-    assert stats[70].ignoresEffects is False          # override beats the parsed True
-    assert stats[70].recoil == 20                     # override sets a field the text lacked
+    assert stats[70].ignoresEffects is False          # override beats parsed True
+    assert stats[70].recoil == 20                     # override sets field text lacked
     assert stats[70].damage == 130                    # untouched fields survive
     assert 999 not in stats                           # overrides never invent attacks

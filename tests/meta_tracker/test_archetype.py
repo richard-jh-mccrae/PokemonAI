@@ -23,7 +23,7 @@ def test_single_evolution_line_groups_basic_and_evo():
 
 
 def test_top_stage_without_pre_evolution_still_a_line():
-    # Cinderace (Stage 2) with no Raboot/Scorbunny in the deck.
+    # Cinderace (Stage 2) with no Raboot/Scorbunny in deck.
     lines = evolution_lines({CINDERACE: 4})
     assert len(lines) == 1 and lines[0].top_name == "Cinderace"
 
@@ -48,7 +48,7 @@ def test_archetype_key_is_order_independent():
 
 
 def test_low_copy_lines_are_sub_not_main():
-    # One-of attacker should not become a main line.
+    # One-of attacker shouldn't become a main line.
     a = classify(_deck((STARYU, 4), (MEGA_STARMIE_EX, 3), (CINDERACE, 1), (BASIC_W, 52)))
     assert a.main_lines == ["Mega Starmie ex"]
     assert "Cinderace" in a.sub_lines
@@ -59,7 +59,7 @@ def _id(name):
 
 
 def test_engine_pokemon_demoted_to_sub():
-    # Budew (curated engine) must not name the deck even with copies + an attack.
+    # Budew (curated engine) must not name deck even with copies + an attack.
     a = classify(_deck((CINDERACE, 4), (_id("Budew"), 3), (BASIC_W, 53)))
     assert a.main_lines == ["Cinderace"]
     assert "Budew" in a.sub_lines
@@ -72,14 +72,14 @@ def test_dudunsparce_engine_demoted():
 
 
 def test_pure_engine_deck_falls_back_not_unknown():
-    # If the only attacker is an engine, still name it (don't emit "Unknown").
+    # If only attacker is an engine, still name it (don't emit "Unknown").
     a = classify(_deck((_id("Budew"), 4), (BASIC_W, 56)))
     assert a.name != "Unknown" and a.main_lines == ["Budew"]
 
 
 def test_zero_damage_wincon_is_main():
-    # Regression: Alakazam attacks via ability (printed damage 0) but is the deck's
-    # main win-condition; the Dudunsparce engine alongside it must not steal the name.
+    # Regression: Alakazam attacks via ability (printed damage 0) but is deck's
+    # main win-condition; Dudunsparce engine alongside it must not steal the name.
     a = classify(_deck((_id("Alakazam"), 4), (_id("Dudunsparce"), 4), (BASIC_W, 52)))
     assert a.main_lines == ["Alakazam"]
     assert "Dudunsparce" in a.sub_lines

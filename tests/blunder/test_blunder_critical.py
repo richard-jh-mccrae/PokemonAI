@@ -35,7 +35,7 @@ def test_is_critical_matches_uppercase_token_only():
     assert is_critical("this one is CRITICAL")
     assert is_critical("CRITICAL.")                      # punctuation is a word boundary
     assert not is_critical("a critical attack")          # lowercase prose, not a marker
-    assert not is_critical("CRITICALLY low")             # substring, not the token
+    assert not is_critical("CRITICALLY low")             # substring, not the token itself
     assert not is_critical("")
     assert not is_critical(None)
     assert CRITICAL_MARKER == "CRITICAL"
@@ -70,9 +70,9 @@ def test_shell_ui_exposes_critical_checkbox():
     token in the rationale (bidirectional), so the human sets it without hand-typing the marker."""
     from train.blunder.shell import _SHELL_HTML
     assert 'id="critical"' in _SHELL_HTML and 'type="checkbox"' in _SHELL_HTML
-    assert "class=\"crit\"" in _SHELL_HTML                       # the red styling hook
-    assert f"'{CRITICAL_MARKER}: '" in _SHELL_HTML               # applyCritical prepends the exact token
-    assert "syncCrit" in _SHELL_HTML                             # box tracks the rationale text
+    assert "class=\"crit\"" in _SHELL_HTML                       # red styling hook
+    assert f"'{CRITICAL_MARKER}: '" in _SHELL_HTML               # applyCritical prepends exact token
+    assert "syncCrit" in _SHELL_HTML                             # box tracks rationale text
 
 
 def test_report_badges_critical(tmp_path):
@@ -81,6 +81,6 @@ def test_report_badges_critical(tmp_path):
     append_correction(_c("CRITICAL: had lethal, passed"), log)
     append_correction(_c("ordinary miss", category="overextension"), log)  # distinct dedup key
     txt = build_report(log, tmp_path / "r.html").read_text(encoding="utf-8")
-    assert txt.count("pill critical") == 2                # header count + the one badged row
+    assert txt.count("pill critical") == 2                # header count + one badged row
     assert "&#9888; 1 CRITICAL" in txt                    # header shows exactly one critical
     assert "http" not in txt                              # still fully offline

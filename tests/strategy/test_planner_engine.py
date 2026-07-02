@@ -65,7 +65,7 @@ def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
         menu = _first_open_menu(pilot, obs)
         assert menu is not None                            # reached an open turn menu with a search input
         value = pilot._engine_leaf_value(menu, pilot.decide(menu))
-        assert value is not None                           # the search round-tripped to an end-of-turn board
+        assert value is not None                           # search round-tripped to an end-of-turn board
         assert value >= 0                                  # prizes/survival are non-negative
     finally:
         battle_finish()
@@ -89,7 +89,7 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
         end, my_index, start_prizes, result = sim
         assert my_index in (0, 1) and start_prizes >= 1
         cur = end.get("current") or {}
-        # my turn is over: the game finished, or the menu is no longer mine to act on
+        # my turn's over: game finished, or menu is no longer mine to act on
         assert result != -1 or cur.get("yourIndex") != my_index or cur.get("select") is None \
             or (end.get("select") is None)
     finally:
@@ -118,9 +118,9 @@ def test_critical_7f48_is_fixed_on_its_real_replay_state():
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_7f48.json").read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
     decision = pilot.explain(fx["obs"])
-    assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # the Planner acted
-    assert "2-prize KO" in decision.planned.rationale                                   # via the multi-step line
-    assert decision.chosen == fx["correct"]        # the agent now takes the human's correct move (the retreat)
+    assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # Planner acted
+    assert "2-prize KO" in decision.planned.rationale                                   # via multi-step line
+    assert decision.chosen == fx["correct"]        # agent now takes human's correct move (the retreat)
 
 
 @pytest.mark.req("REQ-PLANNER-0020")
@@ -134,7 +134,7 @@ def test_critical_0cbc_stabilize_then_ko_is_fixed_on_its_real_replay_state():
     pilot = _shipped_pilot()
     decision = pilot.explain(fx["obs"])
     assert decision.planned is not None and decision.planned.goal == "stabilize_then_ko"
-    assert decision.chosen == fx["correct"]        # the agent now heals-and-KOs (plays Wally's) as the human marked
+    assert decision.chosen == fx["correct"]        # agent now heals-and-KOs (plays Wally's) as human marked
 
 
 @pytest.mark.req("REQ-PLANNER-0023")
@@ -150,6 +150,6 @@ def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_4298.json").read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
     decision = pilot.explain(fx["obs"])
-    assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # the Planner acted
-    assert "energy tutor" in decision.planned.rationale                                # via the Supporter line
-    assert decision.chosen == fx["correct"]        # the agent now plays Hilda (the energy grab) as the human marked
+    assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # Planner acted
+    assert "energy tutor" in decision.planned.rationale                                # via Supporter line
+    assert decision.chosen == fx["correct"]        # agent now plays Hilda (energy grab) as human marked

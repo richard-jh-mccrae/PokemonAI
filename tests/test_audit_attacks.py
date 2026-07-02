@@ -11,7 +11,7 @@ from sim.audit_attacks import (
     plan_scenarios, record_key, shape_record,
 )
 
-# Synthetic pool: plain dicts as the drive-shell builds them from all_card_data().
+# Synthetic pool: plain dicts, same as drive-shell builds from all_card_data().
 W, F, P, G, FIRE = 3, 6, 5, 1, 2   # EnergyType ints
 
 
@@ -30,7 +30,7 @@ def _pool():
         30: _mon(270, weak=F, name="BigWeak"),                       # weak to Fighting
         31: _mon(90, weak=F, name="SmallWeak"),
         40: _mon(130, resist=F, name="Resist"),                      # resists Fighting
-        41: _mon(220, resist=F, ability=True, name="ResistAbility"), # bigger but has an ability
+        41: _mon(220, resist=F, ability=True, name="ResistAbility"), # bigger, but has ability
         50: _mon(200, weak=F, tera=True, name="TeraWeak"),           # tera excluded from panel
         60: _mon(70, name="Staryu2"),
         61: _mon(330, basic=False, mega=True, evolves_from="Staryu2", name="MegaTip"),
@@ -46,7 +46,7 @@ def _pool():
 @pytest.mark.req("REQ-AUDIT-0001")
 def test_panel_vanilla_is_highest_hp_basic_with_no_ability_no_matchup():
     panel = pick_panel(_pool()[10], _pool())
-    assert panel["vanilla"] == 20            # 310 HP, not weak/resistant to Fighting, no ability
+    assert panel["vanilla"] == 20            # 310 HP, not weak/resist to Fighting, no ability
 
 
 @pytest.mark.req("REQ-AUDIT-0001")
@@ -64,7 +64,7 @@ def test_panel_resist_prefers_no_ability_over_hp():
 @pytest.mark.req("REQ-AUDIT-0001")
 def test_panel_missing_matchup_is_none_not_a_guess():
     pool = _pool()
-    water_attacker = _mon(100, etype=W)      # nothing in the pool is weak/resistant to Water
+    water_attacker = _mon(100, etype=W)      # nothing in pool weak/resist to Water
     panel = pick_panel(water_attacker, pool)
     assert panel["weak"] is None and panel["resist"] is None
 
@@ -83,7 +83,7 @@ def test_panel_prevent_ex_only_for_ex_attackers():
 @pytest.mark.req("REQ-AUDIT-0003")
 def test_evolution_chain_walks_names_basic_first():
     assert evolution_chain(61, _pool()) == [60, 61]
-    assert evolution_chain(10, _pool()) == [10]           # a Basic is its own chain
+    assert evolution_chain(10, _pool()) == [10]           # Basic is its own chain
 
 
 @pytest.mark.req("REQ-AUDIT-0002")
@@ -96,7 +96,7 @@ def test_side_deck_is_60_with_four_of_each_chain_card():
 
 @pytest.mark.req("REQ-AUDIT-0002")
 def test_side_deck_maps_colorless_to_a_real_energy_card():
-    deck = build_side_deck([10], [0, 0, 0])               # colorless cost -> playable basic Energy
+    deck = build_side_deck([10], [0, 0, 0])               # colorless cost -> plays basic Energy
     assert len(deck) == 60
     assert all(c in (10, 3) for c in deck)
 
@@ -105,20 +105,20 @@ def test_side_deck_maps_colorless_to_a_real_energy_card():
 def test_side_deck_seeds_bench_fodder_within_copy_limits():
     deck = build_side_deck([344, CRUSTLE], [0], fodder=[20, 30])
     assert len(deck) == 60
-    assert deck.count(20) == 4 and deck.count(30) == 4    # snipe targets are drawable
+    assert deck.count(20) == 4 and deck.count(30) == 4    # snipe targets drawable
 
 
 @pytest.mark.req("REQ-AUDIT-0002")
 def test_bench_fodder_picks_sturdy_clean_bodies_and_respects_exclude():
     picks = bench_fodder(_pool(), exclude={20}, n=2)
-    assert picks == [30, 10]           # top HP after the exclude; no ability (41), no tera (50)
+    assert picks == [30, 10]           # top HP after exclude; no ability (41), no tera (50)
 
 
 @pytest.mark.req("REQ-AUDIT-0002")
 def test_missing_typed_tracks_the_typed_cost_not_just_the_count():
     assert _missing_typed([G, 0], []) == {1}          # {G}{C}: Grass card 1 still needed
-    assert _missing_typed([G, 0], [W]) == {1}         # a Water attach never pays the {G}
-    assert _missing_typed([G, 0], [G]) == set()       # typed met; count gate covers the {C}
+    assert _missing_typed([G, 0], [W]) == {1}         # Water attach never pays the {G}
+    assert _missing_typed([G, 0], [G]) == set()       # typed met; count gate covers {C}
     assert _missing_typed([0, 0, 0], []) == set()     # all-colorless: nothing typed to chase
 
 
@@ -185,7 +185,7 @@ def test_attack_window_slices_from_the_attack_to_the_turn_boundary():
         {"type": _ATTACK, "attackId": 147},
         {"type": _HP, "serial": 900, "value": -70},
         {"type": _TURN_END},
-        {"type": _HP, "serial": 900, "value": -10},        # next turn's poison tick: excluded
+        {"type": _HP, "serial": 900, "value": -10},        # next-turn poison tick: excluded
     ]
     win = attack_window(logs, 147)
     assert [l.get("value") for l in win if l["type"] == _HP] == [-70]
@@ -198,13 +198,13 @@ def test_attack_window_is_empty_when_the_attack_never_fired():
 
 @pytest.mark.req("REQ-AUDIT-0004")
 def test_attack_window_uses_the_last_replayed_chunk_not_the_first():
-    # Engine logs are per-viewing-player: the defender-view chunk REPLAYS the turn, so a
-    # naive first-occurrence slice stops at the replayed boundary and drops rider damage.
+    # Engine logs are per-viewing-player: defender-view chunk REPLAYS the turn, so a naive
+    # first-occurrence slice stops at the replayed boundary and drops rider damage.
     attacker_view = [{"type": _ATTACK, "attackId": 1487},
                      {"type": _HP, "serial": 900, "value": -120}]
-    defender_view = [{"type": _TURN_END},                  # defender's own previous turn end
+    defender_view = [{"type": _TURN_END},                  # defender's own prev turn end
                      {"type": _TURN_START},
-                     {"type": _ATTACK, "attackId": 1487},  # the same attack, replayed
+                     {"type": _ATTACK, "attackId": 1487},  # same attack, replayed
                      {"type": _HP, "serial": 900, "value": -120},
                      {"type": _HP, "serial": 901, "value": -50},   # the snipe rider
                      {"type": _TURN_END}]
@@ -242,7 +242,7 @@ def test_damage_flags_a_ko_when_dealt_reaches_hp():
 @pytest.mark.req("REQ-AUDIT-0004")
 def test_zero_damage_attack_reads_as_zero_not_missing():
     snap_def = board_snapshot(_obs(), 1)
-    window = [{"type": _ATTACK, "attackId": 1488}]         # ability prevented everything
+    window = [{"type": _ATTACK, "attackId": 1488}]         # ability blocked everything
     d = damage_from_window(window, snap_def, board_snapshot(_obs(), 0))
     assert d["dealtActive"] == 0 and d["dealtBench"] == [] and d["koed"] is False
 
@@ -251,7 +251,7 @@ def test_zero_damage_attack_reads_as_zero_not_missing():
 def test_healing_hp_change_is_not_counted_as_damage():
     snap_def = board_snapshot(_obs(), 1)
     window = [{"type": _ATTACK, "attackId": 1},
-              {"type": _HP, "serial": 900, "value": 30}]   # a heal, not a hit
+              {"type": _HP, "serial": 900, "value": 30}]   # heal, not a hit
     d = damage_from_window(window, snap_def, board_snapshot(_obs(), 0))
     assert d["dealtActive"] == 0
 
@@ -276,7 +276,7 @@ def test_record_carries_the_full_measurement_shape():
     assert r["scenario"] == "prevent_ex" and r["printed"] == 210
     assert r["dealtActive"] == 210 and r["dealtBench"] == []
     assert r["defenderCardId"] == CRUSTLE and r["defenderHp"] == 150
-    assert r["defenderBench"] == 2                          # a whiffed rider vs no target
+    assert r["defenderBench"] == 2                          # whiffed rider vs no target
     assert r["attackerEnergies"] == 3 and r["myHandSize"] == 4
     assert r["coin"] is None and r["koed"] is True
     assert "error" not in r
@@ -306,8 +306,8 @@ def test_merge_never_clobbers_a_success_with_an_error():
     err = error_record(1488, 1031, "prevent_ex", "timeout")
     assert record_key(good) == record_key(err)
     merged = merge_records([good], [err])
-    assert merged == [good]                                # measurement survives a flaky re-run
-    # but an error IS recorded when nothing better exists, and a success replaces it
+    assert merged == [good]                                # measurement survives flaky re-run
+    # error IS recorded when nothing better exists; success replaces it
     assert merge_records([], [err]) == [err]
     assert merge_records([err], [good]) == [good]
 

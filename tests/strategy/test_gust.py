@@ -14,37 +14,37 @@ from common.strategy import Strategy
 from pilot_helpers import (
     BENCH, HAND, MAIN, PLAY, SWITCH, attack_opt, card_opt, make_select, opt, poke, state)
 
-END = 14  # OptionType.END (not exported by pilot_helpers)
+END = 14  # OptionType.END (pilot_helpers doesn't export it)
 
 BOSS = 1182        # Boss's Orders — Supporter, Function Tag `gust`
 WINCON = 901       # my Active attacker / win-condition
-WALL = 800         # opponent's Active: a high-HP wall I can't KO
-BENCHIE = 700      # opponent's benched Pokémon: low HP, KO-able after a gust (1 prize)
-KOABLE_ACTIVE = 810  # opponent's Active: low HP, KO-able by my cheap attack right now (1 prize)
-EX_BENCHIE = 702   # opponent's benched ex: KO-able after a gust, worth 2 prizes
-OFF_WINCON = 902   # my Active: an attacker that is NOT the deck's win-condition
+WALL = 800         # opp Active: high-HP wall, can't KO
+BENCHIE = 700      # opp benched: low HP, KO-able after gust (1 prize)
+KOABLE_ACTIVE = 810  # opp Active: low HP, KO-able by my cheap attack now (1 prize)
+EX_BENCHIE = 702   # opp benched ex: KO-able after gust, worth 2 prizes
+OFF_WINCON = 902   # my Active: attacker that is NOT the deck's win-condition
 TUTOR = 903        # a setup search Supporter (Function Tag `search`)
-BIG_BENCHIE = 703  # opponent's benched Pokémon: too much HP to KO after a gust
-MEGA_WINCON = 904  # my Active: a 3-prize Mega ex win-condition (what a live attacker threatens)
-LIVE_ATTACKER = 705  # opponent's benched 1-prize attacker, energized, hits hard enough to KO my Active
-DOOM_ACTIVE = 811  # opponent's Active: a wall I can't KO that nonetheless KOs my Active next turn
-STALL_TARGET = 706  # opponent's benched mon: energyless + high retreat — the defensive stall-gust pick
-PREEVO_THREAT = 707  # opponent's benched pre-evo whose LINE becomes an attacker (forward-evolution)
-EVO_FORM = 708     # the attacker PREEVO_THREAT evolves into (gives it a high forward_max_damage)
-DEAD_END = 709     # opponent's benched mon that evolves into nothing (forward_max_damage 0)
-WEAK_ATTACKER = 905  # my Active: a 10-damage attacker that can't KO a 20-HP body by attacking
-ITEM_GUST = 1183   # a synthetic Item gust (cardType ITEM) — doesn't cost the one Supporter slot
-FIGHT_GUST = 906   # my Active: a Fighting attacker (120) — to exercise Resistance in the gust oracle
-RESIST_BENCHIE = 710  # opp benched mon: HP 100, RESISTS Fighting (survives 120-30=90) — a false KO
-SNIPER_WINCON = 907  # my Active: a win-condition whose attack ALSO snipes the bench (Jetting Blow-like)
-DWEB_HI = 720      # opp benched, KO-able, whose removal lets my snipe finish DWEB_LO (the 2-prize line)
-DWEB_LO = 721      # opp benched, KO-able, low HP — finished by the 50 snipe only if DWEB_HI is gusted
+BIG_BENCHIE = 703  # opp benched: too much HP to KO after gust
+MEGA_WINCON = 904  # my Active: 3-prize Mega ex win-condition (what a live attacker threatens)
+LIVE_ATTACKER = 705  # opp benched 1-prize attacker, energized, hits hard enough to KO my Active
+DOOM_ACTIVE = 811  # opp Active: wall I can't KO, but KOs my Active next turn
+STALL_TARGET = 706  # opp benched: energyless + high retreat — defensive stall-gust pick
+PREEVO_THREAT = 707  # opp benched pre-evo whose LINE becomes an attacker (forward-evolution)
+EVO_FORM = 708     # attacker PREEVO_THREAT evolves into (high forward_max_damage)
+DEAD_END = 709     # opp benched mon that evolves into nothing (forward_max_damage 0)
+WEAK_ATTACKER = 905  # my Active: 10-damage attacker, can't KO a 20-HP body by attacking
+ITEM_GUST = 1183   # synthetic Item gust (cardType ITEM) — doesn't cost the one Supporter slot
+FIGHT_GUST = 906   # my Active: Fighting attacker (120) — exercises Resistance in gust oracle
+RESIST_BENCHIE = 710  # opp benched: HP 100, RESISTS Fighting (survives 120-30=90) — a false KO
+SNIPER_WINCON = 907  # my Active: win-condition whose attack ALSO snipes bench (Jetting Blow-like)
+DWEB_HI = 720      # opp benched, KO-able, removal lets my snipe finish DWEB_LO (2-prize line)
+DWEB_LO = 721      # opp benched, KO-able, low HP — finished by 50 snipe only if DWEB_HI gusted
 A_SNIPE_G = 104    # my Active's snipe attack id (120 damage + 50 bench rider)
-MY_FRAGILE = 908   # my Active: 130 HP — KO'd by the opponent's FORWARD hand-size evolution, not its now
-KADA = 911         # opp Active: a weak pre-evo (30 dmg) that EVOLVES into a hand-size attacker
-ALAK = 912         # the hand_size_attacker KADA evolves into (Alakazam: 20 dmg/card via handSizeDamage)
-STALL1 = 711       # opp benched body: energyless, retreat 1 — a valid stall target (can't pay retreat)
-PSYCHIC = 7        # an energy type for the opp pre-evo
+MY_FRAGILE = 908   # my Active: 130 HP — KO'd by opp's FORWARD hand-size evolution, not now
+KADA = 911         # opp Active: weak pre-evo (30 dmg) that EVOLVES into a hand-size attacker
+ALAK = 912         # hand_size_attacker KADA evolves into (Alakazam: 20 dmg/card via handSizeDamage)
+STALL1 = 711       # opp benched body: energyless, retreat 1 — valid stall target (can't pay retreat)
+PSYCHIC = 7        # energy type for the opp pre-evo
 WATER, LIGHTNING, FIRE, FIGHTING = 3, 4, 2, 6
 SUPPORTER, ITEM = 3, 1   # CardType values (cg/api.py)
 
@@ -76,9 +76,9 @@ _STATS = DictCardStatProvider({
     DWEB_LO: CardStat(DWEB_LO, hp=20),
     MY_FRAGILE: CardStat(MY_FRAGILE, energyType=WATER, hp=130, minAttackCost=1, minCostDamage=50),
     KADA: CardStat(KADA, name="TKadabra", hp=80, energyType=PSYCHIC, maxDamage=30,
-                   minAttackCost=1, minCostDamage=30),                  # opp Active: a weak pre-evo …
+                   minAttackCost=1, minCostDamage=30),                  # opp Active: weak pre-evo…
     ALAK: CardStat(ALAK, name="TAlakazam", evolvesFrom="TKadabra", hp=140, minAttackCost=1,
-                   handSizeDamage=20),                                  # … that evolves into a hand-size KO
+                   handSizeDamage=20),                                  # …evolves into hand-size KO
     STALL1: CardStat(STALL1, hp=70, retreatCost=1),                     # energyless retreat-1 stall body
 })
 _TAGS = CardFunctions({BOSS: ["gust"], ITEM_GUST: ["gust"], TUTOR: ["search"],
@@ -124,7 +124,7 @@ def test_gust_for_the_ko_stands_down_in_setup_before_the_wincon_is_online():
                       hand=[TUTOR, BOSS]))
     p = _pilot()
     assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [0]   # play the tutor, develop the win-condition first
+    assert p.decide(obs) == [0]   # play tutor, develop win-condition first
 
 
 @pytest.mark.req("REQ-GUST-0005")
@@ -141,7 +141,7 @@ def test_item_gust_into_a_ko_fires_in_setup_unlike_a_supporter():
                       opp_bench=[poke(BENCHIE, hp=60)],
                       hand=[ITEM_GUST, TUTOR]))
     p = _pilot()
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[0])   # Item gust fires even in setup
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[0])   # Item gust fires even in setup, unlike Supporter
 
 
 @pytest.mark.req("REQ-GUST-0001")
@@ -157,8 +157,8 @@ def test_gust_for_the_lethal_fires_even_through_the_setup_damping():
                       opp_bench=[poke(BENCHIE, hp=60)],
                       hand=[TUTOR, BOSS], prizes=1))
     p = _pilot()
-    assert p.explain(obs).options[1].tactical >= KO_SCORE   # lethal gust is KO_SCORE-class (Tactical)
-    assert p.decide(obs) == [1]                             # take the game even over a setup tutor
+    assert p.explain(obs).options[1].tactical >= KO_SCORE   # lethal gust = KO_SCORE-class (Tactical)
+    assert p.decide(obs) == [1]                             # take game over a setup tutor
 
 
 @pytest.mark.req("REQ-GUST-0001")
@@ -294,8 +294,8 @@ def test_gust_target_drags_up_a_ko_able_bench_mon():
                       opp_bench=[poke(BIG_BENCHIE, hp=200), poke(BENCHIE, hp=60)]))
     p = _pilot()
     opts = p.explain(obs).options
-    assert opts[1].tactical >= KO_SCORE     # KO-able target → KO_SCORE-class (Tactical)
-    assert opts[0].tactical < KO_SCORE      # un-KO-able target → not boosted
+    assert opts[1].tactical >= KO_SCORE     # KO-able target -> KO_SCORE-class (Tactical)
+    assert opts[0].tactical < KO_SCORE      # un-KO-able target -> no boost
     assert p.decide(obs) == [1]
 
 
@@ -309,7 +309,7 @@ def test_gust_target_prefers_the_higher_prize_ko():
                       opp_bench=[poke(BENCHIE, hp=60), poke(EX_BENCHIE, hp=60)]))
     p = _pilot()
     opts = p.explain(obs).options
-    assert opts[1].tactical > opts[0].tactical    # the ex (2 prizes) outscores the basic (1)
+    assert opts[1].tactical > opts[0].tactical    # ex (2 prizes) outscores basic (1)
     assert p.decide(obs) == [1]
 
 
@@ -325,7 +325,7 @@ def test_gust_target_denial_outranks_a_bigger_inert_prize():
                                  poke(LIVE_ATTACKER, hp=60, energy=2)]))   # 1-prize, energized: threat
     p = _pilot()
     opts = p.explain(obs).options
-    assert opts[1].tactical > opts[0].tactical    # denial lifts the live attacker above the bigger prize
+    assert opts[1].tactical > opts[0].tactical    # denial lifts live attacker above bigger prize
     assert p.decide(obs) == [1]
 
 
@@ -341,7 +341,7 @@ def test_gust_target_breaks_ties_toward_an_evolving_threat():
                       opp_bench=[poke(DEAD_END, hp=60), poke(PREEVO_THREAT, hp=60)]))
     p = _pilot()
     opts = p.explain(obs).options
-    assert opts[1].tactical > opts[0].tactical    # the evolving-threat pre-evo edges the dead-end
+    assert opts[1].tactical > opts[0].tactical    # evolving-threat pre-evo edges the dead-end
     assert p.decide(obs) == [1]
 
 
@@ -354,7 +354,7 @@ def test_gust_target_does_not_fire_on_my_own_retreat():
         context=SWITCH,
         current=state(active=poke(WINCON, energy=1, hp=200), bench=[poke(BENCHIE, hp=60)]))
     p = _pilot()
-    assert p.explain(obs).options[0].tactical == 0   # my own bench → no gust KO_SCORE boost
+    assert p.explain(obs).options[0].tactical == 0   # my own bench -> no gust KO_SCORE boost
 
 
 @pytest.mark.req("REQ-GUST-0009")
@@ -369,8 +369,8 @@ def test_gust_oracle_respects_resistance_no_false_ko():
                       opp_bench=[poke(RESIST_BENCHIE, hp=100), poke(BENCHIE, hp=100)]))
     p = _pilot()
     opts = p.explain(obs).options
-    assert opts[0].tactical < KO_SCORE      # resisted → 90 < 100 → not a KO target
-    assert opts[1].tactical >= KO_SCORE     # non-resisting equal-HP mon → KO-able
+    assert opts[0].tactical < KO_SCORE      # resisted: 90 < 100, not a KO target
+    assert opts[1].tactical >= KO_SCORE     # non-resisting equal-HP mon: KO-able
     assert p.decide(obs) == [1]
 
 
@@ -388,11 +388,11 @@ def test_gust_target_prefers_the_two_prize_snipe_synergy():
               general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS,
               attacks={A_SNIPE_G: 120}, attack_costs={A_SNIPE_G: 1}, bench_snipe={A_SNIPE_G: 50})
     opts = p.explain(obs).options
-    assert opts[0].tactical > opts[1].tactical   # the 70-HP gust enables the 2-prize snipe synergy
+    assert opts[0].tactical > opts[1].tactical   # 70-HP gust enables the 2-prize snipe synergy
     assert p.decide(obs) == [0]
 
 
-# --- forward-doom Posture: anticipate the opponent's next-turn EVOLUTION threat (ep82754875 f52) ---
+# --- forward-doom Posture: anticipate opp's next-turn EVOLUTION threat (ep82754875 f52) -----------
 
 @pytest.mark.req("REQ-GUST-0003")
 def test_active_doomed_by_forward_hand_size_evolution():
@@ -475,7 +475,7 @@ def test_gust_stall_target_picks_the_energyless_high_retreat_body():
         [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
         context=SWITCH,
         current=state(active=poke(OFF_WINCON, energy=1, hp=100),
-                      opp_bench=[poke(LIVE_ATTACKER, hp=200, energy=2),    # energized: would be a gift
+                      opp_bench=[poke(LIVE_ATTACKER, hp=200, energy=2),    # energized: would gift tempo
                                  poke(STALL_TARGET, hp=200, energy=0)]))   # energyless, retreat 2: stall
     p = _pilot()
     assert p.decide(obs) == [1]

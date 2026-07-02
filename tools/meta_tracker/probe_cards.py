@@ -13,9 +13,9 @@ The record it emits is ``{actor, logs, contexts}`` — consumed by
 from __future__ import annotations
 
 _DECK_SIZE = 60
-_BENCH_BASICS = 4   # distinct Basic Pokémon to seed (4 copies each) → a fieldable bench
+_BENCH_BASICS = 4   # distinct Basic Pokémon to seed (4 copies each) -> a fieldable bench
 _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyType -> basic Energy card
-_OPT_PLAY = 7    # OptionType.PLAY — its `index` is the hand position (see cg/api.py)
+_OPT_PLAY = 7    # OptionType.PLAY — `index` = hand position (see cg/api.py)
 _OPT_EVOLVE = 9  # OptionType.EVOLVE — `area`+`index` locate the evolution card in hand
 _OPT_ABILITY = 10  # OptionType.ABILITY — `area`+`index` locate the Pokémon whose Ability fires
 
@@ -38,14 +38,14 @@ def build_probe_deck(target_id: int, cards: dict[int, dict], low_hp: bool = Fals
     stable pass uses it (no combat → the frail extras can't hurt heal/attrition probing).
     """
     tcard = cards.get(target_id, {})
-    copies = 1 if tcard.get("aceSpec") else 4    # ≤4 same-name cards; ACE SPEC is capped at 1
+    copies = 1 if tcard.get("aceSpec") else 4    # ≤4 same-name cards; ACE SPEC capped at 1
     deck = [target_id] * copies
     # Basic Pokémon: a few *distinct* ones (4 copies each) so a bench can be fielded (for
-    # gust/switch probing) and fetch effects have targets. Skip only if the target itself is a
+    # gust/switch probing) and fetch effects have targets. Skip only if target itself is a
     # Basic (it is the board). ≤4 same-name keeps every copy-count legal.
     if not (tcard.get("category") == "pokemon" and tcard.get("stage") == "basic"):
-        hp_key = ((lambda c: (cards[c].get("hp", 0), c)) if low_hp        # frail → KO'd (attrition)
-                  else (lambda c: (-cards[c].get("hp", 0), c)))           # sturdy → survives chip
+        hp_key = ((lambda c: (cards[c].get("hp", 0), c)) if low_hp        # frail -> KO'd (attrition)
+                  else (lambda c: (-cards[c].get("hp", 0), c)))           # sturdy -> survives chip
         basics = sorted((c for c in cards if cards[c].get("category") == "pokemon"
                          and cards[c].get("stage") == "basic"), key=hp_key)
         for b in basics[:_BENCH_BASICS]:
@@ -54,17 +54,17 @@ def build_probe_deck(target_id: int, cards: dict[int, dict], low_hp: bool = Fals
             seeded = set(deck)
             frail = sorted((c for c in cards if cards[c].get("category") == "pokemon"
                             and cards[c].get("stage") == "basic" and c not in seeded),
-                           key=lambda c: (cards[c].get("hp", 0), c))      # frailest → HP-capped fetch
+                           key=lambda c: (cards[c].get("hp", 0), c))      # frailest -> HP-capped fetch
             deck += [b for b in frail[:2] for _ in range(4)]
             sup = _first(cards, lambda c: c.get("category") == "supporter")
             if sup is not None and sup != target_id:
                 deck += [sup] * 4                                         # a Supporter-fetch target
     energies = sorted(c for c in cards if cards[c].get("category") == "basic_energy")
-    # Stable/chip: one Energy type is enough. Attrition (low_hp) spreads *all* basic Energy so the
-    # diverse frail attackers can actually pay their costs and KO (a single type often can't).
+    # Stable/chip: one Energy type is enough. Attrition (low_hp) spreads *all* basic Energy so
+    # diverse frail attackers can actually pay costs and KO (single type often can't).
     fill = energies if (low_hp and energies) else (energies[:1] or [None])
     i = 0
-    while len(deck) < _DECK_SIZE:                    # basic energy is exempt from the 4-copy cap
+    while len(deck) < _DECK_SIZE:                    # basic energy exempt from 4-copy cap
         deck.append(fill[i % len(fill)])
         i += 1
     return deck
@@ -219,13 +219,13 @@ def extract_probe(obs_after: dict, actor: int) -> dict:
 
 # --- lib drive-shell (run-validated, not unit-tested; lazy `cg` import) ------------
 
-_CTX_MAIN = 0       # SelectContext.MAIN — a fresh action choice (the card has resolved)
+_CTX_MAIN = 0       # SelectContext.MAIN — a fresh action choice (card has resolved)
 _SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON — place the target Active here
 _SETUP_BENCH = 2    # SelectContext.SETUP_BENCH_POKEMON — seed the bench here
 _OPT_END = 14       # OptionType.END — end my turn
 _OPT_ATTACH = 8     # OptionType.ATTACH — manually attach a card to a Pokémon
 _OPT_ATTACK = 13    # OptionType.ATTACK
-_LOG_ATTACK = 15    # LogType.ATTACK — the attack event (record keeps from here: drops energize/draws)
+_LOG_ATTACK = 15    # LogType.ATTACK — attack event (record keeps from here: drops energize/draws)
 _LOG_TURN_START = 2  # LogType.TURN_START — a turn boundary (capture must stop here)
 _LOG_TURN_END = 3    # LogType.TURN_END
 _AREA_HAND = 2      # AreaType.HAND
@@ -248,11 +248,11 @@ def _attack_turn_logs(logs: list[dict]) -> list[dict]:
     return logs[s:e]
 
 
-_ATTACK_DMG = None        # lazy {attackId: damage} cache (built once from the engine)
+_ATTACK_DMG = None        # lazy {attackId: damage} cache, built once from engine
 _ATTACK_ENERGIES = None   # lazy {cardId: cheapest attack's energy list}
 _CARD_ENERGY = None       # lazy {cardId: EnergyType int} (a Pokémon's own type)
-_ABILITY_MONS = None      # lazy set of cardIds that have ≥1 Ability (skill)
-_ATTACK_COSTLIEST = None  # lazy {cardId: (attackId, energies)} — the priciest attack (effect-bearing)
+_ABILITY_MONS = None      # lazy set of cardIds with ≥1 Ability (skill)
+_ATTACK_COSTLIEST = None  # lazy {cardId: (attackId, energies)} — priciest attack (effect-bearing)
 _EVO_DATA = None          # lazy {cardId: {name, evolvesFrom, stage1, stage2}}
 
 
@@ -437,7 +437,7 @@ def _develop(battle_select, obs, cards, attack=False, ko=False):
             positive = [(d, i) for d, i in scored if d > 0]
             if not positive:
                 return battle_select([atk[0]])
-            pick = max(positive) if ko else min(positive)   # KO fast vs chip slowly
+            pick = max(positive) if ko else min(positive)   # KO fast vs chip slow
             return battle_select([pick[1]])
     return _end_turn(battle_select, obs)
 
@@ -512,7 +512,7 @@ def probe_card(target_id: int, cards: dict[int, dict], *, me: int = 0,
     """
     combat = attack or ko
     battle_start, battle_select, battle_finish = _engine()
-    deck = build_probe_deck(target_id, cards, low_hp=ko, search_fodder=not combat)  # fodder: stable only
+    deck = build_probe_deck(target_id, cards, low_hp=ko, search_fodder=not combat)  # fodder stable-only
     obs, start = battle_start(deck, deck)
     if start.errorPlayer >= 0:
         battle_finish()
@@ -565,7 +565,7 @@ def probe_pokemon(target_id: int, cards: dict[int, dict], *, me: int = 0,
             you, ctx = cur["yourIndex"], obs["select"]["context"]
             if ctx == _SETUP_ACTIVE and you == me:
                 o = _setup_active_option(obs, target_id)
-                obs = battle_select([o] if o is not None else [0])         # put the target Active
+                obs = battle_select([o] if o is not None else [0])         # put target Active
             elif ctx != _CTX_MAIN:
                 obs = _advance(battle_select, obs)                         # setup (benches) / sub-decision
             elif you == me:
@@ -579,7 +579,7 @@ def probe_pokemon(target_id: int, cards: dict[int, dict], *, me: int = 0,
                 if atk is not None:
                     obs = battle_select([atk])                            # attack
                     rec = extract_probe(obs, me)
-                    rec["logs"] = _attack_turn_logs(rec["logs"])          # this turn only (no energize leak)
+                    rec["logs"] = _attack_turn_logs(rec["logs"])          # this turn only, no energize leak
                     return rec
                 obs = _end_turn(battle_select, obs)
             else:
@@ -614,13 +614,13 @@ def probe_pokemon_ability(target_id: int, cards: dict[int, dict], *, me: int = 0
             you, ctx = cur["yourIndex"], obs["select"]["context"]
             if ctx == _SETUP_ACTIVE and you == me:
                 o = _setup_active_option(obs, target_id)
-                obs = battle_select([o] if o is not None else [0])         # put the target Active
+                obs = battle_select([o] if o is not None else [0])         # put target Active
             elif ctx != _CTX_MAIN:
                 obs = _advance(battle_select, obs)                         # setup (benches) / sub-decision
             elif you == me:
                 opt = find_ability_option(obs, target_id, me)
                 if opt is not None:
-                    return _resolve_play(battle_select, obs, opt, me)      # activate + record the Ability
+                    return _resolve_play(battle_select, obs, opt, me)      # activate + record Ability
                 if not cur.get("energyAttached"):
                     ai = _find_attach_energy(obs, cards)
                     if ai is not None:
@@ -648,13 +648,13 @@ def probe_evolution(target_id: int, cards: dict[int, dict], *, me: int = 0,
     """
     chain = evolution_chain(target_id, _evolution_data())
     if len(chain) < 2:
-        return None                                   # a Basic — handled by probe_pokemon
+        return None                                   # a Basic — probe_pokemon handles it
     costliest = _card_attack_costliest().get(target_id)
     energies = costliest[1] if costliest else [0]
     want_attack = costliest[0] if costliest else None
     battle_start, battle_select, battle_finish = _engine()
     deck = build_evolution_deck(chain, energies)
-    obs, start = battle_start(deck, _bench_deck(cards))   # opponent fields a Bench → spread targets
+    obs, start = battle_start(deck, _bench_deck(cards))   # opponent fields a Bench -> spread targets
     if start.errorPlayer >= 0:
         battle_finish()
         return None
@@ -678,7 +678,7 @@ def probe_evolution(target_id: int, cards: dict[int, dict], *, me: int = 0,
                 active_id = active.get("id") if active else None
                 if active_id != target_id:
                     eo = None
-                    for stage_id in reversed(chain[1:]):                   # evolve the Active up the line
+                    for stage_id in reversed(chain[1:]):                   # evolve Active up the line
                         eo = find_evolve_option(obs, stage_id, me, in_play_area=_AREA_ACTIVE)
                         if eo is not None:
                             break
@@ -698,16 +698,16 @@ def probe_evolution(target_id: int, cards: dict[int, dict], *, me: int = 0,
                     ability_done = True
                     continue
                 atk = _attack_option(obs, want_attack)
-                if atk is not None:                                        # fire the costliest (effect) attack
+                if atk is not None:                                        # fire costliest (effect) attack
                     obs = battle_select([atk])
-                    r, obs = _resolve_from(battle_select, obs, me)         # resolve the spread placement
-                    logs += _attack_turn_logs(r["logs"])                   # this turn only (no energize leak)
+                    r, obs = _resolve_from(battle_select, obs, me)         # resolve spread placement
+                    logs += _attack_turn_logs(r["logs"])                   # this turn only, no energize leak
                     contexts += r["contexts"]
                     break
                 if not cur.get("energyAttached"):
                     ai = _find_attach_energy(obs, cards)
                     if ai is not None:
-                        obs = battle_select([ai]); continue                # bank Energy for the costly attack
+                        obs = battle_select([ai]); continue                # bank Energy for costly attack
                 obs = _end_turn(battle_select, obs)
             else:
                 obs = _end_turn(battle_select, obs)

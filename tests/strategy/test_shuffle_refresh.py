@@ -16,19 +16,19 @@ from pilot_helpers import MAIN, PLAY, attack_opt, make_select, opt, poke, state
 
 END = 14
 LILLIES = 1227        # a Shuffle-Refresh (shuffle hand into deck, draw 6)
-WINC = 1031           # the win-condition payoff (a Mega ex)
-STARYU = 1030         # the win-condition's Line base (a pre-evolution to deploy the payoff onto)
+WINC = 1031           # win-condition payoff (a Mega ex)
+STARYU = 1030         # win-condition's Line base (pre-evolution to deploy payoff onto)
 BASIC = 700
-PLAINMON = 900        # a vanilla Active body (not the win-condition)
-ULTRA = 2001          # a cost_discard tutor (Ultra Ball: keep-value 0, no dig-before-commit bonus)
-PLAINDRAW = 950       # a plain draw Supporter (draw, NOT shuffle_hand) — the contrast card
+PLAINMON = 900        # vanilla Active body (not the win-condition)
+ULTRA = 2001          # cost_discard tutor (Ultra Ball: keep-value 0, no dig-before-commit bonus)
+PLAINDRAW = 950       # plain draw Supporter (draw, NOT shuffle_hand) - the contrast card
 
 
 def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-# --- refresh-when-hand-is-dead: a dead hand + a deck that still holds a need -> refresh ------------
+# --- refresh-when-hand-is-dead: dead hand + deck still holding a need -> refresh -------------------
 @pytest.mark.req("REQ-GEN-0042")
 def test_refresh_when_hand_is_dead_plays_the_refresh_over_end():
     """A Shuffle-Refresh alone in a dead hand (no other card to play), with the deck still holding a
@@ -41,7 +41,7 @@ def test_refresh_when_hand_is_dead_plays_the_refresh_over_end():
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=funcs)
-    # hand = just the refresh (dead — no other play); win-condition NOT in play -> deck holds a need.
+    # hand = just the refresh (dead - no other play); win-condition NOT in play -> deck holds a need.
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
     assert "refresh-when-hand-is-dead" in _fired(pilot.explain(obs).options[0])
@@ -49,7 +49,7 @@ def test_refresh_when_hand_is_dead_plays_the_refresh_over_end():
     assert pilot.decide(obs) == [0]                                   # refresh, not End
 
 
-# --- a playable Pokémon is a development out -> the hand is NOT dead (use key cards first) ----------
+# --- a playable Pokemon is a development out -> hand is NOT dead (use key cards first) --------------
 @pytest.mark.req("REQ-GEN-0043")
 def test_a_playable_pokemon_keeps_the_hand_live_so_the_refresh_stands_down():
     """A spare Basic in hand is a development out — even in SETUP with a developed bench (where benching
@@ -63,14 +63,14 @@ def test_a_playable_pokemon_keeps_the_hand_live_so_the_refresh_stands_down():
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=funcs)
-    # SETUP, bench already developed (keep-a-bench won't fire); the hand also holds a benchable Basic.
+    # SETUP, bench already developed (keep-a-bench won't fire); hand also holds a benchable Basic.
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, BASIC]))
     assert "refresh-when-hand-is-dead" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- a playable tutor that fills a need keeps the hand live (full-scan vs keep-value distinction) --
+# --- a playable tutor filling a need keeps the hand live (full-scan vs keep-value distinction) ------
 @pytest.mark.req("REQ-GEN-0044")
 def test_a_playable_tutor_that_fills_a_need_keeps_the_hand_live():
     """The reason the gate is a full play-scan, not a keep-value floor: a `cost_discard` tutor (Ultra
@@ -93,7 +93,7 @@ def test_a_playable_tutor_that_fills_a_need_keeps_the_hand_live():
     assert pilot.decide(obs) == [1]                                  # play the tutor, not the refresh
 
 
-# --- deck_holds_a_need gate: a dead hand but a deck with nothing left to want -> don't refresh ------
+# --- deck_holds_a_need gate: dead hand but deck has nothing left to want -> don't refresh -----------
 @pytest.mark.req("REQ-GEN-0045")
 def test_refresh_stands_down_when_the_deck_holds_no_need():
     """Even with a dead hand, don't refresh into a deck that can't give you anything you lack — the
@@ -104,14 +104,14 @@ def test_refresh_stands_down_when_the_deck_holds_no_need():
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[WINC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # win-condition Active + bench developed -> no need anywhere; hand is the lone refresh (dead).
+    # win-condition Active + bench developed -> no need anywhere; hand is lone refresh (dead).
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(WINC, energy=3),
                                     bench=[poke(701), poke(702), poke(703)], hand=[LILLIES]))
     assert "refresh-when-hand-is-dead" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- a Shuffle-Refresh IS a hand-cycling draw -> dig-before-commit endorses it (ADR-0024 reversal) --
+# --- Shuffle-Refresh IS a hand-cycling draw -> dig-before-commit endorses it (ADR-0024 reversal) ----
 @pytest.mark.req("REQ-GEN-0046")
 def test_dig_before_commit_endorses_a_shuffle_refresh_as_a_draw():
     """A Shuffle-Refresh carries the `draw` tag and refills the hand — playing it to cycle is the strong
@@ -123,15 +123,15 @@ def test_dig_before_commit_endorses_a_shuffle_refresh_as_a_draw():
                                   PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # SETUP (no win-condition Line) — dig-before-commit is eligible to fire on a draw card here.
+    # SETUP (no win-condition Line) - dig-before-commit is eligible to fire on a draw card here.
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, PLAINDRAW]))
-    assert "dig-before-commit" in _fired(pilot.explain(obs).options[0])       # the Shuffle-Refresh now endorsed
-    assert "dig-before-commit" in _fired(pilot.explain(obs).options[1])       # the plain draw card too
+    assert "dig-before-commit" in _fired(pilot.explain(obs).options[0])       # Shuffle-Refresh now endorsed
+    assert "dig-before-commit" in _fired(pilot.explain(obs).options[1])       # plain draw card too
 
 
-# --- the regression fix: a Shuffle-Refresh is played BEFORE the turn-ending attack (cycle, then KO) -
+# --- regression fix: Shuffle-Refresh played BEFORE the turn-ending attack (cycle, then KO) ----------
 @pytest.mark.req("REQ-GEN-0046")
 def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
     """The post-refactor mirror loss: the agent ATTACKED instead of playing its draw Supporter, forgoing
@@ -141,13 +141,13 @@ def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # a live attack and the refresh on the same menu; no held Energy / wincon -> the guards stay silent.
+    # live attack and the refresh on same menu; no held Energy / wincon -> guards stay silent.
     obs = make_select([opt(PLAY, index=0), attack_opt(1)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
     assert pilot.decide(obs) == [0]                                  # play the refresh, not attack first
 
 
-# --- hold-wincon-dont-shuffle: don't shuffle a held win-condition back into the deck ---------------
+# --- hold-wincon-dont-shuffle: don't shuffle a held win-condition back into the deck -----------------
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_away():
     """A Shuffle-Refresh shuffles the WHOLE hand into the deck — including a win-condition you are
@@ -159,7 +159,7 @@ def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_a
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # hand holds BOTH the refresh and the win-condition -> shuffling would bury the wincon.
+    # hand holds BOTH refresh and win-condition -> shuffling would bury the wincon.
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, WINC]))
@@ -182,7 +182,7 @@ def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
     assert "hold-wincon-dont-shuffle" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- hold-wincon-with-base-dont-shuffle: a benched base to evolve the held wincon -> hold firmly ----
+# --- hold-wincon-with-base-dont-shuffle: benched base to evolve held wincon -> hold firmly ----------
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
     """The held win-condition has its Line BASE already on the Bench (deploy-soon), so the shuffle
@@ -212,7 +212,7 @@ def test_hold_wincon_with_base_silent_when_no_base_is_in_play():
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
     pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,                  # bench body is NOT the base
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,                  # bench body is NOT base
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES, WINC]))
     fired = _fired(pilot.explain(obs).options[0])
     assert "hold-wincon-with-base-dont-shuffle" not in fired

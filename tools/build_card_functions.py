@@ -34,8 +34,8 @@ DEFAULT_OUT = (Path(__file__).resolve().parents[1]
                / "src" / "common" / "card_functions.json")
 DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "meta_tracker" / "function_overrides.json"
 _TRAINER_CATS = {"item", "supporter", "stadium", "tool"}
-_COMBAT_PASSES = 4   # heal/damage align in only ~1-in-N combat games, so probe several & union
-_KO_PASSES = 3       # attrition (recycle/energy_denial) aligns ~1-in-N too — probe several & union
+_COMBAT_PASSES = 4   # heal/damage align only ~1-in-N combat games -> probe several & union
+_KO_PASSES = 3       # attrition (recycle/energy_denial) aligns ~1-in-N too -> probe several & union
 
 
 def _merge(recs: list[dict]) -> dict:
@@ -67,8 +67,8 @@ def probe_trainers(cards: dict, *, limit: int | None = None, log=print) -> dict[
     probes: dict[int, dict] = {}
     for i, cid in enumerate(ids):
         attempts = [probe_card(cid, cards, attack=False)]                              # stable pass
-        attempts += [probe_card(cid, cards, attack=True) for _ in range(_COMBAT_PASSES)]  # combat (variance)
-        attempts += [probe_card(cid, cards, ko=True) for _ in range(_KO_PASSES)]          # attrition (variance)
+        attempts += [probe_card(cid, cards, attack=True) for _ in range(_COMBAT_PASSES)]  # combat, variance
+        attempts += [probe_card(cid, cards, ko=True) for _ in range(_KO_PASSES)]          # attrition, variance
         recs = [r for r in attempts if r is not None]
         if recs:
             probes[cid] = _merge(recs)
@@ -132,7 +132,7 @@ def probe_evolution_pool(cards: dict, *, limit: int | None = None, log=print) ->
 
 def _load_overrides(path) -> dict[int, list[str]]:
     p = Path(path)
-    if p.exists():  # numeric keys only → a leading-underscore "_note" key can document the file
+    if p.exists():  # numeric keys only — a leading-underscore "_note" key can document the file
         return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()
                 if k.lstrip("-").isdigit()}
     return {}
@@ -169,7 +169,7 @@ def main() -> None:
     table = build_function_table(cards, probes, overrides)
 
     out = Path(args.out)
-    # Accumulate by default: union this (stochastic) run into the existing table so a tag once
+    # Accumulate by default: union this (stochastic) run into existing table so a tag once
     # observed is never lost and successive runs only *improve* coverage. --fresh starts clean.
     prior = {} if args.fresh else _load_table(out)
     before = sum(len(v) for v in prior.values())

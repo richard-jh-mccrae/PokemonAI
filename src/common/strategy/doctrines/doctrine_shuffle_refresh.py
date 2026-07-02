@@ -56,111 +56,81 @@ class ShuffleRefreshMixin:
                 continue                                     # board actions coexist with a refresh
             cid = self._option_card_id(obs, select, o)
             tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
-            if "shuffle_hand" in tags:                       # don't count the refresh as its own out
+            if "shuffle_hand" in tags:                       # don't count refresh as its own out
                 continue
             score = self._option_trace(obs, select, board, o, i).score
             if score > 0:
-                return False                                 # an endorsed play -> hand is live
+                return False                                 # endorsed play -> hand is live
             stat = self.stats.get(cid) if (self.stats and cid is not None) else None
             if o.get("type") == _PLAY and stat is not None and stat.hp > 0 and score >= 0:
-                return False                                 # a (non-discouraged) Pokémon development -> live
+                return False                                 # non-discouraged Pokémon development -> live
         return True
 
 
-# ── v1 = Layer A (the dead-hand fallback trigger) + the two explicit keep-value floors ──
+# ── v1 = Layer A (dead-hand fallback trigger) + the two explicit keep-value floors ──
 HYPOTHESES = [
     Hypothesis(
         id="attach-before-hand-shuffle",
-        rationale="Attach the Energy you are holding BEFORE playing a card that throws your hand away "
-                  "(Function Tag `shuffle_hand`, e.g. Harlequin / Lillie's Determination — each "
-                  "'shuffle your hand into your deck'). That card discards any Energy still in hand, "
-                  "so playing it first wastes the attachment you could have made (and can shuffle away "
-                  "a game-winning Energy). Fires only when a reusable Energy is in hand and you have "
-                  "not yet attached this turn — weighted to push the hand-shuffle below an endorsed "
-                  "attach AND below 0. Belt-and-suspenders: `_finish_turn_last` ALSO tiers any "
-                  "`shuffle_hand` Supporter structurally (tier 3, after the tier-2 Energy attach), so "
-                  "the attach precedes the shuffle even if this weight ever fails to fire; the weight "
-                  "additionally GATES whether to refresh at all (don't, while a held Energy is unplaced). "
-                  "Stands down when the held Energy has NO placeable home this turn (`not "
-                  "energy_placeable` — every in-play body is already maxed, or the Bench is empty and the "
-                  "Active fully powered): then shuffling it away costs nothing, so this must not veto a "
-                  "bench-finding refresh (ep83038055 f40).",
+        rationale="Attach held Energy BEFORE playing a `shuffle_hand` card (Harlequin / Lillie's "
+                  "Determination), since that card discards any Energy still in hand — playing it first "
+                  "wastes the attach and can shuffle away a game-winning Energy. Fires only with a "
+                  "reusable Energy in hand, not yet attached this turn; belt-and-suspenders with "
+                  "`_finish_turn_last`'s structural tiering (tier 3 shuffle after tier-2 attach). Stands "
+                  "down when the Energy has NO placeable home (`not energy_placeable`), so it never vetoes "
+                  "a bench-finding refresh (ep83038055 f40).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.reusable_energy_in_hand and not c.board.energy_attached
         and c.board.energy_placeable,
         weight=-60, status="testing"),
     Hypothesis(
         id="hold-wincon-dont-shuffle",
-        rationale="Don't shuffle a usable win-condition out of your hand with a hand-shuffling draw "
-                  "Supporter (Function Tag `shuffle_hand`, e.g. Lillie's Determination / Judge — "
-                  "'shuffle your hand into your deck'). When the win-condition (a Line payoff) is in "
-                  "hand, refilling sends it back into the deck, costing the turn you could deploy it — "
-                  "hold it and dig another way. Complements `attach-before-hand-shuffle` (which guards "
-                  "held Energy) and `keep-key-cards-at-discard` (which guards a cost-discard): this "
-                  "guards the hand-shuffle of the PAYOFF itself. Moderate — it nets negative against "
-                  "`dig-before-commit` but is NOT absolute, so a genuinely dead hand still refills (the "
-                  "win-condition returns to the deck, recoverable; only a tempo cost). Stands down when "
-                  "the win-condition is already in PLAY (`wincon_in_play`): the hand copy is then a "
-                  "redundant duplicate, safe to shuffle away — don't protect a dead second payoff (the "
-                  "ep82226759 Harlequin shape: a Mega Starmie ex Active with a second copy in hand).",
+        rationale="Don't shuffle a usable win-condition (a Line payoff) out of hand with a `shuffle_hand` "
+                  "Supporter — refilling sends it back into the deck, costing the turn to deploy it, so "
+                  "hold it and dig another way. Moderate (nets negative against `dig-before-commit` but "
+                  "not absolute, so a genuinely dead hand still refills); stands down when the "
+                  "win-condition is already in PLAY (`wincon_in_play`) — a redundant hand duplicate is "
+                  "safe to shuffle (the ep82226759 Harlequin shape: Mega Starmie ex Active, second copy in "
+                  "hand).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.wincon_in_hand and not c.board.wincon_in_play,
         weight=-25, status="assumed"),
     Hypothesis(
         id="hold-wincon-with-base-dont-shuffle",
-        rationale="Strengthen the hold (`hold-wincon-dont-shuffle`) when the held win-condition has a "
-                  "base ALREADY IN PLAY to evolve it onto next turn — a Line pre-evolution on the Bench "
-                  "(`line_preevo_in_play`, e.g. a benched Staryu under a Mega Starmie ex in hand). Then "
-                  "the shuffle is not a mere recoverable tempo cost: it shuffles away the payoff of a "
-                  "concrete, imminent evolution (the base is being built — energise it, evolve it, "
-                  "attack), so HOLD it firmly and take the board action (a developing attack / attach) "
-                  "this turn instead. Stacks on the base hold (−25) to net the `shuffle_hand` PLAY below "
-                  "0 even against `dig-before-commit` (+20) + `refresh-when-hand-is-dead` (+8) — so "
-                  "`_finish_turn_last` tiers it BELOW the attack (the develop-then-deploy line), the "
-                  "ep82867148 f52 shape (3 Mega in hand, a benched Staryu, Turbo Flare available). "
-                  "Narrow: a base in PLAY plus the payoff in hand is the high-confidence deploy-soon "
-                  "case; with no base in play the moderate base hold still allows a dead-hand refill.",
+        rationale="Strengthen `hold-wincon-dont-shuffle` when the win-condition's base is ALREADY IN PLAY "
+                  "to evolve onto next turn (`line_preevo_in_play`, e.g. benched Staryu under a Mega "
+                  "Starmie ex in hand) — this is a concrete imminent evolution, not just recoverable "
+                  "tempo, so hold firmly and develop instead. Stacks on the base hold (−25) to net the "
+                  "shuffle below 0 even against `dig-before-commit` (+20) + `refresh-when-hand-is-dead` "
+                  "(+8), tiering it below the attack (ep82867148 f52: 3 Mega in hand, benched Staryu, "
+                  "Turbo Flare available); narrow to base-in-play, else the moderate hold still allows a "
+                  "dead-hand refill.",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.wincon_in_hand and c.board.line_preevo_in_play and not c.board.wincon_in_play,
         weight=-15, status="testing"),
     Hypothesis(
         id="refresh-when-hand-is-dead",
-        rationale="Play a Shuffle-Refresh (Function Tag `shuffle_hand`, e.g. Lillie's Determination / "
-                  "Judge — 'shuffle your hand into your deck, then draw') ONLY when your hand is dead: no "
-                  "other card in it yields a positive-scoring play this turn (`Board.hand_is_dead`, a full "
-                  "play-scan of the hand) AND the deck still holds a card you lack (`deck_holds_a_need`). "
-                  "ADR-0024 decision (A) — a refresh is not a dig (it DESTROYS the hand), so it is a "
-                  "last-resort hand reload, reached only when nothing else is worth doing; this is 'use "
-                  "your key cards first' proven structurally (every useful card outscores the refresh). "
-                  "Reuses the Fetch keep-value comparator: a live card keeps the hand off this gate, so we "
-                  "never shuffle away a hand we'd fetch back. Small positive — beats End (≈0), loses to any "
-                  "real play; a dead hand can't contain a better Supporter, so the one-per-turn slot "
-                  "economy is subsumed. Never preempts an attack (the scan is hand-only; the turn-ending "
-                  "attack stays a last-tier `_finish_turn_last` commitment, after the tier-3 shuffle, so a "
-                  "dead-hand + lethal refreshes THEN KOs the same turn). Layer A; the stochastic pull-EV "
-                  "refinement is deferred.",
+        rationale="Play a Shuffle-Refresh (Function Tag `shuffle_hand`) ONLY when the hand is dead — no "
+                  "card yields a positive-scoring play (`Board.hand_is_dead`, a full play-scan) AND the "
+                  "deck still holds a needed card (`deck_holds_a_need`) — ADR-0024 decision (A): a refresh "
+                  "DESTROYS the hand, so it's last-resort, reusing the Fetch keep-value comparator so a "
+                  "live card is never shuffled away. Small positive (beats End, loses to any real play); "
+                  "never preempts an attack, since `_finish_turn_last` keeps the attack after the tier-3 "
+                  "shuffle so a dead-hand + lethal refreshes THEN KOs same turn. Layer A; stochastic "
+                  "pull-EV refinement deferred.",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.hand_is_dead and c.board.deck_holds_a_need,
         weight=8, status="testing"),
     Hypothesis(
         id="hold-successor-when-doomed",
-        rationale="Don't shuffle the hand away with a `shuffle_hand` Supporter when your Active "
-                  "win-condition is DOOMED and the hand holds the successor to rebuild with — the "
-                  "win-condition in hand (`wincon_in_hand`) PLUS a Line base already in play "
-                  "(`line_preevo_in_play`, a benched Staryu to evolve it onto next turn). This is the "
-                  "case the other holds miss: `hold-wincon-dont-shuffle` / `hold-wincon-with-base-dont-"
-                  "shuffle` both stand down once the win-condition is in PLAY (they treat the hand copy "
-                  "as a redundant duplicate) — but when that in-play copy is about to be Knocked Out, "
-                  "the hand copy is NOT redundant, it is the NEXT attacker you deploy after the Active "
-                  "falls. And the dead-hand scan is fooled: post-attach, with a just-benched Staryu "
-                  "under evolution sickness, no card is playable THIS action so `refresh-when-hand-is-"
-                  "dead` (+8) fires though the hand holds a Mega + Energy you need NEXT turn. So refuse "
-                  "the shuffle: hold the successor and take the board action (the develop-then-attack) "
-                  "instead (ep83037962 f49 — Harlequin gambling away a benchable Mega Starmie ex + two "
-                  "Water). Weighted (−35) to net the refresh below 0 even against `dig-before-commit` "
-                  "(+20) + `refresh-when-hand-is-dead` (+8), so `_finish_turn_last` tiers it below the "
-                  "attack. Narrow (doomed + payoff in hand + base in play), so a healthy board still "
-                  "cycles a dead hand freely.",
+        rationale="Don't shuffle away the hand when the Active win-condition is DOOMED and the hand holds "
+                  "the rebuild successor (`wincon_in_hand` PLUS `line_preevo_in_play`) — the case the "
+                  "other holds miss, since they stand down once the win-condition is in PLAY, but an "
+                  "about-to-be-KO'd in-play copy makes the hand copy the NEXT attacker, not a redundant "
+                  "duplicate. Also fixes a dead-hand-scan false positive (`refresh-when-hand-is-dead` +8 "
+                  "fires post-attach though the hand holds what's needed next turn): hold the successor "
+                  "and develop instead (ep83037962 f49 — Harlequin gambling away a benchable Mega Starmie "
+                  "ex + two Water). Weighted (−35) to net below 0 against `dig-before-commit` (+20) + "
+                  "`refresh-when-hand-is-dead` (+8); narrow, so a healthy board still cycles freely.",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.active_doomed and c.board.wincon_in_hand and c.board.line_preevo_in_play,
         weight=-35, status="testing"),

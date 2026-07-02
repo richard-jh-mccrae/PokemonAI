@@ -25,8 +25,8 @@ from cg.game import battle_finish, battle_select, battle_start  # noqa: E402
 
 ATTACK, PLAY, ATTACH, CARD, END, YES, NO = 13, 7, 8, 3, 14, 1, 2
 
-# (label, attacker_cid, printed_dmg, attacker_energy_id, defender_cid) — attacker's TYPE drives the
-# resistance match; defender is NOT Weak to that type, so the only modifier on the hit is Resistance.
+# (label, attacker_cid, printed_dmg, attacker_energy_id, defender_cid) — attacker's TYPE drives
+# resistance match; defender is NOT Weak to that type, so only modifier on the hit is Resistance.
 MATCHUPS = [
     ("Fighting -> Iron Crown ex (F-resist, ex)", 116, 70, 6, 80),
     ("Fighting -> Ho-Oh (F-resist, non-ex)", 116, 70, 6, 318),
@@ -76,13 +76,13 @@ def _choose(obs, atk_seat, attacker_cid, defender_cid):
         for i, o in enumerate(opts):
             if o.get("type") == ATTACK:
                 return [i]
-    if any(o.get("type") in (YES, NO) for o in opts):     # mulligan: redraw only if no key basic in hand
+    if any(o.get("type") in (YES, NO) for o in opts):     # mulligan: redraw only if key basic not in hand
         want = YES if key not in _hand_ids(obs, seat) else NO
         for i, o in enumerate(opts):
             if o.get("type") == want:
                 return [i]
         return [0]
-    if is_attacker and _active(obs, seat) is not None:    # power the Active before benching extra copies
+    if is_attacker and _active(obs, seat) is not None:    # power Active before benching extra copies
         for i, o in enumerate(opts):
             if o.get("type") == ATTACH:
                 return [i]
@@ -128,7 +128,7 @@ def probe(attacker_cid, printed, energy_id, defender_cid, max_steps=4000):
             try:
                 obs = battle_select(_choose(obs, 0, attacker_cid, defender_cid))
             except Exception:
-                return None                              # an illegal select (e.g. an ability prompt the
+                return None                              # illegal select (e.g. an ability prompt the
                                                          # greedy driver mishandles) — skip this card
     finally:
         battle_finish()

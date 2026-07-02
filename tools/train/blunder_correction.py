@@ -43,10 +43,10 @@ def main(argv=None):
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args(argv)
 
-    replays = discover_replays(args.replay)   # one file, or every Replay in a directory (batch)
+    replays = discover_replays(args.replay)   # one file, or every Replay in a dir (batch)
     if not replays:
         raise SystemExit(f"no replays found at {args.replay}")
-    detected = build_identity(replays[0])["agent"]   # from the build-folder stem (own tags auto-fill)
+    detected = build_identity(replays[0])["agent"]   # from build-folder stem (own tags auto-fill)
     print(f"blunder_correction: {len(replays)} replay(s) from {args.replay}")
     print(f"  agent for own blunders: {args.agent or detected or '(unknown — pass --agent)'}"
           + ("" if args.agent else "  [auto-detected]" if detected else ""))

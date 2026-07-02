@@ -16,17 +16,17 @@ from common.strategy import Line, Strategy
 from pilot_helpers import (ACTIVE, ATTACH, BENCH, HAND, MAIN, PLAY, attack_opt, make_select, opt,
                            poke, state)
 
-CAPE = 1159          # Hero's Cape — ACE SPEC Pokémon Tool, +100 HP
-WINC = 1031          # the win-condition payoff (a Mega ex)
-STARYU = 1030        # the win-condition's pre-evolution (a Line piece)
-LILLIES = 1227       # a hand-shuffle draw Supporter (shuffle hand into deck, draw) — `shuffle_hand`
-OPENER = 900         # an off-line opener body (not the win-condition) — a bad Cape carrier
-WALL = 901           # an off-line wall (re-emerged Cinderace) — earns the Cape only if it gains a turn
-SNIPER = 8000        # an opponent attacker that bench-snipes (Jetting-Blow-like: 120 + 50 snipe)
-WEAKOPP = 8001       # an opponent Active that barely hits (the current attacker is not the threat)
-BIGOPP = 8002        # an opponent BENCHED attacker that hits hard once promoted (the real threat)
-FRAGILE = 8003       # a low-HP opponent Active my attack KOs this turn (the lethal-KO setup)
-KO_SCORE = 1000      # an option that knocks out scores >= this (common/strategy/context.py)
+CAPE = 1159          # Hero's Cape - ACE SPEC Pokemon Tool, +100 HP
+WINC = 1031          # win-condition payoff (a Mega ex)
+STARYU = 1030        # win-condition's pre-evolution (a Line piece)
+LILLIES = 1227       # hand-shuffle draw Supporter (shuffle hand into deck, draw) - `shuffle_hand`
+OPENER = 900         # off-line opener body (not the win-condition) - bad Cape carrier
+WALL = 901           # off-line wall (re-emerged Cinderace) - earns Cape only if it gains a turn
+SNIPER = 8000        # opponent attacker that bench-snipes (Jetting-Blow-like: 120 + 50 snipe)
+WEAKOPP = 8001       # opponent Active that barely hits (current attacker isn't the threat)
+BIGOPP = 8002        # opponent BENCHED attacker that hits hard once promoted (the real threat)
+FRAGILE = 8003       # low-HP opponent Active my attack KOs this turn (lethal-KO setup)
+KO_SCORE = 1000      # option that knocks out scores >= this (common/strategy/context.py)
 WATER = 3
 FIRE = 2
 LIGHTNING = 4
@@ -47,7 +47,7 @@ def _wincon_strat():
                     lines=[])
 
 
-# --- tracer: a +HP Tool is deployed proactively onto the Active win-condition --------------------
+# --- tracer: +HP Tool deploys proactively onto the Active win-condition --------------------------
 @pytest.mark.req("REQ-GEN-0048")
 def test_deploy_hp_tool_fires_onto_the_active_wincon():
     """A +HP Tool (Hero's Cape) in hand and the Active IS the win-condition: attaching it onto the
@@ -60,8 +60,8 @@ def test_deploy_hp_tool_fires_onto_the_active_wincon():
     funcs = CardFunctions({CAPE: ["tool"]})
     pilot = Pilot(_wincon_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=funcs)
-    # ATTACH the Cape (hand idx 0) onto my Active win-condition (inPlay ACTIVE / 0). No opponent set
-    # -> no incoming threat; the deploy must still fire (proactive default).
+    # ATTACH Cape (hand idx 0) onto my Active win-condition (inPlay ACTIVE / 0). No opponent set
+    # -> no incoming threat; deploy must still fire (proactive default).
     obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)],
                       context=MAIN, current=state(active=poke(WINC, hp=330, energy=1), hand=[CAPE]))
     trace = pilot.explain(obs).options[0]
@@ -69,7 +69,7 @@ def test_deploy_hp_tool_fires_onto_the_active_wincon():
     assert trace.score > 0
 
 
-# --- correction #1: deploy the Cape BEFORE a hand-shuffle Supporter shuffles it away --------------
+# --- correction #1: deploy Cape BEFORE a hand-shuffle Supporter shuffles it away ------------------
 @pytest.mark.req("REQ-GEN-0048")
 def test_deploy_beats_a_hand_shuffle_supporter():
     """ep82866415 f43: holding the Cape, the agent must attach it onto the Active win-condition BEFORE
@@ -84,14 +84,14 @@ def test_deploy_beats_a_hand_shuffle_supporter():
     funcs = CardFunctions({CAPE: ["tool"], LILLIES: ["draw", "shuffle_hand"]})
     pilot = Pilot(_wincon_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=funcs)
-    # play Lillie's (idx 0) OR attach the Cape onto the Active wincon (hand idx 1) OR End.
+    # play Lillie's (idx 0) OR attach Cape onto Active wincon (hand idx 1) OR End.
     obs = make_select(
         [opt(PLAY, index=0), opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0), opt(END)],
         context=MAIN, current=state(active=poke(WINC, hp=330, energy=1), hand=[LILLIES, CAPE]))
-    assert pilot.decide(obs) == [1]                               # attach the Cape, don't shuffle it away
+    assert pilot.decide(obs) == [1]                               # attach Cape, don't shuffle it away
 
 
-# --- the anti-shuffle belt: no good carrier -> HOLD the Cape, don't shuffle it away ----------------
+# --- anti-shuffle belt: no good carrier -> HOLD Cape, don't shuffle it away -----------------------
 @pytest.mark.req("REQ-GEN-0049")
 def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
     """The belt for the case the positive deploy can't reach: holding the irreplaceable Cape with NO
@@ -101,7 +101,7 @@ def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
     stats = DictCardStatProvider({
         CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
         LILLIES: CardStat(LILLIES, hp=0),
-        OPENER: CardStat(OPENER, hp=160),                        # an off-line body (NOT the wincon)
+        OPENER: CardStat(OPENER, hp=160),                        # off-line body (NOT the wincon)
     })
     funcs = CardFunctions({CAPE: ["tool"], LILLIES: ["draw", "shuffle_hand"], OPENER: ["opener"]})
     pilot = Pilot(_wincon_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
@@ -110,7 +110,7 @@ def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
                       current=state(active=poke(OPENER, hp=160, energy=1), hand=[LILLIES, CAPE]))
     trace = pilot.explain(obs).options[0]                        # the Lillie's (shuffle) option
     assert "hold-irreplaceable-tool-dont-shuffle" in _fired(trace)
-    assert pilot.decide(obs) == [1]                              # hold (End), don't shuffle the Cape away
+    assert pilot.decide(obs) == [1]                              # hold (End), don't shuffle Cape away
 
 
 @pytest.mark.req("REQ-GEN-0049")
@@ -126,7 +126,7 @@ def test_hold_irreplaceable_tool_silent_without_an_irreplaceable_tool():
     assert "hold-irreplaceable-tool-dont-shuffle" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- correction #2: at-risk targeting picks the body where +100 buys the MOST survival turns -------
+# --- correction #2: at-risk targeting picks body where +100 buys the MOST survival turns ----------
 @pytest.mark.req("REQ-GEN-0050")
 def test_at_risk_deploy_prefers_the_higher_gain_bench_line_piece():
     """ep82866415 f48 (corr #2): the Cape goes onto the body where +100 buys the MOST survival turns.
@@ -143,7 +143,7 @@ def test_at_risk_deploy_prefers_the_higher_gain_bench_line_piece():
     funcs = CardFunctions({CAPE: ["tool"]})
     pilot = Pilot(_line_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=funcs)
-    # ATTACH the Cape onto the Active wincon (opt 0) OR onto the benched Staryu line-piece (opt 1).
+    # ATTACH Cape onto Active wincon (opt 0) OR onto benched Staryu line-piece (opt 1).
     obs = make_select(
         [opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0),
          opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
@@ -151,7 +151,7 @@ def test_at_risk_deploy_prefers_the_higher_gain_bench_line_piece():
                                     bench=[poke(STARYU, hp=70, energy=1)],
                                     opp_active=poke(SNIPER, energy=1, hp=330), hand=[CAPE]))
     opts = pilot.explain(obs).options
-    assert "deploy-hp-tool" in _fired(opts[1])           # the BENCH Staryu — gains the most turns
+    assert "deploy-hp-tool" in _fired(opts[1])           # BENCH Staryu - gains most turns
     assert "deploy-hp-tool" not in _fired(opts[0])       # not the Active (gains fewer)
     assert pilot.decide(obs) == [1]
 
@@ -175,11 +175,11 @@ def test_picker_handles_a_zero_gain_bench_line_piece_without_crashing():
         context=MAIN, current=state(active=poke(WINC, hp=330, energy=1),
                                     bench=[poke(STARYU, hp=70, energy=1)], hand=[CAPE]))
     opts = pilot.explain(obs).options                       # must not raise
-    assert "deploy-hp-tool" in _fired(opts[0])              # proactive default -> the active wincon
+    assert "deploy-hp-tool" in _fired(opts[0])              # proactive default -> active wincon
     assert "deploy-hp-tool" not in _fired(opts[1])          # not the 0-gain bench line-piece
 
 
-# --- the Active is doomed even at +100 -> redirect the Cape to the promotable successor -----------
+# --- Active doomed even at +100 -> redirect Cape to the promotable successor ----------------------
 @pytest.mark.req("REQ-GEN-0051")
 def test_doomed_active_redirects_the_cape_to_the_promotable_successor():
     """User addition: 'if our active is doomed and a cape can't protect it, we cape our next in line to
@@ -225,7 +225,7 @@ def test_no_deploy_onto_a_body_that_dies_even_with_the_boost():
     assert "deploy-hp-tool" not in _fired(pilot.explain(obs).options[0])    # don't cape the doomed active
 
 
-# --- a wall (off-line body) earns the Cape ONLY when +100 buys it a real survival turn -------------
+# --- wall (off-line body) earns Cape ONLY when +100 buys a real survival turn ----------------------
 @pytest.mark.req("REQ-GEN-0052")
 def test_wall_gets_the_cape_when_it_buys_a_survival_turn():
     """User: 'never say never' on an off-line body — a re-emerged Cinderace WALL (the Active, not the
@@ -264,7 +264,7 @@ def test_wall_does_not_get_the_cape_when_it_gains_no_turn():
     assert "deploy-hp-tool" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- predict-next-attacker: incoming sees an opponent BENCHED promotion, not just their current Active -
+# --- predict-next-attacker: incoming sees opponent BENCHED promotion, not just current Active -----
 @pytest.mark.req("REQ-GEN-0053")
 def test_predict_next_attacker_sees_a_benched_opp_promotion():
     """Incoming generalizes beyond the opponent's CURRENT Active: a harmless Active (100) hides a big
@@ -288,12 +288,12 @@ def test_predict_next_attacker_sees_a_benched_opp_promotion():
                                     opp_active=poke(WEAKOPP, energy=1, hp=200),
                                     opp_bench=[poke(BIGOPP, energy=1, hp=330)], hand=[CAPE]))
     opts = pilot.explain(obs).options
-    assert "deploy-hp-tool" in _fired(opts[1])           # the benched successor (real threat predicted)
+    assert "deploy-hp-tool" in _fired(opts[1])           # benched successor (real threat predicted)
     assert "deploy-hp-tool" not in _fired(opts[0])       # not the doomed Active
     assert pilot.decide(obs) == [1]
 
 
-# --- the KO invariant: a positional Cape deploy never forgoes a knockout (corr 82756664-36) --------
+# --- KO invariant: a positional Cape deploy never forgoes a knockout (corr 82756664-36) ------------
 @pytest.mark.req("REQ-GEN-0054")
 def test_cape_deploy_never_forgoes_a_lethal_ko():
     """A positional Cape deploy never overrides a knockout. With a lethal attack AND the proactive Cape
@@ -313,7 +313,7 @@ def test_cape_deploy_never_forgoes_a_lethal_ko():
         context=MAIN, current=state(active=poke(WINC, hp=330, energy=1),
                                     opp_active=poke(FRAGILE, energy=1, hp=60), hand=[CAPE]))
     decision = pilot.explain(obs)
-    assert decision.options[0].tactical >= KO_SCORE         # the attack IS a recognized lethal KO
+    assert decision.options[0].tactical >= KO_SCORE         # attack IS a recognized lethal KO
     assert decision.options[0].deferred                     # ...but held for last, never forgone
-    assert "deploy-hp-tool" in _fired(decision.options[1])  # the Cape deploy is endorsed (tier-2 develop)
-    assert pilot.decide(obs) == [1]                         # equip the Cape first, then KO on the re-presented menu
+    assert "deploy-hp-tool" in _fired(decision.options[1])  # Cape deploy endorsed (tier-2 develop)
+    assert pilot.decide(obs) == [1]                         # equip Cape first, then KO on re-presented menu

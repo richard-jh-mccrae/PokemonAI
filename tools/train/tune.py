@@ -44,8 +44,8 @@ def _build_pilot(agent: str):
     deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
     attacks = all_attack()
     seeds = authored_seeds(GENERAL_STRATEGY, strategy)   # incl. weight_overrides (ADR-0035)
-    pilot = Pilot(                                 # mirror main.py EXACTLY — incl. recoil + bench_snipe,
-        strategy, deck, general_strategy=GENERAL_STRATEGY,   # else the W-route featurizes a pilot whose
+    pilot = Pilot(                                 # mirror main.py EXACTLY -- incl. recoil + bench_snipe,
+        strategy, deck, general_strategy=GENERAL_STRATEGY,   # else W-route featurizes a pilot whose
         stats=EngineCardStatProvider(), functions=CardFunctions.load(),  # snipe rider / draw-guard differ
         attacks={a.attackId: a.damage for a in attacks},     # from runtime (snipe-for-the-ko never fires)
         attack_costs={a.attackId: len(a.energies) for a in attacks},
@@ -57,7 +57,7 @@ def _build_pilot(agent: str):
 
 
 def main(argv=None):
-    for stream in (sys.stdout, sys.stderr):           # labels carry '→'/curly quotes; cp1252 would crash
+    for stream in (sys.stdout, sys.stderr):           # labels carry '->'/curly quotes; cp1252 would crash
         try:
             stream.reconfigure(encoding="utf-8")
         except (AttributeError, ValueError):
@@ -103,7 +103,7 @@ def main(argv=None):
         n_critical = sum(p.critical for p in result.proposals) + sum(
             c.is_critical for c in result.unsatisfied) + sum(c.is_critical for c, _ in result.skipped)
         if n_critical:
-            print(f"  *** {n_critical} CRITICAL correction(s) flagged — /blunder-buster resolves "
+            print(f"  *** {n_critical} CRITICAL correction(s) flagged -- /blunder-buster resolves "
                   f"these FIRST (blocking) before any other cluster ***")
         sat = result.n_constraints - len(result.unsatisfied)
         if result.n_constraints:
@@ -117,11 +117,11 @@ def main(argv=None):
                   "seeds - leverage is in the proposals / unsatisfied list below)")
         elif not changed:
             print("  (no weight changes from authored defaults - leverage is in the proposals below)")
-        for c in result.unsatisfied:                  # the fit couldn't honour these (conflict / needs a rule)
+        for c in result.unsatisfied:                  # fit couldn't honour these (conflict / needs a rule)
             mark = "[CRITICAL] " if c.is_critical else ""
             print(f"  {mark}UNSATISFIED ep {c.episode_id} frame {c.decision.get('frame')} "
                   f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
-            if c.rationale:                            # show it so the CRITICAL marker is visible here too
+            if c.rationale:                            # show it so CRITICAL marker visible here too
                 print(f"    rationale: {c.rationale}")
         prop_out = write_proposals(
             REPO / "data" / "proposals" / f"{agent}.json", agent, result.proposals,
@@ -138,7 +138,7 @@ def main(argv=None):
             from collections import Counter
             by = Counter((e or {}).get("disposition", "?") for _, e in dispositioned)
             print(f"  reviewed (excluded): {len(dispositioned)} already-assessed "
-                  f"({', '.join(f'{k} {n}' for k, n in sorted(by.items()))}) — data/corrections/reviewed.json")
+                  f"({', '.join(f'{k} {n}' for k, n in sorted(by.items()))}) -- data/corrections/reviewed.json")
             for c, e in dispositioned:
                 print(f"    SEEN ep {c.episode_id} frame {c.decision.get('frame')} "
                       f"[{(e or {}).get('disposition', '?')}]: {(e or {}).get('reason', '')}")

@@ -19,7 +19,7 @@ def test_decisions_payload_has_labeled_options_and_detected_seat():
     assert len(decisions) == 43
     main = next(d for d in decisions if d["context"] == "Main")
     assert "End turn" in [o["label"] for o in main["options"]]
-    assert main["chosen"] == [2]      # selection from the next film frame (offset +1)
+    assert main["chosen"] == [2]      # selection from next film frame (offset +1)
 
 
 def test_record_correction_from_posted_form_appends_labeled_correction(tmp_path):
@@ -35,7 +35,7 @@ def test_record_correction_from_posted_form_appends_labeled_correction(tmp_path)
         submission_id=123, store_path=log,
     )
     assert corr.category == "missed_win" and corr.correct == [4]
-    assert corr.correct_label == "End turn"                 # auto-labeled via the decoder
+    assert corr.correct_label == "End turn"                 # auto-labeled via decoder
     assert corr.chosen_label.startswith(("Play", "Attach", "End"))
     loaded = load_corrections(log)
     assert len(loaded) == 1 and loaded[0] == corr
@@ -50,13 +50,13 @@ def test_frames_payload_matches_heroz_film_indexing():
 
     f1 = p["frames"][0]
     assert f1["step"] == 1 and f1["frame"] == 0          # 1-based step, 0-based film index
-    assert p["frames"][-1]["taggable"] is False          # the terminal frame isn't taggable
+    assert p["frames"][-1]["taggable"] is False          # terminal frame isn't taggable
 
     main = next(f for f in p["frames"] if f["context"] == "Main")
     assert main["taggable"] is True
     assert main["selected_label"]                        # mirrors HEROZ "Selected Action"
     assert any(o["label"] == "End turn" for o in main["options"])
-    assert main["frame"] == main["step"] - 1             # POST uses the 0-based frame
+    assert main["frame"] == main["step"] - 1             # POST uses 0-based frame
 
 
 def test_list_corrections_filters_by_episode(tmp_path):

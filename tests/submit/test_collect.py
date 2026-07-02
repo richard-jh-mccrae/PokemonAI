@@ -27,9 +27,9 @@ def test_collect_extracts_result_matchup_timing_and_telemetry_from_a_real_match(
 
     m = parse_match(env.toJSON(), env.logs, seat=0)
 
-    assert m["result"] in {"win", "loss", "draw"}             # decided from the replay rewards
-    assert m["opponent_archetype"]                            # classified from the opponent's deck
-    assert m["decision_ms"]["count"] > 0                      # per-decision timing from the log
+    assert m["result"] in {"win", "loss", "draw"}             # decided from replay rewards
+    assert m["opponent_archetype"]                            # classified from opponent's deck
+    assert m["decision_ms"]["count"] > 0                      # per-decision timing from log
     assert m["telemetry"]["decisions"] > 0                    # @T telemetry parsed out of stderr
     assert set(m["telemetry"]["tier_mix"]) == {"0"}           # this agent runs Tier-0 closed-form
 
@@ -174,7 +174,7 @@ def test_kaggle_score_fails_cleanly_with_an_auth_hint(monkeypatch):
     with pytest.raises(SystemExit) as ei:
         collectmod.kaggle_score(1)
     msg = str(ei.value)
-    assert "authenticated" in msg.lower() and "KAGGLE_API_TOKEN" in msg   # tells you how to fix it
+    assert "authenticated" in msg.lower() and "KAGGLE_API_TOKEN" in msg   # tells how to fix
 
 
 @pytest.mark.req("REQ-SUB-0011")
@@ -190,7 +190,7 @@ def test_run_kaggle_surfaces_the_cli_error_on_other_failures(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
     with pytest.raises(SystemExit) as ei:
         collectmod._run_kaggle(["competitions", "submissions", "typo-comp", "--csv"])
-    assert "competition not found" in str(ei.value)      # the real cause, surfaced not swallowed
+    assert "competition not found" in str(ei.value)      # real cause surfaced, not swallowed
 
 
 class _FakeApi:
@@ -222,7 +222,7 @@ def test_kaggle_download_skips_episodes_already_on_disk(tmp_path):
 
     dest = tmp_path / "replays"
     dest.mkdir()
-    # episode 100 was collected on a prior run — both its files are already present
+    # episode 100 collected on a prior run — both its files already present
     (dest / "episode-100-replay.json").write_text(json.dumps({"r": 100}), encoding="utf-8")
     (dest / "episode-100-agent-0-logs.json").write_text(json.dumps([]), encoding="utf-8")
 
