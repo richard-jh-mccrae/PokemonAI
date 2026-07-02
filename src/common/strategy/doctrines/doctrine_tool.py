@@ -98,7 +98,6 @@ class ToolMixin:
         0 when unknown. Isolated to the Tool doctrine (does not touch the shared `_incoming_active_damage`)."""
         if not self.stats:
             return 0
-        defender_stat = self.stats.get(defender_id) if defender_id is not None else None
         best = 0
         for p in self._opp_in_play(obs):
             st = self.stats.get(p.get("id"))
@@ -106,7 +105,7 @@ class ToolMixin:
                 continue
             if (st.minAttackCost or 0) > len(p.get("energies") or []) + 1:   # unaffordable even with an attach
                 continue
-            best = max(best, int(self._wr_adjusted(st, defender_stat, st.maxDamage or 0)))
+            best = max(best, int(self._predicted_max_damage(st, {"id": defender_id})))
         return best
 
     def _tool_carrier_candidates(self, obs: dict, me: dict, board, active_incoming: int,

@@ -1,0 +1,270 @@
+"""Parametric Effect Clauses — pure classifier + table + loader (ADR-0032 item 6).
+
+Lib-free: synthetic probe records (shape mirrors cg/api.py ``Log``) -> clause dicts
+``{kind, amount, restriction?, rider?}``. The magnitudes the boolean Function Tags
+discard (heal amount, draw count) are kept here; tags stay boolean (ADR-0006).
+"""
+import json
+
+import pytest
+
+from meta_tracker.card_effects import (
+    accumulate_effects, apply_overrides, build_effect_table, classify_effect_clauses,
+    merge_clauses)
+
+
+def _rec(logs, actor=0, contexts=None):
+    return {"actor": actor, "logs": logs, "contexts": contexts or []}
+
+
+def _heal(value, player=0, counter=False):
+    return {"type": 16, "playerIndex": player, "value": value, "putDamageCounter": counter}
+
+
+def _draw(player=0):
+    return {"type": 4, "playerIndex": player}
+
+
+def _move(frm, to, player=0):
+    return {"type": 6, "playerIndex": player, "fromArea": frm, "toArea": to}
+
+
+# --- heal amount (REQ-EFFECT-0001) -------------------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0001")
+def test_heal_amount_is_measured_from_hp_change():
+    # HP_CHANGE(16) value>0, actor's side, not a damage counter -> heal clause with the magnitude
+    out = classify_effect_clauses({"category": "item"}, probe=_rec([_heal(60)]))
+    assert out == [{"kind": "heal", "amount": 60}]
+
+
+@pytest.mark.req("REQ-EFFECT-0001")
+def test_heal_amount_is_per_target_max_not_sum():
+    # "heal 40 from each" logs one HP_CHANGE per target -> the clause carries the
+    # per-target magnitude (board-independent), not the board-dependent sum
+    out = classify_effect_clauses({}, probe=_rec([_heal(40), _heal(40)]))
+    assert out == [{"kind": "heal", "amount": 40}]
+    # a capped partial heal alongside a full one -> the max observed
+    out = classify_effect_clauses({}, probe=_rec([_heal(30), _heal(60)]))
+    assert out == [{"kind": "heal", "amount": 60}]
+
+
+@pytest.mark.req("REQ-EFFECT-0001")
+def test_damage_and_counters_and_opponent_hp_are_not_heal():
+    assert classify_effect_clauses({}, probe=_rec([_heal(-30)])) == []          # damage
+    assert classify_effect_clauses({}, probe=_rec([_heal(30, counter=True)])) == []  # counter effect
+    assert classify_effect_clauses({}, probe=_rec([_heal(30, player=1)])) == []      # opponent's mon
+
+
+# --- draw count (REQ-EFFECT-0002) ---------------------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0002")
+def test_draw_count_is_number_of_actor_draw_logs():
+    # DRAW(4) logs one card each -> the count the boolean `draw` tag discards
+    out = classify_effect_clauses({}, probe=_rec([_draw(), _draw(), _draw()]))
+    assert out == [{"kind": "draw", "amount": 3}]
+
+
+@pytest.mark.req("REQ-EFFECT-0002")
+def test_opponent_draws_are_not_my_draw_clause():
+    assert classify_effect_clauses({}, probe=_rec([_draw(player=1)])) == []
+
+
+# --- energy riders (REQ-EFFECT-0003) ------------------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0003")
+def test_heal_then_own_energy_to_hand_is_bounce_rider():
+    # Wally's Compassion pattern: heal, then my Energy leaves the in-play ENERGY(8)
+    # area for my HAND(2) during the same resolution
+    out = classify_effect_clauses({}, probe=_rec([_heal(120), _move(8, 2)]))
+    assert out == [{"kind": "heal", "amount": 120, "rider": "bounce_energy_to_hand"}]
+
+
+@pytest.mark.req("REQ-EFFECT-0003")
+def test_heal_then_own_energy_to_discard_is_discard_rider():
+    # Super Potion pattern (verified in a real probe record): heal 60 then ENERGY(8)->DISCARD(3)
+    out = classify_effect_clauses({}, probe=_rec([_heal(60), _move(8, 3)]))
+    assert out == [{"kind": "heal", "amount": 60, "rider": "discard_own_energy"}]
+
+
+@pytest.mark.req("REQ-EFFECT-0003")
+def test_energy_move_without_or_before_a_heal_is_no_rider():
+    # the rider is "heal FOLLOWED BY the move" — a cost paid before the heal, or a
+    # move with no heal at all, is not a heal rider
+    assert classify_effect_clauses({}, probe=_rec([_move(8, 2)])) == []
+    out = classify_effect_clauses({}, probe=_rec([_move(8, 3), _heal(60)]))
+    assert out == [{"kind": "heal", "amount": 60}]
+
+
+@pytest.mark.req("REQ-EFFECT-0003")
+def test_opponent_energy_move_is_not_my_rider():
+    # knocking the opponent's Energy off (energy_denial territory) is not my heal's rider
+    out = classify_effect_clauses({}, probe=_rec([_heal(60), _move(8, 3, player=1)]))
+    assert out == [{"kind": "heal", "amount": 60}]
+
+
+# --- overrides union (REQ-EFFECT-0004) ----------------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_override_replaces_measured_clauses_of_the_same_kind():
+    # the probe under-measures a capped heal; the hand-verified override wins its kind,
+    # while measured clauses of other kinds survive
+    probe = _rec([_heal(40), _draw(), _draw()])
+    ovr = [{"kind": "heal", "amount": "all", "restriction": "mega_only",
+            "rider": "bounce_energy_to_hand"}]
+    out = classify_effect_clauses({}, probe=probe, overrides=ovr)
+    assert {"kind": "draw", "amount": 2} in out
+    heals = [c for c in out if c["kind"] == "heal"]
+    assert heals == ovr
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_multi_clause_override_of_one_kind_ships_whole():
+    # Arven's Sandwich: heal 30 active-only + heal 100 if Arven's — both clauses ship
+    ovr = [{"kind": "heal", "amount": 30, "restriction": "active_only"},
+           {"kind": "heal", "amount": 100, "restriction": "arvens_pokemon"}]
+    out = classify_effect_clauses({}, probe=_rec([_heal(30)]), overrides=ovr)
+    assert out == sorted(ovr, key=lambda c: str(c))
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_override_only_card_needs_no_probe():
+    ovr = [{"kind": "heal", "amount": 150}]
+    assert classify_effect_clauses({}, overrides=ovr) == ovr
+
+
+# --- condition gates (REQ-EFFECT-0011) -----------------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0011")
+def test_override_condition_passes_through_the_union():
+    # Jumbo Ice Cream: probe measures the 80 but not the 3+-Energy gate; the override
+    # carries the gate and replaces the ungated measured clause — condition verbatim
+    ovr = [{"kind": "heal", "amount": 80, "restriction": "active_only",
+            "condition": "energy_3_plus"}]
+    out = classify_effect_clauses({}, probe=_rec([_heal(80), _draw()]), overrides=ovr)
+    assert {"kind": "draw", "amount": 1} in out
+    assert [c for c in out if c["kind"] == "heal"] == ovr
+
+
+@pytest.mark.req("REQ-EFFECT-0011")
+def test_merge_keeps_distinct_condition_variants_separate():
+    # clauses differing only in condition are different clauses (like restriction
+    # variants) — merging must not collapse a gated heal into an ungated one
+    a = [{"kind": "heal", "amount": 10, "condition": "played_supporter_this_turn"}]
+    b = [{"kind": "heal", "amount": 40}]
+    assert merge_clauses(a, b) == sorted(a + b, key=lambda c: str(c))
+
+
+# --- override union survives accumulation (REQ-EFFECT-0012) ---------------------------
+
+@pytest.mark.req("REQ-EFFECT-0012")
+def test_apply_overrides_stamps_kind_over_an_accumulated_table():
+    # Bianca's Devotion: a prior run shipped the capped ungated measurement (heal 250);
+    # accumulate keeps it (distinct key) — the post-accumulate stamp must replace ALL
+    # heal clauses with the gated text-verified one, other kinds surviving
+    table = {1190: [{"kind": "heal", "amount": 250},
+                    {"kind": "heal", "amount": "all",
+                     "condition": "remaining_hp_30_or_less"},
+                    {"kind": "draw", "amount": 2}]}
+    ovr = {1190: [{"kind": "heal", "amount": "all",
+                   "condition": "remaining_hp_30_or_less"}]}
+    out = apply_overrides(table, ovr)
+    assert out[1190] == sorted(ovr[1190] + [{"kind": "draw", "amount": 2}],
+                               key=lambda c: str(c))
+
+
+@pytest.mark.req("REQ-EFFECT-0012")
+def test_apply_overrides_adds_override_only_cards_and_leaves_others_alone():
+    table = {1117: [{"kind": "heal", "amount": 30}]}
+    ovr = {1242: [{"kind": "heal", "amount": 10,
+                   "condition": "played_supporter_this_turn"}]}
+    out = apply_overrides(table, ovr)
+    assert out[1117] == [{"kind": "heal", "amount": 30}]      # untouched
+    assert out[1242] == ovr[1242]                              # probe-unreachable card ships
+
+
+# --- graceful degradation (REQ-EFFECT-0005) -----------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0005")
+def test_sparse_or_absent_probe_degrades_to_empty():
+    assert classify_effect_clauses({}) == []
+    assert classify_effect_clauses({}, probe=None) == []
+    assert classify_effect_clauses({}, probe={}) == []
+    assert classify_effect_clauses({}, probe=_rec([])) == []
+    assert classify_effect_clauses({}, probe={"logs": [{}]}) == []      # no actor, empty log
+    assert classify_effect_clauses({}, probe=_rec([{"type": 16}])) == []  # HP_CHANGE, no value
+
+
+# --- per-record merge + table build (REQ-EFFECT-0006) --------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0006")
+def test_merge_clauses_takes_max_amount_per_kind():
+    a = [{"kind": "heal", "amount": 30}]           # a capped pass
+    b = [{"kind": "heal", "amount": 60}]           # a fully-damaged pass
+    assert merge_clauses(a, b) == [{"kind": "heal", "amount": 60}]
+
+
+@pytest.mark.req("REQ-EFFECT-0006")
+def test_build_table_classifies_each_record_separately():
+    # records must NOT be concatenated: a heal in pass A + an unrelated energy move in
+    # pass B must not fabricate a rider; and two 3-card draws must not sum to 6
+    cards = {7: {"category": "supporter"}}
+    recs = {7: [_rec([_heal(60)]), _rec([_move(8, 3)]),
+                _rec([_draw(), _draw(), _draw()]), _rec([_draw(), _draw(), _draw()])]}
+    table = build_effect_table(cards, recs)
+    assert table[7] == [{"kind": "draw", "amount": 3}, {"kind": "heal", "amount": 60}]
+
+
+@pytest.mark.req("REQ-EFFECT-0006")
+def test_build_table_omits_clauseless_cards_and_applies_overrides():
+    cards = {1: {"category": "item"}, 2: {"category": "item"}}
+    table = build_effect_table(cards, {}, overrides={1: [{"kind": "heal", "amount": 150}]})
+    assert table == {1: [{"kind": "heal", "amount": 150}]}   # 2 has no clauses -> omitted
+
+
+# --- cross-run accumulation (REQ-EFFECT-0007) ----------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0007")
+def test_accumulate_is_monotonic_max_merge():
+    new = {1: [{"kind": "heal", "amount": 60}]}
+    prior = {1: [{"kind": "heal", "amount": 30}, {"kind": "draw", "amount": 2}],
+             2: [{"kind": "draw", "amount": 3}]}
+    acc = accumulate_effects(new, prior)
+    assert acc[1] == [{"kind": "draw", "amount": 2}, {"kind": "heal", "amount": 60}]
+    assert acc[2] == [{"kind": "draw", "amount": 3}]     # prior-only card never dropped
+
+
+@pytest.mark.req("REQ-EFFECT-0007")
+def test_accumulate_all_amount_beats_any_int():
+    new = {1: [{"kind": "heal", "amount": 90}]}
+    prior = {1: [{"kind": "heal", "amount": "all"}]}
+    assert accumulate_effects(new, prior)[1] == [{"kind": "heal", "amount": "all"}]
+
+
+@pytest.mark.req("REQ-EFFECT-0007")
+def test_accumulate_keeps_distinct_restriction_or_rider_variants():
+    # override-authored clause variants (distinct restriction) never collapse together
+    prior = {1: [{"kind": "heal", "amount": 30, "restriction": "active_only"},
+                 {"kind": "heal", "amount": 100, "restriction": "arvens_pokemon"}]}
+    acc = accumulate_effects({}, prior)
+    assert acc == {1: sorted(prior[1], key=lambda c: str(c))}
+
+
+# --- runtime loader (REQ-EFFECT-0008) -----------------------------------------------
+
+@pytest.mark.req("REQ-EFFECT-0008")
+def test_loader_reads_table_and_defaults_missing_cards_to_empty(tmp_path):
+    from common.effects import CardEffects
+    p = tmp_path / "card_effects.json"
+    p.write_text(json.dumps({"1112": [{"kind": "heal", "amount": 60,
+                                       "rider": "discard_own_energy"}]}), encoding="utf-8")
+    fx = CardEffects.load(p)
+    assert fx.clauses(1112) == ({"kind": "heal", "amount": 60, "rider": "discard_own_energy"},)
+    assert fx.clauses(9999) == ()
+
+
+@pytest.mark.req("REQ-EFFECT-0008")
+def test_loader_fails_safe_to_empty_when_file_absent(tmp_path):
+    from common.effects import CardEffects
+    fx = CardEffects.load(tmp_path / "nope.json")
+    assert fx.clauses(1112) == ()

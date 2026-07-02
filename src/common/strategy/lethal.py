@@ -80,7 +80,8 @@ class LethalMixin:
         for i, o in enumerate(options):
             if o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 evolved_id = self._option_card_id(obs, select, o)
-                if self._best_affordable_ko_value(obs, board, opp, evolved_id, board.my_active_energy) > 0:
+                if self._best_affordable_ko_value(obs, board, opp, evolved_id, board.my_active_energy,
+                                                  bound="min") > 0:
                     return LethalLine(next_step=[i], kind="evolve",
                                       rationale="lethal (evolve): evolving enables the winning KO")
         return None
@@ -92,14 +93,19 @@ class LethalMixin:
         simultaneous double-KO is a draw, not a win (ADR-0022 #2), so it never wins here."""
         aid = option.get("attackId")
         hp = (opp or {}).get("hp", 0)
-        my_stat = self.stats.get(self._my_active_id(obs)) if self.stats else None
-        prevented = self._ability_prevents_damage(my_stat, (opp or {}).get("id"), aid)
-        dmg = 0 if prevented else self._weakness_adjusted(obs, opp, self.attacks.get(aid, 0))
+        # The damage oracle (ADR-0032): per-attack prevention/W/R — an ignore-flag attack (Nebula
+        # Beam) KOs through a prevent_ex_damage wall the old attack-blind path zeroed. bound="min"
+        # = the sound FLOOR: a coin/conditional attack ("If tails, does nothing") contributes its
+        # worst case, so a merely-likely KO can never lock a phantom Lethal (the one catastrophic
+        # error — CONTEXT.md *Lethal*: coins forced to their worst outcome). The context term stays
+        # sound under "min": a visible-state scaler (hand size, attached Energy) is EXACT.
+        dmg = self.predicted_damage(self._my_active_id(obs), aid, opp, bound="min",
+                                    context=self._damage_context(obs))
         active_ko = bool(hp and dmg >= hp)
         if active_ko and self._is_simultaneous_draw(board, aid, self._prize_value(opp)):
             return False
         prizes_taken = ((self._prize_value(opp) if active_ko else 0)
-                        + self._snipe_ko_prizes(board.opp_bench, self.bench_snipe.get(aid, 0)))
+                        + self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(aid)))
         if prizes_taken >= board.my_prizes_remaining:
             return True
         return active_ko and not board.opp_bench       # the KO leaves them no Pokémon to promote

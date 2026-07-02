@@ -94,8 +94,9 @@ class GustMixin:
             others.append(tuple(entry))
         best = 0
         for aid in (getattr(my_stat, "attacks", None) or ()):
-            if self._wr_adjusted(my_stat, t_stat, self.attacks.get(aid, 0)) >= t_hp:   # this attack KOs it
-                best = max(best, self._snipe_ko_prizes(others, self.bench_snipe.get(aid, 0)))
+            # per-attack oracle (ADR-0032): the KO check honors the attack's own ignore flags
+            if self.predicted_damage(getattr(my_stat, "cardId", None), aid, target) >= t_hp:
+                best = max(best, self._snipe_ko_prizes(others, self._rider_snipe(aid)))
         return best
 
     def _gust_forward_denial(self, target: dict) -> float:
@@ -138,8 +139,8 @@ class GustMixin:
         t_stat = self.stats.get(target.get("id"))
         if not t_stat:
             return 0
-        # the target attacks ME: target = attacker, my Active = defender (Weakness AND Resistance).
-        incoming = self._wr_adjusted(t_stat, self.stats.get(board.my_active_id), t_stat.maxDamage or 0)
+        # the target attacks ME: target = attacker, my Active = defender — per-attack oracle max
+        incoming = self._predicted_max_damage(t_stat, {"id": board.my_active_id})
         if board.my_active_hp and incoming >= board.my_active_hp:
             return self._prize_value({"id": board.my_active_id})
         return 0

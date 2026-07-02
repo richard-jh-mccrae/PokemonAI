@@ -1,0 +1,445 @@
+{
+ "6": {
+  "damageMin": 0,
+  "damageMax": 120
+ },
+ "25": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "52": {
+  "damageMin": 0,
+  "damageMax": 180
+ },
+ "55": {
+  "damageMin": 0,
+  "damageMax": 230
+ },
+ "64": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "75": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "81": {
+  "damageMin": 0,
+  "damageMax": 90
+ },
+ "91": {
+  "damageMin": 10,
+  "damageMax": 10
+ },
+ "126": {
+  "damageMin": 10,
+  "damageMax": 10
+ },
+ "138": {
+  "damageMin": 0,
+  "damageMax": 180
+ },
+ "173": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "177": {
+  "damageMin": 0,
+  "damageMax": 40
+ },
+ "195": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 30
+ },
+ "226": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 30
+ },
+ "228": {
+  "damageMin": 0,
+  "damageMax": 30
+ },
+ "244": {
+  "damageMin": 10,
+  "damageMax": 10
+ },
+ "259": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "261": {
+  "damageMin": 100,
+  "damageMax": 100
+ },
+ "274": {
+  "scaleVar": "atk_hand",
+  "scalePerUnit": 5
+ },
+ "326": {
+  "damageMin": 0,
+  "damageMax": 30
+ },
+ "350": {
+  "damageMin": 0,
+  "damageMax": 240
+ },
+ "352": {
+  "damageMin": 90,
+  "damageMax": 90
+ },
+ "363": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 20
+ },
+ "364": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "391": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "404": {
+  "damageMin": 0,
+  "damageMax": 20
+ },
+ "408": {
+  "damageMin": 0,
+  "damageMax": 360
+ },
+ "469": {
+  "damageMin": 140,
+  "damageMax": 140
+ },
+ "486": {
+  "damageMin": 0,
+  "damageMax": 20
+ },
+ "498": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "505": {
+  "damageMin": 10,
+  "damageMax": 10
+ },
+ "533": {
+  "damageMin": 0,
+  "damageMax": 920
+ },
+ "551": {
+  "damageMin": 0,
+  "damageMax": 1180
+ },
+ "578": {
+  "damageMin": 0,
+  "damageMax": 80
+ },
+ "595": {
+  "damageMin": 60,
+  "damageMax": 60
+ },
+ "603": {
+  "damageMin": 50,
+  "damageMax": 50
+ },
+ "630": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "651": {
+  "damage": 80
+ },
+ "657": {
+  "damageMin": 0,
+  "damageMax": 320
+ },
+ "662": {
+  "damageMin": 90,
+  "damageMax": 90
+ },
+ "664": {
+  "damageMin": 0,
+  "damageMax": 60
+ },
+ "668": {
+  "damageMin": 0,
+  "damageMax": 180
+ },
+ "678": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "684": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "686": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "708": {
+  "damage": 80
+ },
+ "717": {
+  "damageMin": 0,
+  "damageMax": 1150
+ },
+ "727": {
+  "damageMin": 60,
+  "damageMax": 60
+ },
+ "728": {
+  "damageMin": 0,
+  "damageMax": 400
+ },
+ "733": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "747": {
+  "damageMin": 0,
+  "damageMax": 160
+ },
+ "758": {
+  "damageMin": 100,
+  "damageMax": 200
+ },
+ "790": {
+  "damageMin": 120,
+  "damageMax": 120
+ },
+ "792": {
+  "damageMin": 0,
+  "damageMax": 40
+ },
+ "805": {
+  "damageMin": 50,
+  "damageMax": 50
+ },
+ "833": {
+  "damageMin": 50,
+  "damageMax": 50
+ },
+ "835": {
+  "damageMin": 0,
+  "damageMax": 180
+ },
+ "843": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 50
+ },
+ "879": {
+  "damageMin": 0,
+  "damageMax": 60
+ },
+ "887": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "889": {
+  "damageMin": 0,
+  "damageMax": 80
+ },
+ "894": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 20
+ },
+ "951": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "973": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "975": {
+  "damageMin": 0,
+  "damageMax": 700
+ },
+ "1003": {
+  "damageMin": 90,
+  "damageMax": 90
+ },
+ "1013": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1016": {
+  "damageMin": 0,
+  "damageMax": 150
+ },
+ "1037": {
+  "damageMin": 50,
+  "damageMax": 50
+ },
+ "1051": {
+  "damageMin": 0,
+  "damageMax": 60
+ },
+ "1054": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1056": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "1059": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "1067": {
+  "damageMin": 0,
+  "damageMax": 20
+ },
+ "1079": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 50
+ },
+ "1081": {
+  "damageMin": 0,
+  "damageMax": 30
+ },
+ "1087": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "1092": {
+  "damageMin": 0,
+  "damageMax": 1350
+ },
+ "1125": {
+  "damageMin": 130,
+  "damageMax": 130
+ },
+ "1135": {
+  "scaleVar": "atk_active_energy",
+  "scalePerUnit": 20
+ },
+ "1137": {
+  "damageMin": 0,
+  "damageMax": 30
+ },
+ "1153": {
+  "damageMin": 0,
+  "damageMax": 140
+ },
+ "1178": {
+  "damage": 10
+ },
+ "1184": {
+  "damageMin": 0,
+  "damageMax": 20
+ },
+ "1205": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1213": {
+  "damageMin": 0,
+  "damageMax": 460
+ },
+ "1229": {
+  "damageMin": 40,
+  "damageMax": 40
+ },
+ "1256": {
+  "damageMin": 0,
+  "damageMax": 210
+ },
+ "1260": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1266": {
+  "damageMin": 10,
+  "damageMax": 10
+ },
+ "1270": {
+  "damage": 120
+ },
+ "1271": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1309": {
+  "damageMin": 40,
+  "damageMax": 40
+ },
+ "1319": {
+  "damageMin": 50,
+  "damageMax": 50
+ },
+ "1328": {
+  "damageMin": 0,
+  "damageMax": 30
+ },
+ "1335": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "1346": {
+  "damageMin": 50,
+  "damageMax": 50
+ },
+ "1366": {
+  "damageMin": 0,
+  "damageMax": 2400
+ },
+ "1369": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1382": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1428": {
+  "damageMin": 20,
+  "damageMax": 20
+ },
+ "1439": {
+  "damageMin": 0,
+  "damageMax": 240
+ },
+ "1453": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1458": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1470": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1492": {
+  "damageMin": 0,
+  "damageMax": 270
+ },
+ "1493": {
+  "damageMin": 0,
+  "damageMax": 20
+ },
+ "1498": {
+  "damageMin": 30,
+  "damageMax": 30
+ },
+ "1526": {
+  "damageMin": 0,
+  "damageMax": 150
+ },
+ "1528": {
+  "damage": 30
+ },
+ "1547": {
+  "damageMin": 0,
+  "damageMax": 0
+ },
+ "1548": {
+  "damageMin": 160,
+  "damageMax": 160
+ }
+}

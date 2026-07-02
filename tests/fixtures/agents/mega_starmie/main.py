@@ -6,13 +6,14 @@ import os
 from cg.api import all_attack
 from common import telemetry
 from common.cards import CardFunctions
+from common.effects import CardEffects
 from common.config import load_overrides_and_params
 from common.deck_tracker import OwnCardModel
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import (
-    EngineCardStatProvider, parse_attack_bench_snipe,
-    parse_attack_ignores_active_effects, parse_attack_recoil)
+    EngineCardStatProvider, build_attack_stats, load_attack_overrides,
+    parse_attack_bench_snipe, parse_attack_recoil)
 from common.scouting.scout import Scout
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs
@@ -31,8 +32,9 @@ _attacks = {a.attackId: a.damage for a in _all_attacks}
 _attack_costs = {a.attackId: len(a.energies) for a in _all_attacks}
 _recoil = {a.attackId: parse_attack_recoil(a.text) for a in _all_attacks}        # ADR-0022 #2
 _bench_snipe = {a.attackId: parse_attack_bench_snipe(a.text) for a in _all_attacks}  # ADR-0022 #14
-_ignores_active_effects = {a.attackId: parse_attack_ignores_active_effects(a.text)   # Nebula Beam bypasses
-                           for a in _all_attacks}                                     # Crustle (ep83054602 f17)
+_attack_stats = build_attack_stats(_all_attacks, load_attack_overrides())   # ADR-0032: per-attack
+                                                   # effect records — text seeds + engine-audited overrides
+                                                   # (subsumes the narrow ignores_active_effects feed)
 # weight overrides (tuned.json, ADR-0018) + params (Strategy.params, ADR-0019), with an optional
 # offline experiment overlay layered on top for local A/B (env AGENT_OVERLAY; ADR-0021). Inert on the grader.
 _overrides, _params = load_overrides_and_params(STRATEGY.params)
@@ -47,11 +49,12 @@ _pilot = Pilot(
     overrides=_overrides,
     stats=_provider,
     functions=CardFunctions.load(),
+    effects=CardEffects.load(),                       # ADR-0032 Effect Clauses (heal amounts/riders)
     attacks=_attacks,
     attack_costs=_attack_costs,
     recoil=_recoil,
     bench_snipe=_bench_snipe,
-    ignores_active_effects=_ignores_active_effects,
+    attack_stats=_attack_stats,
     search_budget=_params.get("search_budget", 0),   # Tier from params (Strategy default or overlay; ADR-0019/0021)
     scout=_scout,                                     # opponent recognition → the Read on Board (ADR-0026)
     briefs=_briefs,                                   # matched Matchup Brief on Board (ADR-0027), covers-routed

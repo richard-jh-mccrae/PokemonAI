@@ -1,0 +1,70 @@
+{
+ "_note": "Engine-OBSERVED heal restrictions (ADR-0032 item 6; probe_restrictions.py): which targets the select offered on a seeded board (damaged bench Mega + damaged non-Mega Active). Regenerate with build_card_effects.py --observe-restrictions; re-stamped after effect_overrides.json on every build — on conflict the observed value wins (the engine is the authority).",
+ "1096": {
+  "restriction": null,
+  "offered": [
+   "ACTIVE:329 Tapu Koko ex",
+   "BENCH:678 Mega Lucario ex"
+  ],
+  "source": "select"
+ },
+ "1112": {
+  "restriction": null,
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex",
+   "BENCH:678 Mega Lucario ex"
+  ],
+  "source": "select"
+ },
+ "1117": {
+  "restriction": null,
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex",
+   "BENCH:678 Mega Lucario ex"
+  ],
+  "source": "select"
+ },
+ "1130": {
+  "restriction": "active_only",
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex"
+  ],
+  "source": "healed"
+ },
+ "1147": {
+  "restriction": "active_only",
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex"
+  ],
+  "source": "healed"
+ },
+ "1153": {
+  "restriction": "active_only",
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex"
+  ],
+  "source": "healed"
+ },
+ "1212": {
+  "restriction": "active_only",
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex"
+  ],
+  "source": "healed"
+ },
+ "1222": {
+  "restriction": null,
+  "offered": [
+   "ACTIVE:75 Iron Leaves ex",
+   "BENCH:678 Mega Lucario ex"
+  ],
+  "source": "healed"
+ },
+ "1229": {
+  "restriction": "mega_only",
+  "offered": [
+   "BENCH:678 Mega Lucario ex"
+  ],
+  "source": "select"
+ }
+}

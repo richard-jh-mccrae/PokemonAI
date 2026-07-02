@@ -20,10 +20,14 @@ def _fired(t):
     return {h.id for h, _ in t.fired}
 
 
+DREEPY = 998
+
+
 def _stats():
     return DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
                        minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
+        DREEPY: CardStat(DREEPY, name="Dreepy", hp=40),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50, attacks=(20,)),
         CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, retreatCost=3, maxDamage=120),
         ALAKAZAM: CardStat(ALAKAZAM, name="Alakazam", hp=140, retreatCost=2, ex=True, maxDamage=10,
@@ -58,8 +62,9 @@ def test_retreat_off_an_ex_locked_wall_into_a_non_ex_attacker():
            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
                       "option": [{"type": ATTACK, "attackId": 11}, {"type": RETREAT}, {"type": 14}]}}
     traces = p.explain(obs)
-    assert traces.options[0].tactical == 0                # the Mega's attack is prevented (whiff)
-    assert traces.options[1].tactical >= KO_SCORE         # retreat -> Cinderace KOs Crustle
+    assert traces.options[0].tactical <= 0                # the Mega's attack is prevented (whiff —
+    assert traces.options[1].tactical >= KO_SCORE         # now also pays the efficiency cost);
+    # retreat -> Cinderace KOs Crustle
     assert p.decide(obs) == [1]                           # retreat off the ex-locked wall
 
 
@@ -74,6 +79,23 @@ def test_play_harlequin_against_a_hand_size_attacker_line():
                       "option": [{"type": PLAY, "index": 0}]}}
     assert p._board(obs, obs["select"]).opp_has_hand_size_attacker
     assert "play-harlequin-vs-hand-size" in _fired(p.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-DMG-0006")
+def test_prevented_active_damage_does_not_kill_the_bench_snipe_credit():
+    # ADR-0032 per-target semantics: vs Crustle my Mega's Jetting Blow (attack 11) deals 0 to the
+    # ACTIVE — but its 50 bench rider still KOs the benched 40-HP Dreepy, banking a real prize.
+    # The old attack-blind path early-returned 0 and the snipe was invisible.
+    p = _pilot()
+    me = {"active": [{"id": MEGA, "energies": [1] * 6, "hp": 330}], "bench": [], "hand": []}
+    opp = {"active": [{"id": CRUSTLE, "energies": [1], "hp": 150}],
+           "bench": [{"id": DREEPY, "hp": 40}]}
+    obs = {"current": {"players": [me, opp], "yourIndex": 0, "turn": 7},
+           "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                      "option": [{"type": ATTACK, "attackId": 11}, {"type": 14}]}}
+    traces = p.explain(obs)
+    assert traces.options[0].tactical >= KO_SCORE          # the snipe-KO is a banked prize
+    assert p.decide(obs) == [0]                            # attack — don't pass the turn
 
 
 @pytest.mark.req("REQ-GEN-0052")

@@ -44,8 +44,9 @@ _CONDITIONS = ("poisoned", "burned", "asleep", "paralyzed", "confused")
 
 
 def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
-          opp_active=None, opp_bench=(), turn: int = 2, prizes: int = 0, opp_prizes: int = 0,
-          opp_conditions=(), opp_hand_count: int = 0, deck_count: int | None = None) -> dict:
+          opp_active=None, opp_bench=(), opp_discard=(), turn: int = 2, prizes: int = 0,
+          opp_prizes: int = 0, opp_conditions=(), opp_hand_count: int = 0,
+          deck_count: int | None = None) -> dict:
     """A minimal `current` state with my board/hand (and optionally the opponent's). `prizes` /
     `opp_prizes` set each player's remaining prize count (length of the `prize` list); 0 leaves it
     empty (the prior default — no rule read prizes), so a lethal check only fires when a test sets it.
@@ -63,7 +64,7 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
         players[your_index]["deckCount"] = deck_count
     opp = {"active": [opp_active] if opp_active else [],
            "bench": list(opp_bench), "hand": None, "handCount": opp_hand_count,
-           "discard": [], "prize": [None] * opp_prizes}
+           "discard": [_hand_card(c) for c in opp_discard], "prize": [None] * opp_prizes}
     opp.update({k: (k in opp_conditions) for k in _CONDITIONS})
     players[1 - your_index] = opp
     return {"turn": turn, "yourIndex": your_index, "players": players}

@@ -86,6 +86,56 @@ A *routing hint*, not an outcome — the Search API still resolves exact effects
 _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category), structural tag
 (ex/trainer-type — those come from `CardData`), embedding (a rejected approach — use exact tags)
 
+**Attack Effect**:
+The per-attack, machine-readable effect facts of a *single* attack — its damage and energy cost plus
+the **effect modifiers** that bend the closed-form damage math: ignores-Ability / ignores-Weakness /
+ignores-Resistance, self-recoil, bench-snipe rider, hand-size scaling, "no damage to the Active", and
+conditional / coin-flip damage. **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
+card-tier structural stats (`CardStat`) and the behavioral, card-level `Function Tag`. Consumed by the
+closed-form (**Tier-0**) combat math so the agent picks the right attack *before* paying the Engine
+Search sim budget — e.g. Mega Starmie ex's Nebula Beam lands through Crustle's ex-damage immunity
+because it *ignores Abilities*, while its Jetting Blow does not. Derived and **verified against the
+simulator** (the differential damage audit — actual dealt HP vs closed-form prediction), never recalled
+from memory. Realized as the `AttackStat` record the stat provider builds beside `CardStat`.
+_Avoid_: Function Tag (behavioral, coarse, card-level), CardStat / structural fact (card-level, not
+per-attack), damage table (the raw printed number — an Attack Effect carries the modifiers that bend it)
+
+**Damage Formula**:
+The closed-form damage expression of a single attack — `base + per_unit × count(variable)` over a
+CLOSED vocabulary of state variables (own/opponent hand size, attached Energy, discard-pile Energy,
+…), evaluated against the live board at decision time. Damage that scales on **visible** state is
+thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hidden**-state scaler
+(Mega Abomasnow ex's deck-discard) is bounded soundly via the deck tracker (pigeonhole floor) and
+estimated via Deck-Content Odds; only **true randomness** (coin flips) is carried as measured
+`min`/`max` bounds — my Lethal math reads the floor (sound), Incoming reads the ceiling (worst-case).
+Fitted by sweep-probing the engine (varying one state variable and regressing the dealt damage),
+never text-parsed.
+_Avoid_: expected value (a probability blend — breaks soundness in both directions), printed damage
+(the base term only), bounds (the coin-RNG fallback, not the general shape)
+
+**Effect Clause**:
+One machine-readable clause of a Trainer's or Ability's effect — `{kind, amount, target restriction,
+rider}` — so a multi-clause card is a LIST of clauses (Wally's Compassion = heal(all, Mega-only) +
+bounce-Energy(→hand)). The parametric card-tier counterpart of the attack-tier **Attack Effect**:
+the **Function Tag** stays the coarse boolean *routing trigger* (`heal`), the Effect Clause carries
+the *quantities the math reads* (150 vs 60 vs all; the Energy-discard cost; the Mega-only gate).
+Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
+targets the select actually offers), with a hand-authored override tail for clauses no probe board
+can trigger. Shipped as `card_effects.json` beside the tag table.
+_Avoid_: Function Tag (boolean, coarse — a Clause is parametric), card text (the free-text source;
+a Clause is the measured, structured fact), effect (unqualified — say which tier)
+
+**Transient Effect**:
+A one-turn effect an ATTACK grants — "during your (opponent's) next turn …": a damage shield
+(takes-less / prevent-all), a self-lock (can't attack / can't reuse the same attack), a next-turn
+damage bonus, a retreat-lock. Invisible in the observation (no per-Pokémon effect state), so it is
+**inferred from the ATTACK log stream** by the match-scoped `TransientTracker` — deterministic,
+serial-bound (leaving the Active ends the match-by-serial), expiring when the granter's next turn
+starts. Consumed by the damage oracle (a live shield joins the defender math, pierced by
+ignores-effects attacks) and by Incoming (a locked attacker threatens 0, a bonused one more).
+_Avoid_: status/Special Condition (poison/sleep/… — engine-exposed player flags, a different
+mechanism), buff/debuff (vague), effect (unqualified — say which tier)
+
 **Hand Refresh**:
 The umbrella concept for a card that throws your whole hand away to draw a fresh one. Splits by
 *where the old hand goes*, because that governs recoverability and the pull pool: a **Shuffle-Refresh**
