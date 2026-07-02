@@ -30,6 +30,8 @@ _ATTACH_FROM = 21 # pick the Pokémon to attach Energy to
 _IS_FIRST = 41    # IS_FIRST — coin-toss "Would you like to go first?" (YesNo)
 _NO = 2           # OptionType.NO — decline (the _YES sibling; coin-toss "go second" option)
 _MULLIGAN = 42    # "Would you like to redraw the cards?"
+_COIN_HEAD = 46   # COIN_HEAD — "Do you want to choose heads?" (only under manual_coin; a sound
+                  # engine-verify must BAIL here rather than choose the flip — ADR-0030)
 
 # fetch-grab selects: maxCount>1 here = single multi-pick resolved GREEDILY w/ gap-update +
 # take-fewer (not static top-N) so a satisfied need isn't double-grabbed (ADR-0023). Others stay top-N.

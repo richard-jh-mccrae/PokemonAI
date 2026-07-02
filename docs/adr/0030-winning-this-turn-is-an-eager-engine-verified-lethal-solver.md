@@ -9,9 +9,30 @@ CRITICALs (`040c`, `c1e0`, `fd5c`) are gated as regressions ([tests/strategy/tes
 `REQ-LETHAL-0001..0008`). The **Tier-1 Engine-Search backstop** primitive (`_engine_confirms_win`) is
 shipped and proven to round-trip the native `search_begin` / `search_step` on a real observation and
 read the engine's `result` ([tests/strategy/test_lethal_engine.py](../../tests/strategy/test_lethal_engine.py),
-`REQ-LETHAL-0009`). **Remaining follow-up:** driving a full multi-step line to terminal *inside* the
-search (re-running the policy on each intermediate `SearchState`) and gating the lock on it; and strict
-execute-only across the whole turn (a turn-scoped locked line). Extends
+`REQ-LETHAL-0009`). **Wired 2026-07-02 (wiring pass): the backstop now guards DIRECT locks** behind
+the `lethal_verify` kill-switch (`Strategy.params`, ADR-0021 pattern; **default ON** after the
+arena A/B — 2000 games neutral, 0 crashes): before a 1-step direct KO locks, the engine confirms
+it; a refute drops the candidate (never locks a phantom, counted in `Decision.lethal_refuted` → a
+sparse `lethal_refuted` telemetry key), a `None` verdict (engine absent / unexpected coin) keeps
+the sound closed-form lock, and the verdict rides on the line (`LethalLine.verified`, in the `@T`
+`lethal.verified` key) — `REQ-LETHAL-0013/0014`. **The wiring pass also fixed the primitive
+itself:** as originally shipped it read `result` straight after the line's steps, but a real
+winning attack parks the search on MY cascade selects first (take the prize(s), pick a snipe
+target) with `result` still −1 — measured live, EVERY genuine win read as a refute (its only
+prior test proved the False path). `_engine_confirms_win` now drives MY OWN cascade selects
+through the policy (under the `_planning` guard) to the engine's verdict, bails **None** on a
+COIN_HEAD select (never choose the flip), and returns False only when the select passes to the
+opponent unresolved; instrumented mirrors then showed 197/197 direct locks engine-CONFIRMED, 0
+refutes. Scope note
+the wiring made explicit: verify applies to direct locks ONLY — a 1-step engine sim of a
+multi-step (`unlock`/`evolve`) line ends mid-turn with no `result` and would read as a false
+refute, so those stay closed-form until the multi-step drive lands. This softens the original
+"trivially-exact single-step KO needs no engine call" stance: the call costs ~a search_step
+(≈0.1 ms, ADR-0031 phase 0) and buys the closed-form blind spots (abilities/status/timing), so
+the fast-path exemption is retired behind the A/B'd switch. **Remaining follow-up:** driving a
+full multi-step line to terminal *inside* the search (re-running the policy on each intermediate
+`SearchState` — the Planner's `_simulate_line` is the machinery to reuse) and gating unlock/evolve
+locks on it; and strict execute-only across the whole turn (a turn-scoped locked line). Extends
 [ADR-0022](0022-gust-is-closed-form-lethal-lookahead.md) — it generalizes the gust closed-form lethal
 into a whole-turn solver — and is the first concrete use of the **Tier-1 Search** seam named in
 [ADR-0008](0008-pilot-is-a-layered-rules-pipeline.md). Terms in

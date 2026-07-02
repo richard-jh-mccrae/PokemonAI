@@ -40,7 +40,8 @@ def _prune_none(v):
 _PLANNER_SURVIVAL_W = 50.0     # my Active survives predicted Incoming after the line (full turn)
 _PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by the KO …
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize
-_PLANNER_DEV_W = 1.0           # dev toward win-condition (seeded; exercised from P3 on)
+_PLANNER_DEV_W = 1.0           # development left on my end-of-turn board (engine-rank phase: bodies
+_PLANNER_DEV_CAP = 100.0       # + attached Energy, `_board_development`) … capped below a prize
 
 
 @dataclass
@@ -48,11 +49,18 @@ class TurnLine:
     """A committed sequence of this-turn actions achieving a **Turn Goal**: the option index(es) to
     take at THIS decision (``next_step``), the ``goal`` it serves (for legibility / telemetry
     clustering), the leaf-eval ``value`` of the resulting board, and a one-line ``rationale``. A
-    multi-step line surfaces one step per decision as the engine re-opens the turn menu."""
+    multi-step line surfaces one step per decision as the engine re-opens the turn menu.
+    ``ranked_by`` records how the committed line was VALUED when multi-candidate engine ranking ran
+    (`planner_engine_rank`): "engine" = its own sim's leaf value; "closed" = the closed-form value
+    (its sim was unavailable); None = ranking never ran (switch off / engine absent / mid-sim).
+    ``diverged`` = the ranking committed a DIFFERENT line than the closed form would have — the A/B
+    divergence signal."""
     next_step: list
     goal: str = ""
     value: float = 0.0
     rationale: str = ""
+    ranked_by: str | None = None
+    diverged: bool = False
 
 
 class PlannerMixin:
@@ -76,46 +84,94 @@ class PlannerMixin:
         fp = self._plan_fingerprint(obs, select)
         if self._turn_plan is not None and self._turn_plan[0] == fp:
             return self._turn_plan[1]                 # cache hit: re-plan only on reveal (fingerprint change)
-        line = self._closed_form_plan(obs, select, board, options, traces)
-        if line is not None:
-            line = self._engine_rank(obs, line)       # Tier-1: sharpen value on exact end-of-turn board
+        candidates = self._closed_form_candidates(obs, select, board, options, traces)
+        line = self._commit_best(obs, candidates)
         self._turn_plan = (fp, line)
         return line
 
     def _closed_form_plan(self, obs, select, board, options, traces) -> TurnLine | None:
-        """The Goal-Ladder verdict from closed-form generation (no engine), highest rung first.
+        """The single closed-form Goal-Ladder verdict (no engine) — the mid-sim / switch-off pick:
+        the best candidate by closed-form leaf value, ties to the first generated (the original
+        single-line behavior, exactly)."""
+        candidates = self._closed_form_candidates(obs, select, board, options, traces)
+        return max(candidates, key=lambda ln: ln.value) if candidates else None
 
-        **Stabilize-then-KO** is checked FIRST because it is the one goal that fires EVEN when a
-        status-quo KO exists — it combines the heal + KO the greedy scorer treats as mutually exclusive.
-        Below it, **KO-for-prizes** is strictly layer-on-top: it stands down when the tuned machinery
-        already reaches a KO (any option scored KO_SCORE-class), supplying only a KO otherwise MISSED."""
-        stabilize = self._stabilize_then_ko_line(obs, select, board, options, traces)
-        if stabilize is not None:
+    def _closed_form_candidates(self, obs, select, board, options, traces) -> list:
+        """ALL candidate Turn Lines from closed-form generation, highest rung first.
+
+        **Stabilize-then-KO** rules the pool alone when it fires — it is the one goal alive EVEN when
+        a status-quo KO exists (it combines the heal + KO the greedy scorer treats as mutually
+        exclusive), and mixing lower rungs under it would trade the heal away. Below it, the pool is
+        strictly layer-on-top: it empties when the tuned machinery already reaches a KO (any option
+        scored KO_SCORE-class), else it holds every **KO-for-prizes** enabling line plus — behind the
+        `planner_key_threat` switch — every **KO-the-key-threat** snipe line (the Goal Ladder's middle
+        rung, CONTEXT.md: the leaf scalar ranks across the two, prizes dominant)."""
+        stabilize = self._stabilize_then_ko_lines(obs, select, board, options, traces)
+        if stabilize:
             return stabilize
         if any(t.tactical >= KO_SCORE for t in traces):
-            return None
-        return self._ko_for_prizes_line(obs, select, board, options, traces)
+            return []
+        candidates = self._ko_for_prizes_lines(obs, select, board, options, traces)
+        if self.planner_key_threat:
+            candidates += self._ko_key_threat_lines(obs, select, board, options)
+        return candidates
 
-    def _stabilize_then_ko_line(self, obs, select, board, options, traces) -> TurnLine | None:
+    def _commit_best(self, obs, candidates) -> TurnLine | None:
+        """The line to commit from the candidate pool — the multi-candidate ENGINE RANKING seam
+        (ADR-0031 P3 completed; `planner_engine_rank`).
+
+        OFF (default) or engine absent: the closed-form best, its value engine-SHARPENED when
+        available (the original behavior, byte-identical). ON: every candidate is forward-simmed to
+        its end-of-turn board and ranked by the ENGINE leaf value — a candidate whose sim is
+        unavailable keeps its closed-form value (same scale, decision 7: never lose a line to a
+        failed fork). If even the best ranked value collapses below one prize, the pool's premise
+        failed in sim — defer to the tuned scoring (the natural veto: the sim is trusted for ranking,
+        and an all-candidates refute means there is nothing left to rank). ``diverged`` records a
+        pick the closed form would not have made."""
+        if not candidates:
+            return None
+        closed_best = max(candidates, key=lambda ln: ln.value)
+        if not self.planner_engine_rank:
+            return self._engine_rank(obs, closed_best)   # status quo: sharpen the committed value only
+        ranked = []
+        for cand in candidates:
+            self._planning = True                        # per-sim reentrancy guard (never nest a search)
+            try:
+                val = self._engine_leaf_value(obs, cand.next_step)
+            except Exception:
+                val = None                               # a failed fork never crashes the decision
+            finally:                                     # (decision 7) — the candidate keeps its
+                self._planning = False                   # closed-form value below
+            ranked.append((val if val is not None else cand.value, val is not None, cand))
+        best_val, engine_valued, best = max(ranked, key=lambda t: t[0])
+        if best_val < KO_SCORE:
+            return None                                  # every candidate's prize premise failed in sim
+        return replace(best, value=best_val,
+                       ranked_by=("engine" if engine_valued else "closed"),
+                       diverged=(best is not closed_best))
+
+    def _stabilize_then_ko_lines(self, obs, select, board, options, traces) -> list:
         """The **stabilize-then-KO** goal (ADR-0031): when my Active is DOOMED yet can also KO this turn,
         a clutch-heal (Wally's Compassion — heal a Mega ex to FULL, then bounce all its Energy to hand)
         played FIRST lets me heal AND still take the KO (re-attach one Energy, then the cheapest KO
         attack). It combines the heal + KO goals the greedy scorer can't: its `active_can_ko` suppressor
         drops the heal whenever a KO is available — the exact trap that caused 0cbc (`heal-and-stall` and
-        `heal-and-KO` conflated). Fires ONLY when healing genuinely stabilises (full HP beats the
-        **Incoming**) AND the KO survives the Energy bounce (a re-attach still affords it), so it never
+        `heal-and-KO` conflated). A candidate fires ONLY when healing genuinely stabilises (full HP beats
+        the **Incoming**) AND the KO survives the Energy bounce (a re-attach still affords it), so it never
         heals-and-stalls and never forfeits the prize. A winning KO is owned by the Lethal Solver upstream,
-        so this only ever combines a heal with a NON-winning KO."""
+        so this only ever combines a heal with a NON-winning KO. Every valid heal option is a candidate
+        (they were all `return`-first before multi-candidate ranking; ties still break to the first)."""
         if not board.active_doomed:
-            return None
+            return []
         if not any(o.get("type") == _ATTACK and t.tactical >= KO_SCORE
                    for o, t in zip(options, traces)):
-            return None                               # no KO on menu -> nothing to preserve; defer to hold-clutch-heal
+            return []                                 # no KO on menu -> nothing to preserve; defer to hold-clutch-heal
         opp = self._opp_active(obs)
         active_stat = (self.stats.get(board.my_active_id)
                        if (self.stats and board.my_active_id is not None) else None)
         if not (opp and active_stat):
-            return None
+            return []
+        lines = []
         for i, o in enumerate(options):
             if o.get("type") != _PLAY:
                 continue
@@ -132,9 +188,9 @@ class PlannerMixin:
                 continue                              # heal's Energy cost would forfeit the KO
             value = self._leaf_value(prizes=self._prize_value(opp), active_survives=True,
                                      threat_removed=self._threat_magnitude(opp))
-            return TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
-                            rationale="plan (stabilize_then_ko): heal, re-power, still KO for the prize")
-        return None
+            lines.append(TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
+                                  rationale="plan (stabilize_then_ko): heal, re-power, still KO for the prize"))
+        return lines
 
     def _condition_holds(self, condition, board) -> bool:
         """Evaluate a clause's dynamic ``condition`` gate against the Board — TRUE only when the
@@ -220,20 +276,20 @@ class PlannerMixin:
         return (cur.get("turn"), side(me), side(opp), hand, len(me.get("prize") or []),
                 bool(cur.get("energyAttached")), opts)
 
-    def _ko_for_prizes_line(self, obs, select, board, options, traces) -> TurnLine | None:
-        """The **KO-for-prizes** goal (ADR-0031 phase 1-2): a multi-step enabling line that unlocks an
-        otherwise-missed KO of the opponent's Active, ranked by the leaf-eval scalar (prizes dominant +
-        my Active's survival vs Incoming + the threat removed). Generates one candidate per enabling
-        first-step (retreat into a benched attacker; evolve the Active), each regressed to "does this
-        body, after the step PLUS this turn's one attach, KO?" and evaluated at its end-of-turn board.
-        Commits the highest-leaf-value line's first step. None when no such line exists."""
+    def _ko_for_prizes_lines(self, obs, select, board, options, traces) -> list:
+        """The **KO-for-prizes** goal (ADR-0031 phase 1-2): multi-step enabling lines that unlock an
+        otherwise-missed KO of the opponent's Active, each valued by the leaf-eval scalar (prizes
+        dominant + my Active's survival vs Incoming + the threat removed). One candidate per enabling
+        first-step (retreat into a benched attacker; evolve the Active; play an energy-tutor
+        Supporter), each regressed to "does this body, after the step PLUS this turn's one attach,
+        KO?" and evaluated at its end-of-turn board. Empty when no such line exists."""
         opp = self._opp_active(obs)
         if not (opp or {}).get("hp"):
-            return None
+            return []
         opp_player = self._opp_player(obs)
         extra = 1 if (board.reusable_energy_in_hand and not board.energy_attached) else 0
         threat = self._threat_magnitude(opp)
-        best = None                                   # (value, prizes, index, kind)
+        lines = []
         for i, o in enumerate(options):
             if o.get("type") == _RETREAT:
                 cand = self._retreat_ko_candidate(obs, board, opp, opp_player, extra)
@@ -250,13 +306,106 @@ class PlannerMixin:
                 continue
             prizes, survives = cand
             value = self._leaf_value(prizes=prizes, active_survives=survives, threat_removed=threat)
-            if best is None or value > best[0]:
-                best = (value, prizes, i, kind)
-        if best is None:
-            return None
-        value, prizes, idx, kind = best
-        return TurnLine(next_step=[idx], goal="ko_for_prizes", value=value,
-                        rationale=f"plan (ko_for_prizes): {kind} unlocks a {int(prizes)}-prize KO")
+            lines.append(TurnLine(next_step=[i], goal="ko_for_prizes", value=value,
+                                  rationale=f"plan (ko_for_prizes): {kind} unlocks a {int(prizes)}-prize KO"))
+        return lines
+
+    def _ko_key_threat_lines(self, obs, select, board, options) -> list:
+        """The **KO-the-key-threat** goal (the Goal Ladder's middle rung, CONTEXT.md *Turn Goal*;
+        `planner_key_threat`): ENABLING lines that unlock a bench-snipe KO of the opponent's benched
+        TOP-threat body — the greatest shared threat rank (`_body_threat_rank`: eventual attack
+        power, forward evolution, energized/hand-size boosts). A snipe-KO already ON the menu needs
+        no rung (the Tactical layer credits its prize KO_SCORE-class), but no closed-form hook scores
+        the STEP that reaches one — `_retreat_to_lethal_tactical` and the KO-for-prizes generators
+        test KOs of the ACTIVE only — so a retreat into the sniper, an evolve that brings the snipe
+        attack online, or the energy tutor that powers it is invisible to the greedy scorer and the
+        biggest future attacker survives. Bench snipes ignore W/R so ``rider >= hp`` is the exact KO
+        test (`_snipe_ko_prizes`'s rule), and a Tera body is snipe-immune. Candidates join the
+        KO-for-prizes pool: the leaf scalar ranks across the rungs (prizes dominant, then the removed
+        threat's magnitude)."""
+        opp_player = self._opp_player(obs)
+        bench = [p for p in (opp_player.get("bench") or []) if p]
+        if not bench:
+            return []
+        ranked = [(self._body_threat_rank(obs, p, board.read, board.posture_confidence), p)
+                  for p in bench]
+        top_rank, top = max(ranked, key=lambda t: t[0])
+        top_stat = self.stats.get(top.get("id")) if self.stats else None
+        own_mag = float(getattr(top_stat, "maxDamage", 0) or 0) if top_stat else 0.0
+        fwd_fn = getattr(self.stats, "forward_max_damage", None)
+        fwd_mag = float(fwd_fn(top.get("id")) or 0) if fwd_fn is not None else 0.0
+        threat_mag = max(own_mag, fwd_mag)             # the SAME damage basis the rank uses — a
+                                                       # 0-printed body with a monster forward line
+                                                       # (the Evolving-Threat case) still counts
+        hp = top.get("hp", 0)
+        if top_rank <= 0 or threat_mag <= 0 or not hp or self._is_tera(top.get("id")):
+            return []                                 # nothing benched actually threatens (or Tera-immune)
+        me = self._my_player(obs)
+        opp = self._opp_active(obs)
+        others = [p for p in ([opp] + [p for p in bench if p is not top]) if p]
+        extra = 1 if (board.reusable_energy_in_hand and not board.energy_attached) else 0
+        prizes = self._prize_value(top)
+        lines = []
+        for i, o in enumerate(options):
+            if o.get("type") == _RETREAT:
+                cand = self._retreat_snipe_candidate(me, others, hp, extra)
+                kind = "retreat"
+            elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
+                evolved_id = self._option_card_id(obs, select, o)
+                if not self._affords_snipe_ko(evolved_id, board.my_active_energy + extra, hp):
+                    continue
+                estat = self.stats.get(evolved_id) if self.stats else None
+                my_hp = getattr(estat, "hp", 0) or 0
+                cand = (bool(my_hp) and self._incoming_worst(evolved_id, my_hp, others) < my_hp)
+                kind = "evolve"
+            elif o.get("type") == _PLAY:
+                if (board.energy_attached or board.reusable_energy_in_hand
+                        or not self._is_energy_tutor(obs, select, o)):
+                    continue                          # mirrors `_supporter_ko_candidate`'s gate
+                cand = self._retreat_snipe_candidate(me, others, hp, extra=1)
+                kind = "energy tutor"
+            else:
+                continue
+            if cand is None:
+                continue
+            value = self._leaf_value(prizes=prizes, active_survives=bool(cand),
+                                     threat_removed=threat_mag)
+            lines.append(TurnLine(
+                next_step=[i], goal="ko_key_threat", value=value,
+                rationale=f"plan (ko_key_threat): {kind} unlocks the snipe-KO of the benched key threat"))
+        return lines
+
+    def _retreat_snipe_candidate(self, me, others, target_hp: int, extra: int):
+        """``active_survives`` (bool) for the best benched body that, once retreated INTO (its Energy
+        plus this turn's one attach), affords an attack whose bench-snipe rider KOs the ``target_hp``
+        key threat — or None when no benched body reaches one. Among the capable bodies it prefers
+        the one that SURVIVES the opponent's remaining Incoming (the sniped threat excluded)."""
+        best = None
+        for p in (me.get("bench") or []):
+            if not p:
+                continue
+            if not self._affords_snipe_ko(p.get("id"), len(p.get("energies") or []) + extra, target_hp):
+                continue
+            my_hp = p.get("hp", 0)
+            survives = bool(my_hp) and self._incoming_worst(p.get("id"), my_hp, others) < my_hp
+            if best is None or survives > best:
+                best = survives
+        return best
+
+    def _affords_snipe_ko(self, body_id, energy: int, target_hp: int) -> bool:
+        """True iff ``body_id`` carrying ``energy`` can pay an attack whose unconditional bench-snipe
+        rider (`_rider_snipe`) reaches ``target_hp`` — the exact snipe-KO test (no W/R on the Bench)."""
+        stat = self.stats.get(body_id) if (self.stats and body_id is not None) else None
+        if not (stat and target_hp):
+            return False
+        return any(self.attack_costs.get(aid, 99) <= energy and self._rider_snipe(aid) >= target_hp
+                   for aid in (stat.attacks or ()))
+
+    def _is_energy_tutor(self, obs, select, option) -> bool:
+        """This PLAY option is a `tutor_energy` Trainer (Hilda class) — it searches an attachable
+        Energy into hand, supplying the attach an enabling line lacks (the 4298 shape)."""
+        cid = self._option_card_id(obs, select, option)
+        return bool(cid is not None and self.functions and "tutor_energy" in self.functions.tags(cid))
 
     def _retreat_ko_candidate(self, obs, board, opp, opp_player, extra: int):
         """``(prizes, active_survives)`` for the best benched body that KOs the opponent's Active AFTER a
@@ -291,8 +440,7 @@ class PlannerMixin:
         power the KO this turn). None otherwise. Reuses the sound retreat-KO valuation."""
         if board.energy_attached or board.reusable_energy_in_hand:
             return None
-        cid = self._option_card_id(obs, select, option)
-        if cid is None or not (self.functions and "tutor_energy" in self.functions.tags(cid)):
+        if not self._is_energy_tutor(obs, select, option):
             return None
         return self._retreat_ko_candidate(obs, board, opp, opp_player, extra=1)
 
@@ -317,14 +465,16 @@ class PlannerMixin:
     def _leaf_value(self, *, prizes: float, active_survives: bool, threat_removed: float = 0.0,
                     development: float = 0.0) -> float:
         """The leaf-eval scalar over a resulting board: prizes taken (dominant, KO_SCORE-weighted) +
-        the threat removed + my Active's survival vs Incoming + development toward the win-condition.
-        The positional terms sum to less than one prize, so a bigger KO always ranks first — a
-        positional score can NEVER outrank a real prize (the hard-rung invariant, ADR-0031 decision 3).
-        Hand-weighted + tunable; the Base Value Model (ADR-0007) is the drop-in replacement later."""
+        the threat removed + my Active's survival vs Incoming + the development left on my board
+        (engine-rank phase input, `_board_development`; 0 for closed-form candidates). EVERY
+        positional term is capped, and their capped sum stays below one prize, so a bigger KO always
+        ranks first — a positional score can NEVER outrank a real prize (the hard-rung invariant,
+        ADR-0031 decision 3). Hand-weighted + tunable; the Base Value Model (ADR-0007) is the drop-in
+        replacement later."""
         return (KO_SCORE * prizes
                 + min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)
                 + (_PLANNER_SURVIVAL_W if active_survives else 0.0)
-                + _PLANNER_DEV_W * development)
+                + min(_PLANNER_DEV_CAP, _PLANNER_DEV_W * development))
 
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
         """True if my body (``my_id`` at ``my_hp``) survives the opponent's Incoming AFTER I KO their
@@ -396,7 +546,18 @@ class PlannerMixin:
         if active and active.get("hp"):
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
-        return self._leaf_value(prizes=prizes_taken, active_survives=survives)
+        return self._leaf_value(prizes=prizes_taken, active_survives=survives,
+                                development=self._board_development(me))
+
+    @staticmethod
+    def _board_development(me: dict) -> float:
+        """The development left on MY simmed end-of-turn board — the `_PLANNER_DEV_W` term's input
+        (ADR-0031 decision 4, exercised from the engine-rank phase): bodies in play plus the Energy
+        attached to them. A coarse, engine-readable progress measure that splits prize-equal lines
+        toward the one that leaves the stronger board (e.g. a line that spent nothing over one that
+        stripped the Bench); `_leaf_value` caps its contribution below a prize."""
+        bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
+        return 10.0 * len(bodies) + 5.0 * sum(len(p.get("energies") or []) for p in bodies)
 
     def _simulate_line(self, obs, first_step, max_steps: int = 40):
         """Forward-simulate a candidate line through the Engine Search to my end-of-turn board (the

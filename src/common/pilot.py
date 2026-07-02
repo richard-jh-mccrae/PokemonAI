@@ -222,7 +222,8 @@ class Board:
                                           # 60-count. With `obs['own_prizes']` it's EXACT. Sound, never probabilistic. Queried by `deck_definitely_empty_of`.
     deck_known_counts: dict | None = None  # EXACT count of each card still in my deck, once the
                                           # deck-tracker anchored prizes (decklist − visible − prizes); None
-                                          # until first search reveal. Backs `deck_definitely_has` (ADR-0023, staged: no consumer wired yet, tests-only).
+                                          # until first search reveal. Backs the POSITIVE `deck_definitely_has`;
+                                          # its decision reader is `search-the-confirmed-hit` (`Context.search_confirmed_hit`, doctrine_fetch).
     deck_contains_odds: dict | None = None  # PROBABILISTIC {cardId: P(deck still holds ≥1 copy)} —
                                           # complement to the SOUND deck_definitely_empty_of (ADR-0029): unseen
                                           # copies split hypergeometrically over hidden prizes; collapses to 1.0/0.0 once resolved. Feeds `dont-search-a-probable-whiff`.
@@ -233,8 +234,8 @@ class Board:
                                           # at upcoming Checkup, else 0 — free KO without attacking, so an
                                           # offensive gust must beat THIS too (gusting cures it). ADR-0022 #10
     read: Read | None = None              # per-decision Scouting Read (ADR-0026); None = Posture off
-                                          # (no Scout wired / pregame). Carried here so every option shares
-                                          # one Read; nothing scores off it in M2.0 (wiring is Posture-OFF).
+                                          # (no Scout wired / pregame). One Read shared by every option;
+                                          # consumed γ-modulated by the snipe threat rank (lever C) — `posture=True` ships.
     posture_confidence: float = 0.0       # γ ∈ [0,1] from the Read (ADR-0026): continuous strength the
                                           # generic-core Posture levers scale by; 0 = unrecognized / no Scout.
     favorability: float = 0.5             # compiled matchup win-rate vs Read's candidate opponents
@@ -381,6 +382,9 @@ class Context:
     search_targets_unlikely: bool = False  # this option PLAYS a search whose every still-REACHABLE
                                    # fetch target is PROBABLY (not provably) prized — P(deck contains it)
                                    # below whiff threshold (ADR-0029). PROBABILISTIC complement to search_targets_exhausted; mutually exclusive with it.
+    search_confirmed_hit: bool = False  # this option PLAYS a search that PROVABLY hits: a fetch target
+                                   # certainly still in deck (`Board.deck_definitely_has`, post-anchor) AND filling
+                                   # a need (positive grab value). POSITIVE complement of the two whiff signals (ADR-0029); sound-or-silent. Drives `search-the-confirmed-hit`.
 
 
 @dataclass
@@ -408,6 +412,9 @@ class Decision:
     lethal: LethalLine | None = None  # the locked guaranteed-win line this turn (ADR-0030), or None
     planned: TurnLine | None = None   # the committed Turn Line this turn (ADR-0031), or None —
                                       # below-win Goal-Ladder plan the Planner steered this decision toward
+    lethal_refuted: int = 0      # direct lethal candidates the engine backstop REFUTED this decision
+                                 # (`lethal_verify`, ADR-0030) — nonzero means closed-form claimed a win
+                                 # the engine denied, the exact divergence an A/B or correction wants
 
 
 class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -418,7 +425,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, effects=None, attacks=None, attack_costs=None, recoil=None,
                  bench_snipe=None, ignores_active_effects=None, attack_stats=None,
-                 search_budget=0, scout=None, briefs=None, posture=True):
+                 search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
+                 planner_engine_rank=False, planner_key_threat=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -443,6 +451,15 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         self.briefs = list(briefs) if briefs else []    # hand-authored Matchup Briefs (ADR-0027), covers-routed
         self.posture = posture                          # ADR-0026 kill-switch: False forces γ=0 + neutral
                                                         # favorability → both levers off (the A/B baseline)
+        self.lethal_verify = lethal_verify              # ADR-0030 kill-switch: engine-confirm a DIRECT
+                                                        # lethal lock before trusting it (refute → no lock)
+        self.planner_engine_rank = planner_engine_rank  # ADR-0031 kill-switch: engine-sim RANKS the
+                                                        # Planner's candidate lines (off = closed-form pick,
+                                                        # engine only sharpens the committed line's value)
+        self.planner_key_threat = planner_key_threat    # ADR-0031 kill-switch: the KO-the-key-threat
+                                                        # Goal-Ladder rung (snipe-KO the benched top threat)
+        self._lethal_refutes = 0                        # per-decision count of engine-refuted lethal
+                                                        # candidates (rides in telemetry when > 0)
         from common.transients import TransientTracker
         self._transients = TransientTracker(self._attack_stat)   # ADR-0033: live next-turn grants
                                                         # (Frost Barrier class) inferred from ATTACK
@@ -473,11 +490,14 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         board = self._board(obs, select)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
         lethal = self.find_lethal_line(obs, select, board, options, traces)  # ADR-0030: take the win now
-        if lethal is not None:
-            return Decision(chosen=lethal.next_step, options=traces, read=board.read, lethal=lethal)
+        refuted = self._lethal_refutes                  # engine-refuted candidates (lethal_verify) — kept
+        if lethal is not None:                          # on every Decision shape so a refute is countable
+            return Decision(chosen=lethal.next_step, options=traces, read=board.read, lethal=lethal,
+                            lethal_refuted=refuted)
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0031: below-win Goal Ladder
         if planned is not None:
-            return Decision(chosen=planned.next_step, options=traces, read=board.read, planned=planned)
+            return Decision(chosen=planned.next_step, options=traces, read=board.read, planned=planned,
+                            lethal_refuted=refuted)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
         # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
@@ -490,7 +510,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                                        select.get("minCount", 0), max_count)
         else:
             chosen = order[:max_count]
-        return Decision(chosen=chosen, options=traces, read=board.read)
+        return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted)
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
@@ -1053,6 +1073,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             and not board.accel_recipient_missing and not board.bench_wincon_ready)
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
+        search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
         attach_from_concentrate = (select.get("context") == _ATTACH_FROM
                                    and board.attach_from_concentrate_slot is not None
@@ -1093,7 +1114,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon,
-                       search_targets_unlikely=search_unlikely)
+                       search_targets_unlikely=search_unlikely,
+                       search_confirmed_hit=search_confirmed)
 
     # Fetch doctrine's comparator/oracle, deck-knowledge whiff/redundant signals, whether-to-play
     # lookahead, and greedy multi-pick live in doctrine_fetch (FetchMixin).
@@ -1632,12 +1654,22 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                 or option.get("area") != _BENCH):
             return None
         poke = self._option_pokemon(obs, select, option)
+        if (poke or {}).get("id") is None:
+            return None
+        return self._body_threat_rank(obs, poke, read, gamma)
+
+    def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0) -> float:
+        """The select-independent threat-rank core behind `_target_threat_rank` — rank ANY benched
+        opponent body (a raw player-dict Pokémon), so the Planner's KO-the-key-threat rung can rank
+        the bench at the MAIN menu with exactly the same order the DAMAGE-select snipe uses. 0 when
+        the id/provider is missing (an unknowable body never outranks a known threat)."""
         cid = (poke or {}).get("id")
         if cid is None:
-            return None
+            return 0.0
         stat = self.stats.get(cid) if self.stats else None
         own = stat.maxDamage if stat else 0
-        fwd = self._target_forward_damage(obs, select, option) or 0
+        fwd_fn = getattr(self.stats, "forward_max_damage", None)
+        fwd = (fwd_fn(cid) or 0) if fwd_fn is not None else 0
         fwd = self._read_modulated_forward(cid, fwd, read, gamma)   # lever C (ADR-0026): Read-accurate forward
         rank = float(max(own, fwd))
         rank += 0.001 * own                                   # more-evolved tie-break (Drakloak>Dreepy)

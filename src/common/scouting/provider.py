@@ -308,7 +308,10 @@ class AttackStat:
     nextTurnSelfLock: bool = False     # attacker-side: "this Pokémon can't attack / use attacks"
     nextTurnSameAttackLock: bool = False   # attacker-side: "can't use <THIS attack>" next turn
     nextTurnSelfBonus: int = 0         # attacker-side: this Pokémon's attack does +N next turn
-    nextTurnDefenderRetreatLock: bool = False  # opponent-side: "the Defending Pokémon can't retreat"
+    # NB the pool's 22 "Defending Pokémon can't retreat" attacks are deliberately NOT tracked: the
+    # engine ENFORCES the lock by omitting RETREAT from the locked side's menu (probed 2026-07-02,
+    # tests/sim/test_retreat_lock_engine.py), so a menu-driven this-turn Pilot gains nothing from a
+    # field — re-add a parse only alongside a real consumer (ADR-0033).
 
 
 # Conditional-dmg families (ADR-0032 bounds half). Pool: 26 "does nothing" conditionals (coin-tails
@@ -479,9 +482,6 @@ _T_SELF_LOCK_RE = re.compile(
 _T_NAMED_LOCK_RE = re.compile(r"During your next turn, this Pok.mon can.t use ([^.]+)\.")
 _T_SELF_BONUS_RE = re.compile(
     r"During your next turn, (?:this Pok.mon.s )?[^.]{0,40}?attack does (\d+) more damage")
-_T_RETREAT_LOCK_RE = re.compile(
-    r"During your opponent.s next turn, (?:the )?(?:Defending Pok.mon|your opponent.s Active "
-    r"Pok.mon) can.t retreat")
 _T_COIN_GATE_RE = re.compile(r"Flip a coin\.[^.]*\bIf heads, during")
 
 
@@ -494,8 +494,9 @@ def parse_attack_transients(text: str, attack_name: str) -> dict:
 
     Returns:
         A dict of the fields to set — ``reduction`` / ``prevent_all`` / ``self_lock`` /
-        ``same_lock`` / ``self_bonus`` / ``retreat_lock`` — empty when the attack grants
-        nothing trackable (incl. coin-gated variants, which aren't knowable).
+        ``same_lock`` / ``self_bonus`` — empty when the attack grants nothing trackable
+        (incl. coin-gated variants, which aren't knowable; retreat-locks, which the engine
+        enforces by omitting the RETREAT option, so no field carries them).
     """
     t = (text or "").replace("\n", " ")
     if _T_COIN_GATE_RE.search(t):
@@ -515,8 +516,6 @@ def parse_attack_transients(text: str, attack_name: str) -> dict:
     m = _T_SELF_BONUS_RE.search(t)
     if m:
         out["self_bonus"] = int(m.group(1))
-    if _T_RETREAT_LOCK_RE.search(t):
-        out["retreat_lock"] = True
     return out
 
 
@@ -569,7 +568,6 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
             nextTurnSelfLock=trans.get("self_lock", False),
             nextTurnSameAttackLock=trans.get("same_lock", False),
             nextTurnSelfBonus=trans.get("self_bonus", 0),
-            nextTurnDefenderRetreatLock=trans.get("retreat_lock", False),
         )
     for aid, fields in (overrides or {}).items():
         st = table.get(int(aid))

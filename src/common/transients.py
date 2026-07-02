@@ -70,8 +70,6 @@ class TransientTracker:
             grant["same_lock"] = attack_id
         if getattr(st, "nextTurnSelfBonus", 0):
             grant["self_bonus"] = st.nextTurnSelfBonus
-        if getattr(st, "nextTurnDefenderRetreatLock", False):
-            grant["retreat_lock"] = True
         if not grant:
             return None
         grant["serial"] = serial

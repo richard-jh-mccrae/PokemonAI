@@ -351,6 +351,91 @@ def test_stranded_chain_check_walks_the_full_previous_stage_chain():
     assert "dont-fetch-the-setup-only-opener" in _fired(pilot.explain(obs).options[0])
 
 
+# --- search-the-confirmed-hit: the POSITIVE complement of the two whiff guards (ADR-0029) --------
+END = 14                # OptionType.END (not exported by pilot_helpers)
+MEGA, SIGNAL = 555, 556  # a Mega ex payoff and its tutor (Mega Signal shape, tutor_mega)
+
+
+def _confirmed_stats():
+    # FILLER stays stat-LESS on purpose: it must join no fetch-filter set (a pure deck body).
+    return DictCardStatProvider({
+        MEGA: CardStat(MEGA, hp=330, megaEx=True, evolvesFrom="Riolu"),
+        BASIC: CardStat(BASIC, hp=70),
+    })
+
+
+def _confirmed_pilot(deck):
+    funcs = CardFunctions({SIGNAL: ["search", "tutor_mega"], ULTRA: ["search", "bench_fill"]})
+    strat = Strategy(roles={MEGA: ["win_condition"]})
+    return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY,
+                 stats=_confirmed_stats(), functions=funcs)
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_search_the_confirmed_hit_fires_only_once_the_tracker_proves_the_needed_target():
+    """Once the deck-tracker has anchored the prizes (`own_prizes` -> exact deck counts), a tutor whose
+    NEEDED target (positive grab value: the unfound win-condition) is PROVABLY still in the deck is a
+    certain hit — the endorsement fires and the search plays. The SAME board without the annotation
+    makes no positive claim (sound-or-silent, ADR-0029): the rule stays quiet."""
+    pilot = _confirmed_pilot([MEGA] * 2 + [SIGNAL] * 2 + [FILLER] * 56)
+    play_signal = opt(PLAY, area=HAND, index=0)
+    cur = state(active=poke(FILLER, energy=1), hand=[SIGNAL], prizes=6, deck_count=20)
+    obs = make_select([play_signal, opt(END)], current=cur)
+    obs["own_prizes"] = {FILLER: 6}                    # anchored: no MEGA prized -> both provably in deck
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "search-the-confirmed-hit" in fired
+    assert pilot.decide(obs) == [0]                    # the certain hit is played over End
+
+    unanchored = make_select([play_signal, opt(END)], current=cur)
+    assert "search-the-confirmed-hit" not in _fired(pilot.explain(unanchored).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_search_the_confirmed_hit_stands_aside_for_the_redundant_wincon_veto():
+    """A provably-present target the dig would be REDUNDANT for (the wincon-only tutor with the payoff
+    already in hand) is `dont-tutor-the-held-wincon`'s case (-45): the endorsement must not co-fire
+    against it — presence alone is not a hit worth digging for."""
+    pilot = _confirmed_pilot([MEGA] * 2 + [SIGNAL] * 2 + [FILLER] * 56)
+    play_signal = opt(PLAY, area=HAND, index=0)
+    cur = state(active=poke(FILLER, energy=1), hand=[SIGNAL, MEGA], prizes=6, deck_count=20)
+    obs = make_select([play_signal, opt(END)], current=cur)
+    obs["own_prizes"] = {FILLER: 6}                    # a MEGA provably in deck — but one is in hand
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "dont-tutor-the-held-wincon" in fired
+    assert "search-the-confirmed-hit" not in fired
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_search_the_confirmed_hit_stands_aside_for_the_sound_whiff_veto():
+    """Provably ABSENT targets belong to `dont-search-an-empty-deck`; the endorsement never co-fires
+    with it (deck_definitely_has and deck_definitely_empty_of are exclusive by construction)."""
+    pilot = _confirmed_pilot([MEGA] * 2 + [SIGNAL] * 2 + [FILLER] * 56)
+    play_signal = opt(PLAY, area=HAND, index=0)
+    # both MEGA copies prized -> provably gone from the deck (and NOT in hand/play: still a need).
+    cur = state(active=poke(FILLER, energy=1), hand=[SIGNAL], prizes=6, deck_count=20)
+    obs = make_select([play_signal, opt(END)], current=cur)
+    obs["own_prizes"] = {MEGA: 2, FILLER: 4}
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "dont-search-an-empty-deck" in fired
+    assert "search-the-confirmed-hit" not in fired
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_confirmed_hit_prefers_the_provable_search_between_two_digs():
+    """Two searches on the menu after the anchor: the Mega-tutor provably hits the needed payoff; the
+    bench-filler's every Basic is prized away. The confirmed hit is endorsed, the certain whiff vetoed —
+    the Pilot plays the provable dig."""
+    pilot = _confirmed_pilot([MEGA] * 2 + [BASIC] * 3 + [SIGNAL] * 2 + [ULTRA] * 2 + [FILLER] * 51)
+    play_signal, play_poffin = opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)
+    cur = state(active=poke(BASIC, energy=1), hand=[SIGNAL, ULTRA], prizes=6, deck_count=20)
+    obs = make_select([play_signal, play_poffin, opt(END)], current=cur)
+    obs["own_prizes"] = {BASIC: 2, FILLER: 4}          # the 2 unseen Basics prized; the Megas stay in deck
+    d = pilot.explain(obs)
+    assert "search-the-confirmed-hit" in _fired(d.options[0])
+    assert "search-the-confirmed-hit" not in _fired(d.options[1])
+    assert pilot.decide(obs)[0] == 0                   # the provable hit leads the turn's digs
+
+
 @pytest.mark.req("REQ-GEN-0061")
 def test_fetch_the_support_never_endorses_a_stranded_support():
     """An engine-tagged Pokémon that is a stranded evolution (energy_accel Cinderace, no Raboot in

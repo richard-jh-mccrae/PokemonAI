@@ -21,7 +21,7 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     margin = round(scores[0] - scores[1], 3) if len(scores) > 1 else 0.0
     lethal = getattr(decision, "lethal", None)   # Lethal Solver's verdict (ADR-0030), or None
     planned = getattr(decision, "planned", None)  # Turn Planner's committed line (ADR-0031), or None
-    return {
+    rec = {
         "plan": opts[0].plan.value,
         "tier": tier,
         "chosen": list(decision.chosen),
@@ -32,7 +32,9 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         ],
         # Lethal Solver's verdict rides here so a blunder Correction's live_trace carries it (the
         # SAME record feeds the tuner retest) — always present: None when no guaranteed win locked.
-        "lethal": ({"step": list(lethal.next_step), "kind": lethal.kind, "why": lethal.rationale}
+        # `verified` = the engine backstop's verdict on the lock (True / None; `lethal_verify`).
+        "lethal": ({"step": list(lethal.next_step), "kind": lethal.kind, "why": lethal.rationale,
+                    "verified": getattr(lethal, "verified", None)}
                    if lethal else None),
         # Turn Planner's committed line rides alongside lethal verdict — always present (None
         # when Planner didn't commit), so a Correction can filter on it the same way (ADR-0031).
@@ -40,6 +42,15 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
                     if planned else None),
         "margin": margin,
     }
+    ranked = getattr(planned, "ranked_by", None) if planned else None
+    if ranked is not None:                        # sparse: only when multi-candidate engine ranking
+        rec["planned"]["ranked"] = ranked         # ran (`planner_engine_rank`) — how the committed
+        rec["planned"]["diverged"] = bool(getattr(planned, "diverged", False))   # line was valued +
+                                                  # whether it beat the closed-form pick (A/B signal)
+    refuted = getattr(decision, "lethal_refuted", 0)
+    if refuted:                                   # sparse: only when the engine denied a closed-form
+        rec["lethal_refuted"] = refuted           # "win" (the lethal_verify divergence signal)
+    return rec
 
 
 def emit(decision, *, tier: int = 0, out=None) -> None:

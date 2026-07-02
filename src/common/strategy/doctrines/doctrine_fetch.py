@@ -93,6 +93,19 @@ class FetchMixin:
         best = max(board.deck_contains_probability(cid) for cid in reachable)
         return best < _WHIFF_PROB_THRESHOLD
 
+    def _search_confirmed_hit(self, option: dict, tags: list, board, plan) -> bool:
+        """The POSITIVE deck-knowledge signal for a search/tutor PLAY (ADR-0029): True iff a card the
+        search's fetch-filter can pull is PROVABLY still in the deck (`Board.deck_definitely_has` —
+        the tracker's exact post-anchor counts) AND fills a real need (positive grab value, the SAME
+        rungs the real grab scores — the ADR-0023 shared-oracle invariant). Sound-or-silent, mirroring
+        the oracle it reads: False off a PLAY, before the tracker anchors the prizes, or for a card
+        with no known fetch-filter — a positive endorsement is never asserted on a guess."""
+        if option.get("type") != _PLAY or not board.deck_known_counts:
+            return False
+        fetch_set = self._search_deck_set(tags)
+        return any(board.deck_definitely_has(cid) and self._grab_value_of(board, cid, plan) > 0
+                   for cid in fetch_set)
+
     def _search_deck_set(self, tags: list) -> set:
         """The set of card ids in my deck a search with these fetch-filter tags can pull OUT of the
         deck (union over the card's `_FETCH_FILTERS` tags; empty for a non-search / unknown filter).
@@ -282,6 +295,24 @@ HYPOTHESES = [
                   "ep82524455-f6: 2-of-3 Staryu in 6 prizes → P ≈ 0.98) stays above the bar, unsuppressed.",
         when=lambda c: c.option_type == _PLAY and c.search_targets_unlikely,
         weight=-25, status="testing"),
+    Hypothesis(
+        id="search-the-confirmed-hit",
+        rationale="The POSITIVE complement of the two whiff guards (ADR-0029): once the deck-tracker "
+                  "has anchored the prizes (a search reveal → exact deck counts), a search whose "
+                  "filter PROVABLY still reaches a needed card — `Board.deck_definitely_has` on a "
+                  "target with positive grab value (the same rungs the real grab scores, the ADR-0023 "
+                  "shared-oracle invariant) — is a CERTAIN hit: endorse the dig over sitting on it. "
+                  "Sound-or-silent like the oracle it reads (`Context.search_confirmed_hit` stays "
+                  "False before the anchor, so pre-anchor behavior is untouched) and mutually "
+                  "exclusive with the sound veto by construction (a definitely-has target is never "
+                  "definitely-empty). Stands aside for the redundant wincon-tutor — that dig is "
+                  "`dont-tutor-the-held-wincon`'s case (−45), and endorsing what a veto owns would "
+                  "just dilute it. Normal-band (+15, cf `prefer-bench-fill-first`): tips a marginal "
+                  "dig toward the provable hit and orders certain digs above uncertain ones without "
+                  "overriding any real lacking-need grab.",
+        when=lambda c: c.option_type == _PLAY and c.search_confirmed_hit
+        and not c.search_redundant_wincon,
+        weight=15, status="assumed"),
     Hypothesis(
         id="dont-tutor-the-held-wincon",
         rationale="A tutor that can fetch ONLY the win-condition is redundant when a copy is already in HAND, "

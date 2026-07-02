@@ -25,12 +25,40 @@ prizes), `0cbc` (heal-then-KO), and `4298` (play Hilda for the energy grab → r
 ([tests/fixtures/corrections/](../../tests/fixtures/corrections/)); the two multi-turn corrections
 (`a21472`, `b4649`) remain out of scope — captured, re-measured, and fixtured for a future session in
 [docs/todo/deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) (`a21472` is still a
-live gap; `b4649` re-measured as already covered by tuned scoring). **Remaining (deferred, per the build ladder):** tagging the
+live gap; `b4649` re-measured as already covered by tuned scoring).
+
+**Amended 2026-07-02 (wiring pass) — three deferred pieces built, each kill-switched
+(`Strategy.params`, ADR-0021 pattern; OFF until the arena A/B clears them):**
+**(a) Multi-candidate engine RANKING** (`planner_engine_rank`, REQ-PLANNER-0026..0029, 0034): the
+closed-form rungs now emit ALL candidates (`_closed_form_candidates`); with the switch ON every
+candidate forward-sims to its end-of-turn board and the ENGINE leaf value picks the committed line
+(`_commit_best`). A candidate whose sim fails keeps its closed-form value on the same leaf scale
+(decision 7, per candidate); when even the best ranked value falls below one prize the pool's
+premise failed in sim and the Planner DEFERS — the natural veto, resolving the "veto-and-replan vs
+rank" fork in ranking's favor because the sim is trusted for ranking, never as a per-line guarantee
+(coins auto-resolve to one sample). Provenance rides in telemetry (`planned.ranked` = engine/closed
++ `planned.diverged` vs the closed-form pick — the A/B divergence signal); plan-once-cache holds
+(N sims per reveal, not per decision). OFF = the closed-form pick with value-sharpening, exactly
+the pre-amendment behavior.
+**(b) The KO-the-key-threat rung** (`planner_key_threat`, REQ-PLANNER-0031/0032): ENABLING lines
+(retreat / evolve-the-Active / energy-tutor Supporter) that unlock a bench-snipe KO of the benched
+TOP-threat body — ranked by the shared `_body_threat_rank`, the select-independent core extracted
+from the snipe threat rank so MAIN-menu planning and DAMAGE-select sniping order the bench
+identically. A snipe-KO already ON the menu needs no rung (the Tactical layer credits its prizes
+KO_SCORE-class — measured during this build, which is also why a "direct" rung would be vacuous);
+the STEP that reaches one was scored by no hook. Candidates join the KO-for-prizes pool under the
+same layer-on-top gate; the leaf scalar ranks across rungs (prizes dominant, then threat removed).
+**(c) The development leaf term** (decision 4's fourth term, exercised): `_board_development` — my
+end-of-turn bodies + attached Energy, read off the SIM board — feeds `_PLANNER_DEV_W`, capped
+(`_PLANNER_DEV_CAP`) so the positional sum stays below one prize (REQ-PLANNER-0033). Engine-rank
+phase only: closed-form candidates keep development 0, so the term rides (a)'s switch.
+
+**Remaining (deferred, per the build ladder):** tagging the
 sibling energy-tutors beyond Hilda (a card-data sweep — 22 other cards search an Energy into hand) and the
-evolve-via-Supporter variant of the same line; the full selective-override *margin*
+evolve-via-Supporter variant of the same line; enabling-step snipe lines that need TWO steps
+(gust-up-then-snipe); the full selective-override *margin*
 comparison (commit only when a line **clearly beats** the status-quo develop line by engine-sim value) is
-tuning-gated on the M1 A/B ladder, so v1 ships the conservative "otherwise-missed KO" gate; observable
-multi-candidate engine *ranking*; the develop-order fold-in / full unification; the **Base Value Model**
+tuning-gated on the M1 A/B ladder, so v1 ships the conservative "otherwise-missed KO" gate; the develop-order fold-in / full unification; the **Base Value Model**
 ([ADR-0007](0007-learning-is-one-offline-value-model.md)) leaf-eval upgrade; and all multi-turn planning
 (`a21472`, `b4649`). **Realizes** the designed **Tier-1 Search** / M3 of
 [ADR-0008](0008-pilot-is-a-layered-rules-pipeline.md); **generalizes**
