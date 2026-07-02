@@ -194,6 +194,8 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  .item .ed{color:#06c;cursor:pointer;float:right} .item i{color:#666}
  .crit{display:flex;align-items:center;gap:6px;color:#c00;font-weight:700;margin:12px 0 0}
  .crit input{width:auto;margin:0}
+ .live{margin-top:6px;font-size:12px;color:#333;background:#eef4ee;padding:6px 8px;border-radius:5px}
+ .live .verd{font-weight:700} .live .warn{color:#a50;font-weight:400}
 </style></head><body>
 <div id="left">
  <div id="vbar">
@@ -325,6 +327,17 @@ function show(n){
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
     `<div><b>${f.context||'(no decision here)'}</b>${f.type?' ('+f.type+')':''}</div>`;
   if(f.selected_label) h+=`<div>engine selected: <b>${f.selected_label}</b></div>`;
+  if(f.live){
+    // The shipped agent's @T record for this decision (ADR-0019): how it ACTUALLY decided. A
+    // non-null lethal/planned verdict means that layer short-circuited scoring (ADR-0030/0031) —
+    // shown so the rationale can target the right layer (planner/solver code, not weights).
+    const L=f.live, arr=a=>'['+((a||[]).join(','))+']';
+    h+=`<div class="live">live @T: chose ${arr(L.chosen)} · margin ${L.margin??'?'}`+
+      (L.lethal?`<div class="verd">&#127919; LETHAL ${esc(L.lethal.kind||'')} &rarr; ${arr(L.lethal.step)} — ${esc(L.lethal.why||'')}</div>`:'')+
+      (L.planned?`<div class="verd">&#129517; PLANNED ${esc(L.planned.goal||'')} &rarr; ${arr(L.planned.step)} — ${esc(L.planned.why||'')}</div>`:'')+
+      ((L.lethal||L.planned)?`<div class="warn">solver/planner drove this pick — scores didn't; fix = lethal.py / planner.py, not weights</div>`:'')+
+      `</div>`;
+  }
   $('now').innerHTML=h;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);

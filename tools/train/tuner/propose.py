@@ -27,6 +27,10 @@ class ProposedHypothesis:
     agent_build: str | None = None
     built_at: str | None = None
     critical: bool = False    # rationale carries CRITICAL marker (resolve first; /blunder-buster gate)
+    # Live-trace layer flags: pick was driven by a scoring-short-circuit layer -> no weight/when()
+    # can fix it; fix lives in planner.py / lethal.py. /blunder-buster routes on these (ADR-0030/0031).
+    planner_committed: bool = False   # live_trace.planned non-null (Turn Planner committed a line)
+    lethal_locked: bool = False       # live_trace.lethal non-null (Lethal Solver locked a win)
 
 
 def _slug(text: str) -> str:
@@ -40,8 +44,11 @@ def propose_hypothesis(correction) -> ProposedHypothesis:
         f"fire at SelectContext={dec.get('select_context')!r} (turn {dec.get('turn')}) to prefer "
         f"'{correction.correct_label}' over '{correction.chosen_label}'"
     )
+    live = correction.live_trace or {}
     return ProposedHypothesis(
         id=hid, rationale=correction.rationale or "", seed_weight=_SEED_WEIGHT,
         trigger_sketch=sketch, category=correction.category, episode_id=correction.episode_id,
         frame=dec.get("frame"), agent_build=correction.agent_build, built_at=correction.built_at,
-        critical=is_critical(correction.rationale))
+        critical=is_critical(correction.rationale),
+        planner_committed=live.get("planned") is not None,
+        lethal_locked=live.get("lethal") is not None)

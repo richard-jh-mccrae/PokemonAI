@@ -56,6 +56,18 @@ def _build_pilot(agent: str):
     return pilot, seeds
 
 
+def _layer_tag(planner: bool, lethal: bool) -> str:
+    """Line marks for decisions the live trace shows were Planner/Solver-driven (ADR-0030/0031) —
+    scoring didn't choose there, so the fix is planner.py/lethal.py code, never a weight/when()."""
+    return ("[PLANNED] " if planner else "") + ("[LETHAL] " if lethal else "")
+
+
+def _live_layers(c) -> tuple[bool, bool]:
+    """(planner_committed, lethal_locked) from a Correction's embedded live trace."""
+    live = c.live_trace or {}
+    return live.get("planned") is not None, live.get("lethal") is not None
+
+
 def main(argv=None):
     for stream in (sys.stdout, sys.stderr):           # labels carry '->'/curly quotes; cp1252 would crash
         try:
@@ -105,6 +117,13 @@ def main(argv=None):
         if n_critical:
             print(f"  *** {n_critical} CRITICAL correction(s) flagged -- /blunder-buster resolves "
                   f"these FIRST (blocking) before any other cluster ***")
+        n_layer = sum(p.planner_committed or p.lethal_locked for p in result.proposals) + sum(
+            any(_live_layers(c)) for c in result.unsatisfied) + sum(
+            any(_live_layers(c)) for c, _ in result.skipped)
+        if n_layer:
+            print(f"  *** {n_layer} correction(s) where the live pick was Planner/Solver-driven "
+                  f"(live_trace planned/lethal non-null) — scoring didn't choose there; the fix "
+                  f"lives in planner.py / lethal.py, never a weight or when() ***")
         sat = result.n_constraints - len(result.unsatisfied)
         if result.n_constraints:
             verb = "fit adopted" if result.fit_adopted else "seeds kept"
@@ -118,7 +137,7 @@ def main(argv=None):
         elif not changed:
             print("  (no weight changes from authored defaults - leverage is in the proposals below)")
         for c in result.unsatisfied:                  # fit couldn't honour these (conflict / needs a rule)
-            mark = "[CRITICAL] " if c.is_critical else ""
+            mark = ("[CRITICAL] " if c.is_critical else "") + _layer_tag(*_live_layers(c))
             print(f"  {mark}UNSATISFIED ep {c.episode_id} frame {c.decision.get('frame')} "
                   f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
             if c.rationale:                            # show it so CRITICAL marker visible here too
@@ -129,11 +148,12 @@ def main(argv=None):
             reviewed=dispositioned)
         print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
         for p in result.proposals:
-            mark = "[CRITICAL] " if p.critical else ""
+            mark = ("[CRITICAL] " if p.critical else "") + _layer_tag(p.planner_committed, p.lethal_locked)
             print(f"  {mark}PROPOSE {p.id} (seed {p.seed_weight}): {p.trigger_sketch}")
             print(f"    rationale: {p.rationale}")
         for c, why in result.skipped:
-            print(f"  SKIP frame {c.decision.get('frame')}: {why}")
+            mark = _layer_tag(*_live_layers(c))
+            print(f"  {mark}SKIP frame {c.decision.get('frame')}: {why}")
         if dispositioned:                                 # already-assessed blunders, held off fresh work
             from collections import Counter
             by = Counter((e or {}).get("disposition", "?") for _, e in dispositioned)

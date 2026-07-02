@@ -79,10 +79,16 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
     aren't in ``open`` (no silent drop).
 
     Each ``open``/``skipped`` entry carries ``"critical": bool`` (the rationale's CRITICAL marker)
-    so ``/blunder-buster`` can partition the must-fix-first cohort straight from the snapshot.
+    so ``/blunder-buster`` can partition the must-fix-first cohort straight from the snapshot,
+    plus ``"planner_committed"``/``"lethal_locked"`` (the live trace's ``planned``/``lethal``
+    verdicts) so planner/solver-layer blunders are routed to code fixes, never a ``when()``.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _live(c, key):  # a layer verdict on the correction's live trace (ADR-0030/0031)
+        return (c.live_trace or {}).get(key) is not None
+
     data = {
         "deck": deck,
         "generated_at": generated_at,
@@ -90,12 +96,14 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
             {"id": p.id, "category": p.category, "episode_id": p.episode_id, "frame": p.frame,
              "seed_weight": p.seed_weight, "trigger_sketch": p.trigger_sketch,
              "rationale": p.rationale, "agent_build": p.agent_build, "built_at": p.built_at,
-             "critical": p.critical}
+             "critical": p.critical, "planner_committed": p.planner_committed,
+             "lethal_locked": p.lethal_locked}
             for p in proposals
         ],
         "skipped": [
             {"episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason,
-             "critical": c.is_critical}
+             "critical": c.is_critical, "planner_committed": _live(c, "planned"),
+             "lethal_locked": _live(c, "lethal")}
             for c, reason in skipped
         ],
         "reviewed": [

@@ -192,9 +192,17 @@ must clear two gates before shipping:
    regress any Correction that was already satisfied. *(Confirmation testing + regression testing.)*
 2. **Retest** (`tools/train/tuner/retest.py`): re-derive the decision with the new rule and compare
    it, in the same telemetry format the live agent emits, against what the shipped agent actually did
-   — showing `chosen before → after` and the margin. *(A concrete before/after proof.)*
+   — showing `chosen before → after`, the margin, and the lifted `lethal`/`planned` layer verdicts
+   (before → after). *(A concrete before/after proof.)*
 
 Then a human reviews the diff and commits. No executable rule is ever auto-committed.
+
+**Layer routing (not weight-tunable at all).** A Correction whose live trace carries a non-null
+`lethal` (ADR-0030) or `planned` (ADR-0031) verdict was decided by a layer that **short-circuits**
+the scored pipeline — the fired features and weights never chose. Neither route above applies: the
+fix is code in that layer (`lethal.py` / `planner.py`) gated by a fixtured regression test, and the
+tuner only *surfaces* these (`[LETHAL]` / `[PLANNED]` line tags, `lethal_locked` /
+`planner_committed` snapshot flags) so `/blunder-buster` routes them out of rule authoring.
 
 **Parallel-mode join (`union_verify`).** When `/blunder-buster` fans clusters out to parallel agents,
 each cluster clears the per-cluster Verifier *in isolation* — but isolated passes don't compose:

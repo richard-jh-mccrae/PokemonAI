@@ -5,9 +5,10 @@
     python tools/train/review_correction.py --remove <episode>-<frame>
 
 ``disposition`` is one of: refuted (a bad correction — e.g. it forgoes a Knock Out; also dropped
-from the weight fit), deferred (valid but needs new infrastructure), covered (already handled by an
-existing rule). Edits ``data/corrections/reviewed.json`` in place, preserving the ``_note`` and
-existing entries. See ``tools/train/blunder/reviewed.py``.
+from the weight fit), deferred (an evidenced capability-gap ONLY — the fix is a designed-but-unbuilt
+roadmap layer, with a fixture + docs/todo definition-of-done; a missing signal is built, not
+deferred), covered (already handled by an existing rule). Edits ``data/corrections/reviewed.json``
+in place, preserving the ``_note`` and existing entries. See ``tools/train/blunder/reviewed.py``.
 """
 from __future__ import annotations
 

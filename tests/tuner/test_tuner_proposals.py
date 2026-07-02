@@ -49,4 +49,5 @@ def test_write_proposals_snapshot_is_durable_and_traceable(tmp_path):
     assert data["open"][0]["agent_build"] == BUILD
     assert data["open"][0]["critical"] is False          # no CRITICAL marker in this rationale
     assert data["skipped"][0] == {"episode_id": 81785223, "frame": 32, "reason": "tactical",
-                                  "critical": False}
+                                  "critical": False,
+                                  "planner_committed": False, "lethal_locked": False}

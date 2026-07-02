@@ -126,13 +126,22 @@ blunder loop reads end to end:
 
 - **See how it decided** — `train.blunder.telemetry_log` parses the log and joins a Correction's
   `(seat, frame)` to its live record (positional map, validated by option-count + `chosen`). The
-  inspector surfaces it per frame (real `score`/`fired`/`margin`), and `record_correction` embeds it
-  as `Correction.live_trace`.
+  inspector surfaces it per frame (real `score`/`fired`/`margin`, plus the `lethal`/`planned` layer
+  verdicts — the tagging shell renders them at the decision so the human tags knowing which layer
+  drove the pick), and `record_correction` embeds it as `Correction.live_trace`.
 - **Retest = see the log after the fix** — `train.tuner.retest` re-derives the decision under the
   candidate Pilot via `telemetry.to_record(pilot.explain(obs))` (the *same* `@T` format) and diffs it
-  against `live_trace`: `chosen_before→after`, `margin`, and `fixed` (correct now chosen). Local +
-  instant; the full-game ladder A/B stays the ship gate. `/blunder-buster` runs this per cluster
-  member as before/after proof.
+  against `live_trace`: `chosen_before→after`, `margin`, `fixed` (correct now chosen), and the lifted
+  `lethal_before→after` / `planned_before→after` verdicts (a Solver/Planner-layer fix's one-glance
+  proof). Local + instant; the full-game ladder A/B stays the ship gate. `/blunder-buster` runs this
+  per cluster member as before/after proof.
+- **Layer routing** — a non-null `lethal` (ADR-0030) / `planned` (ADR-0031) in the live trace means
+  that layer **short-circuited scoring** at the decision: no weight or `when()` can fix it; the fix
+  is code in `lethal.py` / `planner.py`. The pipeline surfaces this — `tune.py` tags `PROPOSE` /
+  `UNSATISFIED` / `SKIP` lines `[LETHAL]` / `[PLANNED]` (with a summary banner), and the proposals
+  snapshot carries `"lethal_locked"` / `"planner_committed"` per entry — so `/blunder-buster` routes
+  these clusters to the layer, not to rule authoring. (Only the committed half is auto-taggable; a
+  `null` verdict on a missed win/line is the skill's step-2 read.)
 
 ### Build order (shipped)
 1. **Wire weights** (deterministic) — done: `main.py` loads `overrides=_read_tuned()`,
