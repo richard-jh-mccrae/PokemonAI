@@ -118,21 +118,71 @@ class PlannerMixin:
                        if (self.stats and board.my_active_id is not None) else None)
         if not (opp and active_stat):
             return None
-        healed_hp = getattr(active_stat, "hp", 0) or 0    # clutch_heal heals to full (CardStat.hp is max HP)
-        if healed_hp <= board.incoming_active_damage:
-            return None                               # even full HP dies to the Incoming -> healing won't stabilise
-        attach = 0 if board.energy_attached else 1        # after the bounce, one manual re-attach this turn
-        if self._best_affordable_ko_value(obs, board, opp, board.my_active_id, attach) <= 0:
-            return None                               # can't re-power to the KO after the bounce -> don't heal
         for i, o in enumerate(options):
             if o.get("type") != _PLAY:
                 continue
             cid = self._option_card_id(obs, select, o)
-            if cid is not None and self.functions and "clutch_heal" in self.functions.tags(cid):
-                value = self._leaf_value(prizes=self._prize_value(opp), active_survives=True,
-                                         threat_removed=self._threat_magnitude(opp))
-                return TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
-                                rationale="plan (stabilize_then_ko): heal to full, re-power, still KO for the prize")
+            if cid is None:
+                continue
+            cand = self._heal_candidate(cid, board, active_stat)
+            if cand is None:
+                continue
+            healed_hp, energy_total = cand
+            if healed_hp <= board.incoming_active_damage:
+                continue                              # this heal can't outlast the Incoming
+            if self._best_affordable_ko_value(obs, board, opp, board.my_active_id, energy_total) <= 0:
+                continue                              # the heal's Energy cost would forfeit the KO
+            value = self._leaf_value(prizes=self._prize_value(opp), active_survives=True,
+                                     threat_removed=self._threat_magnitude(opp))
+            return TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
+                            rationale="plan (stabilize_then_ko): heal, re-power, still KO for the prize")
+        return None
+
+    def _condition_holds(self, condition, board) -> bool:
+        """Evaluate a clause's dynamic ``condition`` gate against the Board — TRUE only when the
+        gate is absent or PROVABLY satisfied right now. The two board-checkable gates (Bianca's
+        remaining-HP, Jumbo Ice Cream's attached-Energy) are evaluated; any other condition string
+        fails closed (never plan on an amount that might not materialise)."""
+        if not condition:
+            return True
+        if condition == "remaining_hp_30_or_less":
+            return bool(board.my_active_hp) and board.my_active_hp <= 30
+        if condition == "energy_3_plus":
+            return board.my_active_energy >= 3
+        return False
+
+    def _heal_candidate(self, cid: int, board, active_stat) -> tuple[int, int] | None:
+        """What playing heal-card ``cid`` on my Active would leave: ``(healed_hp, energy_total)``
+        — the post-heal HP and the total Energy the Active can still pay an attack with this turn
+        (attached after the card's rider, plus the manual attach if unused). Two sources, clause
+        first (ADR-0032 4b): an Effect Clause (`kind: heal` with the measured ``amount`` and its
+        ``rider``/``restriction``) generalizes the tag path; the `clutch_heal` Function Tag stays
+        as the fallback (full heal + bounce — Wally's) for a clause-blind Pilot. None when ``cid``
+        heals nothing, a restriction excludes my Active (``mega_only`` on a non-Mega), or the
+        clause carries a ``condition`` the closed form can't evaluate (fail-closed: don't plan on
+        an amount that might not materialise)."""
+        max_hp = getattr(active_stat, "hp", 0) or 0
+        attach = 0 if board.energy_attached else 1
+        for clause in (self.effects.clauses(cid) if self.effects else ()):
+            if clause.get("kind") != "heal":
+                continue
+            if not self._condition_holds(clause.get("condition"), board):
+                continue                              # gate fails / not board-checkable: fail-closed
+            restriction = clause.get("restriction")
+            if restriction == "mega_only" and not getattr(active_stat, "megaEx", False):
+                continue
+            amount = clause.get("amount")
+            healed = max_hp if amount == "all" else min(max_hp, board.my_active_hp + int(amount or 0))
+            rider = clause.get("rider")
+            if rider == "bounce_energy_to_hand":
+                energy_total = attach                 # all Energy bounced; only the re-attach pays
+            elif rider == "discard_own_energy":
+                energy_total = max(0, board.my_active_energy - 1) + attach
+            else:
+                energy_total = board.my_active_energy + attach
+            return (healed, energy_total)
+        if self.functions and "clutch_heal" in self.functions.tags(cid):
+            return (max_hp, attach)                   # legacy tag path: full heal + Energy bounce
         return None
 
     def _engine_rank(self, obs, line: TurnLine) -> TurnLine:
@@ -304,7 +354,7 @@ class PlannerMixin:
                 continue
             energy = len(p.get("energies") or []) + 1          # allow one attach next turn
             if (pstat.minAttackCost or 99) <= energy:
-                worst = max(worst, int(self._wr_adjusted(pstat, my_stat, pstat.maxDamage or 0)))
+                worst = max(worst, int(self._predicted_max_damage(pstat, {"id": my_id})))
         return worst
 
     def _threat_magnitude(self, opp) -> float:

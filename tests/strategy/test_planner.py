@@ -324,6 +324,129 @@ def test_stabilize_stands_down_when_the_active_is_not_doomed():
     assert pilot.explain(obs).planned is None
 
 
+# --------------------------------------- stabilize via Effect Clauses (ADR-0032 4b): any heal with the numbers
+SUPER_POTION, POTION = 1112, 1117
+
+
+def _effects(table):
+    from common.effects import CardEffects
+    return CardEffects(table)
+
+
+@pytest.mark.req("REQ-PLANNER-0024")
+def test_clause_heal_stabilizes_when_amount_and_rider_math_check_out():
+    """ADR-0032 4b: Super Potion's CLAUSE (heal 60, rider discard_own_energy) generalizes the
+    Wally-only stabilize: my doomed Mega (160/330, Incoming 210) KOs the 70-HP glass cannon with
+    Jetting Blow; heal 60 -> 220 > 210 survives, and after the rider discards one Energy (2 -> 1)
+    plus the manual attach, Jetting (cost 1) is still affordable — heal first, still take the KO."""
+    pilot = _pilot(effects=_effects({SUPER_POTION: [
+        {"kind": "heal", "amount": 60, "rider": "discard_own_energy"}]}))
+    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[SUPER_POTION, WATER],
+                  prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(JETTING), opt(END)], current=board)
+    b = pilot._board(obs)
+    assert b.active_doomed and b.active_can_ko
+    d = pilot.explain(obs)
+    assert d.planned is not None and d.planned.goal == "stabilize_then_ko"
+    assert d.planned.next_step == [0] and pilot.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-PLANNER-0024")
+def test_clause_heal_stands_down_when_the_amount_cannot_stabilize():
+    # Potion heals 30: 160+30=190 <= 210 Incoming — healing wouldn't save the Active, don't spend it
+    pilot = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 30}]}))
+    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[POTION, WATER], prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(JETTING), opt(END)], current=board)
+    assert pilot.explain(obs).planned is None
+
+
+@pytest.mark.req("REQ-PLANNER-0024")
+def test_clause_heal_stands_down_when_its_rider_forfeits_the_ko():
+    # The ONLY KO is Nebula (cost 3) at exactly 2 Energy + 1 attach = 3 — but Super Potion's rider
+    # discards one (2 -> 1 + 1 = 2 < 3): healing would forfeit the prize -> stand down
+    pilot = _pilot(effects=_effects({SUPER_POTION: [
+        {"kind": "heal", "amount": 60, "rider": "discard_own_energy"}]}))
+    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(OPP, hp=180),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[SUPER_POTION, WATER],
+                  prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(NEBULA), opt(END)], current=board)
+    assert pilot.explain(obs).planned is None
+
+
+@pytest.mark.req("REQ-PLANNER-0024")
+def test_clause_restriction_gates_the_candidate():
+    # a mega-only heal clause can't target my non-Mega Active: skipped, no line
+    pilot = _pilot(effects=_effects({SUPER_POTION: [
+        {"kind": "heal", "amount": 200, "restriction": "mega_only"}]}))
+    board = state(active=poke(OPENER, energy=1, hp=100), opp_active=poke(THREAT, hp=30),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[SUPER_POTION, WATER],
+                  prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(OPEN_ATK), opt(END)], current=board)
+    b = pilot._board(obs)
+    assert b.active_doomed and b.active_can_ko
+    assert pilot.explain(obs).planned is None
+
+
+@pytest.mark.req("REQ-PLANNER-0025")
+def test_board_checkable_condition_gates_are_evaluated():
+    # Bianca's Devotion: heal ALL, gated on "30 HP or less remaining" — the gate is board-checkable,
+    # so the Planner evaluates it instead of fail-closed skipping. At 20/330 the gate passes (heal to
+    # full, KO kept); at 160/330 the gate fails -> no line.
+    BIANCA = 1190
+    eff = _effects({BIANCA: [{"kind": "heal", "amount": "all",
+                              "condition": "remaining_hp_30_or_less"}]})
+    for hp, fires in ((20, True), (160, False)):
+        pilot = _pilot(effects=eff)
+        board = state(active=poke(WINCON, energy=2, hp=hp), opp_active=poke(THREAT, hp=70),
+                      opp_bench=[poke(BENCHIE, hp=100)], hand=[BIANCA, WATER],
+                      prizes=2, opp_prizes=2)
+        obs = make_select([opt(PLAY, area=HAND, index=0),
+                           opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                           attack_opt(JETTING), opt(END)], current=board)
+        planned = pilot.explain(obs).planned
+        assert (planned is not None) is fires, f"hp={hp}"
+        if fires:
+            assert planned.goal == "stabilize_then_ko"
+
+
+@pytest.mark.req("REQ-PLANNER-0025")
+def test_energy_gate_is_evaluated():
+    # Jumbo Ice Cream: heal 80, gated on the Active having 3+ Energy — checkable off the board
+    JUMBO = 1147
+    eff = _effects({JUMBO: [{"kind": "heal", "amount": 80, "condition": "energy_3_plus"}]})
+    for energy, fires in ((3, True), (2, False)):
+        pilot = _pilot(effects=eff)
+        board = state(active=poke(WINCON, energy=energy, hp=160), opp_active=poke(THREAT, hp=70),
+                      opp_bench=[poke(BENCHIE, hp=100)], hand=[JUMBO, WATER],
+                      prizes=2, opp_prizes=2)
+        obs = make_select([opt(PLAY, area=HAND, index=0),
+                           opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                           attack_opt(JETTING), opt(END)], current=board)
+        assert (pilot.explain(obs).planned is not None) is fires, f"energy={energy}"
+
+
+@pytest.mark.req("REQ-PLANNER-0025")
+def test_unknown_condition_still_fails_closed():
+    eff = _effects({1242: [{"kind": "heal", "amount": 200, "condition": "played_supporter_this_turn"}]})
+    pilot = _pilot(effects=eff)
+    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[1242, WATER], prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(JETTING), opt(END)], current=board)
+    assert pilot.explain(obs).planned is None       # not board-checkable -> never plan on it
+
+
 # ------------------------------------------- Supporter-enabled KO line (4298): the tutor supplies the attach
 @pytest.mark.req("REQ-PLANNER-0021")
 def test_energy_tutor_supporter_unlocks_an_otherwise_missed_ko_is_planned_and_taken():

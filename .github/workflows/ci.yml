@@ -68,6 +68,12 @@ jobs:
             --cov-report=xml:reports/coverage-${{ matrix.os }}-py${{ matrix.python-version }}.xml \
             --durations=10
 
+      # ADR-0032 soundness gate: a bounded engine audit (the ignore-flag family + goldens, <1 min)
+      # diffed against the SHIPPED damage oracle — fails on any over-prediction (damage the closed
+      # form promises that the engine won't deal = phantom-KO risk). Full-pool audit stays manual.
+      - name: Attack-audit soundness gate
+        run: python tools/sim/ci_audit_gate.py
+
       - name: Upload test & coverage reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

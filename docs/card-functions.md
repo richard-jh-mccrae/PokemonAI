@@ -1,5 +1,10 @@
 # Card-function tags
 
+> Sibling tiers (ADR-0032): per-**attack** effect facts (ignore flags, riders) live in
+> [attack-effects.md](attack-effects.md); parametric Trainer/Ability **Effect Clauses** (heal
+> amounts, riders, restrictions) ship as `card_effects.json`. Tags here stay the coarse boolean
+> *routing triggers*; those tiers carry the quantities the math reads.
+
 Coarse, per-card **Function Tags** describing what a card *does* (`draw`, `search`,
 `gust`, `spread`, `energy_accel`, `heal`, `poison`, …). **Behavioral only** — structural facts
 (ex/Mega-ex, trainer type, ACE SPEC) are *not* tagged; the runtime reads those off `CardData`

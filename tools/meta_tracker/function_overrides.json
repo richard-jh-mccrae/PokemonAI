@@ -1,41 +1,126 @@
 {
-  "_note": "Curated tags the probe can't reach, confirmed via tools/verify_meta_cards.py against card text. Unioned with probe-derived tags at build; never clobbered by regeneration. cardId -> [tags]. NOTE: `stall` is a curated *play-role* seed (a big-HP setup wall that declines to attack) — a usage pattern, not a parseable function; proper coverage needs replay-usage learning (see docs/card-functions.md). Inline names are for humans only.",
-  "17":   ["discard_eot"],
-  "19":   ["search"],
-  "66":   ["stall"],
-  "90":   ["search"],
-  "112":  ["heal", "spread"],
-  "344":  ["search"],
-  "353":  ["search"],
-  "666":  ["opener", "energy_accel"],
-  "721":  ["recycle"],
-  "756":  ["stall"],
-  "1071": ["search", "stall"],
-  "1081": ["energy_denial"],
-  "1086": ["bench_fill"],
-  "1121": ["tutor_pokemon", "cost_discard"],
-  "1145": ["tutor_mega"],
-  "1115": ["search"],
-  "1129": ["recycle"],
-  "1134": ["search"],
-  "1159": ["tool"],
-  "1189": ["search", "rush_evolve"],
-  "1197": ["hand_disruption"],
-  "1199": ["shuffle_hand"],
-  "1213": ["shuffle_hand"],
-  "1217": ["hand_disruption"],
-  "1223": ["shuffle_hand"],
-  "1227": ["shuffle_hand"],
-  "1229": ["heal", "clutch_heal"],
-  "1254": ["recycle"],
-  "1264": ["bench_guard"],
-  "1100": ["tutor_energy"],
-  "1119": ["tutor_energy"],
-  "1142": ["tutor_energy"],
-  "1194": ["tutor_energy"],
-  "1198": ["tutor_energy"],
-  "1206": ["tutor_energy"],
-  "1215": ["tutor_energy"],
-  "1225": ["tutor_energy"],
-  "1232": ["tutor_energy"]
+ "_note": "Curated tags the probe can't reach, confirmed via tools/verify_meta_cards.py against card text. Unioned with probe-derived tags at build; never clobbered by regeneration. cardId -> [tags]. NOTE: `stall` is a curated *play-role* seed (a big-HP setup wall that declines to attack) \u2014 a usage pattern, not a parseable function; proper coverage needs replay-usage learning (see docs/card-functions.md). Inline names are for humans only.",
+ "17": [
+  "discard_eot"
+ ],
+ "19": [
+  "search"
+ ],
+ "66": [
+  "stall"
+ ],
+ "90": [
+  "search"
+ ],
+ "112": [
+  "heal",
+  "spread"
+ ],
+ "344": [
+  "search"
+ ],
+ "353": [
+  "search"
+ ],
+ "666": [
+  "opener",
+  "energy_accel"
+ ],
+ "721": [
+  "recycle"
+ ],
+ "756": [
+  "stall"
+ ],
+ "1071": [
+  "search",
+  "stall"
+ ],
+ "1081": [
+  "energy_denial"
+ ],
+ "1086": [
+  "bench_fill"
+ ],
+ "1121": [
+  "tutor_pokemon",
+  "cost_discard"
+ ],
+ "1145": [
+  "tutor_mega"
+ ],
+ "1115": [
+  "search"
+ ],
+ "1129": [
+  "recycle"
+ ],
+ "1134": [
+  "search"
+ ],
+ "1159": [
+  "tool"
+ ],
+ "1189": [
+  "search",
+  "rush_evolve"
+ ],
+ "1197": [
+  "hand_disruption"
+ ],
+ "1199": [
+  "shuffle_hand"
+ ],
+ "1213": [
+  "shuffle_hand"
+ ],
+ "1217": [
+  "hand_disruption"
+ ],
+ "1223": [
+  "shuffle_hand"
+ ],
+ "1227": [
+  "shuffle_hand"
+ ],
+ "1229": [
+  "heal",
+  "clutch_heal"
+ ],
+ "1254": [
+  "recycle"
+ ],
+ "1264": [
+  "bench_guard"
+ ],
+ "1100": [
+  "tutor_energy"
+ ],
+ "1119": [
+  "tutor_energy"
+ ],
+ "1142": [
+  "tutor_energy"
+ ],
+ "1194": [
+  "tutor_energy"
+ ],
+ "1198": [
+  "tutor_energy"
+ ],
+ "1206": [
+  "tutor_energy"
+ ],
+ "1215": [
+  "tutor_energy"
+ ],
+ "1225": [
+  "tutor_energy"
+ ],
+ "1232": [
+  "tutor_energy"
+ ],
+ "330": [
+  "prevent_ex_damage"
+ ]
 }
