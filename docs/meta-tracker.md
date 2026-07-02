@@ -44,7 +44,9 @@ metric is **per-episode (encounter-weighted)** — see CONTEXT.md → *Play rate
 | `archetype.py` | evolution-line reconstruction, main/sub split, archetype naming |
 | `cards.py` / `cards.json` | card metadata (stage/ex/`evolvesFrom`/damage), portable cache |
 | `store.py` | SQLite extract store + episode dedup + dataset-complete state |
-| `dashboard.py` | self-contained Plotly HTML (archetype merge + decklists) |
+| `aggregate.py` | pure per-Episode stats shared by the dashboard + export: `sides`, `rate_table` (play/win rate), `merge_map`/`apply_merge` (Variant Cluster merge) — lib-free (no Plotly) |
+| `dashboard.py` | self-contained Plotly HTML (renders the `aggregate` stats + decklists) |
+| `export_decks.py` | deck export: head-N clusters' Representative Build → `data/meta/decks/<slug>/` + `index.json` (ADR-0027) |
 | `run_daily.py` | orchestration |
 | `dump_cards.py` | regenerate `cards.json` from the native `cg` engine |
 
@@ -61,6 +63,9 @@ python tools/run_meta_tracker.py --bands Elite High
 
 # regenerate the card cache after a pool update
 python tools/meta_tracker/dump_cards.py
+
+# export the head-N representative decks for the Matchup Brief workflow (ADR-0027)
+python tools/export_meta_decks.py --top 10
 
 # tests (uses the gzipped sample replay; no network)
 python -m pytest tests/ -q
@@ -87,6 +92,35 @@ are subset-related are merged into one cluster (e.g. the ±Cramorant Hop's
 Trevenant builds), labelled by the cluster's *most common* member. This is a view
 transformation (`dashboard._merge_map`) — the store keeps the precise ≤3-main
 labels, so it can be tuned or disabled without re-scraping.
+
+## Deck export
+
+The meta-tracker's other output — the **menu** for the Matchup Brief workflow
+([ADR-0027](adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)). For each of
+the top-`EXPORT_TOP_N` **Variant Clusters** by play rate it ships that cluster's
+**Representative Build** (the recency-weighted most-common exact 60-card list actually
+observed) as two files under `data/meta/decks/<slug>/`:
+
+- `deck.csv` — sorted card ids, one per line (the deck-genie format)
+- `deck.txt` — the Limitless-style render (`deck_convert.render_txt`)
+
+plus a ranked `index.json` — the menu:
+
+```json
+{ "rank": 1, "slug": "hop_s_trevenant_hop_s_snorlax",
+  "label": "Hop's Trevenant / Hop’s Snorlax",
+  "covers": ["Hop's Trevenant", "Hop's Trevenant / Hop’s Cramorant", …],
+  "play_rate": 0.31, "win_rate": 0.55, "episodes": 1661 }
+```
+
+`covers` is the cluster's member Archetype strings — it seeds a Brief's `covers:` list, so
+`matchup-genie` (pointed at one `<slug>/deck.csv`) stamps it without re-deriving. A cluster
+whose modal build isn't a legal 60 is skipped with a warning (never a malformed `deck.csv`);
+a slug collision is a hard error.
+
+**Standalone** (`python tools/export_meta_decks.py`) — reads the current `meta.db`, no
+scrape; run it when you're about to author Briefs. Output is gitignored + regenerated. Knob:
+`config.EXPORT_TOP_N`.
 
 ## Schedule (Windows)
 
