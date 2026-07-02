@@ -68,7 +68,7 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
     """Carve-out (refactor audit 2026-06-29): don't burn a finite discard-EOT Energy (Ignition) to
     build toward the big attack when the Active win-condition's CHEAP attack already KOs the opponent —
     Nebula isn't needed this turn, so the build endorsement would only partially cancel the deck's
-    `conserve-ignition-prefer-water` penalty (the two used to co-fire with opposite signs on the SAME
+    `conserve-discard-energy-prefer-basic` penalty (the two used to co-fire with opposite signs on the SAME
     Ignition attach). Scoped to `discard_eot`: a reusable Water still builds toward the payoff."""
     pilot = _pilot()
     ign = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Ignition (hand idx 1)

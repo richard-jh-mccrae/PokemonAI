@@ -8,7 +8,7 @@ from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Line, Ready, Strategy
 from pilot_helpers import (
-    ACTIVE, ATTACH, ATTACH_FROM, BENCH, DAMAGE, HAND, MAIN, MULLIGAN, NO, PLAY, YES,
+    ACTIVE, ATTACH, ATTACH_FROM, BENCH, DAMAGE, HAND, MAIN, MULLIGAN, NO, PLAY, SETUP_ACTIVE, YES,
     attack_opt, card_opt, make_select, opt, poke, state,
 )
 
@@ -139,6 +139,55 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
     # neither signal -> ungoverned, defaults to the redraw blunder.
     baseline = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
     assert baseline.decide(mull) == [0]
+
+
+@pytest.mark.req("REQ-GEN-0056")
+def test_open_the_accelerator_prefers_the_accel_opener_at_setup_active():
+    # Folded from mega_starmie `open-cinderace` (same trigger + weight): a deck that Roles an
+    # `accel_source` opener wants it in the Active Spot — acceleration from turn one.
+    pilot = Pilot(Strategy(roles={666: ["accel_source", "starter"], 700: ["starter"]}),
+                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=SETUP_ACTIVE,
+                      current=state(hand=[700, 666]))
+    assert pilot.decide(obs) == [1]                # the accel_source beats the plain starter
+    accel, starter = pilot.explain(obs).options[1], pilot.explain(obs).options[0]
+    assert "open-the-accelerator" in _fired(accel)
+    assert "open-the-accelerator" not in _fired(starter)   # role-keyed: a bare starter doesn't fire
+
+
+@pytest.mark.req("REQ-GEN-0057")
+def test_advance_the_accel_pieces_lifts_playing_or_attaching_an_accel_roled_card():
+    # Folded from mega_starmie `accel-into-main`: during SETUP, advance the deck's own
+    # `accel_source`-Roled pieces (e.g. attach the burst Energy that IS the acceleration).
+    pilot = Pilot(Strategy(roles={17: ["accel_source"]}), deck=[1] * 60,
+                  general_strategy=GENERAL_STRATEGY)
+    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                      current=state(hand=[111, 17]))
+    assert pilot.decide(obs) == [1]
+    assert "advance-the-accel-pieces" in _fired(pilot.explain(obs).options[1])
+    assert "advance-the-accel-pieces" not in _fired(pilot.explain(obs).options[0])  # role-keyed
+
+
+@pytest.mark.req("REQ-GEN-0062")
+def test_honor_preferred_start_penalizes_the_coin_toss_option_that_contradicts_the_deck():
+    # Folded from mega_starmie `prefer-going-second`: the deck declares
+    # params["preferred_start"] = "first" | "second"; the general selector honors it.
+    IS_FIRST = 41
+    toss = make_select([opt(YES), opt(NO)], context=IS_FIRST, current=state())
+
+    second = Pilot(Strategy(params={"preferred_start": "second"}), deck=[1] * 60,
+                   general_strategy=GENERAL_STRATEGY)
+    assert second.decide(toss) == [1]                                   # NO = go second
+    assert "honor-preferred-start" in _fired(second.explain(toss).options[0])
+    assert "honor-preferred-start" not in _fired(second.explain(toss).options[1])
+
+    first = Pilot(Strategy(params={"preferred_start": "first"}), deck=[1] * 60,
+                  general_strategy=GENERAL_STRATEGY)
+    assert first.decide(toss) == [0]                                    # YES = go first
+    assert "honor-preferred-start" in _fired(first.explain(toss).options[1])
+
+    undeclared = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+    assert not any("honor-preferred-start" in _fired(o) for o in undeclared.explain(toss).options)
 
 
 @pytest.mark.req("REQ-GEN-0007")

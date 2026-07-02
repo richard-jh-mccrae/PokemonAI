@@ -33,14 +33,18 @@ IS_FIRST = 41  # SelectContext.IS_FIRST — "Would you like to go first?" (cg/ap
 _STATS = DictCardStatProvider({
     STARYU: CardStat(STARYU, energyType=WATER, weakness=LIGHTNING, hp=70),
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True, hp=330),
-    CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160),
+    # Stage 2, evolvesFrom Raboot (none in this deck -> stranded, dead in hand).
+    CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160,
+                        name="Cinderace", evolvesFrom="Raboot"),
 })
 _TAGS = CardFunctions({CINDERACE: ["opener"]})
 
 
 def _pilot(functions=_TAGS, stats=_STATS):
-    return Pilot(STRATEGY, deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=stats, functions=functions)
+    # The deck list carries the real members these tests exercise — the stranded-evolution
+    # check (`dont-fetch-the-setup-only-opener`) reads it: Cinderace with no Raboot on the list.
+    return Pilot(STRATEGY, deck=[CINDERACE] * 4 + [STARYU] * 3 + [MEGA_STARMIE] * 3 + [1] * 50,
+                 general_strategy=GENERAL_STRATEGY, stats=stats, functions=functions)
 
 
 def _fired(option_trace):
@@ -48,12 +52,13 @@ def _fired(option_trace):
 
 
 @pytest.mark.req("REQ-MS-0001")
-def test_prefer_going_second_declines_the_coin_toss():
-    """Turbo deck: at the coin toss, choose to go SECOND (the player going first can't attack T1)."""
+def test_preferred_start_second_declines_the_coin_toss():
+    """Turbo deck: at the coin toss, choose to go SECOND (the player going first can't attack T1).
+    Declared via params["preferred_start"]="second"; the general `honor-preferred-start` honors it."""
     p = _pilot()
     obs = make_select([opt(YES), opt(NO)], context=IS_FIRST, current=state())
     assert p.decide(obs) == [1]                                          # NO = go second
-    assert "prefer-going-second" in _fired(p.explain(obs).options[0])    # fired on the YES (go-first) option
+    assert "honor-preferred-start" in _fired(p.explain(obs).options[0])  # fired on the YES (go-first) option
 
 
 @pytest.mark.req("REQ-MS-0002")
@@ -64,8 +69,8 @@ def test_never_fetch_cinderace_penalises_grabbing_the_opener_at_a_search():
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": CINDERACE}, {"id": STARYU}], current=state(hand=[]))
     opts = p.explain(obs).options
-    assert "never-fetch-cinderace" in _fired(opts[0])        # Cinderace (opener) — penalised
-    assert "never-fetch-cinderace" not in _fired(opts[1])    # Staryu (line piece) — not the opener
+    assert "dont-fetch-the-setup-only-opener" in _fired(opts[0])        # Cinderace (opener) — penalised
+    assert "dont-fetch-the-setup-only-opener" not in _fired(opts[1])    # Staryu (line piece) — not the opener
     assert p.decide(obs) == [1]                              # take Staryu, never Cinderace
 
 
@@ -75,10 +80,10 @@ def test_never_fetch_cinderace_silent_when_choosing_the_opening_active():
     FETCHING (TO_HAND), so it must stay silent at the setup-Active choice."""
     p = _pilot()
     obs = make_select([card_opt(HAND, 0)], context=SETUP_ACTIVE, current=state(hand=[CINDERACE]))
-    assert "never-fetch-cinderace" not in _fired(p.explain(obs).options[0])
+    assert "dont-fetch-the-setup-only-opener" not in _fired(p.explain(obs).options[0])
 
 
-# --- conserve-ignition-prefer-water (needs the minCostDamage + active_cheap_attack_kos signals) ---
+# --- conserve-discard-energy-prefer-basic (needs the minCostDamage + active_cheap_attack_kos signals) ---
 WATER_ENERGY, IGNITION = 3, 17
 _IGN_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
@@ -108,7 +113,7 @@ def test_conserve_ignition_fires_when_the_cheap_attack_already_kos():
     finite Ignition (CCC→Nebula); prefer the Water. (dont-waste-discard-energy exempts the wincon,
     so this deck rule is what covers it.)"""
     obs = _attach_ignition_onto_active_wincon(opp_hp=120, hand=[WATER_ENERGY, IGNITION])
-    assert "conserve-ignition-prefer-water" in _fired(_ign_pilot().explain(obs).options[0])
+    assert "conserve-discard-energy-prefer-basic" in _fired(_ign_pilot().explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-MS-0003")
@@ -116,14 +121,14 @@ def test_conserve_ignition_silent_when_nebula_is_actually_needed():
     """Cheap attack (120) does NOT KO the 200-HP Active → you need Nebula (CCC via Ignition) → the
     rule must stay silent so the Ignition attach isn't penalised."""
     obs = _attach_ignition_onto_active_wincon(opp_hp=200, hand=[WATER_ENERGY, IGNITION])
-    assert "conserve-ignition-prefer-water" not in _fired(_ign_pilot().explain(obs).options[0])
+    assert "conserve-discard-energy-prefer-basic" not in _fired(_ign_pilot().explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-MS-0003")
 def test_conserve_ignition_silent_without_a_reusable_water_alternative():
     """No reusable Water in hand → there's no cheaper alternative, so don't penalise the Ignition."""
     obs = _attach_ignition_onto_active_wincon(opp_hp=120, hand=[STARYU, IGNITION])  # no Water; Ignition at idx 1
-    assert "conserve-ignition-prefer-water" not in _fired(_ign_pilot().explain(obs).options[0])
+    assert "conserve-discard-energy-prefer-basic" not in _fired(_ign_pilot().explain(obs).options[0])
 
 
 # --- Hero's Cape deploy, end-to-end in the deck (the GENERAL Tool Doctrine `deploy-hp-tool`) --------
@@ -177,14 +182,15 @@ def test_deploy_heros_cape_fires_proactively_to_bank_a_survival_turn():
     assert "deploy-hp-tool" in _fired(_cape_pilot().explain(_attach_cape_vs(6666)).options[0])
 
 
-# --- develop-turbo-flare-recipient (enshrine: accelerator up + bare bench -> develop a recipient) ---
+# --- develop-the-accel-recipient (folded from develop-turbo-flare-recipient; enshrine: accelerator up + bare bench -> develop a recipient) ---
 # Cinderace's Turbo Flare attaches 3 Basic Energy to BENCHED Pokémon only; with no benched Staryu the
 # acceleration is wasted. These pin the deck doctrine "get the accelerator a recipient first".
 POFFIN = 1086
 _REC_STATS = DictCardStatProvider({
     STARYU: CardStat(STARYU, energyType=WATER, weakness=LIGHTNING, hp=70),
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True, hp=330),
-    CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160),
+    CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160,
+                        name="Cinderace", evolvesFrom="Raboot"),
     POFFIN: CardStat(POFFIN, hp=0),   # Buddy-Buddy Poffin (Item)
 })
 _REC_TAGS = CardFunctions({CINDERACE: ["opener"], POFFIN: ["search", "bench_fill"]})
@@ -203,7 +209,7 @@ def test_develop_recipient_fires_on_the_staryu_when_accelerator_up_and_bench_bar
     obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(1)],
                       current=state(active=poke(CINDERACE, energy=1), bench=[], hand=[STARYU]))
     opts = p.explain(obs).options
-    assert "develop-turbo-flare-recipient" in _fired(opts[0])   # endorses developing the recipient
+    assert "develop-the-accel-recipient" in _fired(opts[0])   # endorses developing the recipient
     assert p.decide(obs) == [0]                                 # bench it before the turn-ending attack
 
 
@@ -214,7 +220,7 @@ def test_develop_recipient_stands_down_when_a_recipient_is_already_benched():
     p = _rec_pilot()
     obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(1)],
                       current=state(active=poke(CINDERACE, energy=1), bench=[poke(STARYU)], hand=[STARYU]))
-    assert "develop-turbo-flare-recipient" not in _fired(p.explain(obs).options[0])
+    assert "develop-the-accel-recipient" not in _fired(p.explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-MS-0005")
@@ -224,7 +230,7 @@ def test_develop_recipient_stands_down_when_active_is_not_the_accelerator():
     p = _rec_pilot()
     obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(1)],
                       current=state(active=poke(STARYU, energy=1), bench=[], hand=[STARYU]))
-    assert "develop-turbo-flare-recipient" not in _fired(p.explain(obs).options[0])
+    assert "develop-the-accel-recipient" not in _fired(p.explain(obs).options[0])
 
 
 # --- Boss's Orders gust, end-to-end through the REAL mega_starmie Pilot (general doctrine, ADR-0022) ---

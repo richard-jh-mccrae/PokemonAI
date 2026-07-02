@@ -27,10 +27,12 @@ CLUSTERS = {
         "concentrate-energy-on-wincon", "prefer-reusable-over-burst", "prefer-active-attach-in-setup",
         "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator",
         "dont-attach-discard-energy-turn1", "concentrate-accel-on-one-line-body",
-        "conserve-burst-when-no-ko"}),
+        "conserve-burst-when-no-ko", "advance-the-accel-pieces",
+        "conserve-discard-energy-prefer-basic"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat"}),
-    "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker"}),
+    "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
+                                 "develop-the-accel-recipient"}),
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
         "promote-the-ready-wincon", "promote-the-staller"}),
@@ -38,7 +40,8 @@ CLUSTERS = {
     "evolution": (EVOLUTION_HYPOTHESES, {
         "evolve-into-wincon", "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
-    "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand"}),
+    "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
+                                     "honor-preferred-start"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit"}),
     "disruption": (DISRUPTION_HYPOTHESES, {
         "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored"}),

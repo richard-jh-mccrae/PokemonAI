@@ -4,7 +4,7 @@ Keep a body to promote, don't expose loose multi-prizers, pre-position the next 
 no Mixin. The `_multi_prize` / `_is_pokemon` CardStat predicates live here because only the bench
 rules read them.
 """
-from common.strategy.context import _EVOLVE, _PLAY, _WINCON_ROLES
+from common.strategy.context import _BENCH_MAX, _EVOLVE, _PLAY, _WINCON_ROLES
 from common.strategy.strategy import Hypothesis, Plan
 
 
@@ -40,4 +40,24 @@ HYPOTHESES = [
                   "Active is replaced without losing a turn.",
         when=lambda c: c.plan == Plan.RACE and c.option_type == _PLAY and _is_pokemon(c.stat),
         weight=25, status="assumed"),
+    Hypothesis(
+        id="develop-the-accel-recipient",
+        rationale="A bench-accelerator in the Active Spot (an `accel_source`-Role Pokémon whose "
+                  "attack loads the BENCH, e.g. Cinderace's Turbo Flare) accelerates onto NOTHING "
+                  "while the Bench holds no win-condition-Line recipient "
+                  "(`board.accel_recipient_missing`). Developing one is then the top setup priority: "
+                  "endorse playing a Line pre-evolution or a bench-filler (Function Tag `bench_fill`) "
+                  "to give the acceleration a target — and, via the base, the eventual payoff. Rides "
+                  "ALONGSIDE the `keep-a-bench` / `prefer-bench-fill-first` reflexes (which already "
+                  "handle the held-bencher cases); the FETCH side — grab the deployable base over a "
+                  "stranded payoff — is `fetch-base-before-stranded-payoff` (its general pair since "
+                  "2026-06-30). Stands down once a recipient is benched or the Active isn't the "
+                  "accelerator; a positive endorsement of development only, so a turn with no "
+                  "recipient to find still attacks. Folded from mega_starmie "
+                  "`develop-turbo-flare-recipient` (same trigger + weight) — the signal was already "
+                  "general Board vocabulary.",
+        when=lambda c: c.option_type == _PLAY and c.board.accel_recipient_missing
+        and (c.card_is_line_preevo or "bench_fill" in c.tags)
+        and c.board.my_bench < _BENCH_MAX,
+        weight=20, status="assumed"),
 ]

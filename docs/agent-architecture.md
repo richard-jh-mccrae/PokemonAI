@@ -58,11 +58,18 @@ Strategy(
   lines=[Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX,
               role="win_condition", ready=Ready(energy=3))],   # CCC for Nebula Beam
   roles={CINDERACE: ["accel_source", "starter"], IGNITION_ENERGY: ["accel_source"], ...},
-  params={"setup_energy_target": 3},                            # tunable scalars
-  hypotheses=[Hypothesis(id="open-cinderace", rationale="...", when=<trigger>,
-                         weight=40, status="assumed"), ...],
-)
+  params={"setup_energy_target": 3,                             # tunable scalars
+          "preferred_start": "second"},                         # deck-intent the General Strategy honors
+  hypotheses=[],   # declarations drive the role-keyed General Strategy (see below); a deck MAY
+)                  # still author Hypotheses for genuinely deck-specific play the general rules lack
 ```
+
+**Declarations first (2026-07-02 fold).** Every rule mega_starmie ever authored generalised into
+the General Strategy — the triggers were already written in universal vocabulary (Roles / Function
+Tags / Board signals), so the rules moved to `baseline_*`/doctrine clusters and the deck now opts
+in purely via its declarations (fold table: the deck file's docstring). Author a NEW deck the same
+way: declare Lines/Roles/params, inherit the play; add a deck Hypothesis only when no general rule
+can carry the trigger (then consider folding IT once its vocabulary proves general).
 
 - **Function Tag vs Role.** A **Function Tag** is *universal and mechanical* — what a card
   does (`draw`, `search`, `energy_accel`, `heal`, …), probed offline and shipped as

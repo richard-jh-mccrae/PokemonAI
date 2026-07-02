@@ -191,17 +191,18 @@ nothing general fits. As each card's usage locks, record its disposition against
 **The expand-vs-override decision (point 6) — where a new rule lives, priority-ordered.** Once the
 outline is solid, compare the deck's target strategy against the general one and, for each gap, pick:
 
-1. **Expand the General Strategy (the priority, when applicable).** If the rule reads **only universal
-   features** (`tags` / `stat` / `board` / `roles`) and would help **any** deck that hits the same
-   situation, it belongs in the general layer — add it to the matching
-   `src/common/strategy/baseline/baseline_<context>.py` cluster (ADR-0025), not the deck. A win here
-   lifts every future deck. Promotion to general is a deliberate, separately-reviewed step — flag it.
-2. **Deck-specific override / replace / diverge (otherwise).** If the rule is genuinely deck-bound —
-   it reads `card_id`s, the deck's `Line`, or deck `roles`, or it must *override/replace* a general
-   rule that misplays this deck — it lives in `src/agents/<deck>/strategy.py` (a deck `Hypothesis`,
-   and/or a weight override in `tuned.json`). This is the deck taking a different route from within
-   its own subdirectory. When unsure which side a rule falls on, **keep it in the deck file** — local
-   is safe; promotion is the deliberate step.
+1. **Expand the General Strategy (the DEFAULT — ADR-0034).** If the rule's trigger reads **only
+   universal vocabulary** (`tags` / `stat` / `board` signals / `roles` / `params`), it lives in the
+   general layer — the matching `src/common/strategy/baseline/baseline_<context>.py` cluster or
+   doctrine (ADR-0025), under a card-name-free id. **Role-keyed IS general**: the deck opts in by
+   assigning the Role — the rule stays silent for decks that don't (precedent: the entire
+   mega_starmie fold, 2026-07-02 — the deck now ships `hypotheses=[]`). A deck-intent judgment with
+   no structural derivation becomes a **param** a general selector honors (`preferred_start` →
+   `honor-preferred-start`). Per-deck strength stays tunable by id via `tuned.json` (ADR-0009).
+2. **Deck Hypothesis (the justified exception).** Only when the trigger genuinely needs deck-local
+   knowledge NO declaration (Role / Line / param / tag) can carry — and say WHY in the rationale.
+   A shipped deck rule is a standing **folding candidate**: once its vocabulary proves general,
+   fold it (score-equality gated via `tools/sim/score_diff.py` — capture before, diff after).
 
 Also fill `roles` (the per-deck intent overlay), `lines`, and `params`. Everything lands in
 STRATEGY.md — nothing executable yet.
