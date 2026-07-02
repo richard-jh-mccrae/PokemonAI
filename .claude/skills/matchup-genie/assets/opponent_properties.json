@@ -1,0 +1,21 @@
+{
+  "_doc": "Registry of opponent-property lever keys a Matchup Brief may assert (ADR-0027). A small, growing vocabulary (like Function Tags / Roles) — matchup-genie reuses a key where one fits and mints a new one only when nothing does, adding it here with consumer:'unwired' and flagging it. 'consumer' tracks whether the Read/Posture runtime yet maps the key onto a Board field: 'unwired' = forward contract, nothing reads it yet (the consumer is a separate, unbuilt item); a field name = the Board property it drives once wired. validate_brief.py reads this file; unknown keys in a Brief are flagged, not silently accepted.",
+  "properties": {
+    "opp_is_engine_dependent": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck's setup hinges on a specific draw/search engine Pokémon; gusting + KOing it strangles the deck. Lever (future): raise disruption value against its `engine` target."
+    },
+    "opp_donk_vulnerable": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "runs low-HP single-Basic openers; an aggressive turn-1/2 line can take an early prize lead or a donk. Lever (future): raise early aggression / prioritise the fragile_preevo snipe."
+    },
+    "opp_tempo": {
+      "type": "enum",
+      "values": ["fast", "midrange", "slow"],
+      "consumer": "unwired",
+      "note": "how fast the deck comes online and starts taking prizes; sets the race clock. Lever (future): race a slow deck; stabilise-then-grind against a fast one."
+    }
+  }
+}

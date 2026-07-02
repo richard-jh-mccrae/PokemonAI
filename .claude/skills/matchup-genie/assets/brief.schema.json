@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Matchup Brief",
+  "description": "The objective, shared counterplay annotations for ONE opponent Variant Cluster (ADR-0027). Lives beside the auto-artifact at src/common/scouting/briefs/<slug>.json; authored by /matchup-genie, consumed (future) by the Read/Posture layer to populate Board opponent-property fields. Validated by scripts/validate_brief.py (the enforcing gate; this schema is the human/machine reference).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets"],
+  "properties": {
+    "slug": {"type": "string", "description": "matches the filename and data/meta/decks/<slug>/"},
+    "label": {"type": "string", "description": "the cluster's canonical label (from index.json)"},
+    "covers": {
+      "type": "array", "minItems": 1, "items": {"type": "string"},
+      "description": "member Archetype strings (from index.json[slug].covers) — routes every variant to this one Brief; the Read matches read.candidates[0] against this list"
+    },
+    "authored": {"type": "string", "description": "ISO date the Brief was authored/updated"},
+    "summary": {"type": "string", "description": "one-line objective profile: how it wins + its exploitable seam"},
+    "tempo": {"type": "string", "enum": ["fast", "midrange", "slow"], "description": "the race clock — when it starts taking prizes"},
+    "opponent_properties": {
+      "type": "object",
+      "description": "the levers — boolean/scalar weakness keys the (future) consumer maps onto Board. Every key must be registered in assets/opponent_properties.json.",
+      "additionalProperties": {"type": ["boolean", "string", "number"]}
+    },
+    "threats": {
+      "type": "array",
+      "description": "the opponent's attackers we must respect",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["card", "why"],
+        "properties": {"card": {"type": "string"}, "why": {"type": "string"}}
+      }
+    },
+    "targets": {
+      "type": "array",
+      "description": "what to disrupt or snipe, using the Dossier role vocab",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["card", "role", "why"],
+        "properties": {
+          "card": {"type": "string"},
+          "role": {"type": "string", "enum": ["fragile_preevo", "prize_liability", "engine"]},
+          "why": {"type": "string"}
+        }
+      }
+    },
+    "sources": {"type": "array", "items": {"type": "string"}, "description": "citations (name — url)"}
+  }
+}
