@@ -45,6 +45,27 @@ def test_manifest_includes_general_strategy_hypotheses_with_overlay(tmp_path):
     assert hyp["effective"] == 77.0      # the tuned overlay applies to general hyps too
 
 
+@pytest.mark.req("REQ-WEIGHTS-0001")
+def test_manifest_effective_weight_layers_authored_override_under_tuned(tmp_path):
+    """ADR-0035: effective = tuned.json > Strategy.weight_overrides > authored default; the
+    manifest reports the chain and carries the authored overrides declaratively."""
+    agent = tmp_path / "a"
+    agent.mkdir()
+    (agent / "strategy.py").write_text(
+        "from common.strategy import Strategy\n"
+        "STRATEGY = Strategy(name='a', weight_overrides="
+        "{'keep-a-bench': 33.0, 'open-the-accelerator': 44.0})\n", encoding="utf-8")
+    (agent / "tuned.json").write_text(json.dumps({"open-the-accelerator": 99.0}), encoding="utf-8")
+    manifest = build_manifest(agent)
+
+    gen = {h["id"]: h for h in manifest["general_strategy"]["hypotheses"]}
+    assert gen["keep-a-bench"]["effective"] == 33.0           # authored seed override applies
+    assert gen["keep-a-bench"]["seed_override"] == 33.0
+    assert gen["open-the-accelerator"]["effective"] == 99.0   # learned tuned.json wins above it
+    assert manifest["strategy"]["weight_overrides"] == {
+        "keep-a-bench": 33.0, "open-the-accelerator": 44.0}
+
+
 @pytest.mark.req("REQ-SUB-0002")
 def test_manifest_reports_tier_from_declared_search_budget(tmp_path):
     agent = tmp_path / "a"

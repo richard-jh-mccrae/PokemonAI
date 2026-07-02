@@ -30,8 +30,8 @@ These files drift; read them now, don't trust this doc's snapshot of them:
 | Doc disposition | Code |
 |---|---|
 | covers-as-is | nothing — the General Strategy already fires |
-| override-candidate (seed weight) | a `{hyp_id: weight}` entry — seed it in `src/agents/<deck>/tuned.json` (the machine-overrides file `main.py` loads), or as a deck Hypothesis re-stating the id only if it must be deck-conditional |
-| conflicts | override the offending id toward `0`, and/or a deck Hypothesis that outweighs it — document why |
+| override-candidate (seed weight) | a `{hyp_id: weight}` entry in `Strategy.weight_overrides` (ADR-0035 — the authored per-deck seed layer, under learned tuned.json). NEVER hand-edit `tuned.json` (tuner-owned, rewritten wholesale each run) and NEVER redeclare the id as a deck Hypothesis (the Pilot flat-concats — both copies fire and stack) |
+| conflicts | `weight_overrides` the offending id toward `0`, and/or a deck Hypothesis (new id) that outweighs it — document why |
 | gap → new Hypothesis | **GENERAL (the priority):** if the trigger reads only universal `tags`/`roles`/`board`/`stat` and helps *any* deck, add it to the matching `src/common/strategy/baseline/baseline_<context>.py` cluster (ADR-0025) — flag the promotion for separate review. **DECK (otherwise):** a new `Hypothesis(...)` in `strategy.py` when it reads `card_id`s / the Line / deck roles, or must override a misplaying general rule |
 | Role / Line / param | fill `roles={cardId: [...]}`, `lines=[Line(path=[...], payoff=...)]`, `params={...}` |
 
@@ -83,8 +83,8 @@ strategy that loads and tests green but times out in a real game is not done.
 
 ## 6 · Present the diff — the human commits
 
-Show `src/agents/<deck>/strategy.py` + `tests/test_<deck>_triggers.py` (+ `tuned.json` if you
-seeded overrides) as a diff, with a one-line note per Hypothesis: id, the doctrine it encodes, seed
+Show `src/agents/<deck>/strategy.py` (incl. any `weight_overrides`) + `tests/test_<deck>_triggers.py`
+as a diff, with a one-line note per Hypothesis: id, the doctrine it encodes, seed
 weight + band, and the trigger-check result. Set `status="assumed"` (or `"testing"` once you've
 exercised it). The ladder A/B is the only thing that promotes a rule to `confirmed`/`refuted` — the
 skill never self-validates that. The human reviews and commits.

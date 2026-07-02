@@ -153,7 +153,8 @@ Salvatore rush line stands.
 - **Hand:** opening-hand only (Explosiveness); keeps a no-Basic hand startable.
 - **Anti-patterns:** **NEVER fetched** (Ultra Ball / any tutor) — only enters via Explosiveness at
   game start; a fetched Cinderace is dead. Don't keep it Active once the line is ready.
-- **Disposition:** `open-cinderace` + `accel-into-main` (deck rules) cover opening/accel.
+- **Disposition:** `open-the-accelerator` + `advance-the-accel-pieces` (general; folded from the
+  deck rules 2026-07-02) cover opening/accel.
   **CONFLICT: `hold-position-in-setup`** penalizes the *intended* retreat-to-promote → override (§6).
   Never-fetch → §6. Note: Cinderace is tagged `energy_accel` (gap closed 2026-07-02) though general
   `use-acceleration` won't fire — the deck leans on Role `accel_source`.
@@ -212,7 +213,8 @@ Salvatore rush line stands.
 - **Mechanics:** Supporter. Search deck for an **Evolution Pokémon AND an Energy**, both to hand.
 - **Use:** the targeted setup engine — fetch **Mega Starmie ex + an Energy** in one card. High
   Supporter priority in setup over raw draw.
-- **Disposition:** general `dig-before-commit` + deck `tutor-the-wincon` cover the lift; `fetch-the-wincon` governs the pull.
+- **Disposition:** general `dig-before-commit` + `play-a-tutor-for-the-unfound-wincon` (general;
+  folded from deck `tutor-the-wincon`) cover the lift; `fetch-the-wincon` governs the pull.
 
 ### 4× Lillie's Determination — `draw` (refill)
 - **Mechanics:** Supporter. Shuffle hand into deck, draw **6** (**8** if exactly 6 prizes remaining).
@@ -238,7 +240,8 @@ Salvatore rush line stands.
 ### 4× Mega Signal — `search` (payoff tutor)
 - **Mechanics:** Item. Search deck for a **Mega Evolution ex** (→ Mega Starmie ex), reveal, to hand.
 - **Use:** the dedicated wincon tutor — primary way to find Mega Starmie ex. High setup priority.
-- **Disposition:** `fetch-the-wincon` (general) + `tutor-the-wincon` (deck) cover it.
+- **Disposition:** `fetch-the-wincon` + `play-a-tutor-for-the-unfound-wincon` (both general; the
+  latter folded from deck `tutor-the-wincon`) cover it.
 
 ### 4× Buddy-Buddy Poffin — `search`, `bench_fill` (bench dev + thinning)
 - **Mechanics:** Item. Put up to **2 Basics with ≤70 HP** from deck onto your Bench (Staryu qualifies; Cinderace 160 HP does not).
@@ -252,7 +255,8 @@ Salvatore rush line stands.
   feed Night Stretcher (pitch a spare Water / 2nd Starmie → recover later).
 - **Anti-patterns:** **NEVER fetch Cinderace** (opening-hand-only; dead if fetched). Don't pay the
   2-card cost when a free tutor (Mega Signal / Hilda / Poffin) does the job.
-- **Disposition:** `fetch-the-wincon` covers the target choice; `never-fetch-cinderace` (§6) guards Cinderace.
+- **Disposition:** `fetch-the-wincon` covers the target choice; `dont-fetch-the-setup-only-opener`
+  (general; folded from deck `never-fetch-cinderace`, §6) guards Cinderace.
 
 ### 2× Night Stretcher — `recycle` (recovery backbone)
 - **Mechanics:** Item. Put a **Pokémon OR a Basic Energy** from your discard into your hand (**not** Ignition — special Energy).
@@ -331,8 +335,9 @@ Blow on 1). **Conserves Ignition entirely** — this is the deck's bread-and-but
 **recipient** — a benched Staryu (→ the future Mega Starmie ex) — or its 3-Water acceleration is
 wasted. While Cinderace (the accelerator) is Active with a **bare Bench** (no Line recipient),
 *developing one is the top setup priority*: play a Staryu, play Buddy-Buddy Poffin, or — at a search —
-**fetch the deployable base (Staryu) over a stranded Mega** you can't yet evolve. Enshrined as the deck
-rule **`develop-turbo-flare-recipient`** + the general **`fetch-base-before-stranded-payoff`** (§6). It
+**fetch the deployable base (Staryu) over a stranded Mega** you can't yet evolve. Enshrined as
+**`develop-the-accel-recipient`** (general; folded from deck `develop-turbo-flare-recipient`) + the
+general **`fetch-base-before-stranded-payoff`** (§6). It
 is **behaviour-neutral** on the held-bencher cases (those already sequence the bench before the
 deferred attack via `keep-a-bench`/attack-last — live-retest-confirmed) and **endorses development
 only** (never blocks the attack — a turn with no Staryu to find still Turbo Flares for the 50). Needs

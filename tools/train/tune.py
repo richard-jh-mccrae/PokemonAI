@@ -21,7 +21,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from train.blunder.reviewed import DEFAULT_REVIEWED, load_reviewed, partition_reviewed  # noqa: E402
 from train.blunder.store import DEFAULT_PATH, load_corrections  # noqa: E402
 from train.tuner.fit import DEFAULT_REG  # noqa: E402
-from train.tuner.io import sparse_overrides, write_meta, write_overrides, write_proposals  # noqa: E402
+from train.tuner.io import authored_seeds, sparse_overrides, write_meta, write_overrides, write_proposals  # noqa: E402
 from train.tuner.report_md import render_run_report  # noqa: E402
 from train.tuner.run import tune  # noqa: E402
 
@@ -43,7 +43,7 @@ def _build_pilot(agent: str):
     strategy = mod.STRATEGY
     deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
     attacks = all_attack()
-    seeds = {h.id: h.weight for h in (*GENERAL_STRATEGY.hypotheses, *strategy.hypotheses)}
+    seeds = authored_seeds(GENERAL_STRATEGY, strategy)   # incl. weight_overrides (ADR-0035)
     pilot = Pilot(                                 # mirror main.py EXACTLY — incl. recoil + bench_snipe,
         strategy, deck, general_strategy=GENERAL_STRATEGY,   # else the W-route featurizes a pilot whose
         stats=EngineCardStatProvider(), functions=CardFunctions.load(),  # snipe rider / draw-guard differ

@@ -105,15 +105,19 @@ def _trigger_src(fn) -> str:
     return (src[i:] if i >= 0 else src).rstrip().rstrip(",")
 
 
-def _hyp_row(h, tuned: dict) -> dict:
-    """One Hypothesis as a manifest row — all of its decision-steering info."""
-    effective = tuned.get(h.id, h.weight)
+def _hyp_row(h, tuned: dict, seed_overrides: dict) -> dict:
+    """One Hypothesis as a manifest row — all of its decision-steering info. ``effective``
+    resolves the ADR-0035 chain: learned tuned.json > authored Strategy.weight_overrides >
+    authored default."""
+    seed = seed_overrides.get(h.id, h.weight)
+    effective = tuned.get(h.id, seed)
     return {
         "id": h.id,
         "rationale": h.rationale,
         "authored": h.weight,
+        "seed_override": seed_overrides.get(h.id),   # the authored per-deck layer (None = none)
         "effective": effective,
-        "overridden": h.id in tuned and tuned[h.id] != h.weight,
+        "overridden": h.id in tuned and tuned[h.id] != seed,
         "status": h.status,
         "trigger": _trigger_src(h.when),
     }
@@ -313,9 +317,11 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
         },
         "strategy": {
             "name": strategy.name,
-            "hypotheses": [_hyp_row(h, tuned) for h in strategy.hypotheses],
+            "weight_overrides": dict(strategy.weight_overrides),   # authored seed layer (ADR-0035)
+            "hypotheses": [_hyp_row(h, tuned, strategy.weight_overrides) for h in strategy.hypotheses],
         },
         "general_strategy": {
-            "hypotheses": [_hyp_row(h, tuned) for h in general_strategy.hypotheses],
+            "hypotheses": [_hyp_row(h, tuned, strategy.weight_overrides)
+                           for h in general_strategy.hypotheses],
         },
     }
