@@ -339,10 +339,12 @@ def test_parse_attack_transients():
     assert parse_attack_transients(
         "During your next turn, this Pokémon's Big Beam attack does 120 more damage.",
         "Big Beam") == {"self_bonus": 120}
-    # defender retreat-lock (22): tracked for Board signals
+    # defender retreat-lock (22): NOT tracked — the engine enforces it by omitting the RETREAT
+    # option from the locked side's menu (tests/sim/test_retreat_lock_engine.py), so a field
+    # would have no consumer (ADR-0033)
     assert parse_attack_transients(
         "During your opponent's next turn, the Defending Pokémon can't retreat.",
-        "Bind") == {"retreat_lock": True}
+        "Bind") == {}
     # coin-gated transients NOT tracked (can't know the flip): ledger
     assert parse_attack_transients(
         "Flip a coin. If heads, during your opponent's next turn, prevent all damage done to this "

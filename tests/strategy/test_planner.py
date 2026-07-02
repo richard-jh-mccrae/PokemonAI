@@ -490,6 +490,208 @@ def test_energy_tutor_line_generalizes_to_any_tutor_energy_supporter():
     assert pilot.decide(obs) == [0]
 
 
+# ------------------------------- multi-candidate ENGINE RANKING (ADR-0031 P3 completion, item 2a)
+def _two_candidate_obs():
+    """A board with TWO viable ko_for_prizes candidates: retreat into the benched 2-Energy Mega
+    (option 0, + attach -> Nebula 210 KOs 180) OR evolve the Active Staryu to Mega (option 1, the 2
+    Energy carry through, + attach -> Nebula). Equal closed-form leaf values -> the closed-form pick
+    is the first (the retreat)."""
+    board = state(active=poke(PREEVO, energy=2, hp=70), bench=[poke(WINCON, energy=2, hp=330)],
+                  opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
+                  hand=[WINCON, WATER], prizes=2, opp_prizes=2)
+    evolve = opt(EVOLVE, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
+    return make_select([opt(RETREAT), evolve, attack_opt(STARYU), opt(END)], current=board)
+
+
+@pytest.mark.req("REQ-PLANNER-0026")
+def test_engine_rank_off_by_default_keeps_the_closed_form_pick():
+    """Kill-switch (ADR-0021 pattern): without ``planner_engine_rank=True`` a multi-candidate board
+    commits the closed-form best (ties break to the first generated) and the line is not marked
+    engine-ranked — byte-identical to the shipped behavior."""
+    pilot = _pilot()
+    d = pilot.explain(_two_candidate_obs())
+    assert d.planned is not None and d.planned.next_step == [0]   # the closed-form (first) candidate
+    assert d.planned.ranked_by is None                            # no ranking ran (switch off)
+
+
+@pytest.mark.req("REQ-PLANNER-0027")
+def test_engine_rank_commits_the_engine_best_candidate(monkeypatch):
+    """Multi-candidate ranking (the ADR-0031 deferred phase, built): with the switch ON, every
+    closed-form candidate is engine-simmed and the ENGINE's leaf value picks the committed line —
+    here the engine values the evolve line above the retreat the closed form would take. The
+    divergence is recorded for the A/B fire/divergence count."""
+    pilot = _pilot(planner_engine_rank=True)
+    values = {(0,): KO_SCORE + 60.0, (1,): KO_SCORE + 160.0}
+    monkeypatch.setattr(pilot, "_engine_leaf_value",
+                        lambda obs, step: values[tuple(step)])
+    d = pilot.explain(_two_candidate_obs())
+    assert d.planned is not None and d.planned.next_step == [1]   # the engine's pick, not closed-form's
+    assert d.planned.ranked_by == "engine" and d.planned.diverged is True
+    assert to_record(d)["planned"]["ranked"] == "engine"
+    assert to_record(d)["planned"]["diverged"] is True
+
+
+@pytest.mark.req("REQ-PLANNER-0027")
+def test_engine_rank_result_is_cached_per_reveal():
+    """Plan-once-cache (decision 5) holds for the ranked plan: the N candidate sims run once per
+    board fingerprint — the same board returns the cached line object without re-simulating."""
+    pilot = _pilot(planner_engine_rank=True)
+    calls = []
+    pilot._engine_leaf_value = lambda obs, step: calls.append(tuple(step)) or (KO_SCORE + 50.0)
+    obs = _two_candidate_obs()
+    line1 = pilot.explain(obs).planned
+    n = len(calls)
+    assert line1 is not None and n >= 2                           # every candidate was simmed once
+    assert pilot.explain(obs).planned is line1                    # cache hit ...
+    assert len(calls) == n                                        # ... no re-simulation
+
+
+@pytest.mark.req("REQ-PLANNER-0028")
+def test_engine_rank_defers_when_every_candidate_collapses(monkeypatch):
+    """The natural veto: when the engine end-boards show NO candidate actually takes a prize (every
+    ranked value below KO_SCORE — the rung's premise failed in sim), the Planner defers to the tuned
+    scoring instead of committing a refuted line. The proven default decides the turn."""
+    pilot = _pilot(planner_engine_rank=True)
+    monkeypatch.setattr(pilot, "_engine_leaf_value", lambda obs, step: 50.0)
+    d = pilot.explain(_two_candidate_obs())
+    assert d.planned is None                                      # refuted premise -> defer
+    assert d.chosen                                               # the tuned scoring still decided
+
+
+@pytest.mark.req("REQ-PLANNER-0029")
+def test_engine_rank_falls_back_per_candidate_when_a_sim_is_unavailable(monkeypatch):
+    """Fail-safe (decision 7, per candidate): a None sim keeps that candidate's closed-form value on
+    the SAME leaf scale, so an unavailable engine (or one failed fork) never loses the line — with
+    every sim unavailable the pick degrades exactly to the closed-form choice, marked unranked."""
+    pilot = _pilot(planner_engine_rank=True)
+    monkeypatch.setattr(pilot, "_engine_leaf_value", lambda obs, step: None)
+    d = pilot.explain(_two_candidate_obs())
+    assert d.planned is not None and d.planned.next_step == [0]   # closed-form pick survives
+    assert d.planned.ranked_by == "closed" and d.planned.diverged is False
+
+    # mixed: candidate 0 unavailable (keeps closed-form value >= KO_SCORE), candidate 1 engine-refuted
+    # (collapsed) -> the unrefuted closed-form line wins; the engine's refute of [1] still counted.
+    pilot2 = _pilot(planner_engine_rank=True)
+    monkeypatch.setattr(pilot2, "_engine_leaf_value",
+                        lambda obs, step: None if tuple(step) == (0,) else 50.0)
+    d2 = pilot2.explain(_two_candidate_obs())
+    assert d2.planned is not None and d2.planned.next_step == [0]
+    assert d2.planned.ranked_by == "closed"
+
+
+# --------------------------------------------- the KO-the-key-threat rung (ADR-0031 ladder, item 2b)
+SNIPE = 15      # attack id: cost 1, 50 to the Active + a 100 bench-snipe rider
+THREATB = 702   # opponent's benched KEY threat: a 340-damage glass cannon at 90 HP (snipe-KO-able)
+
+
+def _snipe_stats():
+    base = {
+        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
+                         minCostDamage=50, maxDamage=210, maxDamageCost=3,
+                         attacks=(JETTING, NEBULA, SNIPE), evolvesFrom="Staryu", megaEx=True),
+        OPENER: CardStat(OPENER, name="opener", hp=110, energyType=3, minAttackCost=1,
+                         minCostDamage=30, maxDamage=30, attacks=(OPEN_ATK,)),
+        OPP: CardStat(OPP, name="opp active", hp=330, energyType=7),
+        BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
+        THREATB: CardStat(THREATB, name="benched glass cannon", hp=90, energyType=7,
+                          minAttackCost=1, minCostDamage=340, maxDamage=340),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
+    }
+    return DictCardStatProvider(base)
+
+
+def _snipe_pilot(**kw):
+    strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_snipe_stats(),
+                 functions=CardFunctions({}),
+                 attacks={JETTING: 120, NEBULA: 210, SNIPE: 50, OPEN_ATK: 30},
+                 attack_costs={JETTING: 1, NEBULA: 3, SNIPE: 1, OPEN_ATK: 1},
+                 bench_snipe={SNIPE: 100}, **kw)
+
+
+def _key_threat_obs():
+    """No KO reachable vs the 330-HP Active (even Nebula 210 after retreat+attach falls short), and
+    my spent opener can't do anything — but retreating into the benched Mega brings its SNIPE online,
+    whose 100 bench rider KOs the opponent's benched 340-damage glass cannon (90 HP), the bench's top
+    threat. A snipe-KO ON the menu is the Tactical layer's turf (it credits the prize KO_SCORE-class);
+    the RETREAT that reaches one is scored by no hook — the rung's gap."""
+    board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
+                  opp_active=poke(OPP, hp=330),
+                  opp_bench=[poke(THREATB, energy=1, hp=90), poke(BENCHIE, hp=100)],
+                  hand=[WATER], prizes=3, opp_prizes=3)
+    return make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board)
+
+
+@pytest.mark.req("REQ-PLANNER-0031")
+def test_key_threat_rung_commits_the_retreat_that_unlocks_the_threat_snipe():
+    """The `KO the opponent's key threat` rung (the Goal Ladder's unbuilt middle rung, CONTEXT.md):
+    with no KO on the menu and no Active-KO enabling line, the retreat that brings the sniper online
+    against the benched TOP-threat body (by the shared threat rank) is committed — the KO-for-prizes
+    generators test the opponent's ACTIVE only, so this line is otherwise invisible. Kill-switched
+    (`planner_key_threat`): OFF (the default) leaves the board to the tuned scoring."""
+    on = _snipe_pilot(planner_key_threat=True)
+    d = on.explain(_key_threat_obs())
+    assert d.planned is not None and d.planned.goal == "ko_key_threat"
+    assert d.planned.next_step == [0]                  # the enabling retreat
+    assert on.decide(_key_threat_obs()) == [0]
+
+    off = _snipe_pilot()
+    assert off.explain(_key_threat_obs()).planned is None   # default OFF: byte-identical behavior
+
+
+@pytest.mark.req("REQ-PLANNER-0032")
+def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
+    """(a) Layer-on-top: a status-quo KO on the menu (the 120-HP Active — Jetting KOs, and the
+    on-menu SNIPE itself banks the benched KO) stands the rung down: the greedy scorer already takes
+    a prize. (b) No benched body that actually THREATENS (a 0-damage fat wall): the rung stays
+    silent — it never snipes a non-threat just because it can."""
+    pilot = _snipe_pilot(planner_key_threat=True)
+    ko_on_menu = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=120),
+                       opp_bench=[poke(THREATB, energy=1, hp=90)], prizes=3, opp_prizes=3)
+    d = pilot.explain(make_select([attack_opt(SNIPE), attack_opt(JETTING), opt(END)], current=ko_on_menu))
+    assert d.planned is None                           # the KO on the menu owns the turn
+
+    FATB = 703                                         # a harmless fat benched body (no threat rank)
+    stats = _snipe_stats()
+    stats._stats[FATB] = CardStat(FATB, name="fat benchie", hp=150, energyType=7)
+    pilot2 = _snipe_pilot(planner_key_threat=True)
+    pilot2.stats = stats
+    no_threat = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
+                      opp_active=poke(OPP, hp=330), opp_bench=[poke(FATB, hp=150)],
+                      hand=[WATER], prizes=3, opp_prizes=3)
+    d2 = pilot2.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=no_threat))
+    assert d2.planned is None                          # nothing benched threatens -> no rung
+
+
+# ------------------------------------------------ the development leaf term (ADR-0031 decision 4, item 2c)
+@pytest.mark.req("REQ-PLANNER-0033")
+def test_development_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypatch):
+    """The seeded `_PLANNER_DEV_W` term gets its input (engine-rank phase, `P3 on`): two candidate
+    lines with EQUAL engine prizes + survival are split by the simmed end-board's development (my
+    bodies + their attached Energy) — the line that leaves a more developed board wins. The hard-rung
+    invariant holds: development can never outrank a prize."""
+    pilot = _pilot(planner_engine_rank=True)
+
+    def fake_sim(obs, first_step, max_steps=40):
+        me_bare = {"active": [poke(WINCON, energy=1, hp=330)], "bench": [], "prize": [None]}
+        me_dev = {"active": [poke(WINCON, energy=1, hp=330)],
+                  "bench": [poke(PREEVO, energy=2, hp=70), poke(OPENER, energy=1, hp=110)],
+                  "prize": [None]}
+        opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 2}
+        me = me_dev if first_step == [1] else me_bare
+        end = {"current": {"turn": 3, "yourIndex": 0, "players": [me, opp]}}
+        return (end, 0, 2, -1)                          # both lines banked 1 prize (2 -> 1), no result
+
+    monkeypatch.setattr(pilot, "_simulate_line", fake_sim)
+    d = pilot.explain(_two_candidate_obs())
+    assert d.planned is not None and d.planned.next_step == [1]   # the developed end-board wins the tie
+    assert d.planned.ranked_by == "engine"
+
+    lv = pilot._leaf_value
+    assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True,
+                                                    threat_removed=10_000, development=10_000)
+
+
 @pytest.mark.req("REQ-PLANNER-0022")
 def test_energy_tutor_stands_down_when_the_turns_attach_is_already_spent():
     """Soundness: the tutor-energy line only works because the fetched Energy can be attached THIS turn.

@@ -26,7 +26,7 @@ def _deck():
     return [int(x) for x in (MEGA / "deck.csv").read_text(encoding="utf-8").split("\n")[:60]]
 
 
-def _engine_pilot(deck):
+def _engine_pilot(deck, **kw):
     atk = all_attack()
     try:
         fns = CardFunctions.load()
@@ -34,7 +34,7 @@ def _engine_pilot(deck):
         fns = CardFunctions({})
     return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
                  functions=fns, attacks={a.attackId: a.damage for a in atk},
-                 attack_costs={a.attackId: len(a.energies) for a in atk})
+                 attack_costs={a.attackId: len(a.energies) for a in atk}, **kw)
 
 
 def _first_open_menu(pilot, obs, limit=80):
@@ -92,6 +92,32 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
         # my turn's over: game finished, or menu is no longer mine to act on
         assert result != -1 or cur.get("yourIndex") != my_index or cur.get("select") is None \
             or (end.get("select") is None)
+    finally:
+        battle_finish()
+
+
+@pytest.mark.req("REQ-PLANNER-0034")
+def test_engine_ranking_survives_a_live_drive():
+    """Live smoke for multi-candidate ranking (`planner_engine_rank=True`): a real mirror drive with
+    the switch ON must never crash, and any line it commits carries the ranking provenance
+    (``ranked_by`` set — the engine valued it, or the closed form did when a sim fork failed). The
+    ranking-vs-closed pick equivalences are unit-gated; this proves the seam holds on live engine
+    observations end to end."""
+    deck = _deck()
+    pilot = _engine_pilot(deck, planner_engine_rank=True)
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    committed = []
+    try:
+        for _ in range(120):
+            cur = obs.get("current") or {}
+            if cur.get("result", -1) != -1:
+                break
+            d = pilot.explain(obs)
+            if d.planned is not None:
+                committed.append(d.planned)
+            obs = battle_select(d.chosen)
+        assert all(ln.ranked_by in ("engine", "closed") for ln in committed)
     finally:
         battle_finish()
 

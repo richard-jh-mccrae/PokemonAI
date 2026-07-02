@@ -3,6 +3,18 @@
 **Status.** Accepted & built 2026-07-02 (TDD; the completion plan's P2 —
 [docs/todo/effect-compendium-completion.md](../todo/effect-compendium-completion.md)). Extends
 [ADR-0032](0032-card-knowledge-is-an-engine-audited-effect-compendium.md).
+**Amended 2026-07-02 (wiring pass): the `retreat_lock` field is DELETED, not wired.** An engine
+probe settled its fate: the engine **enforces** the 22 "Defending Pokémon can't retreat" effects
+by **omitting the RETREAT option** from the locked side's next-turn menu (control turn with
+Energy + Bench: RETREAT offered; every post-Corner turn: absent — gated as
+[tests/sim/test_retreat_lock_engine.py](../../tests/sim/test_retreat_lock_engine.py),
+REQ-TRANS-0006). A menu-driven, this-turn-only Pilot therefore gains nothing from tracking it:
+my-side locks are self-enforcing (engine sims inherit the real state too), tightening the
+opponent-side **Incoming** on a lock would be UNSOUND (a hidden Switch-class card still swaps),
+and the one honest consumer (a gust-doctrine "don't gust away the Active my lock strands") is
+untriggerable by any shipped deck (none of the 22 lock attacks is in ours) — a rule that can never
+fire can never earn its keep. Parse + `AttackStat` field + tracker grant removed; re-add them only
+alongside a real consumer.
 
 **Context.** 138 attacks grant "during your (opponent's) next turn" effects — pool-verified:
 17 defender takes-less (Frost Barrier, Reflect), 6 prevent-all walls, 23 self-locks ("this Pokémon
@@ -17,9 +29,10 @@ the log stream**, match-scoped, never probabilistically:
 
 1. **Fields on `AttackStat`** (`parse_attack_transients`, text-seeded like every other tier):
    `nextTurnReduction`, `nextTurnPreventAll`, `nextTurnSelfLock`, `nextTurnSameAttackLock`
-   (only when the named attack IS this attack), `nextTurnSelfBonus`,
-   `nextTurnDefenderRetreatLock`. Coin-gated transients are NOT parsed — the flip isn't knowable,
-   and under-crediting a possible enemy shield is the safe direction for my attack math.
+   (only when the named attack IS this attack), `nextTurnSelfBonus`. Coin-gated transients are NOT
+   parsed — the flip isn't knowable, and under-crediting a possible enemy shield is the safe
+   direction for my attack math. (Retreat-locks were parsed originally and deleted by the 2026-07-02
+   amendment above — the engine enforces them at the menu.)
 2. **`TransientTracker`** (`common/transients.py`): consumes each observation's logs; an `ATTACK`
    log whose attack carries transient fields grants an effect for that side, **bound to the
    attacking serial**; the grant expires when the granter's next `TURN_START` fires — exactly the
@@ -46,7 +59,7 @@ the phantom-KO direction: attacking into an untracked prevent-all wall wastes th
 compendium exists to save.
 
 **Consequences.** Named cross-attack locks, coin-gated shields, hand/item/supporter locks and
-cost-raisers stay on the ledger (tracked fields exist for none of them; the retreat-lock field is
-tracked but has no consumer yet — a Board signal for gust/stall heuristics when wanted). The
+cost-raisers stay on the ledger (tracked fields exist for none of them; retreat-locks are
+engine-enforced at the menu and deliberately untracked — the 2026-07-02 amendment). The
 tracker is the first match-scoped state INSIDE the Pilot; the `_planning` guard is the invariant
 that keeps engine-sim futures from polluting it.

@@ -52,6 +52,11 @@ def _build_pilot(agent: str):
         recoil={a.attackId: parse_attack_recoil(a.text) for a in attacks},
         bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in attacks},
         ignores_active_effects={a.attackId: parse_attack_ignores_active_effects(a.text) for a in attacks},
+        # the wiring-pass kill-switches at main.py's shipped defaults (A/B-cleared 2026-07-02) — a
+        # retest must decide with the same backstops the live agent runs
+        lethal_verify=strategy.params.get("lethal_verify", True),
+        planner_engine_rank=strategy.params.get("planner_engine_rank", True),
+        planner_key_threat=strategy.params.get("planner_key_threat", True),
     )
     return pilot, seeds
 

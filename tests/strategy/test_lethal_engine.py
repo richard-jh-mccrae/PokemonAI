@@ -25,7 +25,7 @@ def _deck():
     return [int(x) for x in (MEGA / "deck.csv").read_text(encoding="utf-8").split("\n")[:60]]
 
 
-def _engine_pilot(deck):
+def _engine_pilot(deck, **kw):
     atk = all_attack()
     try:
         fns = CardFunctions.load()
@@ -33,7 +33,39 @@ def _engine_pilot(deck):
         fns = CardFunctions({})
     return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
                  functions=fns, attacks={a.attackId: a.damage for a in atk},
-                 attack_costs={a.attackId: len(a.energies) for a in atk})
+                 attack_costs={a.attackId: len(a.energies) for a in atk}, **kw)
+
+
+@pytest.mark.req("REQ-LETHAL-0014")
+def test_live_wiring_engine_refutes_a_phantom_direct_lock():
+    """End-to-end backstop wiring (ADR-0030 item-1): with ``lethal_verify=True`` and closed-form math
+    LYING that an early attack wins (a phantom lock), the REAL engine search refutes it — no lock, the
+    refute is counted — proving `find_lethal_line` drives `_engine_confirms_win` on the live
+    observation, not just that the primitive round-trips."""
+    deck = _deck()
+    pilot = _engine_pilot(deck, lethal_verify=True)
+    pilot._attack_wins = lambda *a, **kw: True        # the closed-form lie: every attack "wins"
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    try:
+        checked = False
+        for _ in range(120):
+            cur = obs.get("current") or {}
+            if cur.get("result", -1) != -1:
+                break
+            sel = obs.get("select")
+            if (sel is not None and sel.get("context") == 0 and sel.get("maxCount", 0) == 1
+                    and obs.get("search_begin_input")
+                    and any(o.get("type") == 13 for o in (sel.get("option") or []))):  # an ATTACK option
+                d = pilot.explain(obs)
+                assert d.lethal is None               # the engine refuted every phantom candidate
+                assert d.lethal_refuted >= 1
+                checked = True
+                break
+            obs = battle_select(pilot.decide(obs))
+        assert checked                                # the drive reached an attack menu to check
+    finally:
+        battle_finish()
 
 
 @pytest.mark.req("REQ-LETHAL-0009")

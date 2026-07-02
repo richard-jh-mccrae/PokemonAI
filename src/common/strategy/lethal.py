@@ -31,10 +31,14 @@ class LethalLine:
     (``next_step``), a one-line ``rationale`` for the legibility trace, and a ``kind`` tag (``direct``
     / ``unlock`` / ``evolve``) so the Decision Telemetry (ADR-0019) lets a blunder correction be
     filtered and clustered by *how* the win was reached. A multi-step line surfaces one step per
-    decision as the engine re-opens the turn menu."""
+    decision as the engine re-opens the turn menu. ``verified`` is the engine backstop's verdict on
+    the lock (``lethal_verify``): True = the engine's own search confirmed the win; None = not
+    checked (switch off / multi-step kind / engine unavailable). A False never rides here — a
+    refuted candidate is dropped, not locked."""
     next_step: list
     rationale: str = ""
     kind: str = ""
+    verified: bool | None = None
 
 
 class LethalMixin:
@@ -47,6 +51,7 @@ class LethalMixin:
     def find_lethal_line(self, obs, select, board, options, traces) -> LethalLine | None:
         """The shortest guaranteed win on the current turn, or None. Only acts at the single-pick
         MAIN menu; every other context (search, snipe, mulligan, multi-select) is untouched."""
+        self._lethal_refutes = 0                       # per-decision engine-refute count (telemetry)
         if select.get("context") != _MAIN or select.get("maxCount", 0) != 1:
             return None
         if board.my_prizes_remaining <= 0:
@@ -54,10 +59,18 @@ class LethalMixin:
         opp = self._opp_active(obs)
 
         # 1) KO already on menu that WINS now (one step). Judged by attack's OWN prize yield
-        # (`_attack_wins`) not coarse "KO exists": snipe KOing a 1-prize bench but leaving 2-prize ex Active is NOT a win.
+        # (`_attack_wins`) not coarse "KO exists". lethal_verify engine-confirms DIRECT locks only
+        # (a 1-step sim of a multi-step line would false-refute); refute drops the candidate.
         for i, o in enumerate(options):
             if o.get("type") == _ATTACK and self._attack_wins(obs, board, o, opp):
-                return LethalLine(next_step=[i], rationale="lethal: this KO wins the match", kind="direct")
+                verified = None
+                if self.lethal_verify and not self._planning:
+                    verified = self._engine_confirms_win(obs, [[i]])
+                    if verified is False:
+                        self._lethal_refutes += 1
+                        continue                       # the engine says this "win" doesn't win — skip it
+                return LethalLine(next_step=[i], rationale="lethal: this KO wins the match",
+                                  kind="direct", verified=verified)
 
         # Develops below unlock a KO of opp ACTIVE (closed-form hooks). Wins iff takes my last prize or
         # opp has no bench to promote — under-counts any rider snipe, conservative but sound.
@@ -101,20 +114,28 @@ class LethalMixin:
             return True
         return active_ko and not board.opp_bench       # KO leaves them no Pokémon to promote
 
-    def _engine_confirms_win(self, obs, line_steps):
+    def _engine_confirms_win(self, obs, line_steps, max_cascade: int = 12):
         """Tier-1 (ADR-0030): forward-simulate ``line_steps`` — a list of per-select index lists, the
         exact moves of a candidate Lethal Line — through the engine's OWN search and report whether IT
         declares me the winner. The grading engine, not my closed-form math, is the authority, so it
         also resolves what closed-form is blind to (abilities, status, Tera, evolution/turn-1 timing).
 
+        A winning attack does not flip ``result`` at the attack step: the engine first opens MY
+        cascade selects (take the prize(s), pick a snipe/Damage target, pay a cost), so after the
+        line's own steps the search keeps driving MY selects through the policy (``decide``, under
+        the ``_planning`` guard so nothing nests or pollutes) until the engine reaches a verdict —
+        measured live: the prize-take TO_HAND select is what every real win parks on.
+
         Sound and fail-safe:
-          * ``manual_coin=True`` so a coin the line doesn't account for surfaces as an unhandled select
-            → the step raises → we return None rather than trust a lucky flip.
-          * returns True/False when the engine reaches a verdict, or **None** if the search is
-            unavailable (lib-free suite), the observation carries no ``search_begin_input``, or anything
-            errors — the caller then keeps its sound closed-form verdict.
-        The hidden-zone predictions are filled from my own deck list; a this-turn KO of the opponent's
-        visible Active draws nothing and gives them no action, so the verdict is invariant to them.
+          * ``manual_coin=True`` so a coin the line doesn't account for surfaces as a COIN_HEAD
+            select → **None** rather than trust a chosen flip (never let the policy pick heads).
+          * the select passing to the OPPONENT with no verdict = the win did not materialize before
+            they act → False (a real refute: our win-shapes need no opponent action).
+          * an exhausted cascade cap is **None** (undetermined never refutes); so is an unavailable
+            search (lib-free suite), a missing ``search_begin_input``, or any error — the caller
+            then keeps its sound closed-form verdict.
+        The hidden-zone predictions are filled from my own deck list; the cascade's prize picks
+        reveal predicted cards but the ``result`` verdict is invariant to WHICH prize is taken.
         Lazy DLL import keeps the fast unit suite from ever loading the native engine."""
         if not (obs or {}).get("search_begin_input") or not line_steps:
             return None
@@ -122,6 +143,10 @@ class LethalMixin:
             from cg import api as cgapi
         except Exception:
             return None
+        from dataclasses import asdict
+
+        from common.strategy.planner import _prune_none
+        _COIN_HEAD = 46                                # SelectContext.COIN_HEAD (manual-coin choice)
         cur = obs.get("current") or {}
         yi = cur.get("yourIndex", 0)
         players = cur.get("players") or []
@@ -132,23 +157,38 @@ class LethalMixin:
         def take(n):
             return deck[: max(0, n)]
 
-        try:
+        was_planning = self._planning
+        self._planning = True                          # the cascade re-runs decide(): never nest a
+        try:                                           # search, never verify inside a verify
             ob = cgapi.to_observation_class(obs)
             st = cgapi.search_begin(ob, take(me.get("deckCount", 0)), take(len(me.get("prize") or [])),
                                     take(opp.get("deckCount", 0)), take(len(opp.get("prize") or [])),
                                     take(opp.get("handCount", 0)), [], manual_coin=True)
-            won = False
             for step in line_steps:
                 st = cgapi.search_step(st.searchId, list(step))
-                c = st.observation.current
+            verdict = None
+            for _ in range(max_cascade):
+                o = st.observation
+                c = o.current
                 if c and c.result != -1:
-                    won = c.result == yi
+                    verdict = c.result == yi           # the engine's own verdict
                     break
+                sel = o.select
+                if sel is None or c is None:
+                    break                              # nothing to drive: undetermined -> None
+                if sel.context == _COIN_HEAD:
+                    break                              # an unaccounted coin: never choose the flip
+                if c.yourIndex != yi:
+                    verdict = False                    # passed to the opponent unresolved: no win
+                    break
+                st = cgapi.search_step(st.searchId, list(self.decide(_prune_none(asdict(o)))))
             cgapi.search_end()
-            return won
+            return verdict
         except Exception:
             try:
                 cgapi.search_end()
             except Exception:
                 pass
             return None
+        finally:
+            self._planning = was_planning

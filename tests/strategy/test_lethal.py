@@ -253,7 +253,8 @@ def test_lethal_verdict_is_emitted_in_decision_telemetry():
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
                 prizes=1, opp_prizes=2)
     rec = to_record(pilot.explain(make_select([attack_opt(JETTING), opt(END)], current=won)))
-    assert rec["lethal"] == {"step": [0], "kind": "direct", "why": "lethal: this KO wins the match"}
+    assert rec["lethal"] == {"step": [0], "kind": "direct", "why": "lethal: this KO wins the match",
+                             "verified": None}
 
     safe = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=330),
                  opp_bench=[poke(OPP, hp=120)], prizes=3, opp_prizes=2)
@@ -267,6 +268,111 @@ def test_lethal_verdict_is_emitted_in_decision_telemetry():
                          opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
                          attack_opt(JETTING), opt(END)], current=unlock)
     assert to_record(pilot.explain(obs_u))["lethal"]["kind"] == "unlock"
+
+
+# ------------------------------------------------- the engine-verify backstop wiring (ADR-0030, item 1)
+def _direct_win_obs():
+    """A board whose only win is a 1-step direct KO (the REQ-LETHAL-0001 shape)."""
+    won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
+                prizes=1, opp_prizes=2)
+    return make_select([attack_opt(JETTING), opt(END)], current=won)
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
+def test_lethal_verify_is_off_by_default_and_never_calls_the_engine(monkeypatch):
+    """Kill-switch (ADR-0021 pattern): without `lethal_verify=True` the Solver locks on closed-form
+    math alone — byte-identical to the shipped behavior — and NEVER invokes the engine backstop."""
+    pilot = _pilot()
+
+    def _boom(*a, **kw):
+        raise AssertionError("engine backstop must not be called when lethal_verify is off")
+
+    monkeypatch.setattr(pilot, "_engine_confirms_win", _boom)
+    d = pilot.explain(_direct_win_obs())
+    assert d.lethal is not None and d.lethal.verified is None   # locked, unverified (switch off)
+    assert d.lethal_refuted == 0
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
+def test_lethal_verify_confirms_a_direct_lock_and_rides_in_telemetry(monkeypatch):
+    """With the switch ON, a DIRECT lock is confirmed through `_engine_confirms_win` with exactly the
+    lock's one step; the verdict rides on the line (and in the @T record) so the blunder-buster can
+    filter on it (ADR-0019)."""
+    pilot = _pilot(lethal_verify=True)
+    calls = []
+
+    def _confirm(obs, steps):
+        calls.append(steps)
+        return True
+
+    monkeypatch.setattr(pilot, "_engine_confirms_win", _confirm)
+    obs = _direct_win_obs()
+    d = pilot.explain(obs)
+    assert d.lethal is not None and d.lethal.verified is True
+    assert calls == [[[0]]]                                     # one candidate, its exact step list
+    assert to_record(d)["lethal"]["verified"] is True
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
+def test_lethal_verify_refutes_a_phantom_direct_lock(monkeypatch):
+    """The backstop's whole point (ADR-0030: false-lock = thrown game): when the ENGINE says the
+    closed-form 'win' does not actually win, the candidate is dropped — no lock, defer to the normal
+    machinery — and the refute is surfaced (Decision + @T) so a live divergence is countable."""
+    pilot = _pilot(lethal_verify=True)
+    monkeypatch.setattr(pilot, "_engine_confirms_win", lambda obs, steps: False)
+    d = pilot.explain(_direct_win_obs())
+    assert d.lethal is None                                     # the phantom is NOT locked
+    assert d.lethal_refuted == 1
+    rec = to_record(d)
+    assert rec["lethal"] is None and rec["lethal_refuted"] == 1
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
+def test_lethal_verify_unavailable_engine_keeps_the_sound_closed_form_lock(monkeypatch):
+    """Fail-safe (never commit-degraded, ADR-0030): a None verdict — no `search_begin_input`, lib-free
+    suite, or any search error — keeps the sound closed-form lock, unverified. The switch being ON must
+    never LOSE wins the closed-form layer already proves."""
+    pilot = _pilot(lethal_verify=True)
+    monkeypatch.setattr(pilot, "_engine_confirms_win", lambda obs, steps: None)
+    d = pilot.explain(_direct_win_obs())
+    assert d.lethal is not None and d.lethal.verified is None
+    assert d.lethal_refuted == 0
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
+def test_lethal_verify_never_touches_multi_step_unlock_locks(monkeypatch):
+    """A 1-step engine sim of a MULTI-step line cannot reach a result (the turn hasn't ended), so
+    `_engine_confirms_win` would report False and wrongly refute a good lock. Until the multi-step
+    drive-to-terminal is built (ADR-0030 remaining follow-up), verify applies to DIRECT locks only —
+    unlock/evolve locks stay closed-form even with the switch ON."""
+    pilot = _pilot(lethal_verify=True)
+
+    def _boom(*a, **kw):
+        raise AssertionError("a multi-step (unlock) lock must not be engine-verified one step deep")
+
+    monkeypatch.setattr(pilot, "_engine_confirms_win", _boom)
+    unlock = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=180),
+                   opp_bench=[poke(OPP, hp=180)], hand=[WALLYS, WATER], prizes=1, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(JETTING), opt(END)], current=unlock)
+    d = pilot.explain(obs)
+    assert d.lethal is not None and d.lethal.kind == "unlock" and d.lethal.verified is None
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
+def test_lethal_verify_refute_falls_through_to_a_second_confirmed_candidate(monkeypatch):
+    """Candidate-level, not turn-level: an engine-refuted direct candidate drops, but a LATER direct
+    candidate the engine confirms still locks (the refute count records the drop)."""
+    pilot = _pilot(lethal_verify=True)
+    verdicts = iter([False, True])
+    monkeypatch.setattr(pilot, "_engine_confirms_win", lambda obs, steps: next(verdicts))
+    won = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=120),
+                prizes=1, opp_prizes=2)
+    obs = make_select([attack_opt(JETTING), attack_opt(NEBULA), opt(END)], current=won)
+    d = pilot.explain(obs)
+    assert d.lethal is not None and d.lethal.next_step == [1]   # the second candidate locks
+    assert d.lethal.verified is True and d.lethal_refuted == 1
 
 
 @pytest.mark.req("REQ-LETHAL-0012")

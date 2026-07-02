@@ -5,8 +5,9 @@
 `tools/build_card_effects.py` — the parametric counterpart of `CardFunctions`
 (`common/cards.py`): the tag says *that* a card heals, the clause says *how much*.
 Same doctrine: **partial and additive** — an unknown card has no clauses, a missing
-file degrades to empty, O(1) lookup per decision. Not yet wired into the Pilot
-(ADR-0032's join step does that).
+file degrades to empty, O(1) lookup per decision. Wired into the Pilot via
+`Pilot(effects=...)`: the Turn Planner's heal-candidate path reads the `heal`
+clauses (amount/rider/restriction/condition — `planner._heal_candidate`, ADR-0032 4b).
 """
 from __future__ import annotations
 

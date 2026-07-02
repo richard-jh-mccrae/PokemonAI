@@ -6,7 +6,12 @@ REQ-GEN-0053..0055). Adds `common/deck_odds.py` (the pure hypergeometric estimat
 Complements — does **not** replace — the sound deck tracker
 ([ADR-0023](0023-fetch-is-a-shared-value-comparator.md)'s `OwnCardModel` /
 `deck_definitely_empty_of`). Scope: **own** deck only; opponent-deck inference is separate and
-unbuilt.
+unbuilt. **Amended 2026-07-02 (wiring pass):** the POSITIVE sound reader shipped —
+`search-the-confirmed-hit` (+15, `Context.search_confirmed_hit`, doctrine_fetch,
+REQ-GEN-0063): once the tracker anchors the prizes, a search whose filter PROVABLY reaches a
+needed target (`Board.deck_definitely_has` + positive grab value) is endorsed. Sound-or-silent
+like its oracle; exclusive with the sound veto by construction; A/B-gated by an overlay weight
+override (arm-OFF sets it to 0).
 
 **Context.** Own-deck knowledge already has a **sound** half: `OwnCardModel`
 ([deck_tracker.py](../../src/common/deck_tracker.py)) resolves the 6-card prize split **exactly**
