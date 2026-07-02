@@ -15,6 +15,7 @@ from common import deck_odds
 from common.strategy import Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
+from common.scouting.briefs import Brief, match_brief
 
 # Engine vocabulary (option/select/area enum mirrors, KO_SCORE, _ENGINE_TAGS, …) is shared with the
 # doctrine modules, so it lives in common.strategy.context. The three card-archetype doctrines each
@@ -302,6 +303,10 @@ class Board:
                                           # (0.5 = neutral / no data) — the lever-A aggression signal (ADR-0026).
     matchup_coverage: float = 0.0         # share of the Read's posterior that hit a real matchup cell; low
                                           # coverage = favorability is mostly the 0.5 default, so trust it less.
+    brief: Brief | None = None            # the matched hand-authored Matchup Brief for the recognized
+                                          # opponent (ADR-0027, covers-routed); None = unrecognized / no
+                                          # covering Brief / Posture off. Behavior-neutral: carried for a
+                                          # future γ-gated consumer, nothing scores off it yet.
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -507,7 +512,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, attacks=None, attack_costs=None, recoil=None, bench_snipe=None,
-                 ignores_active_effects=None, search_budget=0, scout=None, posture=True):
+                 ignores_active_effects=None, search_budget=0, scout=None, briefs=None, posture=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -523,6 +528,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                                             # defender's damage-prevention Ability (Crustle) doesn't apply
         self.search_budget = search_budget
         self.scout = scout                              # opponent Scout (ADR-0026); None = Posture off
+        self.briefs = list(briefs) if briefs else []    # hand-authored Matchup Briefs (ADR-0027), covers-routed
         self.posture = posture                          # ADR-0026 kill-switch: False forces γ=0 + neutral
                                                         # favorability → both levers off (the A/B baseline)
         self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
@@ -1176,6 +1182,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         my_arch = self.strategy.params.get("my_archetype")
         fav, cov = (matchup_favorability(self.scout.artifact, my_arch, read.candidates)
                     if (self.posture and self.scout and read and my_arch) else (0.5, 0.0))
+        # covers-routed (ADR-0027), γ-gated to a RECOGNIZED opponent: on an empty early board the Read's
+        # top candidate is just the prior favourite, so gate on γ>0 to keep board.brief off until recognized.
+        brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         active_doomed = self._active_doomed(ma, oa, opp)
         active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
         board = Board(
@@ -1238,6 +1247,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             read=read,                                              # Posture Read (ADR-0026); None = off
             posture_confidence=gamma,                               # γ ∈ [0,1] the levers scale by
             favorability=fav, matchup_coverage=cov,                 # lever-A signal + its reliability
+            brief=brief,                                            # matched Matchup Brief (ADR-0027); None = off
         )
         if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
             board = replace(board,                      # Tool is in hand (the common case pays nothing)

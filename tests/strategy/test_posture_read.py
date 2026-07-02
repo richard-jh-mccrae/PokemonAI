@@ -9,6 +9,7 @@ import pytest
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.briefs import Brief
 from common.scouting.read import EvoPath, Read
 from common.scouting.scout import Scout
 from common.strategy import Line, Strategy
@@ -27,12 +28,12 @@ def _stats():
     })
 
 
-def _pilot(scout=None, my_archetype=None):
+def _pilot(scout=None, my_archetype=None, briefs=None, posture=True):
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"]},
                      params={"my_archetype": my_archetype} if my_archetype else {})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 attacks={11: 120}, attack_costs={11: 1}, scout=scout)
+                 attacks={11: 120}, attack_costs={11: 1}, scout=scout, briefs=briefs, posture=posture)
 
 
 def _obs_facing_mega_lucario():
@@ -204,3 +205,24 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
     even = {h.id for h, _ in _unfavored_pilot(0.5, funcs).explain(obs).options[0].fired}
     assert "disrupt-when-unfavored" in unfavored
     assert "disrupt-when-unfavored" not in even
+
+
+# ---- Brief-consumer wiring: the matched Matchup Brief on the Board (ADR-0027), behavior-neutral ----
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_recognized_opponent_routes_its_matchup_brief_onto_board():
+    # A Brief whose `covers` includes the recognized archetype is surfaced on board.brief (variant routing).
+    brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"])
+    board = _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[brief]), _obs_facing_mega_lucario())
+    assert board.brief is not None and board.brief.slug == "ml"
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_no_brief_on_board_when_unknown_unmatched_or_posture_off():
+    brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"])
+    other = Brief(slug="x", label="X", covers=["Some Other Deck"])
+    ml = _obs_facing_mega_lucario()
+    assert _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[brief]), _obs_early_unknown()).brief is None
+    assert _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[other]), ml).brief is None   # no cover
+    assert _board_of(_pilot(scout=None, briefs=[brief]), ml).brief is None                      # no Scout
+    assert _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[brief], posture=False), ml).brief is None
