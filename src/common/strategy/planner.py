@@ -138,8 +138,10 @@ class PlannerMixin:
             self._planning = True                        # per-sim reentrancy guard (never nest a search)
             try:
                 val = self._engine_leaf_value(obs, cand.next_step)
-            finally:
-                self._planning = False
+            except Exception:
+                val = None                               # a failed fork never crashes the decision
+            finally:                                     # (decision 7) — the candidate keeps its
+                self._planning = False                   # closed-form value below
             ranked.append((val if val is not None else cand.value, val is not None, cand))
         best_val, engine_valued, best = max(ranked, key=lambda t: t[0])
         if best_val < KO_SCORE:
@@ -329,7 +331,12 @@ class PlannerMixin:
                   for p in bench]
         top_rank, top = max(ranked, key=lambda t: t[0])
         top_stat = self.stats.get(top.get("id")) if self.stats else None
-        threat_mag = float(getattr(top_stat, "maxDamage", 0) or 0) if top_stat else 0.0
+        own_mag = float(getattr(top_stat, "maxDamage", 0) or 0) if top_stat else 0.0
+        fwd_fn = getattr(self.stats, "forward_max_damage", None)
+        fwd_mag = float(fwd_fn(top.get("id")) or 0) if fwd_fn is not None else 0.0
+        threat_mag = max(own_mag, fwd_mag)             # the SAME damage basis the rank uses — a
+                                                       # 0-printed body with a monster forward line
+                                                       # (the Evolving-Threat case) still counts
         hp = top.get("hp", 0)
         if top_rank <= 0 or threat_mag <= 0 or not hp or self._is_tera(top.get("id")):
             return []                                 # nothing benched actually threatens (or Tera-immune)
@@ -433,8 +440,7 @@ class PlannerMixin:
         power the KO this turn). None otherwise. Reuses the sound retreat-KO valuation."""
         if board.energy_attached or board.reusable_energy_in_hand:
             return None
-        cid = self._option_card_id(obs, select, option)
-        if cid is None or not (self.functions and "tutor_energy" in self.functions.tags(cid)):
+        if not self._is_energy_tutor(obs, select, option):
             return None
         return self._retreat_ko_candidate(obs, board, opp, opp_player, extra=1)
 

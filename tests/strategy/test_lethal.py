@@ -361,6 +361,36 @@ def test_lethal_verify_never_touches_multi_step_unlock_locks(monkeypatch):
 
 
 @pytest.mark.req("REQ-LETHAL-0013")
+def test_refute_count_survives_the_cascades_policy_reentry(monkeypatch):
+    """The verify cascade re-runs decide(), which re-enters find_lethal_line under ``_planning`` —
+    the re-entry must NOT wipe the outer decision's refute count (the review-caught clobber): a
+    refuted first candidate stays counted when a later candidate's cascade drives the policy."""
+    pilot = _pilot(lethal_verify=True)
+    won = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=120),
+                prizes=1, opp_prizes=2)
+    obs = make_select([attack_opt(JETTING), attack_opt(NEBULA), opt(END)], current=won)
+    calls = []
+
+    def _verify(o, steps):
+        calls.append(tuple(steps[0]))
+        if len(calls) == 1:
+            return False                               # refute candidate 0 ...
+        was = pilot._planning                          # ... then mimic candidate 1's cascade: the
+        pilot._planning = True                         # policy re-enters find_lethal_line in-sim
+        try:
+            pilot.find_lethal_line(obs, obs["select"], pilot._board(obs, obs["select"]),
+                                   obs["select"]["option"], [])
+        finally:
+            pilot._planning = was
+        return True
+
+    monkeypatch.setattr(pilot, "_engine_confirms_win", _verify)
+    d = pilot.explain(obs)
+    assert d.lethal is not None and d.lethal.next_step == [1]
+    assert d.lethal_refuted == 1                       # the re-entry did not wipe the outer count
+
+
+@pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_refute_falls_through_to_a_second_confirmed_candidate(monkeypatch):
     """Candidate-level, not turn-level: an engine-refuted direct candidate drops, but a LATER direct
     candidate the engine confirms still locks (the refute count records the drop)."""

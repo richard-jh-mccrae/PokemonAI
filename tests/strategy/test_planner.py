@@ -639,6 +639,29 @@ def test_key_threat_rung_commits_the_retreat_that_unlocks_the_threat_snipe():
     assert off.explain(_key_threat_obs()).planned is None   # default OFF: byte-identical behavior
 
 
+@pytest.mark.req("REQ-PLANNER-0031")
+def test_key_threat_rung_counts_a_forward_damage_only_threat():
+    """The review-caught basis mismatch: the top threat is RANKED by max(own, forward) damage, so
+    the magnitude gate must use the same basis — a 0-printed benched base whose evolution line
+    reaches a monster attack (the Evolving-Threat case the rank exists for) is still a key threat
+    worth the snipe, not a silent skip."""
+    DREEPY, DRAGA = 704, 705
+    stats = _snipe_stats()
+    stats._stats[DREEPY] = CardStat(DREEPY, name="Dreepy", hp=60, energyType=7, maxDamage=0)
+    stats._stats[DRAGA] = CardStat(DRAGA, name="Dragapult ex", hp=320, energyType=7,
+                                   evolvesFrom="Dreepy", minAttackCost=1, minCostDamage=200,
+                                   maxDamage=200, attacks=(16,))
+    pilot = _snipe_pilot(planner_key_threat=True)
+    pilot.stats = stats
+    board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
+                  opp_active=poke(OPP, hp=330), opp_bench=[poke(DREEPY, hp=60)],
+                  hand=[WATER], prizes=3, opp_prizes=3)
+    obs = make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board)
+    d = pilot.explain(obs)
+    assert d.planned is not None and d.planned.goal == "ko_key_threat"
+    assert d.planned.next_step == [0]                  # snipe the base before the monster comes online
+
+
 @pytest.mark.req("REQ-PLANNER-0032")
 def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
     """(a) Layer-on-top: a status-quo KO on the menu (the 120-HP Active — Jetting KOs, and the

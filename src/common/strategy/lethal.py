@@ -22,7 +22,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from common.strategy.context import _ACTIVE, _ATTACH, _ATTACK, _EVOLVE, _MAIN, _RETREAT, KO_SCORE
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _COIN_HEAD, _EVOLVE, _MAIN,
+                                     _RETREAT, KO_SCORE)
 
 
 @dataclass
@@ -51,7 +52,11 @@ class LethalMixin:
     def find_lethal_line(self, obs, select, board, options, traces) -> LethalLine | None:
         """The shortest guaranteed win on the current turn, or None. Only acts at the single-pick
         MAIN menu; every other context (search, snipe, mulligan, multi-select) is untouched."""
-        self._lethal_refutes = 0                       # per-decision engine-refute count (telemetry)
+        if not self._planning:                         # per-decision engine-refute count (telemetry).
+            self._lethal_refutes = 0                   # A verify cascade re-runs decide() -> re-enters
+                                                       # here under _planning: never wipe the OUTER
+                                                       # decision's count mid-scan (an in-sim call can't
+                                                       # refute anyway — the verify gate is closed)
         if select.get("context") != _MAIN or select.get("maxCount", 0) != 1:
             return None
         if board.my_prizes_remaining <= 0:
@@ -146,7 +151,6 @@ class LethalMixin:
         from dataclasses import asdict
 
         from common.strategy.planner import _prune_none
-        _COIN_HEAD = 46                                # SelectContext.COIN_HEAD (manual-coin choice)
         cur = obs.get("current") or {}
         yi = cur.get("yourIndex", 0)
         players = cur.get("players") or []
