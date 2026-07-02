@@ -15,7 +15,7 @@ trustworthy improvement.
   **sparse** — only weights that differ from the authored seed (`tuner.io.sparse_overrides`), so the
   file *is* exactly the deltas that take effect (an empty `{}` means no weight-route corrections
   yet; all leverage is in the proposals). `tune.py` prints the per-id `seed -> new` diff, and
-  `tests/test_tuned_wiring.py` asserts every shipped key is a real Hypothesis id.
+  `tests/agents/test_tuned_wiring.py` asserts every shipped key is a real Hypothesis id.
 - **Hypotheses are a hybrid, gated by a deterministic Verifier.** Claude authors the `when()`
   predicate from the Correction **rationale** (the *authoring spec*, not a footnote) + the live
   feature catalog; the **Verifier** accepts it only if, after re-fitting weights over all

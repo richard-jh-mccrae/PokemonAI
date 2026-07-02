@@ -3,8 +3,8 @@
 **Status.** Accepted (grilled 2026-06-29); **implemented 2026-06-29** — whether-to-play
 (`gust-for-the-ko` + the lethal Tactical term), the `SWITCH(3)` target-select (`_gust_target_tactical`
 = KO + prizes + denial + forward-denial), and the tier-5 stall-gust, all test-first in
-`tests/test_gust.py` + an end-to-end check through the real mega_starmie Pilot. **Refinements
-implemented 2026-06-29** (grilled; `tests/test_attack_value.py` + `tests/test_attack_riders.py`): the
+`tests/strategy/test_gust.py` + an end-to-end check through the real mega_starmie Pilot. **Refinements
+implemented 2026-06-29** (grilled; `tests/strategy/test_attack_value.py` + `tests/scouting/test_attack_riders.py`): the
 special-condition rescue guard + offensive baseline (#10), the Item-vs-Supporter split (#12), the
 simultaneous-double-KO draw-guard (#2, half a), the bench-snipe attack-value bonus (#14), and
 **Resistance** in the KO oracle — see the *Refinements* section below. **Still deferred:** the

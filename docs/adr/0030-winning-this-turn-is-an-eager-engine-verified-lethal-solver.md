@@ -5,10 +5,10 @@
 `LethalMixin` composed into the Pilot) — prize-out + empty-bench wins, attach / retreat / evolve
 unlocks, shortest-first, with a **sound per-attack yield** check (`_attack_wins`, which caught and
 fixed a real false-lethal: a snipe taking 1 of 2 needed prizes was locking). The three in-scope
-CRITICALs (`040c`, `c1e0`, `fd5c`) are gated as regressions ([tests/test_lethal.py](../../tests/test_lethal.py),
+CRITICALs (`040c`, `c1e0`, `fd5c`) are gated as regressions ([tests/strategy/test_lethal.py](../../tests/strategy/test_lethal.py),
 `REQ-LETHAL-0001..0008`). The **Tier-1 Engine-Search backstop** primitive (`_engine_confirms_win`) is
 shipped and proven to round-trip the native `search_begin` / `search_step` on a real observation and
-read the engine's `result` ([tests/test_lethal_engine.py](../../tests/test_lethal_engine.py),
+read the engine's `result` ([tests/strategy/test_lethal_engine.py](../../tests/strategy/test_lethal_engine.py),
 `REQ-LETHAL-0009`). **Remaining follow-up:** driving a full multi-step line to terminal *inside* the
 search (re-running the policy on each intermediate `SearchState`) and gating the lock on it; and strict
 execute-only across the whole turn (a turn-scoped locked line). Extends

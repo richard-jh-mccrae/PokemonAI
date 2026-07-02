@@ -7,7 +7,7 @@ from sim.check_agent import check_contents, check_legality
 
 from conftest import require_kaggle_environments
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 # Self-contained agent fixtures (so tests don't depend on a deletable source agent under
 # src/agents/). `mega_starmie` is a complete, legal, shippable agent copied here.
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"

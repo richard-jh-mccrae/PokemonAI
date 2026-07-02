@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from deck_stealer import StealError, steal  # noqa: E402
 from meta_tracker.parse import parse_replay  # noqa: E402
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "episode-81364540-replay.json.gz"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "episode-81364540-replay.json.gz"
 
 
 def _expected(team: str) -> list[int]:

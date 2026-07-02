@@ -7,7 +7,7 @@ Compiles the **Correction** log into agent improvements. The companion to the
 
 **Status: built and verified end-to-end (TDD).** `tools/train/tuner/` (`attribution`, `featurize`,
 `fit`, `propose`, `run`, `io`) + the engine-backed `tools/train/tune.py` CLI, all green
-(`tests/test_tuner_*.py`). The inspector **auto-embeds `obs`** in every Correction (aligned to
+(`tests/tuner/test_tuner_*.py`). The inspector **auto-embeds `obs`** in every Correction (aligned to
 `film[frame+1]`, verified 43/43); pre-`obs` records are backfilled with
 `tools/train/backfill_obs.py`. `tune.py` produces a per-deck `tuned.json` + Hypothesis proposals
 from the real log. Limitation: multi-select Decisions featurize on the first chosen/correct index
@@ -101,7 +101,7 @@ bought nothing (or traded laterally) and the seeds are kept — so `{}` is the h
 a corpus whose blunders need new *rules*, not reweighting (this is why a hand-curated `tuned.json`
 kept getting reset). `tune.py` prints `W-route: <sat>/<n> satisfied (fit adopted | seeds kept)`, the
 `seed -> new` diff for any adopted change, and an **`UNSATISFIED`** line per correction the shipped
-weights still can't honour (genuine conflict, or needs an H, not a weight). `tests/test_tuned_wiring.py`
+weights still can't honour (genuine conflict, or needs an H, not a weight). `tests/agents/test_tuned_wiring.py`
 guards that every shipped key is a real Hypothesis id. (`tune.py` reconfigures stdout to UTF-8 so the
 `→` in energy-attach labels can't crash the run on a cp1252 console.)
 
@@ -144,7 +144,7 @@ blunder loop reads end to end:
 
 ### System-test coverage (real agent, end to end)
 
-`tests/test_blunder_system.py` exercises the whole feature on the **real** strategy/engine/bundle
+`tests/blunder/test_blunder_system.py` exercises the whole feature on the **real** strategy/engine/bundle
 (skips cleanly if the native engine is absent):
 
 - **ST-1** tag a Decision + author a Correction *with a note* → stored with auto-`obs`, decoded
@@ -154,8 +154,8 @@ blunder loop reads end to end:
 - **ST-4** the packaged bundle **applies the tune in a real decision** (subprocess, cwd = bundle).
 - **ST-5** the packaged bundle **fires a newly committed `when()`** (subprocess).
 
-`tests/test_agent_tuned_system.py` additionally pins that the shipped bundle resolves a tuned weight
-through `Pilot._weight`; `tests/test_tuned_wiring.py` guards that every shipped override key is a
+`tests/agents/test_agent_tuned_system.py` additionally pins that the shipped bundle resolves a tuned weight
+through `Pilot._weight`; `tests/agents/test_tuned_wiring.py` guards that every shipped override key is a
 real Hypothesis id (else it is silently ignored).
 
 ## Future improvements (for a later session)

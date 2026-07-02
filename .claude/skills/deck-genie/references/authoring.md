@@ -47,7 +47,7 @@ local is safe; promotion to general is a deliberate, separately-reviewed step.
 For **each** authored Hypothesis, write a test that builds the engine observation by hand and
 asserts the trigger fires where intended and **not** on an obvious counter-case. Use
 `tests/pilot_helpers.py` (lib-free — no native engine needed). The pattern, from
-`tests/test_general_strategy.py`:
+`tests/strategy/test_general_strategy.py`:
 
 ```python
 from common.pilot import Pilot

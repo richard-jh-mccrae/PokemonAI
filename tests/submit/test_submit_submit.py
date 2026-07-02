@@ -10,7 +10,7 @@ from submit.history import read_history
 from submit.package import REPO, _git_hash
 from submit.submit import compose_message, submit
 
-FIXTURE_AGENTS = Path(__file__).resolve().parent / "fixtures" / "agents"
+FIXTURE_AGENTS = Path(__file__).resolve().parents[1] / "fixtures" / "agents"
 
 
 def _ok(name, agents_root):

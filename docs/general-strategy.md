@@ -162,7 +162,7 @@ The doctrine for a **gust** — force the opponent to switch a benched Pokémon 
 [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md); it supersedes the earlier
 `gust-the-damaged` sketch. A gust is **two** Pilot decisions — *whether to play it* (one Supporter
 per turn; can't be played turn 1 on the play) and *which benched Pokémon to drag up*. Both are now
-**shipped** test-first (`tests/test_gust.py`, plus an end-to-end check through the real mega_starmie
+**shipped** test-first (`tests/strategy/test_gust.py`, plus an end-to-end check through the real mega_starmie
 Pilot). All KO / lethal / prize value lives in the **Tactical layer** (structural, so the weight-tuner
 never ingests a KO_SCORE-magnitude seed); only the two tunable positional weights below are
 Hypotheses. **Refinements shipped 2026-06-29** (ADR-0022 §Refinements): the special-condition rescue
@@ -353,7 +353,7 @@ drives; too clever for now).
 
 ### Shipped — the need-gated rungs (this build, status: testing)
 
-The grab/discard comparator is **built test-first** (`tests/test_fetch_doctrine.py`, REQ-GEN-0035..0040)
+The grab/discard comparator is **built test-first** (`tests/strategy/test_fetch_doctrine.py`, REQ-GEN-0035..0040)
 as five need-gated Hypotheses + greedy multi-pick — the additive scored sum of these *is* `fetch_value`
 (no monolithic function; the ADR-0008 idiom). New `Context`/`Board` gap signals back them
 (`card_is_starter`/`_support`/`_redundant`/`_top_fetch_priority`, `support_in_play`, `in_play_ids`,
@@ -492,7 +492,7 @@ refresh, so the refresh is reached only when nothing else is worth doing. It nev
 (the scan is hand-only; attacks stay last-tier turn-enders in `_finish_turn_last`, after the tier-3
 shuffle, so a dead-hand + lethal refreshes **then** KOs the same turn).
 
-**v1 = Layer A (the dead-hand fallback) — shipped (ADR-0024), test-first (`tests/test_shuffle_refresh.py`).**
+**v1 = Layer A (the dead-hand fallback) — shipped (ADR-0024), test-first (`tests/strategy/test_shuffle_refresh.py`).**
 
 #### `refresh-when-hand-is-dead` · weight +8 · status: testing
 > Play a Shuffle-Refresh **only when the hand is dead** — `shuffle_hand and board.hand_is_dead and

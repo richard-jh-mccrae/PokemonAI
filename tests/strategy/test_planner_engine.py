@@ -18,7 +18,7 @@ from common.scouting.provider import EngineCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 MEGA = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
 
 

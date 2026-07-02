@@ -68,5 +68,5 @@ Exit code is 0 if every stage passes, 1 otherwise.
 python -m pytest tests/ -q
 
 # full harness incl. the cabt stages (in the venv)
-.venv\Scripts\python -m pytest tests/test_check_agent.py -q
+.venv\Scripts\python -m pytest tests/sim/test_check_agent.py -q
 ```

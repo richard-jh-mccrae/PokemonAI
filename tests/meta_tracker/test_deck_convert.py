@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from deck_convert import (  # noqa: E402
     ConvertError, REPO, _indexes, check_legality, convert_to_csv,
     render_txt, resolve_deck,

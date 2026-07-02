@@ -3,7 +3,7 @@
 **Status.** Accepted (grilled 2026-06-29); **Layer-A premise PARTLY REVERSED 2026-06-30** — the
 `dig-before-commit` boundary guard is removed (see the Update note at the end of this Status block).
 **Layer A core implemented 2026-06-29** test-first
-(`tests/test_shuffle_refresh.py`, REQ-GEN-0042…0046). v1 scope = **Layer A** (the dead-hand fallback):
+(`tests/strategy/test_shuffle_refresh.py`, REQ-GEN-0042…0046). v1 scope = **Layer A** (the dead-hand fallback):
 the `refresh-when-hand-is-dead` Hypothesis + the `Board.hand_is_dead` (full real-menu play-scan) and
 `deck_holds_a_need` signals; the tag rename `discard_hand`→`shuffle_hand` + the `function_overrides.json`
 durability fix; and the `dig-before-commit` boundary guard (a refresh no longer gets the early-dig
@@ -129,7 +129,7 @@ comparator (a future reader who sees them scattered should read this ADR + ADR-0
 The build adds two `Board` signals (`hand_is_dead` via a hand-card play-scan reusing the
 `_fetch_fills_a_need` virtual-scoring pattern; `deck_holds_a_need`) and one Hypothesis
 (`refresh-when-hand-is-dead`); the tag rename + `function_overrides.json` durability fix; and tests
-`tests/test_shuffle_refresh.py` (REQ-GEN-0042…), test-first per the global testing standard.
+`tests/strategy/test_shuffle_refresh.py` (REQ-GEN-0042…), test-first per the global testing standard.
 Layer B (stochastic pull-EV), the `hand_disruption` offensive axis, and deck-overrides arrive on the
 designed-in seams without reshaping the comparator. Documented in
 [general-strategy.md](../general-strategy.md#shuffle-refresh-doctrine--designed-adr-0024); glossary in

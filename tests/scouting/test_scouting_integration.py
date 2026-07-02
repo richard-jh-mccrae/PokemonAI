@@ -13,7 +13,7 @@ from meta_tracker.cards import load_cards
 from meta_tracker.compile_scouting import compile_artifact
 from meta_tracker.parse import extract_decks, load_replay
 
-REPLAY = Path(__file__).resolve().parent / "fixtures" / "episode-81364540-replay.json.gz"
+REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "episode-81364540-replay.json.gz"
 NOW = "2026-06-23T00:00:00"
 
 

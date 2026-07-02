@@ -11,7 +11,7 @@ import pytest
 
 from conftest import require_kaggle_environments
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 
 

@@ -1,7 +1,7 @@
 # ADR-0023: Fetch decisions are one shared closed-form value comparator (importance × gap × availability), board-only, Read-deferred
 
 **Status.** Accepted (grilled 2026-06-29); **core implemented 2026-06-29** test-first
-(`tests/test_fetch_doctrine.py`, REQ-GEN-0035..0040). **Shipped this build** — the need-gated grab/discard
+(`tests/strategy/test_fetch_doctrine.py`, REQ-GEN-0035..0040). **Shipped this build** — the need-gated grab/discard
 rungs `fetch-a-starter`, `fetch-the-support`, `fetch-deck-priority` (Tier-3 `Strategy.fetch_priority`),
 `discard-the-redundant`, `prefer-good-in-discard` (the `discard_fodder` Role), **greedy multi-pick**
 (`_greedy_grab`: gap-update + take-fewer, after verifying multi-fetches are single `maxCount>1` selects),

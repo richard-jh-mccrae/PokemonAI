@@ -169,7 +169,7 @@ style; skip only the ones that don't apply to serial mode):
      soundness gate.
    - **`lethal` non-null but the human rejects the pick** → the Solver over-fired (a false / wrong
      lock): tighten `_attack_wins` / the win-gate.
-   Resolve it in-session by editing the Solver **plus a focused unit test in `tests/test_lethal.py`** (a
+   Resolve it in-session by editing the Solver **plus a focused unit test in `tests/strategy/test_lethal.py`** (a
    step-4b-style infra fix, **not** a Hypothesis). The **retest** (step 6, which re-runs `explain()` and
    now carries `lethal`) is the before/after proof; suite-green (step 7) is the guard. The Hypothesis
    **Verifier (step 5) does not gate a Solver-code fix** — skip it for these clusters; the retest + suite
@@ -187,7 +187,7 @@ style; skip only the ones that don't apply to serial mode):
    - `src/common/strategy/lethal.py` — the **Lethal Solver** (ADR-0030). Where a lethal-layer blunder
      (`live_trace.lethal` set, or `null` on a missed win — step 2) is fixed: `find_lethal_line` (win
      detection + unlock kinds) and `_attack_wins` (soundness). The Solver short-circuits scoring, so
-     these are **code fixes here + a `tests/test_lethal.py` test**, never a `when()` Hypothesis.
+     these are **code fixes here + a `tests/strategy/test_lethal.py` test**, never a `when()` Hypothesis.
 
 4. **Author the candidate `when()`** from the cluster's RATIONALES (the authoring spec):
    - Prefer **universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s.

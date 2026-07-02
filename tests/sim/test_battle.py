@@ -7,7 +7,7 @@ from sim.battle import (AgentServer, BattleMatch, MatchResult, balanced_tally, f
                         parse_spec, play_match, read_deck, resolve, resolve_contestant, run_battle,
                         seat_plan, tally, to_battle_match, wilson_ci)
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 MEGA = FIXTURE_AGENTS / "mega_starmie"          # a complete, legal, self-playing source agent
 SRC = [REPO / "src"]                            # the source fixture isn't self-contained; cg/common live in src
