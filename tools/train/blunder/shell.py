@@ -192,6 +192,8 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  .item{border:1px solid #e4e4e4;border-radius:5px;padding:6px 8px;margin:5px 0;font-size:12px;background:#fafafa}
  .item .x{color:#b00;cursor:pointer;float:right;font-weight:700;margin-left:8px}
  .item .ed{color:#06c;cursor:pointer;float:right} .item i{color:#666}
+ .crit{display:flex;align-items:center;gap:6px;color:#c00;font-weight:700;margin:12px 0 0}
+ .crit input{width:auto;margin:0}
 </style></head><body>
 <div id="left">
  <div id="vbar">
@@ -220,6 +222,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  <label>Correct move(s) — the better legal option</label><select id="correct" multiple></select>
  <label>Source</label><select id="source"></select>
  <label>Attribution (optional)</label><input id="attribution" placeholder="hypothesis:&lt;id&gt; / missing_hypothesis / tactical / value / scouting">
+ <label class="crit" title="blunder-buster resolves CRITICAL blunders first, one at a time, and never leaves one unfixed"><input type="checkbox" id="critical"> Critical</label>
  <label>Rationale — state the <b>general rule</b>, not just this instance</label><textarea id="rationale" placeholder="The rule the agent should learn (e.g. 'snipe the highest-threat benched attacker with energy'), then the intended line. This becomes the when() the Tuner authors."></textarea>
  <button id="save">Save blunder ▸ ship</button>
  <div id="msg"></div><div id="log"></div>
@@ -229,8 +232,14 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 <script>
 let FR=[],META={},i=0,replayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
 const $=id=>document.getElementById(id);
-const FORM=['category','correct','source','attribution','rationale','save'];
+const FORM=['category','correct','source','attribution','critical','rationale','save'];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+// The CRITICAL marker lives IN the rationale (case-sensitive word-boundary token, mirrors
+// train.blunder.correction.is_critical). The checkbox is a bidirectional toggle of that token,
+// so downstream (proposals/dashboard/blunder-buster) needs no change.
+const CRIT_RE=/\\bCRITICAL\\b/;
+const applyCritical=(t,on)=>{const s=t.replace(/\\bCRITICAL\\b[:：]?\\s*/g,'').replace(/^\\s+/,''); return on?('CRITICAL: '+s):s;};
+const syncCrit=()=>{$('critical').checked=CRIT_RE.test($('rationale').value);};
 const analyzeVal=()=>$('analyze').value;
 const viewSeat=()=>{const v=analyzeVal(); return v==='both'?0:+v;};
 const isOwn=seat=>{const v=analyzeVal(); return v==='both'||+v===seat;};
@@ -255,7 +264,8 @@ async function refreshList(){
   $('list').innerHTML=LIST.map((it,k)=>
     `<div class="item"><span class="x" onclick="removeItem(${k})">✕</span>`+
     `<span class="ed" onclick="editItem(${k})">edit</span>`+
-    `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}<br>`+
+    `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}`+
+    (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+`<br>`+
     `→ ${esc(it.correct_label||('opt '+it.correct.join(',')))}`+
     (it.rationale?`<br><i>${esc(it.rationale)}</i>`:'')+`</div>`).join('');
 }
@@ -269,6 +279,7 @@ function editItem(k){
   const it=LIST[k]; if(!it) return;
   gotoStep(it.step);
   $('category').value=it.category; $('rationale').value=it.rationale||''; $('source').value=it.source;
+  syncCrit();
   [...$('correct').options].forEach(o=>o.selected=it.correct.includes(+o.value));
   editingId=it.id; $('msg').className=''; $('msg').textContent='editing — Save to replace'; $('right').scrollTop=0;
 }
@@ -276,7 +287,9 @@ async function boot(){
   META=await (await fetch('/meta.json')).json();
   META.categories.forEach(c=>$('category').add(new Option(c,c)));
   META.sources.forEach(s=>$('source').add(new Option(s,s)));
-  $('analyze').onchange=()=>{openColorful('viewer'); show(i);};
+  $('critical').onchange=()=>{$('rationale').value=applyCritical($('rationale').value,$('critical').checked);};
+  $('rationale').oninput=syncCrit;
+  $('analyze').onchange=()=>{openColorful('viewer'); fillPick(); show(i);};
   $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
   loadGame();
 }
@@ -295,8 +308,7 @@ async function loadGame(){
   $('analyze').add(new Option('both (self-play) — all own','both'));
   $('analyze').value=String(seat);
   $('step').max=total; $('oftotal').textContent='/'+total;
-  $('pick').innerHTML='';
-  FR.forEach((f,k)=>$('pick').add(new Option(`${f.step}/${total} · T${f.turn} · ${f.context||'—'}${f.taggable?'':' (—)'}`,k)));
+  fillPick();
   editingId=null;
   openColorful('viewer'); show(0); refreshList();
 }
@@ -313,23 +325,24 @@ function show(n){
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
     `<div><b>${f.context||'(no decision here)'}</b>${f.type?' ('+f.type+')':''}</div>`;
   if(f.selected_label) h+=`<div>engine selected: <b>${f.selected_label}</b></div>`;
-  if(f.live) h+=liveTraceHtml(f);
   $('now').innerHTML=h;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);
   $('msg').className=''; $('msg').textContent=f.taggable?'':'(not a taggable frame — step to a decision)';
+  syncCrit();
 }
-function liveTraceHtml(f){
-  const t=f.live, ch=new Set(t.chosen||[]);
-  const lbl=p=>{const o=(f.options||[]).find(o=>o.pos===p.i); return o?o.label:('opt '+p.i);};
-  const rows=t.opts.map(p=>{
-    const fired=(p.fired||[]).map(x=>`${x[0]} ${x[1]>0?'+':''}${x[1]}`).join(', ')||'—';
-    return `<div${ch.has(p.i)?' style="font-weight:700"':''}>`+
-      `${ch.has(p.i)?'▶ ':'&nbsp;&nbsp;'}${esc(lbl(p))} · <b>${p.score}</b>`+
-      (p.tac?` (tac ${p.tac})`:'')+` <span style="color:#777">${esc(fired)}</span></div>`;}).join('');
-  return `<div style="margin-top:6px;border-top:1px dashed #cbd; padding-top:4px">`+
-    `<div style="color:#446">live agent trace — plan ${esc(t.plan)} · tier ${t.tier} · margin ${t.margin}</div>`+
-    rows+`</div>`;
+function pickOption(f,k){
+  // Our-agent decisions stand out: ▶ marker + bold (bold on <option> is browser-dependent, the
+  // marker is the reliable cue). Show the turn, then the decision taken — easier to eyeball.
+  const own=isOwn(f.seat), act=f.selected_label||f.context||'—';
+  const o=new Option(`${f.step}/${total} · T${f.turn} · ${own?'▶ ':''}${act}${f.taggable?'':' (—)'}`,k);
+  if(own) o.style.fontWeight='bold';
+  return o;
+}
+function fillPick(){
+  const cur=$('pick').value; $('pick').innerHTML='';
+  FR.forEach((f,k)=>$('pick').add(pickOption(f,k)));
+  if(cur!=='') $('pick').value=cur;
 }
 function gotoStep(s){const k=FR.findIndex(f=>f.step==s); if(k>=0)show(k);}
 $('prev').onclick=()=>show(i-1); $('next').onclick=()=>show(i+1);
@@ -340,7 +353,8 @@ $('plain').onclick=()=>{$('viewer').src='/viewer/';};
 $('save').onclick=async()=>{
   const f=FR[i], correct=[...$('correct').selectedOptions].map(o=>+o.value), own=isOwn(f.seat);
   if(!correct.length){$('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
-  const body={frame:f.frame,correct,category:$('category').value,rationale:$('rationale').value,
+  const rationale=applyCritical($('rationale').value,$('critical').checked);   // checkbox owns the CRITICAL token
+  const body={frame:f.frame,correct,category:$('category').value,rationale,
     source:$('source').value, agent: own?META.agent:pname(f.seat),
     submission_id: own?META.submission_id:null, attribution:$('attribution').value,
     editing_id: editingId||''};   // edit flow: lets the server allow replacing this same tag
@@ -349,7 +363,7 @@ $('save').onclick=async()=>{
   if(j.ok){
     if(editingId){await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:editingId})}); editingId=null;}
     saved++; $('msg').textContent=`saved: ${pname(f.seat)} · ${j.source} · ${j.category} → ${j.correct_label}`;
-    $('log').textContent=`${saved} blunder(s) shipped this session`; $('rationale').value=''; refreshList();
+    $('log').textContent=`${saved} blunder(s) shipped this session`; $('rationale').value=''; syncCrit(); refreshList();
   } else $('msg').textContent='error: '+j.error;
 };
 boot();

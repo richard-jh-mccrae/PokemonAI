@@ -65,6 +65,16 @@ def test_proposals_snapshot_serializes_critical(tmp_path):
     assert data["skipped"][0]["critical"] is True
 
 
+def test_shell_ui_exposes_critical_checkbox():
+    """REQ-BLUNDER-0013: the tagging shell renders a red Critical checkbox that owns the CRITICAL
+    token in the rationale (bidirectional), so the human sets it without hand-typing the marker."""
+    from train.blunder.shell import _SHELL_HTML
+    assert 'id="critical"' in _SHELL_HTML and 'type="checkbox"' in _SHELL_HTML
+    assert "class=\"crit\"" in _SHELL_HTML                       # the red styling hook
+    assert f"'{CRITICAL_MARKER}: '" in _SHELL_HTML               # applyCritical prepends the exact token
+    assert "syncCrit" in _SHELL_HTML                             # box tracks the rationale text
+
+
 def test_report_badges_critical(tmp_path):
     """REQ-BLUNDER-0013: the offline dashboard badges a CRITICAL blunder (and stays offline)."""
     log = tmp_path / "c.jsonl"
