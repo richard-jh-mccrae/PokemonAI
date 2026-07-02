@@ -285,3 +285,85 @@ def test_fetch_endorsement_is_silent_when_no_need_remains():
                       current=state(active=poke(WINC, energy=3),
                                     bench=[poke(701), poke(702), poke(703)], hand=[ULTRA]))
     assert "fetch-when-it-fills-a-need" not in _fired(pilot.explain(obs).options[0])
+
+
+# --- play-a-tutor-for-the-unfound-wincon: folded from mega_starmie `tutor-the-wincon` ------------
+@pytest.mark.req("REQ-GEN-0058")
+def test_play_a_tutor_for_the_unfound_wincon_is_role_keyed_and_gated_on_wincon_in_hand():
+    """During SETUP a `tutor`-Roled Trainer is endorsed while the win-condition is unfound; the
+    endorsement stands down once the payoff is already in hand."""
+    TUTOR = 1145
+    strat = Strategy(roles={TUTOR: ["tutor"], WINC: ["win_condition"]},
+                     lines=[Line(path=[BASIC, WINC], payoff=WINC, role="win_condition")])
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+
+    digging = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                          current=state(hand=[TUTOR, 111]))
+    assert "play-a-tutor-for-the-unfound-wincon" in _fired(pilot.explain(digging).options[0])
+    assert "play-a-tutor-for-the-unfound-wincon" not in _fired(pilot.explain(digging).options[1])
+
+    held = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                       current=state(hand=[TUTOR, WINC]))
+    assert "play-a-tutor-for-the-unfound-wincon" not in _fired(pilot.explain(held).options[0])
+
+
+# --- dont-fetch-the-setup-only-opener: folded from mega_starmie `never-fetch-cinderace` ----------
+@pytest.mark.req("REQ-GEN-0061")
+def test_dont_fetch_the_setup_only_opener_requires_the_stranded_evolution_chain():
+    """An `opener`-tagged card is penalised at a search ONLY when its previous-stage chain is
+    unreachable from the deck list (dead in hand — e.g. a Stage-2 Explosiveness opener with no
+    Stage 1 in the deck). With the chain present the penalty must stand down."""
+    OPENER, RABOOT = 666, 667
+    stats = DictCardStatProvider({
+        OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot", hasAbility=True),
+        RABOOT: CardStat(RABOOT, name="Raboot", hp=90),                  # a Basic in these stats
+        BASIC: CardStat(BASIC, hp=70)})
+    funcs = CardFunctions({OPENER: ["opener"]})
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
+                      deck=[{"id": OPENER}, {"id": BASIC}], current=state(hand=[]))
+
+    # no Raboot in the deck list -> the opener can never be deployed from hand -> penalised.
+    stranded = Pilot(Strategy(), deck=[OPENER] * 4 + [1] * 56,
+                     general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    assert "dont-fetch-the-setup-only-opener" in _fired(stranded.explain(obs).options[0])
+    assert "dont-fetch-the-setup-only-opener" not in _fired(stranded.explain(obs).options[1])
+    assert stranded.decide(obs) == [1]                    # take the line piece, never the opener
+
+    # Raboot (a Basic here) in the deck -> the opener is evolvable from hand -> no penalty.
+    fed = Pilot(Strategy(), deck=[OPENER] * 4 + [RABOOT] * 4 + [1] * 52,
+                general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    assert "dont-fetch-the-setup-only-opener" not in _fired(fed.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0061")
+def test_stranded_chain_check_walks_the_full_previous_stage_chain():
+    """Chain reachability is FULL-depth: Stage 1 present but ITS Basic missing -> still stranded."""
+    OPENER, RABOOT = 666, 667
+    stats = DictCardStatProvider({
+        OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
+        RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),  # its own base missing
+        BASIC: CardStat(BASIC, hp=70)})
+    funcs = CardFunctions({OPENER: ["opener"]})
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
+                      deck=[{"id": OPENER}, {"id": BASIC}], current=state(hand=[]))
+    pilot = Pilot(Strategy(), deck=[OPENER] * 4 + [RABOOT] * 4 + [1] * 52,
+                  general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    assert "dont-fetch-the-setup-only-opener" in _fired(pilot.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0061")
+def test_fetch_the_support_never_endorses_a_stranded_support():
+    """An engine-tagged Pokémon that is a stranded evolution (energy_accel Cinderace, no Raboot in
+    deck) is a dead grab — `fetch-the-support` must not endorse it even with no support in play."""
+    OPENER, LIVEMON = 666, 868
+    stats = DictCardStatProvider({
+        OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
+        LIVEMON: CardStat(LIVEMON, name="Livemon", hp=90)})          # a Basic support
+    funcs = CardFunctions({OPENER: ["opener", "energy_accel"], LIVEMON: ["energy_accel"]})
+    pilot = Pilot(Strategy(), deck=[OPENER] * 4 + [LIVEMON] * 2 + [1] * 54,
+                  general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
+                      deck=[{"id": OPENER}, {"id": LIVEMON}], current=state(hand=[]))
+    stranded, live = pilot.explain(obs).options
+    assert "fetch-the-support" not in _fired(stranded)   # dead grab, engine tag notwithstanding
+    assert "fetch-the-support" in _fired(live)           # a deployable support keeps the rung

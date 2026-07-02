@@ -159,7 +159,7 @@ win-condition* with no base)
 A **benched** Line member (a pre-evolution or the payoff) that a bench-targeting accelerator loads
 Energy onto — e.g. Cinderace's Turbo Flare attaches 3 Basic Energy to the Bench, so a benched Staryu
 is its recipient. With **no** recipient the acceleration is wasted, so developing one is the top setup
-priority while the accelerator is Active (`accel_recipient_missing` → `develop-turbo-flare-recipient`).
+priority while the accelerator is Active (`accel_recipient_missing` → `develop-the-accel-recipient`).
 _Avoid_: target (overloaded — reserve "recipient" for the body that *receives* accelerated Energy)
 
 **Pilot**:

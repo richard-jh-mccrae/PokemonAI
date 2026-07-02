@@ -23,7 +23,7 @@ HYPOTHESES = [
                   "play to evolve — without an evolution target the rush-evolve does nothing — AND "
                   "when the payoff is already in hand: you can evolve directly this turn, so spending "
                   "a tutor (and a second copy from the deck) to do the same is wasteful (mirrors "
-                  "`tutor-the-wincon`'s `not wincon_in_hand` gate). ALSO stands down when the tutor's "
+                  "`play-a-tutor-for-the-unfound-wincon`'s `not wincon_in_hand` gate). ALSO stands down when the tutor's "
                   "evolution target is provably GONE from the deck (`search_targets_exhausted`, the "
                   "sound deck-oracle over its `rush_evolve` fetch-filter): with an in-play Staryu but "
                   "every Mega Starmie ex prized/played, Salvatore whiffs — don't endorse it (ep83117367). "

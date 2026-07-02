@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from common.strategy.context import (_BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _PLAY, _SETUP_BENCH,
-                                      _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH, _TO_HAND,
-                                      _WINCON_ROLES)
+from common.strategy.context import (_BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG, _PLAY,
+                                      _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
+                                      _TO_HAND, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis, Plan
 
 # A reliable-engine Supporter (draw / search / heal) is fuel you keep at a forced discard, unlike a
@@ -138,6 +138,7 @@ class FetchMixin:
             card_is_wincon=cid in self._wincon_set(),
             card_is_starter=bool(stat and stat.hp > 0 and not stat.evolvesFrom),
             card_is_support=bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags))),
+            card_stranded_evolution=cid in self._stranded_evolution_set(),
             card_is_top_fetch_priority=(cid == board.top_fetch_priority_id),
             roles=roles, tags=tags, stat=stat, board=board)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
@@ -331,7 +332,7 @@ HYPOTHESES = [
                   "`Context.search_redundant_wincon`: fetch-set ⊆ the win-condition set AND either "
                   "`wincon_in_hand` or `wincon_in_play and not wincon_base_deployable`) so the agent "
                   "develops / attaches / refreshes instead of burning the turn on a useless dig. "
-                  "Mirrors the deck's `tutor-the-wincon` gate but ACTIVELY penalises, cancelling "
+                  "Mirrors `play-a-tutor-for-the-unfound-wincon`'s gate but ACTIVELY penalises, cancelling "
                   "`dig-before-commit`'s blanket endorsement of any search. Stays silent for a "
                   "flexible tutor (Ultra Ball can also fetch a pre-evolution / opener, so its "
                   "fetch-set isn't ⊆ the wincon).",
@@ -379,6 +380,21 @@ HYPOTHESES = [
         and not (c.stat and (getattr(c.stat, "ex", False) or getattr(c.stat, "megaEx", False))),
         weight=12, status="testing"),
     Hypothesis(
+        id="dont-fetch-the-setup-only-opener",
+        rationale="At a search, never take a SETUP-ONLY opener into hand: an `opener`-tagged "
+                  "Pokémon (its Ability opens the Active Spot at game start, e.g. Explosiveness) "
+                  "whose previous-stage chain is absent from the deck list "
+                  "(`card_stranded_evolution` — a Stage 2 with no Stage 1 anywhere in the deck) can "
+                  "never be played from hand, so the fetched copy is a dead card. Pull a live piece "
+                  "instead. The structural guard keeps it honest for future decks: an opener whose "
+                  "evolution line IS in the deck stays fetchable. Gated to a grab (TO_HAND), so it "
+                  "never touches the legitimate open-with-it choice during set-up. Folded from "
+                  "mega_starmie `never-fetch-cinderace` (same trigger + weight for that deck — "
+                  "Cinderace is stranded there by construction).",
+        when=lambda c: c.select_context == _TO_HAND and _OPENER_TAG in c.tags
+        and c.card_stranded_evolution,
+        weight=-60, status="assumed"),
+    Hypothesis(
         id="fetch-the-support",
         rationale="When a search lets you choose a card AND you have no engine/support Pokémon in play, "
                   "take one — a Pokémon whose Ability draws, accelerates Energy or searches (Function "
@@ -386,9 +402,12 @@ HYPOTHESES = [
                   "turn, so when you lack one it is a high-value grab, second only to the win-condition "
                   "and energy-when-starved. Gap-gated off `Board.support_in_play` — stands down once an "
                   "engine is online (no dead second engine). Derived structurally (a Pokémon carrying an "
-                  "engine tag), so any deck inherits it; a deck refines which engine via its Roles.",
+                  "engine tag), so any deck inherits it; a deck refines which engine via its Roles. "
+                  "Never endorses a STRANDED evolution (`card_stranded_evolution` — a support you can't "
+                  "deploy from hand, e.g. an energy_accel Cinderace with no Raboot in deck, is a dead "
+                  "grab no matter how good its engine is; cf `dont-fetch-the-setup-only-opener`).",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_support
-        and not c.board.support_in_play,
+        and not c.card_stranded_evolution and not c.board.support_in_play,
         weight=15, status="testing"),
     Hypothesis(
         id="fetch-when-it-fills-a-need",
@@ -406,6 +425,21 @@ HYPOTHESES = [
                   "raw grab). The full cost-netting (subtract the shed cards) and Plan-scaled bar remain.",
         when=lambda c: c.option_type == _PLAY and c.fetch_fills_a_need,
         weight=8, status="testing"),
+    Hypothesis(
+        id="play-a-tutor-for-the-unfound-wincon",
+        rationale="During SETUP, play a `tutor`-Roled card to dig for the win-condition pieces. "
+                  "Role-keyed: the deck names which of its Trainers exist to assemble the line "
+                  "(choosing WHICH card the search then pulls is `fetch-the-wincon` / "
+                  "`fetch-energy-when-starved`). Stands down once the win-condition is already in "
+                  "hand — no need to dig for a copy you're holding — AND when the tutor's entire "
+                  "fetch-set is provably GONE from the deck (`search_targets_exhausted`): a "
+                  "wincon-only tutor with every payoff copy prized/played can dig up nothing, so "
+                  "endorsing it burns the turn on a whiff (ep83117367); a flexible tutor keeps its "
+                  "endorsement. Folded from mega_starmie `tutor-the-wincon` (same trigger + weight); "
+                  "co-fires with `fetch-when-it-fills-a-need` exactly as the deck rule did.",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles
+        and not c.board.wincon_in_hand and not c.search_targets_exhausted,
+        weight=25, status="assumed"),
     Hypothesis(
         id="hold-costly-fetch-when-line-assembled",
         rationale="Cost-net a DISCARD-cost fetch (Ultra Ball pays 2 cards) against a marginal need: "
@@ -505,7 +539,7 @@ HYPOTHESES = [
         rationale="At a forced discard, shed a setup-only opener you can no longer play — a card whose "
                   "only way into play is its game-start Ability (Function Tag `opener`, e.g. Cinderace's "
                   "Explosiveness; no Raboot line to hard-play it). Once the game is under way a held copy "
-                  "is a dead card (the mirror of `never-fetch-cinderace`, which never TAKES one), so it "
+                  "is a dead card (the mirror of `dont-fetch-the-setup-only-opener`, which never TAKES one), so it "
                   "is the best thing to pitch. A positive weight ranks it among the discards.",
         when=lambda c: c.select_context == _DISCARD and "opener" in c.tags,
         weight=20, status="testing"),

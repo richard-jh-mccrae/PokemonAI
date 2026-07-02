@@ -398,6 +398,15 @@ class Context:
     card_is_support: bool = False      # this option's card is an engine/support Pokémon (hp > 0 with a
                                        # draw/accel/search Ability, see _ENGINE_TAGS) — the
                                        # `fetch-the-support` grab rung. Derived off CardStat + tags.
+    card_stranded_evolution: bool = False  # this option's card is an evolution that can NEVER be
+                                       # deployed from hand in THIS deck: its previous-stage chain
+                                       # (CardStat.evolvesFrom names) can't reach a Basic using only
+                                       # cards on the deck list (a Stage-2 Explosiveness opener with
+                                       # no Stage 1 — Cinderace without Raboot). Deck-static; gates
+                                       # `dont-fetch-the-setup-only-opener`.
+    params: dict = field(default_factory=dict)  # the deck's Strategy.params, passed through so a
+                                       # general rule can honor a deck-declared intent (e.g.
+                                       # `preferred_start` -> `honor-preferred-start`). Read-only.
     card_is_top_fetch_priority: bool = False  # this candidate IS the deck's highest-priority fetch
                                        # target present (== board.top_fetch_priority_id) — the Tier-3
                                        # explicit-list grab override (`fetch-deck-priority`)
@@ -936,6 +945,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         card_is_wincon = cid is not None and cid in self._wincon_set()
         card_is_starter = bool(stat and stat.hp > 0 and not stat.evolvesFrom)
         card_is_support = bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags)))
+        card_stranded_evolution = cid is not None and cid in self._stranded_evolution_set()
         card_is_top_fetch_priority = cid is not None and cid == board.top_fetch_priority_id
         card_is_redundant = cid is not None and cid in board.in_play_ids
         card_is_hand_duplicate = cid is not None and cid in board.hand_duplicate_ids
@@ -1001,6 +1011,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        attach_from_target_is_concentrate=attach_from_concentrate,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
+                       card_stranded_evolution=card_stranded_evolution,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
                        card_is_redundant=card_is_redundant,
                        card_is_hand_duplicate=card_is_hand_duplicate,
@@ -1015,7 +1026,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        card_prize_value=card_prize_value,
                        promote_target_can_attack=promote_target_can_attack,
                        promote_target_hits_weakness=promote_target_hits_weakness,
-                       roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
+                       roles=roles, tags=tags, stat=stat, board=board, params=self.strategy.params,
+                       is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon,
@@ -1285,6 +1297,31 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         """Card ids that are a non-payoff member of a Line's path — a pre-evolution that builds
         toward the win-condition payoff (e.g. Staryu on the Staryu → Mega Starmie line)."""
         return {cid for line in self.strategy.lines for cid in line.path if cid != line.payoff}
+
+    def _stranded_evolution_set(self) -> frozenset:
+        """Deck card ids that can NEVER be deployed from hand in this deck: evolutions whose
+        previous-stage chain (`CardStat.evolvesFrom` names, walked to full depth) can't reach a
+        Basic using only cards on the deck list — e.g. a Stage-2 Explosiveness opener with no
+        Stage 1 in the deck (Cinderace without Raboot): in hand it is a dead card. Deck-static,
+        so computed once; empty without a stats provider (fail-open — no card is called dead
+        on unknown facts)."""
+        cached = getattr(self, "_stranded_cache", None)
+        if cached is not None:
+            return cached
+        stats = {cid: self.stats.get(cid) for cid in set(self.deck)} if self.stats else {}
+        by_name = {st.name: st for st in stats.values() if st and st.name}
+
+        def deployable(st, seen=()) -> bool:
+            if st is None or not st.evolvesFrom:      # unknown facts fail-open; a Basic grounds out
+                return True
+            if st.evolvesFrom in seen:                # a name cycle can't ground out in a Basic
+                return False
+            prev = by_name.get(st.evolvesFrom)
+            return prev is not None and deployable(prev, (*seen, st.evolvesFrom))
+
+        self._stranded_cache = frozenset(
+            cid for cid, st in stats.items() if st and st.evolvesFrom and not deployable(st))
+        return self._stranded_cache
 
     def _line_preevo_in_play(self, me: dict) -> bool:
         """True if a non-payoff member of any Line's path (a pre-evolution) is on my Active/Bench —

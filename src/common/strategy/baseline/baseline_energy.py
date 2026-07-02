@@ -72,6 +72,19 @@ HYPOTHESES = [
         when=lambda c: c.plan == Plan.SETUP and c.option_type == _ATTACH,
         weight=-5, status="assumed"),
     Hypothesis(
+        id="advance-the-accel-pieces",
+        rationale="During SETUP, advance your own acceleration pieces — PLAY or ATTACH a card the "
+                  "deck Roles `accel_source` (e.g. Ignition Energy: one attach = CCC on an "
+                  "Evolution; or benching/feeding a bench-accelerator). Role-keyed: the deck opts "
+                  "in by naming its accelerators, so the rule stays silent for decks without any. "
+                  "NB this co-fires additively with the other SETUP energy rules on an attach "
+                  "toward the win-condition (`build-active-wincon` +20, `power-up-attacker` +15, "
+                  "`attach-energy-last` -5) — tune it against that cluster, not alone. Folded from "
+                  "mega_starmie `accel-into-main` (same trigger + weight).",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _ATTACH)
+        and "accel_source" in c.roles,
+        weight=30, status="assumed"),
+    Hypothesis(
         id="use-acceleration",
         rationale="Energy acceleration multiplies your one manual attachment per turn — getting "
                   "attackers online faster is tempo-positive for any deck, so prioritise playing "
@@ -149,6 +162,24 @@ HYPOTHESES = [
                 and not (_WINCON_ROLES & set(c.attach_target_roles)))), # … and not the wincon: pure waste
         weight=-60, status="testing"),   # near-imperative: must beat the accel boosts on a wasted attach
     Hypothesis(
+        id="conserve-discard-energy-prefer-basic",
+        rationale="A discard-at-end-of-turn burst Energy (`discard_eot`, e.g. Ignition — 4 copies, "
+                  "discarded each turn, not recoverable) is a finite resource whose value is the "
+                  "big-attack turn. So don't spend it when the win-condition's CHEAP attack already "
+                  "Knocks Out the opponent's Active AND a reusable Basic is in hand: attach the "
+                  "Basic (and take the cheap KO), saving the burst for a turn that genuinely needs "
+                  "the bulk. Stands down when the cheap attack CAN'T KO — it never blocks the burst "
+                  "you actually need. The strong, KO-aware sibling of the tie-break nudge "
+                  "`prefer-reusable-over-burst` (−12, which co-fires here); `build-active-wincon` "
+                  "carries the matching carve-out (stands down for a `discard_eot` attach when "
+                  "`active_cheap_attack_kos`), and `dont-waste-discard-energy` exempts the wincon — "
+                  "so 'prefer the Basic' wins by this rule's full margin. Folded from mega_starmie "
+                  "`conserve-ignition-prefer-water` (same trigger + weight).",
+        when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags
+        and c.attach_target_area == _ACTIVE and bool(_WINCON_ROLES & set(c.attach_target_roles))
+        and c.board.reusable_energy_in_hand and c.board.active_cheap_attack_kos,
+        weight=-40, status="assumed"),
+    Hypothesis(
         id="conserve-burst-when-no-ko",
         rationale="`dont-waste-discard-energy` EXEMPTS the win-condition — a burst Energy's bulk "
                   "acceleration (Ignition CCC toward Nebula Beam) is normally the whole point. But when "
@@ -176,8 +207,8 @@ HYPOTHESES = [
                   "stops the moment the big attack is online and never over-stacks a finished attacker. "
                   "Carve-out: stands down for a one-shot discard-EOT Energy (`discard_eot`, e.g. Ignition) "
                   "when the Active's CHEAP attack already KOs (`active_cheap_attack_kos`) — the big attack "
-                  "isn't needed this turn, so endorsing the burn would needlessly fight a deck's "
-                  "conserve-the-burst rule (e.g. mega_starmie `conserve-ignition-prefer-water`); a reusable "
+                  "isn't needed this turn, so endorsing the burn would needlessly fight the "
+                  "conserve-the-burst rule (`conserve-discard-energy-prefer-basic`); a reusable "
                   "Energy is never penalised, so 'prefer the reusable' wins by its full margin.",
         when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
         and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.attach_target_under_max
@@ -230,7 +261,7 @@ HYPOTHESES = [
                   "attack on turn 1 (rules.md §first-turn), so the burst Energy is discarded at end of "
                   "turn having powered NOTHING — pure waste of your one manual attach (rules.md:31). "
                   "A hard penalty because it must dominate the accelerator rewards "
-                  "(`feed-the-firing-accelerator` +35 / deck `accel-into-main` +30) that otherwise "
+                  "(`feed-the-firing-accelerator` +35 / `advance-the-accel-pieces` +30) that otherwise "
                   "reward feeding the Active accelerator (Cinderace) an Ignition it cannot fire this "
                   "turn — the exact regression the human flagged (ep83053965 f6). Gated on `turn <= 1` "
                   "(the sound, engine-verifiable 'cannot attack' case), so it never touches a real "

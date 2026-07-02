@@ -44,6 +44,19 @@ when the hand holds an `opener`-tagged card (Explosiveness — [card-functions.m
 **or** a `starter`-Role card. The role branch makes the keep survive a `card_functions.json` A/B
 toggle. **Source:** F7 — Rulebook (the mulligan rule); the card's own Ability text.
 
+### `open-the-accelerator` · weight 40 · status: assumed *(folded from mega_starmie `open-cinderace`, 2026-07-02)*
+> At the Set-Up Active pick, prefer an `accel_source`-Role opener — acceleration on from turn one.
+
+**Reads:** `SETUP_ACTIVE` select + the candidate's `accel_source` Role. Role-keyed: a deck opts in
+by naming its accelerator. The only rule in the system at the Set-Up Active pick.
+
+### `honor-preferred-start` · weight −30 · status: assumed *(folded from mega_starmie `prefer-going-second`, 2026-07-02)*
+> At the coin toss, honor the deck's declared tempo: `params["preferred_start"]` = `"first" | "second"`.
+
+**Reads:** `IS_FIRST` select + `Strategy.params` (Context passthrough); penalises the option that
+**contradicts** the declaration (turbo → second: the player going first can't attack turn 1;
+setup-heavy → first). Undeclared decks are untouched.
+
 ## Setup & sequencing
 
 ### `dig-before-commit` · weight 20 · status: assumed
@@ -74,6 +87,18 @@ played (sequenced after draw/search, but played). **Source:** F12 — JustInBasi
 
 **Reads:** the option card's `energy_accel` Function Tag. **Fires:** `SETUP` / `RACE`. The universal
 form of a deck's `accel_source` rule. **Source:** F12 / F14 — JustInBasil (Consistency / Deck Strategy).
+
+### `advance-the-accel-pieces` · weight 30 · status: assumed *(folded from mega_starmie `accel-into-main`, 2026-07-02)*
+> During SETUP, PLAY or ATTACH the deck's own `accel_source`-Roled pieces (the burst Energy that IS
+> the acceleration; the accelerator body).
+
+**Reads:** the option card's `accel_source` **Role** (the deck's opt-in; `use-acceleration` is the
+tag-keyed sibling). Co-fires additively with the other SETUP energy rules — tune against that
+cluster, not alone. Also in `baseline_energy`, folded 2026-07-02:
+**`conserve-discard-energy-prefer-basic`** (weight −40, from `conserve-ignition-prefer-water`) —
+don't spend a `discard_eot` burst on the Active wincon when its cheap attack already KOs and a
+reusable Basic is in hand; the KO-aware sibling of `prefer-reusable-over-burst` (−12), carve-outs in
+`build-active-wincon` / `dont-waste-discard-energy` unchanged.
 
 ### `build-before-attack` / `dont-chip-with-a-doomed-active` — **removed** (superseded by attack-last)
 These two chip-penalty rules made development beat a weak attack. The Pilot's `_finish_turn_last`
@@ -108,6 +133,14 @@ Attackers).
 
 **Reads:** a `PLAY` of a Pokémon. **Fires:** `RACE` (aggression). **Source:** F14 — JustInBasil
 (Deck Strategy: maintain a stream of attackers).
+
+### `develop-the-accel-recipient` · weight 20 · status: assumed *(folded from mega_starmie `develop-turbo-flare-recipient`, 2026-07-02)*
+> A bench-accelerator in the Active Spot accelerates onto NOTHING while the Bench holds no
+> win-condition-Line recipient — developing one is the top setup priority.
+
+**Reads:** `Board.accel_recipient_missing` (accel Active + no Line member benched) + a `PLAY` of a
+Line pre-evolution or `bench_fill` card, Bench not full. The DEVELOP half of the pair whose FETCH
+half is `fetch-base-before-stranded-payoff`.
 
 ### `dont-feed-the-doomed` · weight −30 · status: assumed
 > If your Active will be Knocked Out next turn and you have a benched Pokémon, don't sink this
@@ -366,6 +399,17 @@ the lookahead that scores the best grab with the **same** grab rungs (`_grab_val
 (Ultra Ball) the positive driver `dig-before-commit` denies it; silent on a whiff / when nothing is
 lacking. Weighted **below a free needed development** (`power-up-attacker` nets +10 — the ep82228640-fr7
 shape), which also stands in for the deferred cost-netting. **Source:** ADR-0023; F12 — JustInBasil (Consistency).
+
+#### `play-a-tutor-for-the-unfound-wincon` · weight 25 · status: assumed *(folded from mega_starmie `tutor-the-wincon`, 2026-07-02)*
+> In SETUP, play a `tutor`-**Roled** card while the win-condition is unfound. Role-keyed (the deck
+names its assembly Trainers); stands down on `wincon_in_hand` and on a provable whiff
+(`search_targets_exhausted`). Co-fires with `fetch-when-it-fills-a-need` by design.
+
+#### `dont-fetch-the-setup-only-opener` · weight −60 · status: assumed *(folded from mega_starmie `never-fetch-cinderace`, 2026-07-02)*
+> At a search, never take an `opener`-tagged card that is **provably dead in hand**:
+`card_stranded_evolution` — an evolution whose previous-stage chain (full depth,
+`CardStat.evolvesFrom` names) is absent from the deck list (Cinderace with no Raboot). The
+structural guard keeps an opener whose line IS in the deck fetchable.
 
 #### `fetch-a-starter` · weight 12 · status: testing
 > In SETUP with a thin Bench (`my_bench < 2`), grab a startable Basic (`card_is_starter`: hp > 0, no

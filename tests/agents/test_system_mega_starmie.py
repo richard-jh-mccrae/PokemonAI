@@ -1,8 +1,10 @@
 """System test: the mega_starmie deck (tests/fixtures) driven through a scripted mock match.
 
-Verifies end-to-end that the General Strategy AND the deck's own Strategy hypotheses fire, and
-that Function Tags + engine card stats (weakness) are used and have an effect. Lib-free: the
-fixture Strategy imports only common.strategy, and observations are built by hand.
+Verifies end-to-end that the deck's DECLARATIONS (Roles / Lines / params — the deck carries zero
+Hypotheses since the 2026-07-02 fold) drive the role-keyed General Strategy rules, that the
+tag-keyed rules fire alongside them, and that Function Tags + engine card stats (weakness) are
+used and have an effect. Lib-free: the fixture Strategy imports only common.strategy, and
+observations are built by hand.
 """
 import importlib.util
 from pathlib import Path
@@ -67,21 +69,23 @@ def _fired(pilot, obs):
 
 
 @pytest.mark.req("REQ-SYS-0001")
-def test_general_and_deck_hypotheses_both_fire_over_a_match():
+def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
+    # The deck ships ZERO Hypotheses; its Roles/params opt in to the role-keyed General Strategy.
     p = _pilot()
     fired = set().union(*(_fired(p, o) for o in (_open_active(), _play_search(), _attack())))
-    deck = {"open-cinderace", "accel-into-main", "tutor-the-wincon"}
+    role_keyed = {"open-the-accelerator", "advance-the-accel-pieces",
+                  "play-a-tutor-for-the-unfound-wincon"}       # fire only via this deck's Roles
     general = {h.id for h in GENERAL_STRATEGY.hypotheses}
-    assert fired & deck, f"no deck hypothesis fired across the match: {fired}"
-    assert fired & general, f"no General Strategy hypothesis fired across the match: {fired}"
+    assert fired & role_keyed, f"no role-keyed rule fired off the declarations: {fired}"
+    assert fired & (general - role_keyed), f"no other General Strategy rule fired: {fired}"
 
 
 @pytest.mark.req("REQ-SYS-0002")
-def test_a_deck_role_and_a_general_tag_rule_fire_on_the_same_card():
-    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'search' -> both layers fire on one option.
+def test_a_role_keyed_and_a_tag_keyed_general_rule_fire_on_the_same_card():
+    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'search' -> both signals fire on one option.
     fired0 = {h.id for h, _ in _pilot().explain(_play_search()).options[0].fired}
-    assert "tutor-the-wincon" in fired0    # deck hypothesis (role)
-    assert "dig-before-commit" in fired0   # General Strategy hypothesis (tag)
+    assert "play-a-tutor-for-the-unfound-wincon" in fired0   # role-keyed (the deck's declaration)
+    assert "dig-before-commit" in fired0                     # tag-keyed (universal Function Tag)
 
 
 @pytest.mark.req("REQ-SYS-0003")
@@ -89,9 +93,9 @@ def test_function_tags_have_an_effect():
     obs = _play_search()
     with_tags = {h.id for h, _ in _pilot().explain(obs).options[0].fired}
     without = {h.id for h, _ in _pilot(functions=None).explain(obs).options[0].fired}
-    assert "dig-before-commit" in with_tags     # the tag drives the General Strategy rule
+    assert "dig-before-commit" in with_tags     # the tag drives the tag-keyed rule
     assert "dig-before-commit" not in without   # remove card_functions -> the rule can't fire
-    assert "tutor-the-wincon" in without        # the deck's role-based rule is unaffected
+    assert "play-a-tutor-for-the-unfound-wincon" in without  # the role-keyed rule is unaffected
 
 
 @pytest.mark.req("REQ-SYS-0004")

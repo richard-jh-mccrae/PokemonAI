@@ -25,11 +25,12 @@ def _agent_with_tuned(tmp_path, tuned: dict) -> Path:
 
 @pytest.mark.req("REQ-SUB-0001")
 def test_manifest_reports_effective_weight_overlaying_tuned_on_authored(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"open-cinderace": 99.0})
+    agent = _agent_with_tuned(tmp_path, {"open-the-accelerator": 99.0})
     manifest = build_manifest(agent)
 
-    hyp = next(h for h in manifest["strategy"]["hypotheses"] if h["id"] == "open-cinderace")
-    assert hyp["authored"] == 40.0       # the seed weight declared in strategy.py
+    hyp = next(h for h in manifest["general_strategy"]["hypotheses"]
+               if h["id"] == "open-the-accelerator")
+    assert hyp["authored"] == 40.0       # the authored seed (baseline_opening)
     assert hyp["effective"] == 99.0      # tuned.json overrides it
     assert hyp["overridden"] is True
 
@@ -164,7 +165,7 @@ def test_brief_renders_a_highlighted_deck_change_callout(tmp_path):
 
 @pytest.mark.req("REQ-SUB-0008")
 def test_manifest_surfaces_training_provenance_from_sidecar(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"open-cinderace": 99.0})
+    agent = _agent_with_tuned(tmp_path, {"open-the-accelerator": 99.0})
     (agent / "tuned.meta.json").write_text(json.dumps(
         {"tuned_at": "2026-06-25T14:30:05", "corrections_count": 7, "corrections_hash": "abc123def456"}),
         encoding="utf-8")
@@ -176,7 +177,7 @@ def test_manifest_surfaces_training_provenance_from_sidecar(tmp_path):
 
 @pytest.mark.req("REQ-SUB-0004")
 def test_brief_is_self_contained_and_embeds_recoverable_manifest(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"open-cinderace": 99.0})
+    agent = _agent_with_tuned(tmp_path, {"open-the-accelerator": 99.0})
     manifest = build_manifest(agent, when=datetime(2026, 6, 25, 14, 30, 5), git_hash="abc1234")
     html = render_brief(manifest)
 
@@ -190,11 +191,11 @@ def test_brief_is_self_contained_and_embeds_recoverable_manifest(tmp_path):
 
 @pytest.mark.req("REQ-SUB-0004")
 def test_brief_renders_expandable_hypothesis_rows_with_all_info(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"open-cinderace": 99.0})
+    agent = _agent_with_tuned(tmp_path, {"open-the-accelerator": 99.0})
     html = render_brief(build_manifest(agent, when=datetime(2026, 6, 25, 14, 30, 5), git_hash="abc1234"))
 
     assert "<details" in html                     # expandable rows
-    assert "open-cinderace" in html               # the hypothesis id
+    assert "open-the-accelerator" in html         # the hypothesis id (general, tuned per-deck)
     assert "99" in html                            # its effective (tuned) weight
     assert "Explosiveness" in html                # its rationale text (the human "all info")
     assert "lambda" in html                        # the trigger source is shown too

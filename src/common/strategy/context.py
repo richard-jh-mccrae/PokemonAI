@@ -28,6 +28,7 @@ _DISCARD = 8      # choose which card(s) to discard (e.g. Ultra Ball's cost)
 _DAMAGE = 15      # choose which Pokémon an attack deals damage to (a bench snipe)
 _ATTACH_FROM = 21 # choose the Pokémon to attach an Energy to
 _IS_FIRST = 41    # IS_FIRST — the coin-toss "Would you like to go first?" (YesNo)
+_NO = 2           # OptionType.NO — decline (the _YES sibling; the coin-toss "go second" option)
 _MULLIGAN = 42    # "Would you like to redraw the cards?"
 
 # fetch-grab selects: a maxCount>1 here is a single multi-pick resolved GREEDILY with gap-update +
@@ -58,7 +59,7 @@ _ENGINE_TAGS = frozenset({"energy_accel", "draw", "search", "dig"})  # a "suppor
 _EVOLVING_THREAT_DMG = 100 # an evolution line "becomes an attacker" at >= this damage (ADR-0020)
 
 __all__ = [
-    "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_ATTACK", "_END",
+    "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_NO", "_ATTACK", "_END",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_DAMAGE", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_ZONE",

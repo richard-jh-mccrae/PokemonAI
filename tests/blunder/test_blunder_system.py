@@ -157,7 +157,7 @@ def test_correction_translates_to_a_weight_change(real_pilot):
                             rationale="develop the attack instead of over-benching")
 
     # reg responsive enough to overturn the chosen option's weight. The play-Staryu side fires TWO
-    # benching rules here (keep-a-bench + the deck's develop-turbo-flare-recipient, since Cinderace is
+    # benching rules here (keep-a-bench + the general develop-the-accel-recipient, since Cinderace is
     # the Active with a bare Bench), so the gap is wider than one rule — a more responsive reg than the
     # conservative production default is needed to demonstrate the W-route (mechanism, not doctrine).
     res = tune([corr], pilot, seeds, reg=0.08)

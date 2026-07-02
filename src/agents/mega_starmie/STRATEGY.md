@@ -155,7 +155,7 @@ Salvatore rush line stands.
   game start; a fetched Cinderace is dead. Don't keep it Active once the line is ready.
 - **Disposition:** `open-cinderace` + `accel-into-main` (deck rules) cover opening/accel.
   **CONFLICT: `hold-position-in-setup`** penalizes the *intended* retreat-to-promote → override (§6).
-  Never-fetch → §6. Note: Cinderace lacks the `energy_accel` tag (probe gap) so general
+  Never-fetch → §6. Note: Cinderace is tagged `energy_accel` (gap closed 2026-07-02) though general
   `use-acceleration` won't fire — the deck leans on Role `accel_source`.
 
 ### 3× Staryu — `starter` (wincon basic)
@@ -391,6 +391,21 @@ turn-ending attack, not only in SETUP).
 
 ## 5 · General-Strategy disposition table (growing)
 
+> **2026-07-02 FOLD — the deck now ships ZERO Hypotheses.** Every remaining deck rule moved into
+> the General Strategy (same trigger + weight; score-equality proven by `tools/sim/score_diff.py`
+> over 1869 corpus frames, 0 divergent). The deck's opt-in is its DECLARATIONS (Roles / Lines /
+> params); per-deck tuning still works by id via `tuned.json` (ADR-0009).
+>
+> | deck rule | → general rule | home |
+> |---|---|---|
+> | `open-cinderace` | `open-the-accelerator` | baseline_opening |
+> | `accel-into-main` | `advance-the-accel-pieces` | baseline_energy |
+> | `develop-turbo-flare-recipient` | `develop-the-accel-recipient` | baseline_bench |
+> | `tutor-the-wincon` | `play-a-tutor-for-the-unfound-wincon` | doctrine_fetch |
+> | `never-fetch-cinderace` | `dont-fetch-the-setup-only-opener` (+ NEW structural guard `card_stranded_evolution`) | doctrine_fetch |
+> | `conserve-ignition-prefer-water` | `conserve-discard-energy-prefer-basic` | baseline_energy |
+> | `prefer-going-second` | `params["preferred_start"]="second"` + `honor-preferred-start` | baseline_opening |
+
 | General Hypothesis | Disposition | Seed weight | Why (deck-specific reasoning) |
 |---|---|---|---|
 | `prefer-rush-evolve-tutor` | covers-as-is (refined) | — | Salvatore rush-evolves Staryu→Mega Starmie ex; now gated on `line_preevo_in_play` (stands down with no Staryu in play to evolve) |
@@ -398,10 +413,10 @@ turn-ending attack, not only in SETUP).
 | `hold-clutch-heal` | covers-as-is | — | Wally's Compassion defensive save |
 | `fetch-the-wincon` | covers-as-is | — | fetch Mega Starmie ex (Mega Signal / Hilda / Ultra Ball) |
 | `dont-bench-multiprize` | covers-as-is | — | Mega Starmie ex (3-prize) is the wincon → exempt; no loose multiprizers to bench |
-| `dont-waste-discard-energy` | override / extend | TBD | Ignition is finite + non-recyclable: prefer Water over Ignition **even on the wincon** unless Nebula is needed / ≥2 Ignition in hand → §6 `conserve-ignition-prefer-water` |
+| `dont-waste-discard-energy` | covers + general sibling | — | wincon exemption kept; the even-on-the-wincon conserve is now general `conserve-discard-energy-prefer-basic` (folded 2026-07-02) |
 | `hold-position-in-setup` | covers-as-is (resolved) | — | Cinderace-pivot conflict **resolved** by general **`retreat-to-ready-attacker`** (60 > 25): retreat the spent non-wincon Active into the ready benched wincon. No deck rule needed. |
-| `use-acceleration` | gap (tag) | — | Cinderace's Turbo Flare isn't tagged `energy_accel` (probe gap) → general rule won't fire; deck uses Role `accel_source` instead. Candidate: add the tag via `function_overrides.json`. |
-| `develop-turbo-flare-recipient` (deck) | **shipped** 2026-06-30 (TDD) | +20 | accelerator Active + bare Bench → endorse developing a Line recipient (Staryu / `bench_fill`) so Turbo Flare has a target; enshrines #3, behaviour-neutral over `keep-a-bench`. New signal `Board.accel_recipient_missing` |
+| `use-acceleration` | gap **CLOSED** 2026-07-02 | — | Cinderace now tagged `energy_accel` (function_overrides). Score-equal for this deck: `use-acceleration` is PLAY-gated (a Stage-2 Cinderace has no play-from-hand option) and `fetch-the-support` carries a stranded-evolution guard (a dead grab is never endorsed). Vocabulary correct for future rules/decks. |
+| `develop-turbo-flare-recipient` (deck) | **folded → general** `develop-the-accel-recipient` 2026-07-02 | +20 | accelerator Active + bare Bench → endorse developing a Line recipient (Staryu / `bench_fill`) so Turbo Flare has a target; enshrines #3, behaviour-neutral over `keep-a-bench`. New signal `Board.accel_recipient_missing` |
 | `fetch-base-before-stranded-payoff` (general) | **shipped** 2026-06-30 (TDD) | +20 | grab the deployable base over an un-evolvable payoff (no base in play/hand); fixes the verified Ultra-Ball Mega-over-Staryu trap. New signal `Board.wincon_base_deployable` |
 | Boss's gust (offensive KO + stall) | **shipped** 2026-06-29 (ADR-0022) | `gust-for-the-ko` 50, `gust-for-the-stall` 10 | general gust doctrine: `_can_ko` oracle → whether-to-play + lethal (Tactical) + SWITCH(3) target-select (KO+prizes+denial) + tier-5 stall. Refinements pending: condition/draw guards, 4-mechanic split |
 | `snipe-the-evolving-threat` / `snipe-the-weakest` | covers-as-is | — | Jetting Blow's 50 bench-snipe target (evolving pre-evo / lowest-HP) — forward-evolution index, ADR-0020 |
@@ -414,7 +429,7 @@ turn-ending attack, not only in SETUP).
 
 ## 6 · New deck Hypotheses (drafts — trigger sketches, NOT lambdas yet)
 
-### `develop-turbo-flare-recipient` · seed weight +20 · status: assumed · **IMPLEMENTED 2026-06-30 (TDD)**
+### `develop-turbo-flare-recipient` · +20 · **FOLDED → general `develop-the-accel-recipient` (baseline_bench), 2026-07-02**
 > Turbo Flare attaches its 3 Basic Energy to **Benched** Pokémon only — with no Staryu (or benched
 > Mega Starmie ex) on the Bench the acceleration is wasted. While the accelerator (Cinderace) is the
 > Active and the Bench has no Line recipient, developing one is the **top setup priority**.
@@ -441,7 +456,7 @@ The inverse of `prefer-payoff-over-preevo`. **Fixes the verified trap:** Ultra B
 bare Bench, no Staryu in play/hand — was Mega 35 > Staryu 30 (grabbed the un-evolvable Mega); now
 Staryu 50 > Mega 35. Needs **no deck deduction** — it picks among the search's *revealed* options.
 
-### `conserve-ignition-prefer-water` · seed weight −40 · status: assumed · **IMPLEMENTED 2026-06-28**
+### `conserve-ignition-prefer-water` · −40 · **FOLDED → general `conserve-discard-energy-prefer-basic` (baseline_energy), 2026-07-02**
 > Ignition is finite (4, non-recyclable) — even on the win-condition, prefer a Basic Water attach
 > (→ Jetting Blow) over an Ignition unless Nebula Beam's 210 / ignore-effects is needed this turn.
 
@@ -455,7 +470,7 @@ count signal is needed. Stands down when the cheap attack can't KO (Nebula genui
 
 ### ~~`pivot-cinderace-to-attacker`~~ — **COVERED** by general `retreat-to-ready-attacker` (60); draft dropped 2026-06-28 (forward-evolution / blunder-round reconciliation).
 
-### `never-fetch-cinderace` · seed weight −60 · status: assumed · **IMPLEMENTED 2026-06-28**
+### `never-fetch-cinderace` · −60 · **FOLDED → general `dont-fetch-the-setup-only-opener` (doctrine_fetch, + structural `card_stranded_evolution` guard), 2026-07-02**
 > Cinderace can only enter via Explosiveness at game start; fetching it later is a dead card. Never
 > select it at a search. (Generalize via the `opener` tag → "don't fetch a setup-only opener.")
 
@@ -463,7 +478,7 @@ count signal is needed. Stands down when the cheap attack can't KO (Nebula genui
 Pokémon → strongly penalize. **Reads:** `select_context` TO_HAND, the candidate's `opener` tag.
 Prefer the tag form over a hard-coded Cinderace id.
 
-### `prefer-going-second` · seed weight −30 · status: assumed · **IMPLEMENTED 2026-06-28**
+### `prefer-going-second` · −30 · **FOLDED → `params["preferred_start"]="second"` + general `honor-preferred-start` (baseline_opening), 2026-07-02**
 > This is a turbo deck that wants to attack as early as possible. At the coin-toss "go first?" choice,
 > decline — going second lets you attack on your first turn (the player going first cannot), and
 > going first wastes a turn and risks an unusable end-of-turn Ignition.
