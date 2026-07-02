@@ -45,10 +45,10 @@ def _stats():
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=50, attacks=(20,), evolvesFrom="Raboot",
-                         energyType=2),                      # {R} — for the weakness in the turn-1 test
+                         energyType=2),                      # {R} — needed for turn-1 weakness test
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
-        OPP: CardStat(OPP, name="opp", hp=60, weakness=2),  # weak to {R} — Cinderace doubles into it
+        OPP: CardStat(OPP, name="opp", hp=60, weakness=2),  # weak to {R} -> Cinderace doubles into it
     })
 
 
@@ -57,7 +57,7 @@ def _pilot(**kw):
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=CardFunctions({IGNITION: ["discard_eot"]}),
-                 # Jetting Blow (11) carries a 50-dmg bench-snipe rider; Nebula (10) does not.
+                 # Jetting Blow (11) carries a 50-dmg bench-snipe rider; Nebula (10) doesn't.
                  attacks={10: 210, 11: 120, 12: 20, 20: 50},
                  attack_costs={10: 3, 11: 1, 12: 1, 20: 1},
                  bench_snipe={11: 50}, **kw)
@@ -77,7 +77,7 @@ def test_dont_waste_ignition_on_an_already_powered_cinderace():
     traces = pilot.explain(obs)
     assert "dont-waste-discard-energy" in _fired(traces.options[0])   # the wasteful Ignition attach
     assert traces.options[0].score <= 0                               # sunk -> sequenced last (tier 4)
-    assert pilot.decide(obs) == [1]                                   # attack instead of wasting it
+    assert pilot.decide(obs) == [1]                                   # attack, don't waste it
 
 
 # ----------------------------------------------- _attach_lethal_tactical: turn-1-going-first guard
@@ -88,13 +88,13 @@ def test_lethal_attach_stands_down_on_turn_one_going_first():
     (else it tiers the attach as 'take the win' and the Energy is discarded for nothing)."""
     pilot = _pilot()
     attach_ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
-    # Cinderace 0 Energy; opp 60 HP weak to {R} -> +Ignition would let Turbo Flare (50x2=100) KO.
+    # Cinderace 0 Energy; opp 60 HP weak to {R} -> +Ignition lets Turbo Flare (50x2=100) KO.
     cur = state(active=poke(CINDER, energy=0, hp=160), opp_active=poke(OPP, hp=60), hand=[IGNITION], turn=1)
     obs = make_select([attach_ign, opt(END)], current=cur)
     assert pilot.explain(obs).options[0].tactical == 0               # no phantom lethal on turn 1
     assert pilot.decide(obs) == [1]                                  # End beats the wasted attach
 
-    # Control: same board on a later turn -> the lethal attach is real (you CAN attack) -> KO-class.
+    # Control: same board, later turn -> lethal attach is real (CAN attack) -> KO-class.
     later = state(active=poke(CINDER, energy=0, hp=160), opp_active=poke(OPP, hp=60), hand=[IGNITION], turn=3)
     assert pilot.explain(make_select([attach_ign, opt(END)], current=later)).options[0].tactical >= KO_SCORE
 
@@ -112,10 +112,10 @@ def test_retreat_into_ready_wincon_to_take_the_ko():
                 opp_active=poke(OPP, hp=10), opp_bench=[poke(PREEVO, hp=60)])  # bench target -> snipe rider
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert traces.options[0].tactical >= KO_SCORE                    # the Active's own attack is a KO ...
+    assert traces.options[0].tactical >= KO_SCORE                    # Active's own attack is a KO ...
     assert traces.options[1].tactical >= KO_SCORE                    # ... and so is retreat->wincon KO
-    assert traces.options[1].tactical > traces.options[0].tactical   # the wincon's KO (snipe) is better
-    assert pilot.decide(obs) == [1]                                  # so retreat into it
+    assert traces.options[1].tactical > traces.options[0].tactical   # wincon's KO (snipe) is better
+    assert pilot.decide(obs) == [1]                                  # retreat into it
 
 
 @pytest.mark.req("REQ-GEN-0050")
@@ -130,7 +130,7 @@ def test_retreat_lethal_stands_down_when_no_benched_wincon_can_ko():
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
     assert traces.options[1].tactical == 0                           # retreat carries no lethal value
-    assert pilot.decide(obs) == [0]                                  # take the Active's KO
+    assert pilot.decide(obs) == [0]                                  # take the Active's KO instead
 
 
 @pytest.mark.req("REQ-GEN-0050")
@@ -151,11 +151,11 @@ def test_retreat_lethal_stands_down_when_the_active_already_takes_an_equal_ko():
     pilot = _pilot()
     attack = attack_opt(20)                                          # Cinderace Turbo Flare 50 -> KO (opp 10)
     cur = state(active=poke(CINDER, energy=1, hp=160),
-                bench=[poke(PREEVO, energy=4, hp=70)],               # an energised Staryu: also KOs, but only
+                bench=[poke(PREEVO, energy=4, hp=70)],               # energised Staryu: also KOs, but only
                 opp_active=poke(OPP, hp=10))                          # the SAME 1-prize KO (no snipe edge)
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert traces.options[0].tactical >= KO_SCORE                    # the Active's own attack is a KO
+    assert traces.options[0].tactical >= KO_SCORE                    # Active's own attack is a KO
     assert traces.options[1].tactical == 0                           # retreat carries no EXTRA value -> stand down
     assert pilot.decide(obs) == [0]                                  # just attack with the Active
 
@@ -174,7 +174,7 @@ def test_spread_attach_to_the_needy_at_attach_from():
     obs = make_select([powered, bare], context=ATTACH_FROM, current=cur)
     traces = pilot.explain(obs)
     assert "spread-attach-to-the-needy" not in _fired(traces.options[0])   # already powered
-    assert "spread-attach-to-the-needy" in _fired(traces.options[1])       # the bare body
+    assert "spread-attach-to-the-needy" in _fired(traces.options[1])       # bare body needs it
     assert pilot.decide(obs) == [1]
 
 
@@ -203,16 +203,16 @@ def test_concentrate_accel_on_one_line_body_at_attach_from():
                 bench=[poke(PREEVO, energy=1, hp=70), poke(PREEVO, energy=0, hp=70)])
     obs = make_select([started, bare], context=ATTACH_FROM, current=cur)
     traces = pilot.explain(obs)
-    assert "concentrate-accel-on-one-line-body" in _fired(traces.options[0])       # the started body
-    assert "concentrate-accel-on-one-line-body" not in _fired(traces.options[1])   # the bare body
+    assert "concentrate-accel-on-one-line-body" in _fired(traces.options[0])       # started body
+    assert "concentrate-accel-on-one-line-body" not in _fired(traces.options[1])   # bare body
     assert pilot.decide(obs) == [0]
 
-    # The EVOLVED win-condition (Mega) is preferred over a MORE-energised pre-evo — it's the actual
-    # attacker (no evolution step), so concentrate on it (ep83007714-fr22 wants the Mega, not the Staryu).
+    # EVOLVED win-condition (Mega) beats a MORE-energised pre-evo — it's the actual attacker
+    # (no evolution step left), so concentrate on it (ep83007714-fr22 wants Mega, not Staryu).
     cur2 = state(active=poke(CINDER, energy=1, hp=160),
                  bench=[poke(WINCON, energy=1, hp=330), poke(PREEVO, energy=2, hp=70)])
     obs2 = make_select([card_opt(BENCH, 0), card_opt(BENCH, 1)], context=ATTACH_FROM, current=cur2)
-    assert pilot.decide(obs2) == [0]     # the Mega, though the Staryu carries more Energy
+    assert pilot.decide(obs2) == [0]     # Mega, though Staryu carries more Energy
 
 
 # ----------------------------------------------- conserve-burst-when-no-ko (discard_eot vs un-KO-able Active)
@@ -228,11 +228,11 @@ def test_conserve_burst_when_the_opponent_cannot_be_koed_even_maxed():
                 hand=[IGNITION, WATER])
     obs = make_select([ign, water, opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert "conserve-burst-when-no-ko" in _fired(traces.options[0])       # penalises the Ignition burst
+    assert "conserve-burst-when-no-ko" in _fired(traces.options[0])       # penalizes Ignition burst
     assert "conserve-burst-when-no-ko" not in _fired(traces.options[1])   # not the reusable Basic
     assert pilot.decide(obs) == [1]                                       # attach the Basic, keep Ignition
 
-    # Control: a KO-able Active (60 HP < 210 maxed) — the burst DOES buy the KO, so the exemption holds.
+    # Control: KO-able Active (60 HP < 210 maxed) — burst DOES buy the KO, exemption holds.
     cur2 = state(active=poke(WINCON, energy=0, hp=330), opp_active=poke(OPP, hp=60), hand=[IGNITION, WATER])
     obs2 = make_select([ign, water, opt(END)], context=0, current=cur2)
     assert "conserve-burst-when-no-ko" not in _fired(pilot.explain(obs2).options[0])

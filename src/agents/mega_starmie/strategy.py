@@ -34,7 +34,7 @@ MEGA_SIGNAL, BUDDY_POFFIN, SALVATORE, HILDA, ULTRA_BALL = 1145, 1086, 1189, 1225
 CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 
 # Per-deck Role overlay on the universal Function Tags (sparse — only deck-intentional cards).
-# The Roles ARE the deck's opt-in to the role-keyed General Strategy rules (see docstring table).
+# Roles ARE the deck's opt-in to the role-keyed General Strategy rules (see docstring table).
 ROLES = {
     MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
     CINDERACE: ["accel_source", "starter"],     # Explosiveness opener + Turbo Flare
@@ -55,5 +55,5 @@ STRATEGY = Strategy(
             "search_budget": 0,           # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
             "my_archetype": "Cinderace / Mega Starmie ex",   # Posture favorability key (ADR-0026 lever A)
             "preferred_start": "second"},  # turbo: attack T1 -> general `honor-preferred-start` (-30 on YES)
-    hypotheses=[],                        # empty by design — see the fold table in the docstring
+    hypotheses=[],                        # empty by design — see fold table in the docstring
 )

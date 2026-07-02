@@ -65,7 +65,7 @@ def _obs(bench, opp_active, opp_prizes, opp_discard=()):
                                   for i in range(len(bench))]}}
 
 
-# idx0 = the cheap 1-prize attacker (Cinderace); idx1 = the second, 3-prize finisher (Mega Starmie ex).
+# idx0 = cheap 1-prize attacker (Cinderace); idx1 = second, 3-prize finisher (Mega Starmie ex)
 def _bench(cinderace_energy=1, mega_energy=3):
     return [{"id": CINDERACE, "energies": [1] * cinderace_energy, "hp": 160},
             {"id": MEGA, "energies": [1] * mega_energy, "hp": 330}]
@@ -73,7 +73,7 @@ def _bench(cinderace_energy=1, mega_energy=3):
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_interpose_cheap_attacker_over_wincon_on_weakness():
-    # The worked case: first Mega KO'd, Bench = Cinderace + a fully-built second Mega, opponent's Active is
+    # Worked case: first Mega KO'd, Bench = Cinderace + fully-built second Mega, opponent's Active is
     # a Fire-weak Archaludon ex, opponent needs 3 prizes. Promote CINDERACE (50 -> 100 on Weakness, 1 prize
     # if it trades) and keep the 3-prize finisher fresh — not the second Mega (feeding it can lose the game).
     p = _pilot()
@@ -82,17 +82,17 @@ def test_interpose_cheap_attacker_over_wincon_on_weakness():
     assert board.bench_wincon_prize_value == 3
     assert board.opp_prizes_remaining == 3
     dec = p.explain(obs)
-    assert RULE in _fired(dec.options[0])                       # fires on the cheap Cinderace
-    assert "promote-the-ready-wincon" in _fired(dec.options[1])  # the wincon rule still fires on the Mega
-    assert RULE not in _fired(dec.options[1])                   # but never on the wincon itself
-    assert p.decide(obs) == [0]                                 # Cinderace, not the second Mega
+    assert RULE in _fired(dec.options[0])                       # fires on cheap Cinderace
+    assert "promote-the-ready-wincon" in _fired(dec.options[1])  # wincon rule still fires on Mega
+    assert RULE not in _fired(dec.options[1])                   # but never on wincon itself
+    assert p.decide(obs) == [0]                                 # Cinderace, not second Mega
 
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_interpose_accelerator_to_power_the_underbuilt_finisher():
-    # Neutral matchup (no Weakness), but the benched finisher is only 1/3 Energy and Basic Energy remains in
-    # deck: promote the accelerator so Turbo Flare loads the finisher to full off the Bench — which promoting
-    # the finisher directly (one attach/turn) can't.
+    # Neutral matchup (no Weakness), but benched finisher is only 1/3 Energy and Basic Energy remains in
+    # deck: promote accelerator so Turbo Flare loads finisher to full off Bench — which promoting
+    # finisher directly (one attach/turn) can't.
     p = _pilot()
     obs = _obs(_bench(mega_energy=1), {"id": NEUTRAL, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     board = p._board(obs, obs["select"])
@@ -106,7 +106,7 @@ def test_interpose_accelerator_to_power_the_underbuilt_finisher():
 @pytest.mark.req("REQ-GEN-0054")
 def test_no_interpose_accelerator_when_deck_has_no_basic_energy():
     # Same under-built finisher, but no Basic Energy left in deck -> Turbo Flare would whiff, so driver (b)
-    # stands down. With no other driver, lead with the finisher.
+    # stands down. With no other driver, lead w/ finisher.
     p = _pilot(deck_has_basic=False)
     obs = _obs(_bench(mega_energy=1), {"id": NEUTRAL, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     assert not p._board(obs, obs["select"]).basic_energy_in_deck
@@ -117,14 +117,14 @@ def test_no_interpose_accelerator_when_deck_has_no_basic_energy():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_interpose_when_opponent_has_shown_a_gust():
-    # Neutral matchup, finisher fully built: only the gust driver applies. A Boss's Orders in the opponent's
-    # discard means they can drag the benched finisher out anyway -> interpose the cheap body to tax it.
+    # Neutral matchup, finisher fully built: only gust driver applies. A Boss's Orders in opponent's
+    # discard means they can drag benched finisher out anyway -> interpose cheap body to tax it.
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": NEUTRAL, "hp": 300, "energies": [1, 1]}, opp_prizes=3,
                opp_discard=[BOSS_ORDERS])
     board = p._board(obs, obs["select"])
     assert board.opp_has_played_gust
-    assert not board.bench_wincon_underpowered                 # full finisher: driver (b) is off
+    assert not board.bench_wincon_underpowered                 # full finisher: driver (b) off
     dec = p.explain(obs)
     assert RULE in _fired(dec.options[0])
     assert p.decide(obs) == [0]
@@ -133,7 +133,7 @@ def test_interpose_when_opponent_has_shown_a_gust():
 @pytest.mark.req("REQ-GEN-0054")
 def test_never_interpose_when_opponent_needs_one_prize():
     # HARD VETO: opponent needs a single prize. Even Fire-weak (driver a would fire), interposing a 1-prize
-    # body just hands them the win -- lead with the strongest body (the Mega), which might survive / KO back.
+    # body just hands them the win -- lead w/ strongest body (the Mega), which might survive / KO back.
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": ARCHALUDON, "hp": 300, "energies": [1, 1]}, opp_prizes=1)
     dec = p.explain(obs)
@@ -143,8 +143,8 @@ def test_never_interpose_when_opponent_needs_one_prize():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_no_interpose_when_no_driver_applies():
-    # Neutral matchup, finisher fully powered, no gust shown -> none of (a)/(b)/(c). The proven default
-    # holds: promote the ready win-condition. Guards against the rule over-firing.
+    # Neutral matchup, finisher fully powered, no gust shown -> none of (a)/(b)/(c). Proven default
+    # holds: promote the ready win-condition. Guards against rule over-firing.
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": NEUTRAL, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     dec = p.explain(obs)

@@ -20,7 +20,7 @@ _REPLAY = re.compile(r"(?:episode-)?(\d+)(?:-replay)?\.json(?:\.gz)?$")
 
 def _episode_id(path: Path) -> int | None:
     name = path.name
-    if "-logs.json" in name:                       # the per-seat agent telemetry log, not a Replay
+    if "-logs.json" in name:                       # per-seat agent telemetry log, not a Replay
         return None
     m = _REPLAY.fullmatch(name)
     return int(m.group(1)) if m else None
@@ -53,7 +53,7 @@ def load_game(path: Path | str) -> dict:
         "replay": load_replay(path),
         "live_records": load_log(log_path) if log_path else None,
         "live_seat": live_seat,
-        "agent": bid["agent"],              # the deck/build name from the dir stem (auto-fills own tags)
+        "agent": bid["agent"],              # deck/build name from dir stem (auto-fills own tags)
         "agent_build": bid["agent_build"],
         "agent_version": bid["agent_version"],
         "built_at": bid["built_at"],

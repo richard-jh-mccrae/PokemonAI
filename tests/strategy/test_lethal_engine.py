@@ -45,7 +45,7 @@ def test_engine_confirms_win_round_trips_the_search_on_a_real_observation():
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
-    assert start.errorPlayer < 0                          # a legal deck loaded
+    assert start.errorPlayer < 0                          # legal deck loaded
     try:
         verdict = None
         for _ in range(80):
@@ -57,6 +57,6 @@ def test_engine_confirms_win_round_trips_the_search_on_a_real_observation():
                 verdict = pilot._engine_confirms_win(obs, [pilot.decide(obs)])
                 break
             obs = battle_select(pilot.decide(obs))
-        assert verdict is False        # engine round-tripped and ruled: one early move is not a win
+        assert verdict is False        # engine round-tripped + ruled: one early move isn't a win
     finally:
         battle_finish()

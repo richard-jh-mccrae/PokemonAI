@@ -14,22 +14,22 @@ from common.strategy import Strategy
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
 
-END = 14  # OptionType.END (not exported by pilot_helpers)
+END = 14  # OptionType.END (pilot_helpers doesn't export it)
 
 WINCON = 900   # my Active attacker / win-condition (Mega Starmie ex shape)
-PREEVO = 800   # Staryu — the Line base (evolves into WINCON), a weak attacker on its own
+PREEVO = 800   # Staryu — Line base (evolves into WINCON), weak attacker alone
 OPP = 678      # opponent's Active
-JETTING = 11   # attack id: cost 1, 120 damage
-NEBULA = 10    # attack id: cost 3, 210 damage (the big attack an extra Energy unlocks)
-STARYU = 12    # Staryu's own attack: cost 1, 20 damage (can't KO)
-SNIPE = 15     # a snipe attack: cost 1, 50 to the Active + a 100 bench-snipe rider
-WATER = 3      # a Basic {W} Energy card in hand
+JETTING = 11   # attack id: cost 1, 120 dmg
+NEBULA = 10    # attack id: cost 3, 210 dmg (big attack, extra Energy unlocks it)
+STARYU = 12    # Staryu's own attack: cost 1, 20 dmg (no KO)
+SNIPE = 15     # snipe attack: cost 1, 50 to Active + 100 bench-snipe rider
+WATER = 3      # Basic {W} Energy card in hand
 WALLYS = 1229  # Wally's Compassion — clutch_heal (heals a Mega ex, BOUNCES all its Energy to hand)
-BOSS = 1182    # Boss's Orders — a gust Supporter (drags a benched Pokémon to the Active Spot)
-EVOLVE = 9     # OptionType.EVOLVE (not exported by pilot_helpers)
-RETREAT = 12   # OptionType.RETREAT (not exported by pilot_helpers)
+BOSS = 1182    # Boss's Orders — gust Supporter (drags a benched Pokémon to Active Spot)
+EVOLVE = 9     # OptionType.EVOLVE (pilot_helpers doesn't export it)
+RETREAT = 12   # OptionType.RETREAT (pilot_helpers doesn't export it)
 EXOPP = 679    # opponent's Active: a Pokémon ex (2 prizes)
-BENCHIE = 700  # opponent's benched body (1 prize), KO-able by the snipe rider
+BENCHIE = 700  # opponent's benched body (1 prize), KO-able by snipe rider
 
 
 def _stats():
@@ -61,15 +61,15 @@ def test_immediate_prize_out_ko_is_a_locked_lethal_line_taken_now():
     my LAST prize -> a guaranteed win THIS turn. The Solver locks the 1-step line and the Pilot takes
     the attack; ``explain(obs).lethal`` surfaces the line."""
     pilot = _pilot()
-    # Active powered for Jetting Blow (1 W); opp Active at 120 HP (a KO); my last prize (1 remaining).
+    # Active powered for Jetting Blow (1 W); opp Active at 120 HP (a KO); my last prize (1 left).
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
                 prizes=1, opp_prizes=2)
     obs = make_select([attack_opt(JETTING), opt(END)], current=won)
 
     d = pilot.explain(obs)
-    assert d.lethal is not None                    # a guaranteed winning line was found and locked
-    assert d.lethal.next_step == [0]               # its next step is the finishing attack
-    assert pilot.decide(obs) == [0]                # ... and the Pilot takes it
+    assert d.lethal is not None                    # guaranteed winning line found + locked
+    assert d.lethal.next_step == [0]               # next step: the finishing attack
+    assert pilot.decide(obs) == [0]                # ... Pilot takes it
 
 
 @pytest.mark.req("REQ-LETHAL-0002")
@@ -77,7 +77,7 @@ def test_empty_bench_ko_is_lethal_even_when_prizes_are_not_last():
     """A KO of the opponent's Active while their Bench is EMPTY wins the game (they have no Pokémon
     left to promote) — a win even though it does NOT take my last prize. The Solver locks it."""
     pilot = _pilot()
-    # 3 prizes left (NOT a prize-out), but the opponent's Bench is empty: KO their Active = they lose.
+    # 3 prizes left (not prize-out), but opponent's Bench empty: KO their Active = they lose.
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
                 opp_bench=[], prizes=3, opp_prizes=2)
     obs = make_select([attack_opt(JETTING), opt(END)], current=won)
@@ -85,8 +85,8 @@ def test_empty_bench_ko_is_lethal_even_when_prizes_are_not_last():
     assert d.lethal is not None and d.lethal.next_step == [0]   # empty-bench win detected + taken
     assert pilot.decide(obs) == [0]
 
-    # Control — the opponent has a benched Pokémon, so the KO is NOT a win (they promote); with prizes
-    # not last there is no lethal to lock.
+    # Control — opponent has a benched Pokémon, so KO is NOT a win (they promote); prizes not last ->
+    # no lethal to lock.
     not_won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
                     opp_bench=[poke(OPP, hp=120)], prizes=3, opp_prizes=2)
     obs_c = make_select([attack_opt(JETTING), opt(END)], current=not_won)
@@ -102,7 +102,7 @@ def test_enabling_attach_is_locked_and_the_breaker_is_vetoed():
     pilot = _pilot()
     play_wallys = opt(PLAY, area=HAND, index=0)                              # the breaker
     attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
-    # Active at 2 Energy (Jetting 120 can't KO 180); attaching the 3rd unlocks Nebula 210 = the win.
+    # Active at 2 Energy (Jetting 120 can't KO 180); attaching 3rd unlocks Nebula 210 = the win.
     won = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=180),
                 opp_bench=[poke(OPP, hp=180)], hand=[WALLYS, WATER], prizes=1, opp_prizes=2)
     obs = make_select([play_wallys, attach_water, attack_opt(JETTING), opt(END)], current=won)
@@ -110,8 +110,8 @@ def test_enabling_attach_is_locked_and_the_breaker_is_vetoed():
     assert d.lethal is not None and d.lethal.next_step == [1]   # lock the enabling attach
     assert pilot.decide(obs) == [1]                             # take it, NOT Wally's (index 0)
 
-    # Control — the opponent's Active is too healthy (330): attaching does NOT unlock a KO, so there is
-    # no line to lock and the Solver stands down.
+    # Control — opponent's Active too healthy (330): attaching doesn't unlock a KO -> no line to
+    # lock, Solver stands down.
     safe = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=330),
                  opp_bench=[poke(OPP, hp=180)], hand=[WALLYS, WATER], prizes=1, opp_prizes=2)
     obs_c = make_select([play_wallys, attach_water, attack_opt(JETTING), opt(END)], current=safe)
@@ -131,10 +131,10 @@ def test_evolve_that_unlocks_the_ko_is_a_locked_lethal_line():
                 opp_bench=[poke(OPP, hp=120)], hand=[WINCON], prizes=1, opp_prizes=2)
     obs = make_select([evolve, staryu_attack, opt(END)], current=won)
     d = pilot.explain(obs)
-    assert d.lethal is not None and d.lethal.next_step == [0]   # lock the evolve that unlocks the KO
+    assert d.lethal is not None and d.lethal.next_step == [0]   # lock the evolve unlocking the KO
     assert pilot.decide(obs) == [0]
 
-    # Control — evolving still doesn't reach the KO (opp Active at 330 > Jetting's 120): no lethal.
+    # Control — evolving still doesn't reach the KO (opp Active 330 > Jetting's 120): no lethal.
     safe = state(active=poke(PREEVO, energy=1, hp=70), opp_active=poke(OPP, hp=330),
                  opp_bench=[poke(OPP, hp=120)], hand=[WINCON], prizes=1, opp_prizes=2)
     obs_c = make_select([evolve, staryu_attack, opt(END)], current=safe)
@@ -153,7 +153,7 @@ def test_snipe_that_does_not_take_enough_prizes_is_not_lethal():
     obs = make_select([snipe, opt(END)], current=looks_won)
     assert pilot.explain(obs).lethal is None                    # only 1 prize taken -> not a win
 
-    # Control — I need only 1 prize: the same snipe-KO now takes my last, so it IS lethal and locks.
+    # Control — need only 1 prize: same snipe-KO now takes my last -> lethal, locks.
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(EXOPP, hp=330),
                 opp_bench=[poke(BENCHIE, hp=100)], prizes=1, opp_prizes=2)
     obs_c = make_select([snipe, opt(END)], current=won)
@@ -178,16 +178,16 @@ def test_simultaneous_double_ko_is_a_draw_not_a_locked_win():
     draw = state(active=poke(RECOILER, energy=1, hp=70), opp_active=poke(ROPP, hp=200),
                  opp_bench=[poke(ROPP, hp=200)], prizes=1, opp_prizes=1)
     obs = make_select([attack_opt(RECOIL_ATK), opt(END)], current=draw)
-    assert pilot.explain(obs).lethal is None                    # a draw is not a win
+    assert pilot.explain(obs).lethal is None                    # a draw isn't a win
 
-    # Control — my Active survives the recoil (500 HP > 400): the KO is a clean win and locks.
+    # Control — my Active survives recoil (500 HP > 400): KO is a clean win, locks.
     win = state(active=poke(RECOILER, energy=1, hp=500), opp_active=poke(ROPP, hp=200),
                 opp_bench=[poke(ROPP, hp=200)], prizes=1, opp_prizes=1)
     obs_c = make_select([attack_opt(RECOIL_ATK), opt(END)], current=win)
     assert pilot.explain(obs_c).lethal is not None
 
 
-# ----------------------------------------------------------------- the in-scope CRITICAL gate (ADR-0030)
+# --------------------------------------------------------------------- in-scope CRITICAL gate (ADR-0030)
 @pytest.mark.req("REQ-LETHAL-0007")
 def test_critical_c1e0_winning_attack_vetoes_the_gust_breaker():
     """CRITICAL c1e0 ('must never happen again'): the current Active can KO the opponent's Active for
@@ -200,7 +200,7 @@ def test_critical_c1e0_winning_attack_vetoes_the_gust_breaker():
     obs = make_select([boss, attack_opt(JETTING), opt(END)], current=won)
     d = pilot.explain(obs)
     assert d.lethal is not None and d.lethal.next_step == [1]
-    assert pilot.decide(obs) == [1]                             # attack for the win, NOT Boss's (index 0)
+    assert pilot.decide(obs) == [1]                             # attack for win, NOT Boss's (index 0)
 
 
 @pytest.mark.req("REQ-LETHAL-0008")
@@ -210,12 +210,12 @@ def test_critical_fd5c_retreat_into_the_powered_wincon_is_locked():
     opponent's 120-HP Active. The Solver locks the retreat that brings the winning attacker Active."""
     pilot = _pilot()
     retreat = opt(RETREAT)
-    won = state(active=poke(PREEVO, energy=1, hp=70),                 # a spent opener that can't KO
-                bench=[poke(WINCON, energy=1, hp=330)],               # the powered wincon that can
+    won = state(active=poke(PREEVO, energy=1, hp=70),                 # spent opener, can't KO
+                bench=[poke(WINCON, energy=1, hp=330)],               # powered wincon that can
                 opp_active=poke(OPP, hp=120), opp_bench=[poke(BENCHIE, hp=100)], prizes=1, opp_prizes=2)
     obs = make_select([retreat, attack_opt(STARYU), opt(END)], current=won)
     d = pilot.explain(obs)
-    assert d.lethal is not None and d.lethal.next_step == [0]   # lock the retreat-to-lethal
+    assert d.lethal is not None and d.lethal.next_step == [0]   # lock retreat-to-lethal
     assert pilot.decide(obs) == [0]
 
 
@@ -227,21 +227,21 @@ def test_strict_execute_only_holds_across_the_turns_two_decisions():
     pilot = _pilot()
     play_wallys = opt(PLAY, area=HAND, index=0)
     attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
-    # Decision 1: Active at 2 E (Jetting can't KO 180); attaching the 3rd unlocks Nebula 210 = the win.
+    # Decision 1: Active at 2 E (Jetting can't KO 180); attaching 3rd unlocks Nebula 210 = win.
     before = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=180),
                    opp_bench=[poke(OPP, hp=180)], hand=[WALLYS, WATER], prizes=1, opp_prizes=2)
     obs1 = make_select([play_wallys, attach_water, attack_opt(JETTING), opt(END)], current=before)
-    assert pilot.decide(obs1) == [1]                            # the enabling attach, NOT Wally's
+    assert pilot.decide(obs1) == [1]                            # enabling attach, NOT Wally's
 
-    # Decision 2: the engine re-opened the menu after the attach — Active now at 3 E, Nebula available.
+    # Decision 2: engine re-opened menu after attach — Active now at 3 E, Nebula available.
     after = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=180),
                   opp_bench=[poke(OPP, hp=180)], hand=[WALLYS], prizes=1, opp_prizes=2)
     obs2 = make_select([play_wallys, attack_opt(NEBULA), opt(END)], current=after)
     assert pilot.explain(obs2).lethal is not None
-    assert pilot.decide(obs2) == [1]                            # the finishing KO, NOT Wally's
+    assert pilot.decide(obs2) == [1]                            # finishing KO, NOT Wally's
 
 
-# ------------------------------------------------------- telemetry: the verdict rides in the @T record
+# ------------------------------------------------------------- telemetry: verdict rides in the @T record
 @pytest.mark.req("REQ-LETHAL-0011")
 def test_lethal_verdict_is_emitted_in_decision_telemetry():
     """The Solver's verdict must ride in the @T Decision Telemetry (ADR-0019) — the SAME `to_record`
@@ -292,12 +292,12 @@ def test_ignore_effects_attack_bypasses_a_prevent_damage_ability_for_the_win():
                      attacks={JETTING: 120, NEBULA: 210}, attack_costs={JETTING: 1, NEBULA: 3},
                      ignores_active_effects=ignore)
 
-    # 4 Energy -> both attacks affordable; opp Crustle 150 HP with an empty Bench (KO = win); prizes not last.
+    # 4 Energy -> both attacks affordable; opp Crustle 150 HP, empty Bench (KO = win); prizes not last.
     won = state(active=poke(EX_ATTACKER, energy=4, hp=330), opp_active=poke(CRUSTLE, hp=150),
                 opp_bench=[], prizes=3, opp_prizes=2)
     obs = make_select([attack_opt(JETTING), attack_opt(NEBULA), opt(END)], current=won)
 
-    assert build({}).explain(obs).lethal is None        # without the signal: both ex attacks walled, no win seen
-    d = build({NEBULA: True}).explain(obs)              # with it: Nebula bypasses the Ability -> empty-bench win
+    assert build({}).explain(obs).lethal is None        # no signal: both ex attacks walled, no win seen
+    d = build({NEBULA: True}).explain(obs)              # with it: Nebula bypasses Ability -> empty-bench win
     assert d.lethal is not None and d.lethal.next_step == [1]
-    assert build({NEBULA: True}).decide(obs) == [1]     # ... and the Pilot takes Nebula Beam, not Jetting Blow
+    assert build({NEBULA: True}).decide(obs) == [1]     # ... Pilot takes Nebula Beam, not Jetting Blow

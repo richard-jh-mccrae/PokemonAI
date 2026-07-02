@@ -67,7 +67,7 @@ def test_union_verify_catches_a_cross_cluster_regression(monkeypatch):
     union gate must fail the round. (``_satisfied`` is stubbed: the fit's nonlinearity is verify-level
     behaviour already covered above; here we pin ``union_verify``'s base-vs-union wiring.)"""
     seq = iter([[True, True, True],           # base (seeds-only): all three satisfied
-                [True, True, False]])          # union: clusters a & b hold, the covered Correction breaks
+                [True, True, False]])          # union: clusters a & b hold, covered Correction breaks
     monkeypatch.setattr(verify_mod, "_satisfied", lambda *a, **k: next(seq))
 
     def pilot_with(extra):
@@ -79,8 +79,8 @@ def test_union_verify_catches_a_cross_cluster_regression(monkeypatch):
 
     result = union_verify(authored, corrections, pilot_with, seeds={}, clusters={"a": [0], "b": [1]})
     assert result.clusters_satisfied == {"a": True, "b": True}   # both clusters individually fine
-    assert result.regressed == [2]                               # ...but the covered Correction broke
-    assert not result.passed                                     # so the merged round must NOT pass
+    assert result.regressed == [2]                               # ...but covered Correction broke
+    assert not result.passed                                     # so merged round must NOT pass
 
 
 def test_union_verify_rejects_a_contaminated_baseline():

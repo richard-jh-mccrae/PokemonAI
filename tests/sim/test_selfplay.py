@@ -22,7 +22,7 @@ WHEN = datetime(2026, 6, 29, 12, 0, 0)
 def test_run_stem_is_resolvable_by_provenance():
     stem = run_stem("mega_starmie", WHEN, "577f603")
     bid = build_identity(f"data/replays/selfplay/{stem}/42.json")
-    assert bid["agent"] == "mega_starmie"      # corrections auto-file under a real build folder, not _UNFILED
+    assert bid["agent"] == "mega_starmie"      # corrections auto-file under real build folder, not _UNFILED
     assert bid["agent_build"] == stem
 
 
@@ -30,7 +30,7 @@ def test_run_stem_is_resolvable_by_provenance():
 def test_run_stem_distinguishes_an_overlay_corpus():
     base = run_stem("mega_starmie", WHEN, "577f603")
     ov = run_stem("mega_starmie", WHEN, "577f603", overlay="exp/cand.json")
-    assert ov != base                                       # a candidate corpus won't collide with baseline
+    assert ov != base                                       # candidate corpus won't collide with baseline
     assert build_identity(f"x/{ov}/1.json")["agent"] == "mega_starmie"   # still provenance-resolvable
 
 
@@ -40,7 +40,7 @@ def test_episode_id_is_deterministic_and_globally_unique():
     s2 = run_stem("mega_starmie", datetime(2026, 6, 29, 13, 0, 0), "577f603")
     assert episode_id(s1, 0) == episode_id(s1, 0)   # deterministic (no clock dependency)
     assert episode_id(s1, 0) != episode_id(s1, 1)   # unique per game within a run
-    assert episode_id(s1, 0) != episode_id(s2, 0)   # unique across runs (dedup/review require it)
+    assert episode_id(s1, 0) != episode_id(s2, 0)   # unique across runs (dedup/review needs it)
     assert isinstance(episode_id(s1, 0), int)       # info.EpisodeId is an int
 
 
@@ -50,8 +50,8 @@ def test_tag_replay_injects_ids_without_clobbering_the_film():
     tagged = tag_replay(replay, episode_id=12345, team_names=["ms#0", "ms#1"])
     assert tagged["info"]["EpisodeId"] == 12345
     assert tagged["info"]["existing"] == 1          # prior info preserved
-    assert tagged["steps"] == replay["steps"]       # the film is untouched
-    assert detect_seat(tagged, "ms#1") == 1         # inspector resolves a seat from the injected TeamNames
+    assert tagged["steps"] == replay["steps"]       # film untouched
+    assert detect_seat(tagged, "ms#1") == 1         # inspector resolves seat from injected TeamNames
 
 
 @pytest.mark.req("REQ-SIM-0009")
@@ -64,8 +64,8 @@ def test_generate_corpus_saves_tuner_usable_taggable_replays(tmp_path):
     assert build_identity(files[0])["agent"] == "mega_starmie"   # path resolves -> not _UNFILED
     replay = json.loads(files[0].read_text(encoding="utf-8"))
     decisions = iter_decisions(replay)
-    assert decisions                                       # the film yields taggable decisions
-    assert any(d.obs is not None for d in decisions)       # obs present -> Tuner-usable (the cabt-env pivot)
+    assert decisions                                       # film yields taggable decisions
+    assert any(d.obs is not None for d in decisions)       # obs present -> Tuner-usable (cabt-env pivot)
 
 
 @pytest.mark.req("REQ-SIM-0009")
@@ -77,7 +77,7 @@ def test_generate_corpus_exposes_overlay_to_games_and_restores_env(tmp_path, mon
             return {"steps": [[{"visualize": []}]], "info": {}}
 
     def fake_run_match(agent_dir, syspath_roots):
-        seen.append(os.environ.get("AGENT_OVERLAY"))       # what each game would see at import
+        seen.append(os.environ.get("AGENT_OVERLAY"))       # what each game sees at import
         return (["DONE", "DONE"], _FakeEnv())
 
     monkeypatch.setattr("sim.check_agent._run_match", fake_run_match)
@@ -88,4 +88,4 @@ def test_generate_corpus_exposes_overlay_to_games_and_restores_env(tmp_path, mon
     generate_corpus("mega_starmie", 2, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
                     when=WHEN, sha="abc", overlay=str(overlay))
     assert seen == [str(overlay.resolve())] * 2            # every game saw the overlay (absolute path)
-    assert "AGENT_OVERLAY" not in os.environ               # restored after the run -> no leak to later code
+    assert "AGENT_OVERLAY" not in os.environ               # restored after run -> no leak to later code

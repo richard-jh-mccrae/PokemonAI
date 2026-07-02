@@ -22,8 +22,8 @@ def _labeled_options(decision: Decision) -> list[dict]:
 
 
 def _labels_for(decision: Decision, positions: list[int]) -> str:
-    # The film's `selected` is not always a clean option-position (engine quirk; e.g.
-    # Count/Card selects), so label only the in-range positions and skip the rest.
+    # Film's `selected` isn't always a clean option-position (engine quirk; e.g.
+    # Count/Card selects) -> label only in-range positions, skip the rest.
     n = len(decision.options)
     return ", ".join(option_label(decision.options[i], decision.current)
                      for i in positions if isinstance(i, int) and 0 <= i < n)

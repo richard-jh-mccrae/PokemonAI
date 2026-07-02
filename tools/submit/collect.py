@@ -257,7 +257,7 @@ def _our_seat(episode, sub_id: int) -> int:
         a_sub = getattr(a, "submission_id", None) or getattr(a, "submissionId", None)
         if a_sub == sub_id and getattr(a, "index", None) is not None:
             return int(a.index)
-    return 0   # Kaggle serves our own log in slot 0 when ownership can't be matched
+    return 0   # Kaggle serves our own log in slot 0 when ownership can't match
 
 
 def _kaggle_download(row: dict, dest, max_replays: int, *, kaggle_ref=None, api=None,

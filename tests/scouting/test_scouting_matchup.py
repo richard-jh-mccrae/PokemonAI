@@ -26,7 +26,7 @@ def test_favorability_is_posterior_weighted():
 def test_unknown_candidate_is_neutral_and_uncovered():
     fav, cov = matchup_favorability(_art(), "Mine", [("Stranger", 1.0)])
     assert fav == pytest.approx(0.5)   # no cell → neutral contribution
-    assert cov == pytest.approx(0.0)   # nothing was actually covered
+    assert cov == pytest.approx(0.0)   # nothing actually covered
 
 
 @pytest.mark.req("REQ-SCOUT-0009")

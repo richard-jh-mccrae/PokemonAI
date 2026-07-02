@@ -28,8 +28,8 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
 def main() -> None:
     if not SRC.exists():
         run(["git", "clone", "--depth", "1", REPO_URL, str(SRC)])
-    # invoke pnpm through corepack so no global shim is required; scope the install
-    # to the visualizer package and its workspace deps (the trailing '...').
+    # invoke pnpm through corepack — no global shim needed; scope install to the
+    # visualizer package and its workspace deps (trailing '...')
     run(["corepack", "pnpm", "install", "--filter", FILTER + "..."], cwd=SRC)
     run(["corepack", "pnpm", "--filter", FILTER, "build"], cwd=SRC)
 

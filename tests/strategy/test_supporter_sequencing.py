@@ -15,12 +15,12 @@ from common.strategy import Hypothesis, Line, Strategy
 from pilot_helpers import ACTIVE, HAND, PLAY, make_select, opt, poke, state
 
 ATTACH = 8
-ITEM, SUPPORTER = 1, 3        # CardType (cg/api.py): a Pokegear is an Item, a Salvatore a Supporter
-POKEGEAR = 1122              # Item — dig/draw: look top 7, may take a Supporter to hand (a FREE dig)
+ITEM, SUPPORTER = 1, 3        # CardType (cg/api.py): Pokegear is an Item, Salvatore a Supporter
+POKEGEAR = 1122              # Item — dig/draw: look top 7, may take Supporter to hand (a FREE dig)
 SALVATORE = 1189            # Supporter — search/rush_evolve: the one-per-turn commitment
-DRAWSUP = 1224              # Cheren — a plain draw Supporter (draw, NOT shuffle_hand)
-LILLIES = 1227             # Lillie's Determination — a shuffle_hand Supporter (nukes the hand)
-WINCON = 900               # a Mega-ex win-condition (evolves from the pre-evo)
+DRAWSUP = 1224              # Cheren — plain draw Supporter (draw, NOT shuffle_hand)
+LILLIES = 1227             # Lillie's Determination — shuffle_hand Supporter (nukes the hand)
+WINCON = 900               # Mega-ex win-condition (evolves from the pre-evo)
 PREEVO = 800               # its pre-evolution (Staryu-like) — a rush_evolve target
 WATER = 3                  # a reusable Basic Energy
 
@@ -67,7 +67,7 @@ def test_a_free_item_dig_is_sequenced_before_the_one_per_turn_supporter():
                       current=state(active=poke(PREEVO, hp=70), hand=[SALVATORE, POKEGEAR]))
     traces = pilot.explain(obs).options
     assert traces[0].score > traces[1].score        # Salvatore (rush_evolve + search) outscores Pokegear
-    assert pilot.decide(obs) == [1]                 # ... yet the free Item dig is sequenced first
+    assert pilot.decide(obs) == [1]                 # ... yet free Item dig sequenced first
 
 
 # ------------------------------------------------------------ (b) Supporter before a non-KO attach
@@ -87,8 +87,8 @@ def test_a_supporter_is_sequenced_before_a_non_ko_energy_attach():
     obs = make_select([play_draw_sup, attach],
                       current=state(active=poke(PREEVO, energy=0, hp=70), hand=[DRAWSUP, WATER]))
     traces = pilot.explain(obs).options
-    assert traces[1].score > traces[0].score        # the attach outscores the Supporter ...
-    assert pilot.decide(obs) == [0]                 # ... yet the Supporter is sequenced first
+    assert traces[1].score > traces[0].score        # attach outscores the Supporter ...
+    assert pilot.decide(obs) == [0]                 # ... yet Supporter sequenced first
 
 
 # --------------------------------------------------- (c) Energy attach before a hand-shuffle Supporter
@@ -112,5 +112,5 @@ def test_a_hand_shuffle_supporter_is_sequenced_after_the_energy_attach():
     obs = make_select([play_shuffle, attach],
                       current=state(active=poke(PREEVO, energy=0, hp=70), hand=[LILLIES, WATER]))
     traces = pilot.explain(obs).options
-    assert traces[0].score > 0                       # the shuffle is endorsed (positive) despite the -60 ...
-    assert pilot.decide(obs) == [1]                  # ... yet the Energy attach is sequenced first
+    assert traces[0].score > 0                       # shuffle endorsed (positive) despite the -60 ...
+    assert pilot.decide(obs) == [1]                  # ... yet Energy attach sequenced first

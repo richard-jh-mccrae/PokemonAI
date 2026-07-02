@@ -89,7 +89,7 @@ _LOG_MOVE_CARD = 6   # LogType.MOVE_CARD
 _LOG_HP_CHANGE = 16  # LogType.HP_CHANGE (value = actual delta; >0 & not a counter = heal)
 _AREA_HAND = 2       # AreaType.HAND
 _AREA_DISCARD = 3    # AreaType.DISCARD
-_AREA_ENERGY = 8     # AreaType.ENERGY (Energy attached to a Pokémon in play)
+_AREA_ENERGY = 8     # AreaType.ENERGY (Energy attached to Pokémon in play)
 
 _RIDER_DEST = {_AREA_HAND: "bounce_energy_to_hand", _AREA_DISCARD: "discard_own_energy"}
 

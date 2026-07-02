@@ -13,8 +13,8 @@ from meta_tracker.probe_restrictions import (
     find_chip_attacker, healed_serials, offered_heal_targets, pick_sturdies,
     restriction_deck, snapshot_board)
 
-# The canonical observation board: damaged Mega on the Bench, damaged non-Mega
-# Active, plus an undamaged benched body — disambiguates mega_only / active_only /
+# Canonical observation board: damaged Mega on Bench, damaged non-Mega
+# Active, plus undamaged benched body — disambiguates mega_only / active_only /
 # unrestricted in ONE offer.
 MEGA_BENCH = {"serial": 11, "mega": True, "active": False, "damaged": True}
 NONMEGA_ACT = {"serial": 21, "mega": False, "active": True, "damaged": True}
@@ -26,31 +26,31 @@ BOARD = [NONMEGA_ACT, MEGA_BENCH, NONMEGA_BENCH]
 
 @pytest.mark.req("REQ-EFFECT-0013")
 def test_offer_of_both_classes_derives_unrestricted():
-    # Potion: the select offers the damaged Active AND the damaged bench Mega
+    # Potion: select offers damaged Active AND damaged bench Mega
     assert derive_restriction(BOARD, [21, 11]) == {"restriction": None}
 
 
 @pytest.mark.req("REQ-EFFECT-0013")
 def test_offer_of_mega_only_derives_mega_only():
-    # Wally's Compassion: ONLY the bench Mega offered while the damaged Active exists
+    # Wally's Compassion: ONLY bench Mega offered while damaged Active exists
     assert derive_restriction(BOARD, [11]) == {"restriction": "mega_only"}
 
 
 @pytest.mark.req("REQ-EFFECT-0013")
 def test_offer_of_active_only_derives_active_only():
-    # Arven's Sandwich: ONLY the Active offered while the damaged bench Mega exists
+    # Arven's Sandwich: ONLY Active offered while damaged bench Mega exists
     assert derive_restriction(BOARD, [21]) == {"restriction": "active_only"}
 
 
 @pytest.mark.req("REQ-EFFECT-0013")
 def test_empty_or_unknown_offer_is_an_error_not_a_guess():
     assert "error" in derive_restriction(BOARD, [])
-    assert "error" in derive_restriction(BOARD, [99])       # serial not on my board
+    assert "error" in derive_restriction(BOARD, [99])       # serial not on our board
 
 
 @pytest.mark.req("REQ-EFFECT-0013")
 def test_mega_offer_without_an_excluded_damaged_non_mega_is_uninformative():
-    # the Mega was the only damaged body -> its exclusivity proves nothing
+    # Mega was the only damaged body -> its exclusivity proves nothing
     board = [{"serial": 11, "mega": True, "active": True, "damaged": True},
              {"serial": 31, "mega": False, "active": False, "damaged": False}]
     assert "error" in derive_restriction(board, [11])
@@ -65,7 +65,7 @@ def test_active_offer_without_an_excluded_damaged_benched_body_is_uninformative(
 
 @pytest.mark.req("REQ-EFFECT-0013")
 def test_bench_non_mega_only_offer_is_ambiguous():
-    # no vocabulary value explains "benched non-Mega only" — explicit error
+    # no vocab value explains "benched non-Mega only" — explicit error
     board = BOARD + [{"serial": 41, "mega": False, "active": False, "damaged": True}]
     assert "error" in derive_restriction(board, [41])
 
@@ -87,12 +87,12 @@ def test_observed_confirming_the_authored_restriction_changes_nothing():
 def test_observed_restriction_upgrades_an_unrestricted_measured_clause():
     out, conflicts = upgrade_restriction([{"kind": "heal", "amount": 60}], "mega_only")
     assert out == [{"kind": "heal", "amount": 60, "restriction": "mega_only"}]
-    assert conflicts == []                       # None -> observed is the normal upgrade
+    assert conflicts == []                       # None -> observed is normal upgrade
 
 
 @pytest.mark.req("REQ-EFFECT-0014")
 def test_conflicting_authored_restriction_loses_to_the_observed_one():
-    # engine is authority: a differing hand-authored gate is replaced AND reported
+    # engine is authority: differing hand-authored gate gets replaced AND reported
     out, conflicts = upgrade_restriction(
         [{"kind": "heal", "amount": 60, "restriction": "active_only"}], "mega_only")
     assert out == [{"kind": "heal", "amount": 60, "restriction": "mega_only"}]
@@ -110,7 +110,7 @@ def test_observed_unrestricted_strips_a_conflicting_authored_gate():
 @pytest.mark.req("REQ-EFFECT-0014")
 def test_sibling_amount_modes_survive_when_the_observation_matches_one_clause():
     # Arven's Sandwich: observed active_only matches the 30-clause; the 100
-    # arvens_pokemon amount-mode is NOT a conflict — it ships untouched
+    # arvens_pokemon amount-mode is NOT a conflict — ships untouched
     cls = [{"kind": "heal", "amount": 30, "restriction": "active_only"},
            {"kind": "heal", "amount": 100, "restriction": "arvens_pokemon"}]
     out, conflicts = upgrade_restriction(cls, "active_only")
@@ -120,8 +120,8 @@ def test_sibling_amount_modes_survive_when_the_observation_matches_one_clause():
 
 @pytest.mark.req("REQ-EFFECT-0014")
 def test_upgrade_merges_the_upgraded_twin_into_the_authored_clause():
-    # a stale unrestricted measurement + the authored mega_only clause: upgrading the
-    # twin gives it the same merge key -> max-merge collapses them
+    # A stale unrestricted measurement + authored mega_only clause: upgrading the
+    # twin gives it same merge key -> max-merge collapses them.
     cls = [{"kind": "heal", "amount": 60},
            {"kind": "heal", "amount": "all", "restriction": "mega_only"}]
     out, _ = upgrade_restriction(cls, "mega_only")
@@ -214,7 +214,7 @@ def test_snapshot_board_flags_mega_active_damaged():
     assert by_serial[21]["active"] and not by_serial[21]["mega"] and by_serial[21]["damaged"]
     assert not by_serial[11]["active"] and by_serial[11]["mega"] and by_serial[11]["damaged"]
     assert not by_serial[31]["damaged"]
-    # the snapshot + a real offer drive the derivation end to end
+    # snapshot + real offer drive derivation end to end
     assert derive_restriction(board, [11]) == {"restriction": "mega_only"}
 
 
@@ -222,9 +222,9 @@ def test_snapshot_board_flags_mega_active_damaged():
 def test_offered_heal_targets_resolves_my_card_options_to_serials():
     players = _players([_pk(21, 431, 270, 280)], [_pk(11, 678, 330, 340)])
     select = {"context": 17, "minCount": 1, "maxCount": 1, "option": [
-        {"type": 3, "area": 4, "index": 0, "playerIndex": 0},     # my Active
-        {"type": 3, "area": 5, "index": 0, "playerIndex": 0},     # my bench Mega
-        {"type": 3, "area": 5, "index": 0, "playerIndex": 1},     # opponent's — not mine
+        {"type": 3, "area": 4, "index": 0, "playerIndex": 0},     # our Active
+        {"type": 3, "area": 5, "index": 0, "playerIndex": 0},     # our bench Mega
+        {"type": 3, "area": 5, "index": 0, "playerIndex": 1},     # opponent's — not ours
         {"type": 3, "area": 2, "index": 0, "playerIndex": 0},     # HAND area — not in play
         {"type": 6, "area": 4, "index": 0, "playerIndex": 0},     # ENERGY option — not a target
     ]}
@@ -247,7 +247,7 @@ def test_healed_serials_reads_actor_positive_non_counter_hp_changes():
 def test_find_chip_attacker_picks_a_small_vanilla_self_type_attack():
     cid, energy = find_chip_attacker(CARDS)
     assert cid == 28          # vanilla 10-damage; 687 is a Mega, 55 has effect text
-    assert energy == 1        # its grass basic-Energy card
+    assert energy == 1        # its Grass basic-Energy card
 
 
 @pytest.mark.req("REQ-EFFECT-0016")
@@ -255,7 +255,7 @@ def test_pick_sturdies_excludes_megas_frail_and_line_names():
     got = pick_sturdies(CARDS, exclude_names={"Riolu", "Mega Lucario ex"})
     assert got and set(got) <= {431, 979}
     assert 678 not in got and 687 not in got and 333 not in got and 28 not in got
-    # lowest retreat first (the case-B Active must retreat cheaply)
+    # lowest retreat first (case-B Active must retreat cheaply)
     assert got[0] == 979
 
 

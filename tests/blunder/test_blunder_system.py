@@ -35,7 +35,7 @@ from train.tuner.io import sparse_overrides  # noqa: E402
 from train.tuner.run import tune  # noqa: E402
 
 AGENT = "mega_starmie"
-# a committed own-game replay (our agent-0 game) under the build-identity dir layout
+# committed own-game replay (our agent-0 game) under the build-identity dir layout
 REAL_REPLAY = (REPO / "tests" / "fixtures" / "replays" / "mega_starmie_20260625_bde590c"
                / "episode-81903490-replay.json.gz")
 OWN_SEAT = 0                       # episode-81903490 is our agent-0 game
@@ -53,7 +53,7 @@ def real_pilot():
     try:
         from train.tune import _build_pilot
         return _build_pilot(AGENT)
-    except Exception as exc:                       # native engine unavailable in this env
+    except Exception as exc:                       # native engine unavailable this env
         pytest.skip(f"engine-backed Pilot unavailable: {exc}")
 
 
@@ -85,7 +85,7 @@ def _run_agent(bundle: Path, obs: dict) -> list[int]:
     return json.loads(line[len("RESULT"):])
 
 
-# --- ST-1: identify a blunder and author a Correction with a note ------------------------------
+# --- ST-1: identify a blunder, author a Correction with a note ---------------------------------
 
 def test_tag_blunder_with_note_is_stored(tmp_path):
     """REQ-TUNER-0013: tagging a real Decision through the inspector spine stores a Correction
@@ -104,13 +104,13 @@ def test_tag_blunder_with_note_is_stored(tmp_path):
                       built_at=bid["built_at"])
 
     [stored] = load_corrections(store)
-    assert stored.rationale == note               # the note is preserved verbatim
-    assert stored.obs is not None                 # obs auto-captured from the film (no manual entry)
+    assert stored.rationale == note               # note preserved verbatim
+    assert stored.obs is not None                 # obs auto-captured from film (no manual entry)
     assert stored.correct_label                   # option decoded to a human label
     assert stored.agent_build == bid["agent_build"] and bid["agent_build"]   # build traceability
 
 
-# --- ST-2: the noted Correction translates to a new-Hypothesis proposal (H route) --------------
+# --- ST-2: noted Correction translates to a new-Hypothesis proposal (H route) -------------------
 
 def test_correction_with_note_becomes_a_hypothesis_proposal(real_pilot):
     """REQ-TUNER-0013: a Correction the agent is *blind* to (chosen & correct fire identical
@@ -121,7 +121,7 @@ def test_correction_with_note_becomes_a_hypothesis_proposal(real_pilot):
     replay = load_replay(REAL_REPLAY)
     note = "should snipe the higher-threat benched attacker with energy attached"
 
-    proposal = None                               # find any own-seat decision that routes H
+    proposal = None                               # find any own-seat decision routing H
     for d in iter_decisions(replay):
         if d.seat != OWN_SEAT or len(d.options) < 2 or not all(0 <= c < len(d.options) for c in d.chosen):
             continue
@@ -133,10 +133,10 @@ def test_correction_with_note_becomes_a_hypothesis_proposal(real_pilot):
             break
 
     assert proposal is not None, "expected at least one missing_hypothesis frame in the replay"
-    assert proposal.rationale == note             # the note IS the authoring spec
+    assert proposal.rationale == note             # note IS the authoring spec
 
 
-# --- ST-3: a Correction translates to a weight change (W route) --------------------------------
+# --- ST-3: Correction translates to a weight change (W route) -----------------------------------
 
 def test_correction_translates_to_a_weight_change(real_pilot):
     """REQ-TUNER-0013: when the better option fires DIFFERENT Hypotheses than the chosen one, the
@@ -147,7 +147,7 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     mechanism end to end, and the fit is *adopted* only because it satisfies the correction."""
     pilot, seeds = real_pilot
     play = {"type": PLAY, "area": 2, "index": 0, "playerIndex": 0}     # play Staryu from hand
-    attach = {"type": ATTACH, "area": 4, "index": 0, "playerIndex": 0}  # attach to the Active
+    attach = {"type": ATTACH, "area": 4, "index": 0, "playerIndex": 0}  # attach to Active
     obs = make_select([play, attach], context=MAIN,
                       current=state(hand=[STARYU], active=poke(CINDERACE, hp=70)))
     d = Decision(episode_id="synthetic", frame=0, seat=0, turn=2, select_context="Main",
@@ -157,18 +157,18 @@ def test_correction_translates_to_a_weight_change(real_pilot):
                             rationale="develop the attack instead of over-benching")
 
     # reg responsive enough to overturn the chosen option's weight. The play-Staryu side fires TWO
-    # benching rules here (keep-a-bench + the general develop-the-accel-recipient, since Cinderace is
-    # the Active with a bare Bench), so the gap is wider than one rule — a more responsive reg than the
-    # conservative production default is needed to demonstrate the W-route (mechanism, not doctrine).
+    # benching rules here (keep-a-bench + general develop-the-accel-recipient, since Cinderace is
+    # the Active with a bare Bench), so the gap is wider than one rule - needs a more responsive reg
+    # than the conservative production default to demonstrate the W-route (mechanism, not doctrine).
     res = tune([corr], pilot, seeds, reg=0.08)
 
     changed = sparse_overrides(res.overrides, seeds)
-    assert res.fit_adopted                       # the fit satisfied the correction, so it ships
+    assert res.fit_adopted                       # fit satisfied the correction, so it ships
     assert changed                               # a real Hypothesis weight moved (W route)
     assert set(changed) <= set(seeds)            # every changed key is a real Hypothesis id
 
 
-# --- ST-4: the packaged agent APPLIES the tune in a real decision ------------------------------
+# --- ST-4: packaged agent APPLIES the tune in a real decision -----------------------------------
 
 def test_packaged_agent_applies_tuned_weight_in_a_decision(tmp_path):
     """REQ-TUNER-0013: the shipped bundle loads tuned.json and the weight changes which move it
@@ -182,10 +182,10 @@ def test_packaged_agent_applies_tuned_weight_in_a_decision(tmp_path):
     assert _run_agent(bundle, obs) == [0]         # ATTACH preferred (power-up-attacker fires)
 
     (bundle / "tuned.json").write_text(json.dumps({"power-up-attacker": -100000.0}), encoding="utf-8")
-    assert _run_agent(bundle, obs) == [1]         # the tune flips the decision
+    assert _run_agent(bundle, obs) == [1]         # tune flips the decision
 
 
-# --- ST-5: the packaged agent USES a newly committed Hypothesis --------------------------------
+# --- ST-5: packaged agent USES a newly committed Hypothesis -------------------------------------
 
 def test_packaged_agent_uses_a_newly_committed_hypothesis(tmp_path):
     """REQ-TUNER-0013: once a human commits a new when() to the deck Strategy, the shipped agent
@@ -195,7 +195,7 @@ def test_packaged_agent_uses_a_newly_committed_hypothesis(tmp_path):
     (bundle / "tuned.json").write_text("{}", encoding="utf-8")
     obs = make_select([opt(type=NO), opt(type=PLAY)], context=MAIN, current=state())
 
-    assert _run_agent(bundle, obs) == [0]         # baseline: nothing prefers the 'play' option
+    assert _run_agent(bundle, obs) == [0]         # baseline: nothing prefers 'play' option
 
     strat = bundle / "strategy.py"
     strat.write_text(
@@ -205,4 +205,4 @@ def test_packaged_agent_uses_a_newly_committed_hypothesis(tmp_path):
         + "when=lambda c: c.option_type == 7, weight=999.0))\n",
         encoding="utf-8",
     )
-    assert _run_agent(bundle, obs) == [1]         # the agent now fires the committed Hypothesis
+    assert _run_agent(bundle, obs) == [1]         # agent now fires the committed Hypothesis

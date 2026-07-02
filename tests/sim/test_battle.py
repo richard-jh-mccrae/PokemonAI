@@ -9,8 +9,8 @@ from sim.battle import (AgentServer, BattleMatch, MatchResult, balanced_tally, f
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
-MEGA = FIXTURE_AGENTS / "mega_starmie"          # a complete, legal, self-playing source agent
-SRC = [REPO / "src"]                            # the source fixture isn't self-contained; cg/common live in src
+MEGA = FIXTURE_AGENTS / "mega_starmie"          # complete, legal, self-playing source agent
+SRC = [REPO / "src"]                            # source fixture isn't self-contained; cg/common live in src
 
 ROWS = [
     {"submission_id": 1, "agent": "mega_starmie", "artifact": "ms_a", "label": "base", "git_hash": "aaaaaaa"},
@@ -26,7 +26,7 @@ def test_resolve_by_build_id():
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_resolve_by_name_picks_the_latest_build():
-    # two mega_starmie builds (#1, #3) -> the newer wins
+    # two mega_starmie builds (#1, #3) -> newer wins
     assert resolve_contestant("mega_starmie", ROWS)["submission_id"] == 3
 
 
@@ -40,7 +40,7 @@ def test_resolve_unknown_id_or_name_raises_naming_the_miss():
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_resolve_name_is_the_working_tree_source_not_a_build(tmp_path):
-    # a bare agent name resolves to the live src/agents/<name> dir, not the Build Ledger
+    # bare agent name resolves to live src/agents/<name> dir, not the Build Ledger
     row, bundle = resolve("mega_starmie", [], agents_root=FIXTURE_AGENTS,
                           out=tmp_path, into=tmp_path)
     assert bundle == FIXTURE_AGENTS / "mega_starmie"
@@ -58,7 +58,7 @@ def test_wilson_ci_is_wide_at_low_n_and_tight_at_high_n():
     lo_small, hi_small = wilson_ci(6, 10)
     lo_big, hi_big = wilson_ci(600, 1000)
     assert (hi_small - lo_small) > (hi_big - lo_big)        # n=10 far less certain than n=1000
-    assert lo_big < 0.6 < hi_big                            # the point estimate sits inside
+    assert lo_big < 0.6 < hi_big                            # point estimate sits inside
     assert wilson_ci(0, 0) == (0.0, 0.0)                    # empty Battle, no divide-by-zero
 
 
@@ -73,25 +73,25 @@ def test_tally_counts_wins_draws_and_crashes():
     ]
     t = tally(results)
     assert (t["n"], t["a_wins"], t["b_wins"], t["draws"]) == (5, 2, 2, 1)
-    assert (t["a_crashes"], t["b_crashes"]) == (1, 0)        # crash both loses *and* is surfaced
+    assert (t["a_crashes"], t["b_crashes"]) == (1, 0)        # crash both loses AND surfaces
 
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_parse_spec_splits_off_an_optional_experiment_overlay():
     assert parse_spec("mega_starmie@exp/cand.json") == ("mega_starmie", "exp/cand.json")
-    assert parse_spec("3") == ("3", None)                  # a bare build id, no overlay
+    assert parse_spec("3") == ("3", None)                  # bare build id, no overlay
     assert parse_spec("mega_starmie") == ("mega_starmie", None)
 
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_to_battle_match_maps_engine_seat_to_contestant():
-    # A occupied seat 0: engine outcome is already A/B-relative (identity)
+    # A in seat 0: engine outcome already A/B-relative (identity)
     assert to_battle_match(0, MatchResult(winner=0)) == BattleMatch(a_seat=0, winner=0)
-    # A occupied seat 1: engine seat 1 winning means A (contestant 0) won
+    # A in seat 1: engine seat 1 winning means A (contestant 0) won
     assert to_battle_match(1, MatchResult(winner=1)) == BattleMatch(a_seat=1, winner=0)
-    # A in seat 1, engine seat 0 won and crashed -> that's B (contestant 1) winning + crashing
+    # A in seat 1, engine seat 0 won+crashed -> that's B (contestant 1) winning + crashing
     assert to_battle_match(1, MatchResult(winner=0, crashed=(0,))) == BattleMatch(a_seat=1, winner=1, crashed=(1,))
-    # a draw stays a draw regardless of seat
+    # draw stays a draw regardless of seat
     assert to_battle_match(1, MatchResult(winner=None)).winner is None
 
 
@@ -106,7 +106,7 @@ def test_seat_plan_splits_n_evenly_and_is_deterministic():
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_balanced_tally_counts_A_wins_in_both_seats_and_splits_by_seat():
-    # A won once from each seat; B won once from each seat (a perfectly balanced sample).
+    # A won once from each seat; B won once from each seat (perfectly balanced sample).
     records = [
         BattleMatch(a_seat=0, winner=0),        # A sat seat 0 and won
         BattleMatch(a_seat=1, winner=0),        # A sat seat 1 and won
@@ -114,15 +114,15 @@ def test_balanced_tally_counts_A_wins_in_both_seats_and_splits_by_seat():
         BattleMatch(a_seat=1, winner=1),        # A sat seat 1, B won
     ]
     t = balanced_tally(records)
-    assert (t["n"], t["a_wins"], t["b_wins"]) == (4, 2, 2)   # A's wins counted regardless of its seat
-    # the per-seat split is the ADR-0021 audit: the seat effect must stay visible
+    assert (t["n"], t["a_wins"], t["b_wins"]) == (4, 2, 2)   # A's wins counted regardless of seat
+    # per-seat split is the ADR-0021 audit: seat effect must stay visible
     assert t["by_seat"][0] == {"n": 2, "a_wins": 1}
     assert t["by_seat"][1] == {"n": 2, "a_wins": 1}
 
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_report_shows_the_per_seat_split_for_a_balanced_run():
-    # A won 1 of 2 as seat 0, 2 of 2 as seat 1 — the seat effect the report must keep visible
+    # A won 1 of 2 as seat 0, 2 of 2 as seat 1 — seat effect report must keep visible
     records = [BattleMatch(0, 0), BattleMatch(0, 1), BattleMatch(1, 0), BattleMatch(1, 0)]
     report = format_report(ROWS[2], ROWS[0], balanced_tally(records), elapsed=1.0, jobs=2, mode="pre-filter")
     assert "seat 0" in report and "seat 1" in report      # both seats surfaced (ADR-0021 audit)
@@ -135,7 +135,7 @@ def test_report_states_both_contestants_the_score_and_the_ci():
     report = format_report(ROWS[2], ROWS[0], t, elapsed=8.3, jobs=10, mode="curiosity")
     assert "#3 mega_starmie (tuned, ccccccc)" in report     # provenance, short hash
     assert "#3 wins 31" in report and "#1 wins 17" in report and "draws 2" in report
-    assert "win-rate 62%" in report and "95% CI" in report   # 31/50 = 62%, with honesty interval
+    assert "win-rate 62%" in report and "95% CI" in report   # 31/50 = 62%, honesty interval
     assert "crashes 0" in report
 
 
@@ -145,17 +145,17 @@ def test_report_keeps_the_dirty_flag_on_a_working_tree_contestant():
                "git_hash": "f1cd9bf-dirty"}
     t = tally([MatchResult(winner=0)] * 3)
     report = format_report(src_row, ROWS[0], t, elapsed=1.0, jobs=2, mode="curiosity")
-    assert "#src mega_starmie (working-tree, f1cd9bf-dirty)" in report   # -dirty not truncated away
+    assert "#src mega_starmie (working-tree, f1cd9bf-dirty)" in report   # -dirty not truncated
 
 
 @pytest.mark.req("REQ-SIM-0006")
 def test_report_surfaces_crashes_when_present():
     t = tally([MatchResult(winner=1, crashed=(0,))] * 3 + [MatchResult(winner=0)] * 2)
     report = format_report(ROWS[2], ROWS[0], t, elapsed=1.0, jobs=2, mode="curiosity")
-    assert "crashes 3" in report and "#3: 3" in report       # the crashing build, called out
+    assert "crashes 3" in report and "#3: 3" in report       # crashing build, called out
 
 
-# --- engine driver: real Matches on the committed native engine (offline; no cabt/ke) ---
+# --- engine driver: real Matches on committed native engine (offline; no cabt/ke) ---
 
 
 @pytest.mark.req("REQ-SIM-0007")
@@ -167,8 +167,8 @@ def test_play_match_runs_a_full_game_and_names_a_winner():
     finally:
         a.close()
         b.close()
-    assert result.winner in (0, 1, None)        # the engine resolved the game to a verdict
-    assert result.crashed == ()                 # a clean mirror crashes neither seat
+    assert result.winner in (0, 1, None)        # engine resolved the game to a verdict
+    assert result.crashed == ()                 # clean mirror crashes neither seat
 
 
 @pytest.mark.req("REQ-SIM-0007")
@@ -203,7 +203,7 @@ def test_run_battle_is_seat_balanced_and_records_a_seat():
 
 @pytest.mark.req("REQ-SIM-0007")
 def test_run_battle_parallel_is_globally_seat_balanced():
-    # odd per-worker shares (12/4 -> 3 each) must not all tilt the same way; the split is global
+    # odd per-worker shares (12/4 -> 3 each) must not all tilt same way; split is global
     deck = read_deck(MEGA)
     results = run_battle(MEGA, MEGA, deck, deck, n=12, jobs=4, extra_syspath=SRC)
     assert len(results) == 12

@@ -26,7 +26,7 @@ class UnionVerifyResult:
     """The parallel-mode JOIN gate (ADR-0018): every authored Hypothesis verified TOGETHER against
     the union of all Corrections, so one fan-out cluster's rule can't silently regress another's."""
     passed: bool
-    clusters_satisfied: dict              # cluster label -> bool (satisfied in the union)
+    clusters_satisfied: dict              # cluster label -> bool (satisfied in union)
     regressed: list[int] = field(default_factory=list)     # were satisfied pre-round, now violated
     newly_fixed: list[int] = field(default_factory=list)
 

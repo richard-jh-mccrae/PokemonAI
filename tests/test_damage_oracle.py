@@ -13,7 +13,7 @@ import pytest
 from common.scouting.provider import AttackStat, CardStat
 from common.strategy.damage import compute_active_damage
 
-PSYCHIC, WATER, FIGHTING = 3, 2, 1   # arbitrary distinct energy-type ids for the fixtures
+PSYCHIC, WATER, FIGHTING = 3, 2, 1   # arbitrary distinct energy-type ids, fixtures only
 
 MEGA_STARMIE = CardStat(cardId=1031, name="Mega Starmie ex", hp=300, megaEx=True, energyType=PSYCHIC)
 NON_EX = CardStat(cardId=50, name="Staryu", hp=70, energyType=PSYCHIC)
@@ -60,7 +60,7 @@ def test_resistance_subtracts_30_unless_ignored_and_floors_at_zero():
 def test_weakness_applies_before_resistance():
     both = CardStat(cardId=11, name="WeakAndResist", hp=300,
                     weakness=PSYCHIC, resistance=PSYCHIC, energyType=WATER)
-    # (120 x2) - 30, not (120 - 30) x2 — rules.md §5 order
+    # (120x2)-30, not (120-30)x2 — order per rules.md §5
     assert compute_active_damage(JETTING, MEGA_STARMIE, both, frozenset()) == 210
 
 
@@ -94,7 +94,7 @@ def test_visible_state_scaling_is_exact_given_context():
     # counters land THROUGH Crustle's prevention, un-doubled, from an ex attacker
     assert compute_active_damage(POWERFUL_HAND, MEGA_STARMIE, CRUSTLE, CRUSTLE_TAGS,
                                  context=ctx) == 100
-    # no context -> the scaling term contributes nothing (conservative base only)
+    # no context -> scaling term contributes nothing (base only)
     assert compute_active_damage(MIND_RULER, NON_EX, v, frozenset()) == 0
 
 
@@ -102,7 +102,7 @@ def test_visible_state_scaling_is_exact_given_context():
 def test_damage_type_scaling_is_weakness_adjusted():
     weak = CardStat(cardId=9, name="WeakToPsychic", hp=400, weakness=PSYCHIC, energyType=WATER)
     ctx = {"def_hand": 4}
-    # (0 + 30x4) x2 — scaled DAMAGE is still damage: Weakness applies
+    # (0+30x4)x2 — scaled DAMAGE still counts as damage: Weakness applies
     assert compute_active_damage(MIND_RULER, MEGA_STARMIE, weak, frozenset(), context=ctx) == 240
 
 
@@ -113,7 +113,7 @@ def test_bound_selects_floor_ceiling_or_printed():
     assert compute_active_damage(BEST_PUNCH, NON_EX, v, frozenset(), bound="max") == 40
     assert compute_active_damage(BEST_PUNCH, NON_EX, v, frozenset()) == 40          # exact = printed
     assert compute_active_damage(TUMBLING, NON_EX, v, frozenset(), bound="max") == 30
-    # deterministic attack: bounds are None -> every bound reads the printed damage
+    # deterministic attack: bounds None -> every bound reads printed damage
     assert compute_active_damage(JETTING, MEGA_STARMIE, v, frozenset(), bound="min") == 120
 
 
@@ -135,7 +135,7 @@ STAGE1_EX = CardStat(cardId=61, name="Stage1Ex", hp=280, ex=True, energyType=3, 
 
 @pytest.mark.req("REQ-DMG-0010")
 def test_parsed_prevention_field_closes_the_untagged_sylveon_gap():
-    # Sylveon has Crustle's ability but NO prevent_ex_damage tag — the FIELD zeroes ex damage
+    # Sylveon has Crustle's ability but NO prevent_ex_damage tag — FIELD zeroes ex damage anyway
     assert compute_active_damage(JETTING, MEGA_STARMIE, SYLVEON, frozenset()) == 0
     assert compute_active_damage(NEBULA, MEGA_STARMIE, SYLVEON, frozenset()) == 210   # pierces
     assert compute_active_damage(JETTING, NON_EX, SYLVEON, frozenset()) == 120        # non-ex lands
@@ -154,9 +154,9 @@ def test_threshold_prevention_zeroes_only_big_hits():
     assert compute_active_damage(big, NON_EX, DREDNAW, frozenset()) == 0              # >=200: prevented
     assert compute_active_damage(JETTING, NON_EX, DREDNAW, frozenset()) == 120        # small: lands
     # ENGINE-VERIFIED 2026-07-02 (forced-defender audit): Blood Moon 240 (plain) vs Drednaw dealt 0;
-    # Nebula Beam 210 dealt 210 — ignoresEffects pierces the threshold prevention too
+    # Nebula Beam 210 dealt 210 — ignoresEffects pierces threshold prevention too
     assert compute_active_damage(NEBULA, MEGA_STARMIE, DREDNAW, frozenset()) == 210
-    # Weakness pushes 120 over the threshold: 120x2=240 >= 200 -> prevented
+    # Weakness pushes 120 over threshold: 120x2=240 >= 200 -> prevented
     weak_drednaw = CardStat(cardId=158, name="Drednaw", hp=180, weakness=PSYCHIC, energyType=2,
                             preventsDamageAtLeast=200)
     assert compute_active_damage(JETTING, MEGA_STARMIE, weak_drednaw, frozenset()) == 0
@@ -180,13 +180,13 @@ HAMMER = AttackStat(attackId=1046, damage=0, cost=2, hiddenPerUnit=100, hiddenSa
 @pytest.mark.req("REQ-DMG-0018")
 def test_hidden_scaler_uses_exact_deck_facts_when_known():
     v = CardStat(cardId=9, name="Vanilla", hp=700, energyType=2)
-    # deck of 8 with 4 Basic {W}: discarding 6 MUST hit >= 6-(8-4) = 2 -> sound floor 200;
+    # deck of 8 w/ 4 Basic {W}: discarding 6 MUST hit >= 6-(8-4) = 2 -> sound floor 200;
     # EV = 6 x 4/8 = 3 -> exact 300; ceiling capped by the 4 W actually left -> 400
     ctx = {"atk_deck_count": 8, "atk_deck_basic_by_type": {3: 4}}
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="min", context=ctx) == 200
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), context=ctx) == 300
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="max", context=ctx) == 400
-    # deck facts absent -> the prior conservative behavior (floor 0, ceiling perUnit x sample)
+    # deck facts absent -> prior conservative behavior (floor 0, ceiling perUnit x sample)
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="min") == 0
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="max") == 600
 RIPTIDE = AttackStat(attackId=1042, damage=0, cost=1, scaleVar="atk_discard_energy",
@@ -199,9 +199,9 @@ ANY_ENERGY_446 = AttackStat(attackId=446, damage=30, cost=2, scaleVar="atk_disca
 def test_discard_scaler_reads_typed_histogram_from_context():
     v = CardStat(cardId=9, name="Vanilla", hp=300, energyType=2)
     ctx = {"atk_discard_energy_total": 7, "atk_discard_basic_by_type": {3: 5, 1: 2}}
-    # Riptide: 20 x 5 Basic {W} in the ATTACKER's discard — exact, visible state
+    # Riptide: 20 x 5 Basic {W} in ATTACKER's discard — exact, visible state
     assert compute_active_damage(RIPTIDE, NON_EX, v, frozenset(), context=ctx) == 100
-    # 446: +20 x ALL 7 Energy cards (no type filter): 30 + 140
+    # 446: +20 x ALL 7 Energy cards (no type filter): 30+140
     assert compute_active_damage(ANY_ENERGY_446, NON_EX, v, frozenset(), context=ctx) == 170
     # no context -> conservative base only
     assert compute_active_damage(RIPTIDE, NON_EX, v, frozenset()) == 0
@@ -210,10 +210,10 @@ def test_discard_scaler_reads_typed_histogram_from_context():
 @pytest.mark.req("REQ-DMG-0011")
 def test_hidden_state_scaler_bounds():
     v = CardStat(cardId=9, name="Vanilla", hp=400, energyType=2)
-    # ceiling: every sampled card could be the fuel — the Incoming threat model (600)
+    # ceiling: every sampled card could be fuel — the Incoming threat model (600)
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="max") == 600
     # floor / exact: 0 without deck knowledge — sound (a Lethal never banks on hidden cards);
-    # a supplied hidden_units context (the deck tracker's pigeonhole/EV) overrides
+    # a supplied hidden_units context (deck tracker's pigeonhole/EV) overrides
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="min") == 0
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset()) == 0
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="min",
@@ -222,8 +222,8 @@ def test_hidden_state_scaler_bounds():
 
 @pytest.mark.req("REQ-DMG-0017")
 def test_incoming_sees_the_opponents_discard_scaler():
-    # THE P1 hole: the opponent's Kyogre with 5 Basic {W} in THEIR (visible) discard threatens
-    # Riptide 20x5=100 — the Board's incoming/doomed math must price it, not read 0.
+    # THE P1 hole: opp's Kyogre w/ 5 Basic {W} in THEIR (visible) discard threatens
+    # Riptide 20x5=100 — Board's incoming/doomed math must price it, not read 0.
     from common.cards import CardFunctions
     from common.pilot import Pilot
     from common.scouting.provider import DictCardStatProvider
@@ -245,12 +245,12 @@ def test_incoming_sees_the_opponents_discard_scaler():
     obs = make_select([opt(14)], current=board)
     b = p._board(obs)
     assert b.incoming_active_damage == 100          # 20 x 5 visible {W} in their discard
-    assert b.active_doomed                          # 100 >= my 90 HP — the threat is priced
+    assert b.active_doomed                          # 100 >= my 90 HP — threat is priced
 
 
 @pytest.mark.req("REQ-DMG-0011")
 def test_hidden_scaler_feeds_the_incoming_ceiling():
-    # the opponent's Mega Abomasnow ex threatens the CEILING via _predicted_max_damage
+    # opp's Mega Abomasnow ex threatens the CEILING via _predicted_max_damage
     p = _pilot(attack_stats={1046: HAMMER})
     abom = CardStat(cardId=723, name="Mega Abomasnow ex", hp=350, megaEx=True, energyType=2,
                     attacks=(1046,), minAttackCost=2, maxDamage=0)
@@ -259,9 +259,9 @@ def test_hidden_scaler_feeds_the_incoming_ceiling():
 
 @pytest.mark.req("REQ-DMG-0016")
 def test_tera_benched_body_is_never_a_snipe_ko():
-    # Tera Pokémon take NO damage from attacks while benched (engine CardData.tera) — a bench-snipe
+    # Tera Pokémon take NO damage from attacks while benched (engine CardData.tera) — bench-snipe
     # rider must not claim the KO/prize (32 Tera bodies in pool; a phantom snipe-prize could lock a
-    # false Lethal). A non-Tera body at the same HP still credits.
+    # false Lethal). A non-Tera body at same HP still credits.
     p = _pilot()
     p.stats._stats[70] = CardStat(cardId=70, name="Tera ex", hp=40, ex=True, tera=True)
     p.stats._stats[71] = CardStat(cardId=71, name="Plain", hp=40)
@@ -269,7 +269,7 @@ def test_tera_benched_body_is_never_a_snipe_ko():
     assert p._snipe_ko_prizes(((71, 40),), rider=50) == 1      # plain bench: a real prize
 
 
-# --- the Pilot wrapper: resolves ids -> stats/tags, then delegates to the pure oracle ---
+# --- Pilot wrapper: resolves ids -> stats/tags, then delegates to the pure oracle ---
 
 def _pilot(attack_stats=None):
     from common.cards import CardFunctions
@@ -313,7 +313,7 @@ def _lethal_obs(attack_id):
 @pytest.mark.req("REQ-DMG-0008")
 def test_coin_attack_never_locks_a_phantom_lethal():
     # Best Punch: printed 40 would "KO" the 40-HP last-prize defender — but tails does NOTHING.
-    # The Lethal Solver must read the sound floor (0) and refuse the lock (ADR-0030: a phantom
+    # Lethal Solver must read sound floor (0) and refuse the lock (ADR-0030: a phantom
     # lethal is the one catastrophic error). A deterministic 120 still locks.
     p = _pilot(attack_stats={142: BEST_PUNCH, 1487: JETTING})
     assert p.explain(_lethal_obs(142)).lethal is None          # coin floor 0 -> no guaranteed win
@@ -329,7 +329,7 @@ def test_hand_size_lethal_is_exact_and_lockable():
     obs["current"]["players"][0]["hand"] = [{"id": 1}, {"id": 1}]
     obs["current"]["players"][0]["handCount"] = 2
     assert p.explain(obs).lethal is not None
-    lean = _lethal_obs(1072)                                   # 1 card -> 20 counters: no KO
+    lean = _lethal_obs(1072)                                   # 1 card -> 20 counters, no KO
     lean["current"]["players"][0]["hand"] = [{"id": 1}]
     lean["current"]["players"][0]["handCount"] = 1
     assert p.explain(lean).lethal is None
@@ -337,8 +337,8 @@ def test_hand_size_lethal_is_exact_and_lockable():
 
 @pytest.mark.req("REQ-DMG-0006")
 def test_pilot_wrapper_degrades_to_legacy_dicts_without_attack_stats():
-    # No attack_stats wired: the wrapper synthesizes a flagless record from the legacy dicts,
-    # reproducing the OLD behavior exactly (prevention zeroes EVERY ex attack, incl. Nebula).
+    # No attack_stats wired: wrapper synthesizes a flagless record from legacy dicts,
+    # reproducing OLD behavior exactly (prevention zeroes EVERY ex attack, incl. Nebula).
     p = _pilot(attack_stats=None)
     crustle = {"id": 345, "hp": 140}
     assert p.predicted_damage(1031, 1488, crustle) == 0      # flagless -> old conservative zero

@@ -15,7 +15,7 @@ FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "episode-81364540-r
 
 
 def _expected(team: str) -> list[int]:
-    """That team's deck as parse.py reads it, sorted -- the ground truth to match."""
+    """That team's deck as parse.py reads it, sorted -- ground truth to match."""
     rec = parse_replay(FIXTURE, sampled_team=team)
     idx = [rec.team0, rec.team1].index(team)
     return sorted(rec.deck0 if idx == 0 else rec.deck1)
@@ -32,7 +32,7 @@ def test_writes_named_teams_exact_sorted_60(tmp_path):
 
 @pytest.mark.req("REQ-STEAL-0001")
 def test_selects_the_right_side(tmp_path):
-    # Each team's stolen file must match *its own* deck, not the opponent's.
+    # Each team's stolen file must match *its own* deck, not opponent's.
     k = steal(FIXTURE, "keidroid", "k", dest_root=tmp_path)["dest"] / "deck.csv"
     j = steal(FIXTURE, "Jaga", "j", dest_root=tmp_path)["dest"] / "deck.csv"
     assert [int(x) for x in k.read_text().split()] == _expected("keidroid")

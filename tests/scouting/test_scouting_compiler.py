@@ -26,7 +26,7 @@ def _ep(arch0, deck0, arch1, deck1, *, band="Mid", end_time="2026-06-20T00:00:00
 @pytest.mark.req("REQ-SCOUT-0007")
 def test_priors_reflect_archetype_frequency():
     eps = [
-        _ep("A", [1], "A", [1]),   # A appears 4×, B 2× across these
+        _ep("A", [1], "A", [1]),   # A appears 4x, B 2x across these
         _ep("A", [1], "B", [2]),
         _ep("B", [2], "A", [1]),
     ]
@@ -47,7 +47,7 @@ def test_card_inclusion_and_background():
 
     incl = art["dossiers"]["Lucario"]["card_inclusion"]
     assert incl[SIG] == pytest.approx(1.0)                       # in every Lucario deck
-    assert art["background"][COMMON] > art["background"][SIG]    # COMMON is everywhere
+    assert art["background"][COMMON] > art["background"][SIG]    # COMMON everywhere
 
 
 @pytest.mark.req("REQ-SCOUT-0001")
@@ -61,14 +61,14 @@ def test_signatures_are_high_lift_cards():
     art = compile_artifact(eps, cards={}, now=NOW)
 
     sigs = [s["cardId"] for s in art["dossiers"]["Lucario"]["signatures"]]
-    assert SIG in sigs        # near-exclusive to Lucario → high lift
-    assert COMMON not in sigs # ubiquitous → lift ≈ 1
+    assert SIG in sigs        # near-exclusive to Lucario -> high lift
+    assert COMMON not in sigs # ubiquitous -> lift ~1
 
 
 @pytest.mark.req("REQ-SCOUT-0005")
 def test_representative_build_is_most_common_decklist():
     A1, A2 = [1, 1, 2], [1, 3, 3]
-    eps = [_ep("A", A1, "A", A1), _ep("A", A1, "A", A2)]   # A1 ×3, A2 ×1
+    eps = [_ep("A", A1, "A", A1), _ep("A", A1, "A", A2)]   # A1 x3, A2 x1
 
     art = compile_artifact(eps, cards={}, now=NOW)
 
@@ -84,7 +84,7 @@ def test_recency_decay_favors_recent_builds():
 
     art = compile_artifact(eps, cards={}, now=NOW, half_life_days=21.0)
 
-    # Despite being rarer raw, the recent build dominates after decay.
+    # rarer raw, but recent build dominates after decay
     assert sorted(art["dossiers"]["A"]["representative_build"]) == sorted(A_NEW)
 
 
@@ -98,7 +98,7 @@ def test_dossier_has_evolution_lines_and_roles():
     assert MEGA in {t["cardId"] for t in doss["threats"]}          # big attacker
     roles = {t["cardId"]: t["role"] for t in doss["targets"]}
     assert roles.get(MEGA) == "prize_liability"                    # ex/Mega
-    assert roles.get(RIOLU) == "fragile_preevo"                    # pre-evo of the win-con
+    assert roles.get(RIOLU) == "fragile_preevo"                    # pre-evo of win-con
 
 
 @pytest.mark.req("REQ-SCOUT-0007")
@@ -109,7 +109,7 @@ def test_refuses_below_episode_floor():
 
 @pytest.mark.req("REQ-SCOUT-0007")
 def test_band_balanced_prior_ignores_oversampling():
-    # "Low" floods with A; "Elite" has only B. Raw pooling → A ≈ 0.95; balanced → ~0.5 each.
+    # "Low" floods with A; "Elite" has only B. Raw pooling -> A ~0.95; balanced -> ~0.5 each.
     eps = [_ep("A", [1], "A", [1], band="Low")] * 10 + [_ep("B", [2], "B", [2], band="Elite")]
 
     art = compile_artifact(eps, cards={}, now=NOW)
@@ -132,12 +132,12 @@ def test_matchup_winrate_is_directional_and_symmetric_in_n():
 
     a, b = art["dossiers"]["A"], art["dossiers"]["B"]
     assert a["matchups"]["B"]["win_rate"] > 0.5 > b["matchups"]["A"]["win_rate"]
-    assert a["matchups"]["B"]["n"] == pytest.approx(b["matchups"]["A"]["n"])  # same games
+    assert a["matchups"]["B"]["n"] == pytest.approx(b["matchups"]["A"]["n"])  # same games count
 
 
 @pytest.mark.req("REQ-SCOUT-0009")
 def test_draws_excluded_from_winrate_and_count():
-    # Symmetric 1-1 record + 5 draws: marginal stays exactly 0.5 and draws add no weight.
+    # Symmetric 1-1 record + 5 draws: marginal stays exactly 0.5, draws add no weight.
     eps = [_epw("A", "B", 0), _epw("A", "B", 1)] + [_epw("A", "B", None)] * 5
     art = compile_artifact(eps, cards={}, now=NOW)
 
@@ -145,12 +145,12 @@ def test_draws_excluded_from_winrate_and_count():
     assert a["win_rate"] == pytest.approx(0.5)
     assert a["win_n"] == pytest.approx(b["win_n"])
     assert a["win_n"] > 0                       # the two decisive games counted
-    assert a["win_n"] < 2.0                      # …recency-decayed, and no draw weight
+    assert a["win_n"] < 2.0                      # recency-decayed, no draw weight
 
 
 @pytest.mark.req("REQ-SCOUT-0009")
 def test_sparse_cell_shrinks_toward_marginal_not_raw():
-    # A is ~50% overall; one lucky decisive win vs C must not read as 100%.
+    # A ~50% overall; one lucky decisive win vs C must not read as 100%.
     eps = [_epw("A", "B", 0), _epw("A", "B", 1), _epw("A", "C", 0)]
     art = compile_artifact(eps, cards={}, now=NOW)
 
@@ -169,7 +169,7 @@ def test_recent_results_outweigh_old_ones():
 
 @pytest.mark.req("REQ-SCOUT-0009")
 def test_resultless_meta_leaves_neutral_winrate():
-    # No winner_index at all (the legacy episode shape) → neutral defaults, no crash.
+    # No winner_index at all (legacy episode shape) -> neutral defaults, no crash.
     art = compile_artifact([_ep("A", [1], "B", [2])], cards={}, now=NOW)
 
     assert art["dossiers"]["A"]["win_rate"] == 0.5

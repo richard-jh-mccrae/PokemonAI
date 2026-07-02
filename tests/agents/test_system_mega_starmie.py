@@ -20,7 +20,7 @@ from pilot_helpers import (
     attack_opt, card_opt, make_select, opt, poke, state,
 )
 
-# Load the deck's real Strategy from the test fixture (lib-free; imports only common.strategy).
+# Load deck's real Strategy from test fixture (lib-free; imports only common.strategy).
 _FIX = Path(__file__).parents[1] / "fixtures" / "agents" / "mega_starmie" / "strategy.py"
 _spec = importlib.util.spec_from_file_location("ms_fixture_strategy", _FIX)
 _mod = importlib.util.module_from_spec(_spec)
@@ -48,12 +48,12 @@ def _pilot(functions=_TAGS, stats=_STATS):
 
 
 # --- the scripted match ---------------------------------------------------
-def _open_active():   # SETUP: choose the opening Active (Staryu vs Cinderace)
+def _open_active():   # SETUP: choose opening Active (Staryu vs Cinderace)
     return make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=SETUP_ACTIVE,
                        current=state(hand=[STARYU, CINDERACE]))
 
 
-def _play_search():   # SETUP: PLAY a tutor/search card (Buddy Poffin) vs a basic (Staryu)
+def _play_search():   # SETUP: PLAY a tutor/search card (Buddy Poffin) vs basic (Staryu)
     return make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
                        current=state(hand=[BUDDY_POFFIN, STARYU]))
 
@@ -70,7 +70,7 @@ def _fired(pilot, obs):
 
 @pytest.mark.req("REQ-SYS-0001")
 def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
-    # The deck ships ZERO Hypotheses; its Roles/params opt in to the role-keyed General Strategy.
+    # Deck ships ZERO Hypotheses; its Roles/params opt in to role-keyed General Strategy.
     p = _pilot()
     fired = set().union(*(_fired(p, o) for o in (_open_active(), _play_search(), _attack())))
     role_keyed = {"open-the-accelerator", "advance-the-accel-pieces",
@@ -84,7 +84,7 @@ def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
 def test_a_role_keyed_and_a_tag_keyed_general_rule_fire_on_the_same_card():
     # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'search' -> both signals fire on one option.
     fired0 = {h.id for h, _ in _pilot().explain(_play_search()).options[0].fired}
-    assert "play-a-tutor-for-the-unfound-wincon" in fired0   # role-keyed (the deck's declaration)
+    assert "play-a-tutor-for-the-unfound-wincon" in fired0   # role-keyed (deck's declaration)
     assert "dig-before-commit" in fired0                     # tag-keyed (universal Function Tag)
 
 
@@ -93,9 +93,9 @@ def test_function_tags_have_an_effect():
     obs = _play_search()
     with_tags = {h.id for h, _ in _pilot().explain(obs).options[0].fired}
     without = {h.id for h, _ in _pilot(functions=None).explain(obs).options[0].fired}
-    assert "dig-before-commit" in with_tags     # the tag drives the tag-keyed rule
-    assert "dig-before-commit" not in without   # remove card_functions -> the rule can't fire
-    assert "play-a-tutor-for-the-unfound-wincon" in without  # the role-keyed rule is unaffected
+    assert "dig-before-commit" in with_tags     # tag drives the tag-keyed rule
+    assert "dig-before-commit" not in without   # remove card_functions -> rule can't fire
+    assert "play-a-tutor-for-the-unfound-wincon" in without  # role-keyed rule unaffected
 
 
 @pytest.mark.req("REQ-SYS-0004")
@@ -103,7 +103,7 @@ def test_weakness_has_an_effect_on_the_knockout():
     p = _pilot()
     assert p.explain(_attack()).options[0].score >= KO_SCORE   # 120 x2 = 240 >= 160 -> KO
 
-    # counterfactual: the same attack into a non-weak defender is not a knockout
+    # counterfactual: same attack into a non-weak defender is not a knockout
     nonweak = make_select([attack_opt(JETTING)], context=MAIN,
                           current=state(active=poke(MEGA_STARMIE, energy=3),
                                         opp_active=poke(9999, hp=160)))
@@ -116,13 +116,13 @@ def test_agent_keeps_a_startable_cinderace_hand_rather_than_mulliganing():
     # Cinderace's Explosiveness (opener tag + starter role) makes it keepable: keep, don't redraw.
     p = _pilot()
     mull = make_select([opt(YES), opt(NO)], context=MULLIGAN, current=state(hand=[CINDERACE]))
-    assert p.decide(mull) == [1]   # No = keep the hand
+    assert p.decide(mull) == [1]   # No = keep hand
     assert "keep-a-startable-hand" in {h.id for h, _ in p.explain(mull).options[0].fired}
 
 
 @pytest.mark.req("REQ-SYS-0006")
 def test_agent_attaches_energy_during_setup_rather_than_passing():
-    # Blunder #1: in SETUP, attaching an Energy must beat doing nothing (power-up-attacker), so the
+    # Blunder #1: in SETUP, attaching Energy must beat doing nothing (power-up-attacker), so
     # agent powers up its attacker instead of only ever playing the special accel energy.
     p = _pilot()
     obs = make_select([opt(ATTACH), opt(PLAY)], current=state(active=poke(STARYU, energy=0)))

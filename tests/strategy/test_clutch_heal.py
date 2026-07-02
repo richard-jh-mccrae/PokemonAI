@@ -21,7 +21,7 @@ def _ctx(**kw):
 def test_fires_only_for_a_clutch_heal_when_the_active_is_doomed():
     assert bool(_RULE.when(_ctx()))                                    # doomed + clutch_heal + play
     assert not _RULE.when(_ctx(board=Board(active_doomed=False)))      # not doomed -> hold it
-    assert not _RULE.when(_ctx(tags=["heal"]))                        # a plain heal (no energy bounce)
+    assert not _RULE.when(_ctx(tags=["heal"]))                        # plain heal (no energy bounce)
     assert not _RULE.when(_ctx(option_type=_ATTACH))                  # not a play
 
 
@@ -31,7 +31,7 @@ def test_clutch_heal_outranks_the_attach_when_the_active_is_doomed():
     stats = DictCardStatProvider({
         1031: CardStat(cardId=1031, hp=330, megaEx=True),     # my Mega ex (max HP 330)
         999: CardStat(cardId=999, hp=200, maxDamage=300),     # opponent's Active: 300 dmg >> my 50 HP
-        3: CardStat(cardId=3, hp=0, energyType=3),            # a Basic Energy in hand
+        3: CardStat(cardId=3, hp=0, energyType=3),            # Basic Energy in hand
     })
     funcs = CardFunctions({1229: ["heal", "clutch_heal"]})
     pilot = Pilot(Strategy(), deck=[], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -48,4 +48,4 @@ def test_clutch_heal_outranks_the_attach_when_the_active_is_doomed():
     wally, attach = dec.options[0], dec.options[1]
     assert "hold-clutch-heal" in {h.id for h, _ in wally.fired}
     assert wally.score > attach.score                                # heal sequenced before the attach
-    assert dec.chosen == [0]                                          # ... and it is the chosen play
+    assert dec.chosen == [0]                                          # ... and it's the chosen play

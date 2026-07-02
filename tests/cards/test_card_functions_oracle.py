@@ -22,18 +22,18 @@ ORACLE = [
     ("Judge", "hand_disruption"),
     ("Judge", "draw"),
     ("Dragapult ex", "spread"),                 # Stage-2 costliest-attack spread (Phantom Dive)
-    ("Munkidori", "confuse"),                   # Mind Bend → Confused (per-condition, not vague status)
+    ("Munkidori", "confuse"),                   # Mind Bend -> Confused (per-condition, not vague status)
     ("Drakloak", "draw"),                       # Stage-1 ability (Recon Directive — look top 2, draw 1)
     ("Fan Rotom", "search"),                    # basic ability (Fan Call)
     ("Teal Mask Ogerpon ex", "energy_accel"),   # basic ability (Teal Dance — a *true* accel)
     ("Tatsugiri", "dig"),                       # basic ability (Attract Customers)
     # curated overrides the probe can't reach (function_overrides.json) — guard they ship:
-    ("Munkidori", "heal"),                      # Adrena-Brain: move counters off mine
-    ("Munkidori", "spread"),                    # Adrena-Brain: ...onto the opponent's
-    # tutor_energy — deck-search an Energy card into hand (a `search` refinement, curated in
-    # function_overrides.json; the probe only sees the generic DECK→HAND move). Enables the Turn
+    ("Munkidori", "heal"),                      # Adrena-Brain: moves counters off mine
+    ("Munkidori", "spread"),                    # Adrena-Brain: ...onto opponent's
+    # tutor_energy — deck-search an Energy card into hand (`search` refinement, curated in
+    # function_overrides.json; probe only sees the generic DECK→HAND move). Enables the Turn
     # Planner's Supporter-enabled KO line (ADR-0031). Discard-pile energy retrieval stays `recycle`,
-    # a top-N look stays `dig`, and Pokémon energy-tutor attacks/abilities are out of scope (not a
+    # top-N look stays `dig`, Pokémon energy-tutor attacks/abilities out of scope (not a
     # Trainer play-event) — none of those carry this tag.
     ("Energy Search", "tutor_energy"),          # Item: search a Basic Energy → hand
     ("Energy Search Pro", "tutor_energy"),      # Item (ACE SPEC): any # of Basic Energy → hand
@@ -47,12 +47,12 @@ ORACLE = [
     ("Enhanced Hammer", "energy_denial"),       # discards opponent's Special Energy
     ("Sacred Ash", "recycle"),                  # Pokémon from discard back to deck
     ("Telepath Psychic Energy", "search"),      # special Energy that tutors on attach (probe can't reach)
-    ("Hop’s Bag", "search"),                    # name-restricted tutor the probe deck can't satisfy
+    ("Hop’s Bag", "search"),                    # name-restricted tutor, probe deck can't satisfy
     ("Thwackey", "search"),                     # precondition-gated tutor (Festival Lead)
     ("Xerosic’s Machinations", "hand_disruption"),
     ("Kyogre", "recycle"),
-    ("Battle Cage", "bench_guard"),             # new vocab: protects the bench from attack/ability effects
-    ("Cinderace", "opener"),                    # new vocab: Explosiveness — a non-Basic that may open (curated override)
+    ("Battle Cage", "bench_guard"),             # new vocab: protects bench from attack/ability effects
+    ("Cinderace", "opener"),                    # new vocab: Explosiveness — non-Basic that may open (curated override)
     ("Meowth ex", "stall"),                     # play-role seed (curated, pending replay-usage)
     ("Mega Kangaskhan ex", "stall"),
     ("Dudunsparce", "stall"),

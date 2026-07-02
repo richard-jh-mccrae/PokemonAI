@@ -22,7 +22,7 @@ def test_overlay_overrides_tuned_weights_and_merges_params(tmp_path):
     overrides, params = load_overrides_and_params(
         {"search_budget": 0}, env={"AGENT_OVERLAY": str(overlay)}, root=tmp_path)
     assert overrides == {"a": 1, "b": 9, "c": 3}      # overlay wins on b, adds c, keeps a
-    assert params == {"search_budget": 50}            # overlay param over the Strategy default
+    assert params == {"search_budget": 50}            # overlay param over Strategy default
 
 
 @pytest.mark.req("REQ-SIM-0008")

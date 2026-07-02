@@ -53,6 +53,6 @@ def test_render_brief_shows_the_strategy_change_callout():
 
     assert "Strategy changed since build #4" in html_out
     assert "weight 30 → 2" in html_out          # the callout
-    assert "w 30→2" in html_out                 # the inline badge on the row
+    assert "w 30→2" in html_out                 # inline badge on the row
     # first build (no baseline) renders no strategy callout
     assert "Strategy changed" not in render_brief(manifest)

@@ -65,7 +65,7 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     embedded Manifest, ADR-0019) at the bundle root. `prev_deck`/`prev_build_id` (the previous
     build's deck) drive the brief's highlighted deck-change callout.
     """
-    name = Path(name).name or name  # accept a path (e.g. tab-completed) or a bare name
+    name = Path(name).name or name  # accept a path (e.g. tab-completed) or bare name
     agent_dir = (Path(agents_root) if agents_root else MS / "agents") / name
     if not (agent_dir / "main.py").exists():
         raise SystemExit(f"no agent at {agent_dir}")
@@ -78,15 +78,15 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     for py in sorted(agent_dir.glob("*.py")):  # main.py + sibling modules (e.g. strategy.py)
         shutil.copy2(py, stage / py.name)
     shutil.copy2(agent_dir / "deck.csv", stage / "deck.csv")
-    if (tuned := agent_dir / "tuned.json").exists():   # machine weight overrides (ADR-0018), when present
+    if (tuned := agent_dir / "tuned.json").exists():   # machine weight overrides (ADR-0018), if present
         shutil.copy2(tuned, stage / "tuned.json")
     if (tuned_meta := agent_dir / "tuned.meta.json").exists():  # training provenance sidecar (ADR-0019)
         shutil.copy2(tuned_meta, stage / "tuned.meta.json")
     shutil.copytree(MS / "common", stage / "common", ignore=_IGNORE)
     shutil.copytree(MS / "cg", stage / "cg", ignore=_IGNORE)
 
-    when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for the brief and the zip name
-    from submit.brief import build_manifest, render_brief  # lazy: avoid an import cycle
+    when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for brief and zip name
+    from submit.brief import build_manifest, render_brief  # lazy: avoid import cycle
     manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
     brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id, prev_hyps=prev_hyps)
     (stage / "brief.html").write_text(brief, encoding="utf-8")

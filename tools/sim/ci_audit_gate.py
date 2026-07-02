@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
-# the ignore-flag family (every parse claim) + the engine-verified interaction goldens
+# ignore-flag family (every parse claim) + engine-verified interaction goldens
 _GATE_ATTACKS = (70, 95, 148, 207, 252, 316, 331, 426, 434, 479, 529, 540, 564, 607, 753, 837,
                  850, 867, 872, 901, 980, 990, 1226, 1305, 1517, 1487, 1488, 1042)
 

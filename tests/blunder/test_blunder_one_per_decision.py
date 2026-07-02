@@ -39,4 +39,4 @@ def test_editing_the_same_decision_is_allowed_via_replace_id(tmp_path):
                               rationale="first", source="own", agent="x", store_path=store)
     record_correction(replay, frame=d.frame, correct=[_other(d)], category="bad_target",
                       rationale="edited", source="own", agent="x", store_path=store,
-                      replace_id=first.id)        # no raise — replacing the one we're editing
+                      replace_id=first.id)        # no raise — replacing the one being edited

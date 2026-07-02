@@ -16,7 +16,7 @@ def test_main_option_labels_resolve_against_board():
     """REQ-BLUNDER-0008: Main options render readable labels (Play/Attach/End),
     resolving cards by (area, index) position in the full-info board. The Attach
     target carries its disambiguating board descriptor (slot + current/max HP)."""
-    d = _frame("Main")              # options: Play, Play, Play, Attach, End
+    d = _frame("Main")              # opts: Play, Play, Play, Attach, End
     labels = [option_label(o, d.current) for o in d.options]
     assert labels[-1] == "End turn"
     assert labels[3] == "Attach Basic {D} Energy → Munkidori (active · 110/110)"
@@ -28,14 +28,14 @@ def test_card_select_labels_resolve_card_names():
     including the top-level `looking` zone (deck/hand cards stay a bare name)."""
     bench = _frame("ToBench")
     assert option_label(bench.options[0], bench.current) == "Budew"
-    hand = _frame("ToHand")         # area 12 = looking
+    hand = _frame("ToHand")         # area 12 == looking
     assert option_label(hand.options[0], hand.current) == "Lillie's Determination"
 
 
 def test_identical_bench_copies_are_disambiguated():
     """REQ-BLUNDER-0011: two same-named Pokemon on the bench render distinct labels --
     slot index, current/max HP and attached-energy count tell the copies apart."""
-    sw = _frame("Switch")           # two 'Mega Starmie ex' on the bench, one energised
+    sw = _frame("Switch")           # two 'Mega Starmie ex' on bench, one energised
     labels = [option_label(o, sw.current) for o in sw.options]
     assert labels[0] == "Mega Starmie ex (bench 1 · 330/330 · 1⚡)"
     assert labels[1] == "Mega Starmie ex (bench 2 · 330/330)"
@@ -62,7 +62,7 @@ def test_opponent_owned_target_is_marked():
                         "energyCards": [{"name": "x"}]}]},
         ],
     }
-    opt = {"type": "Card", "area": 5, "index": 0, "playerIndex": 1}   # opponent bench 0
+    opt = {"type": "Card", "area": 5, "index": 0, "playerIndex": 1}   # opp bench 0
     assert option_label(opt, current) == "opp Riolu (bench 1 · 60/70 · 1⚡)"
 
 

@@ -19,7 +19,7 @@ class Artifact:
     card_inclusion: dict[str, dict[int, float]]    # archetype -> {cardId: P(card|A)}
     background: dict[int, float]                    # cardId -> P(card present overall)
     dossiers: dict[str, dict] = field(default_factory=dict)
-    meta: dict = field(default_factory=dict)        # schema_version, compiled_at, …
+    meta: dict = field(default_factory=dict)        # schema_version, compiled_at, ...
 
 
 def _empty() -> Artifact:

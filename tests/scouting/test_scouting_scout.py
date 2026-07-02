@@ -24,8 +24,8 @@ def test_resets_state_on_new_match():
     scout = Scout(tiny_artifact())
     # Match 1: strong Mega Lucario ex evidence.
     scout.observe(make_obs(turn=5, opp_bench=[SOLROCK, RIOLU, MEGA_LUCARIO]))
-    # Match 2 begins: the turn counter resets and the board shows a Gardevoir engine
-    # piece. Without a reset, match 1's Solrock/Riolu would still dominate.
+    # Match 2 begins: turn counter resets, board shows a Gardevoir engine piece.
+    # Without a reset, match 1's Solrock/Riolu would still dominate.
     read = scout.observe(make_obs(turn=1, opp_active=KIRLIA))
 
     assert read.candidates[0][0] == "Gardevoir ex"
@@ -38,7 +38,7 @@ def test_evidence_accumulates_across_decisions():
     persistent.observe(make_obs(turn=2, opp_bench=[SOLROCK]))          # sees the signature
     read_persist = persistent.observe(make_obs(turn=3, opp_bench=[SHARED]))  # signature now off-board
 
-    read_fresh = Scout(art).observe(make_obs(turn=3, opp_bench=[SHARED]))    # only the ambiguous card
+    read_fresh = Scout(art).observe(make_obs(turn=3, opp_bench=[SHARED]))    # only ambiguous card
 
     assert (dict(read_persist.candidates)["Mega Lucario ex"]
             > dict(read_fresh.candidates)["Mega Lucario ex"])
@@ -77,7 +77,7 @@ def test_expected_cards_surface_when_confident():
     read = scout.observe(make_obs(opp_bench=[SOLROCK, MEGA_LUCARIO]))
 
     expected_ids = [c for c, _ in read.expected_cards]
-    assert RIOLU in expected_ids        # in the build, not yet seen
+    assert RIOLU in expected_ids        # in build, not yet seen
     assert SOLROCK not in expected_ids  # already revealed
 
 
@@ -87,13 +87,13 @@ def test_evolution_paths_predict_line_top():
     read = scout.observe(make_obs(opp_active=RIOLU, opp_bench=[SOLROCK, MEGA_LUCARIO]))
 
     paths = {p.seen_cardId: p.top_cardId for p in read.evolution_paths}
-    assert paths.get(RIOLU) == MEGA_LUCARIO   # that basic becomes the win-condition
+    assert paths.get(RIOLU) == MEGA_LUCARIO   # that basic becomes win-condition
 
 
 @pytest.mark.req("REQ-SCOUT-0004")
 def test_predicted_dossier_targets_surface_unseen_when_confident():
-    # Recognized Mega Lucario ex (Solrock signature + Mega Lucario), but Riolu is NOT on board. The
-    # dossier's fragile_preevo target (Riolu) is surfaced as a PREDICTED target with seen=False.
+    # Recognized Mega Lucario ex (Solrock signature + Mega Lucario), but Riolu NOT on board. The
+    # dossier's fragile_preevo target (Riolu) surfaces as a PREDICTED target with seen=False.
     read = Scout(tiny_artifact()).observe(make_obs(opp_active=MEGA_LUCARIO, opp_bench=[SOLROCK]))
 
     riolu = [t for t in read.targets if t.cardId == RIOLU]
@@ -104,8 +104,8 @@ def test_predicted_dossier_targets_surface_unseen_when_confident():
 
 @pytest.mark.req("REQ-SCOUT-0004")
 def test_predicted_dossier_role_overrides_stat_default_for_on_board_card():
-    # Riolu is on the board AND is the dossier's fragile_preevo target: the archetype-specific role
-    # wins over the observed stat default, and seen=True (it's in play).
+    # Riolu is on board AND is the dossier's fragile_preevo target: archetype-specific role
+    # wins over observed stat default, and seen=True (it's in play).
     read = Scout(tiny_artifact()).observe(make_obs(opp_active=RIOLU, opp_bench=[SOLROCK, MEGA_LUCARIO]))
 
     riolu = [t for t in read.targets if t.cardId == RIOLU]
@@ -114,9 +114,9 @@ def test_predicted_dossier_role_overrides_stat_default_for_on_board_card():
 
 @pytest.mark.req("REQ-SCOUT-0004")
 def test_no_predicted_intel_below_the_confidence_bar():
-    # An ambiguous board (a card shared by both archetypes) stays below the recognition bar, so the
+    # Ambiguous board (a card shared by both archetypes) stays below recognition bar, so
     # Read carries only OBSERVED intel (all seen) — no predicted dossier targets leak in.
     read = Scout(tiny_artifact()).observe(make_obs(opp_bench=[SHARED]))
 
     assert all(i.seen for i in read.targets + read.threats)
-    assert RIOLU not in {t.cardId for t in read.targets}   # the dossier's predicted target is withheld
+    assert RIOLU not in {t.cardId for t in read.targets}   # dossier's predicted target withheld

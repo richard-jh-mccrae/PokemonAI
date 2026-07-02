@@ -15,7 +15,7 @@ from common.scouting.provider import (
     ("This Pokémon also does 20 damage to itself.", 20),                 # Wiglett Aqua Bomb
     ("This Pokémon also does 50 damage to itself.", 50),                 # Excadrill Wild Tackle
     ("This Pokémon also does 30 damage to itself.", 30),                 # Black Kyurem ex Black Frost
-    # conditional / variable / coin-flip recoil -> 0 (we'd decline or can't count it)
+    # conditional / variable / coin-flip recoil -> 0 (decline or can't count it)
     ("You may do 30 more damage. If you do, this Pokémon also does 30 damage to itself.", 0),  # Gurdurr
     ("This Pokémon also does 10 damage to itself for each damage counter on it.", 0),  # Palafin
     ("Flip 2 coins. If both of them are tails, this Pokémon also does 90 damage to itself.", 0),  # Raticate
@@ -30,7 +30,7 @@ def test_parse_attack_recoil(text, expected):
 
 @pytest.mark.req("REQ-GUST-0006")
 @pytest.mark.parametrize("text,expected", [
-    # Mega Starmie ex Jetting Blow + Farigiraf ex Dirty Beam — the clean single-target opponent rider
+    # Mega Starmie ex Jetting Blow + Farigiraf ex Dirty Beam — clean single-target opponent rider
     ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon. "
      "(Don't apply Weakness and Resistance for Benched Pokémon.)", 50),
     ("This attack also does 30 damage to 1 of your opponent's Benched Pokémon. "
@@ -58,7 +58,7 @@ def test_parse_attack_bench_snipe(text, expected):
 
 @pytest.mark.req("REQ-GUST-0006")
 @pytest.mark.parametrize("text,expected", [
-    # Alakazam (743) Powerful Hand — 2 counters/card = 20 damage/card (counters ignore Weakness/Resistance)
+    # Alakazam (743) Powerful Hand — 2 counters/card = 20 dmg/card (counters ignore Weakness/Resistance)
     ("Place 2 damage counters on your opponent's Active Pokémon for each card in your hand.", 20),
     ("Place 1 damage counter on your opponent's Active Pokémon for each card in your hand.", 10),
     # direct "damage for each card in your hand" -> the printed per-card damage
@@ -76,12 +76,12 @@ def test_parse_attack_hand_size(text, expected):
 
 @pytest.mark.req("REQ-LETHAL-0012")
 @pytest.mark.parametrize("text,expected", [
-    # Mega Starmie ex Nebula Beam — bypasses effects on the opponent's Active (Crustle's prevent Ability)
+    # Mega Starmie ex Nebula Beam — bypasses effects on opp's Active (Crustle's prevent Ability)
     ("This attack's damage isn't affected by Weakness or Resistance, or by any effects on your "
      "opponent's Active Pokémon.", True),
-    # Crustle Superb Scissors — the shorter phrasing of the same clause
+    # Crustle Superb Scissors — shorter phrasing, same clause
     ("This attack's damage isn't affected by any effects on your opponent's Active Pokémon.", True),
-    # NOT the clause: Weakness/Resistance only, a bench-snipe, a recoil, no rider -> False (the Ability still walls it)
+    # NOT the clause: Weakness/Resistance only, bench-snipe, recoil, no rider -> False (Ability still walls it)
     ("This attack's damage isn't affected by Weakness or Resistance.", False),      # W/R only, not effects
     ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon.", False),  # Jetting Blow
     ("This Pokémon also does 50 damage to itself.", False),                         # recoil

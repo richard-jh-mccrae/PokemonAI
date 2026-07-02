@@ -31,7 +31,7 @@ class Scout:
             )
             top = candidates[: self.k]
             threats, targets = self._observed_intel()
-            arch = self._confident_archetype(top)        # add the dossier's PREDICTED intel (ADR-0027)
+            arch = self._confident_archetype(top)        # adds dossier's PREDICTED intel (ADR-0027)
             if arch is not None:
                 threats = self._merge_intel(threats, self._dossier_intel(arch, "threats"))
                 targets = self._merge_intel(targets, self._dossier_intel(arch, "targets"))
@@ -45,8 +45,8 @@ class Scout:
 
     # --- match lifecycle --------------------------------------------------
     def _maybe_reset(self, cur: dict) -> None:
-        # The turn counter only ever increases within a match; a drop means a new
-        # match began (the local self-play harness reuses one process).
+        # Turn counter only ever increases within a match; a drop means a new
+        # match began (local self-play harness reuses one process).
         turn = cur.get("turn")
         if turn is not None:
             if self._last_turn is not None and turn < self._last_turn:
@@ -149,7 +149,7 @@ class Scout:
         """Predict each in-play opponent Pokémon's line top (dossier evolution lines)."""
         arch = self._confident_archetype(top)
         if arch is None:
-            return []  # off-meta engine `evolvesFrom` fallback: follow-up cycle
+            return []  # off-meta: engine `evolvesFrom` fallback handles it next cycle
         lines = (self.artifact.dossiers.get(arch) or {}).get("evolution_lines") or []
         paths = []
         for cid in self._opp_in_play:

@@ -22,20 +22,20 @@ EVOLVE = 9      # OptionType.EVOLVE
 RETREAT = 12    # OptionType.RETREAT
 
 WINCON = 900    # my Active attacker / win-condition (Mega Starmie ex shape)
-PREEVO = 800    # Staryu — the Line base (evolves into WINCON), a weak attacker on its own
-OPENER = 850    # a spent opener Basic (can't KO, no evolution) — the body to retreat OUT of
+PREEVO = 800    # Staryu — Line base (evolves into WINCON), weak attacker alone
+OPENER = 850    # spent opener Basic (can't KO, no evolution) — retreat OUT of this
 OPP = 678       # opponent's Active (1 prize)
 EXOPP = 679     # opponent's Active: a Pokémon ex (2 prizes)
 BENCHIE = 700   # opponent's benched body (1 prize, harmless)
-BIGATK = 701    # opponent's benched body that KOs my Mega next turn (the survival threat)
-THREAT = 680    # opponent's Active: KO-able now (70 HP) but a 210-damage glass cannon that dooms me next turn
-WALLYS = 1229   # Wally's Compassion — clutch_heal (heals a Mega ex to full, bounces its Energy to hand)
-HILDA = 1225    # Hilda — a Supporter that searches an Energy (+ an Evolution) into hand (tutor_energy)
+BIGATK = 701    # opponent's benched body that KOs my Mega next turn (survival threat)
+THREAT = 680    # opponent's Active: KO-able now (70 HP) but 210-dmg glass cannon that dooms me next turn
+WALLYS = 1229   # Wally's Compassion — clutch_heal (heals Mega ex to full, bounces Energy to hand)
+HILDA = 1225    # Hilda — Supporter that searches an Energy (+ Evolution) into hand (tutor_energy)
 JETTING = 11    # attack id: cost 1, 120 damage
-NEBULA = 10     # attack id: cost 3, 210 damage (the big attack an extra Energy unlocks)
+NEBULA = 10     # attack id: cost 3, 210 damage (big attack an extra Energy unlocks)
 STARYU = 12     # Staryu's own attack: cost 1, 20 damage (can't KO)
-OPEN_ATK = 13   # the opener's own attack: cost 1, 30 damage (can't KO)
-WATER = 3       # a Basic {W} Energy card in hand (a reusable attach)
+OPEN_ATK = 13   # opener's own attack: cost 1, 30 damage (can't KO)
+WATER = 3       # Basic {W} Energy card in hand (reusable attach)
 
 
 def _stats():
@@ -51,9 +51,9 @@ def _stats():
         EXOPP: CardStat(EXOPP, name="opp ex", hp=210, energyType=7, ex=True),
         BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
         BIGATK: CardStat(BIGATK, name="big hitter", hp=200, energyType=7, minAttackCost=1,
-                         minCostDamage=340, maxDamage=340),   # a benched threat that KOs my Mega next turn
+                         minCostDamage=340, maxDamage=340),   # benched threat, KOs my Mega next turn
         THREAT: CardStat(THREAT, name="glass cannon", hp=70, energyType=7, minAttackCost=1,
-                         minCostDamage=210, maxDamage=210),   # KO-able now, but dooms my Active next turn
+                         minCostDamage=210, maxDamage=210),   # KO-able now, dooms my Active next turn
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
     })
 
@@ -81,10 +81,10 @@ def test_retreat_then_attach_unlocks_an_otherwise_missed_ko_is_planned_and_taken
     obs = make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board)
 
     d = pilot.explain(obs)
-    assert d.planned is not None                      # a KO-for-prizes line was found
-    assert d.planned.next_step == [0]                 # its next step is the enabling retreat
+    assert d.planned is not None                      # KO-for-prizes line found
+    assert d.planned.next_step == [0]                 # next step = the enabling retreat
     assert d.planned.goal == "ko_for_prizes"
-    assert pilot.decide(obs) == [0]                   # ... and the Pilot takes it
+    assert pilot.decide(obs) == [0]                   # Pilot takes it
 
 
 @pytest.mark.req("REQ-PLANNER-0002")
@@ -113,7 +113,7 @@ def test_evolve_then_attach_unlocks_an_otherwise_missed_ko_is_planned_and_taken(
                   opp_bench=[poke(BENCHIE, hp=100)], hand=[WINCON, WATER], prizes=2, opp_prizes=2)
     obs = make_select([evolve, attack_opt(STARYU), opt(END)], current=board)
     d = pilot.explain(obs)
-    assert d.planned is not None and d.planned.next_step == [0]   # lock the evolve that unlocks the KO
+    assert d.planned is not None and d.planned.next_step == [0]   # lock the evolve unlocking the KO
     assert pilot.decide(obs) == [0]
 
 
@@ -194,8 +194,8 @@ def test_planned_line_value_reflects_post_ko_survival():
     p_safe = pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=safe)).planned
     p_doomed = pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=doomed)).planned
     assert p_safe is not None and p_doomed is not None
-    assert p_safe.next_step == [0] and p_doomed.next_step == [0]   # prizes dominate: the KO is taken either way
-    assert p_safe.value > p_doomed.value                          # ... but survival lifts the safe line
+    assert p_safe.next_step == [0] and p_doomed.next_step == [0]   # prizes dominate: KO taken either way
+    assert p_safe.value > p_doomed.value                          # survival lifts the safe line
 
 
 @pytest.mark.req("REQ-PLANNER-0009")
@@ -206,7 +206,7 @@ def test_leaf_value_prizes_dominate_positional_terms():
     AMONG equal-prize lines."""
     lv = _pilot()._leaf_value
     assert lv(prizes=2, active_survives=False) > lv(prizes=1, active_survives=True)      # more prizes win
-    assert lv(prizes=1, active_survives=True) > lv(prizes=1, active_survives=False)       # survival breaks a tie
+    assert lv(prizes=1, active_survives=True) > lv(prizes=1, active_survives=False)       # survival breaks tie
     assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True, threat_removed=10_000)
 
 
@@ -241,7 +241,7 @@ def test_committed_plan_is_cached_as_turn_scoped_state():
     pilot = _pilot()
     obs = _ko_obs()
     line1 = pilot.explain(obs).planned
-    assert line1 is not None and pilot._turn_plan is not None   # the plan is cached as turn state
+    assert line1 is not None and pilot._turn_plan is not None   # plan cached as turn state
     assert pilot.explain(obs).planned is line1                  # same board -> cached object reused
 
 
@@ -252,7 +252,7 @@ def test_plan_is_recomputed_when_the_board_reveals_new_information():
     here the opponent's Active is now too healthy to KO, so the plan correctly collapses to None."""
     pilot = _pilot()
     assert pilot.explain(_ko_obs(opp_hp=180)).planned is not None
-    assert pilot.explain(_ko_obs(opp_hp=330)).planned is None   # a reveal invalidates the cached KO line
+    assert pilot.explain(_ko_obs(opp_hp=330)).planned is None   # reveal invalidates cached KO line
 
 
 @pytest.mark.req("REQ-PLANNER-0015")
@@ -268,7 +268,7 @@ def test_no_nested_plan_or_cache_while_simulating():
     finally:
         pilot._planning = False
     assert d.planned is not None and d.planned.next_step == [0]   # closed-form line still returned
-    assert pilot._turn_plan is None                                # ... but not cached (we were mid-sim)
+    assert pilot._turn_plan is None                                # not cached (mid-sim)
 
 
 # ------------------------------------------------------ stabilize-then-KO (0cbc): heal AND take the KO
@@ -289,7 +289,7 @@ def test_stabilize_then_ko_heals_to_full_and_keeps_the_ko_when_doomed():
     assert b.active_doomed and b.active_can_ko          # doomed, yet a KO is on the board (the trap)
     d = pilot.explain(obs)
     assert d.planned is not None and d.planned.goal == "stabilize_then_ko"
-    assert d.planned.next_step == [0]                   # play Wally's first (heal, then re-power, then KO)
+    assert d.planned.next_step == [0]                   # play Wally's first (heal, re-power, then KO)
     assert pilot.decide(obs) == [0]
 
 
@@ -306,7 +306,7 @@ def test_stabilize_stands_down_when_the_heal_would_forfeit_the_ko():
                        opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
                        attack_opt(NEBULA), attack_opt(JETTING), opt(END)], current=board)
     assert pilot._board(obs).active_doomed and pilot._board(obs).active_can_ko
-    assert pilot.explain(obs).planned is None           # can't re-power the KO -> don't heal
+    assert pilot.explain(obs).planned is None           # can't re-power KO -> don't heal
 
 
 @pytest.mark.req("REQ-PLANNER-0019")
@@ -356,7 +356,7 @@ def test_clause_heal_stabilizes_when_amount_and_rider_math_check_out():
 
 @pytest.mark.req("REQ-PLANNER-0024")
 def test_clause_heal_stands_down_when_the_amount_cannot_stabilize():
-    # Potion heals 30: 160+30=190 <= 210 Incoming — healing wouldn't save the Active, don't spend it
+    # Potion heals 30: 160+30=190 <= 210 Incoming — heal wouldn't save Active, don't spend it
     pilot = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 30}]}))
     board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
                   opp_bench=[poke(BENCHIE, hp=100)], hand=[POTION, WATER], prizes=2, opp_prizes=2)
@@ -368,7 +368,7 @@ def test_clause_heal_stands_down_when_the_amount_cannot_stabilize():
 
 @pytest.mark.req("REQ-PLANNER-0024")
 def test_clause_heal_stands_down_when_its_rider_forfeits_the_ko():
-    # The ONLY KO is Nebula (cost 3) at exactly 2 Energy + 1 attach = 3 — but Super Potion's rider
+    # ONLY KO is Nebula (cost 3) at exactly 2 Energy + 1 attach = 3 — but Super Potion's rider
     # discards one (2 -> 1 + 1 = 2 < 3): healing would forfeit the prize -> stand down
     pilot = _pilot(effects=_effects({SUPER_POTION: [
         {"kind": "heal", "amount": 60, "rider": "discard_own_energy"}]}))
@@ -383,7 +383,7 @@ def test_clause_heal_stands_down_when_its_rider_forfeits_the_ko():
 
 @pytest.mark.req("REQ-PLANNER-0024")
 def test_clause_restriction_gates_the_candidate():
-    # a mega-only heal clause can't target my non-Mega Active: skipped, no line
+    # mega-only heal clause can't target my non-Mega Active: skipped, no line
     pilot = _pilot(effects=_effects({SUPER_POTION: [
         {"kind": "heal", "amount": 200, "restriction": "mega_only"}]}))
     board = state(active=poke(OPENER, energy=1, hp=100), opp_active=poke(THREAT, hp=30),
@@ -399,9 +399,9 @@ def test_clause_restriction_gates_the_candidate():
 
 @pytest.mark.req("REQ-PLANNER-0025")
 def test_board_checkable_condition_gates_are_evaluated():
-    # Bianca's Devotion: heal ALL, gated on "30 HP or less remaining" — the gate is board-checkable,
-    # so the Planner evaluates it instead of fail-closed skipping. At 20/330 the gate passes (heal to
-    # full, KO kept); at 160/330 the gate fails -> no line.
+    # Bianca's Devotion: heal ALL, gated on "30 HP or less remaining" — gate is board-checkable,
+    # so Planner evaluates it instead of fail-closed skipping. At 20/330 gate passes (heal to
+    # full, KO kept); at 160/330 gate fails -> no line.
     BIANCA = 1190
     eff = _effects({BIANCA: [{"kind": "heal", "amount": "all",
                               "condition": "remaining_hp_30_or_less"}]})
@@ -464,10 +464,10 @@ def test_energy_tutor_supporter_unlocks_an_otherwise_missed_ko_is_planned_and_ta
     obs = make_select([play_hilda, attack_opt(OPEN_ATK), opt(END)], current=board)
 
     d = pilot.explain(obs)
-    assert d.planned is not None                       # a KO-for-prizes line was found
+    assert d.planned is not None                       # KO-for-prizes line found
     assert d.planned.goal == "ko_for_prizes"
-    assert d.planned.next_step == [0]                  # its next step is playing the energy tutor
-    assert pilot.decide(obs) == [0]                    # ... and the Pilot takes it
+    assert d.planned.next_step == [0]                  # next step = playing the energy tutor
+    assert pilot.decide(obs) == [0]                    # Pilot takes it
 
 
 @pytest.mark.req("REQ-PLANNER-0021")
@@ -477,11 +477,11 @@ def test_energy_tutor_line_generalizes_to_any_tutor_energy_supporter():
     (Energy Search, Colress's Tenacity, Crispin, …). Same board, a different tutor id — the Planner
     still plays it to supply the attach that unlocks the retreat→attach→KO. Guards against a
     regression that hardcodes a single card."""
-    energy_search = 1119                               # a tutor_energy sibling (Item) — not Hilda
+    energy_search = 1119                               # tutor_energy sibling (Item) — not Hilda
     pilot = _pilot(functions=CardFunctions({energy_search: ["search", "tutor_energy"]}))
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
                   opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
-                  hand=[energy_search], prizes=2, opp_prizes=2)   # no Energy in hand — the tutor fetches it
+                  hand=[energy_search], prizes=2, opp_prizes=2)   # no Energy in hand — tutor fetches it
     obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(OPEN_ATK), opt(END)], current=board)
 
     d = pilot.explain(obs)
@@ -500,6 +500,6 @@ def test_energy_tutor_stands_down_when_the_turns_attach_is_already_spent():
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
                   opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
                   hand=[HILDA], prizes=2, opp_prizes=2)
-    board["energyAttached"] = True                     # this turn's one Energy attach is already spent
+    board["energyAttached"] = True                     # this turn's one Energy attach already spent
     obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(OPEN_ATK), opt(END)], current=board)
     assert pilot.explain(obs).planned is None

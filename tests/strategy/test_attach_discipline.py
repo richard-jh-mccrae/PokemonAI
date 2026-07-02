@@ -27,7 +27,7 @@ def _attach(hand_idx, area, in_idx):
 
 
 def _stats():
-    # Mega Starmie ex: cheapest attack 1, biggest attack CCC=3 -> "under max" until 3 Energy.
+    # Mega Starmie ex: cheapest attack 1, biggest attack CCC=3 -> "under max" until 3 Energy
     return DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                        minAttackCost=1, maxDamageCost=3, evolvesFrom="Staryu"),
@@ -52,8 +52,8 @@ def _obs(bench, hand, options):
 
 @pytest.mark.req("REQ-GEN-0016")
 def test_concentrate_loads_the_most_built_wincon_over_a_bare_body():
-    # Bench: a Mega on 2 Energy (closest to its CCC payoff) and a bare Staryu. The third Energy tops up
-    # the Mega — concentrate, don't spread it onto the Staryu.
+    # Bench: a Mega on 2 Energy (closest to its CCC payoff), a bare Staryu. 3rd Energy tops up
+    # the Mega — concentrate, don't spread onto the Staryu
     p = _pilot()
     bench = [{"id": MEGA, "energies": [WATER, WATER], "hp": 330}, {"id": STARYU, "energies": [], "hp": 70}]
     hand = [{"id": WATER}]
@@ -68,7 +68,7 @@ def test_concentrate_loads_the_most_built_wincon_over_a_bare_body():
 
 @pytest.mark.req("REQ-GEN-0016")
 def test_prefer_reusable_basic_over_ignition_onto_the_wincon():
-    # A Water and an Ignition both top up the Active Mega; prefer the reusable Water and save the burst.
+    # A Water and an Ignition both top up the Active Mega; prefer reusable Water, save the burst
     p = _pilot()
     bench = []
     me_active = {"id": MEGA, "energies": [WATER, WATER], "hp": 330}
@@ -78,8 +78,8 @@ def test_prefer_reusable_basic_over_ignition_onto_the_wincon():
            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
                       "option": [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)]}}   # Ignition vs Water
     dec = p.explain(obs)
-    assert "prefer-reusable-over-burst" in _fired(dec.options[0])     # the Ignition attach: penalised
-    assert "prefer-reusable-over-burst" not in _fired(dec.options[1])  # the Water attach: clean
+    assert "prefer-reusable-over-burst" in _fired(dec.options[0])     # Ignition attach: penalised
+    assert "prefer-reusable-over-burst" not in _fired(dec.options[1])  # Water attach: clean
     assert p.decide(obs) == [1]                                       # attach the reusable Water
 
 
@@ -99,10 +99,10 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
                      lines=[Line(path=[STARYU, MEGA], payoff=MEGA)])
     p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
               attacks={}, attack_costs={})
-    # bench: the off-line Cinderace at the LOWER index, the Line base Staryu after — both bare/needy.
+    # bench: off-line Cinderace at LOWER index, Line base Staryu after — both bare/needy
     bench = [{"id": CINDERACE, "energies": [], "hp": 160}, {"id": STARYU, "energies": [], "hp": 70}]
     obs = _obs(bench, [{"id": WATER}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])   # ->Cinderace, ->Staryu
     t0, t1 = p.explain(obs).options
-    assert t0.score == t1.score                                      # genuinely a SCORE tie ...
-    assert t1.attach_to_needy_line and not t0.attach_to_needy_line   # ... broken by the Line-base flag
-    assert p.decide(obs) == [1]                                      # so the Staryu (Line base) is fed, not Cinderace
+    assert t0.score == t1.score                                      # genuinely a SCORE tie...
+    assert t1.attach_to_needy_line and not t0.attach_to_needy_line   # ...broken by the Line-base flag
+    assert p.decide(obs) == [1]                                      # so Staryu (Line base) fed, not Cinderace

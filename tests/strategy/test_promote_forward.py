@@ -48,8 +48,8 @@ def _obs(bench, opp_active, hand=(), ctx=TO_ACTIVE, active=None):
 
 @pytest.mark.req("REQ-GEN-0026")
 def test_promote_the_accelerator_that_kos_over_the_wincon():
-    # Opp Active = a 20-HP Mega Lucario ex. Both Cinderace (50) and the benched Mega (120) KO it; promote
-    # CINDERACE — it takes the prize AND its Turbo Flare loads the Mega for next turn.
+    # Opp Active = 20-HP Mega Lucario ex. Both Cinderace (50) and benched Mega (120) KO it; promote
+    # CINDERACE — takes the prize AND its Turbo Flare loads the Mega for next turn.
     p = _pilot()
     bench = [{"id": CINDERACE, "energies": [3], "hp": 160},      # idx0: accelerator, can KO
              {"id": MEGA, "energies": [3], "hp": 330}]           # idx1: ready wincon, can KO
@@ -57,13 +57,13 @@ def test_promote_the_accelerator_that_kos_over_the_wincon():
     dec = p.explain(obs)
     assert "promote-the-accelerator-for-the-ko" in _fired(dec.options[0])
     assert "promote-the-ready-wincon" in _fired(dec.options[1])
-    assert p.decide(obs) == [0]                                  # the accelerator, not the wincon
+    assert p.decide(obs) == [0]                                  # accelerator, not the wincon
 
 
 @pytest.mark.req("REQ-GEN-0026")
 def test_promote_the_staller_over_a_bare_preevo_even_with_the_payoff_in_hand():
-    # Mega in hand, but the only benched pre-evolution (Staryu) is BARE — evolving it exposes a dead
-    # 0-Energy Mega. Promote Cinderace (a staller that can act) instead.
+    # Mega in hand, but only benched pre-evolution (Staryu) is BARE — evolving it exposes a dead
+    # 0-Energy Mega. Promote Cinderace (staller that can act) instead.
     p = _pilot(hand_ids=[MEGA])
     bench = [{"id": CINDERACE, "energies": [1], "hp": 160},      # idx0: staller, 1 Energy
              {"id": STARYU, "energies": [], "hp": 70}]           # idx1: bare pre-evolution
@@ -72,12 +72,12 @@ def test_promote_the_staller_over_a_bare_preevo_even_with_the_payoff_in_hand():
     dec = p.explain(obs)
     assert "promote-the-staller" in _fired(dec.options[0])
     assert "prefer-wincon-line-piece" not in _fired(dec.options[1])   # bare pre-evo: stands down
-    assert p.decide(obs) == [0]                                  # the staller, not the bare Staryu
+    assert p.decide(obs) == [0]                                  # staller, not the bare Staryu
 
 
 @pytest.mark.req("REQ-GEN-0025")
 def test_best_promote_slot_picks_the_most_built_ready_wincon():
-    # Three Mega Starmie ex on the Bench: bare (0), online (1 Energy), most-built (3 Energy). The best
+    # Three Mega Starmie ex on the Bench: bare (0), online (1 Energy), most-built (3 Energy). Best
     # body to promote is the 3-Energy one — closest to its payoff hit (ep83007714 f104).
     p = _pilot()
     bench = [{"id": MEGA, "energies": [], "hp": 330},            # idx0: bare, not ready
@@ -87,15 +87,15 @@ def test_best_promote_slot_picks_the_most_built_ready_wincon():
     board = p._board(obs, obs["select"])
     assert board.best_promote_slot == (5, 1)                     # (BENCH, index 1) — the 3-Energy Mega
     dec = p.explain(obs)
-    assert "promote-the-ready-wincon" in _fired(dec.options[1])  # fires only on the best body …
-    assert "promote-the-ready-wincon" not in _fired(dec.options[0])  # … not the bare copy
-    assert "promote-the-ready-wincon" not in _fired(dec.options[2])  # … not the lesser-built copy
+    assert "promote-the-ready-wincon" in _fired(dec.options[1])  # fires only on best body …
+    assert "promote-the-ready-wincon" not in _fired(dec.options[0])  # … not bare copy
+    assert "promote-the-ready-wincon" not in _fired(dec.options[2])  # … not lesser-built copy
     assert p.decide(obs) == [1]
 
 
 @pytest.mark.req("REQ-GEN-0025")
 def test_promote_the_ready_wincon_fires_at_switch_too():
-    # The new-Active pick when you RETREAT (SWITCH) must also bring up the built wincon, not bench-slot-0
+    # The new-Active pick on RETREAT (SWITCH) must also bring up the built wincon, not bench-slot-0
     # (ep83007714 f92: a bare Cinderace at slot 0, the 3-Energy Mega at slot 1).
     p = _pilot()
     bench = [{"id": CINDERACE, "energies": [], "hp": 160},       # idx0: bare off-line body (slot 0)
@@ -104,4 +104,4 @@ def test_promote_the_ready_wincon_fires_at_switch_too():
     assert p._board(obs, obs["select"]).best_promote_slot == (5, 1)
     dec = p.explain(obs)
     assert "promote-the-ready-wincon" in _fired(dec.options[1])  # fires at SWITCH, on the wincon
-    assert p.decide(obs) == [1]                                  # not the bench-slot-0 Cinderace
+    assert p.decide(obs) == [1]                                  # not bench-slot-0 Cinderace

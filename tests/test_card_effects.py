@@ -33,18 +33,18 @@ def _move(frm, to, player=0):
 
 @pytest.mark.req("REQ-EFFECT-0001")
 def test_heal_amount_is_measured_from_hp_change():
-    # HP_CHANGE(16) value>0, actor's side, not a damage counter -> heal clause with the magnitude
+    # HP_CHANGE(16) value>0, actor's side, not a damage counter -> heal clause w/ magnitude
     out = classify_effect_clauses({"category": "item"}, probe=_rec([_heal(60)]))
     assert out == [{"kind": "heal", "amount": 60}]
 
 
 @pytest.mark.req("REQ-EFFECT-0001")
 def test_heal_amount_is_per_target_max_not_sum():
-    # "heal 40 from each" logs one HP_CHANGE per target -> the clause carries the
+    # "heal 40 from each" logs one HP_CHANGE per target -> clause carries the
     # per-target magnitude (board-independent), not the board-dependent sum
     out = classify_effect_clauses({}, probe=_rec([_heal(40), _heal(40)]))
     assert out == [{"kind": "heal", "amount": 40}]
-    # a capped partial heal alongside a full one -> the max observed
+    # capped partial heal + a full one -> max observed wins
     out = classify_effect_clauses({}, probe=_rec([_heal(30), _heal(60)]))
     assert out == [{"kind": "heal", "amount": 60}]
 
@@ -52,15 +52,15 @@ def test_heal_amount_is_per_target_max_not_sum():
 @pytest.mark.req("REQ-EFFECT-0001")
 def test_damage_and_counters_and_opponent_hp_are_not_heal():
     assert classify_effect_clauses({}, probe=_rec([_heal(-30)])) == []          # damage
-    assert classify_effect_clauses({}, probe=_rec([_heal(30, counter=True)])) == []  # counter effect
-    assert classify_effect_clauses({}, probe=_rec([_heal(30, player=1)])) == []      # opponent's mon
+    assert classify_effect_clauses({}, probe=_rec([_heal(30, counter=True)])) == []  # counter fx
+    assert classify_effect_clauses({}, probe=_rec([_heal(30, player=1)])) == []      # opp's mon
 
 
 # --- draw count (REQ-EFFECT-0002) ---------------------------------------------------
 
 @pytest.mark.req("REQ-EFFECT-0002")
 def test_draw_count_is_number_of_actor_draw_logs():
-    # DRAW(4) logs one card each -> the count the boolean `draw` tag discards
+    # DRAW(4) logs one card each -> count the boolean `draw` tag discards
     out = classify_effect_clauses({}, probe=_rec([_draw(), _draw(), _draw()]))
     assert out == [{"kind": "draw", "amount": 3}]
 
@@ -74,8 +74,8 @@ def test_opponent_draws_are_not_my_draw_clause():
 
 @pytest.mark.req("REQ-EFFECT-0003")
 def test_heal_then_own_energy_to_hand_is_bounce_rider():
-    # Wally's Compassion pattern: heal, then my Energy leaves the in-play ENERGY(8)
-    # area for my HAND(2) during the same resolution
+    # Wally's Compassion pattern: heal, then my Energy leaves in-play ENERGY(8)
+    # area for my HAND(2) in same resolution
     out = classify_effect_clauses({}, probe=_rec([_heal(120), _move(8, 2)]))
     assert out == [{"kind": "heal", "amount": 120, "rider": "bounce_energy_to_hand"}]
 
@@ -89,8 +89,8 @@ def test_heal_then_own_energy_to_discard_is_discard_rider():
 
 @pytest.mark.req("REQ-EFFECT-0003")
 def test_energy_move_without_or_before_a_heal_is_no_rider():
-    # the rider is "heal FOLLOWED BY the move" — a cost paid before the heal, or a
-    # move with no heal at all, is not a heal rider
+    # rider = "heal FOLLOWED BY the move" — cost paid before the heal, or a
+    # move with no heal at all, isn't a heal rider
     assert classify_effect_clauses({}, probe=_rec([_move(8, 2)])) == []
     out = classify_effect_clauses({}, probe=_rec([_move(8, 3), _heal(60)]))
     assert out == [{"kind": "heal", "amount": 60}]
@@ -98,7 +98,7 @@ def test_energy_move_without_or_before_a_heal_is_no_rider():
 
 @pytest.mark.req("REQ-EFFECT-0003")
 def test_opponent_energy_move_is_not_my_rider():
-    # knocking the opponent's Energy off (energy_denial territory) is not my heal's rider
+    # knocking opponent's Energy off (energy_denial territory) isn't my heal's rider
     out = classify_effect_clauses({}, probe=_rec([_heal(60), _move(8, 3, player=1)]))
     assert out == [{"kind": "heal", "amount": 60}]
 
@@ -107,8 +107,8 @@ def test_opponent_energy_move_is_not_my_rider():
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_override_replaces_measured_clauses_of_the_same_kind():
-    # the probe under-measures a capped heal; the hand-verified override wins its kind,
-    # while measured clauses of other kinds survive
+    # probe under-measures a capped heal; hand-verified override wins its kind,
+    # measured clauses of other kinds survive
     probe = _rec([_heal(40), _draw(), _draw()])
     ovr = [{"kind": "heal", "amount": "all", "restriction": "mega_only",
             "rider": "bounce_energy_to_hand"}]
@@ -137,8 +137,8 @@ def test_override_only_card_needs_no_probe():
 
 @pytest.mark.req("REQ-EFFECT-0011")
 def test_override_condition_passes_through_the_union():
-    # Jumbo Ice Cream: probe measures the 80 but not the 3+-Energy gate; the override
-    # carries the gate and replaces the ungated measured clause — condition verbatim
+    # Jumbo Ice Cream: probe measures the 80 but not the 3+-Energy gate; override
+    # carries the gate, replaces ungated measured clause — condition verbatim
     ovr = [{"kind": "heal", "amount": 80, "restriction": "active_only",
             "condition": "energy_3_plus"}]
     out = classify_effect_clauses({}, probe=_rec([_heal(80), _draw()]), overrides=ovr)
@@ -149,7 +149,7 @@ def test_override_condition_passes_through_the_union():
 @pytest.mark.req("REQ-EFFECT-0011")
 def test_merge_keeps_distinct_condition_variants_separate():
     # clauses differing only in condition are different clauses (like restriction
-    # variants) — merging must not collapse a gated heal into an ungated one
+    # variants) — merge must not collapse a gated heal into an ungated one
     a = [{"kind": "heal", "amount": 10, "condition": "played_supporter_this_turn"}]
     b = [{"kind": "heal", "amount": 40}]
     assert merge_clauses(a, b) == sorted(a + b, key=lambda c: str(c))
@@ -159,9 +159,9 @@ def test_merge_keeps_distinct_condition_variants_separate():
 
 @pytest.mark.req("REQ-EFFECT-0012")
 def test_apply_overrides_stamps_kind_over_an_accumulated_table():
-    # Bianca's Devotion: a prior run shipped the capped ungated measurement (heal 250);
-    # accumulate keeps it (distinct key) — the post-accumulate stamp must replace ALL
-    # heal clauses with the gated text-verified one, other kinds surviving
+    # Bianca's Devotion: prior run shipped capped ungated measurement (heal 250);
+    # accumulate keeps it (distinct key) — post-accumulate stamp must replace ALL
+    # heal clauses w/ the gated text-verified one, other kinds surviving
     table = {1190: [{"kind": "heal", "amount": 250},
                     {"kind": "heal", "amount": "all",
                      "condition": "remaining_hp_30_or_less"},
@@ -206,8 +206,8 @@ def test_merge_clauses_takes_max_amount_per_kind():
 
 @pytest.mark.req("REQ-EFFECT-0006")
 def test_build_table_classifies_each_record_separately():
-    # records must NOT be concatenated: a heal in pass A + an unrelated energy move in
-    # pass B must not fabricate a rider; and two 3-card draws must not sum to 6
+    # records must NOT be concatenated: heal in pass A + unrelated energy move in
+    # pass B must not fabricate a rider; two 3-card draws must not sum to 6
     cards = {7: {"category": "supporter"}}
     recs = {7: [_rec([_heal(60)]), _rec([_move(8, 3)]),
                 _rec([_draw(), _draw(), _draw()]), _rec([_draw(), _draw(), _draw()])]}
@@ -243,7 +243,7 @@ def test_accumulate_all_amount_beats_any_int():
 
 @pytest.mark.req("REQ-EFFECT-0007")
 def test_accumulate_keeps_distinct_restriction_or_rider_variants():
-    # override-authored clause variants (distinct restriction) never collapse together
+    # override-authored clause variants (distinct restriction) never collapse
     prior = {1: [{"kind": "heal", "amount": 30, "restriction": "active_only"},
                  {"kind": "heal", "amount": 100, "restriction": "arvens_pokemon"}]}
     acc = accumulate_effects({}, prior)

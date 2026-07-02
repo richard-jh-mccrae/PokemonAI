@@ -20,7 +20,7 @@ def _seat0_taggable(replay):
 def test_load_log_parses_the_at_records():
     """REQ-TELE-0001: the per-seat agent log parses into ordered @T decision records."""
     records = load_log(LOG)
-    assert len(records) == 66                      # one per seat-0 decision (handshake skipped)
+    assert len(records) == 66                      # one per seat-0 decision, handshake skipped
     first = records[0]
     assert set(first) >= {"plan", "tier", "chosen", "opts", "margin"}
     assert all("fired" in o and "score" in o for o in first["opts"])
@@ -53,7 +53,7 @@ def test_record_for_returns_none_for_an_unknown_frame():
 def test_find_log_resolves_the_sibling_agent_log():
     """REQ-TELE-0001: the agent log is located next to a collected replay by episode id + seat."""
     assert find_log(REPLAY, 0) == LOG
-    assert find_log(REPLAY, 1) is None             # no seat-1 log in the fixture
+    assert find_log(REPLAY, 1) is None             # no seat-1 log in fixture
 
 
 def test_record_correction_embeds_the_live_trace(tmp_path):
@@ -70,7 +70,7 @@ def test_record_correction_embeds_the_live_trace(tmp_path):
                             store_path=store, live_records=records)
 
     assert rec.live_trace is not None
-    assert rec.live_trace["chosen"] == d.chosen          # the live record for this exact decision
+    assert rec.live_trace["chosen"] == d.chosen          # live record for this exact decision
     assert "fired" in rec.live_trace["opts"][0]
     [loaded] = load_corrections(store)
     assert loaded.live_trace == rec.live_trace           # survives the JSONL round-trip

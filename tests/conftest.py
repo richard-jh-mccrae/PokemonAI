@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
 
-# Make the meta_tracker package importable without installation.
+# Make meta_tracker package importable without installation.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-# Tests live in per-subsystem subdirs (tests/<subsystem>/); keep tests/ itself on the path
-# so shared helpers (pilot_helpers, scouting_helpers) and `from conftest import …` resolve
+# Tests live in per-subsystem subdirs (tests/<subsystem>/); keep tests/ itself on path
+# so shared helpers (pilot_helpers, scouting_helpers) and `from conftest import ...` resolve
 # from any subdir.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

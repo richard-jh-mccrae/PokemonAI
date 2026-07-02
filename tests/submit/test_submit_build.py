@@ -19,11 +19,11 @@ def test_build_records_to_the_local_ledger_not_agent_history(tmp_path):
     row = build("mega_starmie", out=subs, builds=builds, agents_root=FIXTURE_AGENTS)
 
     assert row["agent"] == "mega_starmie"
-    assert (subs / f"{row['artifact']}.zip").exists()          # the bundle landed under out/
+    assert (subs / f"{row['artifact']}.zip").exists()          # bundle landed under out/
     assert row["summary"]["deck_size"] == 60
     assert row["manifest_digest"].startswith("sha256:")
     assert [r["submission_id"] for r in read_history(builds)] == [row["submission_id"]]  # ledgered
-    assert not history.exists()                                 # but build never touches Agent History
+    assert not history.exists()                                 # build never touches Agent History
 
 
 @pytest.mark.req("REQ-SUB-0009")
@@ -46,16 +46,16 @@ def test_build_accepts_an_explicit_submission_id_and_label(tmp_path):
 def test_next_build_brief_highlights_a_deck_change(tmp_path):
     """A deck.csv edit must be highlighted in the *next* build's brief (vs the prior build)."""
     agents = tmp_path / "agents"
-    shutil.copytree(FIXTURE_AGENTS / "mega_starmie", agents / "mega_starmie")  # a mutable copy
+    shutil.copytree(FIXTURE_AGENTS / "mega_starmie", agents / "mega_starmie")  # mutable copy
     subs, builds = tmp_path / "s", tmp_path / "s" / "builds.jsonl"
 
-    def brief() -> str:                                  # the just-built brief (stage is overwritten per build)
+    def brief() -> str:                                  # just-built brief (stage overwritten per build)
         return (subs / "mega_starmie" / "brief.html").read_text(encoding="utf-8")
 
     build("mega_starmie", out=subs, builds=builds, agents_root=agents)
     first = brief()
 
-    deck = agents / "mega_starmie" / "deck.csv"          # drop one card line -> a real deck change
+    deck = agents / "mega_starmie" / "deck.csv"          # drop one card line -> real deck change
     deck.write_text("\n".join(deck.read_text(encoding="utf-8").splitlines()[:-1]) + "\n",
                     encoding="utf-8")
     two = build("mega_starmie", out=subs, builds=builds, agents_root=agents)
@@ -63,7 +63,7 @@ def test_next_build_brief_highlights_a_deck_change(tmp_path):
 
     assert "<div class='deckdiff'>" not in first         # build #1 has no baseline -> no callout
     assert "Deck changed since build #1" in second       # build #2 highlights the edit
-    assert two["deck"]["size"] == 59                      # ledger stores the new deck for build #3 to diff
+    assert two["deck"]["size"] == 59                      # ledger stores new deck for build #3 to diff
 
 
 @pytest.mark.req("REQ-SUB-0009")
@@ -74,5 +74,5 @@ def test_cli_build_records_to_ledger_only(tmp_path):
                "--builds", str(tmp_path / "s" / "builds.jsonl"),
                "--agents-root", str(FIXTURE_AGENTS)])
     assert rc == 0
-    assert (tmp_path / "s" / "builds.jsonl").exists()          # logged to the local ledger
+    assert (tmp_path / "s" / "builds.jsonl").exists()          # logged to local ledger
     assert not (tmp_path / "agent_history.jsonl").exists()      # not to committed Agent History

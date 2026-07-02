@@ -12,8 +12,8 @@ CARD, PLAY, ATTACH, ATTACK = 3, 7, 8, 13
 YES, NO = 1, 2
 MAIN, SETUP_ACTIVE, ATTACH_FROM, MULLIGAN = 0, 1, 21, 42
 SWITCH = 3  # SelectContext.SWITCH — swap a Pokémon into the Active Spot (own retreat OR a Boss's gust)
-DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (a bench snipe)
-TO_HAND = 7  # SelectContext.TO_HAND — a search: choose which card to add to your hand
+DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals damage to (bench snipe)
+TO_HAND = 7  # SelectContext.TO_HAND — search: choose which card to add to your hand
 
 
 def opt(type: int = PLAY, **kw) -> dict:

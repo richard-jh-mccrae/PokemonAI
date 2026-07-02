@@ -40,7 +40,7 @@ def test_resistance_matchup_measures_the_known_minus_30():
     r = recs[0]
     assert "error" not in r, r
     assert r["printed"] == 70
-    assert r["dealtActive"] == 40                     # 70 - 30: the uniform set-wide Resistance
+    assert r["dealtActive"] == 40                     # 70 - 30: uniform set-wide Resistance
     assert r["koed"] is False
 
 

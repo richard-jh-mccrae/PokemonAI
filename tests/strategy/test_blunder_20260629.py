@@ -14,14 +14,14 @@ from pilot_helpers import (
     ACTIVE, BENCH, CARD, DAMAGE, HAND, PLAY, attack_opt, card_opt, make_select, opt, poke, state)
 
 ATTACH = 8
-END = 14                # OptionType.END — end the turn
-DISCARD_SEL = 8         # SelectContext.DISCARD — a cost-discard select (NB pilot_helpers.DISCARD is the AreaType)
-WINCON = 900            # a Mega-ex win-condition (evolves from a pre-evo, like Mega Starmie)
+END = 14                # OptionType.END — end turn
+DISCARD_SEL = 8         # SelectContext.DISCARD — cost-discard select (NB pilot_helpers.DISCARD is the AreaType)
+WINCON = 900            # Mega-ex win-condition (evolves from pre-evo, like Mega Starmie)
 PREEVO = 800            # its pre-evolution (Staryu-like)
-WATER = 3               # a reusable Basic Energy
-IGNITION = 17           # a discard-at-EOT burst energy (CCC on an Evolution)
-CRUSH = 1120            # Crushing Hammer — an energy-denial Item (Function Tag `energy_denial`)
-OPP = 678               # an energized opponent attacker (Mega Lucario ex shape)
+WATER = 3               # reusable Basic Energy
+IGNITION = 17           # discard-at-EOT burst energy (CCC on an Evolution)
+CRUSH = 1120            # Crushing Hammer — energy-denial Item (Function Tag `energy_denial`)
+OPP = 678               # energized opponent attacker (Mega Lucario ex shape)
 
 
 def _fired(o):
@@ -52,13 +52,13 @@ def _pilot(**kw):
 @pytest.mark.req("REQ-GEN-0025")
 def test_build_active_wincon_keeps_loading_the_active_toward_its_big_attack():
     pilot = _pilot()
-    # Active win-con at 1 Energy: "online" for its cheap attack (minAttackCost 1) but short of its
-    # max-damage attack (maxDamageCost 3) — keep building it.
+    # Active win-con at 1 Energy: online for cheap attack (minAttackCost 1) but short of
+    # max-damage attack (maxDamageCost 3) -> keep building it.
     attach = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([attach], current=state(active=poke(WINCON, energy=1, hp=330), hand=[WATER]))
     assert "build-active-wincon" in _fired(pilot.explain(obs).options[0])
 
-    # Already at its max-damage cost (3) -> fully online -> stands down (no needless over-stack).
+    # Already at max-damage cost (3) -> fully online -> stands down (no needless over-stack).
     full = make_select([attach], current=state(active=poke(WINCON, energy=3, hp=330), hand=[WATER]))
     assert "build-active-wincon" not in _fired(pilot.explain(full).options[0])
 
@@ -72,18 +72,18 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
     Ignition attach). Scoped to `discard_eot`: a reusable Water still builds toward the payoff."""
     pilot = _pilot()
     ign = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Ignition (hand idx 1)
-    # Active wincon at 1 W (short of Nebula CCC=3); its cheap attack (120) KOs the 120-HP opp Active.
+    # Active wincon at 1 W (short of Nebula CCC=3); cheap attack (120) KOs the 120-HP opp Active.
     obs = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
                                            opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
     assert "build-active-wincon" not in _fired(pilot.explain(obs).options[0])
 
-    # Control A — a reusable Water attach (no `discard_eot`) still builds toward the payoff, even on KO.
+    # Control A — reusable Water attach (no `discard_eot`) still builds toward payoff, even on KO.
     wat = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Water (hand idx 0)
     obs_w = make_select([wat], current=state(active=poke(WINCON, energy=1, hp=330),
                                              opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
     assert "build-active-wincon" in _fired(pilot.explain(obs_w).options[0])
 
-    # Control B — when the cheap attack can't KO (Nebula IS needed), Ignition is the intended power.
+    # Control B — when cheap attack can't KO (Nebula IS needed), Ignition is the intended power.
     obs_n = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
                                              opp_active=poke(OPP, hp=300), hand=[WATER, IGNITION]))
     assert "build-active-wincon" in _fired(pilot.explain(obs_n).options[0])
@@ -92,13 +92,13 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
 @pytest.mark.req("REQ-GEN-0025")
 def test_build_active_wincon_prefers_active_over_a_bench_copy():
     pilot = _pilot()
-    # Active win-con (1 E) vs a bench copy (0 E): build the ATTACKER, not the idle bench piece.
+    # Active win-con (1 E) vs bench copy (0 E): build the ATTACKER, not the idle bench piece.
     to_active = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     to_bench = opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)
     obs = make_select([to_bench, to_active],
                       current=state(active=poke(WINCON, energy=1, hp=330),
                                     bench=[poke(WINCON, energy=0, hp=330)], hand=[WATER]))
-    assert pilot.decide(obs) == [1]                       # the active attach wins
+    assert pilot.decide(obs) == [1]                       # active attach wins
 
 
 # ---------------------------------------------------------------- attach-before-hand-shuffle
@@ -110,9 +110,9 @@ def test_attach_before_hand_shuffle_demotes_a_hand_shuffle_while_holding_energy(
     obs = make_select([play_shuffle, attach],
                       current=state(active=poke(WINCON, energy=1, hp=330), hand=[1223, WATER]))
     assert "attach-before-hand-shuffle" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                       # attach first; the shuffle is sequenced last
+    assert pilot.decide(obs) == [1]                       # attach first; shuffle sequenced last
 
-    # No reusable Energy in hand -> nothing to attach first -> the rule stands down.
+    # No reusable Energy in hand -> nothing to attach first -> rule stands down.
     no_energy = make_select([play_shuffle],
                             current=state(active=poke(WINCON, energy=1, hp=330), hand=[1223]))
     assert "attach-before-hand-shuffle" not in _fired(pilot.explain(no_energy).options[0])
@@ -147,8 +147,8 @@ def test_snipe_the_top_threat_breaks_the_evolving_tie_on_the_strongest_line():
         674: CardStat(674, name="Hariyama", maxDamage=210, evolvesFrom="Makuhita"),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # Two no-Energy evolving threats; Makuhita is the WEAKEST (lower HP). The unified threat rank picks
-    # the strongest forward line (Riolu->Mega Lucario 270 over Makuhita->Hariyama 210), never the weakest.
+    # Two no-Energy evolving threats; Makuhita is WEAKEST (lower HP). Unified threat rank picks
+    # strongest forward line (Riolu->Mega Lucario 270 over Makuhita->Hariyama 210), never weakest.
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700),
                                     opp_bench=[poke(444, hp=60), poke(333, hp=90)]))  # idx0 Makuhita(weakest), idx1 Riolu
@@ -165,14 +165,14 @@ def test_top_threat_picks_the_energized_body_over_a_bigger_latent_line():
         900: CardStat(900, name="Zubat", maxDamage=30),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # An energized benched body is present -> it is the higher snipe tier (imminent); the bigger but
-    # latent Riolu line stands below it, so the top-threat pick is the energized attacker.
+    # Energized benched body present -> higher snipe tier (imminent); bigger but latent Riolu
+    # line stands below it, so top-threat pick is the energized attacker.
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700),
                                     opp_bench=[poke(333, hp=90), poke(900, energy=1, hp=80)]))
     latent, energized = pilot.explain(obs).options
     assert "snipe-the-top-threat" in _fired(energized) and "snipe-the-top-threat" not in _fired(latent)
-    assert pilot.decide(obs) == [1]                       # the energized threat is sniped
+    assert pilot.decide(obs) == [1]                       # energized threat sniped
 
 
 # ---------------------------------------------------------------- keep-key-cards-at-discard
@@ -184,14 +184,14 @@ def test_keep_key_cards_at_discard_protects_the_burst_energy():
     obs = make_select(opts, min_count=2, max_count=2, context=DISCARD_SEL,
                       current=state(hand=[IGNITION, 1182, 1229]))
     assert "keep-key-cards-at-discard" in _fired(pilot.explain(obs).options[0])   # Ignition guarded
-    assert 0 not in pilot.decide(obs)                    # the Ignition is NOT among the discards
+    assert 0 not in pilot.decide(obs)                    # Ignition NOT among the discards
 
 
 # ---------------------------------------------------------------- lethal-attach lookahead
 @pytest.mark.req("REQ-GEN-0030")
 def test_attach_lethal_unlocks_a_ko_via_ignition_ccc():
     pilot = _pilot()
-    # Active win-con at 1 W vs a 200-HP Active: Jetting Blow (120) can't KO, but attaching Ignition
+    # Active win-con at 1 W vs 200-HP Active: Jetting Blow (120) can't KO, but attaching Ignition
     # (CCC on an Evolution) unlocks Nebula Beam (210) -> lethal.
     attach_ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # Ignition hand[0]
     attach_w = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)     # Water hand[1]
@@ -200,14 +200,14 @@ def test_attach_lethal_unlocks_a_ko_via_ignition_ccc():
                                     opp_active=poke(678, hp=200)))
     traces = pilot.explain(obs).options
     assert traces[0].tactical >= KO_SCORE               # Ignition attach is lethal
-    assert traces[1].tactical < KO_SCORE                # a plain Water (->2 E) is not
+    assert traces[1].tactical < KO_SCORE                # plain Water (->2 E) is not
     assert pilot.decide(obs) == [0]                      # take the lethal attach
 
 
 @pytest.mark.req("REQ-GEN-0030")
 def test_attach_lethal_stands_down_when_the_active_can_already_ko():
     pilot = _pilot()
-    # The cheap attack already KOs (120 >= 100) -> no attach needed, so no lethal-attach credit.
+    # Cheap attack already KOs (120 >= 100) -> no attach needed -> no lethal-attach credit.
     attach_ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([attach_ign],
                       current=state(active=poke(WINCON, energy=1, hp=330), hand=[IGNITION],
@@ -248,9 +248,9 @@ def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
                                     opp_active=poke(OPP, energy=2, hp=440), hand=[CRUSH]))
     traces = pilot.explain(obs)
     assert "play-energy-denial" in _fired(traces.options[0])
-    assert traces.options[1].tactical > traces.options[0].score   # the attack scores higher on tactical
-    assert pilot.decide(obs) == [0]                       # yet the strip is taken first (attack-last)
-    assert traces.options[1].deferred                     # the attack is held one slot, not dropped
+    assert traces.options[1].tactical > traces.options[0].score   # attack scores higher on tactical
+    assert pilot.decide(obs) == [0]                       # yet strip taken first (attack-last)
+    assert traces.options[1].deferred                     # attack held one slot, not dropped
 
 
 @pytest.mark.req("REQ-GEN-0031")
@@ -279,7 +279,7 @@ def test_play_energy_denial_stands_down_when_the_opponent_has_no_energy():
                       current=state(active=poke(WINCON, energy=3, hp=330),
                                     opp_active=poke(OPP, energy=0, hp=440), hand=[CRUSH]))
     assert "play-energy-denial" not in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                       # nothing to strip -> the attack wins
+    assert pilot.decide(obs) == [1]                       # nothing to strip -> attack wins
 
 
 @pytest.mark.req("REQ-GEN-0031")
@@ -289,21 +289,21 @@ def test_energy_denial_stands_down_when_you_can_already_ko_the_active():
     (ep82748422 f26: Crushing Hammer is wasted when Jetting Blow will KO the Active anyway)."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)
-    lethal = attack_opt(11)                               # 120 vs a 100-HP Active -> KO (active_cheap_attack_kos)
+    lethal = attack_opt(11)                               # 120 vs 100-HP Active -> KO (active_cheap_attack_kos)
     obs = make_select([play_crush, lethal, opt(END)],
                       current=state(active=poke(WINCON, energy=3, hp=330),
                                     opp_active=poke(OPP, energy=2, hp=100), hand=[CRUSH]))
     traces = pilot.explain(obs)
-    assert traces.options[1].tactical >= KO_SCORE         # the attack is genuinely lethal
-    assert "play-energy-denial" not in _fired(traces.options[0])  # the strip is moot -> hold the Item
-    assert pilot.decide(obs) == [1]                       # just take the KO, save the Crushing Hammer
+    assert traces.options[1].tactical >= KO_SCORE         # attack is genuinely lethal
+    assert "play-energy-denial" not in _fired(traces.options[0])  # strip is moot -> hold Item
+    assert pilot.decide(obs) == [1]                       # take the KO, save the Crushing Hammer
 
 
 # --------------------- deck-knowledge (sound): dont-search-an-empty-deck + dont-tutor-the-held-wincon
-POFFIN = 1086           # Buddy-Buddy Poffin — bench-fill (fetches Basic Pokémon onto the Bench)
-MEGA_SIGNAL = 1145      # Mega Signal — tutor_mega (fetches ONLY a Mega Evolution ex = the wincon)
+POFFIN = 1086           # Buddy-Buddy Poffin — bench-fill (fetches Basic Pokémon onto Bench)
+MEGA_SIGNAL = 1145      # Mega Signal — tutor_mega (fetches ONLY a Mega Evolution ex = wincon)
 ULTRA_BALL = 1121       # Ultra Ball — tutor_pokemon (fetches ANY Pokémon)
-FILLER = 99             # a non-Pokémon deck filler (absent from stats -> not a Pokémon)
+FILLER = 99             # non-Pokémon deck filler (absent from stats -> not a Pokémon)
 _FNS = {POFFIN: ["search", "bench_fill"], MEGA_SIGNAL: ["search", "tutor_mega"],
         ULTRA_BALL: ["search", "tutor_pokemon", "cost_discard"], IGNITION: ["discard_eot"]}
 
@@ -328,15 +328,15 @@ def _ctx(pilot, obs, i):
 
 @pytest.mark.req("REQ-GEN-0032")
 def test_deck_definitely_empty_of_is_sound_only_when_all_copies_are_accounted():
-    # Deck runs 3 PREEVO (the only Basic); the rest are non-Basic filler.
+    # Deck runs 3 PREEVO (the only Basic); rest are non-Basic filler.
     pilot = _search_pilot([PREEVO] * 3 + [FILLER] * 57)
 
-    # All 3 PREEVO seen OUTSIDE the deck (1 Active + 2 discard); the 6 prizes are hidden but cannot
-    # hold a 4th copy that does not exist -> the deck is PROVABLY empty of PREEVO.
+    # All 3 PREEVO seen OUTSIDE the deck (1 Active + 2 discard); 6 prizes hidden but can't
+    # hold a 4th copy that doesn't exist -> deck PROVABLY empty of PREEVO.
     all_seen = state(active=poke(PREEVO, hp=70), discard=[PREEVO, PREEVO], prizes=6)
     assert _board_of(pilot, all_seen).deck_definitely_empty_of(PREEVO)
 
-    # Only 2 of 3 seen; the 3rd could be in the 6 hidden prizes -> NOT certain (the refuted read).
+    # Only 2 of 3 seen; 3rd could be in the 6 hidden prizes -> NOT certain (the refuted read).
     one_missing = state(active=poke(PREEVO, hp=70), discard=[PREEVO], prizes=6)
     assert not _board_of(pilot, one_missing).deck_definitely_empty_of(PREEVO)
 
@@ -350,7 +350,7 @@ def test_deck_empty_counts_revealed_prizes_and_evolution_stacks():
     revealed["players"][0]["prize"][0] = {"id": PREEVO, "playerIndex": 0, "serial": 1}
     assert _board_of(pilot, revealed).deck_definitely_empty_of(PREEVO)
 
-    # A PREEVO stacked UNDER an evolved win-con (preEvolution) is in play, not in the deck.
+    # PREEVO stacked UNDER an evolved win-con (preEvolution) is in play, not in the deck.
     evolved = poke(WINCON, energy=1, hp=330)
     evolved["preEvolution"] = [{"id": PREEVO, "playerIndex": 0, "serial": 2}]
     stacked = state(active=evolved, discard=[PREEVO, PREEVO], prizes=6)
@@ -361,14 +361,14 @@ def test_deck_empty_counts_revealed_prizes_and_evolution_stacks():
 def test_dont_search_stands_down_a_bench_fill_whose_only_target_is_gone():
     pilot = _search_pilot([PREEVO] * 3 + [FILLER] * 57)
     play_poffin = opt(PLAY, area=HAND, index=0)              # Buddy-Buddy Poffin in hand[0]
-    # All 3 Staryu accounted outside the deck -> a 2nd Poffin would fetch nothing.
+    # All 3 Staryu accounted outside deck -> 2nd Poffin would fetch nothing.
     exhausted = state(active=poke(PREEVO, hp=70), discard=[PREEVO, PREEVO], hand=[POFFIN], prizes=6)
     obs = make_select([play_poffin, opt(END)], current=exhausted)
     assert _ctx(pilot, obs, 0).search_targets_exhausted
     assert "dont-search-an-empty-deck" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                          # End beats the guaranteed-whiff Poffin
+    assert pilot.decide(obs) == [1]                          # End beats guaranteed-whiff Poffin
 
-    # One Staryu unaccounted (could be in the hidden prizes) -> the rule stays silent; Poffin is fine.
+    # One Staryu unaccounted (could be in hidden prizes) -> rule stays silent; Poffin fine.
     maybe = state(active=poke(PREEVO, hp=70), discard=[PREEVO], hand=[POFFIN], prizes=6)
     obs2 = make_select([play_poffin, opt(END)], current=maybe)
     assert not _ctx(pilot, obs2, 0).search_targets_exhausted
@@ -378,13 +378,13 @@ def test_dont_search_stands_down_a_bench_fill_whose_only_target_is_gone():
 
 @pytest.mark.req("REQ-GEN-0032")
 def test_dont_search_stands_down_mega_signal_when_all_megas_are_gone():
-    # 3 Mega ex (the only tutor_mega target), all accounted OUTSIDE the deck (discard) -> Mega Signal whiffs.
+    # 3 Mega ex (only tutor_mega target), all accounted OUTSIDE deck (discard) -> Mega Signal whiffs.
     pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     play_signal = opt(PLAY, area=HAND, index=0)
     gone = state(active=poke(PREEVO, hp=70), discard=[WINCON, WINCON, WINCON], hand=[MEGA_SIGNAL], prizes=6)
     obs = make_select([play_signal, opt(END)], current=gone)
     c = _ctx(pilot, obs, 0)
-    assert c.search_targets_exhausted and not c.search_redundant_wincon   # whiff, not the in-hand case
+    assert c.search_targets_exhausted and not c.search_redundant_wincon   # whiff, not in-hand case
     assert "dont-search-an-empty-deck" in _fired(pilot.explain(obs).options[0])
     assert pilot.decide(obs) == [1]
 
@@ -395,7 +395,7 @@ def test_dont_search_stands_down_mega_signal_when_all_megas_are_gone():
 
 @pytest.mark.req("REQ-GEN-0032")
 def test_dont_tutor_the_held_wincon_for_a_wincon_only_tutor():
-    # Mega Signal can fetch ONLY the wincon; with a Mega already in hand a 2nd is redundant — even
+    # Mega Signal fetches ONLY the wincon; with a Mega already in hand a 2nd is redundant — even
     # though the deck still holds Megas (so it does NOT whiff). The ep82228017-fr4 shape.
     pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     play_signal = opt(PLAY, area=HAND, index=0)
@@ -409,8 +409,8 @@ def test_dont_tutor_the_held_wincon_for_a_wincon_only_tutor():
 
 @pytest.mark.req("REQ-GEN-0032")
 def test_flexible_tutor_is_not_redundant_when_the_wincon_is_in_hand():
-    # Ultra Ball fetches ANY Pokémon, so a held wincon does NOT make it redundant — it can still
-    # pull a pre-evolution / opener. The rule must stay silent (only a wincon-ONLY tutor is redundant).
+    # Ultra Ball fetches ANY Pokémon, so a held wincon does NOT make it redundant — can still
+    # pull a pre-evolution / opener. Rule must stay silent (only a wincon-ONLY tutor is redundant).
     pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     play_ball = opt(PLAY, area=HAND, index=0)
     held = state(active=poke(PREEVO, hp=70), hand=[ULTRA_BALL, WINCON], prizes=6)
@@ -418,7 +418,7 @@ def test_flexible_tutor_is_not_redundant_when_the_wincon_is_in_hand():
     assert not _ctx(pilot, obs, 0).search_redundant_wincon
     assert "dont-tutor-the-held-wincon" not in _fired(pilot.explain(obs).options[0])
 
-    # Ultra Ball whiffs only when the deck is empty of EVERY Pokémon (all Megas + Staryu accounted).
+    # Ultra Ball whiffs only when deck is empty of EVERY Pokémon (all Megas + Staryu accounted).
     none_left = state(active=poke(PREEVO, hp=70),
                       discard=[WINCON, WINCON, WINCON, PREEVO, PREEVO], hand=[ULTRA_BALL], prizes=6)
     obs2 = make_select([play_ball, opt(END)], current=none_left)
@@ -440,7 +440,7 @@ def _endorse_ultra_pilot():
 
 @pytest.mark.req("REQ-GEN-0033")
 def test_dig_before_commit_skips_a_cost_discard_search():
-    # Ultra Ball pays 2 cards to play -> NOT a free dig -> no dig-before-commit bonus; a plain search keeps it.
+    # Ultra Ball pays 2 cards to play -> NOT a free dig -> no dig-before-commit bonus; plain search keeps it.
     pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
                       current=state(active=poke(PREEVO, hp=70), hand=[ULTRA_BALL, MEGA_SIGNAL], prizes=6))
@@ -451,24 +451,24 @@ def test_dig_before_commit_skips_a_cost_discard_search():
 
 @pytest.mark.req("REQ-GEN-0033")
 def test_cost_discard_search_is_sequenced_after_a_free_dig_even_when_it_scores_higher():
-    # Ultra Ball is endorsed (+50) over a free search (Mega Signal, +20), yet a discard-cost play is a
-    # COMMITMENT — `_finish_turn_last` holds it to tier 2, so the FREE dig (tier 0) is taken first.
+    # Ultra Ball endorsed (+50) over free search (Mega Signal, +20), yet discard-cost play is a
+    # COMMITMENT — `_finish_turn_last` holds it to tier 2, so FREE dig (tier 0) taken first.
     pilot = _endorse_ultra_pilot()
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
                       current=state(active=poke(PREEVO, hp=70), hand=[ULTRA_BALL, MEGA_SIGNAL], prizes=6))
     traces = pilot.explain(obs).options
-    assert traces[0].score > traces[1].score                # Ultra Ball outscores the free search ...
-    assert pilot.decide(obs) == [1]                         # ... yet the free dig is sequenced first
+    assert traces[0].score > traces[1].score                # Ultra Ball outscores free search ...
+    assert pilot.decide(obs) == [1]                         # ... yet free dig is sequenced first
 
 
 @pytest.mark.req("REQ-GEN-0033")
 def test_attach_beats_a_cost_discard_search_the_ep82228640_fr7_shape():
-    # The ep82228640-fr7 shape: a free Energy attach vs a 2-card-discard Ultra Ball. With Ultra Ball no
-    # longer treated as a free dig, the attach (a needed, free development) is taken first.
+    # ep82228640-fr7 shape: free Energy attach vs 2-card-discard Ultra Ball. With Ultra Ball no
+    # longer treated as free dig, attach (needed, free development) taken first.
     pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # W -> Staryu (needs energy)
     play_ball = opt(PLAY, area=HAND, index=2)                                    # Ultra Ball (cost_discard)
     cur = state(active=poke(PREEVO, energy=0, hp=70), hand=[WINCON, WATER, ULTRA_BALL], prizes=6)
     obs = make_select([attach, play_ball, opt(END)], current=cur)
     assert "dig-before-commit" not in _fired(pilot.explain(obs).options[1])      # Ultra Ball not free
-    assert pilot.decide(obs) == [0]                          # attach first; the discard-cost dig waits
+    assert pilot.decide(obs) == [0]                          # attach first; discard-cost dig waits

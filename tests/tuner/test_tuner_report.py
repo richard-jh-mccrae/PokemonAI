@@ -35,7 +35,7 @@ def test_report_explains_an_adopted_weight_change_with_driver_and_magnitude():
     assert "`accel-into-main`: 30 → 1.97" in md and "-28.03" in md      # by how much
     assert "never attach ignition to cinderace" in md                  # the why (driver rationale)
     assert "missed_win" in md and "→" in md                            # proposal + unsatisfied move
-    assert "methodology.md" in md                                       # links the math explainer
+    assert "methodology.md" in md                                       # links math explainer
 
 
 def test_report_explains_when_seeds_are_kept():

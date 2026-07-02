@@ -16,4 +16,4 @@ def test_dashboard_joins_state_and_performance_with_a_matchup_dropdown():
 
     assert "http://" not in html and "https://" not in html      # self-contained
     assert "1200" in html and "5-2" in html                       # score + record joined by id
-    assert "Dragapult ex" in html and "<details" in html          # the per-archetype matchup dropdown
+    assert "Dragapult ex" in html and "<details" in html          # per-archetype matchup dropdown

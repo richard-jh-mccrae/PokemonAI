@@ -32,7 +32,7 @@ def test_load_reviewed_drops_comment_keys_and_missing_is_empty(tmp_path):
         "81904451-37": {"disposition": "refuted", "reason": "forgoes a KO"},
     }), encoding="utf-8")
     led = load_reviewed(p)
-    assert set(led) == {"81904451-37"}                       # _note dropped
+    assert set(led) == {"81904451-37"}                       # _note gone
     assert led["81904451-37"]["disposition"] == "refuted"
     assert load_reviewed(tmp_path / "nope.json") == {}        # missing -> {}
 
@@ -40,7 +40,7 @@ def test_load_reviewed_drops_comment_keys_and_missing_is_empty(tmp_path):
 @pytest.mark.req("REQ-TUNE-0032")
 def test_partition_splits_active_from_dispositioned():
     reviewed = {"81904451-37": {"disposition": "refuted", "reason": "forgoes a KO"}}
-    corrs = [_Corr(81904451, 37), _Corr(81904451, 99)]       # one reviewed, one new
+    corrs = [_Corr(81904451, 37), _Corr(81904451, 99)]       # 1 reviewed, 1 new
     active, dispositioned = partition_reviewed(corrs, reviewed)
     assert [c.episode_id for c in active] == [81904451] and active[0].decision["frame"] == 99
     assert len(dispositioned) == 1

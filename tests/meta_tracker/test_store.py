@@ -34,7 +34,7 @@ def test_round_trip_decodes_json(tmp_path):
 def test_reclassify_recomputes_from_decks(tmp_path):
     conn = connect(tmp_path / "t.db")
     r = _rec(1)
-    r.arch0, r.mains0 = "STALE", ["STALE"]      # pretend old logic mislabeled it
+    r.arch0, r.mains0 = "STALE", ["STALE"]      # pretend old logic mislabeled
     upsert_episode(conn, r, "2026-06-22")
     assert reclassify(conn) == 1
     (row,) = load_episodes(conn)

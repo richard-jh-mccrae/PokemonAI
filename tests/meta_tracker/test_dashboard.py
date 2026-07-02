@@ -18,7 +18,7 @@ def test_subset_merge_folds_into_fullest():
 
 
 def test_no_merge_when_primary_differs():
-    # {B} is a subset of {A,B,C} but its primary (B) != the superset's primary (A).
+    # {B} is a subset of {A,B,C} but its primary (B) != superset's primary (A).
     eps = [_ep("B", ["B"]), _ep("A / B / C", ["A", "B", "C"])]
     assert merge_map(eps)["B"] == "B"
 

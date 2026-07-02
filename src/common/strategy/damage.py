@@ -55,8 +55,8 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
     elif bound == "max" and attack.damageMax is not None:
         dmg = float(attack.damageMax)
     if attack.scaleVar == "atk_discard_energy" and attack.scalePerUnit and context:
-        # the attacker's discard is OPEN information for both players (Riptide-class): a typed
-        # filter reads the Basic-Energy histogram, an untyped one counts every Energy card
+        # attacker's discard is OPEN info for both players (Riptide-class): typed filter reads
+        # the Basic-Energy histogram, untyped counts every Energy card
         if attack.scaleEnergyType is not None:
             units = (context.get("atk_discard_basic_by_type") or {}).get(attack.scaleEnergyType)
         else:
@@ -66,10 +66,8 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
     elif attack.scaleVar and attack.scalePerUnit and (context or {}).get(attack.scaleVar) is not None:
         dmg += attack.scalePerUnit * context[attack.scaleVar]
     if attack.hiddenPerUnit and attack.hiddenSample:
-        # hidden-state deck-discard scaler (Hammer-lanche class): the units are hidden card ORDER,
-        # but with EXACT deck facts (the tracker-anchored deck) the distribution is known: the
-        # pigeonhole floor is SOUND (any `sample` cards off a deck of N with F fuel hit at least
-        # sample-(N-F)), the hypergeometric mean prices "exact", the ceiling caps at min(sample, F).
+        # hidden-state deck-discard scaler (Hammer-lanche class): hidden ORDER but EXACT deck facts ->
+        # distribution known: pigeonhole floor SOUND (>= sample-(N-F)), hypergeometric mean "exact", ceiling min(sample,F).
         units = (context or {}).get("hidden_units")
         deck_n = (context or {}).get("atk_deck_count")
         fuel = ((context or {}).get("atk_deck_basic_by_type") or {}).get(attack.hiddenEnergyType) \
@@ -85,7 +83,7 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
         if units is not None:
             dmg += attack.hiddenPerUnit * units
         elif bound == "max":
-            dmg += attack.hiddenPerUnit * attack.hiddenSample  # no deck facts: every card fuels
+            dmg += attack.hiddenPerUnit * attack.hiddenSample  # no deck facts: assume every card fuels
     if not dmg:
         return 0
     if not attack.ignoresEffects and _prevented(attacker, defender, defender_tags):
@@ -103,11 +101,11 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
         if reduction and (r_types is None or atype in r_types):   # Dewgong: {R}/{W} attackers only
             dmg = max(0, dmg - reduction)
         threshold = getattr(defender, "preventsDamageAtLeast", 0)
-        if threshold and dmg >= threshold:                 # Drednaw: a big-enough hit is prevented
+        if threshold and dmg >= threshold:                 # Drednaw: big-enough hit is prevented
             return 0
     if not attack.ignoresEffects and defender_transient:
-        # a LIVE transient grant on the defending body (ADR-0033: Frost Barrier's -30, a
-        # prevent-all wall) — an effect on the Active, so the Nebula class pierces it too
+        # LIVE transient grant on defending body (ADR-0033: Frost Barrier's -30, a prevent-all
+        # wall) — effect on the Active, so Nebula class pierces it too
         if defender_transient.get("prevent_all"):
             return 0
         if defender_transient.get("reduction"):

@@ -21,7 +21,7 @@ def mocked(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "meta.db")
     monkeypatch.setattr(config, "DASHBOARD", tmp_path / "dash.html")
 
-    # Jaga & keidroid at the top so the episode bands as Elite.
+    # Jaga & keidroid at the top -> episode bands as Elite.
     lb = [{"rank": 1, "teamId": 1, "teamName": "Jaga", "score": 1367.0},
           {"rank": 2, "teamId": 2, "teamName": "keidroid", "score": 1323.0}]
     lb += [{"rank": i, "teamId": i, "teamName": f"t{i}", "score": float(1300 - i * 7)}
@@ -29,7 +29,7 @@ def mocked(monkeypatch, tmp_path):
     monkeypatch.setattr(run_daily.fetch, "leaderboard", lambda *a, **k: lb)
     monkeypatch.setattr(run_daily.fetch, "episodes_index",
                         lambda: [{"date": "2026-06-22", "slug": "daily-2026-06-22", "episode_count": 1}])
-    # one page, no next token -> day gets marked complete
+    # one page, no next token -> day marked complete
     monkeypatch.setattr(run_daily.fetch, "dataset_episode_page",
                         lambda slug, token=None, page_size=200: ([EP_ID], None))
 
@@ -67,7 +67,7 @@ def test_pipeline_stops_cleanly_on_rate_limit(monkeypatch, mocked):
 
 
 def test_pipeline_off_band_episode_dropped(monkeypatch, mocked):
-    # Drop Jaga/keidroid to the bottom so the episode falls below the kept range.
+    # Drop Jaga/keidroid to the bottom so episode falls below kept range.
     lb = [{"rank": i, "teamId": i, "teamName": f"t{i}", "score": float(1400 - i)} for i in range(1, 99)]
     lb += [{"rank": 99, "teamId": 99, "teamName": "Jaga", "score": 605.0},
            {"rank": 100, "teamId": 100, "teamName": "keidroid", "score": 602.0}]

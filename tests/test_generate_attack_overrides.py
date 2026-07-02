@@ -48,21 +48,21 @@ def test_constant_effect_damage_needs_cross_scenario_agreement():
     # Telekinesis: printed 0, dealt 70 on vanilla AND weak -> fixed damage 70
     recs = [_m(850, "vanilla", 70), _m(850, "weak", 70)]
     assert derive_overrides(recs, parsed)[850] == {"damage": 70}
-    # disagreement (weak doubled: it's plain scaling/W-affected, not a constant) -> reject
+    # disagreement (weak doubled: plain scaling/W-affected, not constant) -> reject
     recs2 = [_m(850, "vanilla", 70), _m(850, "weak", 140)]
     assert 850 not in derive_overrides(recs2, parsed)
-    # a single scenario is not agreement -> reject
+    # single scenario isn't agreement -> reject
     assert 850 not in derive_overrides([_m(850, "vanilla", 70)], parsed)
 
 
 @pytest.mark.req("REQ-AUDIT-0016")
 def test_sweep_points_fit_an_exact_linear_scaler():
-    parsed = {1072: AttackStat(attackId=1072, damage=0)}         # pretend the parser missed it
+    parsed = {1072: AttackStat(attackId=1072, damage=0)}         # pretend parser missed it
     recs = [_m(1072, "vanilla", 120, hand=6),
             _m(1072, "vanilla", 160, hand=8, sweep={"var": "hand", "step": 2}),
             _m(1072, "vanilla", 200, hand=10, sweep={"var": "hand", "step": 4})]
     assert derive_overrides(recs, parsed)[1072] == {"scaleVar": "atk_hand", "scalePerUnit": 20}
-    # a noisy point breaks the exact fit -> reject (stays on the ledger)
+    # noisy point breaks the exact fit -> reject (stays on ledger)
     recs[2]["dealtActive"] = 210
     assert 1072 not in derive_overrides(recs, parsed)
 
@@ -79,13 +79,13 @@ def test_energy_sweeps_fit_the_attacker_energy_var():
 
 @pytest.mark.req("REQ-AUDIT-0014")
 def test_copy_attacks_are_excluded_from_generation():
-    # a copy-attack's measured damage is the COPIED attack's — defender-dependent, non-transferable
+    # copy-attack's measured damage is the COPIED attack's - defender-dependent, non-transferable
     recs = [_m(528, "vanilla", 0, coin="min"), _m(528, "vanilla", 200, coin="max")]
     parsed = {528: AttackStat(attackId=528, damage=0)}
     texts = {528: "Flip a coin. If heads, choose 1 of your opponent's Active Pokémon's attacks "
                   "and use it as this attack."}
     assert derive_overrides(recs, parsed, texts=texts) == {}
-    assert 528 in derive_overrides(recs, parsed)          # without texts the guard can't fire
+    assert 528 in derive_overrides(recs, parsed)          # without texts guard can't fire
 
 
 @pytest.mark.req("REQ-AUDIT-0014")

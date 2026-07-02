@@ -84,7 +84,7 @@ def test_live_reduction_and_prevent_join_the_oracle():
                                  defender_transient={"reduction": 30}) == 90
     assert compute_active_damage(atk, me, them, frozenset(),
                                  defender_transient={"prevent_all": True}) == 0
-    # Nebula-class pierces transient protection exactly like static effects (the Drednaw finding)
+    # Nebula-class pierces transient protection just like static effects (Drednaw finding)
     assert compute_active_damage(nebula, me, them, frozenset(),
                                  defender_transient={"prevent_all": True}) == 210
 
@@ -104,7 +104,7 @@ def _pilot():
 @pytest.mark.req("REQ-TRANS-0004")
 def test_opponents_frost_barrier_shrinks_my_tactical_damage_and_expires():
     # their Active (serial 9) used Frost Barrier last turn -> my Jetting-class 120 lands 90;
-    # after THEIR next turn starts, the shield is gone -> full 120 again
+    # after THEIR next turn starts, shield gone -> full 120 again
     p = _pilot()
     p._transients.observe(_obs(3, [_atk(1, FB, 9)]))
 
@@ -129,7 +129,7 @@ def test_incoming_respects_their_self_lock_and_self_bonus():
     p._transients.observe(_obs(3, [_atk(1, LOCKED, 9)]))       # their Active self-locked
     assert p._incoming_active_damage(ma, oa) == 0              # can't attack me next turn
     p._transients.observe(_obs(5, [{"type": TURN_START, "playerIndex": 1}]))   # lock expired
-    p._transients.observe(_obs(5, [_atk(1, BONUS, 9)]))        # now a +120 self-bonus
+    p._transients.observe(_obs(5, [_atk(1, BONUS, 9)]))        # now +120 self-bonus
     assert p._incoming_active_damage(ma, oa) == 90 + 120
 
 
@@ -142,4 +142,4 @@ def test_incoming_same_attack_lock_excludes_only_that_attack():
     ma = {"id": 1, "serial": 1, "hp": 100, "energies": [3]}
     assert p._incoming_active_damage(ma, oa) == 150            # NAMED 150 beats PLAIN 120
     p._transients.observe(_obs(3, [_atk(1, NAMED, 9)]))        # NAMED is locked next turn
-    assert p._incoming_active_damage(ma, oa) == 120            # the other attack still threatens
+    assert p._incoming_active_damage(ma, oa) == 120            # other attack still threatens

@@ -8,7 +8,7 @@ in ``docs/tuning/methodology.md`` and linked from each report.
 from __future__ import annotations
 
 # docs/weights.md bands — |weight| -> what that magnitude means, for a legible "by how much".
-# Boundaries sit in the gaps between the documented tiers (0-5 / 10-20 / 30-50 / 60-100).
+# Boundaries sit in gaps between documented tiers (0-5 / 10-20 / 30-50 / 60-100).
 _BANDS = [(7.5, "faint tiebreaker"), (25, "normal preference"), (55, "strong preference"),
           (100, "near-imperative"), (float("inf"), "combat-scale")]
 

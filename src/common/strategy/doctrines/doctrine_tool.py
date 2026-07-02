@@ -103,7 +103,7 @@ class ToolMixin:
             st = self.stats.get(p.get("id"))
             if not st:
                 continue
-            if (st.minAttackCost or 0) > len(p.get("energies") or []) + 1:   # unaffordable even with an attach
+            if (st.minAttackCost or 0) > len(p.get("energies") or []) + 1:   # unaffordable even w/ attach
                 continue
             best = max(best, int(self._predicted_max_damage(st, {"id": defender_id})))
         return best
@@ -171,60 +171,47 @@ class ToolMixin:
         return self._best_gain_slot(candidates, bonus, wincon=False)       # (3) a wall, only if it gains a turn
 
 
-# ── the deploy rung: a positive endorsement so the equip scores > 0 and tiers BEFORE a hand-shuffle ──
+# ── deploy rung: positive endorsement so equip scores > 0, tiers BEFORE a hand-shuffle ──
 HYPOTHESES = [
     Hypothesis(
         id="deploy-hp-tool",
-        rationale="Deploy a +HP Pokémon Tool (Function Tag `tool` with a parsed `CardStat.hpBonus`, "
-                  "e.g. Hero's Cape +100) onto the body the survival-turns picker chose — by default "
-                  "the Active win-condition (ADR-0028). PROACTIVE, not held for a breakpoint: a deck "
-                  "that shuffles its own hand (Lillie's / Harlequin) would otherwise shuffle the "
-                  "irreplaceable ACE SPEC back into the deck, so the Cape goes onto the body that "
-                  "carries the game. A positive weight, so the equip scores > 0 and `_finish_turn_last` "
-                  "tiers it (tier-2 attach) BEFORE a tier-3 hand-shuffle Supporter (the root-cause fix: "
-                  "a ≤0 equip drops to tier 4, below the shuffle). Reads "
-                  "`Context.attach_is_tool_deploy_target` (this ATTACH option's target == "
-                  "`Board.tool_deploy_slot`); a positional weight, so a lethal KO still outranks it.",
+        rationale="Deploy a +HP Pokémon Tool (Function Tag `tool`, e.g. Hero's Cape +100) onto the body "
+                  "the survival-turns picker chose — PROACTIVE (not held for a breakpoint), since a "
+                  "hand-shuffle Supporter (Lillie's / Harlequin) would otherwise bury the irreplaceable "
+                  "ACE SPEC back in the deck (ADR-0028). Positive weight so the equip tiers (tier-2) "
+                  "BEFORE a tier-3 hand-shuffle; reads `Context.attach_is_tool_deploy_target`, and a "
+                  "lethal KO still outranks it.",
         when=lambda c: c.attach_is_tool_deploy_target,
         weight=40, status="assumed"),
     Hypothesis(
         id="hold-irreplaceable-tool-dont-shuffle",
-        rationale="Don't shuffle an irreplaceable Tool out of your hand with a hand-shuffling draw "
-                  "Supporter (Function Tag `shuffle_hand`, e.g. Lillie's Determination / Harlequin — "
-                  "'shuffle your hand into your deck'). An ACE SPEC Tool (one-per-deck, NOT recoverable "
-                  "from the discard — e.g. Hero's Cape) sent back into the deck is effectively lost for "
-                  "the game. The BELT to the positive `deploy-hp-tool` (the suspenders): that equips the "
-                  "Tool when a carrier worth protecting exists; this HOLDS it when none does (only a spent "
-                  "opener in play, so the deploy can't fire). Mirrors `hold-wincon-dont-shuffle`, but a "
-                  "touch stronger — the shuffled wincon is recoverable from the deck, this one is not. "
-                  "Reads `Board.irreplaceable_tool_in_hand`.",
+        rationale="Don't shuffle an irreplaceable ACE SPEC Tool (e.g. Hero's Cape — one-per-deck, not "
+                  "recoverable from discard) away with a `shuffle_hand` Supporter; sent back into the "
+                  "deck it's effectively lost for the game. Belt to `deploy-hp-tool`'s suspenders (that "
+                  "equips it when a carrier exists, this holds it when none does yet) — mirrors "
+                  "`hold-wincon-dont-shuffle` but stronger, since a shuffled wincon is at least recoverable.",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.board.irreplaceable_tool_in_hand,
         weight=-30, status="assumed"),
-    # ── the WHERE-NOT guards (moved from baseline_tool, re-scoped per ADR-0028): reluctance to fritter
-    #    a Tool on an off-line body — but standing DOWN on the body the survival-turns picker chose ──
+    # ── WHERE-NOT guards (moved from baseline_tool, re-scoped per ADR-0028): reluctant to fritter
+    #    a Tool on an off-line body — but stands DOWN on the body the survival-turns picker chose ──
     Hypothesis(
         id="save-tool-for-the-attacker",
         rationale="A Pokémon Tool (Function Tag `tool`, e.g. Hero's Cape) is a one-shot equip — don't "
-                  "spend it on an off-role Pokémon (a spent opener / accelerator). Hold it for the "
-                  "win-condition / primary attacker that will carry the game. RE-SCOPED (ADR-0028): "
-                  "stands down on the body the survival-turns picker chose "
-                  "(`attach_is_tool_deploy_target`) — that deploy is the intended play (incl. a wincon "
-                  "LINE pre-evolution the Cape rides up on evolution), so it must not be penalised. "
-                  "Fires only on a picker-REJECTED off-line body (the −25-on-the-bench-Staryu mis-fire "
-                  "this removes is exactly what buried correction #2).",
+                  "spend it on an off-role Pokémon; hold it for the win-condition/primary attacker. "
+                  "RE-SCOPED (ADR-0028): stands down on the picker's chosen deploy target "
+                  "(`attach_is_tool_deploy_target`, incl. a wincon LINE pre-evolution), firing only on a "
+                  "picker-rejected off-line body.",
         when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
         and not (_WINCON_ROLES & set(c.attach_target_roles))
         and not c.attach_is_tool_deploy_target,
         weight=-15, status="testing"),
     Hypothesis(
         id="protect-ace-spec-tool",
-        rationale="An ACE SPEC card is limited to one per deck and is usually irreplaceable (no second "
-                  "copy; not recoverable from the discard). So beyond the usual 'hold a Tool for the "
-                  "attacker' reluctance, be EXTRA reluctant to spend an ACE SPEC Tool (e.g. Hero's Cape) "
-                  "on an off-role Pokémon. Stacks additively on `save-tool-for-the-attacker` and reads "
-                  "the structural `aceSpec` fact off CardStat; like the base rule it RE-SCOPED to stand "
-                  "down on the picker's chosen deploy target (ADR-0028).",
+        rationale="An ACE SPEC card is one-per-deck and usually irreplaceable, so be EXTRA reluctant to "
+                  "spend an ACE SPEC Tool (e.g. Hero's Cape) on an off-role Pokémon. Stacks additively on "
+                  "`save-tool-for-the-attacker`, reading the structural `aceSpec` fact off CardStat; same "
+                  "RE-SCOPE stand-down on the picker's chosen deploy target (ADR-0028).",
         when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
         and c.stat is not None and getattr(c.stat, "aceSpec", False)
         and not (_WINCON_ROLES & set(c.attach_target_roles))

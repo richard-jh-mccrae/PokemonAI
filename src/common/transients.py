@@ -38,7 +38,7 @@ class TransientTracker:
         """Consume one observation's logs; never raises (a malformed obs is ignored)."""
         try:
             turn = ((obs or {}).get("current") or {}).get("turn") or 0
-            if turn and turn < self._last_turn:             # a NEW match: state must not leak
+            if turn and turn < self._last_turn:             # NEW match: state must not leak
                 self._by_side.clear()
             if turn:
                 self._last_turn = turn
@@ -46,7 +46,7 @@ class TransientTracker:
                 t = (lg or {}).get("type")
                 side = lg.get("playerIndex")
                 if t == _TURN_START and side is not None:
-                    self._by_side.pop(side, None)           # the granter's next turn: grant expires
+                    self._by_side.pop(side, None)           # granter's next turn: grant expires
                 elif t == _ATTACK and side is not None:
                     grant = self._grant_fields(lg.get("attackId"), lg.get("serial"))
                     if grant:

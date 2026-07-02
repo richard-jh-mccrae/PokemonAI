@@ -37,7 +37,7 @@ def test_agent_emits_decision_telemetry_to_stderr_in_a_real_match():
     recs = _stderr_telemetry(env)
     assert recs, "agent must emit @T decision telemetry to stderr"
     rec = recs[0]
-    assert "chosen" in rec and "opts" in rec                 # the choice + every legal option
+    assert "chosen" in rec and "opts" in rec                 # choice + every legal option
     assert all("score" in o for o in rec["opts"])            # each option carries its score
     assert any(o.get("fired") for o in recs[-1]["opts"]) or any(  # hypotheses fired somewhere
         o.get("fired") for r in recs for o in r["opts"])

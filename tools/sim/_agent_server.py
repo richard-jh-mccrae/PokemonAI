@@ -24,12 +24,12 @@ def _load_agent(bundle: Path):
 
 def main() -> None:
     os.environ["AGENT_NO_TELEMETRY"] = "1"                 # protocol channel must stay clean
-    for root in sys.argv[1:]:                              # extra sys.path roots (e.g. src for a source agent)
+    for root in sys.argv[1:]:                              # extra sys.path roots (e.g. src for source agent)
         sys.path.insert(0, root)
     bundle = Path.cwd()
     sys.path.insert(0, str(bundle))
 
-    # Hand the real stdout to the protocol; send any agent prints to stderr instead.
+    # Hand real stdout to the protocol; send any agent prints to stderr instead.
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8")
     os.dup2(2, 1)
 

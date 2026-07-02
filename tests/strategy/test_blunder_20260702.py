@@ -63,15 +63,15 @@ def _ctx(pilot, obs, i):
 def test_rush_evolve_filter_takes_ability_less_evolutions_only():
     st = _stats()
     f = _FETCH_FILTERS["rush_evolve"]
-    assert f(st.get(WINCON)) is True        # an ability-less Evolution — Salvatore can fetch it
+    assert f(st.get(WINCON)) is True        # ability-less Evolution — Salvatore can fetch it
     assert f(st.get(ABIL_EVO)) is False     # has an Ability (Explosiveness) — excluded
     assert f(st.get(PREEVO)) is False       # a Basic (no evolvesFrom) — not an evolution
 
 
 @pytest.mark.req("REQ-GEN-0032")
 def test_search_deck_set_for_salvatore_is_the_ability_less_evolution_only():
-    # Deck holds BOTH an ability-less Mega and an ability-bearing Cinderace; Salvatore reaches only
-    # the former (the ability-bearing one is not a legal rush-evolve target).
+    # Deck holds BOTH ability-less Mega and ability-bearing Cinderace; Salvatore reaches only
+    # the former — ability-bearing one isn't a legal rush-evolve target.
     pilot = _pilot([WINCON] * 3 + [ABIL_EVO] * 4 + [PREEVO] * 3 + [FILLER] * 50)
     assert pilot._search_deck_set(["search", "rush_evolve"]) == {WINCON}
 
@@ -79,8 +79,8 @@ def test_search_deck_set_for_salvatore_is_the_ability_less_evolution_only():
 # ---------------------------------------------------------------- dont-search-an-empty-deck on Salvatore
 @pytest.mark.req("REQ-GEN-0032")
 def test_salvatore_stands_down_when_its_evolution_is_gone_from_the_deck():
-    # 3 Mega ex (Salvatore's only target), all accounted OUTSIDE the deck (discard) -> Salvatore whiffs,
-    # even though a Staryu is in play to evolve. The ep83117367 shape.
+    # 3 Mega ex (Salvatore's only target), all accounted OUTSIDE deck (discard) -> Salvatore whiffs,
+    # even w/ a Staryu in play to evolve. The ep83117367 shape.
     pilot = _pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     play_salv = opt(PLAY, area=HAND, index=0)
     gone = state(active=poke(PREEVO, hp=70), bench=[poke(PREEVO, hp=70)],
@@ -89,15 +89,15 @@ def test_salvatore_stands_down_when_its_evolution_is_gone_from_the_deck():
     c = _ctx(pilot, obs, 0)
     assert c.search_targets_exhausted
     fired = _fired(pilot.explain(obs).options[0])
-    assert "dont-search-an-empty-deck" in fired          # the sound whiff guard fires
-    assert "prefer-rush-evolve-tutor" not in fired        # the positive endorsement is gated off
-    assert pilot.decide(obs) == [1]                       # End beats the guaranteed-whiff Salvatore
+    assert "dont-search-an-empty-deck" in fired          # sound whiff guard fires
+    assert "prefer-rush-evolve-tutor" not in fired        # positive endorsement gated off
+    assert pilot.decide(obs) == [1]                       # End beats guaranteed-whiff Salvatore
 
 
 @pytest.mark.req("REQ-GEN-0032")
 def test_salvatore_is_endorsed_while_a_copy_could_still_be_in_the_deck():
-    # Only 2 of 3 Mega ex accounted; the 3rd could sit in the 6 hidden prizes -> NOT a certain whiff.
-    # The rush-evolve tutor keeps its endorsement (sound: never suppress a plausibly-present target).
+    # Only 2 of 3 Mega ex accounted; 3rd could sit in the 6 hidden prizes -> NOT a certain whiff.
+    # Rush-evolve tutor keeps its endorsement (sound: never suppress a plausibly-present target).
     pilot = _pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     play_salv = opt(PLAY, area=HAND, index=0)
     maybe = state(active=poke(PREEVO, hp=70), bench=[poke(PREEVO, hp=70)],
@@ -107,17 +107,17 @@ def test_salvatore_is_endorsed_while_a_copy_could_still_be_in_the_deck():
     assert not c.search_targets_exhausted
     fired = _fired(pilot.explain(obs).options[0])
     assert "dont-search-an-empty-deck" not in fired
-    assert "prefer-rush-evolve-tutor" in fired            # a reachable target -> still preferred
+    assert "prefer-rush-evolve-tutor" in fired            # reachable target -> still preferred
 
 
 # ---------------------------------------------------------------- own_prizes str-key coercion (JSON obs)
 @pytest.mark.req("REQ-GEN-0032")
 def test_own_prizes_string_keys_are_coerced_to_ints():
-    # A Correction's obs is JSON, so its own_prizes keys are STRINGS ("900"), while the decklist is
-    # int-keyed. The Pilot must coerce, else the resolved prize never matches and the oracle is blind.
+    # A Correction's obs is JSON, so own_prizes keys are STRINGS ("900"), while decklist is
+    # int-keyed. Pilot must coerce, else resolved prize never matches and oracle is blind.
     pilot = _pilot([WINCON] * 3 + [FILLER] * 57)
     st = state(active=poke(WINCON, energy=1, hp=330), discard=[WINCON], hand=[SALVATORE],
-               prizes=6, deck_count=53)                   # 2 of 3 Mega seen; the 3rd is prized
+               prizes=6, deck_count=53)                   # 2 of 3 Mega seen; 3rd is prized
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(END)], current=st)
     obs["own_prizes"] = {str(WINCON): 1}                  # JSON string key (as on disk)
     board = pilot._board(obs, obs["select"])
@@ -136,3 +136,4 @@ def test_cardstat_has_ability_is_set_from_engine_skills():
     assert cinderace is not None and cinderace.hasAbility is True    # Cinderace — Explosiveness
     assert stats.get(1031).hasAbility is False                       # Mega Starmie ex — no Ability
     assert stats.get(1030).hasAbility is False                       # Staryu — a Basic, no Ability
+

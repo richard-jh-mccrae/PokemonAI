@@ -57,8 +57,8 @@ class Strategy:
     params: dict = field(default_factory=dict)         # tunable scalars
     hypotheses: list = field(default_factory=list)     # weighted, status-tracked rules
     fetch_priority: list = field(default_factory=list)  # Tier-3 explicit grab order (cardIds, highest
-                                                        # first) — a combo deck's override of the derived
+                                                        # first) -- combo deck's override of derived
                                                         # fetch importance (ADR-0023); empty for most decks
     weight_overrides: dict = field(default_factory=dict)  # authored per-deck seed overrides of (typically
-                                                        # general) Hypothesis weights by id — doctrine-driven,
+                                                        # general) Hypothesis weights by id -- doctrine-driven,
                                                         # sparse, UNDER the learned tuned.json layer (ADR-0035)

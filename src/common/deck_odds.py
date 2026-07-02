@@ -38,11 +38,11 @@ def p_contains(unseen_copies, prizes_hidden, deck_count) -> float:
     except Exception:
         return 1.0
     if u <= 0:
-        return 0.0                       # every copy is seen outside the deck -> sound-EMPTY
+        return 0.0                       # every copy seen outside deck -> sound-EMPTY
     if d <= 0:
-        return 0.0                       # the deck is empty -> it holds nothing (all unseen are prized)
+        return 0.0                       # deck empty -> holds nothing (all unseen are prized)
     if k <= 0:
-        return 1.0                       # no hidden prizes -> every unseen copy is in the deck
+        return 1.0                       # no hidden prizes -> every unseen copy is in deck
     if u > k:
         return 1.0                       # more unseen copies than prize slots -> pigeonhole: ≥1 in deck
     h = d + k

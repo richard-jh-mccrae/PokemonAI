@@ -19,9 +19,9 @@ _AREA = {
     6: "prize", 7: "stadium", 9: "tool", 12: "looking",
 }
 
-# attackId -> name, built once from the engine (the scouting provider uses the same source).
-# Lazily resolved so a label-only caller doesn't load the native engine until it tags an Attack;
-# degrades to "Attack #<id>" if the engine is unavailable.
+# attackId -> name, built once from engine (scouting provider uses same source).
+# Lazily resolved so a label-only caller doesn't load native engine until it tags an Attack;
+# degrades to "Attack #<id>" if engine unavailable.
 _ATTACK_NAMES: dict[int, str] | None = None
 
 
@@ -134,8 +134,8 @@ def option_label(option: dict, current: dict) -> str:
         return tgt or _card_name(current, option.get("area"), option.get("index"),
                                  player_index) or "(card)"
 
-    # Evolve handled above; ToolCard / Energy / Ability / Retreat / Discard / ...: prefer a
-    # disambiguated board target, else the card name, else the bare action kind.
+    # Evolve handled above; ToolCard / Energy / Ability / Retreat / Discard / ...: prefer
+    # disambiguated board target, else card name, else bare action kind.
     tgt = _board_target(current, option.get("area"), option.get("index"), player_index, seat)
     if tgt:
         return f"{kind}: {tgt}"

@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from submit.package import REPO, _git_hash, artifact_stem  # reuse the build-stamp helpers
+from submit.package import REPO, _git_hash, artifact_stem  # reuse build-stamp helpers
 
 
 def render_brief(manifest: dict, *, prev_deck: dict | None = None,
@@ -87,7 +87,7 @@ def _load_strategy(agent_dir: Path):
     spec = importlib.util.spec_from_file_location("_brief_strategy", Path(agent_dir) / "strategy.py")
     mod = importlib.util.module_from_spec(spec)
     prev = sys.dont_write_bytecode
-    sys.dont_write_bytecode = True   # don't drop a __pycache__ into the staged bundle (it would ship)
+    sys.dont_write_bytecode = True   # no __pycache__ in staged bundle (it would ship)
     try:
         spec.loader.exec_module(mod)
     finally:
@@ -129,7 +129,7 @@ def _card_index() -> dict:
         from meta_tracker.cards import load_cards
         return load_cards()
     except Exception:
-        return {}      # no card db at build time -> brief falls back to the bare count
+        return {}      # no card db at build time -> brief falls back to bare count
 
 
 def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
@@ -152,7 +152,7 @@ def _card_label(card: dict) -> str:
     return card.get("name") or f"#{card['id']}"
 
 
-# Standard decklist sections: (heading, the card categories it gathers).
+# Standard decklist sections: (heading, card categories it gathers).
 _DECK_SECTIONS = [
     ("Pokémon", {"pokemon"}),
     ("Trainer", {"item", "tool", "supporter", "stadium"}),
@@ -197,7 +197,7 @@ def _deck_diff(prev_deck: dict | None, cur_deck: dict) -> tuple[list, list, list
     *current* card id to its inline marker. Empty across the board when nothing changed (or no
     baseline) — the brief then shows no callout."""
     if not (prev_deck or {}).get("cards"):
-        return [], [], [], {}      # no previous build to diff against (e.g. the first build)
+        return [], [], [], {}      # no previous build to diff against (e.g. first build)
     prev = {c["id"]: c for c in prev_deck["cards"]}
     cur = {c["id"]: c for c in cur_deck.get("cards", [])}
     added, changed, badges = [], [], {}
@@ -310,7 +310,7 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
         "training": training,
         "capabilities": {
             "search_budget": search_budget,
-            "tier": 1 if search_budget > 0 else 0,    # >0 => Tier-1 Search; else Tier-0 closed-form
+            "tier": 1 if search_budget > 0 else 0,    # >0 = Tier-1 Search; else Tier-0 closed-form
             "card_functions": {"present": (agent_dir / "common" / "card_functions.json").exists()},
             "posture": {"enabled": (agent_dir / "common" / "scouting" / "artifact.json").exists()},
             "overrides": {"present": bool(tuned), "count": len(tuned)},

@@ -18,11 +18,11 @@ class TuneResult:
     overrides: dict                                  # {hyp_id: weight} -> tuned.json
     proposals: list[ProposedHypothesis] = field(default_factory=list)
     skipped: list = field(default_factory=list)      # [(correction, reason)]
-    n_constraints: int = 0                            # W-route corrections fed to the fit
+    n_constraints: int = 0                            # W-route corrections fed to fit
     unsatisfied: list = field(default_factory=list)  # W-route corrections shipped weights can't honour
-    base_satisfied: int = 0                           # constraints the authored seeds already satisfy
-    fit_adopted: bool = False                         # did the fit beat the seeds (else keep priors)?
-    w_items: list = field(default_factory=list)       # [(correction, Constraint)] — for the run report
+    base_satisfied: int = 0                           # constraints authored seeds already satisfy
+    fit_adopted: bool = False                         # did fit beat seeds (else keep priors)?
+    w_items: list = field(default_factory=list)       # [(correction, Constraint)] — for run report
 
 
 def _n_satisfied(constraints, weights) -> int:

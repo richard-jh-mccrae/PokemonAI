@@ -37,8 +37,8 @@ def test_hold_position_in_setup_fires_on_a_retreat_at_the_setup_turn_menu():
                       current=state(active=poke(ACTIVE_ID, energy=1), bench=[poke(BENCH_ID)]))
     trace = p.explain(obs)
     assert "hold-position-in-setup" in _fired(trace.options[0])       # the Retreat option
-    assert trace.options[0].score < 0                                 # a reluctance (negative weight)
-    assert "hold-position-in-setup" not in _fired(trace.options[1])   # the End option — not a retreat
+    assert trace.options[0].score < 0                                 # reluctance = negative weight
+    assert "hold-position-in-setup" not in _fired(trace.options[1])   # End option — not a retreat
 
 
 @pytest.mark.req("REQ-GEN-0026")

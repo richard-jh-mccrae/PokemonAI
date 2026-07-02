@@ -17,65 +17,48 @@ class CardStat:
     hp: int = 0
     ex: bool = False
     megaEx: bool = False
-    aceSpec: bool = False              # ACE SPEC — one-per-deck, irreplaceable; read off CardStat for
+    aceSpec: bool = False              # ACE SPEC — one/deck, irreplaceable; CardStat feeds
                                        # 'protect the ACE SPEC' rules (e.g. Hero's Cape)
-    hasAbility: bool = False           # a Pokémon carrying an Ability (engine CardData.skills, hp > 0) —
-                                       # e.g. Cinderace's Explosiveness. The structural basis for a
-                                       # rush-evolve tutor's fetch-filter: Salvatore fetches only an
-                                       # ability-LESS Evolution ("a card that has no Abilities and evolves
-                                       # from 1 of your Pokémon"), so this excludes an ability-bearing
-                                       # Evolution from its whiff/redundancy target set (cf _FETCH_FILTERS).
-    hpBonus: int = 0                   # flat HP a Pokémon Tool grants its holder (e.g. Hero's Cape +100),
-                                       # parsed from skill text — the engine has no structured field.
-                                       # The primitive behind the general +HP-tool breakpoint model.
-    recoil: int = 0                    # unconditional self-damage the card's HIGHEST-damage attack
-                                       # deals to itself (e.g. Hariyama Wild Press 210 → recoil 70),
-                                       # parsed from attack text — the engine has no structured field.
-                                       # The central "sensible place" so Tactical survival math can ask
-                                       # "does my nuke leave me a free KO?" without per-agent wiring.
-    handSizeDamage: int = 0            # per-card damage of a "for each card in your hand" attack
-                                       # (Alakazam's Powerful Hand: 2 counters/card = 20), parsed from
-                                       # attack text — the printed `damage` is 0, so this is the only
-                                       # way the forward-doom / Posture read sees the threat. ep82754875
-    benchSnipeDamage: int = 0          # unconditional bench-snipe an attack also deals to ONE of the
-                                       # opponent's Benched Pokémon (Jetting Blow → 50), parsed from
-                                       # attack text — the opponent's incoming vs MY Bench (the Tool
-                                       # survival-turns math reads it for a benched carrier; ADR-0028)
+    hasAbility: bool = False           # Pokémon w/ Ability (CardData.skills, hp>0). Salvatore's
+                                       # fetch-filter excludes ability-bearing Evolution targets (cf _FETCH_FILTERS)
+    hpBonus: int = 0                   # flat HP a Tool grants holder (e.g. Hero's Cape +100),
+                                       # parsed from skill text — engine has no structured field.
+                                       # Primitive behind the general +HP-tool breakpoint model.
+    recoil: int = 0                    # self-damage of card's HIGHEST-dmg attack (Hariyama Wild Press 210 -> 70),
+                                       # parsed from text (no engine field). Feeds "does my nuke leave a free KO?"
+    handSizeDamage: int = 0            # per-card dmg of "for each card in hand" atk (Powerful Hand: 2ctr=20);
+                                       # printed damage=0, only way forward-doom/Posture sees threat. ep82754875
+    benchSnipeDamage: int = 0          # unconditional bench-snipe dmg to ONE opp Benched (Jetting Blow->50);
+                                       # Tool survival-turns math reads for benched carrier (ADR-0028)
     maxDamage: int = 0
-    maxDamageCost: int | None = None   # energy count of the HIGHEST-damage attack (None if unknown) —
-                                       # the mirror of minAttackCost: "fully online" means enough Energy
-                                       # for the big attack (e.g. Nebula Beam CCC=3), not just the cheap
-                                       # one (Jetting Blow 1). The threshold behind `build-active-wincon`.
-    minAttackCost: int | None = None   # energy count of the card's cheapest attack (None if unknown)
-    minCostDamage: int = 0             # damage of the cheapest-cost attack (best damage among the
-                                       # lowest-cost attacks) — for "does the cheap attack KO" gating
+    maxDamageCost: int | None = None   # energy count of HIGHEST-dmg attack (None if unknown); mirror of
+                                       # minAttackCost. "fully online" threshold behind `build-active-wincon`.
+    minAttackCost: int | None = None   # energy count of card's cheapest attack (None if unknown)
+    minCostDamage: int = 0             # damage of cheapest-cost attack (best damage among
+                                       # lowest-cost attacks) — for "does cheap attack KO" gating
                                        # (e.g. Jetting Blow 120 at 1 energy, not Nebula Beam 210 at CCC)
-    attacks: tuple = ()                # (attackId, …) of this card's attacks — the lethal-attach
-                                       # lookahead reads each attack's cost/damage to ask "would
-                                       # attaching this Energy unlock a KO this turn?" (e.g. Ignition →
-                                       # CCC → Nebula Beam). Empty when unknown.
+    attacks: tuple = ()                # (attackId, …) — lethal-attach lookahead reads cost/dmg to ask
+                                       # "would attaching this Energy unlock a KO?" (Ignition->CCC->Nebula Beam)
     weakness: int | None = None
     resistance: int | None = None
     energyType: int | None = None
-    retreatCost: int = 0               # Energy to retreat (engine CardData.retreatCost) — the
+    retreatCost: int = 0               # Energy to retreat (engine CardData.retreatCost) —
                                        # defensive stall-gust strands an energyless high-retreat body
-    cardType: int | None = None        # engine CardData.cardType (CardType enum: ITEM=1, TOOL=2,
-                                       # SUPPORTER=3, …) — distinguishes a Supporter gust (costs the one
-                                       # Supporter slot) from a free Item gust, so Supporter-economy rules
-                                       # only fire on Supporters. ADR-0022 #12
+    cardType: int | None = None        # CardType enum (ITEM=1, TOOL=2, SUPPORTER=3…) — distinguishes
+                                       # Supporter gust (costs the slot) from free Item gust. ADR-0022 #12
     stage: str | None = None
     evolvesFrom: str | None = None
     tera: bool = False                 # engine CardData.tera: takes NO damage from attacks while
-                                       # BENCHED (32 in pool) — a bench-snipe rider can never KO it
-    # Defender-side damage facts (ADR-0032 G1), parsed from Ability text — the parametric fields the
-    # boolean prevent_ex_damage tag can't carry (and Sylveon 330 shows the tag can silently miss):
+                                       # BENCHED (32 in pool) — bench-snipe rider can never KO it
+    # Defender-side dmg facts (ADR-0032 G1), from Ability text — parametric fields the boolean
+    # prevent_ex_damage tag can't carry (Sylveon 330 shows the tag can silently miss).
     preventsDamageFrom: str | None = None   # "ex" (Crustle/Sylveon) | "basic_ex" (Farigiraf ex) —
-                                            # zeroes a matching attacker's damage unless the attack
+                                            # zeroes matching attacker's damage unless attack
                                             # ignoresEffects (Nebula Beam)
     preventsDamageAtLeast: int = 0          # threshold prevention (Drednaw: damage >=200 -> 0); 0=off
     damageReduction: int = 0                # flat always-on "takes N less damage" AFTER W/R
                                             # (Mudsdale/Bouffalant ex/Mega Diancie ex -30)
-    damageReductionTypes: tuple | None = None  # attacker EnergyTypes the reduction is scoped to
+    damageReductionTypes: tuple | None = None  # attacker EnergyTypes reduction scoped to
                                             # (Dewgong: {R}/{W} -> (2, 3)); None = all attackers
 
 
@@ -104,10 +87,8 @@ class DictCardStatProvider:
         return self._forward.forward_card_ids(st.name) if st else frozenset()
 
 
-# Matches ONLY the unconditional Tool phrasing "The Pokémon this card is attached to gets +N HP"
-# (Hero's Cape). A restricted variant inserts a qualifier — "The Cynthia's Pokémon …", "The {G}
-# Pokémon …" — so "The Pok.mon" is no longer adjacent and the pattern won't match, parsing those to
-# 0. The `.` matches the é without putting a non-ASCII literal in source (cross-platform safe).
+# Matches ONLY unconditional Tool phrasing "+N HP" (Hero's Cape); restricted variants ("The
+# Cynthia's Pokémon…") break adjacency, parse to 0. `.` = é, no non-ASCII literal (cross-platform).
 _HP_BONUS_RE = re.compile(r"\bThe Pok.mon this card is attached to gets \+(\d+) HP")
 
 
@@ -126,27 +107,19 @@ def _parse_tool_hp_bonus(card) -> int:
     return 0
 
 
-# Attack-rider parsers (ADR-0022 #2/#14). The amount of a self-damage (recoil) or a benched-Pokémon
-# snipe lives only in the free-text `Attack.text` — the engine exposes no structured field (mirror
-# `_parse_tool_hp_bonus`). Both match ONLY the clean UNCONDITIONAL phrasing as a whole sentence, so a
-# conditional rider ("You may …", "If you do, …", coin-flip, "for each …") parses to 0. Under-crediting
-# is the SAFE direction: a recoil we miss never wrongly downgrades a real win to a draw, and a snipe we
-# miss never inflates an attack's value. `.` stands in for the é / apostrophe (cross-platform, no
-# non-ASCII literal in source).
+# Attack-rider parsers (ADR-0022 #2/#14): recoil/bench-snipe amount lives only in free-text (no
+# engine field). Whole-sentence UNCONDITIONAL match only; conditional riders parse to 0 (safe: under-credit never).
 _RECOIL_RE = re.compile(r"This Pok.mon (?:also )?does (\d+) damage to itself\.?$")
 _BENCH_SNIPE_RE = re.compile(
     r"This attack also does (\d+) damage to 1 of your opponent.s Benched Pok.mon\.?$")
-# A "for each card in your hand" attacker (Alakazam's Powerful Hand): its printed `damage` is 0, so the
-# threat is invisible without parsing the text. Counter-placement ("Place N damage counters …") is N×10
-# damage and ignores Weakness/Resistance; the rarer "does N damage for each card …" is direct damage.
+# "For each card in hand" attacker (Powerful Hand): printed damage=0, invisible w/o text parse.
+# Counter-placement = N×10, ignores W/R; rarer "does N dmg for each card" is direct damage.
 _HAND_SIZE_COUNTERS_RE = re.compile(
     r"Place (\d+) damage counters? on your opponent.s Active Pok.mon for each card in your hand\.?$")
 _HAND_SIZE_DAMAGE_RE = re.compile(r"does (\d+) (?:more )?damage for each card in your hand\.?$")
 _DAMAGE_PER_COUNTER = 10
-# An attack whose damage "isn't affected by ... any effects on your opponent's Active Pokémon" (Mega
-# Starmie's Nebula Beam, Crustle's Superb Scissors). Such an attack bypasses a damage-PREVENTION Ability
-# on the Active (Crustle's Mysterious Rock Inn), which the closed-form combat math otherwise treats as an
-# absolute wall. `[^.]*` keeps the clause within one sentence; `.` covers the é / apostrophe (cross-platform).
+# Dmg "isn't affected by...effects on opponent's Active" (Nebula Beam) bypasses a damage-
+# PREVENTION Ability (Mysterious Rock Inn) combat math otherwise treats as an absolute wall.
 _IGNORES_ACTIVE_EFFECTS_RE = re.compile(
     r"isn.t affected by[^.]*effects on your opponent.s Active Pok.mon")
 
@@ -216,12 +189,8 @@ def parse_attack_hand_size(text: str) -> int:
     return 0
 
 
-# Defender-side ability families (ADR-0032 G1). Pool-verified: 2 prevent-from-ex (Crustle 345,
-# Sylveon 330 — Sylveon is UNTAGGED, the field closes that gap), 1 Basic-ex variant (Farigiraf ex),
-# 1 threshold (Drednaw >=200), 3 unconditional -30 after W/R (Mudsdale/Bouffalant ex/Mega Diancie
-# ex). Dewgong's attacker-TYPE-conditional -30 and the fossil's bench-only prevention parse to
-# nothing (hand-review ledger); "Prevent all effects … (Damage is not an effect.)" is
-# damage-irrelevant and must not match.
+# Defender ability families (ADR-0032 G1). Pool-verified: 2 prevent-from-ex (Sylveon 330 was
+# UNTAGGED, closes gap), 1 basic-ex (Farigiraf ex), 1 threshold (Drednaw>=200), 3 flat -30 after W/R.
 _PREVENT_EX_RE = re.compile(
     r"Prevent all damage done to this Pok.mon by attacks from your opponent.s Pok.mon \{ex\}")
 _PREVENT_BASIC_EX_RE = re.compile(
@@ -232,7 +201,7 @@ _PREVENT_THRESHOLD_RE = re.compile(
 _TAKES_LESS_RE = re.compile(
     r"This Pok.mon takes (\d+) less damage from attacks \(after applying Weakness and Resistance\)")
 # Dewgong's type-scoped variant: "takes 30 less damage from attacks from your opponent's {R} or
-# {W} Pokémon (after applying …)" — the reduction applies only to attackers of the named types.
+# {W} Pokémon (after applying …)" — reduction applies only to attackers of named types.
 _TAKES_LESS_TYPED_RE = re.compile(
     r"This Pok.mon takes (\d+) less damage from attacks from your opponent.s \{(\w)\}"
     r"(?: or \{(\w)\})? Pok.mon")
@@ -275,12 +244,8 @@ def parse_card_defense(card) -> tuple[str | None, int, int, tuple | None]:
     return (prevents, threshold, reduction, types)
 
 
-# The ignore-family (ADR-0032): "This attack's damage isn't affected by …" — the per-attack damage
-# modifiers the card-level model can't express (Nebula Beam lands 210 through Crustle's ex-damage
-# prevention because it ignores *effects*; Jetting Blow doesn't). Whole-sentence, damage-scoped:
-# Conkeldurr's "ignore all Energy in this attack's cost" is a COST modifier and must not match.
-# "This damage isn't affected by …" (Arboliva) and "effects on those Pokémon" (Iron Crown's snipe)
-# are covered variants. Text is the SEED — the engine audit verifies/corrects via overrides.
+# Ignore-family (ADR-0032): per-attack dmg modifiers card-level model can't express (Nebula Beam
+# ignores *effects* so lands through Crustle's prevention). Whole-sentence; Conkeldurr's cost-ignore excluded.
 _IGNORES_RE = re.compile(r"\bThis (?:attack.s )?damage isn.t affected by ([^.]+)\.")
 
 
@@ -319,31 +284,25 @@ class AttackStat:
     ignoresWeakness: bool = False
     ignoresResistance: bool = False
     ignoresEffects: bool = False       # pierces defender-side effects incl. damage-prevention
-                                       # Abilities (Crustle) — the Nebula-Beam-vs-Crustle fact
-    damageMin: int | None = None       # sound FLOOR of a conditional/coin attack ("If tails, this
-                                       # attack does nothing" -> 0); None = deterministic. The
-    damageMax: int | None = None       # Lethal Solver reads the floor (never lock a phantom win),
-                                       # Incoming reads the ceiling (worst case). Text-seeded
+                                       # Abilities (Crustle) — Nebula-Beam-vs-Crustle fact
+    damageMin: int | None = None       # sound FLOOR of conditional/coin attack ("If tails, this
+                                       # attack does nothing" -> 0); None = deterministic.
+    damageMax: int | None = None       # Lethal Solver reads floor (never lock phantom win),
+                                       # Incoming reads ceiling (worst case). Text-seeded
                                        # (parse_attack_damage_bounds), audit-corrected (coin fork).
     scaleVar: str | None = None        # visible-state scaler (ADR-0032 Damage Formula): damage =
                                        # printed + scalePerUnit x count(scaleVar), attacker-relative
-    scalePerUnit: int = 0              # vars: atk_hand / def_hand / def_active_energy /
-                                       # atk_active_energy / atk_bench / def_bench /
-                                       # atk_discard_energy. EXACT at decision time (all visible —
-                                       # BOTH discard piles are open information); counter-placers
-                                       # also carry all three ignore flags (counters aren't damage).
+    scalePerUnit: int = 0              # vars: atk/def_hand, atk/def_active_energy, atk/def_bench,
+                                       # atk_discard_energy — EXACT (all visible incl. both discards)
     scaleEnergyType: int | None = None  # atk_discard_energy's type filter (Riptide Basic {W} -> 3);
-                                       # None = count EVERY Energy card in the attacker's discard
+                                       # None = count EVERY Energy card in attacker's discard
     hiddenPerUnit: int = 0             # HIDDEN-state scaler (deck-discard family: Hammer-lanche /
                                        # Misty's Lapras / Ground Burn): damage += perUnit x units,
-    hiddenSample: int = 0              # units unknowable closed-form — bound "max" assumes every
-                                       # sampled card fuels (perUnit x hiddenSample, the Incoming
-                                       # ceiling); "min"/"exact" add 0 (sound floor) unless the
-                                       # deck tracker supplies context["hidden_units"], OR exact
-    hiddenEnergyType: int | None = None  # deck facts + this Basic-{X} filter let the oracle compute
-                                       # the pigeonhole floor / hypergeometric EV itself.
+    hiddenSample: int = 0              # units unknowable closed-form — "max" assumes every sampled card
+                                       # fuels (Incoming ceiling); "min"/"exact" 0 unless deck tracker has hidden_units
+    hiddenEnergyType: int | None = None  # deck facts + Basic-{X} filter -> oracle computes pigeonhole floor/EV
     # Transient next-turn grants (ADR-0033): what USING this attack grants for one turn — tracked
-    # match-scoped from ATTACK logs (common/transients.py), the obs exposes no effect state.
+    # match-scoped from ATTACK logs (common/transients.py), obs has no effect state.
     nextTurnReduction: int = 0         # defender-side: "takes N less damage" next turn (Frost Barrier)
     nextTurnPreventAll: bool = False   # defender-side: "prevent all damage done to this Pokémon"
     nextTurnSelfLock: bool = False     # attacker-side: "this Pokémon can't attack / use attacks"
@@ -352,14 +311,11 @@ class AttackStat:
     nextTurnDefenderRetreatLock: bool = False  # opponent-side: "the Defending Pokémon can't retreat"
 
 
-# The conditional-damage families (ADR-0032 Damage Formula, the bounds half). Verified pool-wide:
-# 26 "…, this attack does nothing" conditionals (11 coin-tails + 15 board conditions — Sawk, Cosmic
-# Beam), 26 "If heads, +N more", 2 "You may do N more". A does-nothing clause floors the attack to
-# 0; a bonus clause lifts the ceiling by N. Deterministic attacks parse to None (no bounds).
+# Conditional-dmg families (ADR-0032 bounds half). Pool: 26 "does nothing" conditionals (coin-tails
+# + board), 26 "If heads +N", 2 "You may +N". Does-nothing floors to 0; bonus lifts ceiling by N.
 _DOES_NOTHING_RE = re.compile(r", this attack does nothing")
-# Any conditional/optional flat bonus lifts the ceiling: coin heads, board conditions ("If your
-# opponent's Active is a Pokémon {ex}, …"), optional pay-offs ("You may … to have this attack do
-# N more"). A *for each* bonus is a SCALER, not a flat bonus — the lookahead rejects it.
+# Any conditional/optional flat bonus lifts ceiling (coin heads, board conditions, pay-offs).
+# *For each* bonus is a SCALER not flat bonus — lookahead rejects it.
 _BONUS_RE = re.compile(
     r"(?:If [^.]{1,80}?, this attack does|You may do|to have this attack do) (\d+) more damage"
     r"(?! for each)")
@@ -386,9 +342,8 @@ def parse_attack_damage_bounds(text: str, printed: int) -> tuple[int, int] | Non
     return (lo, hi) if found else None
 
 
-# The visible-state scaler families (ADR-0032 Damage Formula, the exact half). Pool-verified: 1
-# own-hand counter-placer (Powerful Hand), 2 opp-hand damage (Mind Ruler), 8 opp-active-energy,
-# 13 own-energy. Attacker-relative var names, so Incoming reuses the same record unchanged.
+# Visible-state scaler families (ADR-0032 exact half). Pool: 1 own-hand counter-placer (Powerful
+# Hand), 2 opp-hand, 8 opp-active-energy, 13 own-energy. Attacker-relative names -> Incoming reuses unchanged.
 _SCALE_FAMILIES = (
     (re.compile(r"Place (\d+) damage counters? on your opponent.s Active Pok.mon for each card in "
                 r"your hand"), "atk_hand", 10, True),
@@ -403,18 +358,18 @@ _SCALE_FAMILIES = (
      "def_bench", 1, False),
     (re.compile(r"does (\d+) (?:more )?damage for each of your Benched Pok.mon"),
      "atk_bench", 1, False),
-    # the attacker's DISCARD pile — open information for BOTH players, so an opponent's Riptide
+    # attacker's DISCARD pile — open info for BOTH players, so an opponent's Riptide
     # is exactly priceable from THEIR visible discard. Optional Basic-{X} type filter.
     (re.compile(r"Put (\d+) damage counters? on 1 of your opponent.s Pok.mon for each Basic "
                 r"\{(\w)\} Energy card in your discard pile"), "atk_discard_energy", 10, True),
     (re.compile(r"does (\d+) (?:more )?damage for each(?: Basic)?(?: \{(\w)\})? Energy card[s]? "
                 r"in your discard pile"), "atk_discard_energy", 1, False),
-    # damage counters already sitting on a body (maxHp − hp, both visible) — 8 self + 7 defender
+    # damage counters already on a body (maxHp − hp, both visible) — 8 self + 7 defender
     (re.compile(r"does (\d+) (?:more )?damage for each damage counter on this Pok.mon"),
      "atk_self_counters", 1, False),
     (re.compile(r"does (\d+) (?:more )?damage for each damage counter on your opponent.s Active "
                 r"Pok.mon"), "def_counters", 1, False),
-    # Prize cards taken so far (start − remaining, both visible) — 6 attacks, direction-split
+    # Prize cards taken so far (start − remaining, both visible) — 6 attacks, split by direction
     (re.compile(r"does (\d+) (?:more )?damage for each Prize card you have (?:already )?taken"),
      "atk_prizes_taken", 1, False),
     (re.compile(r"does (\d+) (?:more )?damage for each Prize card your opponent has "
@@ -457,12 +412,8 @@ def load_attack_overrides(path=None) -> dict:
         return {}
 
 
-# Fixed EFFECT damage (ADR-0032 ledger sweep): a printed-0 attack whose number lives in the text —
-# chosen-target damage ("This attack does N damage to 1/2/each of your opponent's Pokémon") or
-# counter-puts ("Put N damage counters on … your opponent's Pokémon", = N x 10, counters bypass
-# W/R and prevention). Bench-only riders ("… Benched Pokémon") and defender-conditional targets
-# ("… Pokémon {ex}") are NOT this family. The Active is always a choosable target, so the amount
-# is the attack's Active damage.
+# Fixed EFFECT damage (ADR-0032 ledger sweep): printed-0 attack, number lives in text — chosen-target
+# dmg or counter-puts (N x 10, bypass W/R). Bench-only/ex-conditional targets are NOT this family.
 _EFFECT_DMG_RE = re.compile(
     r"This attack does (\d+) damage to (?:\d+|each) of your opponent.s Pok.mon(?! \{)(?! for each)")
 _COUNTER_PUT_RE = re.compile(
@@ -489,9 +440,8 @@ def parse_attack_effect_damage(text: str) -> tuple[int, bool] | None:
     return None
 
 
-# The hidden-state deck-discard scalers (ADR-0032 Damage Formula, class C). Pool-verified: exactly
-# 3 — Hammer-lanche (top 6 own), Misty's Lapras (top 7 own), Ground Burn (top 1 of EACH deck → a
-# 2-card sample). The units are hidden card order, so only bounds are closed-form.
+# Hidden-state deck-discard scalers (ADR-0032 class C). Pool: exactly 3 — Hammer-lanche (top 6
+# own), Misty's Lapras (top 7), Ground Burn (top 1 EACH deck). Hidden card order -> bounds only.
 _HIDDEN_SCALE_RE = re.compile(
     r"Discard the top (\d+ )?cards? of (your|each player.s) deck.{0,60}?does (\d+) (?:more )?damage "
     r"for each(?: Basic \{(\w)\} Energy card)?", re.S)
@@ -518,12 +468,8 @@ def parse_attack_hidden_scale(text: str) -> tuple[int, int, int | None] | None:
     return (int(m.group(3)), n, etype)
 
 
-# Transient next-turn families (ADR-0033). Pool-verified: 17 defender takes-less, 6 prevent-all,
-# 23 self-locks ("can't attack" / "can't use attacks"), 18 self-referential named locks, 2 self
-# next-turn bonuses, 22 Defending-can't-retreat. Coin-gated variants ("Flip a coin. If heads,
-# during…") are NOT parsed — the flip isn't knowable, and under-crediting a possible shield is the
-# safe direction. Named locks are captured only when the named attack IS this attack (self-
-# referential); a cross-attack lock stays on the ledger.
+# Transient next-turn families (ADR-0033). Pool: 17 takes-less, 6 prevent-all, 23 self-locks, 18
+# named locks, 2 self-bonus, 22 retreat-lock. Coin-gated NOT parsed (unknowable, safe under-credit).
 _T_REDUCTION_RE = re.compile(
     r"During your opponent.s next turn, this Pok.mon takes (\d+) less damage")
 _T_PREVENT_RE = re.compile(
@@ -596,7 +542,7 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
         hidden = parse_attack_hidden_scale(text)
         trans = parse_attack_transients(text, getattr(a, "name", "") or "")
         if printed == 0 and not scaling and not hidden:
-            effect = parse_attack_effect_damage(text)   # fixed effect damage hides in the text
+            effect = parse_attack_effect_damage(text)   # fixed effect damage hides in text
             if effect:
                 printed = effect[0]
                 if effect[1]:           # counter-put: counters bypass W/R and prevention
@@ -658,11 +604,11 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         min_cost = min(costs) if costs else None
         cheap_dmg = (max((dmg.get(aid, 0) for aid in c.attacks if cost.get(aid) == min_cost),
                          default=0) if min_cost is not None else 0)
-        # cost of the highest-damage attack (min cost among attacks tying for max damage — the
-        # cheapest way to reach the big hit); None when no attack's cost is known.
+        # cost of highest-damage attack (min cost among attacks tying for max damage —
+        # cheapest way to reach the big hit); None when no attack's cost known.
         max_dmg_costs = [cost[aid] for aid in c.attacks if aid in cost and dmg.get(aid, 0) == max_dmg]
         max_dmg_cost = min(max_dmg_costs) if max_dmg_costs else None
-        # recoil of the highest-damage attack (the nuke most likely to self-KO): max over attacks
+        # recoil of highest-damage attack (nuke most likely to self-KO): max over attacks
         # tying for max damage. 0 when no attack has unconditional recoil.
         recoil = max((recoil_by_aid.get(aid, 0) for aid in c.attacks if dmg.get(aid, 0) == max_dmg),
                      default=0)
@@ -670,7 +616,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         cache[c.cardId] = CardStat(
             cardId=c.cardId, name=c.name, hp=int(c.hp),
             ex=bool(c.ex), megaEx=bool(c.megaEx), aceSpec=bool(getattr(c, "aceSpec", False)),
-            hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # a Pokémon with an Ability skill
+            hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # Pokémon w/ Ability skill
             hpBonus=_parse_tool_hp_bonus(c),
             recoil=int(recoil),
             handSizeDamage=int(max((hand_size_by_aid.get(aid, 0) for aid in c.attacks), default=0)),

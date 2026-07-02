@@ -19,10 +19,8 @@ from common.strategy.baseline.baseline_retreat import HYPOTHESES as RETREAT_HYPO
 from common.strategy.baseline.baseline_sequencing import HYPOTHESES as SEQUENCING_HYPOTHESES
 from common.strategy.baseline.baseline_snipe import HYPOTHESES as SNIPE_HYPOTHESES
 
-# The full baseline roster, in authored order (energy / snipe / bench / promote / retreat /
-# evolution / heal / opening / sequencing / disruption). Order is irrelevant at runtime (the Pilot
-# sums the scores); kept stable for legibility. (Tool rules were promoted to the Tool DOCTRINE —
-# `doctrines/doctrine_tool.py` — once they needed closed-form board-math; ADR-0028.)
+# Full baseline roster, authored order; order runtime-irrelevant (Pilot sums scores), kept stable for
+# legibility. (Tool rules promoted to Tool DOCTRINE `doctrines/doctrine_tool.py` once needing board-math; ADR-0028.)
 BASELINE_HYPOTHESES = (
     ENERGY_HYPOTHESES + SNIPE_HYPOTHESES + BENCH_HYPOTHESES + PROMOTE_HYPOTHESES
     + RETREAT_HYPOTHESES + EVOLUTION_HYPOTHESES + HEAL_HYPOTHESES

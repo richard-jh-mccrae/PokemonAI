@@ -52,8 +52,8 @@ def _pilot():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_retreat_off_an_ex_locked_wall_into_a_non_ex_attacker():
-    # Opp Active = Crustle (prevents ex damage). My Mega ex does 0 to it; the benched non-ex Cinderace
-    # (50 dmg) KOs the 50-HP Crustle. Retreat into Cinderace — don't whiff with the Mega.
+    # Opp Active = Crustle (prevents ex damage). My Mega ex does 0 to it; benched non-ex Cinderace
+    # (50 dmg) KOs the 50-HP Crustle. Retreat into Cinderace -- don't whiff with the Mega.
     p = _pilot()
     me = {"active": [{"id": MEGA, "energies": [1] * 6, "hp": 330}],
           "bench": [{"id": CINDER, "energies": [1], "hp": 160}], "hand": []}
@@ -62,15 +62,15 @@ def test_retreat_off_an_ex_locked_wall_into_a_non_ex_attacker():
            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
                       "option": [{"type": ATTACK, "attackId": 11}, {"type": RETREAT}, {"type": 14}]}}
     traces = p.explain(obs)
-    assert traces.options[0].tactical <= 0                # the Mega's attack is prevented (whiff —
-    assert traces.options[1].tactical >= KO_SCORE         # now also pays the efficiency cost);
+    assert traces.options[0].tactical <= 0                # Mega's attack is prevented (whiff --
+    assert traces.options[1].tactical >= KO_SCORE         # also pays the efficiency cost);
     # retreat -> Cinderace KOs Crustle
     assert p.decide(obs) == [1]                           # retreat off the ex-locked wall
 
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_play_harlequin_against_a_hand_size_attacker_line():
-    # Opp has Kadabra (its line reaches Alakazam, a hand_size_attacker). Play Harlequin to shrink the hand.
+    # Opp has Kadabra (line reaches Alakazam, a hand_size_attacker). Play Harlequin to shrink hand.
     p = _pilot()
     me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [], "hand": [{"id": HARLEQUIN}]}
     opp = {"active": [{"id": KADABRA, "energies": [], "hp": 80}], "bench": []}
@@ -83,9 +83,9 @@ def test_play_harlequin_against_a_hand_size_attacker_line():
 
 @pytest.mark.req("REQ-DMG-0006")
 def test_prevented_active_damage_does_not_kill_the_bench_snipe_credit():
-    # ADR-0032 per-target semantics: vs Crustle my Mega's Jetting Blow (attack 11) deals 0 to the
-    # ACTIVE — but its 50 bench rider still KOs the benched 40-HP Dreepy, banking a real prize.
-    # The old attack-blind path early-returned 0 and the snipe was invisible.
+    # ADR-0032 per-target semantics: vs Crustle, Mega's Jetting Blow (attack 11) deals 0 to the
+    # ACTIVE -- but its 50 bench rider still KOs the benched 40-HP Dreepy, banking a real prize.
+    # Old attack-blind path early-returned 0 and the snipe was invisible.
     p = _pilot()
     me = {"active": [{"id": MEGA, "energies": [1] * 6, "hp": 330}], "bench": [], "hand": []}
     opp = {"active": [{"id": CRUSTLE, "energies": [1], "hp": 150}],
@@ -94,13 +94,13 @@ def test_prevented_active_damage_does_not_kill_the_bench_snipe_credit():
            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
                       "option": [{"type": ATTACK, "attackId": 11}, {"type": 14}]}}
     traces = p.explain(obs)
-    assert traces.options[0].tactical >= KO_SCORE          # the snipe-KO is a banked prize
-    assert p.decide(obs) == [0]                            # attack — don't pass the turn
+    assert traces.options[0].tactical >= KO_SCORE          # snipe-KO is a banked prize
+    assert p.decide(obs) == [0]                            # attack -- don't pass the turn
 
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_a_non_ex_attacker_is_not_prevented():
-    # Sanity: Cinderace (non-ex) is NOT blocked by Crustle's ex-lock — its KO oracle still fires.
+    # Sanity: Cinderace (non-ex) NOT blocked by Crustle's ex-lock -- KO oracle still fires.
     p = _pilot()
     assert not p._ability_prevents_damage(p.stats.get(CINDER), CRUSTLE)
-    assert p._ability_prevents_damage(p.stats.get(MEGA), CRUSTLE)        # the Mega ex IS blocked
+    assert p._ability_prevents_damage(p.stats.get(MEGA), CRUSTLE)        # Mega ex IS blocked

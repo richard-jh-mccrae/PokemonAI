@@ -34,7 +34,7 @@ def dedup_corrections(corrections) -> list[Correction]:
     not duplicates -- all are kept. The same frame in a different episode is a distinct blunder."""
     seen: dict = {}
     for c in corrections:
-        seen[_dedup_key(c)] = c          # last occurrence wins; dict preserves first-seen order
+        seen[_dedup_key(c)] = c          # last occurrence wins; dict keeps first-seen order
     return list(seen.values())
 
 
@@ -49,7 +49,7 @@ def find_conflicts(corrections) -> list:
             if len({(c.category, tuple(c.correct)) for c in v}) > 1]
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[3] / "data" / "corrections"
-DEFAULT_PATH = DEFAULT_ROOT          # back-compat alias; the default store is now the tree root
+DEFAULT_PATH = DEFAULT_ROOT          # back-compat alias; default store is now the tree root
 _UNFILED = "_unfiled"
 
 

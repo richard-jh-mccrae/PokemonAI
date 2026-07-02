@@ -14,10 +14,10 @@ from common.strategy.context import (KO_SCORE, _BENCH, _CARD, _EVOLVING_THREAT_D
                                       _SUPPORTER, _SWITCH)
 from common.strategy.strategy import Hypothesis, Plan
 
-_STALL_RETREAT = 1           # min retreat cost of a STRANDABLE energyless body: with no Energy of its own
-                             # to discard, it can't pay ANY retreat cost (≥1), so the opponent must first
-                             # spend a turn's attach to retreat it — a real tempo cost even at 1 (ep82754875)
-_EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so it
+_STALL_RETREAT = 1           # min retreat cost of a STRANDABLE energyless body: no Energy of its own
+                             # to discard -> can't pay ANY retreat cost (≥1) -> opponent must first
+                             # spend a turn's attach to retreat it — real tempo cost even at 1 (ep82754875)
+_EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so
                              # never overrides a real prize difference)
 
 
@@ -55,7 +55,7 @@ class GustMixin:
                 or option.get("area") != _BENCH):
             return 0
         yi = (obs.get("current") or {}).get("yourIndex", 0)
-        if option.get("playerIndex", yi) == yi:          # my own retreat, not a gust of the opponent
+        if option.get("playerIndex", yi) == yi:          # my own retreat, not a gust of opponent
             return 0
         target = self._option_pokemon(obs, select, option)
         if not target:
@@ -86,7 +86,7 @@ class GustMixin:
         t_stat = self.stats.get(target.get("id")) if (self.stats and target) else None
         if not (my_stat and t_hp):
             return 0
-        others, removed = [], False                      # the bench left after the target is dragged Active
+        others, removed = [], False                      # bench left after target is dragged Active
         for entry in board.opp_bench:
             if not removed and tuple(entry) == (target.get("id"), t_hp):
                 removed = True
@@ -94,7 +94,7 @@ class GustMixin:
             others.append(tuple(entry))
         best = 0
         for aid in (getattr(my_stat, "attacks", None) or ()):
-            # per-attack oracle (ADR-0032): the KO check honors the attack's own ignore flags
+            # per-attack oracle (ADR-0032): KO check honors the attack's own ignore flags
             if self.predicted_damage(getattr(my_stat, "cardId", None), aid, target) >= t_hp:
                 best = max(best, self._snipe_ko_prizes(others, self._rider_snipe(aid)))
         return best
@@ -124,7 +124,7 @@ class GustMixin:
         if option.get("playerIndex", yi) == yi:
             return 0
         target = self._option_pokemon(obs, select, option)
-        if not target or (target.get("energies") or []):       # energized -> not a stall body (a gift)
+        if not target or (target.get("energies") or []):       # energized -> not a stall body (gift)
             return 0
         stat = self.stats.get(target.get("id")) if self.stats else None
         return stat.retreatCost if (stat and stat.retreatCost >= _STALL_RETREAT) else 0
@@ -139,13 +139,13 @@ class GustMixin:
         t_stat = self.stats.get(target.get("id"))
         if not t_stat:
             return 0
-        # the target attacks ME: target = attacker, my Active = defender — per-attack oracle max
+        # target attacks ME: target = attacker, my Active = defender — per-attack oracle max
         incoming = self._predicted_max_damage(t_stat, {"id": board.my_active_id})
         if board.my_active_hp and incoming >= board.my_active_hp:
             return self._prize_value({"id": board.my_active_id})
         return 0
 
-    # ── Board-signal builders (called from Pilot._board to populate the gust gap signals) ──
+    # ── Board-signal builders (called from Pilot._board to populate gust gap signals) ──
     def _active_ko_prizes(self, ma: dict | None, oa: dict | None) -> int:
         """Prizes from Knocking Out the opponent's CURRENT Active with my cheapest attack this turn
         (0 if I can't) — the baseline a gust must beat (gusting benches their current Active, so a gust
@@ -221,23 +221,16 @@ class GustMixin:
         return False
 
 
-# ── the two tunable positional weights (the rest of the doctrine is the Tactical layer above) ──
+# ── the two tunable positional weights (rest of doctrine is the Tactical layer above) ──
 HYPOTHESES = [
     Hypothesis(
         id="gust-for-the-ko",
-        rationale="Play a gust Supporter (Function Tag `gust`, e.g. Boss's Orders — switch one of the "
-                  "opponent's Benched Pokémon into the Active Spot) only when it converts to a Knock Out "
-                  "this turn: drag up a benched Pokémon your Active can KO, reaching a prize you couldn't "
-                  "otherwise (often a high-prize ex/Mega hiding behind a wall). Fires only when such a KO "
-                  "exists (`Board.gust_best_ko_prizes > 0`); otherwise HOLD it — gusting a target you "
-                  "can't KO gifts the opponent, benching their committed Active safe and handing you "
-                  "nothing. The SETUP-before-wincon stand-down only applies to a SUPPORTER gust (it "
-                  "costs your one Supporter slot); a free ITEM gust (Pokémon Catcher) into a KO fires "
-                  "even in setup. The KO must also beat any FREE KO of the current Active — both attacking it "
-                  "(`active_ko_prizes`) and poison/burn finishing it at the next Checkup "
-                  "(`active_condition_ko_prizes`); gusting that Active off would only cure it. "
-                  "(Whether-to-play only; which benched Pokémon to drag up is the gust SWITCH "
-                  "target-select rule. ADR-0022.)",
+        rationale="Play a gust Supporter (Function Tag `gust`, e.g. Boss's Orders) only when it converts "
+                  "to a Knock Out this turn (`Board.gust_best_ko_prizes > 0`) — otherwise HOLD it, since "
+                  "gusting an un-KO-able target just benches the opponent's committed Active safely. Must "
+                  "beat any FREE KO of the current Active too (attack or poison/burn Checkup finish); the "
+                  "SETUP-before-wincon stand-down applies only to the Supporter gust, not a free ITEM gust "
+                  "(Pokémon Catcher). Whether-to-play only — target selection is the SWITCH rule (ADR-0022).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.gust_best_ko_prizes > max(c.board.active_ko_prizes,
                                               c.board.active_condition_ko_prizes)
@@ -246,16 +239,12 @@ HYPOTHESES = [
         weight=50, status="assumed"),
     Hypothesis(
         id="gust-for-the-stall",
-        rationale="Defensive stall-gust (tier 5) — a LAST resort when you're stuck. When your Active is "
-                  "doomed, you have no gustable KO and can't KO their Active, but they have an "
-                  "energyless, high-retreat benched Pokémon, play a gust Supporter to drag that body "
-                  "into the Active Spot: it can't attack and they must spend a turn retreating it, "
-                  "buying you a setup turn. Weighted low (below every tutor/draw) so it only wins the "
-                  "Supporter slot when nothing else advances you — and it never fires unless you're "
-                  "actually under threat. Never stall-gust an Active that carries a special condition "
-                  "(`opp_active_condition_gift`) — switching it to the bench CLEARS the condition "
-                  "(rules.md §8), so the stall would hand the opponent a free cure. (Mechanically weak: "
-                  "a gust doesn't stop a normal retreat, so it only bites on a high retreat cost. ADR-0022.)",
+        rationale="Defensive stall-gust (tier 5, LAST resort): Active doomed, no gustable/direct KO "
+                  "available, but the opponent has an energyless high-retreat benched Pokémon — drag it "
+                  "Active so they burn a turn retreating it, buying a setup turn. Weighted below every "
+                  "tutor/draw so it only wins the slot when nothing else helps; never fires on an Active "
+                  "carrying a special condition (`opp_active_condition_gift`), since switching it out "
+                  "CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
@@ -264,14 +253,12 @@ HYPOTHESES = [
         weight=10, status="assumed"),
     Hypothesis(
         id="gust-to-strand-the-key-attacker",
-        rationale="When the defensive stall-gust target is the opponent's KEY attacker — an energyless, "
-                  "high-retreat ex / Mega ex (`stall_target_is_keystone`) — stranding IT Active is far "
-                  "stronger disruption than stranding a generic wall: their win-condition can't attack "
-                  "and they burn a full turn retreating it. Stacks on `gust-for-the-stall` so the gust "
-                  "Supporter beats a redundant dig for the Supporter slot (the mirror: drag up their "
-                  "benched Mega Starmie ex instead of a wasted Salvatore — ep82751468 f57). Same firm "
-                  "guards (Active doomed, no KO available, not a condition-cure gift); a real KO still "
-                  "outranks it on tactical, so it never forgoes a knockout.",
+        rationale="When the stall-gust target is the opponent's KEY attacker — an energyless, high-retreat "
+                  "ex/Mega ex (`stall_target_is_keystone`) — stranding it Active is far stronger than a "
+                  "generic wall: their win-condition can't attack and they burn a full turn retreating it. "
+                  "Stacks on `gust-for-the-stall` so it beats a redundant dig for the slot (drag up their "
+                  "benched Mega Starmie ex instead of a wasted Salvatore — ep82751468 f57); same guards, "
+                  "and a real KO still outranks it on tactical.",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0

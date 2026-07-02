@@ -59,7 +59,7 @@ def _obs_two_option_menu():
 
 @pytest.mark.req("REQ-POSTURE-0001")
 def test_explain_surfaces_the_recognized_archetype():
-    # The Pilot senses via the Scout and exposes the Read on its public explain() output.
+    # Pilot senses via the Scout, exposes the Read on its public explain() output
     decision = _pilot(scout=Scout(tiny_artifact())).explain(_obs_facing_mega_lucario())
     assert decision.read is not None
     assert decision.read.candidates[0][0] == "Mega Lucario ex"
@@ -67,8 +67,8 @@ def test_explain_surfaces_the_recognized_archetype():
 
 @pytest.mark.req("REQ-POSTURE-0001")
 def test_wiring_a_scout_changes_no_decision_or_score():
-    # M2.0 is Posture-OFF: the Read rides on the Board, but nothing scores off it yet. A wired Scout
-    # (even confidently recognizing the opponent) must produce byte-identical choices AND scores.
+    # M2.0 is Posture-OFF: Read rides on the Board, nothing scores off it yet. A wired Scout
+    # (even confidently recognizing the opponent) must produce byte-identical choices AND scores
     obs = _obs_two_option_menu()
     off, on = _pilot(scout=None), _pilot(scout=Scout(tiny_artifact()))
     assert on.decide(obs) == off.decide(obs)
@@ -88,11 +88,11 @@ def _obs_early_unknown():
 
 @pytest.mark.req("REQ-POSTURE-0001")
 def test_unrecognized_opponent_yields_low_confidence_read():
-    # Unknown / off-meta opponent: the Read stays below the recognition bar, so Posture (which will
-    # γ-gate on confidence in M2.1b) is off by construction. The Pilot never crashes (Read never raises).
+    # Unknown/off-meta opponent: Read stays below the recognition bar -> Posture (which will
+    # γ-gate on confidence in M2.1b) off by construction. Pilot never crashes (Read never raises)
     decision = _pilot(scout=Scout(tiny_artifact())).explain(_obs_early_unknown())
     assert decision.read is not None
-    assert decision.read.confidence[0] < 0.6     # below the Scout's recognition threshold -> Posture off
+    assert decision.read.confidence[0] < 0.6     # below Scout's recognition threshold -> Posture off
 
 
 # ---- M2.1b Slice 1: Read-derived Board signals (γ + favorability), behavior-neutral ----
@@ -111,16 +111,16 @@ def test_posture_confidence_ramps_high_when_recognized():
 
 @pytest.mark.req("REQ-POSTURE-0002")
 def test_posture_confidence_is_zero_when_unknown_or_no_scout():
-    # Unrecognized opponent (or no Scout wired) -> γ = 0, so the levers contribute nothing
-    # (no regression vs an unknown opponent is structural, ADR-0026).
+    # Unrecognized opponent (or no Scout wired) -> γ = 0, levers contribute nothing
+    # (no regression vs unknown opponent is structural, ADR-0026)
     assert _board_of(_pilot(scout=Scout(tiny_artifact())), _obs_early_unknown()).posture_confidence == 0.0
     assert _board_of(_pilot(scout=None), _obs_facing_mega_lucario()).posture_confidence == 0.0
 
 
 @pytest.mark.req("REQ-POSTURE-0002")
 def test_favorability_reflects_the_matchup_table():
-    # With my_archetype declared and a compiled matchup cell vs the recognized opponent, the Board
-    # carries that favorability (the lever-A signal); coverage says how much posterior backs it.
+    # With my_archetype declared + a compiled matchup cell vs the recognized opponent, Board
+    # carries that favorability (lever-A signal); coverage says how much posterior backs it
     art = tiny_artifact()
     art.dossiers["Cinderace / Mega Starmie ex"] = {
         "matchups": {"Mega Lucario ex": {"win_rate": 0.7, "n": 20.0}}}
@@ -132,7 +132,7 @@ def test_favorability_reflects_the_matchup_table():
 
 @pytest.mark.req("REQ-POSTURE-0002")
 def test_favorability_defaults_neutral_without_my_archetype():
-    # No my_archetype declared -> neutral favorability, zero coverage (lever A stays off, safe default).
+    # No my_archetype declared -> neutral favorability, zero coverage (lever A off, safe default)
     board = _board_of(_pilot(scout=Scout(tiny_artifact())), _obs_facing_mega_lucario())
     assert board.favorability == 0.5 and board.matchup_coverage == 0.0
 
@@ -149,9 +149,9 @@ def _snipe_pilot(stats):
 
 @pytest.mark.req("REQ-POSTURE-0003")
 def test_lever_c_suppresses_a_denied_evolving_threats_forward_rank():
-    # A benched Riolu's generic threat rank is its forward-evolution damage (Mega Lucario ex 270). When
-    # the Read CONFIRMS that line (it's on an evolution_path) the rank is unchanged; when a recognized
-    # archetype runs NO such line, lever C suppresses the forward signal (γ-scaled); unknown -> generic.
+    # Benched Riolu's generic threat rank is its forward-evolution damage (Mega Lucario ex 270). When
+    # Read CONFIRMS that line (on an evolution_path) rank is unchanged; when a recognized
+    # archetype runs NO such line, lever C suppresses the forward signal (γ-scaled); unknown -> generic
     stats = DictCardStatProvider({
         SNIPER: CardStat(SNIPER, name="Sniper", maxDamage=120, attacks=(11,)),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
@@ -197,8 +197,8 @@ def _obs_hammer_vs_energized_mega_lucario():
 
 @pytest.mark.req("REQ-POSTURE-0004")
 def test_lever_a_boosts_useful_disruption_when_unfavored():
-    # Recognized Mega Lucario ex, an UNFAVORABLE matchup (win-rate 0.3) — up-weight the useful energy
-    # denial (opp Active carries Energy to strip). Stands down at an EVEN matchup (favorability 0.5).
+    # Recognized Mega Lucario ex, an UNFAVORABLE matchup (win-rate 0.3) -> up-weight the useful energy
+    # denial (opp Active carries Energy to strip). Stands down at an EVEN matchup (favorability 0.5)
     funcs = CardFunctions({HAMMER: ["energy_denial"]})
     obs = _obs_hammer_vs_energized_mega_lucario()
     unfavored = {h.id for h, _ in _unfavored_pilot(0.3, funcs).explain(obs).options[0].fired}
@@ -211,7 +211,7 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
 
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_recognized_opponent_routes_its_matchup_brief_onto_board():
-    # A Brief whose `covers` includes the recognized archetype is surfaced on board.brief (variant routing).
+    # A Brief whose `covers` includes the recognized archetype is surfaced on board.brief (variant routing)
     brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"])
     board = _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[brief]), _obs_facing_mega_lucario())
     assert board.brief is not None and board.brief.slug == "ml"

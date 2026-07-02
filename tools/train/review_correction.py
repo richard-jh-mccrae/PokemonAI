@@ -34,7 +34,7 @@ def _save(path: Path, data: dict) -> None:
 
 def main(argv=None) -> int:
     try:
-        sys.stdout.reconfigure(encoding="utf-8")          # reasons carry em-dashes; cp1252 would crash
+        sys.stdout.reconfigure(encoding="utf-8")          # reasons carry em-dashes -> cp1252 would crash
     except (AttributeError, ValueError):
         pass
     ap = argparse.ArgumentParser(description="Record a Correction as reviewed (exclude from blunder-busting)")

@@ -60,7 +60,7 @@ def main() -> None:
             "energy": ENERGY.get(int(c.energyType), str(int(c.energyType))),
             "hp": int(c.hp),
             "retreat": int(c.retreatCost),
-            # Enrichment for the Scouting compiler (backward-compatible; regenerate to fill).
+            # Enrichment for Scouting compiler (backward-compatible; regenerate to fill).
             "weakness": (int(c.weakness) if c.weakness is not None else None),
             "resistance": (int(c.resistance) if c.resistance is not None else None),
             "maxDamage": int(max_damage),

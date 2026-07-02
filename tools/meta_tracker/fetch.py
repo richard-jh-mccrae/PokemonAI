@@ -50,7 +50,7 @@ def _run(args: list[str], *, capture: bool = True) -> str:
 
 
 def _parse_csv(text: str) -> list[dict]:
-    # Drop any non-CSV preamble (e.g. a "Next Page Token =" line).
+    # Drop non-CSV preamble (e.g. a "Next Page Token =" line).
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if lines and "=" in lines[0] and "," not in lines[0]:
         lines = lines[1:]

@@ -9,13 +9,13 @@ from common.strategy import Strategy
 from pilot_helpers import attack_opt, make_select, opt, poke, state
 
 MY_ATK = 920        # my Active attacker (two equal-cost KO attacks, one with a bench rider)
-MY_EX = 921         # my Active: a 2-prize ex (its self-KO hands the opponent 2 prizes)
-FIGHT_ATK = 922     # my Active: a Fighting attacker (to exercise Resistance)
-MY_RESISTER = 923   # my Active: HP 100, RESISTS Fighting — incoming Fighting damage is reduced -30
-OPP = 800           # opponent's Active, KO-able for 1 prize
-RESISTER = 801      # opponent's Active: HP 100, RESISTS Fighting (survives a 120 hit: 120-30=90)
-OPP_FIGHTER = 802   # opponent's Active: a Fighting attacker hitting 120 (would KO a 100-HP non-resister)
-OPP_BENCH = 700     # an opponent benched Pokémon — a snipe target
+MY_EX = 921         # my Active: a 2-prize ex (its self-KO hands opponent 2 prizes)
+FIGHT_ATK = 922     # my Active: a Fighting attacker (exercises Resistance)
+MY_RESISTER = 923   # my Active: HP 100, RESISTS Fighting — incoming Fighting damage reduced -30
+OPP = 800           # opp Active, KO-able for 1 prize
+RESISTER = 801      # opp Active: HP 100, RESISTS Fighting (survives a 120 hit: 120-30=90)
+OPP_FIGHTER = 802   # opp Active: Fighting attacker hitting 120 (would KO a 100-HP non-resister)
+OPP_BENCH = 700     # opp benched Pokémon — a snipe target
 A_PLAIN, A_SNIPE, A_RECOIL, A_FLAT = 101, 102, 110, 103   # attack ids
 WATER, FIGHTING = 3, 6
 
@@ -48,7 +48,7 @@ def test_equal_cost_ko_prefers_the_attack_with_a_bench_snipe():
                                     opp_active=poke(OPP, hp=100),
                                     opp_bench=[poke(OPP_BENCH, hp=60)]))
     opts = p.explain(obs).options
-    assert opts[1].tactical > opts[0].tactical    # the sniper edges the plain KO
+    assert opts[1].tactical > opts[0].tactical    # sniper edges plain KO
     assert opts[0].tactical >= KO_SCORE           # both still knockouts
     assert p.decide(obs) == [1]
 
@@ -62,7 +62,7 @@ def test_bench_snipe_bonus_is_silent_with_no_benched_target():
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=100), opp_bench=[]))
     opts = p.explain(obs).options
-    assert opts[1].tactical == opts[0].tactical   # nothing to snipe → no bonus
+    assert opts[1].tactical == opts[0].tactical   # nothing to snipe -> no bonus
 
 
 @pytest.mark.req("REQ-GUST-0007")
@@ -73,7 +73,7 @@ def test_bench_snipe_chip_bonus_never_overrides_a_prize():
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=100),        # 1-prize Active
-                                    opp_bench=[poke(OPP_BENCH, hp=200)]))  # 200 > 120 rider → chip, not a KO
+                                    opp_bench=[poke(OPP_BENCH, hp=200)]))  # 200 > 120 rider -> chip, not KO
     val = p.explain(obs).options[0].tactical       # KO_SCORE + 1 prize + capped chip bonus
     assert KO_SCORE + 1 <= val < KO_SCORE + 2      # above the 1-prize floor, below a 2-prize KO
 
@@ -88,10 +88,10 @@ def test_snipe_ko_of_a_bench_pokemon_banks_a_full_prize():
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=3),
                                     opp_active=poke(OPP, hp=320),         # neither attack KOs the Active
-                                    opp_bench=[poke(OPP_BENCH, hp=20)]))  # snipe 50 >= 20 → a KO = a prize
+                                    opp_bench=[poke(OPP_BENCH, hp=20)]))  # snipe 50 >= 20 -> a KO = a prize
     opts = p.explain(obs).options
-    assert opts[1].tactical >= KO_SCORE           # the snipe-KO is a knockout (a prize), not a chip
-    assert opts[1].tactical > opts[0].tactical    # and it beats the 210 chip that KOs nothing
+    assert opts[1].tactical >= KO_SCORE           # snipe-KO is a knockout (prize), not a chip
+    assert opts[1].tactical > opts[0].tactical    # beats the 210 chip that KOs nothing
     assert p.decide(obs) == [1]
 
 
@@ -103,7 +103,7 @@ def test_snipe_that_only_chips_a_survivor_is_not_a_ko():
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=320),         # not a KO of the Active
-                                    opp_bench=[poke(OPP_BENCH, hp=60)]))  # 60 > 50 rider → chip only
+                                    opp_bench=[poke(OPP_BENCH, hp=60)]))  # 60 > 50 rider -> chip only
     assert p.explain(obs).options[0].tactical < KO_SCORE
 
 
@@ -175,7 +175,7 @@ def test_incoming_damage_applies_my_active_resistance():
     value — but my Active RESISTS Fighting, so incoming is 120 - 30 = 90 < 100. I am NOT doomed. The
     same Weakness/Resistance check must apply to incoming damage, not just my own attacks."""
     p = _pilot()
-    obs = make_select([opt(14)],   # an END option — we only need a valid board
+    obs = make_select([opt(14)],   # an END option — just need a valid board
                       current=state(active=poke(MY_RESISTER, hp=100), opp_active=poke(OPP_FIGHTER, hp=200)))
     board = p._board(obs)
     assert board.incoming_active_damage == 90    # 120 reduced by my -30 resistance

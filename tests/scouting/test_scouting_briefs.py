@@ -45,7 +45,7 @@ def test_match_brief_routes_top_candidate_via_covers(tmp_path):
     _write_brief(tmp_path, "alakazam", ["Alakazam", "Alakazam / Frillish"])
     _write_brief(tmp_path, "hariyama", ["Hariyama / Mega Lucario ex"])
     briefs = load_briefs(tmp_path)
-    # the top candidate is a VARIANT string (not the label) -> still routes to the alakazam Brief
+    # top candidate is a VARIANT string (not the label) -> still routes to alakazam Brief
     m = match_brief(briefs, _read(("Alakazam / Frillish", 0.7), ("Hariyama / Mega Lucario ex", 0.2)))
     assert m is not None and m.slug == "alakazam"
 

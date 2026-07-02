@@ -24,7 +24,7 @@ from meta_tracker.card_effects import classify_effect_clauses, merge_clauses
 from meta_tracker.cards import load_cards
 from meta_tracker.probe_cards import probe_card
 
-_HEAL_PASSES = 30   # p(align) ~ 0.2/pass -> p(never) ~ 0.1%; passes are ~ms on the native engine
+_HEAL_PASSES = 30   # p(align) ~ 0.2/pass -> p(never) ~ 0.1%; passes ~ms on native engine
 
 
 @pytest.fixture(scope="module")
@@ -34,8 +34,8 @@ def cards():
 
 @pytest.mark.req("REQ-EFFECT-0009")
 def test_cheren_measures_draw_3(cards):
-    # "Draw 3 cards." — the stable pass is deterministic (the card plays as soon as
-    # it is drawn), so this is a hard assert: exactly 3 DRAW logs -> amount 3.
+    # "Draw 3 cards." — stable pass is deterministic (card plays as soon as
+    # drawn) -> hard assert: exactly 3 DRAW logs -> amount 3
     rec = probe_card(1224, cards, attack=False)
     assert rec is not None, "Cheren never became playable — probe harness regression?"
     clauses = classify_effect_clauses(cards[1224], probe=rec)
@@ -51,7 +51,7 @@ def _measured_heal(cid, cards):
             continue
         measured = merge_clauses(measured, classify_effect_clauses(cards[cid], probe=rec))
         if any(c["kind"] == "heal" for c in measured):
-            break                             # aligned — the amount is the claim under test
+            break                             # aligned — amount is the claim under test
     return next((c for c in measured if c["kind"] == "heal"), None)
 
 
@@ -61,7 +61,7 @@ def test_super_potion_measures_heal_60_with_discard_rider(cards):
     if heal is None:
         pytest.skip("combat scenario never aligned (stochastic); re-run")
     assert heal["amount"] == 60
-    assert heal.get("rider") == "discard_own_energy"   # own ENERGY->DISCARD after the heal
+    assert heal.get("rider") == "discard_own_energy"   # own ENERGY->DISCARD after heal
 
 
 @pytest.mark.req("REQ-EFFECT-0010")
@@ -74,12 +74,12 @@ def test_potion_measures_heal_30(cards):
 
 @pytest.mark.req("REQ-EFFECT-0017")
 def test_wallys_compassion_observes_mega_only(cards):
-    # The restriction-observation board (ADR-0032 item 6): a damaged Mega Lucario ex
-    # retreated to the Bench behind a damaged non-Mega Active. Wally's Compassion
+    # Restriction-observation board (ADR-0032 item 6): a damaged Mega Lucario ex
+    # retreated to Bench behind a damaged non-Mega Active. Wally's Compassion
     # ("Heal all damage from 1 of your Mega Evolution Pokemon ex") must OFFER only the
-    # bench Mega — the damaged Active's exclusion is the observed `mega_only`. The
-    # drive handles both setup cases deterministically; retries absorb shuffle noise
-    # (mulligans), a wrong offer always fails.
+    # bench Mega — damaged Active's exclusion is the observed `mega_only`. Drive
+    # handles both setup cases deterministically; retries absorb shuffle noise
+    # (mulligans), a wrong offer always fails
     from meta_tracker.card_effects import derive_restriction
     from meta_tracker.probe_restrictions import probe_heal_restriction
 

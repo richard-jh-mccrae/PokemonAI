@@ -26,7 +26,7 @@ from functools import lru_cache
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tools"))  # make `meta_tracker` importable
+sys.path.insert(0, str(REPO / "tools"))  # makes `meta_tracker` importable
 
 from meta_tracker.cards import load_cards, stage_rank  # noqa: E402
 
@@ -117,7 +117,7 @@ def _resolve(name: str, sett: str | None, num: str | None) -> tuple[int | None, 
     if len(ids) == 1:
         return ids[0], None
     hit = [i for i in ids if en.get(i, (None, None, None))[1:] == (sett, num)]
-    if len(hit) == 1:                          # disambiguate by the printing
+    if len(hit) == 1:                          # disambiguate by printing
         return hit[0], None
     return None, f"ambiguous: {name!r} -> ids {ids}; printing {sett} {num} matched {len(hit)}"
 
@@ -194,7 +194,7 @@ def render_txt(deck: list[int]) -> str:
         else:
             trainer.append((_TRAINER_SUB.get(cat, 9), -k, name, k, sett, num))
 
-    # group Pokémon into evolution lines: basic -> stage1 -> stage2, kept together
+    # group Pokemon into evolution lines: basic -> stage1 -> stage2, kept together
     node = {}
     for n in poke:
         node.setdefault(n["nn"], n)

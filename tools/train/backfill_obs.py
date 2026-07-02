@@ -26,7 +26,7 @@ from train.blunder.telemetry_log import find_log_any, load_log, record_for  # no
 
 
 def _find_replay(episode_id, dirs) -> Path | None:
-    # accept both the inspector layout (<id>.json) and collect's naming (episode-<id>-replay.json[.gz])
+    # accept both inspector layout (<id>.json) and collect's naming (episode-<id>-replay.json[.gz])
     patterns = (f"{episode_id}.json", f"{episode_id}.json.gz",
                 f"episode-{episode_id}-replay.json", f"episode-{episode_id}-replay.json.gz")
     for d in dirs:

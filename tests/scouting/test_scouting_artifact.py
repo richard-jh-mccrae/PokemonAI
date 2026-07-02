@@ -26,7 +26,7 @@ def test_load_artifact_roundtrips_and_intifies_keys(tmp_path):
     assert isinstance(art, Artifact)
     assert "A" in art.priors
     assert all(isinstance(k, int) for k in art.background)              # JSON keys re-int'd
-    assert all(isinstance(k, int) for k in art.card_inclusion["A"])     # lifted out of the dossier
+    assert all(isinstance(k, int) for k in art.card_inclusion["A"])     # lifted out of dossier
 
 
 @pytest.mark.req("REQ-SCOUT-0007")
