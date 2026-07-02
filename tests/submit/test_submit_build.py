@@ -7,7 +7,7 @@ import pytest
 from submit.build import build
 from submit.history import read_history
 
-FIXTURE_AGENTS = Path(__file__).resolve().parent / "fixtures" / "agents"
+FIXTURE_AGENTS = Path(__file__).resolve().parents[1] / "fixtures" / "agents"
 
 
 @pytest.mark.req("REQ-SUB-0009")

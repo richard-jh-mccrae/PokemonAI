@@ -13,7 +13,7 @@ import pytest
 
 from meta_tracker.cards import load_cards
 
-TABLE = Path(__file__).resolve().parents[1] / "src" / "common" / "card_functions.json"
+TABLE = Path(__file__).resolve().parents[2] / "src" / "common" / "card_functions.json"
 
 # (card name, tag it must carry) — only reliable, deterministic tags.
 ORACLE = [

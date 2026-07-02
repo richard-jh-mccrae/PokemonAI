@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from submit.package import artifact_stem, package
 
 # A self-contained agent fixture (main.py + strategy.py + deck.csv + deck.txt) so these tests don't
 # depend on a deletable source agent under src/agents/ (shared common/ + cg/ still come
 # from there). Delete src/agents/mega_starmie and these stay green.
-FIXTURE_AGENTS = Path(__file__).resolve().parent / "fixtures" / "agents"
+FIXTURE_AGENTS = Path(__file__).resolve().parents[1] / "fixtures" / "agents"
 
 
 @pytest.mark.req("REQ-SCOUT-0007")
@@ -49,7 +49,7 @@ def test_fixture_main_mirrors_the_real_agent_hook():
     keep them byte-identical so fixture-based tests can't drift from what actually ships (e.g. the
     `overrides`/`functions` wiring). Skips if the real agent was deleted (the fixture is
     deliberately self-contained)."""
-    real = Path(__file__).resolve().parents[1] / "src" / "agents" / "mega_starmie" / "main.py"
+    real = Path(__file__).resolve().parents[2] / "src" / "agents" / "mega_starmie" / "main.py"
     if not real.exists():
         pytest.skip("real agent absent (fixture is intentionally standalone)")
     fixture = FIXTURE_AGENTS / "mega_starmie" / "main.py"

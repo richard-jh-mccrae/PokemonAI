@@ -1,7 +1,7 @@
 # ADR-0028: +HP Tool deploy is survival-turns board-math — proactive default, not hold-for-breakpoint
 
 **Status.** Accepted (grilled 2026-06-30, `/grill-with-docs`) and **BUILT** test-first (`/tdd`,
-2026-06-30/07-01; `tests/test_tool_doctrine.py`, full suite 694 passed). **Reverses** the reactive
+2026-06-30/07-01; `tests/strategy/test_tool_doctrine.py`, full suite 694 passed). **Reverses** the reactive
 "hold for an HP breakpoint" Hero's Cape doctrine (STRATEGY.md §3 + the `baseline_tool.py` rules
 landed 2026-06-28) and **promotes** the Tool Baseline Cluster into a **Tool Doctrine**
 (`common/strategy/doctrines/doctrine_tool.py` + a `ToolMixin`). All decisions below shipped, incl. the

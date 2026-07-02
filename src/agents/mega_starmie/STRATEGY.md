@@ -546,7 +546,7 @@ target). → fold into the general Tool / HP-breakpoint work, don't leave it a b
 
 **Status / OPEN:**
 1. ✅ DONE (Phase B, TDD 2026-06-28): **`conserve-ignition-prefer-water`** + **`prefer-going-second`**
-   authored test-first + gated (see §6; `tests/test_mega_starmie_triggers.py`).
+   authored test-first + gated (see §6; `tests/agents/test_mega_starmie_triggers.py`).
 2. ✅ DONE: **`never-fetch-cinderace`** kept as a deck rule (user ruling) and implemented — the general
    `prefer-wincon-line-piece` only *prefers* Staryu, it doesn't forbid a strictly-dead Cinderace fetch.
 3. ✅ DONE: stale `tuned.json` keys for the removed `build-before-attack` / `dont-chip-with-a-doomed-active`

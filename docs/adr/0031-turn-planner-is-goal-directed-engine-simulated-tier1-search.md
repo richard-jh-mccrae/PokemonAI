@@ -16,8 +16,8 @@ observation; **(4)** the **turn-scoped committed-plan cache** + re-plan-on-revea
 sim never nests a search, with the engine sharpening the committed line's value. Also built the **stabilize-then-KO** goal (heal a doomed Mega ex to full with a `clutch_heal`, bounce its
 Energy, re-attach, still take a NON-winning KO — fires despite a status-quo KO, unlike the layer-on-top
 KO-for-prizes gate; the winning-KO case stays owned by the Lethal Solver upstream). Gated by
-`REQ-PLANNER-0001..0023` ([tests/test_planner.py](../../tests/test_planner.py),
-[tests/test_planner_engine.py](../../tests/test_planner_engine.py)); the verdict rides in Decision
+`REQ-PLANNER-0001..0023` ([tests/strategy/test_planner.py](../../tests/strategy/test_planner.py),
+[tests/strategy/test_planner_engine.py](../../tests/strategy/test_planner_engine.py)); the verdict rides in Decision
 Telemetry (`planned`). Verified on real games (6 mirror games, 0 crashes, the Planner committing + engine-
 ranking live) AND on the actual replay states of the CRITICALs that named the feature: **all three
 in-scope CRITICALs are FIXED and gated as real-state regressions** — `7f48` (retreat→attach→KO for 2

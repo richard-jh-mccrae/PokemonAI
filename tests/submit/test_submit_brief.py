@@ -10,7 +10,7 @@ import re
 
 from submit.brief import build_manifest, render_brief
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "agents" / "mega_starmie"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "agents" / "mega_starmie"
 
 
 def _agent_with_tuned(tmp_path, tuned: dict) -> Path:

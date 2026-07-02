@@ -3,7 +3,7 @@
 **Status:** open (2026-07-01), split out of the Turn Planner build
 ([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md)) as **out of
 this-turn scope**. The Planner fixed the three *this-turn* CRITICALs that named it (`7f48`, `0cbc`, `4298`
-— gated in [test_planner_engine.py](../../tests/test_planner_engine.py)). These two were deferred because
+— gated in [test_planner_engine.py](../../tests/strategy/test_planner_engine.py)). These two were deferred because
 they need capability the Planner deliberately lacks: reasoning across **more than one of my turns** and
 about the **opponent's prize trajectory**.
 
@@ -116,7 +116,7 @@ from the captured state via the engine.
 ## How to pick this up (retest harness — same as the shipped gates)
 
 Both fixtures replay through the shipped Pilot exactly like the fixed CRITICALs
-([test_planner_engine.py](../../tests/test_planner_engine.py) `test_critical_4298_…`):
+([test_planner_engine.py](../../tests/strategy/test_planner_engine.py) `test_critical_4298_…`):
 
 ```python
 import json

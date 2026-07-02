@@ -206,9 +206,9 @@ opponent never attaches) are the job of `function_overrides.json`.
 Three layers, because the probe is stochastic and the engine exposes no ground-truth labels:
 
 1. **Unit (pure, fast)** — `classify_functions` rules against synthetic probe records
-   (`tests/test_card_functions.py`) and the pure probe helpers (`tests/test_probe_cards.py`).
+   (`tests/cards/test_card_functions.py`) and the pure probe helpers (`tests/cards/test_probe_cards.py`).
    Verifies "this log-pattern → this tag", not that any real card is right.
-2. **Golden oracle (deterministic regression gate)** — `tests/test_card_functions_oracle.py`
+2. **Golden oracle (deterministic regression gate)** — `tests/cards/test_card_functions_oracle.py`
    asserts a handful of unambiguous cards keyed by *name* carry their tag in the *shipped*
    table (Ultra Ball→`search`, Dragapult ex→`spread`, Judge→`hand_disruption`, …). Catches
    end-to-end pipeline regressions; refresh it on a pool update.

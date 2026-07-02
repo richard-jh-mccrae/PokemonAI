@@ -85,5 +85,5 @@ The build inlines everything into a single self-contained `dist/index.html` (~60
 python tools/train/blunder_correction.py <replay.json|.gz> --team <ours> --agent mega_starmie
 python tools/train/blunder_correction.py data/replays/<build_stem>/ --team <ours> --agent mega_starmie  # batch
 python tools/train/blunder_report.py                         # rebuild the trend report
-python -m pytest tests/test_blunder_*.py -q                  # data-spine tests (REQ-BLUNDER-####)
+python -m pytest tests/blunder/test_blunder_*.py -q                  # data-spine tests (REQ-BLUNDER-####)
 ```

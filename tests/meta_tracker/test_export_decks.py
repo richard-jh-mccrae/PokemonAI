@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from deck_convert import _indexes, check_legality, resolve_deck  # noqa: E402
 from meta_tracker.export_decks import export_decks, run, slugify  # noqa: E402
 from meta_tracker.parse import EpisodeRecord  # noqa: E402

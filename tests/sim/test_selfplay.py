@@ -13,7 +13,7 @@ from train.blunder.decisions import iter_decisions
 from train.blunder.provenance import build_identity
 from train.blunder.seats import detect_seat
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 WHEN = datetime(2026, 6, 29, 12, 0, 0)
 

@@ -66,7 +66,7 @@ See [[snipe-threat-two-signals]].
 same-name MAX-fold), provider `forward_max_damage`, `_context` signal (incl. `stats=None`→None),
 hypothesis (fires on Riolu-class; silent on dead-end & on `target_is_threat`; ranks evolving>weakest,
 threat>evolving), a DAMAGE-context **only-intended-rules-fire** guard, and the f75 regression.
-Also fix `tests/test_scouting_provider.py` fixture `evolvesFrom="Lucario"` → `"Riolu"`.
+Also fix `tests/scouting/test_scouting_provider.py` fixture `evolvesFrom="Lucario"` → `"Riolu"`.
 **Accept:** f75 (ep81905522) satisfied in `tune.py` (verified: margin 33>0), corpus ≥ current, suite green.
 On ship, **remove** the `81905522-75` deferred entry from `data/corrections/reviewed.json`.
 **Known M0 gaps (documented, not fixed):** bench-damage-immune pre-evos are wastefully sniped (no

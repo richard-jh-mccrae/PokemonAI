@@ -1,6 +1,6 @@
 # ADR-0029: Own-deck content is a SOUND oracle PLUS a PROBABILISTIC estimate — two epistemics, never contradictory
 
-**Status.** Accepted & **implemented** test-first 2026-06-30 (`tests/test_deck_odds.py`,
+**Status.** Accepted & **implemented** test-first 2026-06-30 (`tests/strategy/test_deck_odds.py`,
 REQ-GEN-0053..0055). Adds `common/deck_odds.py` (the pure hypergeometric estimator), the
 `Board.deck_contains_probability` signal, and one Fetch rung `dont-search-a-probable-whiff` (−25).
 Complements — does **not** replace — the sound deck tracker
