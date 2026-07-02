@@ -217,6 +217,19 @@ class Board:
                                        # that pre-evolution to evolve is worthwhile. False when the only
                                        # pre-evolution is bare (evolving it just exposes a dead 0-Energy
                                        # wincon — then promote a staller/accelerator instead, ep82753102 f120)
+    bench_wincon_prize_value: int = 0  # greatest prize value among my BENCHED win-conditions (Mega ex 3 /
+                                       # ex 2 / else 1), 0 if none — the prize I keep OFF the front line by
+                                       # interposing a cheaper attacker at a forced promote (prize denial)
+    bench_wincon_underpowered: bool = False  # a benched win-condition carries fewer Energy than its
+                                       # highest-damage attack costs (CardStat.maxDamageCost) — it can't
+                                       # yet fire its payoff, so an accelerator promote can power it off the
+                                       # Bench, which promoting the finisher directly (one attach/turn) can't
+    basic_energy_in_deck: bool = False  # my deck can still yield a Basic Energy (a Basic-Energy id not
+                                       # known-exhausted) — the fuel gate for an accelerator promote
+                                       # (Cinderace's Turbo Flare fetches Basic Energy to the Bench)
+    opp_has_played_gust: bool = False  # the opponent has played a gust (Boss's Orders-style forced switch)
+                                       # this game — a `gust`-tagged card in their discard; they can drag my
+                                       # benched finisher out, so interposing a cheap body taxes that gust
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
     tool_deploy_slot: tuple | None = None  # (AreaType, inPlayIndex) of the body to equip my held +HP
                                        # Tool this turn — the survival-turns target picker (ADR-0028);
@@ -413,6 +426,15 @@ class Context:
                                        # board.best_promote_slot — the most-built ready win-condition. The
                                        # per-option flag `promote-the-powered-attacker` fires on, so the
                                        # promote/switch brings up the 3-Energy Mega, not a bare copy
+    card_prize_value: int = 1          # prizes a Knock Out of THIS option's card yields (Mega ex 3 / ex 2
+                                       # / else 1) — the cost of exposing it; the interpose rule promotes a
+                                       # body whose value is below the benched wincon's
+    promote_target_can_attack: bool = False  # at a TO_ACTIVE promote, the benched Pokémon this option
+                                       # brings up can use an attack this turn (Energy >= its cheapest attack
+                                       # cost) — a live attacker to interpose, not a dead wall
+    promote_target_hits_weakness: bool = False  # at a TO_ACTIVE promote, this option's body would strike
+                                       # the opponent's Active on its Weakness (x2 chip) — a favourable
+                                       # sacrifice (Cinderace's Fire into a Fire-weak Archaludon/Duraludon)
     target_is_top_threat: bool = False  # this snipe target carries the greatest threat rank on the Bench
                                         # (== board.strongest_threat_rank) — the biggest attacker (or
                                         # latent attacker) to chip when no KO is available. Unlike the
@@ -934,6 +956,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             select.get("context") in (_TO_ACTIVE, _SWITCH) and board.best_promote_slot is not None
             and option.get("playerIndex", state.get("yourIndex", 0)) == state.get("yourIndex", 0)
             and (option.get("area"), option.get("index")) == board.best_promote_slot)
+        card_prize_value = self._prize_value({"id": cid}) if cid is not None else 1
+        promote_target_can_attack = self._promote_target_can_attack(obs, select, option)
+        promote_target_hits_weakness = self._promote_target_hits_weakness(obs, select, option)
         at_target = self._attach_target(obs, option)   # the Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
         at_is_line_member = bool(
@@ -981,6 +1006,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
                        promote_target_kos=promote_target_kos,
                        is_best_promote_target=is_best_promote_target,
+                       card_prize_value=card_prize_value,
+                       promote_target_can_attack=promote_target_can_attack,
+                       promote_target_hits_weakness=promote_target_hits_weakness,
                        roles=roles, tags=tags, stat=stat, board=board, is_attack=is_attack,
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
@@ -1189,6 +1217,10 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             bench_wincon_ready=self._bench_wincon_ready(me),
             best_promote_slot=self._best_promote_slot(me),
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
+            bench_wincon_prize_value=self._bench_wincon_prize_value(me),
+            bench_wincon_underpowered=self._bench_wincon_underpowered(me),
+            basic_energy_in_deck=self._basic_energy_in_deck(deck_empty),
+            opp_has_played_gust=self._opp_has_played_gust(opp),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             priority_wincon_slot=self._priority_wincon_slot(
                 me, active_lethal, active_doomed),
@@ -1310,6 +1342,33 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         stat = self.stats.get(poke.get("id")) if self.stats else None
         return self._can_ko(stat, self._opp_active(obs))
 
+    def _promote_target_can_attack(self, obs: dict, select: dict, option: dict) -> bool:
+        """At a TO_ACTIVE promote, True if the benched Pokémon this option brings up can use an attack
+        this turn (Energy >= its cheapest attack cost) — a live attacker worth interposing in front of a
+        win-condition, not a dead wall. Fail-closed when the context / stats / target are missing."""
+        if select.get("context") != _TO_ACTIVE:
+            return False
+        poke = self._option_pokemon(obs, select, option)
+        cid = (poke or {}).get("id")
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not (poke and stat and stat.minAttackCost is not None):
+            return False
+        return len(poke.get("energies") or []) >= stat.minAttackCost
+
+    def _promote_target_hits_weakness(self, obs: dict, select: dict, option: dict) -> bool:
+        """At a TO_ACTIVE promote, True if the benched Pokémon this option brings up would strike the
+        opponent's Active on its Weakness — its type (`energyType`) equals the defender's Weakness type, so
+        its attack is doubled (rules.md §5). Makes a cheap interposed attacker a favourable trade (Cinderace's
+        Fire into a Fire-weak Archaludon/Duraludon). Fail-closed when the context / stats / Active are missing."""
+        if select.get("context") != _TO_ACTIVE:
+            return False
+        poke = self._option_pokemon(obs, select, option)
+        stat = self.stats.get((poke or {}).get("id")) if (self.stats and poke) else None
+        oa = self._opp_active(obs)
+        opp_stat = self.stats.get((oa or {}).get("id")) if (self.stats and oa) else None
+        return bool(stat and opp_stat and stat.energyType is not None
+                    and opp_stat.weakness is not None and opp_stat.weakness == stat.energyType)
+
     def _priority_wincon_slot(self, me: dict, active_lethal: bool,
                               active_doomed: bool = False) -> tuple | None:
         """(AreaType, index) of the ONE win-condition Pokémon to concentrate Energy on — among my
@@ -1367,6 +1426,60 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                 if e >= _min_attack_cost(self.stats, p.get("id")) and (best is None or e > best[0]):
                     best = (e, i)
         return (_BENCH, best[1]) if best else None
+
+    def _bench_wincon_prize_value(self, me: dict) -> int:
+        """The greatest prize value among my BENCHED win-condition bodies (Mega ex 3 / ex 2 / else 1), 0 if
+        none benched. At a forced promote it is the prize I keep OFF the front line by interposing a cheaper
+        attacker (`interpose-the-cheap-attacker-to-preserve-the-wincon`)."""
+        wincon = self._wincon_set()
+        if not wincon:
+            return 0
+        return max((self._prize_value(p) for p in (me.get("bench") or [])
+                    if p and p.get("id") in wincon), default=0)
+
+    def _bench_wincon_underpowered(self, me: dict) -> bool:
+        """True if a benched win-condition carries fewer Energy than its highest-damage attack costs
+        (`CardStat.maxDamageCost`) — it can't yet fire its payoff hit. Promoting an accelerator (whose attack
+        loads the Bench) rather than this finisher lets it reach full Energy off the Bench, which promoting it
+        directly (one manual attach/turn) can't. False when every benched wincon is fully powered / costs unknown."""
+        wincon = self._wincon_set()
+        if not (wincon and self.stats):
+            return False
+        for p in (me.get("bench") or []):
+            if not (p and p.get("id") in wincon):
+                continue
+            stat = self.stats.get(p.get("id"))
+            cost = getattr(stat, "maxDamageCost", None) if stat else None
+            if cost is not None and len(p.get("energies") or []) < cost:
+                return True
+        return False
+
+    def _basic_energy_in_deck(self, deck_empty) -> bool:
+        """True if my deck can still yield a Basic Energy — a Basic-Energy card id in my decklist is not
+        known-exhausted (`deck_empty`, the sound emptiness oracle). The fuel gate for an accelerator promote:
+        Cinderace's Turbo Flare fetches Basic Energy to the Bench, so with none left the acceleration whiffs.
+        Fail-open (True) early when nothing is known-exhausted; False with no stats."""
+        if not self.stats:
+            return False
+        empty = deck_empty or frozenset()
+        for cid in set(self.deck or ()):
+            stat = self.stats.get(cid)
+            if stat and getattr(stat, "cardType", None) == _BASIC_ENERGY and cid not in empty:
+                return True
+        return False
+
+    def _opp_has_played_gust(self, opp: dict) -> bool:
+        """True if the opponent has played a gust (a Boss's Orders-style forced-switch) this game — a
+        `gust`-tagged card sits in their discard. It means they CAN drag my benched win-condition into the
+        Active and Knock it Out, so hiding the finisher on the Bench is less safe: interposing a cheap attacker
+        at a promote taxes their next gust and denies the free front-line prize. False with no functions."""
+        if not self.functions:
+            return False
+        for c in (opp.get("discard") or []):
+            cid = c.get("id") if c else None
+            if cid is not None and "gust" in self.functions.tags(cid):
+                return True
+        return False
 
     def _weakest_snipe_hp(self, obs: dict, select: dict | None) -> int | None:
         """Least HP among the benched Pokémon a DAMAGE select can snipe — the target closest to a

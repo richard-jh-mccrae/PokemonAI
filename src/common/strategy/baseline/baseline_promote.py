@@ -19,6 +19,36 @@ HYPOTHESES = [
         and c.promote_target_kos,
         weight=50, status="testing"),
     Hypothesis(
+        id="interpose-the-cheap-attacker-to-preserve-the-wincon",
+        rationale="At a forced promote after a Knock Out (TO_ACTIVE), when a benched higher-prize "
+                  "win-condition is available, DON'T lead with it — promote a CHEAPER body that can act "
+                  "(`promote_target_can_attack`, `card_prize_value` below the benched wincon's) to soak "
+                  "the next hit for one prize and keep the multi-prize finisher fresh on the Bench. Prize "
+                  "denial: feeding a 3-prize Mega Starmie ex when the opponent needs <=3 can hand them the "
+                  "game outright, whereas a 1-prize Cinderace costs them a whole KO to take a single prize "
+                  "— then you promote the fresh, fully-built finisher. HARD VETO when the opponent needs "
+                  "only ONE prize (`opp_prizes_remaining < 2`): any KO wins for them then, so a sacrifice "
+                  "just gives it away — lead with your strongest body. Fires on any of three drivers: "
+                  "(a) `promote_target_hits_weakness` — the cheap body strikes the opponent's Active on its "
+                  "Weakness (x2 chip, Cinderace's Fire into a Fire-weak Archaludon ex / Duraludon), a "
+                  "favourable trade; (b) an accelerator (`accel_source`) whose attack loads the Bench while "
+                  "the benched finisher isn't fully powered (`bench_wincon_underpowered`) and Basic Energy "
+                  "remains to fetch (`basic_energy_in_deck`) — promoting it powers the finisher to full off "
+                  "the Bench, which promoting the finisher directly (one attach/turn) can't; (c) "
+                  "`opp_has_played_gust` — the opponent has shown a Boss's Orders-style gust, so they can "
+                  "drag the benched finisher out anyway; interpose to tax that gust. Scores +50 on the "
+                  "cheap body vs `promote-the-ready-wincon` (+40) on the wincon, so the sacrifice is chosen; "
+                  "additive with `promote-the-accelerator-for-the-ko` (+50) when the cheap body can also KO "
+                  "this turn (ADR-0031 prize-economy at a promote).",
+        when=lambda c: c.select_context == _TO_ACTIVE and not c.card_is_wincon
+        and c.promote_target_can_attack and c.board.opp_prizes_remaining >= 2
+        and c.board.bench_wincon_prize_value > c.card_prize_value
+        and (c.promote_target_hits_weakness
+             or ("accel_source" in c.roles and c.board.bench_wincon_underpowered
+                 and c.board.basic_energy_in_deck)
+             or c.board.opp_has_played_gust),
+        weight=50, status="testing"),
+    Hypothesis(
         id="promote-the-ready-wincon",
         rationale="When you bring up a new Active — a forced promote after a Knock Out (TO_ACTIVE) OR "
                   "the new-Active pick when you retreat (SWITCH) — promote the READY win-condition, "
