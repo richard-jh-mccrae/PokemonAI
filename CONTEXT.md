@@ -50,6 +50,14 @@ _Avoid_: tech, splash (these are *kinds* of Sub-line, not the category)
 A group of Decks sharing the same Main Lines, named after them (e.g. "Cinderace / Mega Starmie ex"). The unit by which the Meta is counted and named.
 _Avoid_: deck type, build
 
+**Variant Cluster**:
+A set of subset-related Archetypes that share their primary Main line, folded into one unit labelled by its most common member (e.g. the ±Cramorant Hop's Trevenant builds collapse to one). The unit the deck export and a Matchup Brief address — the export's `covers` list is exactly the cluster's member Archetype strings. Non-destructive: the store keeps the precise Archetype labels (`dashboard._merge_map`).
+_Avoid_: variant, merge group
+
+**Representative Build**:
+The single most-common *exact* 60-card Deck actually observed for an Archetype or Variant Cluster (recency-weighted, all Bands pooled) — a real legal list, never a per-slot reconstruction. What the deck export ships per cluster.
+_Avoid_: modal deck, average list
+
 **Play rate**:
 The share of Episodes in a Rank Band in which a Main-line Pokémon or Archetype appears. Encounter-weighted (counted per Episode, not per team) — because matchmaking pairs similar ratings and active agents play more, so they are genuinely faced more often.
 _Avoid_: usage rate, pick rate

@@ -18,8 +18,12 @@ EPISODES_INDEX = "kaggle/pokemon-tcg-ai-battle-episodes-index"  # official daily
 CARDS_JSON = PKG / "cards.json"
 DATA_DIR = REPO / "data" / "meta"
 DB_PATH = DATA_DIR / "meta.db"
+DECKS_DIR = DATA_DIR / "decks"   # deck export: data/meta/decks/<slug>/ + index.json (gitignored)
 REPORTS_DIR = REPO / "reports"
 DASHBOARD = REPORTS_DIR / "meta_dashboard.html"
+
+# --- Deck export ---------------------------------------------------------
+EXPORT_TOP_N = 10            # clusters exported to DECKS_DIR (head of the play-rate ranking; ADR-0027)
 
 # --- Rank bands (percentile of the ladder, by participant rating) --------
 # Contiguous over the top 50%; episodes below 50th percentile are the "lower
