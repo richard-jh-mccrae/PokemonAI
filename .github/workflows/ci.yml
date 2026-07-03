@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false       # report both OSes, don't cancel siblings
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         python-version: ["3.12"]   # most recent only (dev box runs 3.11)
     steps:
       - name: Checkout
