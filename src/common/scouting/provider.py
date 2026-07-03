@@ -289,6 +289,9 @@ class AttackStat:
     cost: int = 0                      # energy count (efficiency tiebreaks, affordability)
     recoil: int = 0                    # unconditional self-damage (ADR-0022 #2)
     benchSnipe: int = 0                # unconditional opp-bench rider (ADR-0022 #14); ignores W/R
+    benchSpread: int = 0               # distributable opp-bench counter spread total (Phantom Dive
+                                       # "put N counters in any way you like" -> N*10); ignores W/R.
+                                       # The placement policy distributes it; count = benchSpread // 10
     handSizeDamage: int = 0            # per-card hand-size scaling (printed damage hides it)
     ignoresWeakness: bool = False
     ignoresResistance: bool = False
@@ -321,7 +324,7 @@ class AttackStat:
                                        # keeps printed (Incoming: they can bench the partner first)
     selfReturn: bool = False           # attack scoops its OWN Pokémon (+ attached) back to hand
                                        # (Meowth ex Tuck Tail). The escape/KO-deny fact: a doomed
-                                       # multi-prize Active can bounce to deny the prize (tuck-tail-to-deny-the-ko)
+                                       # multi-prize Active can bounce to deny the prize (Tactical _SELF_RETURN_ESCAPE)
     # Transient next-turn grants (ADR-0033): what USING this attack grants for one turn — tracked
     # match-scoped from ATTACK logs (common/transients.py), obs has no effect state.
     nextTurnReduction: int = 0         # defender-side: "takes N less damage" next turn (Frost Barrier)
@@ -462,6 +465,29 @@ def parse_attack_effect_damage(text: str) -> tuple[int, bool] | None:
     if m:
         return (int(m.group(1)) * _DAMAGE_PER_COUNTER, True)
     return None
+
+
+# Distributable bench spread (ADR-0032 follow-up, dragapult_ex): "Put N damage counters on your
+# opponent's Benched Pokémon in any way you like" (Dragapult ex Phantom Dive). The "in any way you
+# like" marker = the player distributes the N counters across the opp Bench at will — distinct from
+# the single-target `benchSnipe` rider and from a forced "each" spread.
+_BENCH_SPREAD_RE = re.compile(
+    r"Put (\d+) damage counters? on your opponent.s (?:Benched )?Pok.mon in any way you like")
+
+
+def parse_attack_bench_spread(text: str) -> int:
+    """Distributable opponent-bench counter spread → N*10 total damage; 0 otherwise.
+
+    Args:
+        text: the attack's free-text effect.
+
+    Returns:
+        e.g. Phantom Dive "Put 6 damage counters on your opponent's Benched Pokémon in any way you
+        like" → ``60`` (6 counters). Counters ignore Weakness/Resistance. Single-target ("1 of"),
+        own-bench, and forced ("each") riders → 0 — those aren't a chosen distribution.
+    """
+    m = _BENCH_SPREAD_RE.search((text or "").replace("\n", " "))
+    return int(m.group(1)) * _DAMAGE_PER_COUNTER if m else 0
 
 
 # Hidden-state deck-discard scalers (ADR-0032 class C). Pool: exactly 3 — Hammer-lanche (top 6
@@ -618,7 +644,7 @@ def parse_attack_self_return(text: str) -> bool:
     """True if the attack scoops its OWN Pokémon (and attached cards) back into the owner's hand —
     Meowth ex Tuck Tail ("Put this Pokémon and all attached cards into your hand"). The escape fact:
     a doomed multi-prize Active can bounce to deny the opponent the prize (and re-arm a bench-drop
-    Ability). Distinct from an opponent-facing return; the subject is "this Pokémon".
+    Ability). Subject is "this Pokémon" (self), distinct from an opponent-facing return.
 
     Args:
         text: the attack's free-text effect.
@@ -672,19 +698,23 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
         recover = parse_attack_energy_recover(text)
         requires_bench = parse_attack_bench_requirement(text)
         trans = parse_attack_transients(text, getattr(a, "name", "") or "")
+        free_target_snipe = 0
         if printed == 0 and not scaling and not hidden:
             effect = parse_attack_effect_damage(text)   # fixed effect damage hides in text
-            if effect:
+            if effect and effect[1]:    # counter-put: counters bypass W/R and prevention
                 printed = effect[0]
-                if effect[1]:           # counter-put: counters bypass W/R and prevention
-                    w = r = e = True
+                w = r = e = True
+            elif effect:                # free-target "does N damage to 1 of your opponent's Pokémon"
+                free_target_snipe = effect[0]   # (Cruel Arrow) — it can KO ANY opp Pokémon incl the Bench,
+                w = r = e = True                # so value it as a full-damage bench snipe (ignores W/R on bench)
         if scaling and scaling[2]:      # counter-placer: counters aren't damage — no W/R, no
             w = r = e = True            # prevention (Powerful Hand lands through Crustle)
         table[a.attackId] = AttackStat(
             attackId=a.attackId, damage=printed,
             cost=len(getattr(a, "energies", None) or []),
             recoil=parse_attack_recoil(text),
-            benchSnipe=parse_attack_bench_snipe(text),
+            benchSnipe=parse_attack_bench_snipe(text) or free_target_snipe,
+            benchSpread=parse_attack_bench_spread(text),
             handSizeDamage=parse_attack_hand_size(text),
             ignoresWeakness=w, ignoresResistance=r, ignoresEffects=e,
             damageMin=(bounds[0] if bounds else None),
@@ -699,6 +729,7 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
             recoverEnergyType=(recover[1] if recover else None),
             recoverTarget=(recover[2] if recover else None),
             requiresBench=requires_bench,
+            selfReturn=parse_attack_self_return(text),
             nextTurnReduction=trans.get("reduction", 0),
             nextTurnPreventAll=trans.get("prevent_all", False),
             nextTurnSelfLock=trans.get("self_lock", False),

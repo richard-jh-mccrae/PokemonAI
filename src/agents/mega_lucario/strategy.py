@@ -1,6 +1,14 @@
 """mega_lucario — Strategy (declarative doctrine). See docs/agent-architecture.md and
 src/agents/mega_lucario/STRATEGY.md (the grilled playing doctrine, deck-genie 2026-06-29;
-re-baselined vs the merged general layer 2026-07-02, STRATEGY.md §5b).
+re-baselined vs the merged general layer 2026-07-02, STRATEGY.md §5b; trainer-swap re-run
+2026-07-03, STRATEGY.md §9 T9').
+
+Trainer-swap 2026-07-03 (Pokémon core unchanged): OUT Maximum Belt (ACE SPEC) + Team Rocket's
+Watchtower; IN Unfair Stamp (ACE SPEC Item), Black Belt's Training (+40 vs ex), Team Rocket's Petrel
+(Trainer tutor), Wally's Compassion (Mega clutch-heal). All four are COVERED by the general layer
+(damage-boost model / clutch_heal heal doctrine / general search / aceSpec+shuffle guards) — no new
+deck rule. Meowth ex was RE-MODELED general (`supporter_tutor` tag + `bench-the-supporter-tutor`),
+replacing the mis-assigned `tutor` Role that made the Pilot bench the 2-prize ex for a wincon dig.
 
 Flexible Fighting multi-attacker. Win-condition: Mega Lucario ex (Riolu -> Mega ex, single hop,
 340 HP / 3 prizes) — alternate Mega Brave (FF 270) with Aura Jab (F 130 + load up to 3 Basic {F}
@@ -31,8 +39,11 @@ SOLROCK, LUNATONE, MAKUHITA, HARIYAMA, MEOWTH_EX = 676, 675, 673, 674, 1071
 FIGHTING_ENERGY = 6
 ULTRA_BALL, FIGHTING_GONG, POKE_PAD, PREMIUM_POWER_PRO, SWITCH = 1121, 1142, 1152, 1141, 1123
 LILLIES, JUDGE, BOSS_ORDERS = 1227, 1213, 1182
-MAX_BELT, AIR_BALLOON = 1158, 1174
-WATCHTOWER, GRAVITY_MOUNTAIN = 1256, 1252
+AIR_BALLOON, GRAVITY_MOUNTAIN = 1174, 1252
+# Trainer-swap 2026-07-03 — all covers-as-is (general layer), so no const keys off them:
+#   UNFAIR_STAMP=1080 (ACE SPEC, aceSpec+hand_disruption guards), BLACK_BELTS=1211 (damage-boost model),
+#   PETREL=1219 (general search), WALLYS=1229 (clutch_heal heal doctrine).
+# REMOVED from the deck: MAX_BELT=1158, WATCHTOWER=1256.
 
 _TO_HAND = 7        # SelectContext.TO_HAND — a search: choose which card to take into hand
 _EVOLVE = 9         # OptionType.EVOLVE — evolve a Pokémon in play
@@ -55,10 +66,14 @@ ROLES = {
     LUNATONE: ["engine"],                         # native draw engine (Lunar Cycle, Ability)
     HARIYAMA: ["secondary_attacker", "gust"],     # prize-trade star (210/1-prize) + Heave-Ho gust
     MAKUHITA: ["evolution_base"],
-    MEOWTH_EX: ["tutor"],                          # situational Last-Ditch Supporter fetch
+    # MEOWTH_EX: no Role. Its Last-Ditch Supporter tutor is driven by the general `supporter_tutor`
+    # TAG + `bench-the-supporter-tutor` rule (2026-07-03 re-model). The old `tutor` Role MISFIRED —
+    # `play-a-tutor-for-the-unfound-wincon` (+25) read it as a WINCON dig, benching the 2-prize ex in
+    # setup for the wrong reason (Last-Ditch fetches a SUPPORTER, not the wincon). See STRATEGY.md §3.
     BOSS_ORDERS: ["gust"],                         # the `gust` TAG drives the shipped general doctrine
-    MAX_BELT: ["damage_tool"],
     AIR_BALLOON: ["retreat_tool"],
+    # Black Belt's / Wally's / Petrel / Unfair Stamp: NO Role — covered by tag/CardStat-keyed general
+    # rules (damage-boost model / clutch_heal doctrine / general search / aceSpec guards).
 }
 
 HYPOTHESES = [
@@ -157,18 +172,8 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and c.card_id == GRAVITY_MOUNTAIN
         and c.board.opp_has_stage2,
         weight=15, status="assumed"),
-    Hypothesis(
-        id="watchtower-vs-colorless-abilities",
-        rationale="Team Rocket's Watchtower turns off {C} Abilities BOTH sides — proactive tech only "
-                  "when the opponent actually has a Colorless Pokémon with an Ability in play "
-                  "(`opp_has_colorless_ability`), and NEVER while our own Meowth ex (a {C} ability "
-                  "body) still waits in hand: its Last-Ditch Catch triggers on the bench-drop, and "
-                  "under our own Watchtower it would fetch nothing (Phase-A §3 sequencing — Meowth "
-                  "BEFORE Watchtower). Once Meowth has dropped (or was never drawn), the lock is "
-                  "pure opponent-facing value.",
-        when=lambda c: c.option_type == _PLAY and c.card_id == WATCHTOWER
-        and c.board.opp_has_colorless_ability and MEOWTH_EX not in c.board.hand_ids,
-        weight=15, status="assumed"),
+    # (watchtower-vs-colorless-abilities REMOVED 2026-07-03 — Team Rocket's Watchtower was cut from the
+    # deck. The general Board.opp_has_colorless_ability signal remains for any deck that runs it.)
 ]
 
 STRATEGY = Strategy(

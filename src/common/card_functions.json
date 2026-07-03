@@ -388,7 +388,7 @@
  ],
  "1071": [
   "search",
-  "stall"
+  "supporter_tutor"
  ],
  "1076": [
   "hand_disruption"
@@ -399,7 +399,8 @@
  ],
  "1080": [
   "draw",
-  "hand_disruption"
+  "hand_disruption",
+  "shuffle_hand"
  ],
  "1081": [
   "energy_denial"

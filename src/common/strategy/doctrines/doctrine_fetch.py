@@ -509,6 +509,42 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_sheds_key,
         weight=-25, status="testing"),
     Hypothesis(
+        id="bench-the-supporter-tutor",
+        rationale="Bench a `supporter_tutor` Pokémon (Meowth ex — Last-Ditch Catch: on the bench-drop "
+                  "from hand, search your deck for a SUPPORTER to hand) during SETUP when you hold NO "
+                  "Supporter, to guarantee one. Its tutor is a free ABILITY, so you bench it AND still "
+                  "play a Supporter + attack the same turn — its edge over a Supporter-tutor Trainer "
+                  "(Petrel), which costs the slot. SETUP is the safety proxy (opponents rarely have a "
+                  "gust + a 170-KO online that early); the 2-prize bench liability is accepted for the "
+                  "consistency/tempo. Stands down once a Supporter is in hand (no need — save the "
+                  "2-prize exposure). NOTE: this REPLACES routing Meowth through a `tutor` Role, which "
+                  "`play-a-tutor-for-the-unfound-wincon` (+25) mis-read as a WINCON dig — but Last-Ditch "
+                  "fetches a Supporter, not the wincon, so it benched the 2-prize ex for the wrong "
+                  "reason (mega_lucario STRATEGY.md §3, grill 2026-07-03). Splashable: Meowth ex runs "
+                  "in many decks (mega_lucario, dragapult_ex), so the model is general (tag-keyed).",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY
+        and "supporter_tutor" in c.tags and c.board.no_supporter_in_hand,
+        weight=25, status="assumed"),
+    Hypothesis(
+        id="grab-a-gust-supporter-for-the-ko",
+        rationale="At a TO_HAND Supporter grab (Meowth ex Last-Ditch Catch, or any supporter tutor), "
+                  "take a `gust`-tagged Supporter (Boss's Orders) when a gust would KO/close NOW "
+                  "(`gust_best_ko_prizes > 0`) — the top rung of the context-ranked grab. The free "
+                  "Ability lets you grab it AND still play it + attack the same turn, so the closing "
+                  "gust is the highest-value fetch. Above the draw-supporter default so the gust wins "
+                  "when it pays.",
+        when=lambda c: c.select_context == _TO_HAND and "gust" in c.tags
+        and c.board.gust_best_ko_prizes > 0,
+        weight=20, status="assumed"),
+    Hypothesis(
+        id="grab-a-draw-supporter-in-setup",
+        rationale="The setup default of the context-ranked Supporter grab: with no closing gust "
+                  "available, take a `draw` Supporter (Lillie's / Judge) to keep digging. Below the "
+                  "gust rung (+20) so the closing gust still wins, and modest so `fetch-the-wincon` "
+                  "(+30) and a genuinely needed non-draw grab still outrank it.",
+        when=lambda c: c.plan == Plan.SETUP and c.select_context == _TO_HAND and "draw" in c.tags,
+        weight=10, status="assumed"),
+    Hypothesis(
         id="hold-costly-fetch-when-line-assembled",
         rationale="The GRAB-side net of a DISCARD-cost fetch (the shed side is the `fetch_sheds_*` rungs): once "
                   "the win-condition line is ALREADY assembled (`wincon_in_hand` and `wincon_base_deployable`), "

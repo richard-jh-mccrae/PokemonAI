@@ -249,7 +249,9 @@ def test_build_applies_effect_damage_only_to_printed_zero():
         _Attack(1487, 120, 1, "This attack also does 50 damage to 1 of your opponent's Benched "
                               "Pokémon. (Don't apply Weakness and Resistance for Benched Pokémon.)"),
     ])
-    assert stats[183].damage == 100
+    # free-target "does N to 1 of your opponent's Pokémon" (Cruel Arrow) → a full-damage BENCH SNIPE
+    # (it can KO any opp Pokémon incl the Bench), not fixed Active damage; ignores W/R.
+    assert stats[183].damage == 0 and stats[183].benchSnipe == 100 and stats[183].ignoresWeakness
     assert (stats[342].damage, stats[342].ignoresWeakness, stats[342].ignoresEffects) == (20, True, True)
     assert stats[1487].damage == 120 and stats[1487].benchSnipe == 50   # rider untouched
 

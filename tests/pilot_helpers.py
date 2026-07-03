@@ -71,16 +71,19 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
 
 
 def make_select(options, *, min_count: int = 1, max_count: int = 1,
-                context: int = 0, type: int = 0, current=None, deck=None) -> dict:
+                context: int = 0, type: int = 0, current=None, deck=None,
+                remain_counters: int = 0, effect=None) -> dict:
     """An observation whose `select` offers `options` — i.e. a decision menu. `deck` supplies the
-    revealed search candidates a DECK (area 1) option indexes into (a TO_HAND/search select)."""
+    revealed search candidates a DECK (area 1) option indexes into (a TO_HAND/search select).
+    `remain_counters` sets `remainDamageCounter` (the budget at a DAMAGE_COUNTER_ANY spread-placement
+    select); `effect` sets the resolving-effect record (`{id: sourceCardId, …}`)."""
     return {
         "select": {
             "type": type, "context": context,
             "minCount": min_count, "maxCount": max_count,
             "option": list(options),
-            "remainDamageCounter": 0, "remainEnergyCost": 0,
-            "deck": deck, "contextCard": None, "effect": None,
+            "remainDamageCounter": remain_counters, "remainEnergyCost": 0,
+            "deck": deck, "contextCard": None, "effect": effect,
         },
         "logs": [],
         "current": current if current is not None else state(),

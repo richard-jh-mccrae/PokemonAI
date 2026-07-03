@@ -31,13 +31,16 @@ _spec.loader.exec_module(_mod)
 STRATEGY = _mod.STRATEGY
 
 RIOLU, MEGA_LUCARIO, SOLROCK, LUNATONE, MAKUHITA, HARIYAMA = 677, 678, 676, 675, 673, 674
-POWER_PRO, MAX_BELT, GRAVITY_MOUNTAIN, WATCHTOWER, MEOWTH_EX = 1141, 1158, 1252, 1256, 1071
+POWER_PRO, BLACK_BELTS, GRAVITY_MOUNTAIN, MEOWTH_EX = 1141, 1211, 1252, 1071
+BOSS_ORDERS, LILLIES = 1182, 1227     # supporter-tutor grab candidates (gust / draw)
 F_ENERGY = 6                     # Basic Fighting Energy (cardType 5, energyType 6)
 FIGHTING = 6                     # EnergyType.FIGHTING
 STAB, AURA_JAB, MEGA_BRAVE, COSMIC_BEAM, WILD_PRESS = 981, 982, 983, 980, 978
-WALL_HIT = 9101                  # the wall dummy's own attack (recoil-doom incoming read)
+TUCK_TAIL = 977                  # Meowth ex CCC-60: "Put this Pokémon and all attached cards into your hand"
+WALL_HIT, BIG_HIT = 9101, 9102   # dummy attacks: 100-dmg (recoil-doom read) / 200-dmg (dooms Meowth 170)
 WALL, STALLER, CHARGED = 9001, 9002, 9003   # opp dummies: fat wall / energyless staller / powered body
 EX_WALL, STAGE2, C_ABILITY = 9004, 9005, 9006  # ex-Active (Belt gate) / Stage 2 / {C}-ability dummies
+DOOMER = 9007                    # opp body whose 200-dmg attack KOs a 170-HP Meowth (Tuck-Tail escape read)
 IS_FIRST = 41   # SelectContext.IS_FIRST — the coin toss
 ACTIVATE = 43   # SelectContext.ACTIVATE — "use the Ability?" (owner on select.contextCard)
 TO_ACTIVE = 4   # SelectContext.TO_ACTIVE — forced promote
@@ -64,10 +67,17 @@ _STATS = DictCardStatProvider({
     EX_WALL: CardStat(EX_WALL, hp=320, ex=True),                 # ex Active — the Belt +50 gate/target
     STAGE2: CardStat(STAGE2, hp=170, stage2=True),               # a Stage 2 (Gravity Mountain read)
     C_ABILITY: CardStat(C_ABILITY, hp=170, energyType=0, hasAbility=True),  # {C} ability body
+    DOOMER: CardStat(DOOMER, hp=200, attacks=(BIG_HIT,), minAttackCost=1,   # 200-dmg -> dooms Meowth 170
+                     maxDamage=200, maxDamageCost=1, minCostDamage=200),
     POWER_PRO: CardStat(POWER_PRO, hp=0, cardType=1,             # Item: +30 this turn, {F} attackers
                         damageBoost=30, damageBoostType=FIGHTING),
-    MAX_BELT: CardStat(MAX_BELT, hp=0, cardType=2, aceSpec=True,  # Tool: +50 vs an ex Active
-                       damageBoost=50, damageBoostVsEx=True),
+    BLACK_BELTS: CardStat(BLACK_BELTS, hp=0, cardType=3,          # Supporter: +40 vs an ex Active
+                          damageBoost=40, damageBoostVsEx=True),  # (one/turn; replaced Maximum Belt)
+    BOSS_ORDERS: CardStat(BOSS_ORDERS, hp=0, cardType=3),         # Supporter (gust) — grab candidate
+    LILLIES: CardStat(LILLIES, hp=0, cardType=3),                 # Supporter (draw) — grab candidate
+    MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", energyType=0, hp=170, ex=True, retreatCost=1,
+                        attacks=(TUCK_TAIL,), minAttackCost=3, maxDamage=60, maxDamageCost=3,
+                        minCostDamage=60),
 })
 _ATTACK_STATS = {
     STAB: AttackStat(STAB, damage=30, cost=1, nextTurnSameAttackLock=True),
@@ -79,6 +89,8 @@ _ATTACK_STATS = {
                             requiresBench=("Lunatone",)),
     WILD_PRESS: AttackStat(WILD_PRESS, damage=210, cost=3, recoil=70),
     WALL_HIT: AttackStat(WALL_HIT, damage=100, cost=1),
+    BIG_HIT: AttackStat(BIG_HIT, damage=200, cost=1),
+    TUCK_TAIL: AttackStat(TUCK_TAIL, damage=60, cost=3, selfReturn=True),
 }
 _ATTACKS = {aid: st.damage for aid, st in _ATTACK_STATS.items()}
 _COSTS = {aid: st.cost for aid, st in _ATTACK_STATS.items()}
@@ -107,6 +119,83 @@ def test_fetch_the_engine_first_prefers_solrock_over_riolu_at_a_setup_search():
     opts = p.explain(obs).options
     assert "fetch-the-engine-first" in _fired(opts[0])          # Solrock — the engine
     assert "fetch-the-engine-first" not in _fired(opts[1])      # Riolu — the line piece, not engine
+
+
+# --- GENERAL: Meowth ex supporter-tutor re-model (grill 2026-07-03) ---------------------------
+# The deck's own rules key off Roles/ids, so _pilot() runs tag-free; the Meowth re-model is GENERAL
+# and keys off Function Tags, so these use a tag-aware Pilot.
+
+def _tagged_pilot():
+    return Pilot(STRATEGY, deck=[RIOLU] * 3 + [MEGA_LUCARIO] * 3 + [SOLROCK] * 3 + [LUNATONE] * 2
+                 + [MAKUHITA] * 2 + [HARIYAMA] * 2 + [F_ENERGY] * 11 + [1] * 34,
+                 general_strategy=GENERAL_STRATEGY, stats=_STATS,
+                 functions=CardFunctions({MEOWTH_EX: ["search", "supporter_tutor"],
+                                          BOSS_ORDERS: ["gust"], LILLIES: ["draw"]}),
+                 attacks=_ATTACKS, attack_costs=_COSTS, attack_stats=_ATTACK_STATS)
+
+
+@pytest.mark.req("REQ-ML-0015")
+def test_bench_the_supporter_tutor_when_supporterless_in_setup():
+    """SETUP, Meowth ex in hand, no Supporter held: bench it to fetch one (the free-Ability grab)."""
+    p = _tagged_pilot()
+    obs = make_select([opt(PLAY, index=0)], context=MAIN,
+                      current=state(active=poke(MAKUHITA, hp=80), hand=[MEOWTH_EX]))
+    assert "bench-the-supporter-tutor" in _fired(p.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-ML-0015")
+def test_bench_the_supporter_tutor_stands_down_with_a_supporter_in_hand():
+    """A Supporter already in hand -> no need to expose the 2-prize ex; the rule is silent."""
+    p = _tagged_pilot()
+    obs = make_select([opt(PLAY, index=0)], context=MAIN,
+                      current=state(active=poke(MAKUHITA, hp=80), hand=[MEOWTH_EX, LILLIES]))
+    assert "bench-the-supporter-tutor" not in _fired(p.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-ML-0016")
+def test_grab_the_gust_supporter_when_a_gust_kos():
+    """At the Last-Ditch TO_HAND grab, take Boss's (gust) when a gust would KO a benched body."""
+    p = _tagged_pilot()
+    cur = state(active=poke(MEGA_LUCARIO, energy=2, hp=340), opp_active=poke(WALL, hp=400),
+                opp_bench=[poke(STALLER, hp=100)])          # Mega Brave 270 KOs the gusted 100
+    obs = make_select([card_opt(1, 0)], context=TO_HAND, deck=[{"id": BOSS_ORDERS}], current=cur)
+    assert "grab-a-gust-supporter-for-the-ko" in _fired(p.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-ML-0016")
+def test_grab_a_draw_supporter_in_setup_default():
+    """No closing gust available: in SETUP the grab defaults to a draw Supporter (keep digging)."""
+    p = _tagged_pilot()
+    obs = make_select([card_opt(1, 0)], context=TO_HAND, deck=[{"id": LILLIES}],
+                      current=state(active=poke(MAKUHITA, hp=80)))
+    assert "grab-a-draw-supporter-in-setup" in _fired(p.explain(obs).options[0])
+
+
+# --- GENERAL: Tuck Tail self-return escape (Tactical _SELF_RETURN_ESCAPE) ----------------------
+
+def _tuck_tail_menu(opp):
+    """Meowth ex Active (170, 2-prize) with 3 F, vs `opp`: Tuck Tail or End."""
+    cur = state(active=poke(MEOWTH_EX, energy=3, hp=170), bench=[poke(SOLROCK, energy=1, hp=110)],
+                opp_active=opp)
+    return make_select([attack_opt(TUCK_TAIL), opt(END)], context=MAIN, current=cur)
+
+
+@pytest.mark.req("REQ-ML-0017")
+def test_tuck_tail_escapes_a_doomed_multiprize_active():
+    """A doomed 2-prize Meowth (opp threatens 200 ≥ 170): Tuck Tail's tactical is lifted by the
+    escape credit (2 × 50) — the bounce denies the 2-prize KO, and it beats End."""
+    p = _pilot()
+    doomed = p.explain(_tuck_tail_menu(poke(DOOMER, energy=1, hp=200)))
+    assert doomed.options[0].tactical >= 100        # 60 − eff + 50×2 escape credit
+    assert p.decide(_tuck_tail_menu(poke(DOOMER, energy=1, hp=200))) == [0]   # picks Tuck Tail over End
+
+
+@pytest.mark.req("REQ-ML-0017")
+def test_tuck_tail_not_credited_when_meowth_is_safe():
+    """A safe Meowth (opp only threatens 100 < 170): no escape credit — Tuck Tail stays a weak
+    60-chip and the agent doesn't scoop itself away for tempo."""
+    tac = _pilot().explain(_tuck_tail_menu(poke(WALL, hp=400))).options[0].tactical
+    assert tac < 100                                # just 60 − eff, no escape credit
 
 
 # --- deck: spring-heave-ho-when-it-pays -------------------------------------------------------
@@ -315,7 +404,7 @@ def test_preferred_start_first_takes_the_coin_toss():
     assert "honor-preferred-start" in _fired(p.explain(obs).options[1])  # fired on the NO option
 
 
-# --- GENERAL: the damage-boost OHKO-line model (Power Pro / Maximum Belt) ----------------------
+# --- GENERAL: the damage-boost OHKO-line model (Power Pro / Black Belt's Training) -------------
 
 def _boost_menu(hand, opp, extra_logs=(), active_tools=()):
     active = poke(MEGA_LUCARIO, energy=2, hp=340)
@@ -369,27 +458,27 @@ def test_played_power_pro_boosts_the_attack_itself():
 
 
 @pytest.mark.req("REQ-ML-0012")
-def test_belt_attach_is_lethal_class_vs_an_ex_at_the_breakpoint():
-    """Maximum Belt (+50 vs an ex Active): attaching it to the Mega crosses 270→320 on a 320-HP
-    ex — the Dragapult line. Silent vs a non-ex wall (the defender gate)."""
+def test_black_belts_play_is_lethal_class_vs_an_ex_at_the_breakpoint():
+    """Black Belt's Training (Supporter, +40 vs an ex Active): playing it crosses 270→310 on a
+    310-HP ex. Silent vs a non-ex wall (the defender gate). Replaced Maximum Belt as the ex-boost;
+    now a PLAY (one/turn), not a Tool ATTACH."""
     p = _pilot()
-    belt_attach = opt(8, area=2, index=0, inPlayArea=4, inPlayIndex=0)   # ATTACH Belt onto Active
-    ex = make_select([belt_attach], context=MAIN,
-                     current=state(active=poke(MEGA_LUCARIO, energy=2, hp=340),
-                                   hand=[MAX_BELT], opp_active=poke(EX_WALL, hp=320)))
-    assert p.explain(ex).options[0].tactical >= 1000
-    non_ex = make_select([belt_attach], context=MAIN,
-                         current=state(active=poke(MEGA_LUCARIO, energy=2, hp=340),
-                                       hand=[MAX_BELT], opp_active=poke(WALL, hp=320)))
-    assert _pilot().explain(non_ex).options[0].tactical < 1000
+    ex = _boost_menu([BLACK_BELTS], poke(EX_WALL, hp=310))
+    assert p.explain(ex).options[0].tactical >= 1000                     # the Black Belt's PLAY
+    non_ex = _boost_menu([BLACK_BELTS], poke(WALL, hp=310))
+    assert _pilot().explain(non_ex).options[0].tactical < 1000           # defender not an ex → gated
 
 
 @pytest.mark.req("REQ-ML-0012")
-def test_attached_belt_boosts_the_attack_vs_the_ex():
-    """A Belt already ON the Active prices into the attack: 270+50 KOs the 320-HP ex."""
+def test_played_black_belts_boosts_the_attack_vs_the_ex():
+    """After the Black Belt's PLAY log lands, the attack itself prices 270+40 ≥ 310 vs the ex —
+    the boosted KO is visible on Mega Brave; gated off vs a non-ex defender."""
     p = _pilot()
-    obs = _boost_menu([], poke(EX_WALL, hp=320), active_tools=(MAX_BELT,))
-    assert p.explain(obs).options[1].tactical >= 1000
+    played = [{"type": 10, "playerIndex": 0, "cardId": BLACK_BELTS}]
+    obs = _boost_menu([], poke(EX_WALL, hp=310), extra_logs=played)
+    assert p.explain(obs).options[1].tactical >= 1000                    # Mega Brave now KOs the ex
+    non_ex = _boost_menu([], poke(WALL, hp=310), extra_logs=played)
+    assert _pilot().explain(non_ex).options[1].tactical < 1000           # vs-ex gate holds
 
 
 # --- GENERAL: Wild Press recoil-doom charge ----------------------------------------------------
@@ -438,21 +527,8 @@ def test_gravity_mountain_endorsed_vs_a_stage2_board():
     assert "gravity-mountain-vs-stage2" not in _fired(_pilot().explain(obs2).options[0])
 
 
-@pytest.mark.req("REQ-ML-0014")
-def test_watchtower_endorsed_vs_colorless_abilities_but_never_before_meowth():
-    p = _pilot()
-    cur = state(active=poke(SOLROCK, energy=1, hp=110), hand=[WATCHTOWER],
-                opp_active=poke(C_ABILITY, hp=170))
-    obs = make_select([opt(PLAY, index=0)], context=MAIN, current=cur)
-    assert "watchtower-vs-colorless-abilities" in _fired(p.explain(obs).options[0])
-    held = state(active=poke(SOLROCK, energy=1, hp=110), hand=[WATCHTOWER, MEOWTH_EX],
-                 opp_active=poke(C_ABILITY, hp=170))
-    obs2 = make_select([opt(PLAY, index=0)], context=MAIN, current=held)
-    assert "watchtower-vs-colorless-abilities" not in _fired(_pilot().explain(obs2).options[0])
-    no_target = state(active=poke(SOLROCK, energy=1, hp=110), hand=[WATCHTOWER],
-                      opp_active=poke(WALL, hp=400))
-    obs3 = make_select([opt(PLAY, index=0)], context=MAIN, current=no_target)
-    assert "watchtower-vs-colorless-abilities" not in _fired(_pilot().explain(obs3).options[0])
+# (test_watchtower_* REMOVED 2026-07-03 — Team Rocket's Watchtower was cut from the deck and the
+# `watchtower-vs-colorless-abilities` rule retired. Gravity Mountain is now the sole Stadium.)
 
 
 # --- deck: the Lunar Cycle pair (fire it aggressively; never strand the last F) ----------------
