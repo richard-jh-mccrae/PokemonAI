@@ -292,20 +292,26 @@ tempo problem)
 
 **Lethal Line**:
 The specific ORDERED list of this-turn actions that realises a Lethal — the enabling develops
-(attach / evolve / retreat / gust / …) ending in the turn-closing attack. The **shortest** confirmed
-line is the one taken ("take exactly those decisions"). Once locked it is authoritative: the Pilot
-executes its steps and takes nothing outside it that turn.
+(attach / evolve / retreat / gust / …) ending in the turn-closing attack; exactly the **Turn Line**
+of the *win* goal. The **shortest** confirmed line is the one taken ("take exactly those
+decisions"). Once locked it is authoritative: an engine-verified lock **materialises** the
+confirmed step sequence and replays it for the rest of the turn (each pick identity-matched to the
+live select; outcome-invariant picks stay policy-driven), falling back to per-decision
+re-derivation on any divergence — never a blind index, never anything outside the line.
 _Avoid_: Plan (the turn-mode `SETUP`/`RACE`/…; a Lethal Line is a concrete action list), combo,
 sequence (too generic)
 
 **Lethal Solver**:
-The eager, deck-agnostic Pilot routine that runs at the START of every turn: it works **backward
-from prizes** to generate candidate Lethal Lines by closed-form KO math, confirms a candidate by
-forward-simulating it through the **Engine Search** (winner `result` == me), and LOCKS the first
-confirmed line for execution. Sound by construction — it never locks a false Lethal (misses cost a
-turn; a phantom win loses the game). Subsumes the scattered per-action lethal lookaheads.
+The **Turn Planner's sound top rung** — the *win* Turn Goal, not a standalone routine. One
+generator family proposes candidate Lethal Lines (a direct KO, or enabling develops — attach /
+retreat / evolve / energy-tutor / gust — ending in the winning attack), each proved closed-form at
+worst case (damage floors, coins forced worst) and confirmed by driving it through the **Engine
+Search** to the engine's own verdict: a refute drops the candidate; an unreachable verdict (an
+unforced coin, engine absent) keeps the sound closed-form lock. It preempts every heuristic Turn
+Goal — no positional value can outrank it. Sound by construction — it never locks a false Lethal
+(misses cost a turn; a phantom win loses the game).
 _Avoid_: Tactical Evaluator (scores *all* combat options; the Lethal Solver only seeks a guaranteed
-win), Posture (opponent-driven), bare "search"
+win), Posture (opponent-driven), bare "search", standalone solver (it is a rung of the Turn Planner)
 
 **Engine Search**:
 The simulator's own forward lookahead, exposed to the agent (`search_begin` / `search_step` /
@@ -320,14 +326,16 @@ _Avoid_: rollout (implies a random playout; this is exact deterministic stepping
 (the learned win-prob estimator — the Engine Search is exact rules, not learned), Scout/Read
 
 **Turn Planner**:
-The eager whole-turn optimizer that runs FIRST at the start of my turn — the generalization of the
-**Lethal Solver** from the *win* goal to a **Goal Ladder**. It generates a few **Candidate Turn Lines**
-by working backward from a closed, prioritized set of **Turn Goals**, simulates each through the
-**Engine Search** to its end-of-turn board, ranks them by a leaf evaluation (the Tier-0 board heuristic
-now; the Base Value Model later), and commits to the best — planning the whole turn *before* the first
-action, then executing it one step per decision. **Heuristic, not sound** (only its top rung, the
-Lethal Line, is guaranteed); plans THIS turn only (multi-turn tempo / prize-math is a separate problem).
-Realises the designed **Tier-1 Search** (ADR-0008 M3).
+The eager whole-turn optimizer and the Pilot's ONE planning entry point, running FIRST at the start
+of my turn. It **contains the Lethal Solver as its sound top rung**: the win goal is generated,
+verified, and locked before — and immune to — every heuristic goal below it. Below the win rung it
+generates a few **Candidate Turn Lines** by working backward from a closed, prioritized set of
+**Turn Goals**, simulates each through the **Engine Search** to its end-of-turn board, ranks them by
+a leaf evaluation (the Tier-0 board heuristic now; the Base Value Model later), and commits to the
+best — planning the whole turn *before* the first action, then executing it one step per decision.
+**Heuristic below the top rung** (only the win rung's Lethal Line is guaranteed); plans THIS turn
+only (multi-turn tempo / prize-math is a separate problem). Realises the designed **Tier-1 Search**
+(ADR-0008 M3).
 _Avoid_: Plan (the coarse turn-MODE `SETUP`/`RACE`/…; the Turn Planner is the concrete action
 optimizer, not the mode), Lethal Solver (the win-only special case it subsumes), search (bare)
 

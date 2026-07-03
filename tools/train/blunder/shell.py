@@ -335,7 +335,7 @@ function show(n){
     h+=`<div class="live">live @T: chose ${arr(L.chosen)} · margin ${L.margin??'?'}`+
       (L.lethal?`<div class="verd">&#127919; LETHAL ${esc(L.lethal.kind||'')} &rarr; ${arr(L.lethal.step)} — ${esc(L.lethal.why||'')}</div>`:'')+
       (L.planned?`<div class="verd">&#129517; PLANNED ${esc(L.planned.goal||'')} &rarr; ${arr(L.planned.step)} — ${esc(L.planned.why||'')}</div>`:'')+
-      ((L.lethal||L.planned)?`<div class="warn">solver/planner drove this pick — scores didn't; fix = lethal.py / planner.py, not weights</div>`:'')+
+      ((L.lethal||L.planned)?`<div class="warn">solver/planner drove this pick — scores didn't; fix = planner.py (win rung vs heuristic rungs), not weights</div>`:'')+
       `</div>`;
   }
   $('now').innerHTML=h;

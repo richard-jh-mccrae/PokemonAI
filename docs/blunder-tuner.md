@@ -137,7 +137,8 @@ blunder loop reads end to end:
   per cluster member as before/after proof.
 - **Layer routing** — a non-null `lethal` (ADR-0030) / `planned` (ADR-0031) in the live trace means
   that layer **short-circuited scoring** at the decision: no weight or `when()` can fix it; the fix
-  is code in `lethal.py` / `planner.py`. The pipeline surfaces this — `tune.py` tags `PROPOSE` /
+  is code in `planner.py` (the win rung vs the heuristic rungs — ADR-0037 joined the two into one
+  module). The pipeline surfaces this — `tune.py` tags `PROPOSE` /
   `UNSATISFIED` / `SKIP` lines `[LETHAL]` / `[PLANNED]` (with a summary banner), and the proposals
   snapshot carries `"lethal_locked"` / `"planner_committed"` per entry — so `/blunder-buster` routes
   these clusters to the layer, not to rule authoring. (Only the committed half is auto-taggable; a

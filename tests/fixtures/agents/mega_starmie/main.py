@@ -65,6 +65,12 @@ _pilot = Pilot(
                                                       # ranks the Planner's candidates (A/B-cleared 2026-07-02)
     planner_key_threat=_params.get("planner_key_threat", True),  # ADR-0031 kill-switch: the
                                                       # KO-the-key-threat ladder rung (A/B-cleared 2026-07-02)
+    lethal_family=_params.get("lethal_family", True),  # ADR-0037 kill-switch: the ONE win-generator
+                                                      # family + verify-every-lock (A/B-cleared 2026-07-03:
+                                                      # 2000 games 51%, 0 crashes)
+    lethal_veto=_params.get("lethal_veto", True),     # ADR-0037 stage-3 kill-switch: replay the verified
+                                                      # cascade (A/B-cleared 2026-07-03: 2000 games 52%,
+                                                      # 0 crashes)
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
 _TELEMETRY = os.environ.get("AGENT_NO_TELEMETRY") != "1"     # always-on Decision Telemetry (ADR-0019)
