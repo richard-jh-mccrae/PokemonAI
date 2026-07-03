@@ -104,6 +104,21 @@ Never hand-edit `tuned.json` (tuner-owned, ADR-0018) — authored deltas go in
    (local provenance — the Bundle whitelist never ships it).
 3. Present the full diff + the gate evidence. **The human commits** (ADR-0017).
 
+## Completion discipline — one continuous pass (no convenient stopping points)
+
+Phase 2's per-item verdicts are the ONLY approval stops in this skill. Once the verdicts are in,
+Phases 3–4 run to completion in **one continuous push**: every approved item executed, all gates
+run, ledger + docs written, full diff presented. Hard rules:
+
+- **Never end a turn with approved items still pending** ("executed 3 of 7 — say go"). If you can
+  name the next approved item, execute it now.
+- **A "clean checkpoint" mid-execution is never a reason to stop.** Resumability covers involuntary
+  interruption (context limits, crashes), not voluntary pauses.
+- **Legitimate stops, exhaustively:** a Phase-2 verdict still owed by the user, a gate failure that
+  needs a user decision (e.g. an unexplained score_diff divergence), or a hard blocker you cannot
+  resolve. Everything else: keep executing.
+- The pass is done only when Phase 4 completes — nothing less.
+
 ## Staleness sweep (bare `/deck-align`)
 
 For each `src/agents/*/` with a strategy.py: read its ledger, count commits touching
@@ -119,4 +134,7 @@ Recommend which deck to align first. No edits in sweep mode.
 - **Fold bar**: universal vocabulary, score-equal (or provably-vacuous broadening), card-name-free
   id, rationale credits the origin deck as an example.
 - Resumable: the drift report + per-item verdicts live in the session; the ledger only advances
-  when a pass completes Phase 4.
+  when a pass completes Phase 4. Resumability is for involuntary interruption only — never a
+  license to stop voluntarily (see Completion discipline).
+- **No convenient stopping points** — after verdicts, execute ALL approved items through Phase 4 in
+  one push; never end a turn listing remaining approved work.
