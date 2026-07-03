@@ -52,6 +52,12 @@ exception, and it is not a punt: it produces a re-measure, a fixture, a definiti
 ledger entry — in-session. Do **not** report blunder busting finished while any correction is still
 unresolved.
 
+**No voluntary pauses.** The run executes start → step-11 gate in **one continuous push**. Never end
+a turn reporting remaining clusters ("busted 3; remaining: X, Y — say go") and never stop to
+"confirm a clean, resumable checkpoint" — if you can name the next cluster, bust it now. The only
+sanctioned stops are the CRITICAL hard-stops (step 4 below) and a hard blocker you cannot resolve;
+everything else keeps rolling to the empty open set.
+
 > **Why no defer:** every prior round's "deferred" pile silently became permanent backlog. The
 > Verifier + real Pilot make in-session resolution cheap, and a missing signal is usually one
 > `Context` field. Resolve it now. (The capability-gap shape exists because the opposite failure is
@@ -84,11 +90,12 @@ source (H proposal, W-route `UNSATISFIED`, or `skipped`/tactical).
    **terminal outcome** (fixed / covered / refuted / evidenced capability-gap) **before starting the
    next critical one, and before *any* non-critical cluster.** No batching the cohort with normal
    clusters; no interleaving non-critical work "while you think about it."
-3. **Checkpoint each.** When a critical correction reaches its outcome, **stop and present it**
-   explicitly — the authored `when()` + Verifier `passed` + retest `fixed`, or the **named** covering
+3. **Checkpoint each.** When a critical correction reaches its outcome, **present it** explicitly —
+   the authored `when()` + Verifier `passed` + retest `fixed`, or the **named** covering
    Hypothesis (confirmed against the real Pilot), or the refutation test, or the four capability-gap
-   artifacts — and confirm it's resolved before moving on. "Pay special attention" = each critical
-   item is its own reviewed checkpoint, not a line in a batch summary.
+   artifacts — then **continue immediately**; do not wait for acknowledgement (only the step-4
+   shapes block). "Pay special attention" = each critical item is its own explicit checkpoint
+   narration, not a line in a batch summary.
 4. **A CRITICAL that would be `refuted` — or `capability-gap` — is a HARD STOP.** If the only sound
    outcome is `refuted` (it forgoes a KO / is dominated — [[forgo-ko-corrections-are-refuted]]) or an
    evidenced capability-gap, do **not** silently file it. Present the proof (refutation test / four
@@ -476,6 +483,9 @@ fan-out-then-converge schedule.
   (fixed / covered / refuted / evidenced capability-gap) **this session**; the run is finished only
   when the open set is empty (step 11). No bare `deferred`, no "future run", no leaving a correction
   unanalyzed.
+- **No voluntary pauses / no "say go".** Never end a turn with open corrections listed as remaining
+  work; a clean checkpoint is not a stopping reason. Only the CRITICAL hard-stops and unresolvable
+  blockers stop the run.
 - **Don't invent `ctx` features in a `when()`** — read only what `Context` / `Board` actually expose.
   If a rule genuinely needs a signal that isn't there, **add it to the proper layer first** (step 4b,
   with a test) — never fabricate a field the Pilot doesn't compute.

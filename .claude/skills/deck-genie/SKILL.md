@@ -234,16 +234,40 @@ source (never from memory), then pass all three gates before presenting a diff:
 Present the diff (strategy.py + the trigger-check test file). The human reviews and commits.
 `status` stays `assumed`/`testing`; the ladder A/B confirms or refutes later.
 
-**End state (point 7): a complete, ladder-ready agent.** When the three gates pass, `src/agents/<deck>/`
-is a packaged agent — `strategy.py` (its own grilled, research-backed doctrine) + `main.py` Bundle —
-that loads, tests green, and survives a full self-match. That is the literal "ready to submit to the
-ladder" bar; the deliverable isn't done until it clears it.
+**End state (point 7): a complete, ladder-ready agent — the ENTIRE locked scope, not a subset.**
+When the three gates pass, `src/agents/<deck>/` is a packaged agent — `strategy.py` (its own
+grilled, research-backed doctrine) + `main.py` Bundle — that loads, tests green, and survives a
+full self-match. That is the literal "ready to submit to the ladder" bar; the deliverable isn't
+done until it clears it **with every item of the locked doctrine implemented**.
+
+## Completion discipline — build to feature-complete (no convenient stopping points)
+
+The Phase-5 sign-off is the ONLY approval gate in this skill. Once the user grants it (or gives a
+standing "full build" / "go" authorization), the build runs to **feature-complete in one
+continuous push**: every item of the locked doctrine / agreed plan reaches a terminal state —
+built, gated, green. Hard rules:
+
+- **Never end a turn reporting remaining work.** "Shipped A1–A2; remaining: A3, B, C — say go and
+  I'll keep rolling" is the exact banned failure mode. If you can name the next item, build it now
+  instead of asking.
+- **A "clean, resumable point" is never a reason to stop.** Resumability (below) covers
+  involuntary interruption — context limits, crashes, the user stopping you — not voluntary
+  pauses. Do not stop to "confirm this is a good checkpoint".
+- **Standing authorization persists across items.** One sign-off covers the whole mapped scope;
+  never re-confirm per item, per milestone, or per session.
+- **Legitimate stops, exhaustively:** (a) a genuinely NEW scope decision the user must make (not
+  re-confirmation of the already-agreed plan), or (b) a hard blocker you cannot resolve yourself.
+  Everything else: keep building.
+- **Done = the Phase-6 end state with nothing left on the plan.** If a turn must end early anyway
+  (hard blocker), state the blocker — never a menu of remaining work plus "say go".
 
 ## Resumability
 
 An exhaustive grill spans sessions. STRATEGY.md's **Progress checklist** is the source of truth for
 what's done vs pending. On re-invoke: re-run the dump (cheap, deterministic), read the doc, resume
-from the checklist. Never silently restart a deck that already has a doc in progress.
+from the checklist. Never silently restart a deck that already has a doc in progress. Resumability
+exists for involuntary interruption only — it is never a license to stop voluntarily (see
+Completion discipline).
 
 ## Guardrails
 
@@ -256,3 +280,5 @@ from the checklist. Never silently restart a deck that already has a doc in prog
 - **Don't invent `ctx` features** — a trigger may only read what `Context`/`Board` actually expose.
 - **Never override a Knock Out with a positional rule** — a KO is worth more than any heuristic
   (see [[forgo-ko-corrections-are-refuted]]). If a drafted rule would suppress a lethal, it's wrong.
+- **No convenient stopping points.** After sign-off, build until feature-complete; never end a turn
+  listing remaining work (see Completion discipline).

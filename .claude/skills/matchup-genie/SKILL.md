@@ -158,11 +158,28 @@ card actually appears in the deck, that `target` roles are legal, and that every
 key is registered (unknown → flagged, not silently accepted). Present the diff (`briefs/<slug>.json`
 + any `opponent_properties.json` additions). The human reviews and commits.
 
+## Completion discipline — build to feature-complete (no convenient stopping points)
+
+The Phase-5 sign-off is the ONLY approval gate in this skill. Once the user grants it (or gives a
+standing "full build" / "go" authorization), Phase B runs to **complete in one continuous push**: the
+Brief emitted, the validator passing, any `opponent_properties.json` additions made, the diff
+presented. Hard rules:
+
+- **Never end a turn reporting remaining work** ("Brief drafted; remaining: validation — say go").
+  If you can name the next item, do it now instead of asking.
+- **A "clean, resumable point" is never a reason to stop.** Resumability (below) covers involuntary
+  interruption — context limits, crashes, the user stopping you — not voluntary pauses.
+- **Standing authorization persists across items**; never re-confirm per item or per milestone.
+- **Legitimate stops, exhaustively:** (a) a genuinely NEW scope decision the user must make (not
+  re-confirmation of the already-agreed plan), or (b) a hard blocker you cannot resolve yourself.
+  Everything else: keep building.
+
 ## Resumability
 
 The grill spans sessions. `MATCHUP.md`'s **Progress checklist** is the source of truth. On re-invoke:
 re-run the dump (cheap), read the doc, resume from the checklist. Never silently restart a matchup that
-already has a doc in progress.
+already has a doc in progress. Resumability exists for involuntary interruption only — it is never a
+license to stop voluntarily (see Completion discipline).
 
 ## Guardrails
 
@@ -172,3 +189,5 @@ already has a doc in progress.
 - **Objective, deck-neutral.** No "our deck" reasoning in the Brief — that's each agent's relativization.
 - **`covers` comes from `index.json`, not memory** — it's what routes every variant to this one Brief.
 - **Never claim a target the deck doesn't run** — the validator hard-fails it; ground every card in the dump.
+- **No convenient stopping points.** After sign-off, run Phase B to complete; never end a turn
+  listing remaining work (see Completion discipline).
