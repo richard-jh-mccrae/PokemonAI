@@ -163,6 +163,40 @@ def test_critical_0cbc_stabilize_then_ko_is_fixed_on_its_real_replay_state():
     assert decision.chosen == fx["correct"]        # agent now heals-and-KOs (plays Wally's) as human marked
 
 
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_critical_a212_evolution_tutor_line_is_fixed_on_its_real_replay_state():
+    """CRITICAL a212 ('we know the deck contains Mega Starmie Exs … played Salvatore, evolved Staryu,
+    retreated Cinderace, attached energy, attacked, won the game — such sequences MUST be discoverable
+    by the turn planner'): on the ACTUAL captured state the agent played Crushing Hammer ([1]) instead
+    of Salvatore ([6]) — the enabling first step of evolve-from-deck → free retreat → attach → Jetting
+    Blow, which KOs the opponent's LAST body (empty bench = the win). No hook scores a Supporter first
+    step, so the greedy scorer missed it. Replayed through the shipped Pilot, the evolution-tutor line
+    commits Salvatore — the human's ``correct`` move. (Tracker-cold here, so the rank-grade rung
+    carries it; live, the anchored deck tracker upgrades the same line to the win rung's sound lock.)"""
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_a212.json").read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    decision = pilot.explain(fx["obs"])
+    assert decision.planned is not None                                    # Planner acted
+    assert "evolution tutor" in decision.planned.rationale                 # via the Salvatore line
+    assert decision.chosen == fx["correct"]        # agent now plays Salvatore as human marked
+
+
+@pytest.mark.req("REQ-PLANNER-0036")
+def test_critical_6858_heal_before_attach_is_fixed_on_its_real_replay_state():
+    """CRITICAL 6858 ('heal first, then attach Ignition, then attack for KO'): on the ACTUAL captured
+    state my Mega Starmie (210/330, one {W}) faced the mirror's 190-HP Active. The agent attached
+    Ignition FIRST ([1]) — Nebula KOs, but the Mega stays at 210 and eats the mirror's own 210 next
+    turn. Wally's Compassion FIRST ([3]) heals to 330 and bounces the {W}; the Ignition attach still
+    lands after ({C}{C}{C} on the Evolution -> Nebula 210 ≥ 190), so the agent heals AND takes the
+    3-prize KO. The stabilize-then-KO rung now sees the attach-CARRIED KO (no ATTACK on the menu
+    reaches one) and commits the heal ahead of the attach."""
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_6858.json").read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    decision = pilot.explain(fx["obs"])
+    assert decision.planned is not None and decision.planned.goal == "stabilize_then_ko"
+    assert decision.chosen == fx["correct"]        # agent now plays Wally's first, as human marked
+
+
 @pytest.mark.req("REQ-PLANNER-0023")
 def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
     """CRITICAL 4298 ('our agent needs to start planning its turn ahead of time … it can KO opponent's

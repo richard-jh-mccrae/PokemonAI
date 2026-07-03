@@ -113,6 +113,12 @@ $\Delta_i = +1$ means rule $i$ fired only on the **correct** option (raising its
 $-1$ means it fired only on the **chosen** option (lowering it helps). We call the left-hand side the
 **margin**. "Satisfied" means margin $> 0$.
 
+**Multi-pick selects** (a Discard-2, a multi-grab) are diffed on the **set difference**: $k$ = the
+first option the human picked that the agent didn't, $c$ = the first the agent picked that the human
+didn't. (Diffing position 0 of each list made any correction whose lists share that element — e.g.
+chosen $[0,1]$ vs correct $[0,2]$ — an empty-delta constraint, unsatisfiable by construction: a
+phantom UNSATISFIED no weight could ever fix, ep83454549 f36.)
+
 ### 5.2 The loss we minimise
 
 We want weights that satisfy as many of these inequalities as possible while staying close to the
