@@ -185,7 +185,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  .now{background:#f2f6fc;padding:10px;border-radius:6px;margin-bottom:6px}
  .now .big{font-size:18px;font-weight:700}
  label{display:block;margin:10px 0 3px;font-weight:600} select,textarea,input{width:100%;font:13px system-ui}
- textarea{height:78px} #correct{height:120px}
+ textarea{height:200px;resize:vertical} #correct{height:120px}
  button{padding:6px 10px;cursor:pointer} #save{margin-top:12px;padding:8px 14px;font-weight:600}
  #msg{margin-top:8px} .ko{color:#b00} .ok{color:#070} #log{margin-top:6px;color:#555;font-size:12px}
  :disabled{opacity:.5}
