@@ -6,8 +6,8 @@ direction). Samples are real card text from `data/EN_Card_Data.csv`.
 import pytest
 
 from common.scouting.provider import (
-    parse_attack_bench_snipe, parse_attack_hand_size,
-    parse_attack_ignores_active_effects, parse_attack_recoil)
+    parse_attack_bench_snipe, parse_attack_bench_spread, parse_attack_hand_size,
+    parse_attack_ignores_active_effects, parse_attack_recoil, parse_attack_self_return)
 
 
 @pytest.mark.req("REQ-GUST-0006")
@@ -26,6 +26,20 @@ from common.scouting.provider import (
 ])
 def test_parse_attack_recoil(text, expected):
     assert parse_attack_recoil(text) == expected
+
+
+@pytest.mark.req("REQ-GUST-0006")
+@pytest.mark.parametrize("text,expected", [
+    ("Put this Pokémon and all attached cards into your hand.", True),   # Meowth ex Tuck Tail
+    ("Put this Pokémon into your hand.", True),                          # bare self-scoop variant
+    # not a SELF return -> False (opponent-facing / energy-only / plain)
+    ("Put 1 of your opponent's Pokémon and all attached cards into their hand.", False),
+    ("Return an Energy attached to this Pokémon to your hand.", False),
+    ("This attack does 60 damage.", False),
+    ("", False),
+])
+def test_parse_attack_self_return(text, expected):
+    assert parse_attack_self_return(text) is expected
 
 
 @pytest.mark.req("REQ-GUST-0006")
@@ -54,6 +68,24 @@ def test_parse_attack_recoil(text, expected):
 ])
 def test_parse_attack_bench_snipe(text, expected):
     assert parse_attack_bench_snipe(text) == expected
+
+
+@pytest.mark.req("REQ-GEN-0050")
+@pytest.mark.parametrize("text,expected", [
+    # Dragapult ex Phantom Dive — distributable bench spread ("in any way you like") = N*10 total.
+    ("Put 6 damage counters on your opponent's Benched Pokémon in any way you like.", 60),
+    ("Put 4 damage counters on your opponent's Pokémon in any way you like.", 40),  # non-"Benched" variant
+    # single-target snipe / own bench / "each" / restricted / no-spread -> 0 (not distributable)
+    ("This attack also does 50 damage to 1 of your opponent's Benched Pokémon. "
+     "(Don't apply Weakness and Resistance for Benched Pokémon.)", 0),
+    ("Put 2 damage counters on 1 of your opponent's Benched Pokémon.", 0),          # single target, no distribution
+    ("Put 3 damage counters on your Benched Pokémon in any way you like.", 0),       # OWN bench
+    ("Put 2 damage counters on each of your opponent's Benched Pokémon.", 0),        # forced spread ("each"), not chosen
+    ("This attack does 100 damage to 1 of your opponent's Pokémon.", 0),             # Cruel Arrow — not counters
+    ("", 0),
+])
+def test_parse_attack_bench_spread(text, expected):
+    assert parse_attack_bench_spread(text) == expected
 
 
 @pytest.mark.req("REQ-GUST-0006")

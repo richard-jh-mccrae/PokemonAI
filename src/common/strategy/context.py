@@ -26,6 +26,16 @@ _TO_BENCH = 5     # fetch a Pokémon straight onto Bench (Buddy-Buddy Poffin)
 _TO_HAND = 7      # search: pick which card to add to hand
 _DISCARD = 8      # pick which card(s) to discard (e.g. Ultra Ball's cost)
 _DAMAGE = 15      # pick which Pokémon an attack damages (bench snipe)
+_DAMAGE_COUNTER_ANY = 14  # place a damage counter "in any way you like" (Phantom Dive spread) — one
+                          # counter (10) per select, `select.remainDamageCounter` = counters left,
+                          # `select.effect.id` = source card
+_DAMAGE_COUNTER = 13      # ADD a damage counter to a Pokémon — a counter-mover's TARGET (Munkidori
+                          # Adrena-Brain "to 1 of your opponent's": opponent-owned options)
+_REMOVE_DAMAGE_COUNTER = 16       # REMOVE a damage counter — the counter-mover's SOURCE (Munkidori
+                                  # "from 1 of your Pokémon": self-owned options; removing = a heal)
+_REMOVE_DAMAGE_COUNTER_COUNT = 40 # how many counters to move (NUMBER options {1,2,3})
+_ABILITY = 10     # OptionType.ABILITY — use an in-play Ability at the MAIN menu (Adrena-Brain)
+_NUMBER = 0       # OptionType.NUMBER — a numeric choice option ({number: N})
 _ATTACH_FROM = 21 # pick the Pokémon to attach Energy to
 _IS_FIRST = 41    # IS_FIRST — coin-toss "Would you like to go first?" (YesNo)
 _NO = 2           # OptionType.NO — decline (the _YES sibling; coin-toss "go second" option)
@@ -63,7 +73,8 @@ _EVOLVING_THREAT_DMG = 100 # evolution line "becomes an attacker" at >= this dmg
 __all__ = [
     "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_NO", "_ATTACK", "_END",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
-    "_DISCARD", "_DAMAGE", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
+    "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
+    "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_ZONE",
     "KO_SCORE", "_SUPPORTER", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_EVOLVING_THREAT_DMG",

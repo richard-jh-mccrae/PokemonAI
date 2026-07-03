@@ -53,7 +53,8 @@ ORACLE = [
     ("Kyogre", "recycle"),
     ("Battle Cage", "bench_guard"),             # new vocab: protects bench from attack/ability effects
     ("Cinderace", "opener"),                    # new vocab: Explosiveness — non-Basic that may open (curated override)
-    ("Meowth ex", "stall"),                     # play-role seed (curated, pending replay-usage)
+    ("Meowth ex", "supporter_tutor"),           # Last-Ditch Catch: bench-drop → fetch a Supporter
+    #                                             (was `stall`; re-modeled 2026-07-03, STRATEGY.md §3)
     ("Mega Kangaskhan ex", "stall"),
     ("Dudunsparce", "stall"),
 ]

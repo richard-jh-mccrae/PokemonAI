@@ -6,7 +6,7 @@ import pytest
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
-from pilot_helpers import attack_opt, make_select, opt, poke, state
+from pilot_helpers import ACTIVE, BENCH, attack_opt, card_opt, make_select, opt, poke, state
 
 MY_ATK = 920        # my Active attacker (two equal-cost KO attacks, one with a bench rider)
 MY_EX = 921         # my Active: a 2-prize ex (its self-KO hands opponent 2 prizes)
@@ -16,7 +16,9 @@ OPP = 800           # opp Active, KO-able for 1 prize
 RESISTER = 801      # opp Active: HP 100, RESISTS Fighting (survives a 120 hit: 120-30=90)
 OPP_FIGHTER = 802   # opp Active: Fighting attacker hitting 120 (would KO a 100-HP non-resister)
 OPP_BENCH = 700     # opp benched Pokémon — a snipe target
-A_PLAIN, A_SNIPE, A_RECOIL, A_FLAT = 101, 102, 110, 103   # attack ids
+OPP_BENCH2 = 701    # a second opp benched Pokémon (multi-KO spread test)
+EX_BENCHIE = 702    # a benched 2-prize ex (spread-placement prize-preference test)
+A_PLAIN, A_SNIPE, A_RECOIL, A_FLAT, A_SPREAD = 101, 102, 110, 103, 104   # attack ids
 WATER, FIGHTING = 3, 6
 
 _STATS = DictCardStatProvider({
@@ -28,11 +30,20 @@ _STATS = DictCardStatProvider({
     RESISTER: CardStat(RESISTER, hp=100, resistance=FIGHTING),
     OPP_FIGHTER: CardStat(OPP_FIGHTER, energyType=FIGHTING, maxDamage=120),
     OPP_BENCH: CardStat(OPP_BENCH, hp=60),
+    OPP_BENCH2: CardStat(OPP_BENCH2, hp=60),
+    EX_BENCHIE: CardStat(EX_BENCHIE, hp=200, ex=True),   # 2-prize benched ex
 })
 
 
 def _pilot(**kw):
     return Pilot(Strategy(), deck=[1] * 60, stats=_STATS, **kw)
+
+
+def _gpilot(**kw):
+    """Pilot WITH the general strategy loaded — so baseline Hypotheses (e.g. `place-counter-to-convert`)
+    actually fire (the tactical-only `_pilot` above doesn't load them)."""
+    from common.strategy.general_strategy import GENERAL_STRATEGY
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_STATS, **kw)
 
 
 # --- #14 bench-snipe bonus: prefer the equal-cost KO that also snipes a benched target -------------
@@ -105,6 +116,146 @@ def test_snipe_that_only_chips_a_survivor_is_not_a_ko():
                                     opp_active=poke(OPP, hp=320),         # not a KO of the Active
                                     opp_bench=[poke(OPP_BENCH, hp=60)]))  # 60 > 50 rider -> chip only
     assert p.explain(obs).options[0].tactical < KO_SCORE
+
+
+# --- Phantom Dive distributable bench SPREAD: the 6 counters can DIRECTLY KO softened bench mons ---
+
+@pytest.mark.req("REQ-GEN-0050")
+def test_spread_kos_a_softened_bench_pokemon_banks_a_prize():
+    """A distributable bench spread (Phantom Dive benchSpread=60) that KOs a softened benched Pokémon
+    (remaining HP <= spread) banks a PRIZE this turn — scored KO_SCORE-class — even when the Active
+    survives (200-to-Active here is only a chip vs a 320-HP wall)."""
+    p = _pilot(attacks={A_SPREAD: 200}, attack_costs={A_SPREAD: 2}, bench_spread={A_SPREAD: 60})
+    obs = make_select([attack_opt(A_SPREAD)],
+                      current=state(active=poke(MY_ATK, energy=2),
+                                    opp_active=poke(OPP, hp=320),         # 200 doesn't KO the Active
+                                    opp_bench=[poke(OPP_BENCH, hp=60)]))  # spread 60 >= 60 -> a KO = a prize
+    assert p.explain(obs).options[0].tactical >= KO_SCORE
+
+
+@pytest.mark.req("REQ-GEN-0050")
+def test_spread_can_ko_multiple_bench_mons_within_its_total():
+    """The spread is DISTRIBUTABLE: 60 splits to KO two 30-remaining bench mons (30+30 <= 60) → two
+    prizes, worth more than KOing a single one."""
+    p = _pilot(attacks={A_SPREAD: 200}, attack_costs={A_SPREAD: 2}, bench_spread={A_SPREAD: 60})
+    two = make_select([attack_opt(A_SPREAD)],
+                      current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(OPP_BENCH, hp=30), poke(OPP_BENCH2, hp=30)]))
+    one = make_select([attack_opt(A_SPREAD)],
+                      current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(OPP_BENCH, hp=30)]))
+    assert p.explain(two).options[0].tactical > p.explain(one).options[0].tactical >= KO_SCORE
+
+
+@pytest.mark.req("REQ-GEN-0050")
+def test_spread_that_only_chips_is_a_subprize_bonus_not_a_ko():
+    """A spread too small to KO any bench mon (all HP > 60) is a sub-prize chip tiebreak — with no KO of
+    the Active either, the attack stays below KO_SCORE (never invents a prize)."""
+    p = _pilot(attacks={A_SPREAD: 200}, attack_costs={A_SPREAD: 2}, bench_spread={A_SPREAD: 60})
+    obs = make_select([attack_opt(A_SPREAD)],
+                      current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(OPP_BENCH, hp=200)]))  # 200 > 60 -> chip, no bench KO
+    assert p.explain(obs).options[0].tactical < KO_SCORE
+
+
+@pytest.mark.req("REQ-GEN-0050")
+def test_spread_silent_with_no_bench():
+    """No benched target → the spread hits nothing, adds no value."""
+    p = _pilot(attacks={A_PLAIN: 200, A_SPREAD: 200}, attack_costs={A_PLAIN: 2, A_SPREAD: 2},
+               bench_spread={A_SPREAD: 60})
+    obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SPREAD)],
+                      current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
+                                    opp_bench=[]))
+    opts = p.explain(obs).options
+    assert opts[1].tactical == opts[0].tactical   # nothing to spread onto -> no bonus
+
+
+# --- Phantom Dive PLACEMENT: distribute counters at DAMAGE_COUNTER_ANY (ctx 14), knapsack-optimal ---
+DAMAGE_COUNTER_ANY = 14
+
+@pytest.mark.req("REQ-GEN-0051")
+def test_counter_placement_finishes_a_ko_able_target():
+    """At a spread-placement select (one counter per select, 6-counter budget), put the counter on an
+    opponent mon a counter can KO within the budget — not on an un-KO-able wall."""
+    p = _gpilot()
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=DAMAGE_COUNTER_ANY, remain_counters=6,
+                      current=state(opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(OPP_BENCH, hp=10), poke(OPP_BENCH2, hp=200)]))
+    assert p.decide(obs) == [0]   # 10-HP mon is KO-able within the 60 budget; the 200 wall isn't
+
+
+@pytest.mark.req("REQ-GEN-0051")
+def test_counter_placement_prefers_the_higher_prize_ko_set():
+    """Budget 50 (5 counters) can KO EITHER the 2-prize ex@50 OR the 1-prize@10 (not both: 60>50). The
+    knapsack picks the higher-prize KO set → place on the ex to finish it, not the cheap mon."""
+    p = _gpilot()
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=DAMAGE_COUNTER_ANY, remain_counters=5,
+                      current=state(opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(EX_BENCHIE, hp=50), poke(OPP_BENCH, hp=10)]))
+    assert p.decide(obs) == [0]   # the 2-prize ex (KO set worth 2) over the 1-prize@10 (worth 1)
+
+
+@pytest.mark.req("REQ-GEN-0051")
+def test_counter_placement_preloads_lowest_hp_when_no_ko_possible():
+    """No target is KO-able within the budget (both HP > the 20 budget) → pre-load the LOWEST-HP mon
+    (concentrate toward a future KO)."""
+    p = _gpilot()
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=DAMAGE_COUNTER_ANY, remain_counters=2,
+                      current=state(opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(OPP_BENCH, hp=90), poke(OPP_BENCH2, hp=40)]))
+    assert p.decide(obs) == [1]   # 40-HP < 90-HP -> concentrate on the weaker
+
+
+@pytest.mark.req("REQ-GEN-0051")
+def test_counter_placement_silent_off_context():
+    """Off a DAMAGE_COUNTER_ANY select, the placement rule is silent (a plain END option is unaffected)."""
+    p = _pilot()
+    obs = make_select([opt(14)], context=0,
+                      current=state(active=poke(MY_ATK, energy=1), opp_active=poke(OPP, hp=100)))
+    board = p._board(obs, obs["select"])
+    assert board.best_counter_slot is None
+
+
+# --- Munkidori Adrena-Brain counter-move: TARGET (ctx13 add-to-opp) / SOURCE (ctx16 remove-ours) / AMOUNT --
+DAMAGE_COUNTER = 13          # ADD (target = opponent)
+REMOVE_DAMAGE_COUNTER = 16   # REMOVE (source = ours; removing = a heal)
+REMOVE_COUNT = 40            # how many
+NUMBER = 0                   # OptionType.NUMBER
+
+@pytest.mark.req("REQ-GEN-0052")
+def test_move_counter_target_finishes_the_best_opp():
+    """At the counter-move TARGET select (ctx 13, add to opponent), place on the opp mon a move-of-<=3
+    (30) can KO — reuses the spread placement (budget falls back to 30 for a counter-mover)."""
+    p = _gpilot()
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=DAMAGE_COUNTER,
+                      current=state(opp_active=poke(OPP, hp=320),
+                                    opp_bench=[poke(OPP_BENCH2, hp=200), poke(OPP_BENCH, hp=30)]))
+    assert p.decide(obs) == [1]   # index 1 (30-HP) is finishable within a 3-counter move; the 200 isn't
+
+
+@pytest.mark.req("REQ-GEN-0052")
+def test_move_counter_source_heals_the_most_damaged_body():
+    """At the SOURCE select (ctx 16, remove from ours), pull counters off OUR most-damaged body (the
+    biggest heal / the win-con line body carrying residual chip)."""
+    p = _gpilot()
+    obs = make_select([card_opt(ACTIVE, 0, player=0), card_opt(BENCH, 0, player=0)],
+                      context=REMOVE_DAMAGE_COUNTER,
+                      current=state(active=poke(OPP_BENCH, hp=300, max_hp=320),      # 20 damage
+                                    bench=[poke(OPP_BENCH2, hp=40, max_hp=90)]))     # 50 damage (more)
+    assert p.decide(obs) == [1]   # heal the benched body (50 dmg) over the active (20 dmg)
+
+
+@pytest.mark.req("REQ-GEN-0052")
+def test_move_counter_amount_is_max():
+    """At the AMOUNT select (ctx 40), move the MOST counters offered (max offense + max heal)."""
+    p = _gpilot()
+    obs = make_select([opt(NUMBER, number=1), opt(NUMBER, number=2), opt(NUMBER, number=3)],
+                      context=REMOVE_COUNT, current=state(active=poke(MY_ATK, energy=1)))
+    assert p.decide(obs) == [2]   # the "3" option
 
 
 # --- #2 simultaneous-draw guard: a game-winning KO whose recoil double-KOs is a DRAW, not a win ----

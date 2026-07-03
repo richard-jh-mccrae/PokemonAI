@@ -30,7 +30,9 @@ CLUSTERS = {
         "conserve-burst-when-no-ko", "advance-the-accel-pieces",
         "conserve-discard-energy-prefer-basic"}),
     "snipe": (SNIPE_HYPOTHESES, {
-        "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat"}),
+        "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
+        # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
+        "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
                                  "develop-the-accel-recipient"}),
     "promote": (PROMOTE_HYPOTHESES, {

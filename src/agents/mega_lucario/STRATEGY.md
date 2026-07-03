@@ -4,7 +4,7 @@
 > `strategy.py` is generated from this **after sign-off** (ADR-0017). Build on the
 > [General Strategy](../../../docs/general-strategy.md): reuse, override, or extend — don't restate.
 
-**Status:** Phase A **signed off** · Phase B build **in progress** (gated, tranched) · **Last grilled:** 2026-06-29 · **Re-baselined:** 2026-07-02 (§5b/§9) · **Author:** deck-genie + Richard
+**Status:** Phase A **signed off** · Phase B build **COMPLETE** (gated, tranched) · **Last grilled:** 2026-06-29 · **Re-baselined:** 2026-07-02 (§5b/§9) · **Trainer-swap re-run:** 2026-07-03 (§0/§2/§3/§5/§9 — deck.txt trainer package edited; Pokémon core unchanged) · **Author:** deck-genie + Richard
 
 ## Progress checklist (resumability — keep current)
 
@@ -21,8 +21,16 @@
 - [x] 2026-07-03 **T8': the five deferred items BUILT** (damage-boost OHKO model, attack-condition
   oracle + cosmic-rule retire, recoil-doom survival charge, stadium tech reads, Lunar-Cycle pair) —
   see §9 T8'. Trigger tests 33/33; residual deferrals shrunk to the §9 "Still deferred" line.
+- [x] 2026-07-03 **Trainer-swap re-run (deck-genie, this session).** deck.txt trainer package edited
+  (Pokémon core 100% unchanged). **Removed:** Maximum Belt (ACE SPEC tool), Team Rocket's Watchtower ×2;
+  Judge 3→2, Switch 2→1, Fighting Energy 12→11. **Added:** Unfair Stamp (ACE SPEC Item), Black Belt's
+  Training, Team Rocket's Petrel, Wally's Compassion; Air Balloon 1→2, Gravity Mountain 1→2. **Key
+  finding:** the general layer (grown since Phase A) already covers all four new cards — `baseline_heal`
+  is built around Wally's Compassion (`clutch_heal`), the damage-boost model already parses Black Belt's
+  Training, the ace-spec/discard guards handle Unfair Stamp — so **no new deck Hypotheses**; the change
+  is doc blocks + disposition flips + deleting the two removed cards' deck rules (Watchtower). See §9 T9'.
 
-Cards still to grill: none (20/20 locked). Open questions: see §8 (infra/deferred only).
+Cards still to grill: none. Open questions: see §8 (infra/deferred only).
 
 ## 0 · Card facts (engine dump — substrate, do not hand-edit)
 
@@ -49,28 +57,30 @@ deck.txt → deck.csv via `tools/deck_convert.py to-csv`.
   - *Ability — Last-Ditch Catch:* once/turn, when you play this from hand onto your **Bench**, search your deck for a **Supporter** to hand; shuffle. (Max 1 "Last-Ditch" Ability/turn.)
   - *CCC — Tuck Tail (60):* put this Pokémon and all attached cards into your hand.
 
-### Supporter (9)
-- **4× Lillie's Determination** — `draw`: shuffle hand into deck, draw **6** (**8** if exactly 6 prizes remaining).
-- **3× Judge** — `draw`,`hand_disruption`: each player shuffles hand into deck and draws **4**.
+### Supporter (11)  — *trainer-swap 2026-07-03: 9→11 (−1 Judge, +Petrel +Black Belt's +Wally's)*
+- **4× Lillie's Determination** — `draw`,`shuffle_hand`: shuffle hand into deck, draw **6** (**8** if exactly 6 prizes remaining).
+- **2× Judge** — `draw`,`hand_disruption`,`shuffle_hand`: each player shuffles hand into deck and draws **4**.
 - **2× Boss's Orders** — `gust`: switch in 1 of opponent's Benched Pokémon to the Active Spot.
+- **1× Team Rocket's Petrel** — `search`: search deck for **any Trainer** card to hand; shuffle. *(NEW — toolbox tutor.)*
+- **1× Black Belt's Training** — **(boost via CardStat)**: this turn, your attacks do **+40** to opp Active **{ex}** (before W/R). *(NEW — the ex-breakpoint boost; a Supporter, so it costs the slot.)*
+- **1× Wally's Compassion** — `heal`,`clutch_heal`: heal **all** damage from **1 of your Mega ex**, then put **all its Energy into your hand**. *(NEW — reactive Mega reset.)*
 
 ### Item (18)
-- **4× Ultra Ball** — `search`: discard **2** cards, then search deck for **any Pokémon** to hand.
-- **4× Fighting Gong** — `search`: search a **Basic {F} Energy OR a Basic {F} Pokémon** to hand.
+- **4× Ultra Ball** — `cost_discard`,`search`,`tutor_pokemon`: discard **2** cards, then search deck for **any Pokémon** to hand.
+- **4× Fighting Gong** — `search`,`tutor_energy`: search a **Basic {F} Energy OR a Basic {F} Pokémon** to hand.
 - **4× Poké Pad** — `search`: search a Pokémon **without a Rule Box** (no ex) to hand.
-- **4× Premium Power Pro** — **(untagged)**: this turn, your {F} Pokémon attacks do **+30** to opp Active (before W/R).
-- **2× Switch** — `switch`: switch your Active with a Benched Pokémon.
+- **4× Premium Power Pro** — **(boost via CardStat)**: this turn, your {F} Pokémon attacks do **+30** to opp Active (before W/R).
+- **1× Unfair Stamp** — **[ACE SPEC]** `draw`,`hand_disruption`: **only if a Pokémon of yours was KO'd during the opponent's last turn** — each player shuffles hand into deck; **you draw 5, opponent draws 2**. *(NEW ACE SPEC — comeback disruption.)*
+- **1× Switch** — `switch`: switch your Active with a Benched Pokémon.
 
 ### Tool (2)
-- **1× Maximum Belt** — **[ACE SPEC]** — holder's attacks do **+50** to opp Active **{ex}** (before W/R).
-- **1× Air Balloon** — retreat cost of holder is **{C}{C} less**.
+- **2× Air Balloon** — retreat cost of holder is **{C}{C} less** (→ free retreat for our retreat-2 bodies). *(2×: Belt gone → the Mega's Tool slot is free.)*
 
-### Stadium (3)
-- **2× Team Rocket's Watchtower** — **{C}** Pokémon in play (both players) have **no Abilities**.
-- **1× Gravity Mountain** — each **Stage 2** Pokémon in play (both players) gets **−30 HP**.
+### Stadium (2)
+- **2× Gravity Mountain** — each **Stage 2** Pokémon in play (both players) gets **−30 HP**. *(Now the sole Stadium; Watchtower cut.)*
 
-### Energy (12)
-- **12× Basic {F} (Fighting) Energy.**
+### Energy (11)
+- **11× Basic {F} (Fighting) Energy.**  *(12→11 in the swap.)*
 
 ## 1 · Overview (CONFIRMED — 2026-06-29)
 
@@ -110,13 +120,20 @@ deck.txt → deck.csv via `tools/deck_convert.py to-csv`.
 - **Engine (draw/search):** draw = Lillie's Determination, Judge, **Lunatone ability**; search =
   Ultra Ball (any mon), Fighting Gong (F energy/basic), Poké Pad (non-ex mon), Meowth ex (Supporter).
 - **Acceleration:** **Aura Jab** is the deck's energy engine — recurs F energy from discard onto the
-  Bench (so attacking *is* the acceleration). Plus 12 basic F + Fighting Gong to find them.
+  Bench (so attacking *is* the acceleration). Plus 11 basic F + Fighting Gong to find them.
 - **Disruption:** Judge (hand-strip), Boss's Orders (gust), Hariyama Heave-Ho (gust-on-evolve),
-  Gravity Mountain (−30 to opp Stage 2), Team Rocket's Watchtower (turns off {C} abilities).
-- **Damage boost:** Premium Power Pro (+30 to {F} attacks this turn), Maximum Belt (ACE SPEC, +50 vs ex).
-- **Energy:** 12× basic Fighting — the *only* energy; reusable, and the discard pile is a second
-  reservoir thanks to Aura Jab. No special energy.
-- **User context:** _(none supplied yet — fold in on confirm)_
+  Gravity Mountain (−30 to opp Stage 2), **Unfair Stamp** (ACE SPEC — comeback hand-strip after a KO).
+- **Damage boost:** Premium Power Pro (+30 to {F} attacks this turn), **Black Belt's Training**
+  (Supporter, +40 vs ex — the ex-breakpoint tool, replacing Maximum Belt), Gravity Mountain (−30 to
+  opp Stage 2 crosses the same breakpoints one-sidedly).
+- **Survival / toolbox:** **Wally's Compassion** (heal a Mega ex to full + bank its Energy to hand —
+  a reactive reset vs non-OHKO threats), **Team Rocket's Petrel** (fetch any Trainer — the 1-of
+  silver bullets: Boss's, the ACE SPEC, Black Belt's, a Stadium).
+- **Energy:** 11× basic Fighting — the *only* energy; reusable, and the discard pile is a second
+  reservoir thanks to Aura Jab. No special energy. *(Note: Wally's Compassion banks a healed Mega's
+  Energy to HAND, not the discard — so Aura Jab can't recover it, but you re-attach it directly.)*
+- **User context:** _(2026-07-03 trainer-swap: Maximum Belt→Unfair Stamp ACE SPEC + Black Belt's for
+  the damage; Watchtower→Gravity Mountain; +Petrel toolbox +Wally's survival. Pokémon core unchanged.)_
 
 ### Notable interactions — VERIFIED at the engine/rulebook (2026-06-29)
 - **Gravity Mountain is one-sided tech — it never touches our board.** Engine flags: Mega Lucario ex
@@ -128,17 +145,16 @@ deck.txt → deck.csv via `tools/deck_convert.py to-csv`.
   shave 30 HP off their attackers (crosses our damage breakpoints) at zero cost to us.
 - **Mega ex does NOT end your turn on evolving** (rulebook delta, CLAUDE.md) → evolve Riolu→Mega
   Lucario ex and attack the **same turn**. This is the engine of the whole deck's tempo.
-- **Team Rocket's Watchtower suppresses {C} abilities including our own Meowth ex** (id 1071,
-  `energyType=0` = Colorless). Last-Ditch Catch triggers *on entering play*; if Watchtower is already
-  down, Meowth's ability is OFF → no Supporter fetch. **Sequencing rule:** use Meowth's ability
-  BEFORE laying your own Watchtower; Watchtower is primarily an opponent-facing ability-lock.
 - **Premium Power Pro** (+30 to {F} attacks this turn, Item, unlimited/turn): the damage-boost
   engine. Strong prior that identical "+30" effects **stack** (TCG norm) → multiple = +60/+90/+120.
   Exact stacking is a simulation detail → defer the breakpoint number to the General Strategy's
   (deferred) **damage-boost OHKO-line model**; doctrine intent is "stack Power Pro to cross a KO line."
-- **Maximum Belt** (ACE SPEC, +50 to opp **{ex}** Active only): conditional on the *target* being an
-  ex/Mega. Whether the engine counts a `megaEx` target as "{ex}" for the bonus is unconfirmed — note
-  for Phase 3. Like Power Pro, its breakpoint use sits in the deferred damage-boost model.
+- **Black Belt's Training** (Supporter, +40 to opp **{ex}** Active only, this turn): the ex-breakpoint
+  boost (Maximum Belt's old role). **CardStat `damageBoost=40, damageBoostVsEx=True`** — parsed and
+  consumed by the shipped general damage-boost model (§9 T8'). The `megaEx`-as-{ex} question is
+  **resolved**: rulebook.txt:337 — Mega Evolution Pokémon ex ARE Pokémon ex, so the {ex} gate includes
+  them (matters when the DEFENDER is a Mega ex). **Key difference vs Maximum Belt:** it's a **Supporter**
+  (costs the once/turn slot) not a free Tool — so a breakpoint turn can't also Boss's Orders.
 
 ## 2 · Research synthesis (cited — confidence: MEDIUM)
 
@@ -148,6 +164,44 @@ HIGH-confidence** (multi-source + ground-truth-verified). **Strategic prose is t
 two sources ([Pokemon.com][p], [Dark Fox][df]); much of the web corpus describes the **mainline SV
 Lucario deck, not this MEG-set engine deck** — every line below was filtered against our actual 60.
 Matchup win-rates are unverified meta opinion (soft priors only).
+
+### Trainer-swap re-run (2026-07-03 — cited; two agents, confidence: MEDIUM-HIGH on purpose)
+The edited trainer package matches **tournament Limitless lists** running exactly this config (Unfair
+Stamp ACE SPEC + Wally's Compassion + Petrel + Black Belt's Training) — e.g. [Arya Zammit-Blizzard][az].
+Purpose findings (mechanics owned by the engine dump; these are strategic-role only):
+- **Unfair Stamp (ACE SPEC over Maximum Belt):** the **comeback/disruption** camp's ACE SPEC — *"the
+  only aggressive hand disruption option"* post-Iono-rotation ([JPP][jpp]). Turns your worst moment
+  (losing the 340-HP Mega) into tempo: after a KO, both shuffle, **you draw 5 / opp to 2**. Crucially
+  it's an **Item**, so the canonical line is **Unfair Stamp → then Boss's Orders** (Supporter) to gust
+  and KO into their crippled 2-card hand. **Belt's +50 damage role was re-sourced** to Black Belt's +
+  Power Pro + Gravity Mountain, freeing the ACE-SPEC slot for a higher-impact effect. **Anti-pattern:**
+  low value when you're **already ahead** (it's a comeback card) — the consistency camp runs Secret Box
+  instead ([jpp], [tcgp]).
+- **Black Belt's Training (+40 vs ex, Supporter):** Maximum Belt's damage role moved to the Supporter
+  slot. 270 → 310 alone; **+ one Power Pro clears the ~320–340 Mega/ex tier** (the sources' *"330 =
+  the magic number for KO'ing a Pokémon ex"*). **Cost:** a **Supporter** — a breakpoint turn can't also
+  Boss's Orders ([tcgp], [pz]).
+- **Team Rocket's Petrel (Trainer tutor):** the flexible **Arven replacement** — *"search for any
+  trainer… item, tool, stadium, or supporter for your next turn."* Fetches the 1-of silver bullets
+  (Boss's, Unfair Stamp, Black Belt's, a Stadium) **the turn before** you need them; doesn't draw, so
+  only when you need a specific piece, not as filler ([tcgp]).
+- **Wally's Compassion (Mega reset):** heal a Mega ex to full → *"forces your opponent to stack up
+  more high-damage hits."* Pairs with **Meowth ex** (fetch it via Last-Ditch). **Downside (the Energy
+  bounce):** the healed Mega is **de-powered — can't attack until re-attached** — so it's **reactive
+  only** (a Mega about to be KO'd that you can re-load), never proactive; also eats the Supporter slot
+  ([tcgp], [df]).
+- **Gravity Mountain ×2 over Watchtower:** a **damage-math enabler**, not a hate card — Mega Brave 270
+  + GM −30 is a clean OHKO on the **Stage-2-ex field** (Dragapult / Gardevoir / Gholdengo / Charizard /
+  Hydreigon / Grimmsnarl ex), *"380 vs a Stage-2 ex with GM + boosts."* **Near-strict upside** (our deck
+  has NO Stage 2 → the symmetric −30 never touches us). Watchtower is a **tax not damage** and its
+  symmetric {C}-ability lock also fights **our own Meowth ex** — so the fixed-damage finisher prefers
+  the damage Stadium. **Caveat:** dropping Watchtower cedes the anti-Colorless-ability angle (Pidgeot
+  control etc.); some lists still split — **not settled consensus** ([p], [pz], [pb]).
+- **1 Switch + 2 Air Balloon (from 2 + 1):** the A↔B two-Mega Mega-Brave loop wants **repeatable** free
+  retreat. **Air Balloon stays attached** → free retreat every turn for a retreat-2 Mega; two Balloons
+  **pre-equip both Megas** so the alternation costs zero per turn. **Belt gone frees the Tool slot** —
+  the enabling change; this **INVERTS** the old §3 "prefer Switch to keep Belt on." Switch stays as a
+  1-of one-shot hedge (a Balloon can be knocked off by tool-removal tech) ([pkm], [df]).
 
 ### Core gameplan (verified)
 A **consistency-focused, prize-trading Fighting attacker around a high-HP finisher.** The arc: chip
@@ -163,8 +217,8 @@ liability** of Mega Lucario ex — a sound prize-trade frame (card-neutral prior
 - **Aura Jab** (F · 130): the deck's **SOLE energy-acceleration engine** — attach up to 3 Basic F
   from **discard** to the **Bench** ("up to 3" is a ceiling). Nothing else moves energy into play ([p]).
 - **Mega Brave** (FF · 270): "almost enough" to OHKO the format; modifiers exist to close the gap
-  (e.g. 270 + Maximum Belt 50 = 320). **The restriction is bound to THAT specific Mega Lucario ex**,
-  not the Active Spot ([p]).
+  (e.g. 270 + Black Belt's 40 + Power Pro 30 = 340, or Gravity Mountain −30 vs a Stage-2 ex). **The
+  restriction is bound to THAT specific Mega Lucario ex**, not the Active Spot ([p]).
 
 ### Key combos (verified)
 - **Aura Jab → bench power-up:** 130 *and* pre-load benched attackers from discard, staging a Mega
@@ -189,15 +243,17 @@ liability** of Mega Lucario ex — a sound prize-trade frame (card-neutral prior
   two-Mega board ([df]). **Matchup-dependent lead:** Solrock vs single-prize decks; the Mega line vs
   multi-prize/ex decks where prize math is forgiving ([p], card-neutral).
 
-### Matchups (priors — unverified meta)
-- **Vs Dragapult ex (320 HP):** Mega Brave 270 **+ Maximum Belt +50 = 320 = exact OHKO**; Dragon
-  type, no Fighting weakness, lands clean ([p]).
+### Matchups (priors — unverified meta) *(breakpoint math updated 2026-07-03: Belt +50 → Black Belt's +40)*
+- **Vs Dragapult ex (320 HP):** Mega Brave 270 **+ Black Belt's +40 = 310 (short)** → needs **+ 1
+  Power Pro +30 = 340 = OHKO** (Belt's old 270+50=320 no longer available). If it's a **Stage-2**
+  Dragapult, **Gravity Mountain −30** does the same one-sidedly: 270 vs a 290-after-−30 body ([p]).
 - **Vs Gardevoir ex (very unfavorable, ~5/95):** whole line is Psychic-weak → cheap OHKO on the
   3-prizer. Plan: **don't evolve into Mega Lucario ex; pivot to Solrock** (Grass-weak, Cosmic Beam
   ignores W/R). Solrock has **no native snipe** → drag bench threats Active via Boss's/Heave-Ho. As a
-  risky out: Mega Brave + Belt 50 + Power Pro 30 = 350 KOs a Gardevoir ex ([df]).
-- **Vs Fighting-weak fields (favored):** weakness ×2 + Power Pro/Belt stack — even Riolu's 30 scales
-  to 140 vs a weak ex with both modifiers ([df]).
+  risky out: Mega Brave 270 + Black Belt's 40 + Power Pro 30 = **340**, plus Gravity Mountain −30 vs a
+  Stage-2 Gardevoir line, reaches the KO ([df]).
+- **Vs Fighting-weak fields (favored):** weakness ×2 + Power Pro/Black Belt's stack — even Riolu's 30
+  scales past 100 vs a weak ex with both modifiers ([df]).
 - **Other priors (directional only, opponent cards outside our data):** ~95/5 Joltik Box, ~50/50
   Dragapult/Dusknoir (going second matters there — note vs our go-first default), ~80/20 Gholdengo.
 
@@ -206,8 +262,9 @@ liability** of Mega Lucario ex — a sound prize-trade frame (card-neutral prior
   (Riolu, Solrock, Lunatone, Makuhita) but **NOT** Hariyama or Mega Lucario ex ([jwa], [b]).
 - **Premium Power Pro ×4:** +30 to F attacks this turn — clears OHKO thresholds (270→300, 210→240);
   mono-Fighting so every attacker benefits. **Not tutorable — draw-only** ([p]).
-- **Maximum Belt (ACE SPEC ×1):** +50 vs an opposing **Active ex** only. **Pure offense — no
-  survivability, no weakness/resistance interaction**; the Dragapult-OHKO enabler ([df], [p]).
+- **Black Belt's Training (Supporter ×1, replaced Maximum Belt):** +40 vs an opposing **Active ex**
+  only, this turn. **Pure offense**; the ex-breakpoint enabler — but a **Supporter** (costs the slot),
+  not a free Tool. **Unfair Stamp (ACE SPEC ×1)** now fills the ACE-SPEC slot (comeback, not damage) ([tcgp], [jpp]).
 - **Judge:** hand disruption (both draw 4) — pairs with Heave-Ho to set the opponent behind ([p]).
 - **Gravity Mountain:** −30 to each Stage 2 — **we run zero Stage 2, so it's pure anti-opponent tech**
   (verified against engine stage flags; see §1) ([p]).
@@ -220,14 +277,17 @@ liability** of Mega Lucario ex — a sound prize-trade frame (card-neutral prior
    bench. The deck has **no energy denial** ([df]).
 3. **"Baby Lucario / intermediate Lucario as a single-prize attacker."** No such card — single hop
    Riolu → Mega Lucario ex ([df], [p]).
-4. **"Rocky/Stone Fighting Energy for damage reduction / retreat-lock immunity."** We run **12 basic
+4. **"Rocky/Stone Fighting Energy for damage reduction / retreat-lock immunity."** We run **11 basic
    Fighting, no special energy** — the card and all its effects don't exist here ([us], [p]).
-5. **"Maximum Belt is defensive / pierces resistance / helps survive OHKOs."** Single flat +50 vs an
+5. **"Maximum Belt is defensive / pierces resistance / helps survive OHKOs."** *(Moot 2026-07-03 —
+   Maximum Belt was cut; retained as a mainline-misread note.)* Single flat +50 vs an
    opposing ex — zero defensive value ([us], [df]).
 6. **"Open with Mega Lucario ex."** Impossible — it's a Stage 1; every game opens with a Basic ([p]).
 7. **Other fictions:** Professor Turo's Scenario reset loop, Cornerstone Mask Ogerpon ex tech, Secret
-   Box ACE SPEC, Night Stretcher, decklists with wrong counts (9–10 energy, "2 Judge", "2 Air
-   Balloon") — all mainline carry-over, none in our 60 ([df], [limitless], [p]).
+   Box ACE SPEC (the *consistency*-camp ACE SPEC — our build is the Unfair Stamp *comeback* camp),
+   Night Stretcher — mainline carry-over, none in our 60 ([df], [limitless], [p]). *(2026-07-03 note:
+   the earlier "wrong counts" callout for "2 Judge / 2 Air Balloon / ~11 energy" is now STALE — the
+   trainer-swap list runs exactly 2 Judge, 2 Air Balloon, 11 Fighting Energy.)*
 
 **Sources:** [Pokemon.com — Building a Mega Lucario ex Deck][p] · [Dark Fox TCG — Deck & Matchup
 Guide][df] · [UltimaSupply — Post-Rotation Guide][us] · [Beckett — New Meta April 2026][b] · [Joseph
@@ -240,6 +300,18 @@ Writer Anderson — Deck List & Guide][jwa] · [Limitless — Deck Overview][lim
 [jwa]: https://www.josephwriteranderson.com/blog/mega-lucario-ex-deck-list-and-guide
 [limitless]: https://limitlesstcg.com/decks/345
 
+**Trainer-swap sources (2026-07-03):** [Limitless list — Unfair Stamp + Wally's + Petrel + Black
+Belt's][az] · [JustPressPlay — rotation / ACE SPEC][jpp] · [TCGplayer — Mega Lucario ex Guide][tcgp] ·
+[Pokémon Zone — Mega Lucario][pz] · [pokeman/Bindex — Upgrade Guide][pkm] · [PokéBeach — Post-Rotation
+First Impressions][pb]
+
+[az]: https://limitlesstcg.com/decks/list/27458
+[jpp]: https://justpressplayonline.com/blogs/news/rotation-for-dummies-part-two-the-staples-that-leave-and-what-to-replace-them-with
+[tcgp]: https://www.tcgplayer.com/content/article/Mega-Lucario-ex-Deck-Guide-Pok%C3%A9mon-TCG/edf0e1de-efdd-4702-979e-b27efe3e5171/
+[pz]: https://www.pokemon-zone.com/champions/pokemon/lucario-mega-lucario/
+[pkm]: https://pokeman.app/blog/mega-lucario-ex-league-battle-deck-upgrade-guide.html
+[pb]: https://www.pokebeach.com/?p=318816
+
 ### Strategic implications I'm carrying into Phase 3 (for your confirm)
 - **Run-3-Mega rhythm:** the per-Pokémon Mega Brave lock means with two powered Megas you Mega Brave
   *every* turn (A then B). The "alternate Mega Brave / Aura Jab on one Lucario" cadence is only forced
@@ -247,24 +319,28 @@ Writer Anderson — Deck List & Guide][jwa] · [Limitless — Deck Overview][lim
 - **Psychic-weakness pivot:** vs Psychic, **suppress the Mega Lucario evolve** and run the Solrock
   single-prize plan. This is a real "don't-evolve-the-wincon" carve-out — unusual, worth a rule.
 - **Solrock needs a gust to snipe** — pairs Boss's/Heave-Ho with the Solrock plan.
-- **Maximum Belt is the ex-OHKO breakpoint tool** (270→320 kills Dragapult ex) — deferred to the
-  damage-boost model, but the doctrine should name the breakpoint.
+- **Black Belt's Training is the ex-OHKO breakpoint tool** (270+40=310, +Power Pro=340 kills
+  Dragapult ex) — handled by the built damage-boost model; it's a Supporter, so it costs the slot.
 
 ## 3 · Card-by-card
 
 Breakpoint table (real-rules arithmetic; the agent's *evaluation* of boosts defers to the General
-Strategy damage-boost model):
+Strategy damage-boost model — now sourcing the +vs-ex boost from **Black Belt's Training (+40,
+Supporter)** instead of the removed Maximum Belt (+50, Tool)):
 
-| Attack | Cost | Base | +1 PPP | +Belt(vs ex) | +Belt+1PPP |
-|---|---|---|---|---|---|
-| Mega Brave | FF | 270 | 300 | **320** | 350 |
-| Aura Jab | F | 130 | 160 | 180 | 210 |
-| Wild Press (Hariyama) | FFF | 210 (self-70) | 240 | 260 | 290 |
-| Cosmic Beam (Solrock) | F | 70 *(ignores W/R)* | 100 | 150 | 180 |
-| Accelerating Stab (Riolu) | F | 30 | 60 | 80 | 110 |
+| Attack | Cost | Base | +1 PPP | +BBT(vs ex) | +BBT+1PPP | +GravMtn(vs Stage2) |
+|---|---|---|---|---|---|---|
+| Mega Brave | FF | 270 | 300 | **310** | **340** | effective 300 vs 270-after-−30 |
+| Aura Jab | F | 130 | 160 | 170 | 200 | — |
+| Wild Press (Hariyama) | FFF | 210 (self-70) | 240 | 250 | 280 | effective 240 |
+| Cosmic Beam (Solrock) | F | 70 *(ignores W/R)* | 100 | 110 | 140 | 100 |
+| Accelerating Stab (Riolu) | F | 30 | 60 | 70 | 100 | 60 |
 
-Named lines: **270** OHKOs ≤270 HP · **320 = Dragapult ex OHKO** (Mega Brave + Belt) · Solrock 70
-**ignores Weakness/Resistance** (un-reducible chip/finisher) · Fighting-weak targets double everything.
+Named lines: **270** OHKOs ≤270 HP · **Black Belt's +40 → 310**, and **+ 1 Power Pro → 340** clears the
+~320–340 Mega/ex tier (the sources' "330 magic number"); note BBT costs the **Supporter slot** so that
+turn can't also Boss's Orders · **Gravity Mountain −30 to opp Stage 2** crosses the same lines
+one-sidedly (our deck has no Stage 2) — e.g. Mega Brave 270 vs a 300-HP Stage-2 ex after −30 · Solrock
+70 **ignores Weakness/Resistance** (un-reducible chip/finisher) · Fighting-weak targets double everything.
 
 ### 3× Riolu — `win_condition` line base + minor early chip (LOCKED 2026-06-29)
 - **Mechanics:** Basic Fighting · 80 HP · 1 prize · weak **Psychic** · retreat 2. Untagged.
@@ -295,7 +371,7 @@ Named lines: **270** OHKOs ≤270 HP · **320 = Dragapult ex OHKO** (Mega Brave 
   - **Aura Jab is discard-aware:** its accel only happens if **Basic F sits in the discard**. With an
     empty discard, Aura Jab is a bare 130 → Mega Brave (or a different line) may be better. *(New
     signal: count of Basic F in discard — §8.)*
-  - **Mega Brave** when 270 (or 270 + Belt 50 = 320 / + PPP) crosses a KO line 130 can't reach.
+  - **Mega Brave** when 270 (or 270 + Black Belt's 40 / + PPP / + Gravity Mountain −30) crosses a KO line 130 can't reach.
 - **Aura Jab energy-targeting (the load):** **2nd Mega Lucario ex first** (a benched Riolu/Mega → FF),
   **then Hariyama** (→ FFF Wild Press), then spread. Directly serves the dual-Mega plan. *(New: an
   attach-target priority at Aura Jab's resolve select — §8.)*
@@ -394,44 +470,95 @@ Named lines: **270** OHKOs ≤270 HP · **320 = Dragapult ex OHKO** (Mega Brave 
 - **Disposition:** **covered as-is** by the shipped general Boss's Orders doctrine (ADR-0022:
   `gust-for-the-ko`, `gust-target`, `gust-for-the-stall`). No deck rule needed.
 
-### 1× Meowth ex — `tutor` (situational key-Supporter), `stall` (LOCKED 2026-06-29)
-- **Mechanics:** Basic **Colorless** · 170 HP · **2 prize** · ex. Tags `search`, `stall`.
-  - *Ability — Last-Ditch Catch:* on bench-drop from hand, search deck for a **Supporter** to hand
-    (once; max 1 "Last-Ditch"/turn).
+### 1× Meowth ex — `search`, `supporter_tutor` (GRILLED + RE-MODELED 2026-07-03)
+- **Mechanics:** Basic **Colorless** · 170 HP · **2 prize** · ex · weak Fighting · retreat 1. Tags
+  **`search`, `supporter_tutor`** *(was `search`,`stall`; `stall` removed — inert + wrong for a 2-prize
+  body; `supporter_tutor` added, see below)*.
+  - *Ability — Last-Ditch Catch:* **when you play this from hand onto your Bench**, search deck for a
+    **Supporter** to hand (once; max 1 "Last-Ditch"/turn).
   - *Tuck Tail (CCC · 60):* return Meowth + attached to hand (un-expose the 2 prizes / re-arm the ability).
-- **Use — situational tutor.** Bench it when you **critically need a specific Supporter** (Boss's for
-  lethal, Judge/Lillie's to dig out of a brick) and the **2-prize exposure is acceptable**. Protect it
-  / keep it back; **Tuck Tail** to retrieve when threatened or to reuse Last-Ditch later (CCC = 3 F,
-  expensive).
-- **Watchtower clash (sequencing):** Meowth is **{C} → Team Rocket's Watchtower suppresses its
-  ability**. Use Last-Ditch **before** laying your own Watchtower (and you can't use it under the
-  opponent's Watchtower).
-- **Anti-patterns:** benching it for value with no specific Supporter need (loose 2-prize gift);
-  using its ability with a Watchtower already in play; Tuck Tail unless retrieving/re-arming matters.
-- **Disposition:** general `dont-bench-multiprize` correctly discourages a casual bench (it's not a
-  wincon) — the "bench it for a *needed* Supporter" override is deck intent (Role `tutor` + §6). The
-  Watchtower-before/after sequencing is a deck rule (§6/§8).
+- **The bug we fixed (2026-07-03 grill).** Meowth carried the `tutor` Role, which the GENERAL rule
+  `play-a-tutor-for-the-unfound-wincon` (+25 in SETUP) reads as *"dig for the **win-condition**."* But
+  Last-Ditch fetches a **Supporter**, not the wincon — so the role MISFIRED: +25 (mislabeled wincon-dig)
+  vs `dont-bench-multiprize` −15 = **net +10 → benched the 2-prize ex in setup for the wrong reason**,
+  with `search_targets_exhausted` checking the wrong fetch-set. **Fix:** remove the `tutor` Role; model
+  Meowth as a **`supporter_tutor`** (a general tag) with its own correct trigger.
+- **Use — PROACTIVE setup Supporter-grab (user ruling 2026-07-03).** Meowth's edge over Petrel: its
+  tutor is a **free Ability** (bench Meowth, grab a Supporter, **and still play a Supporter + attack the
+  same turn**). So **in SETUP, when you hold NO Supporter, bench Meowth to bank one** — SETUP itself is
+  the safety proxy (opponents rarely have a gust + a 170-KO online that early), accepting the 2-prize
+  liability for the tempo/consistency.
+- **What to grab (context-ranked, at the Last-Ditch search):** **Boss's** if a gust would KO/close now
+  ▸ a **draw** Supporter (Lillie's/Judge) to keep digging (the SETUP default) ▸ **Wally's Compassion**
+  if a Mega is doomed + resettable.
+- **Tuck Tail escape (user ruling: author it).** When Meowth is **Active + doomed** with **3 F**
+  attached, Tuck Tail **bounces it to deny the 2-prize KO** (and re-arms Last-Ditch). Its value is the
+  return-to-hand, not the 60 damage — so it needs explicit modelling (the Pilot won't pick a weak CCC-60
+  attack otherwise). **Built GENERAL** as a Tactical credit (like the recoil-doom charge's mirror):
+  `AttackStat.selfReturn` (parses "Put this Pokémon … into your hand") + `_SELF_RETURN_ESCAPE` (50/prize)
+  credited in the NON-KO branch of `_tactical` only when the Active is ex/megaEx AND `active_doomed` —
+  so a real KO always wins and a healthy Meowth never scoops itself away. Corner case in a Fighting deck
+  (3 F is steep), but real, and the fact is reusable (scoop-up-style attacks).
+- **Anti-patterns:** benching it with a Supporter already in hand (no need — save the 2-prize); benching
+  it out of SETUP into a live gust; Tuck Tail when not doomed / when it strands 3 F for no denial.
+- **Disposition:** `dont-bench-multiprize` still guards a casual bench; the new **GENERAL** rule
+  `bench-the-supporter-tutor` (SETUP + PLAY + `supporter_tutor` + no Supporter in hand) supplies the
+  positive trigger; the grab is a **GENERAL** context-ranked TO_HAND supporter-target pair
+  (`grab-a-gust-supporter-for-the-ko` / `grab-a-draw-supporter-in-setup`); Tuck Tail is the Tactical
+  `_SELF_RETURN_ESCAPE` credit above. See §5/§9 T9'.
 
 ### 4× Lillie's Determination — `draw` (refill) (LOCKED 2026-06-29)
 - **Mechanics:** Supporter. Shuffle hand into deck, draw **6** (**8** if exactly 6 prizes remaining).
 - **Use:** the refill — play on a **low / dead / clogged** hand. **The draw-8 (exactly 6 prizes) lands
   on your first Supporter-legal turn at 6 prizes — T2 going first** (not T1: no Supporter T1 going
-  first). With 4 Lillie's + 3 Judge, these **are** the draw engine (no Professor's/Iono) alongside
+  first). With 4 Lillie's + 2 Judge, these **are** the draw engine (no Professor's/Iono) alongside
   Lunatone. Lower priority than a board-advancing tutor / a KO-gust Boss's.
 - **Anti-patterns:** **shuffling away a usable Mega Lucario ex / evolution piece** you can deploy next
   turn (A3 ruling) — hold those; don't refill a hand still full of the pieces you need.
 - **Disposition:** general `dig-before-commit` covers the lift (once `draw` fires); the "don't shuffle
   out a deployable wincon" carve-out is a deck rule (§6) reading `wincon_in_hand`.
 
-### 3× Judge — `draw`, `hand_disruption` (LOCKED 2026-06-29)
-- **Mechanics:** Supporter. Both players shuffle hand into deck, draw **4**.
+### 2× Judge — `draw`, `hand_disruption`, `shuffle_hand` (LOCKED 2026-06-29 · count 3→2 2026-07-03)
+- **Mechanics:** Supporter. Both players shuffle hand into deck, draw **4**. *(Cut to 2 in the swap —
+  Unfair Stamp now carries the heavy post-KO hand-strip; Judge stays as the always-on small disruptor.)*
 - **Use:** **disruption-primary** — cut a hoarding opponent's built-up hand (you refill to 4 too); best
   when your hand is small (you net relative to them) and pairs with Heave-Ho to set them behind. Raw-draw
   value below Lillie's (Judge also helps the opponent).
 - **Anti-patterns:** same shuffle caveat (don't ditch a usable Mega/pieces); Judging when it refills
   the opponent more than you (you're hoarding).
 - **Disposition:** general `dig-before-commit` (draw); disruption-timing is Posture-ish → note. Same
-  "don't shuffle out the wincon" carve-out (§6).
+  "don't shuffle out the wincon" carve-out (§6). Unfair Stamp now carries the heavy post-KO strip.
+
+### 1× Team Rocket's Petrel — `search` (Trainer toolbox tutor) (NEW 2026-07-03)
+- **Mechanics:** Supporter. Search your deck for **any Trainer** card, reveal it, put it in hand; shuffle.
+- **Use:** the **Arven-style toolbox tutor** — fetch the deck's **1-of silver bullets**: **Boss's
+  Orders** (gust for a lethal), the **ACE SPEC Unfair Stamp**, **Black Belt's Training** (a breakpoint
+  OHKO), or a **Gravity Mountain**. Fetches to **hand a turn ahead**, so grab the piece the turn BEFORE
+  you need it (it doesn't play the card). It **doesn't draw**, so it's Supporter-slot card-neutral —
+  use it only when you need a specific toolbox piece, not as filler draw.
+- **Anti-patterns:** burning it as generic draw (nets card disadvantage vs Lillie's/Judge); fetching a
+  piece you can't yet act on when a draw Supporter would develop more.
+- **Disposition:** **covers-as-is** by general search handling (`dig-before-commit` / the fetch
+  doctrine at the TO_HAND select). The "which Trainer to grab" value pick is situational for a 1-of
+  toolbox — left to Tactical/board value; a deck fetch-priority rule is **not** authored (a 1-of
+  tutor doesn't justify the hard-coded ids). Flagged as a ladder-watch item (§8) — revisit only if
+  misplays surface.
+
+### 1× Wally's Compassion — `heal`, `clutch_heal` (Mega reset) (NEW 2026-07-03)
+- **Mechanics:** Supporter. Heal **all** damage from **1 of your Mega ex**, then put **all Energy
+  attached to it into your hand**.
+- **Use — a REACTIVE survival reset, never proactive.** Play it on a Mega Lucario ex that took a big
+  hit but **survived** (340 HP eats most single hits), to reset it to full and force the opponent to
+  re-stack a two-hit KO from scratch. The Energy → hand means the Mega is **de-powered until you
+  re-attach** — so only do it when you can re-load it (or when banking the Energy beats losing it to a
+  KO). **Pairs with Meowth ex** (fetch Wally's via Last-Ditch). It eats the Supporter slot (no Boss's
+  that turn).
+- **Anti-patterns:** using it on a healthy attacker (strands its Energy, skips your attack); using it
+  vs a clean OHKO threat (Psychic weakness → the Mega dies anyway before you profit); proactively.
+- **Disposition:** **covers-as-is** by the GENERAL heal doctrine (`baseline_heal.py`, built around this
+  exact card): `hold-clutch-heal` (+60 — hold until `active_doomed` and NOT `active_can_ko`, so it
+  never forfeits a lethal) and `dont-waste-clutch-heal` (−40 when not doomed). Both fire on the
+  `clutch_heal` tag Wally's carries. No deck rule needed.
 
 ### 4× Ultra Ball — `search` (the Mega/any-Pokémon tutor + discard-fuel) (LOCKED 2026-06-29)
 - **Mechanics:** Item. **Discard 2**, then search deck for **any Pokémon** to hand.
@@ -470,62 +597,88 @@ Named lines: **270** OHKOs ≤270 HP · **320 = Dragapult ex OHKO** (Mega Brave 
   happens** (this-turn effect); use the **minimum copies** to cross the line (don't over-spend cards).
 - **Anti-patterns:** playing it on a non-attacking turn (wasted); playing fewer than needed to cross
   the line, or more than needed (over-commit cards).
-- **Disposition:** **deferred to the General Strategy damage-boost OHKO-line model** (§8) — like
-  Maximum Belt's damage half; no positional weight yet (the model needs a meta HP table + stacking).
+- **Disposition:** **covers-as-is by the built damage-boost model** (§9 T8') — `CardStat.damageBoost=30,
+  damageBoostType={F}`; `_boost_lethal_tactical` stacks copies to cross a KO line (same model that
+  consumes Black Belt's +40-vs-ex). No positional weight needed.
 
-### 2× Switch — `switch` (retreat-swap enabler) (LOCKED 2026-06-29)
+### 1× Switch — `switch` (retreat-swap backup) (LOCKED 2026-06-29 · count 2→1 2026-07-03)
 - **Mechanics:** Item. Switch your Active with a Benched Pokémon (free).
-- **Use:** the **preferred retreat-swap enabler** (it's an Item, not a Tool) — promote a fresh powered
-  Mega while the cooldowned one benches **without dumping energy AND without occupying the Mega's tool
-  slot** (so Maximum Belt can stay on). Also escapes a stuck/gusted Active; pivots Solrock↔Mega.
+- **Use — now the 1-of hedge (was the preferred enabler).** With **Maximum Belt gone the Mega's Tool
+  slot is free**, so **Air Balloon is now the primary retreat-swap engine** (it stays attached →
+  free retreat every turn). Switch is the **one-shot backup**: an immediate/early pivot before a
+  Balloon is attached, escaping a stuck/gusted Active, or when a Balloon has been knocked off by
+  tool-removal tech. Still free, still doesn't dump energy.
 - **Disposition:** general retreat/pivot handling; supports the deck's retreat-swap cadence (§6).
 
-### 1× Air Balloon — retreat tool (untagged) (LOCKED 2026-06-29)
+### 1× Unfair Stamp — **ACE SPEC** Item, comeback disruption (NEW 2026-07-03; the new ACE SPEC)
+- **Mechanics:** Item, **ACE SPEC** (max 1/deck, irreplaceable; CardStat `aceSpec=True`). Tags `draw`,
+  `hand_disruption`. **Legal only if a Pokémon of yours was Knocked Out during the opponent's last
+  turn** — then each player shuffles hand into deck; **you draw 5, opponent draws 2.**
+- **Use — the comeback engine.** After the opponent KOs one of your bodies (typically a Mega), Unfair
+  Stamp turns the setback into tempo: refuel to **5** while stripping them to **2**. Because it's an
+  **Item**, the canonical line is **Unfair Stamp → then Boss's Orders** (your Supporter) to gust and KO
+  into their crippled 2-card hand. Its legality is **engine-gated** (only offered after a KO), so it
+  self-times.
+- **Anti-patterns:** low value when you're **already ahead** (a comeback card — it also refuels the
+  opponent by 2); shuffling a **usable Mega out of your hand** with it — same carve-out as Judge/Lillie's
+  (it shuffles YOUR hand too). *(Tag note: Unfair Stamp does NOT currently carry `shuffle_hand`, so the
+  general `hold-wincon-dont-shuffle` guard doesn't see it — candidate infra fix, §8.)*
+- **Disposition:** **covers-as-is** — the ACE SPEC is protected at cost-discards by
+  `keep-key-cards-at-discard` (reads `aceSpec`, so Ultra Ball won't pitch it); `hand_disruption` is
+  read by `disrupt-the-hand-size-attacker`. Engine legality gates the play. No deck rule needed;
+  the only open item is the `shuffle_hand` tag (§8).
+
+### 2× Air Balloon — retreat tool (untagged) (LOCKED 2026-06-29 · count 1→2 2026-07-03; role inverted)
 - **Mechanics:** Pokémon Tool. Holder's retreat cost is **{C}{C} less** (→ free for our retreat-2 bodies).
-- **Use:** a **backup** retreat enabler — **one Tool per Pokémon** (rulebook.txt:597), so Air Balloon
-  and **Maximum Belt compete for the Mega's single slot**. **Prefer Switch for the retreat-swap** (keeps
-  the slot free for Belt); use Air Balloon on a **second Mega** (the non-Belt swapper), on Hariyama
-  (retreat 3 → 1), or when Switch is unavailable.
-- **Anti-patterns:** equipping a body that won't retreat; **putting Air Balloon on the Mega that wants
-  Maximum Belt** (the +50 breakpoint usually wins the slot — swap with Switch instead).
+  Stays attached (repeatable, unlike one-shot Switch).
+- **Use — now the PRIMARY retreat-swap engine.** **Belt is gone, so the Mega's single Tool slot is
+  free** — pre-equip Air Balloon on **both** Mega Lucario ex so the A↔B Mega-Brave alternation
+  (per-Pokémon cooldown) runs at **zero per-turn cost** every turn. Two copies let you arm both Megas;
+  also fits Hariyama (retreat 3 → 1). This **inverts** the old doctrine (which preferred Switch to keep
+  Belt's slot free) — that constraint no longer exists.
+- **Anti-patterns:** equipping a body that won't retreat; relying on a single Balloon on a body that
+  tool-removal tech can strip (keep the 1 Switch as the hedge).
 - **Disposition:** general retreat handling; deck tool-target intent (Mega Lucario ex) → §6.
 
-### 1× Maximum Belt — **ACE SPEC** damage tool (LOCKED 2026-06-29)
-- **Mechanics:** Pokémon Tool, **ACE SPEC** (max 1/deck, irreplaceable). Holder's attacks do **+50**
-  to an opposing **Active {ex}** (before W/R). **Pure offense — no defensive value.**
-- **Use:** equip the **primary Mega Lucario ex**; the **270→320 Dragapult-ex OHKO** enabler and the
-  cross-an-ex-KO-line tool generally. Hold the 1-of for an **ex/Mega matchup** where +50 reaches an
-  otherwise-unreachable KO; don't fritter it onto a doomed body or a non-ex matchup. **Occupies the
-  Mega's single Tool slot** (vs Air Balloon) → do the retreat-swap with **Switch** so Belt stays on.
-- **ex-target caveat:** unconfirmed whether the engine counts a `megaEx` target as "{ex}" for the
-  bonus (§1) — verify in Phase 3/6.
-- **Anti-patterns:** equipping early with no breakpoint in sight (exposes the irreplaceable ACE SPEC);
-  on a non-wincon; expecting survivability.
-- **Disposition:** general `save-tool-for-the-attacker` + `protect-ace-spec-tool` cover "hold it for
-  the wincon"; the **offensive deploy-timing breakpoint defers to the damage-boost model** (§8) —
-  `deploy-hp-tool-on-breakpoint` does NOT fire (no `hpBonus`).
+### 1× Black Belt's Training — Supporter, ex-breakpoint boost (NEW 2026-07-03; replaces Maximum Belt)
+- **Mechanics:** Supporter. This turn, **your attacks do +40 to the opponent's Active {ex}** (before
+  W/R). CardStat `damageBoost=40, damageBoostType=None (any attack), damageBoostVsEx=True`. The `{ex}`
+  gate **includes Mega ex** (rulebook.txt:337). **Pure offense — no defensive value.** No behavioral
+  tag (the boost is a structural CardStat fact).
+- **Use:** the **ex-breakpoint tool** (Maximum Belt's old role, now a Supporter). **270 → 310**, and
+  **+ 1 Power Pro → 340** clears the ~320–340 Mega/ex tier ("330 magic number"). Play it the turn you
+  swing for the OHKO; **fetch it a turn ahead via Petrel** so the boost turn is free.
+- **KEY difference vs Maximum Belt — it costs the Supporter slot.** A boost turn **can't also Boss's
+  Orders**; gust the target the PRIOR turn (or via free Heave-Ho) so Black Belt's + attack lands
+  without needing the gust the same turn. This is the central tax of the ACE-SPEC swap.
+- **Anti-patterns:** playing it vs a non-ex target (the +40 does nothing — wasted Supporter); playing
+  it on a turn a gust was the higher-value Supporter; expecting any survivability.
+- **Disposition:** **covers-as-is** by the shipped general damage-boost model (§9 T8'):
+  `CardStat.damageBoost` parsed, `TurnBoostTracker` accumulates it, the oracle applies it before W/R,
+  and `_boost_lethal_tactical` makes a boost PLAY that CROSSES a KO line KO_SCORE-class (fires only
+  when necessary; stacks with Power Pro copies). No deck rule needed.
 
-### 1× Gravity Mountain — Stadium (anti-Stage-2, untagged) (LOCKED 2026-06-29)
+### 2× Gravity Mountain — Stadium (anti-Stage-2, untagged) (LOCKED 2026-06-29 · count 1→2, sole Stadium 2026-07-03)
 - **Mechanics:** Stadium. Each **Stage 2** Pokémon (both players) gets **−30 HP**. **Never touches our
   board** (all Basic/Stage 1 — verified §1).
-- **Use:** **the default Stadium** (zero downside to us) and the answer vs **Stage-2-heavy** boards —
-  −30 crosses our breakpoints. Also play to **bump a harmful opponent Stadium**.
-- **Disposition:** matchup tech; needs an opponent-board Stage-2 read (§8). No general rule.
+- **Use:** **the deck's only Stadium now** (Watchtower cut) — a **damage-math enabler**, near-strict
+  upside for us. Mega Brave 270 + GM −30 is a clean OHKO on the **Stage-2-ex field** (Dragapult /
+  Gardevoir / Gholdengo / Charizard / Hydreigon / Grimmsnarl ex). Two copies: **findable + re-settable**
+  after the opponent bumps it. Also play to **bump a harmful opponent Stadium**.
+- **Trade-off vs the cut Watchtower:** dropping Watchtower cedes the anti-Colorless-ability angle
+  (Pidgeot control, Meowth-reliant lists) — a meta call, not settled consensus (§2). No self-clash with
+  our Meowth anymore (Gravity Mountain doesn't touch abilities).
+- **Disposition:** covers-as-is via the GENERAL deck rule `gravity-mountain-vs-stage2` (+15, reads
+  `board.opp_has_stage2` — §9 T8'). *(The old `watchtower-vs-colorless-abilities` deck rule is
+  RETIRED — card removed.)*
 
-### 2× Team Rocket's Watchtower — Stadium (ability-lock, untagged) (LOCKED 2026-06-29)
-- **Mechanics:** Stadium. **{C}** Pokémon (both players) have **no Abilities**.
-- **Use:** proactive ability-lock **only vs Colorless-ability decks**; **sequence around our own
-  Meowth** ({C}). Otherwise prefer Gravity Mountain. Also a Stadium-bump tool.
-- **Anti-patterns:** laying it before using Meowth's Last-Ditch (self-suppress); playing it with no
-  Colorless-ability target.
-- **Disposition:** matchup tech; needs an opponent-board {C}-ability read (§8) + the Meowth sequencing
-  rule (§6). No general rule.
-
-### 12× Basic Fighting Energy — the only energy (LOCKED 2026-06-29)
+### 11× Basic Fighting Energy — the only energy (LOCKED 2026-06-29 · count 12→11 2026-07-03)
 - **Use:** manual attach → **Riolu/Mega line first** (priority over Lunar Cycle's discard). The
   **discard is a second reservoir** via Aura Jab (up to 3/turn → bench). Fighting Gong refills; Ultra
   Ball/Lunar Cycle stock the discard. Demanding for dual-Mega (2×FF) + Hariyama (FFF) → Aura Jab is the
-  multiplier that makes 12 enough.
+  multiplier that makes **11** enough (12→11 in the swap — one slot went to the trainer toolbox).
+  **Wally's Compassion caveat:** a healed Mega's Energy returns to **hand** (not discard), so Aura Jab
+  can't recover it — but you re-attach it directly next turn.
 - **Anti-patterns:** stranding F in the discard with no Aura Jab online to redistribute; discarding the
   F you need to power an attack now.
 - **Disposition:** general energy-attachment procedure (`power-up-attacker`, `attach-energy-last`);
@@ -541,12 +694,19 @@ Named lines: **270** OHKOs ≤270 HP · **320 = Dragapult ex OHKO** (Mega Brave 
   recovers up to 3/turn onto the Bench** → builds the 2nd Mega / Hariyama. Breaks with an empty discard.
 - **Dual-Mega Mega Brave (retreat-swap):** two powered Megas + a free swap = **Mega Brave every turn**
   (the cooldown is per-Pokémon). Min: Mega A (FF) + bench Mega B (FF, or FF reachable via Aura Jab) +
-  a retreat enabler. **Prefer Switch** (keeps Belt on; one-Tool-per-Pokémon); Air Balloon as backup.
-  Breaks if you can't power/retreat B.
+  a retreat enabler. **Now: pre-equip Air Balloon on BOTH Megas** (Belt gone → the Tool slot is free)
+  → the alternation costs zero per turn; Switch is the 1-of hedge (early pivot / a Balloon knocked off).
+  *(This inverts the old "prefer Switch" — that only existed to keep Belt's slot free.)* Breaks if you
+  can't power/retreat B.
 - **Heave-Ho drag-and-KO:** Makuhita benched + Hariyama in hand → evolve (gust a bench-sitter Active)
   → KO it the same turn (no evolve ends the turn). Free; doesn't spend Boss's.
-- **Maximum Belt breakpoint:** Mega Brave 270 **+ Belt 50 = 320** OHKOs Dragapult ex; **+ Power Pro
-  +30 = 350** reaches a 340 Mega / Gardevoir-with-help.
+- **Black Belt's Training breakpoint:** Mega Brave 270 **+ Black Belt's 40 = 310**; **+ Power Pro
+  +30 = 340** reaches the ~320–340 Mega/ex tier. Costs the **Supporter slot** (no Boss's that turn) →
+  gust the target the PRIOR turn or via free Heave-Ho. **Gravity Mountain −30** crosses the same lines
+  vs a Stage-2 ex one-sidedly (stacks with the boosts).
+- **Unfair Stamp comeback (Item):** after the opponent KOs a body → Unfair Stamp (you draw 5, opp to 2)
+  **then Boss's Orders** the same turn (Stamp is an Item, doesn't cost the Supporter) → gust + KO into
+  their 2-card hand.
 
 ### Prize-trade sequencing (CRITICAL — user, 2026-06-29)
 The deck mixes **1-prize bodies** (Riolu, Solrock, Lunatone, Makuhita, **Hariyama**) with **3-prize
@@ -596,11 +756,20 @@ F + free Items + Abilities only.**
 - **Lillie's-for-8 timing:** the draw-8 (exactly 6 prizes) lands on your **first Supporter-legal turn
   while still at 6 prizes** — T2 going first. Play it then on a genuinely weak hand (not as a reflex).
 
-### Supporter priority (one/turn — confirmed)
-**Boss's (only when its gust KOs/closes) ▸ then a draw Supporter by hand-state:** **Lillie's** when the
-hand is low/dead (the weak-hand refill; T2 for the 8); **Judge** when disruption matters (opponent
-hoarding) or your hand is small (≤3). Board-advancing draw/tutor outranks a raw refill. Meowth's
-Last-Ditch *fetches* the needed Supporter into hand (you still spend the slot to play it).
+### Supporter priority (one/turn — now 11 Supporters after the swap)
+Priority by situation (the slot is now more contested — 4 Lillie's / 2 Judge / 2 Boss's / 1 Petrel /
+1 Black Belt's / 1 Wally's):
+- **Lethal this turn:** **Boss's** (gust the KO) — or **Black Belt's Training** when +40 vs an ex is
+  what crosses the breakpoint (mutually exclusive with Boss's — gust the target the prior turn).
+- **Survival:** **Wally's Compassion** when the Active Mega is doomed but resettable (general
+  `hold-clutch-heal` gates this — held until doomed, stands down if the Mega can already KO).
+- **Toolbox need:** **Petrel** to fetch a specific 1-of (Boss's / Unfair Stamp / Black Belt's / Stadium)
+  a turn ahead — only when you need the piece, not as filler.
+- **Draw by hand-state:** **Lillie's** when low/dead (T2 for the 8); **Judge** when disruption matters
+  or your hand is small (≤3). Board-advancing draw/tutor outranks a raw refill.
+- **Note:** Unfair Stamp is an **Item**, not a Supporter — it doesn't compete for this slot (it's the
+  post-KO comeback, played alongside a Supporter). Meowth's Last-Ditch *fetches* a Supporter into hand
+  (you still spend the slot to play it).
 
 ### Mid-game tutor priority (set up — confirmed: need-driven)
 Fetch the **immediate bottleneck: energy (Fighting Gong) ▸ next Mega (Ultra Ball) ▸ Hariyama (Poké
@@ -617,9 +786,11 @@ prize-trade KO/gust. (Free Items first; Ultra Ball's discard pitches F as Aura J
   270s; **Hariyama gust-and-KO**. KO-first; Aura Jab loads toward the 2nd Mega.
 - **STABILIZE** (behind / Mega threatened, esp. vs Psychic): lean the **Solrock single-prize plan**
   (Grass-weak, ignores W/R), retreat-swap to a fresh Mega, **gust-stall** (Heave-Ho tempo / Boss's),
-  **Judge** to strip the opponent, rebuild via Fighting Gong + Aura Jab.
+  **Judge** to strip the opponent, **Wally's Compassion** to reset a survivable Mega, and after a KO
+  the **Unfair Stamp → Boss's** comeback line; rebuild via Fighting Gong + Aura Jab.
 - **CLOSE** (ahead / lethal): **gust for the last prizes** (free Heave-Ho / Boss's), **Mega Brave +
-  Belt/PPP** for the breakpoint KO; the two-KO turn (Aura Jab KO + separately-evolved Hariyama gust-KO).
+  Black Belt's/PPP** (or **Gravity Mountain −30** vs a Stage-2 ex) for the breakpoint KO; the two-KO
+  turn (Aura Jab KO + separately-evolved Hariyama gust-KO).
 
 ## 5 · General-Strategy disposition table
 
@@ -635,21 +806,29 @@ prize-trade KO/gust. (Free Items first; Ultra Ball's discard pitches F as Aura J
 | `prefer-wincon-line-piece` | covers-as-is | — | Riolu as the line pre-evo at a fetch |
 | `keep-a-startable-hand` | covers-as-is | — | 11 Basics → mulligans rare |
 | `keep-a-bench` | covers-as-is | — | loss-prevention |
-| `dont-bench-multiprize` | covers-as-is (+ deck override) | — | correctly discourages a casual **Meowth ex** bench; the "bench Meowth for a NEEDED Supporter" is deck intent (Role `tutor`); Mega Lucario ex is the wincon → exempt |
+| `dont-bench-multiprize` | covers-as-is | — | still guards a casual **Meowth ex** bench; Mega Lucario ex is the wincon → exempt |
+| `play-a-tutor-for-the-unfound-wincon` | **conflicts → FIXED (2026-07-03)** | — | MISFIRED on Meowth's `tutor` Role (+25 "wincon-dig" but Last-Ditch fetches a **Supporter**). **Role removed**; replaced by the new general `supporter_tutor` model below |
+| **`bench-the-supporter-tutor`** (NEW general) | **gap → general rule** | +weight | Meowth `supporter_tutor` tag: in SETUP with NO Supporter in hand, bench it to bank one (free-ability edge). SETUP = the safety proxy. Grab is a context-ranked TO_HAND supporter-target rule (Boss's-KO ▸ draw ▸ Wally's) |
+| **Tuck Tail escape** (`_SELF_RETURN_ESCAPE`, NEW) | **gap → GENERAL Tactical** | +50/prize | Meowth Active + `active_doomed` + 3 F → bounce to deny the 2-prize KO / re-arm. `AttackStat.selfReturn` fact + a Tactical credit (non-KO branch only; a real KO always wins) — mirror of `_RECOIL_DOOM` |
 | `pre-position-attacker` | covers-as-is | — | develop the bench in RACE → builds the **2nd Mega** |
 | `hold-position-in-setup` | covers-as-is | — | go-first/setup-develop; the retreat-**swap** is a RACE action, not penalized |
 | `dont-feed-the-doomed` | covers-as-is | — | standard |
 | `promote-the-ready-wincon` | covers-as-is | — | promote a ready benched Mega after a KO |
 | `promote-the-staller` | **gap (tag)** | — | Solrock is the natural 1-prize staller but is **not `opener`-tagged** → won't fire; tag candidate or accept (§8) |
 | `retreat-to-ready-attacker` | covers-as-is (+ gap) | — | covers retreat of a **non-wincon** spent Active into a ready Mega; does **NOT** cover the **dual-Mega retreat-swap** (Active IS the wincon, just cooldowned) → new rule (§6) |
-| `save-tool-for-the-attacker` / `protect-ace-spec-tool` | covers-as-is | — | **Maximum Belt** (ACE SPEC) → hold for the wincon Mega; Air Balloon untagged (won't fire — fine, it sometimes wants a non-wincon body) |
+| `save-tool-for-the-attacker` / `protect-ace-spec-tool` | **N/A now** (Belt removed) | — | 2026-07-03: Maximum Belt gone; the new ACE SPEC (Unfair Stamp) is an **Item**, not a Tool, so these ATTACH-keyed rules don't fire. Air Balloon is a plain retreat tool (not `aceSpec`) → general retreat handling |
+| `hold-clutch-heal` / `dont-waste-clutch-heal` | **covers-as-is (key, NEW)** | — | 2026-07-03: **Wally's Compassion** (`clutch_heal`) — `baseline_heal.py` is built around this card: hold until `active_doomed` & not `active_can_ko` (+60), penalize when not doomed (−40). No deck rule |
+| damage-boost model (`_boost_lethal_tactical`) | **covers-as-is (Black Belt's)** | — | 2026-07-03: **Black Belt's Training** `damageBoost=40, damageBoostVsEx=True` parsed + consumed (a KO-crossing PLAY goes KO_SCORE-class). Replaces Maximum Belt's breakpoint role (now a Supporter — costs the slot) |
+| `keep-key-cards-at-discard` (ACE SPEC arm) | **covers-as-is** | — | 2026-07-03: now protects **Unfair Stamp** (`aceSpec`) from Ultra Ball's discard-2 (was Maximum Belt) |
+| `disrupt-the-hand-size-attacker` (`hand_disruption`) | covers-as-is | — | Judge + **Unfair Stamp** both carry `hand_disruption` |
+| general search (`dig-before-commit` at TO_HAND) | covers-as-is (+ watch) | — | **Team Rocket's Petrel** (`search`, Trainer tutor) — general search handles the PLAY + the fetch pick; the 1-of "which Trainer" value is Tactical, no deck rule (§8 ladder-watch) |
 | `gust-for-the-ko` / `gust-for-the-stall` | covers-as-is | — | **Boss's Orders (id 1182, `gust` tag, Supporter cardType)** — the shipped doctrine fires on it. **Heave-Ho** is the relaxed deck variant (§6) |
 | **`build-active-wincon`** | **covers-as-is (key)** | — | keeps attaching to the Active Mega until its **biggest** attack (Mega Brave, `maxDamageCost`=2) is online → **builds the Mega toward FF** without a deck rule. Matches `setup_energy_target=2` |
 | **`attach-before-hand-shuffle`** (−60) | **covers-as-is (key)** | — | attach your F **before** Lillie's/Judge (a `discard_hand` shuffle would pitch held energy). **Needs Judge tagged `discard_hand`** (infra) — Lillie's already is |
 | **`keep-key-cards-at-discard`** (−30) | **covers-as-is** | — | at Ultra Ball's discard-2, won't pitch the **wincon**; spare F (not `discard_eot`, not wincon) is freely pitched as Aura Jab fuel — exactly our discard priority |
 | `play-energy-denial` | N/A | — | no `energy_denial` card (no Crushing Hammer) |
-| `deploy-hp-tool-on-breakpoint` | N/A | — | no +HP tools (Belt is +damage, Air Balloon retreat) |
-| `dont-waste-discard-energy`, `hold-clutch-heal`, `prefer-rush-evolve-tutor`/`dont-rush-evolve-without-target`, `prefer-bench-fill-first`, `snipe-*`/`snipe-the-strongest-evolving-threat` | N/A | — | no `discard_eot`/`clutch_heal`/`rush_evolve`/`bench_fill` cards; **no attack damages the opp Bench** (snipe rules never fire — our gust drags bench→active, then we hit the Active) |
+| `deploy-hp-tool-on-breakpoint` | N/A | — | no +HP tools (Air Balloon is retreat-only; Belt removed) |
+| `dont-waste-discard-energy`, `prefer-rush-evolve-tutor`/`dont-rush-evolve-without-target`, `prefer-bench-fill-first`, `snipe-*`/`snipe-the-strongest-evolving-threat` | N/A | — | no `discard_eot`/`rush_evolve`/`bench_fill` cards; **no attack damages the opp Bench** (snipe rules never fire — our gust drags bench→active, then we hit the Active). *(`clutch_heal` moved OUT of this N/A list 2026-07-03 — Wally's Compassion now covers it.)* |
 
 **Re-verification note (2026-06-29):** checked the FULL general strategy (32 rules). The deck is **heavily
 covered** — `build-active-wincon` + `attach-before-hand-shuffle` + `keep-key-cards-at-discard` were the
@@ -674,7 +853,7 @@ Disposition deltas that supersede §5/§6 entries:
 | `fetch-the-engine-first` | **stays DECK** (shipped in T1) | reads the deck `engine` Role; fold policy keeps role-DECLARATIONS deck-side, and the rule is deck-editorial priority |
 | *(new)* Cosmic Beam guard | **DECK rule** `dont-cosmic-beam-without-lunatone` (−60) | the compendium models the condition only as `damageMin=0` (lethal-safe) — scoring still prices printed 70; a 0-damage declaration without Lunatone is a hard misplay. Phantom-KO case (opp ≤70 HP) needs oracle-level condition modeling — deferred (§8) |
 | *(new)* Roles/params adoption | DECK declarations | `MEGA_LUCARIO_EX` += `accel_source` (Aura Jab is a bench-accelerator → `develop-the-accel-recipient` endorses benching the 2nd Riolu; `promote-the-accelerator-for-the-ko` applies); `params.preferred_start="first"` (go-first doctrine → general `honor-preferred-start`) |
-| Tool rules | covers-as-is (doctrine_tool, ADR-0028) | `deploy-hp-tool` is +HP-only → inert for Belt/Balloon (no `hpBonus`); `save-tool-for-the-attacker` / `protect-ace-spec-tool` still hold Belt for the Mega; Belt deploy-timing still deferred to the damage-boost model |
+| Tool rules | covers-as-is (doctrine_tool, ADR-0028) | `deploy-hp-tool` is +HP-only → inert for Air Balloon (no `hpBonus`). **2026-07-03: Maximum Belt removed** — no ACE SPEC Tool now, so `protect-ace-spec-tool` is inert (the new ACE SPEC, Unfair Stamp, is an Item); Air Balloon is a plain retreat tool. Belt's +damage role → Black Belt's Training via the damage-boost model |
 | main.py wiring | REFRESH | current contract: `attack_stats` (compendium — without it the synth lacks Cosmic Beam's ignore-flags + Mega Brave's lock), `effects`, Scout+artifact, briefs, posture, `OwnCardModel` tracker + `own_prizes`; import path `common.strategy.general_strategy` |
 
 ## 6 · New deck Hypotheses (drafts — trigger sketches, NOT lambdas yet)
@@ -752,33 +931,36 @@ the General Strategy routes the full prize-map there ([general-strategy.md] "Not
 viable 1-prize attacker. **Fires:** promote / which-attacker decisions in RACE/CLOSE/STABILIZE.
 **Caveat:** must never suppress a lethal of our own (KO-first).
 
-### Deferred to existing General-Strategy work
-- **Damage-boost OHKO-line model** (Premium Power Pro stacking + Maximum Belt +50 breakpoints) — the
-  already-deferred general model (needs a meta HP table + stacking); the doctrine names the breakpoints
-  (270→320 Dragapult), the executable form waits.
-- **Stadium matchup choice** (Gravity Mountain default / Watchtower vs Colorless-ability / bump a
-  harmful opp Stadium; Meowth-before-Watchtower sequencing) — needs opponent-board **stage/type/ability
-  reads** (the Read/Posture layer). v1: lean Gravity Mountain (zero downside) when a Stadium is wanted.
+### Deferred to existing General-Strategy work *(Phase-A drafts — ALL BUILT in §9 T8'/T9'; cards updated 2026-07-03)*
+- **Damage-boost OHKO-line model** (Premium Power Pro stacking + ex-breakpoints) — **BUILT** (T8').
+  The +vs-ex boost now comes from **Black Belt's Training +40** (Maximum Belt removed): 270+40=310,
+  +Power Pro=340 Dragapult.
+- **Stadium matchup choice** — **BUILT** (T8') as `gravity-mountain-vs-stage2` (reads `opp_has_stage2`).
+  *(Watchtower cut 2026-07-03 → the Watchtower/Meowth-sequencing half is retired; Gravity Mountain is
+  now the sole Stadium.)*
 
 ## 7 · Roles, Lines, params (pre-code)
 
 ```python
-# ids verified against the engine (2026-06-29)
+# ids verified against the engine (2026-06-29; trainer-swap ids added 2026-07-03)
 RIOLU, MEGA_LUCARIO_EX = 677, 678
 SOLROCK, LUNATONE, MAKUHITA, HARIYAMA, MEOWTH_EX = 676, 675, 673, 674, 1071
-BOSS_ORDERS, MAX_BELT, AIR_BALLOON = 1182, 1158, 1174
+BOSS_ORDERS, AIR_BALLOON, GRAVITY_MOUNTAIN = 1182, 1174, 1252
+# NEW 2026-07-03: UNFAIR_STAMP=1080, BLACK_BELTS=1211, PETREL=1219, WALLYS=1229 (all covers-as-is,
+# no deck rule → no const needed in strategy.py). REMOVED: MAX_BELT=1158, WATCHTOWER=1256.
 
 roles = {
-    MEGA_LUCARIO_EX: ["win_condition", "primary_attacker"],
+    MEGA_LUCARIO_EX: ["win_condition", "primary_attacker", "accel_source"],
     RIOLU:           ["win_condition_base"],          # line pre-evo
     SOLROCK:         ["secondary_attacker", "engine"], # early attacker + Lunar Cycle enabler
-    LUNATONE:        ["draw", "engine"],               # the native draw engine
+    LUNATONE:        ["engine"],                        # the native draw engine (Lunar Cycle)
     HARIYAMA:        ["secondary_attacker", "gust"],   # Heave-Ho + Wild Press
     MAKUHITA:        ["evolution_base"],
     MEOWTH_EX:       ["tutor"],                         # situational Supporter fetch
     BOSS_ORDERS:     ["gust"],
-    MAX_BELT:        ["damage_tool"],
     AIR_BALLOON:     ["retreat_tool"],
+    # Black Belt's / Wally's / Petrel / Unfair Stamp: NO Role — all covered by tag/CardStat-keyed
+    # general rules (damage-boost model / clutch_heal doctrine / search / aceSpec guards).
 }
 lines  = [ Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win_condition") ]
 # Secondary attackers (Solrock, Makuhita→Hariyama) are NOT a Line payoff — they're Roles, so the
@@ -825,10 +1007,27 @@ Tagging Lunatone `draw` and Hariyama `gust` is the highest-value infra task. (No
   oracle boosts, `_boost_lethal_tactical` (stacking crossings). The megaEx-as-{ex} question is
   resolved: rulebook.txt:337 says Mega Evolution Pokémon ex ARE Pokémon ex.
 - ~~**Stadium matchup choice + opponent-board reads**~~ — BUILT (T8') as card-fact reads
-  (`opp_has_stage2` / `opp_has_colorless_ability` — no Read/Posture dependency) + the two deck
-  rules; only current-Stadium visibility (bump timing) remains unread.
-- **Meowth ex "bench for a needed Supporter" override** of `dont-bench-multiprize` — needs a
-  "do I need a specific Supporter now" signal; situational, low priority. (Still deferred.)
+  (`opp_has_stage2` — no Read/Posture dependency) + the deck rule `gravity-mountain-vs-stage2`; only
+  current-Stadium visibility (bump timing) remains unread. *(2026-07-03: Watchtower cut, so
+  `watchtower-vs-colorless-abilities` is RETIRED; `opp_has_colorless_ability` stays as general infra,
+  now unused by this deck.)*
+- ~~**Meowth ex "bench for a needed Supporter" override**~~ — **RESOLVED (2026-07-03 grill).** Was
+  worse than deferred: the `tutor` Role actively MISFIRED (`play-a-tutor-for-the-unfound-wincon` benched
+  the 2-prize ex in setup as a "wincon dig"). Re-modeled GENERAL: `supporter_tutor` tag + the
+  `bench-the-supporter-tutor` SETUP rule (no-Supporter-in-hand) + a context-ranked grab + a Tuck-Tail
+  escape. Since Meowth splashes into many decks, this is a system-wide fix, not a deck patch. See §9 T9'.
+
+### Trainer-swap open items (2026-07-03)
+- **`shuffle_hand` tag on Unfair Stamp (1080).** Unfair Stamp's text shuffles BOTH hands into deck, but
+  its `card_functions.json` entry is `["draw","hand_disruption"]` — missing `shuffle_hand` (which Judge
+  and Lillie's both carry). Without it the shuffle-refresh guard `hold-wincon-dont-shuffle` won't see
+  it, so a usable Mega in hand could be shuffled away by Unfair Stamp unpenalized. **Candidate general
+  infra fix** (behavioral truth; low-risk, score_diff-gated). Low urgency — Unfair Stamp is a
+  behind/after-a-KO comeback card where digging is usually wanted. **Decision pending at the gate.**
+- **Petrel "which Trainer to fetch" (ladder-watch, not a rule).** A 1-of Trainer tutor; the value pick
+  (Boss's for lethal / Unfair Stamp / Black Belt's for a breakpoint / a Stadium) is left to general
+  search + Tactical board value. A deck fetch-priority rule would hard-code card ids for a single 1-of
+  — not justified now. Revisit only if the ladder surfaces Petrel misplays.
 
 ### Resolved this session
 - Gravity Mountain one-sided (engine stage flags verified, §1); Mega-ex evolve-and-attack; Watchtower
@@ -914,6 +1113,49 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
     sequencing) + `dont-lunar-cycle-away-the-last-attachable-f` (−30, GENERAL Board
     `hand_basic_energy`; self-sequencing: the guard stands down once the turn's attach lands, so
     the ability still fires on the surplus the same turn).
+- **T9' (trainer-swap re-run): ✅ DONE 2026-07-03 — mostly DELETIONS + covers-as-is.** deck.txt trainer
+  package edited (Pokémon core unchanged). The general layer (grown since Phase A) already covers all
+  four new cards, so **no new deck Hypotheses were authored**:
+  - **Removed cards → deleted deck rules:** `watchtower-vs-colorless-abilities` RETIRED (Team Rocket's
+    Watchtower cut); Maximum Belt removed (its `damage_tool` Role + const dropped — its breakpoint role
+    is re-sourced to Black Belt's Training via the general damage-boost model).
+  - **Black Belt's Training (1211):** covers-as-is — `CardStat.damageBoost=40, damageBoostVsEx=True`
+    already parsed + consumed by `_boost_lethal_tactical` (the T8' model). Now a Supporter (slot cost).
+  - **Wally's Compassion (1229):** covers-as-is — `clutch_heal` tag → `baseline_heal.py`
+    (`hold-clutch-heal` +60 / `dont-waste-clutch-heal` −40), the doctrine literally built around it.
+  - **Unfair Stamp (1080):** covers-as-is — `aceSpec` guarded at discard (`keep-key-cards-at-discard`),
+    `hand_disruption` read by `disrupt-the-hand-size-attacker`, engine-gated legality. Open: the
+    `shuffle_hand` tag gap (§8) — a general infra fix pending the gate.
+  - **Team Rocket's Petrel (1219):** covers-as-is — general search at the TO_HAND select; the 1-of
+    "which Trainer" pick left to Tactical (ladder-watch, §8). *(User sign-off 2026-07-03.)*
+  - **Unfair Stamp `shuffle_hand` tag:** ADD to card_functions.json (1080) so the shuffle-refresh guard
+    `hold-wincon-dont-shuffle` sees it. *(User sign-off 2026-07-03; general infra, score_diff-gated.)*
+  - **Meowth ex RE-MODEL (GENERAL — grilled 2026-07-03; "get it right, it's splashable").** The `tutor`
+    Role misfired (see §3 Meowth). Build:
+    1. **card_functions.json (1071):** `['search','stall']` → `['search','supporter_tutor']` (drop inert
+       `stall`, add the new tag).
+    2. **GENERAL `bench-the-supporter-tutor`:** `plan==SETUP and PLAY and 'supporter_tutor' in tags and
+       no Supporter in hand` (SETUP = the safety proxy). Needs a **`Board.no_supporter_in_hand`** (or
+       `hand_has_supporter`) signal — verify/build.
+    3. **GENERAL context-ranked grab** at Last-Ditch's TO_HAND Supporter select — **BUILT (2 rungs):**
+       `grab-a-gust-supporter-for-the-ko` (+20, a `gust` candidate when `gust_best_ko_prizes>0`) and
+       `grab-a-draw-supporter-in-setup` (+10, the SETUP dig default). Wally's-when-doomed rung deferred
+       (rare; general fetch + the heal doctrine cover it) — a documented follow-up, not shipped.
+    4. **Tuck Tail escape — BUILT GENERAL as a Tactical credit** (not a Hypothesis): `AttackStat.selfReturn`
+       (parses "Put this Pokémon … into your hand") + `_SELF_RETURN_ESCAPE` (50/prize) in the NON-KO
+       branch of `_tactical`, gated on `active_doomed` + ex/megaEx Active. Mirror of `_RECOIL_DOOM`; a
+       real KO always wins. Parser pool-unit-tested (self vs opponent/energy/plain).
+    5. **Select-shape validation:** authored the bench (PLAY), grab (TO_HAND) and Tuck Tail (ATTACK)
+       against the standard engine option shapes (no non-obvious ACTIVATE like Heave-Ho's — benching a
+       Basic and a deck-search are the well-known shapes the trigger-test helpers already model), with
+       **`check_agent` real self-matches as the shape safety-net** (a wrong shape surfaces as a
+       crash/illegal move). A dedicated T6'-style probe was not needed here.
+  - **strategy.py delta:** drop `MAX_BELT`/`WATCHTOWER` consts + the `MAX_BELT` Role + the
+    `watchtower-vs-colorless-abilities` Hypothesis; **remove the `MEOWTH_EX: ["tutor"]` Role** (the tag
+    now drives it); `GRAVITY_MOUNTAIN` const already present; docstring refresh. **Trigger-test delta:**
+    remove the Watchtower test; re-point the boost tests from Maximum Belt (+50) to Black Belt's Training
+    (+40); add Meowth `bench-the-supporter-tutor` / grab / Tuck-Tail trigger tests. Gates: trigger tests
+    green, `pytest tests/ -q` green, `check_agent.py` playable. `aligned.json` refreshed.
 - **Still deferred:** planner multi-turn (AJ-now + MB-next 400 lookahead); Meowth
   "needed-Supporter" override; current-Stadium visibility (bump timing); conditional boosts
   (Kieran's mode); non-lethal breakpoint boost timing (playing Power Pro toward a 2-turn plan).

@@ -38,6 +38,9 @@ _LOCK_COST = 40            # charge a self-locking attack (Mega Brave) when a LO
 _LOCK_KO = 0.3             # KO-branch sub-prize variant: among equal-prize KOs keep the nuke off cooldown
 _RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Active doomed (Wild Press at
                            # 80 HP) — combat-scale; a KO/snipe-KO or already-doomed Active is never charged
+_SELF_RETURN_ESCAPE = 50   # per-prize CREDIT for a self-return attack (Meowth ex Tuck Tail) that bounces a
+                           # DOOMED multi-prize Active to hand, denying the opponent the prize(s); non-KO
+                           # branch only, so a real KO always wins (mirror of _RECOIL_DOOM, a survival credit)
 _ENERGIZED_SNIPE_TIER = 100000  # energized benched target is strictly higher snipe TIER than any
                            # bare one — attacks SOONER (imminence), sniped before a bigger latent
                            # threat (ADR-0020). Within a tier, threat magnitude orders the choice.
@@ -174,6 +177,18 @@ class Board:
     strongest_threat_rank: float = 0.0  # at a DAMAGE select, greatest snipe THREAT RANK among
                                         # benched targets (`_target_threat_rank`: max own/forward damage,
                                         # +boost for a hand-size-attacker line) — snipe pick when none KO'd. 0 off a Damage select
+    best_counter_slot: tuple | None = None  # (area, index, playerIndex) of the OPPONENT Pokémon to place
+                                        # the current counter on at a DAMAGE_COUNTER_ANY(14) spread OR a
+                                        # counter-mover's DAMAGE_COUNTER(13) ADD target — knapsack-optimal
+                                        # (finish a KO set, else pre-load lowest-HP). Backs `place-counter-to-convert`
+    best_counter_source_slot: tuple | None = None  # (area, index, playerIndex) of OUR most-damaged body to
+                                        # REMOVE counters from at a REMOVE_DAMAGE_COUNTER(16) source select
+                                        # (Munkidori) — the biggest heal. Backs `move-counters-off-the-damaged`
+    max_counter_move_number: int = 0    # largest count offered at a REMOVE_DAMAGE_COUNTER_COUNT(40) select —
+                                        # move as many counters as possible. Backs `move-max-counters`. 0 off ctx 40
+    stadium_in_play: int | None = None  # card id of the Stadium currently in play (`current.stadium`), else None
+    opp_stadium_in_play: bool = False   # that Stadium was played by the OPPONENT — replacing it disrupts them
+                                        # (a stadium-play net-value signal; backs `play-risky-ruins-when-net-positive`)
     bench_wincon_ready: bool = False   # a benched win-condition / primary attacker already carries
                                        # enough Energy to attack — a finisher to retreat into
     best_promote_slot: tuple | None = None  # (AreaType, index) of MY benched win-condition best to bring
@@ -268,6 +283,8 @@ class Board:
     active_fully_powered: bool = False    # my Active already carries its HIGHEST-damage attack's cost
                                           # (attached ≥ maxDamageCost) — a burst Energy has no urgent
                                           # job; False when unknown (fail-closed keeps the keep rules)
+    no_supporter_in_hand: bool = False   # MY hand holds NO Supporter (cardType 3) — the
+                                          # `supporter_tutor` bench trigger (bench Meowth ex to fetch one)
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -387,6 +404,16 @@ class Context:
     target_forward_damage: int | None = None  # Evolving Threat signal (ADR-0020): max damage
                                               # snipe target's evolution line eventually reaches
                                               # (None off a Damage option / no chain / no provider)
+    counter_is_best_placement: bool = False   # this option puts the current counter on the knapsack-
+                                              # optimal opp target at a DAMAGE_COUNTER_ANY/DAMAGE_COUNTER
+                                              # select (== board.best_counter_slot) — `place-counter-to-convert`
+    counter_is_source_pick: bool = False      # this option removes counters from OUR most-damaged body at
+                                              # a REMOVE_DAMAGE_COUNTER select (== board.best_counter_source_slot)
+    is_max_counter_move: bool = False         # this NUMBER option is the largest count at a
+                                              # REMOVE_DAMAGE_COUNTER_COUNT select — `move-max-counters`
+    evolve_body_energy: int | None = None     # energy on the in-play Pokémon an EVOLVE option would evolve
+                                              # (its inPlayArea/inPlayIndex body) — a wincon-evolution can be
+                                              # held until the payoff can attack. None off an EVOLVE option
     roles: list = field(default_factory=list)
     tags: list = field(default_factory=list)
     stat: object | None = None     # option card's engine CardStat (hp/weakness/prize value/…)
@@ -464,7 +491,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, effects=None, attacks=None, attack_costs=None, recoil=None,
-                 bench_snipe=None, ignores_active_effects=None, attack_stats=None,
+                 bench_snipe=None, bench_spread=None, ignores_active_effects=None, attack_stats=None,
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
                  lethal_veto=False):
@@ -481,6 +508,9 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         self.attack_costs = attack_costs or {}          # attackId -> Energy count (efficiency tiebreak)
         self.recoil = recoil or {}                      # attackId -> unconditional self-damage (ADR-0022 #2)
         self.bench_snipe = bench_snipe or {}            # attackId -> opp-bench snipe rider (ADR-0022 #14)
+        self.bench_spread = bench_spread or {}          # attackId -> distributable opp-bench spread total
+                                                        # (Phantom Dive; feeds the synth fallback only —
+                                                        # AttackStat.benchSpread is the real source)
         self.ignores_active_effects = ignores_active_effects or {}   # attackId -> True if its damage
                                             # ignores EFFECTS on opp's Active (Nebula Beam) — narrow
                                             # pre-compendium signal; LEGACY feed for `_attack_stat`'s synth when attack_stats absent
@@ -706,17 +736,23 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         recover = self._recover_units(attack_id, dmg_ctx, board)  # re-attachable discard fuel (Aura Jab)
         locks = self._lock_cost_applies(attack_id, board)         # burns a cooldown a free attack avoids
         snipe_ko = self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(attack_id))
+        spread_ko = self._spread_ko_prizes(board.opp_bench, self._rider_spread(attack_id))
+        bench_ko = snipe_ko + spread_ko              # direct opp-bench KO prizes (single-target rider +
+                                                     # distributable spread; disjoint — no attack has both)
         if hp and dmg >= hp:
             if self._is_simultaneous_draw(board, attack_id, self._prize_value(opp)):
                 return dmg - eff                            # a simultaneous double-KO is a DRAW, not a win
-            bonus = snipe_ko or self._bench_snipe_bonus(board, attack_id)  # snipe-KO is a full prize;
+            bonus = bench_ko or (self._bench_snipe_bonus(board, attack_id)   # bench-KO is a full prize;
+                                 + self._bench_spread_bonus(board, attack_id))  # else a sub-prize chip tiebreak
             bonus += min(_RECOVER_KO_CAP, _RECOVER_KO * recover)  # sub-prize: the KO that also develops
             bonus -= _LOCK_KO if locks else 0                     # sub-prize: keep the nuke off cooldown
-            return KO_SCORE + self._prize_value(opp) - eff + bonus        # else a sub-prize chip tiebreak
-        if snipe_ko:                                        # Active survives, but snipe rider KOs a
-            return KO_SCORE + snipe_ko - eff                # benched Pokémon — a guaranteed PRIZE this turn
+            return KO_SCORE + self._prize_value(opp) - eff + bonus
+        if bench_ko:                                        # Active survives, but a snipe rider / a
+            return KO_SCORE + bench_ko - eff                # distributable spread KOs benched Pokémon — a PRIZE this turn
         return (dmg - eff + _ENERGY_RECOVER * recover - (_LOCK_COST if locks else 0)
-                - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0))
+                - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
+                + self._bench_spread_bonus(board, attack_id)     # a non-KO spread still chips the Bench (pre-load)
+                + self._self_return_escape_credit(attack_id, board))
 
     def _bench_snipe_bonus(self, board: Board, attack_id) -> float:
         """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes one of the opponent's Benched
@@ -728,6 +764,16 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         if rider <= 0 or not board.opp_bench:
             return 0
         return min(_BENCH_SNIPE_CAP, _BENCH_SNIPE * rider)
+
+    def _bench_spread_bonus(self, board: Board, attack_id) -> float:
+        """Sub-prize tiebreak for a distributable bench SPREAD (Phantom Dive) that doesn't finish a bench
+        mon — it still chips the opponent's Bench, pre-loading it for a later Munkidori / gust / Cruel
+        Arrow, so it's worth a little board value. Scaled by the spread total, capped below a prize; 0
+        with no spread or no benched target. Mirrors `_bench_snipe_bonus`; nonzero only for spread attacks."""
+        spread = self._rider_spread(attack_id)
+        if spread <= 0 or not board.opp_bench:
+            return 0
+        return min(_BENCH_SNIPE_CAP, _BENCH_SNIPE * spread)
 
     def _snipe_ko_prizes(self, opp_bench, rider: int) -> int:
         """Max prize among the opponent's benched Pokémon a bench-snipe ``rider`` KNOCKS OUT — bench HP
@@ -747,6 +793,121 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         return max((self._prize_value({"id": cid}) for cid, hp in opp_bench
                     if hp and hp <= rider and not self._is_tera(cid)),   # Tera: no dmg while benched
                    default=0)
+
+    def _best_ko_subset(self, items, budget: int) -> frozenset:
+        """Indices of the max-total-prize subset of ``items`` (``[(hp, prize), …]``) whose total HP
+        fits in ``budget`` — a small knapsack (bench <= 5, so <= 32 subsets). Ties break to the cheaper
+        set (fewest counters). Empty frozenset when nothing is affordable. Shared by the spread
+        VALUATION (`_spread_ko_prizes`) and the spread PLACEMENT (`_best_counter_slot`)."""
+        best_prize, best_cost, best_mask = 0, 0, 0
+        for mask in range(1 << len(items)):          # bench <= 5 -> <= 32 subsets
+            cost = prize = 0
+            for i, (hp, pv) in enumerate(items):
+                if mask & (1 << i):
+                    cost, prize = cost + hp, prize + pv
+            if cost <= budget and (prize > best_prize
+                                   or (prize == best_prize and prize and cost < best_cost)):
+                best_prize, best_cost, best_mask = prize, cost, mask
+        return frozenset(i for i in range(len(items)) if best_mask & (1 << i))
+
+    def _spread_ko_prizes(self, opp_bench, spread: int) -> int:
+        """Max total prizes from distributing a ``spread`` (Phantom Dive's ``benchSpread``, e.g. 60)
+        across the opponent's Bench to KNOCK OUT benched Pokémon — the ``_best_ko_subset`` knapsack over
+        the benched mons within ``spread`` (spread counters ignore Weakness/Resistance; Tera bodies take
+        none). A distributable spread that finishes bench mons banks PRIZES this turn — the same-turn
+        payoff of Phantom Dive's 6 counters (its cross-turn pre-load is separate).
+
+        Args:
+            opp_bench: the opponent's bench as ``((cardId, hp), …)``.
+            spread: the attack's total distributable bench-counter damage.
+
+        Returns:
+            The greatest total prize value KO-able within ``spread`` (0 if none).
+        """
+        if spread <= 0:
+            return 0
+        items = [(hp, self._prize_value({"id": cid})) for cid, hp in opp_bench
+                 if hp and hp <= spread and not self._is_tera(cid)]
+        return sum(items[i][1] for i in self._best_ko_subset(items, spread))
+
+    def _best_counter_slot(self, obs: dict, select: dict) -> tuple | None:
+        """At a DAMAGE_COUNTER_ANY (ctx 14) placement select — one counter (10 dmg) per select, budget
+        ``remainDamageCounter`` — the OPPONENT Pokémon to place THIS counter on: (1) if the remaining
+        counters can complete one or more KOs (`_best_ko_subset` over the opp targets within the budget),
+        place on the KO-set member closest to dying (finish it first, so the sequential per-counter
+        greedy maximizes same-turn prizes); (2) else pre-load the lowest-remaining-HP opp target
+        (concentrate toward a future KO). Returns (area, index, playerIndex) or None (off ctx 14 / no
+        opponent target). A benched Tera takes no damage, so it's excluded (a phantom placement).
+        Serves BOTH the Phantom Dive spread (DAMAGE_COUNTER_ANY, budget = `remainDamageCounter`) and a
+        counter-mover's ADD-to-opponent target (DAMAGE_COUNTER — Munkidori, which doesn't carry a
+        per-select count, so the budget falls back to its 3-counter (30) maximum)."""
+        if select.get("context") not in (_DAMAGE_COUNTER_ANY, _DAMAGE_COUNTER):
+            return None
+        yi = (obs.get("current") or {}).get("yourIndex", 0)
+        rem = int(select.get("remainDamageCounter", 0))
+        budget = rem * 10 if rem else 30      # ctx 14 carries the count; a counter-mover (ctx 13) -> up to 3
+        cands = []                                                  # (option, hp, prize)
+        for o in (select.get("option") or []):
+            if o.get("type") != _CARD or o.get("playerIndex") == yi:   # opponent-owned targets only
+                continue
+            poke = self._option_pokemon(obs, select, o)
+            hp = (poke or {}).get("hp")
+            if not poke or not hp:
+                continue
+            if o.get("area") == _BENCH and self._is_tera(poke.get("id")):
+                continue
+            cands.append((o, hp, self._prize_value({"id": poke.get("id")})))
+        if not cands:
+            return None
+        subset = self._best_ko_subset([(hp, pv) for _, hp, pv in cands], budget)
+        if subset:
+            o = min((cands[i] for i in subset), key=lambda c: c[1])[0]   # finish the closest-to-dying
+        else:
+            o = min(cands, key=lambda c: (c[1], -c[2]))[0]               # pre-load: lowest HP, tie higher prize
+        return (o.get("area"), o.get("index"), o.get("playerIndex"))
+
+    def _best_counter_source_slot(self, obs: dict, select: dict) -> tuple | None:
+        """At a REMOVE_DAMAGE_COUNTER (ctx 16) source select — where a counter-mover (Munkidori
+        Adrena-Brain) removes counters FROM one of OUR Pokémon — pick our MOST-DAMAGED body: removing
+        its counters is the biggest heal (the deck's reverse-heal, offense + heal in one move). Returns
+        (area, index, playerIndex) of that body, or None (off ctx 16 / nothing damaged)."""
+        if select.get("context") != _REMOVE_DAMAGE_COUNTER:
+            return None
+        yi = (obs.get("current") or {}).get("yourIndex", 0)
+        best, best_dmg = None, 0
+        for o in (select.get("option") or []):
+            if o.get("type") != _CARD or o.get("playerIndex") != yi:   # our own bodies only
+                continue
+            poke = self._option_pokemon(obs, select, o)
+            if not poke:
+                continue
+            dmg = int(poke.get("maxHp") or 0) - int(poke.get("hp") or 0)   # damage counters on it
+            if dmg > best_dmg:
+                best, best_dmg = (o.get("area"), o.get("index"), o.get("playerIndex")), dmg
+        return best
+
+    def _max_counter_move_number(self, select: dict) -> int:
+        """At a REMOVE_DAMAGE_COUNTER_COUNT (ctx 40) select, the LARGEST count offered (move as many
+        counters as possible — max offense + max heal). 0 off ctx 40."""
+        if select.get("context") != _REMOVE_DAMAGE_COUNTER_COUNT:
+            return 0
+        return max((int(o.get("number", 0)) for o in (select.get("option") or [])
+                    if o.get("type") == _NUMBER), default=0)
+
+    def _evolve_body_energy(self, obs: dict, option: dict) -> int | None:
+        """Energy on the in-play Pokémon an EVOLVE option would evolve (its ``inPlayArea``/``inPlayIndex``
+        body) — so a rule can HOLD a win-condition evolution until the payoff can attack. None off EVOLVE."""
+        if option.get("type") != _EVOLVE:
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        bodies = me.get(_ZONE.get(option.get("inPlayArea"), "")) or []
+        idx = option.get("inPlayIndex")
+        if idx is None or not (0 <= idx < len(bodies)) or not bodies[idx]:
+            return None
+        return len(bodies[idx].get("energies") or [])
 
     def _is_tera(self, card_id) -> bool:
         """True if the card is a Tera Pokémon — takes NO damage from attacks while BENCHED (engine
@@ -884,7 +1045,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             dmg = self.predicted_damage(attacker_id, aid, opp, bound=bound)
             if dmg >= opp_hp:
                 val = (KO_SCORE + self._prize_value(opp) - _EFFICIENCY * cost
-                       + self._bench_snipe_bonus(board, aid))
+                       + self._bench_snipe_bonus(board, aid) + self._bench_spread_bonus(board, aid))
                 best = max(best, val)
         return best
 
@@ -977,6 +1138,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                           cost=self.attack_costs.get(attack_id, 0),
                           recoil=self.recoil.get(attack_id, 0),
                           benchSnipe=self.bench_snipe.get(attack_id, 0),
+                          benchSpread=self.bench_spread.get(attack_id, 0),
                           ignoresEffects=bool(self.ignores_active_effects.get(attack_id)))
 
     def _stranded_evolution_set(self) -> frozenset:
@@ -1010,6 +1172,12 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         only feeds the synth fallback."""
         st = self._attack_stat(attack_id)
         return st.benchSnipe if st else 0
+
+    def _rider_spread(self, attack_id) -> int:
+        """The attack's distributable opp-bench spread total (Phantom Dive's ``benchSpread``, e.g. 60)
+        — read off the ONE attack record; the legacy ``bench_spread`` dict feeds the synth fallback."""
+        st = self._attack_stat(attack_id)
+        return st.benchSpread if st else 0
 
     def _rider_recoil(self, attack_id) -> int:
         """The attack's unconditional self-damage — single-sourced like `_rider_snipe`."""
@@ -1065,6 +1233,33 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             if st is not None and getattr(st, "cardType", None) == 5 and st.energyType is not None:
                 counts[st.energyType] = counts.get(st.energyType, 0) + 1
         return counts
+
+    def _no_supporter_in_hand(self, me: dict) -> bool:
+        """True if MY hand holds no Supporter card (cardType 3). Read by `bench-the-supporter-tutor`:
+        bench a `supporter_tutor` Pokémon (Meowth ex) to fetch a Supporter only when we don't already
+        hold one. Unknown stats -> False (don't assert the trigger — never bench the 2-prize ex blind)."""
+        if not self.stats:
+            return False
+        for c in (me.get("hand") or []):
+            st = self.stats.get((c or {}).get("id"))
+            if st is not None and getattr(st, "cardType", None) == _SUPPORTER:
+                return False
+        return True
+
+    def _self_return_escape_credit(self, attack_id, board: Board) -> float:
+        """Tactical CREDIT for a self-returning attack (Meowth ex Tuck Tail: "Put this Pokémon and all
+        attached cards into your hand") when the Active is a DOOMED multi-prize body — bouncing it to
+        hand denies the opponent the 2 (ex) / 3 (Mega ex) prizes it was about to bank, and re-arms a
+        bench-drop Ability. Mirror of `_RECOIL_DOOM` but a survival CREDIT: it lives in the NON-KO
+        branch only, so a real KO (scored KO_SCORE) always wins. 0 unless the attack self-returns, the
+        Active is ex/megaEx, and it is doomed — so a healthy Meowth never scoops itself away for tempo."""
+        st = self._attack_stat(attack_id)
+        if not (st and getattr(st, "selfReturn", False)) or not board.active_doomed:
+            return 0
+        active = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        if not active or not (active.ex or active.megaEx):
+            return 0
+        return _SELF_RETURN_ESCAPE * (3 if active.megaEx else 2)
 
     def _recoil_flips_doom(self, attack_id, obs: dict, board: Board) -> bool:
         """True when this NON-KO attack's unconditional recoil turns my currently-SAFE Active into a
@@ -1373,6 +1568,18 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                        target_is_strongest_forward=target_is_strongest_forward,
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
+                       counter_is_best_placement=(
+                           board.best_counter_slot is not None
+                           and (option.get("area"), option.get("index"),
+                                option.get("playerIndex")) == board.best_counter_slot),
+                       counter_is_source_pick=(
+                           board.best_counter_source_slot is not None
+                           and (option.get("area"), option.get("index"),
+                                option.get("playerIndex")) == board.best_counter_source_slot),
+                       is_max_counter_move=(
+                           option.get("type") == _NUMBER and board.max_counter_move_number > 0
+                           and int(option.get("number", 0)) == board.max_counter_move_number),
+                       evolve_body_energy=self._evolve_body_energy(obs, option),
                        promote_target_kos=promote_target_kos,
                        is_best_promote_target=is_best_promote_target,
                        card_prize_value=card_prize_value,
@@ -1605,6 +1812,12 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             bench_threat_present=self._bench_threat_present(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
             strongest_threat_rank=self._strongest_threat_rank(obs, select, read, gamma),
+            best_counter_slot=self._best_counter_slot(obs, select) if select else None,
+            best_counter_source_slot=self._best_counter_source_slot(obs, select) if select else None,
+            max_counter_move_number=self._max_counter_move_number(select) if select else 0,
+            stadium_in_play=((state.get("stadium") or [{}])[0] or {}).get("id"),
+            opp_stadium_in_play=bool((state.get("stadium") or [{}])[0]
+                                     and (state.get("stadium") or [{}])[0].get("playerIndex", yi) != yi),
             bench_wincon_ready=self._bench_wincon_ready(me),
             best_promote_slot=self._best_promote_slot(me),
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
@@ -1618,6 +1831,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             hand_ids=frozenset(c.get("id") for c in (me.get("hand") or [])
                                if c and c.get("id") is not None),
             hand_basic_energy=self._hand_basic_energy(me.get("hand") or []),
+            no_supporter_in_hand=self._no_supporter_in_hand(me),
             opp_has_played_gust=self._opp_has_played_gust(opp),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             priority_wincon_slot=self._priority_wincon_slot(
