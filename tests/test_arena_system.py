@@ -28,8 +28,11 @@ _END = 14
 def test_visitor_plays_rates_and_the_replay_is_tuner_shaped(tmp_path):
     require_kaggle_environments()
     with TestClient(create_app(replay_dir=tmp_path)) as client:
+        # Pin the HOUSE agent too: unnamed -> random.choice over every playable agent dir, so the
+        # TeamNames assertion below was only deterministic while mega_starmie was the sole agent.
         r = client.post("/api/tables",
-                        json={"visitor": "E2E", "preset": "mega_starmie"})
+                        json={"visitor": "E2E", "preset": "mega_starmie",
+                              "agent": "mega_starmie"})
         assert r.status_code == 200, r.text
         table_id = r.json()["table_id"]
 
