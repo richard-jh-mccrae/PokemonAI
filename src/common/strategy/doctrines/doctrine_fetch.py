@@ -156,6 +156,56 @@ class FetchMixin:
         reachable = fetch_set - board.deck_empty_ids
         return any(self._grab_value_of(board, cid, plan) > 0 for cid in reachable)
 
+    def _pitch_value_of(self, board, cid: int, plan) -> tuple[float, bool]:
+        """(pitch score, keep-key fired) of hand card `cid` at a virtual `_DISCARD` Context — the
+        discard side's FULL signed sum (unlike `_grab_value_of`, negatives count: a keep-floor makes a
+        card expensive to shed). The shed predictor behind cost-netting (ADR-0023 amendment): scoring
+        with the SAME rungs the real discard select uses keeps prediction and pick agreeing."""
+        from common.pilot import Context, _fires   # lazy: Context/Board live in pilot (cycle-free import)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        ctx = Context(
+            plan=plan, select_context=_DISCARD, option_type=_CARD, card_id=cid,
+            card_is_wincon=cid in self._wincon_set(),
+            card_is_redundant=cid is not None and cid in board.in_play_ids,
+            card_is_hand_duplicate=cid is not None and cid in board.hand_duplicate_ids,
+            roles=self.strategy.roles.get(cid, []), tags=tags, stat=stat, board=board)
+        score, key = 0.0, False
+        for h in (*self.general.hypotheses, *self.strategy.hypotheses):
+            if _fires(h, ctx):
+                score += self._weight(h)
+                key = key or h.id == "keep-key-cards-at-discard"
+        return score, key
+
+    def _shed_signals(self, obs: dict, option: dict, tags: list, board, plan) -> tuple[bool, bool, bool]:
+        """(sheds_junk, sheds_live, sheds_key) for a `cost_discard` fetch PLAY: pitch-score the hand
+        minus the fetch card, take the top-2 (what the later `_DISCARD` select will shed — same rungs,
+        argmax alignment). junk = both > 0; live = any < 0; key = `keep-key-cards-at-discard` fires on
+        a forced shed. All False off a PLAY / a free fetch / with < 2 other cards (engine legality)."""
+        if option.get("type") != _PLAY or "cost_discard" not in tags:
+            return False, False, False
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        fetch_cid = self._option_card_id(obs, None, option)
+        cands, excluded = [], False
+        for c in (me.get("hand") or []):
+            cid = c.get("id") if c else None
+            if cid is None:
+                continue
+            if not excluded and cid == fetch_cid:
+                excluded = True                              # the played copy itself is not sheddable
+                continue
+            cands.append(cid)
+        if len(cands) < 2:
+            return False, False, False
+        top2 = sorted((self._pitch_value_of(board, cid, plan) for cid in cands),
+                      key=lambda t: t[0], reverse=True)[:2]
+        return (all(s > 0 for s, _ in top2),
+                any(s < 0 for s, _ in top2),
+                any(k for _, k in top2))
+
     def _top_fetch_priority_id(self, select: dict | None, exclude: frozenset = frozenset()) -> int | None:
         """The highest-priority card id the deck WANTS most among a search's revealed candidates — the
         first id in `Strategy.fetch_priority` that is present in the select's `deck` list (Tier-3, the
@@ -376,8 +426,8 @@ HYPOTHESES = [
         rationale="Whether-to-PLAY a fetch (ADR-0023, decision A): play when the reachable deck set still holds "
                   "a card you LACK (`Context.fetch_fills_a_need`, same-rung lookahead). Fills the gap "
                   "`dig-before-commit` leaves for `cost_discard` fetches (Ultra Ball); modest weight sequences it "
-                  "after free digs and BELOW `power-up-attacker` (+10, the ep82228640-fr7 shape) as a stand-in "
-                  "for deferred cost-netting.",
+                  "after free digs and BELOW `power-up-attacker` (+15, the ep82228640-fr7 shape). The +8 is the "
+                  "NEUTRAL-shed band — the netting rungs (`costly-fetch-sheds-junk` / `dont-shed-a-*`) move it.",
         when=lambda c: c.option_type == _PLAY and c.fetch_fills_a_need,
         weight=8, status="testing"),
     Hypothesis(
@@ -390,12 +440,45 @@ HYPOTHESES = [
         and not c.board.wincon_in_hand and not c.search_targets_exhausted,
         weight=25, status="assumed"),
     Hypothesis(
+        id="costly-fetch-sheds-junk",
+        rationale="Cost-netting, the junk band (ADR-0023 amendment): a `cost_discard` fetch whose 2 "
+                  "predicted sheds BOTH pitch positive (`Context.fetch_sheds_junk` — top-2 keep-value "
+                  "over hand minus the fetch, the same rungs the real discard select uses) pays with "
+                  "dead cards, so it digs at the free band: +12 on `fetch-when-it-fills-a-need`'s +8 "
+                  "matches `dig-before-commit` (+20). Gated on the need (a modifier of the "
+                  "endorsement, not standalone); a `discard_fodder` deck's sheds score junk-positive, "
+                  "so its costly digs ride here with no deck rule.",
+        when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags
+        and c.fetch_fills_a_need and c.fetch_sheds_junk,
+        weight=12, status="testing"),
+    Hypothesis(
+        id="dont-shed-a-live-card",
+        rationale="Cost-netting, the live band (ADR-0023 amendment): a `cost_discard` fetch forced to "
+                  "shed a card with NEGATIVE keep-value (`Context.fetch_sheds_live` — a keep-floor "
+                  "fires on a predicted top-2 shed, e.g. an engine Supporter) trades a live card for "
+                  "the dig: net the play below End (+8 − 20). Deliberately liftable — a provable "
+                  "needed hit (`search-the-confirmed-hit` +15) still clears it, so shedding live for "
+                  "a certain grab survives. A veto, so NOT gated on `fetch_fills_a_need`; the "
+                  "ep83007714-f8 'tossing the supporters' shape.",
+        when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_sheds_live,
+        weight=-20, status="testing"),
+    Hypothesis(
+        id="dont-shed-a-key-card",
+        rationale="Cost-netting, the key band (ADR-0023 amendment): `keep-key-cards-at-discard` FIRES "
+                  "on a predicted shed (`Context.fetch_sheds_key` — predicate-based, so tuning the key "
+                  "floor can't drift this gate) — the discard would be forced to pitch the wincon / an "
+                  "ACE SPEC / a burst Energy. Stacks on `dont-shed-a-live-card` to −45: net −37, "
+                  "unliftable by any normal-band endorsement — never pitch an irreplaceable to dig.",
+        when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_sheds_key,
+        weight=-25, status="testing"),
+    Hypothesis(
         id="hold-costly-fetch-when-line-assembled",
-        rationale="Cost-net a DISCARD-cost fetch (Ultra Ball pays 2 cards): once the win-condition line is "
-                  "ALREADY assembled (`wincon_in_hand` and `wincon_base_deployable`), the only pull left is a "
-                  "redundant duplicate, not worth two cards. Cancels `fetch-when-it-fills-a-need`'s cost-blind "
-                  "+8 (ep83007714 f8: plays Ultra Ball over End with the line in hand) — fires only on "
-                  "`cost_discard` fetches once the line is assembled, never blocking a still-needed dig.",
+        rationale="The GRAB-side net of a DISCARD-cost fetch (the shed side is the `fetch_sheds_*` rungs): once "
+                  "the win-condition line is ALREADY assembled (`wincon_in_hand` and `wincon_base_deployable`), "
+                  "the only pull left is a redundant duplicate, not worth two cards. Cancels "
+                  "`fetch-when-it-fills-a-need`'s +8 (ep83007714 f8: plays Ultra Ball over End with the line in "
+                  "hand) — fires only on `cost_discard` fetches once the line is assembled, never blocking a "
+                  "still-needed dig.",
         when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_fills_a_need
         and c.board.wincon_in_hand and c.board.wincon_base_deployable,
         weight=-12, status="testing"),

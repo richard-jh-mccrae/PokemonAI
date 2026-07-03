@@ -161,12 +161,6 @@ class Board:
     energy_placeable: bool = False     # some in-play Pokémon can still absorb Energy productively (it
                                        # carries fewer Energy than its highest-damage attack costs). False ->
                                        # no useful home this turn, `attach-before-hand-shuffle` can't veto a needed refresh (ep83038055 f40). Fail-open.
-    hand_is_dead: bool = False         # no non-refresh card in hand yields any positive-scoring play
-                                       # this turn (each virtually scored through real pipeline) —
-                                       # Shuffle-Refresh fallback gate (ADR-0024): refresh only a dead hand
-    deck_holds_a_need: bool = False    # my deck still holds a card I currently LACK (some deck card has
-                                       # positive grab-value, `_grab_value_of`) — gain-exists guard for
-                                       # `refresh-when-hand-is-dead` (don't refresh into a deck of dead cards)
     weakest_bench_hp: int | None = None  # least HP among opponent's benched snipe targets at a
                                          # DAMAGE select — target closest to a knockout
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among opponent's
@@ -410,6 +404,15 @@ class Context:
     search_confirmed_hit: bool = False  # this option PLAYS a search that PROVABLY hits: a fetch target
                                    # certainly still in deck (`Board.deck_definitely_has`, post-anchor) AND filling
                                    # a need (positive grab value). POSITIVE complement of the two whiff signals (ADR-0029); sound-or-silent. Drives `search-the-confirmed-hit`.
+    fetch_sheds_junk: bool = False  # this option PLAYS a cost_discard fetch whose 2 predicted sheds
+                                   # (top-2 pitch over hand minus the fetch, same discard rungs) BOTH score > 0 — junk cost, dig at the free band (`costly-fetch-sheds-junk`)
+    fetch_sheds_live: bool = False  # ...a predicted shed scores < 0 — a live card pays the cost
+                                   # (`dont-shed-a-live-card`)
+    fetch_sheds_key: bool = False   # ...`keep-key-cards-at-discard` fires on a predicted shed — an
+                                   # irreplaceable card is forced into the pitch (`dont-shed-a-key-card`)
+    refresh_probable_miss: bool = False  # this option PLAYS a shuffle_hand refresh whose N-card draw
+                                   # PROBABLY misses every needed card (post-anchor hypergeometric over the
+                                   # shuffle-grown pool, ADR-0024 amendment). Drives `dont-refresh-into-a-probable-miss`.
 
 
 @dataclass
@@ -1303,6 +1306,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
         search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
+        sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
+        refresh_miss = self._refresh_probable_miss(option, cid, tags, board, obs, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
         attach_from_concentrate = (select.get("context") == _ATTACH_FROM
                                    and board.attach_from_concentrate_slot is not None
@@ -1346,7 +1351,9 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon,
                        search_targets_unlikely=search_unlikely,
-                       search_confirmed_hit=search_confirmed)
+                       search_confirmed_hit=search_confirmed,
+                       fetch_sheds_junk=sheds_junk, fetch_sheds_live=sheds_live,
+                       fetch_sheds_key=sheds_key, refresh_probable_miss=refresh_miss)
 
     # Fetch doctrine's comparator/oracle, deck-knowledge whiff/redundant signals, whether-to-play
     # lookahead, and greedy multi-pick live in doctrine_fetch (FetchMixin).
@@ -1587,14 +1594,7 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
             board = replace(board,                      # Tool is in hand (common case pays nothing)
                             tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
-        # Shuffle-Refresh fallback signals (ADR-0024) — only `refresh-when-hand-is-dead` reads them,
-        # fires only on a `shuffle_hand` option, so skip the whole-menu scan unless a refresh is in hand.
-        if not self._has_shuffle_refresh(me):
-            return board
-        plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
-        return replace(board,
-                       deck_holds_a_need=self._deck_holds_a_need(board, plan),
-                       hand_is_dead=self._hand_is_dead(obs, select, board))
+        return board
 
     # Shuffle-Refresh doctrine's signals live in doctrine_shuffle_refresh (ShuffleRefreshMixin); `_board` calls them.
 

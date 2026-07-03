@@ -28,11 +28,13 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-# --- refresh-when-hand-is-dead: dead hand + deck still holding a need -> refresh -------------------
+# --- a dead-hand refresh still plays over End (the +20 endorsement, no dead-hand rung needed) ------
 @pytest.mark.req("REQ-GEN-0042")
-def test_refresh_when_hand_is_dead_plays_the_refresh_over_end():
-    """A Shuffle-Refresh alone in a dead hand (no other card to play), with the deck still holding a
-    card I lack (the unfound win-condition), fires `refresh-when-hand-is-dead` and is played over End."""
+def test_a_dead_hand_refresh_is_still_played_over_end():
+    """A Shuffle-Refresh alone in a dead hand, with the deck still holding a card I lack, plays over
+    End — carried by `dig-before-commit`'s +20 alone (the `refresh-when-hand-is-dead` rung and its
+    full-menu scan retired 2026-07-03, ADR-0024 amendment: nothing else is endorsed on a dead hand,
+    so the extra +8 changed no behavior)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, hp=70),
@@ -44,39 +46,16 @@ def test_refresh_when_hand_is_dead_plays_the_refresh_over_end():
     # hand = just the refresh (dead - no other play); win-condition NOT in play -> deck holds a need.
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
-    assert "refresh-when-hand-is-dead" in _fired(pilot.explain(obs).options[0])
     assert pilot.explain(obs).options[0].score > 0
     assert pilot.decide(obs) == [0]                                   # refresh, not End
 
 
-# --- a playable Pokemon is a development out -> hand is NOT dead (use key cards first) --------------
-@pytest.mark.req("REQ-GEN-0043")
-def test_a_playable_pokemon_keeps_the_hand_live_so_the_refresh_stands_down():
-    """A spare Basic in hand is a development out — even in SETUP with a developed bench (where benching
-    it isn't positively scored), the hand is NOT dead, so `refresh-when-hand-is-dead` does not fire.
-    Don't shuffle away a card you could play (pillar: use your key cards first)."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  BASIC: CardStat(BASIC, hp=70),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
-    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
-    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
-                  stats=stats, functions=funcs)
-    # SETUP, bench already developed (keep-a-bench won't fire); hand also holds a benchable Basic.
-    obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
-                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
-                                    hand=[LILLIES, BASIC]))
-    assert "refresh-when-hand-is-dead" not in _fired(pilot.explain(obs).options[0])
-
-
-# --- a playable tutor filling a need keeps the hand live (full-scan vs keep-value distinction) ------
+# --- a live tutor is sequenced before the refresh (tier 2 vs tier 3) --------------------------------
 @pytest.mark.req("REQ-GEN-0044")
-def test_a_playable_tutor_that_fills_a_need_keeps_the_hand_live():
-    """The reason the gate is a full play-scan, not a keep-value floor: a `cost_discard` tutor (Ultra
-    Ball) has keep-value 0 AND gets no `dig-before-commit` bonus, yet it is a LIVE play —
-    `fetch-when-it-fills-a-need` endorses it (it can grab the unfound win-condition). So the hand is not
-    dead, the refresh stands down, and the tutor is played instead."""
+def test_a_playable_tutor_is_played_before_the_refresh():
+    """A `cost_discard` tutor that fills a need is a LIVE play the refresh must not shuffle away:
+    `_finish_turn_last` tiers the costly search (tier 2) before the hand-nuking shuffle (tier 3), so
+    the tutor plays first regardless of raw scores."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
@@ -88,27 +67,109 @@ def test_a_playable_tutor_that_fills_a_need_keeps_the_hand_live():
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, ULTRA]))
-    assert "refresh-when-hand-is-dead" not in _fired(pilot.explain(obs).options[0])
     assert "fetch-when-it-fills-a-need" in _fired(pilot.explain(obs).options[1])
     assert pilot.decide(obs) == [1]                                  # play the tutor, not the refresh
 
 
-# --- deck_holds_a_need gate: dead hand but deck has nothing left to want -> don't refresh -----------
-@pytest.mark.req("REQ-GEN-0045")
-def test_refresh_stands_down_when_the_deck_holds_no_need():
-    """Even with a dead hand, don't refresh into a deck that can't give you anything you lack — the
-    win-condition is already in play (and the bench developed), so the only deck card fills no need and
-    `deck_holds_a_need` is false. Refreshing would just churn a fresh hand from a spent deck."""
+# --- dont-refresh-into-a-probable-miss also owns K=0: a provably-spent deck, post-anchor -----------
+@pytest.mark.req("REQ-GEN-0066")
+def test_probable_miss_vetoes_a_refresh_into_a_provably_spent_deck():
+    """The K=0 case (ADR-0024 amendment, revised at the 2026-07-03 A/B): post-anchor the deck
+    provably holds NOTHING I lack — P(hit) = 0 — so the refresh is churn, netted below End. (The
+    broader pre-anchor sound veto regressed 47%/43% in the A/B and was deleted; the spent deck is a
+    post-anchor situation in practice.)"""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu")})
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[WINC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # win-condition Active + bench developed -> no need anywhere; hand is lone refresh (dead).
+    deck = [WINC, PLAINMON, LILLIES] + [FILLER2] * 27
+    pilot = Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    # wincon Active (need met), anchor -> deck = pure statless FILLER: K=0, P(hit)=0.
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(WINC, energy=3),
-                                    bench=[poke(701), poke(702), poke(703)], hand=[LILLIES]))
-    assert "refresh-when-hand-is-dead" not in _fired(pilot.explain(obs).options[0])
+                                    bench=[poke(PLAINMON), poke(FILLER2)], hand=[LILLIES],
+                                    prizes=6, deck_count=20))
+    obs["own_prizes"] = {FILLER2: 6}
+    trace = pilot.explain(obs).options[0]
+    assert "dont-refresh-into-a-probable-miss" in _fired(trace)
+    assert trace.score < 0
+    assert pilot.decide(obs) == [1]                                   # End — don't churn a spent deck
+
+
+@pytest.mark.req("REQ-GEN-0066")
+def test_disruption_value_survives_the_probable_miss_veto():
+    """−25 is deliberately clearable: a SYMMETRIC refresh with a live disruption trigger (opponent
+    runs a hand-size attacker) still nets positive (+25 +20 −25) and plays AS disruption even though
+    my own pull is provably dead."""
+    HSATK = 640
+    stats = DictCardStatProvider({JUDGE: CardStat(JUDGE, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90),
+                                  HSATK: CardStat(HSATK, hp=90)})
+    funcs = CardFunctions({JUDGE: ["draw", "hand_disruption", "shuffle_hand"],
+                           HSATK: ["hand_size_attacker"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
+    deck = [WINC, PLAINMON, JUDGE] + [FILLER2] * 27
+    pilot = Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
+                      current=state(active=poke(WINC, energy=3),
+                                    bench=[poke(PLAINMON), poke(FILLER2)], hand=[JUDGE],
+                                    prizes=6, deck_count=20, opp_active=poke(HSATK)))
+    obs["own_prizes"] = {FILLER2: 6}
+    trace = pilot.explain(obs).options[0]
+    assert "dont-refresh-into-a-probable-miss" in _fired(trace)       # my pull IS dead
+    assert "play-harlequin-vs-hand-size" in _fired(trace)             # but the disruption is live
+    assert trace.score > 0
+    assert pilot.decide(obs) == [0]                                   # played as disruption
+
+
+# --- dont-refresh-into-a-probable-miss (Layer B, post-anchor): the N-card draw likely whiffs -------
+JUDGE, FILLER2 = 1213, 4242
+
+
+def _anchored_refresh_pilot(refresh_id, refresh_tags, *, opp_prizes=0):
+    """40-card deck, prizes anchored: 1 needed WINC + 29 FILLER left in deck (D=30). The refresh is
+    the lone hand card, so the pull pool stays 30 and P(hit in N) = N/30."""
+    stats = DictCardStatProvider({refresh_id: CardStat(refresh_id, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({refresh_id: refresh_tags})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
+    deck = [PLAINMON, refresh_id, WINC] + [FILLER2] * 37
+    pilot = Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
+                      current=state(active=poke(PLAINMON, energy=1),
+                                    bench=[poke(FILLER2), poke(FILLER2)],
+                                    hand=[refresh_id], prizes=6, deck_count=30,
+                                    opp_prizes=opp_prizes))
+    obs["own_prizes"] = {FILLER2: 6}                     # anchor: exact deck counts known
+    return pilot, obs
+
+
+@pytest.mark.req("REQ-GEN-0067")
+def test_dont_refresh_into_a_probable_miss_vetoes_a_diluted_draw():
+    """POST-ANCHOR probabilistic veto (ADR-0024 amendment): one needed card among 30 (P(hit in
+    Judge's 4) ≈ 0.13 < 0.20) — the refresh is a probable re-roll of dregs, netted below End."""
+    pilot, obs = _anchored_refresh_pilot(JUDGE, ["draw", "shuffle_hand"])
+    trace = pilot.explain(obs).options[0]
+    assert "dont-refresh-into-a-probable-miss" in _fired(trace)
+    assert trace.score < 0
+    assert pilot.decide(obs) == [1]                                   # End
+
+
+@pytest.mark.req("REQ-GEN-0067")
+def test_laceys_8_draw_window_lifts_the_probable_miss():
+    """The conditional draw windows fold into N: Lacey draws 4 (P(hit) = 4/30 < 0.20 → vetoed) — but
+    at opp prizes ≤ 3 she draws 8 (P = 8/30 ≥ 0.20), the veto stands down and the refresh plays.
+    Draw-counts verified at data/EN_Card_Data.csv."""
+    LACEY = 1199
+    pilot, obs = _anchored_refresh_pilot(LACEY, ["draw", "shuffle_hand"], opp_prizes=6)
+    assert "dont-refresh-into-a-probable-miss" in _fired(pilot.explain(obs).options[0])
+    pilot, obs = _anchored_refresh_pilot(LACEY, ["draw", "shuffle_hand"], opp_prizes=3)
+    trace = pilot.explain(obs).options[0]
+    assert "dont-refresh-into-a-probable-miss" not in _fired(trace)   # the 8-draw window opens
+    assert pilot.decide(obs) == [0]                                   # refresh plays again
 
 
 # --- Shuffle-Refresh IS a hand-cycling draw -> dig-before-commit endorses it (ADR-0024 reversal) ----
@@ -138,9 +199,11 @@ def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
     the refill. With the endorsement restored, the Shuffle-Refresh scores positive -> `_finish_turn_last`
     tiers it (tier 3) BEFORE the attack (tier 4), so the agent cycles its hand THEN attacks the same turn
     (the engine re-presents the menu after the non-ending refresh)."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINMON: CardStat(PLAINMON, hp=90)})
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINMON: CardStat(PLAINMON, hp=90),
+                                  BASIC: CardStat(BASIC, hp=70)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    # pre-anchor: the post-anchor Layer-B veto is silent by construction.
+    pilot = Pilot(Strategy(), deck=[BASIC] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     # live attack and the refresh on same menu; no held Energy / wincon -> guards stay silent.
     obs = make_select([opt(PLAY, index=0), attack_opt(1)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))

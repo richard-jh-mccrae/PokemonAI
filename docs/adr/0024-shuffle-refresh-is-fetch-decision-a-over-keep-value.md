@@ -124,6 +124,57 @@ a fetch never did — a *probability* over the draw — is genuinely new.
 - **An offset Hypothesis cancelling `dig-before-commit`'s +20 on `shuffle_hand`** — rejected: brittle
   coupling to a weight the Fetch session is actively changing. The additive exclusion guard is robust.
 
+## Amendment (2026-07-03, grilled): Layer B = deck-side suppressors only; the dead-hand machinery retires
+
+The 2026-06-30 refutation changed Layer B's gap: the misplay is no longer "silent on a mediocre
+hand" (the flat `dig-before-commit` +20 endorses every refresh) — it is that the +20 is
+**deck-blind**. And the hand side needs nothing new: `_finish_turn_last` tier-3 means the refresh
+executes only after every endorsed play, so the hand at shuffle time is already the residual dregs;
+the curated holds floor the keep-worthy-but-unplayable cards. Decisions:
+
+- **Retire `refresh-when-hand-is-dead` (+8) and the `Board.hand_is_dead` full-menu scan** (the
+  Update note's retirement candidate, confirmed): on a dead hand the refresh already wins via +20
+  with nothing else endorsed — the rung adds compute and test surface, no behavior.
+  `deck_holds_a_need` survives, repurposed as the sound veto's substrate. REQ-GEN-0042…0046 tests
+  rewritten at build.
+- **Two deck-side suppressors, mirroring the search whiff family** (discrete rungs — the Item-2
+  idiom decision, ADR-0023 amendment, applies here too):
+  - `dont-refresh-for-nothing` **−40**, sound-or-silent: `deck_holds_a_need` False = every needed
+    card provably gone (valid pre-anchor). Deliberately weaker than the search's −60: a refresh can
+    carry non-pull value — the disruption endorsements (`play-harlequin-vs-hand-size` +25,
+    `disrupt-when-unfavored` +18) survive the veto and a Judge/Harlequin still plays *as
+    disruption*; a plain Lacey/Lillie's dies (+20−40).
+  - `dont-refresh-into-a-probable-miss` **−25**, POST-ANCHOR only (`deck_known_counts`):
+    hypergeometric P(≥1 needed card among the N drawn) < **0.20** (`_WHIFF_PROB_THRESHOLD`,
+    consistent with the sibling). The pool is the shuffle-grown deck **D′ = deck + returned hand −
+    the played card** (returned dregs dilute; K unchanged — a held card is by definition not
+    lacking). Mutually exclusive with the sound rung by construction (requires K > 0).
+- **Draw-count N is an id-keyed fact table** (verified at `data/EN_Card_Data.csv` 2026-07-03), the
+  conditional windows folded into N — no boost rung: Lillie's Determination (1227) 6, **8 at own
+  prizes exactly 6**; Lacey (1199) 4, **8 at opp prizes ≤ 3**; Judge (1213) 4; Harlequin (1223)
+  exact over the coin branches (3/5).
+- **Scoped OUT, recorded:** any hand-level value scalar (the 83116081-17 / 83117367-34 Lillie's-vs-
+  Harlequin pair stays a Base-Value-Model call, ADR-0007); the `hand_disruption` offensive axis
+  and the board-conditioned side of the symmetric-refill cost (opponent hand-size scaling) — its
+  *favorability-conditioned* half shipped as `dont-gift-a-refresh-when-favored` (ADR-0026
+  amendment, same day); pre-anchor probabilistic EV (an E[K]-of-an-expectation blurs ADR-0029's separation for a
+  rung that would ~never fire on a rich deck). The ADR-0028 anti-shuffle Tool floor is untouched
+  (attached cards are not in hand).
+- **Evidence gate:** full-corpus retest + arena A/B (overlay zeroing the two rungs); TDD, REQ-GEN
+  numbers continuing after the Item-2 build's allocations.
+
+**A/B verdict (2026-07-03, built same day) — the sound veto REGRESSED and was DELETED.** 1000-game
+mirror legs: both rungs ON 43% (CI 40–46); `dont-refresh-for-nothing` alone 47% (44–50);
+`dont-refresh-into-a-probable-miss` alone 50% (47–53). Root cause: the veto reused the Fetch NEED
+model, but grab-rung needs (gap-gated, satisfy-count 1) under-count refresh VALUE for a deck whose
+engine is the refresh itself — mid-game with the wincon deployed and not energy-starved, every deck
+card scores 0 grab-value while refreshing for more Energy/attackers is still right. **Revision
+shipped:** `dont-refresh-for-nothing`, `deck_holds_a_need` and its `_has_shuffle_refresh` gate are
+deleted; `dont-refresh-into-a-probable-miss` (post-anchor, −25) owns the whole deck side, its **K = 0
+case** (P = 0) covering the provably-spent deck — which is a post-anchor situation in practice (this
+deck anchors early through its search density). Re-A/B of the revision: 48% (45–51), neutral →
+default ON. The retirement and everything else in this amendment stands.
+
 **Consequences.** The two existing guards become explicit keep-value floors *beside* the reused
 comparator (a future reader who sees them scattered should read this ADR + ADR-0023 for the shape).
 The build adds two `Board` signals (`hand_is_dead` via a hand-card play-scan reusing the
