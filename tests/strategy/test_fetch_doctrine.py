@@ -452,3 +452,105 @@ def test_fetch_the_support_never_endorses_a_stranded_support():
     stranded, live = pilot.explain(obs).options
     assert "fetch-the-support" not in _fired(stranded)   # dead grab, engine tag notwithstanding
     assert "fetch-the-support" in _fired(live)           # deployable support keeps the rung
+
+
+# --- cost-netting (ADR-0023 amendment): the shed side prices the discard cost ---------------------
+JUNKMON = 660           # a Basic duplicated in play AND hand -> a provably-junk shed
+
+
+def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None):
+    stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  JUNKMON: CardStat(JUNKMON, hp=70), **(extra_stats or {})})
+    funcs = CardFunctions({ULTRA: ["search", "tutor_pokemon", "cost_discard"], **(extra_funcs or {})})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
+    return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_costly_fetch_sheds_junk_boosts_ultra_ball_to_the_free_dig_band():
+    """Two provably-junk sheds (hand copies of a benched Pokémon) + a needed grab in deck lift the
+    cost_discard fetch into the free-dig band: `costly-fetch-sheds-junk` rides on
+    `fetch-when-it-fills-a-need` and the fetch is played."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1),
+                                    bench=[poke(JUNKMON), poke(702)],
+                                    hand=[ULTRA, JUNKMON, JUNKMON]))
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "costly-fetch-sheds-junk" in fired
+    assert "fetch-when-it-fills-a-need" in fired
+    assert pilot.explain(obs).options[0].score >= 20               # free-dig band
+    assert pilot.decide(obs) == [0]
+
+
+ENGINE_SUP = 661        # a draw Supporter — live at a forced discard (keep-engine floor)
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_dont_shed_a_live_card_suppresses_the_fetch_below_end():
+    """When a LIVE card (a draw Supporter, negative keep-value at the discard) is forced into the
+    predicted top-2 sheds, `dont-shed-a-live-card` nets the fetch below End — the ep83007714-f8
+    'tossing the supporters is a poor trade' shape."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON], extra_funcs={ENGINE_SUP: ["draw"]},
+                           extra_stats={ENGINE_SUP: CardStat(ENGINE_SUP, hp=0, cardType=SUPPORTER_CT)})
+    # only two shed candidates: one junk (benched duplicate), one LIVE engine Supporter.
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1),
+                                    bench=[poke(JUNKMON), poke(702)],
+                                    hand=[ULTRA, JUNKMON, ENGINE_SUP]))
+    trace = pilot.explain(obs).options[0]
+    assert "dont-shed-a-live-card" in _fired(trace)
+    assert "costly-fetch-sheds-junk" not in _fired(trace)          # one live shed kills the junk band
+    assert trace.score < 0
+    assert pilot.decide(obs) == [1]                                # End over the bad trade
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_dont_shed_a_key_card_stacks_the_fetch_unliftably_negative():
+    """A KEY card (the win-condition) forced into the predicted sheds fires `dont-shed-a-key-card`
+    ON TOP of the live suppressor (−45 total): never pitch the wincon to dig — no normal-band
+    endorsement stack can lift it back."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    # only two shed candidates: one junk, one the WIN-CONDITION (keep-key floor fires on it).
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1),
+                                    bench=[poke(JUNKMON), poke(702)],
+                                    hand=[ULTRA, JUNKMON, WINC]))
+    trace = pilot.explain(obs).options[0]
+    assert "dont-shed-a-key-card" in _fired(trace)
+    assert "dont-shed-a-live-card" in _fired(trace)                # the key shed is also a live shed
+    assert trace.score <= -30
+    assert pilot.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_neutral_sheds_leave_the_fetch_at_the_pessimism_baseline():
+    """Two NEUTRAL sheds (singletons, not in play, no floors) fire no netting rung — the fetch keeps
+    exactly `fetch-when-it-fills-a-need`'s +8 (today's behavior, the corpus-fit middle band)."""
+    NEUT1, NEUT2 = 662, 663
+    pilot = _netting_pilot(deck=[WINC, JUNKMON],
+                           extra_stats={NEUT1: CardStat(NEUT1, hp=60), NEUT2: CardStat(NEUT2, hp=60)})
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1), bench=[poke(701), poke(702)],
+                                    hand=[ULTRA, NEUT1, NEUT2]))
+    trace = pilot.explain(obs).options[0]
+    fired = _fired(trace)
+    assert {"costly-fetch-sheds-junk", "dont-shed-a-live-card", "dont-shed-a-key-card"} & fired == set()
+    assert "fetch-when-it-fills-a-need" in fired
+    assert pilot.decide(obs) == [0]                                # +8 still beats End
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_junk_boost_is_gated_on_a_real_need():
+    """Junk sheds WITHOUT a needed grab get no boost: `costly-fetch-sheds-junk` is a modifier of the
+    endorsement, not a standalone reason to burn two cards."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    # wincon already IN PLAY + developed bench -> the reachable set fills no need; sheds are junk.
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(WINC, energy=3),
+                                    bench=[poke(JUNKMON), poke(702), poke(703)],
+                                    hand=[ULTRA, JUNKMON, JUNKMON]))
+    fired = _fired(pilot.explain(obs).options[0])
+    assert "costly-fetch-sheds-junk" not in fired
+    assert "fetch-when-it-fills-a-need" not in fired

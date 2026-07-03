@@ -13,10 +13,11 @@ generalises): `fetch-the-wincon`, `prefer-wincon-line-piece`, `fetch-energy-when
 `prefer-bench-fill-first`, `dont-search-an-empty-deck`, `dont-tutor-the-held-wincon`,
 `keep-key-cards-at-discard`, plus the deck-knowledge substrate (`Board.deck_definitely_empty_of` /
 `deck_definitely_has`, the `_FETCH_FILTERS` / `_search_signals` path, the `OwnCardModel` deck tracker).
-**Still deferred:** decision (A)'s **cost-netting** (subtract the shed cards' keep-value from a
-`cost_discard` fetch + Supporter-economy opportunity cost) and **Plan-scaled bar** — the positive
-endorsement is shipped, the common stand-down cases are covered by the whiff / redundant /
-`cost_discard`-sequencing rules; plus Read-conditioned fetching and prized-wincon urgency.
+**Still deferred:** the **Supporter-economy opportunity cost** (a Supporter fetch must beat the best
+alternative Supporter — no `cost_discard` Supporter exists in the pool yet), the **Plan-scaled bar**
+(re-deferred at the 2026-07-03 grill: no correction evidence of plan-dependence), Read-conditioned
+fetching, and prized-wincon urgency. **Amended 2026-07-03:** decision (A)'s shed-side **cost-netting
+is designed** (grilled) — see the amendment below.
 
 **Context.** A **fetch** — a card that presents a *choose-from-deck* select (Ultra Ball, Nest Ball, Mega
 Signal, Buddy-Buddy Poffin; the `search`/`dig`/`bench_fill`/`tutor_*` tag family, **not** raw draw) —
@@ -82,6 +83,43 @@ prizes keeps the signal silent) and the exact `OwnCardModel` prize/deck tracker 
   oracle stays an availability gate.
 - **Read-conditioned fetching in v1** — deferred (matching ADR-0022): board-only stays closed-form and
   fully testable, and the deck-Role weight-bump seam adds it later without reshaping the comparator.
+
+## Amendment (2026-07-03, grilled): shed-side cost-netting is three tiered rungs over a predicted shed
+
+The flat pessimism (+8 `fetch-when-it-fills-a-need` standing in for netting) under-plays a junk-shed
+Ultra Ball and over-plays a live-shed one. Facts fixed at source first: **Ultra Ball (1121) is the
+pool's only `cost_discard` card** ("discard 2 **other** cards" — N=2, self excluded, play-legality
+gated by the engine), so v1 netting *is* the Ultra Ball case.
+
+- **Shed predictor = the discard rungs themselves** (the shared-oracle invariant, unchanged): a new
+  `_pitch_value_of(board, cid, plan)` scores each hand card at a virtual `_DISCARD` Context —
+  mirroring `_grab_value_of`, but the **full signed sum** (the grab helper keeps positives only).
+  Predicted sheds = top-2 over hand minus the fetch card. Prediction and the later real `_DISCARD`
+  select agree by construction.
+- **Discrete rungs, NOT a computed net.** A per-fire computed weight would break the
+  weights-that-fire idiom (opaque to the tuner, no overlay-zeroable kill). Three new rungs read
+  three Context booleans (`fetch_sheds_junk` / `fetch_sheds_live` / `fetch_sheds_key`):
+  - `costly-fetch-sheds-junk` **+12** — both predicted sheds pitch > 0; gated on
+    `fetch_fills_a_need` (a modifier of the endorsement, not standalone). Junk-shed UB totals +20 =
+    the free-dig band.
+  - `dont-shed-a-live-card` **−20** — any predicted shed pitch < 0; ungated by need (a veto). Net
+    −12; a provable big grab (`search-the-confirmed-hit` +15) can still lift it to +3 — shed live
+    only for a certain needed hit, deliberately preserved.
+  - `dont-shed-a-key-card` **−25 stacking** — a predicted shed on which `keep-key-cards-at-discard`
+    *fires* (predicate-based, not a weight threshold, so tuning the key rung can't drift this one).
+    Net −37: never pitch the wincon / ACE SPEC / burst Energy to dig.
+- **`hold-costly-fetch-when-line-assembled` stays** — it nets the GRAB side (redundant pull), the
+  new rungs net the SHED side; orthogonal axes. Its anchor ep83007714-f8's sheds were live
+  Supporters, so the new suppressor covers it doubly and the junk-boost cannot resurrect it.
+- **Emergent, intended:** `prefer-good-in-discard` (`discard_fodder` Role, +25) makes a recursion
+  deck's sheds score junk-positive → its UB rides at +20 with no deck-specific rule.
+- **Evidence gate:** full-corpus retest (103/103, 0 proposals — this reprices rungs corrections
+  were fit against) + arena A/B (overlay zeroing the three rungs vs seeds). TDD, REQ-GEN-0065
+  (0064 was claimed by an intervening build).
+
+**Built + cleared 2026-07-03:** `_pitch_value_of` / `_shed_signals` in `FetchMixin`, the three
+Context booleans, the three rungs (`tests/strategy/test_fetch_doctrine.py`). Corpus 103/103, 0
+proposals; 1000-game mirror A/B rungs-ON vs OFF: 52% (CI 49–55), no regression → default ON.
 
 **Consequences.** The seven shipped fetch Hypotheses become **partial instances** of the comparator
 (each one importance rung or one gap/availability gate); a future reader who sees them scattered should

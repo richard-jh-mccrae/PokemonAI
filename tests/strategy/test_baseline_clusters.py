@@ -44,7 +44,8 @@ CLUSTERS = {
                                      "honor-preferred-start"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit"}),
     "disruption": (DISRUPTION_HYPOTHESES, {
-        "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored"}),
+        "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored",
+        "dont-gift-a-refresh-when-favored"}),
 }
 
 
