@@ -319,6 +319,9 @@ class AttackStat:
                                        # Bench (Cosmic Beam/Lunatone, Guardian Burst/Uxie+Azelf;
                                        # pool 2). Oracle zeroes exact/min on the live board; "max"
                                        # keeps printed (Incoming: they can bench the partner first)
+    selfReturn: bool = False           # attack scoops its OWN Pokémon (+ attached) back to hand
+                                       # (Meowth ex Tuck Tail). The escape/KO-deny fact: a doomed
+                                       # multi-prize Active can bounce to deny the prize (tuck-tail-to-deny-the-ko)
     # Transient next-turn grants (ADR-0033): what USING this attack grants for one turn — tracked
     # match-scoped from ATTACK logs (common/transients.py), obs has no effect state.
     nextTurnReduction: int = 0         # defender-side: "takes N less damage" next turn (Frost Barrier)
@@ -605,6 +608,25 @@ def parse_attack_bench_requirement(text: str) -> tuple[str, ...] | None:
     if not m:
         return None
     return tuple(n.strip() for n in m.group(1).split(" and ") if n.strip())
+
+
+_SELF_RETURN_RE = re.compile(
+    r"Put this Pok.mon (?:and all attached cards )?(?:back )?into your hand")
+
+
+def parse_attack_self_return(text: str) -> bool:
+    """True if the attack scoops its OWN Pokémon (and attached cards) back into the owner's hand —
+    Meowth ex Tuck Tail ("Put this Pokémon and all attached cards into your hand"). The escape fact:
+    a doomed multi-prize Active can bounce to deny the opponent the prize (and re-arm a bench-drop
+    Ability). Distinct from an opponent-facing return; the subject is "this Pokémon".
+
+    Args:
+        text: the attack's free-text effect.
+
+    Returns:
+        True when the attack returns its own Pokémon to hand.
+    """
+    return bool(_SELF_RETURN_RE.search((text or "").replace("\n", " ")))
 
 
 def parse_attack_energy_recover(text: str) -> tuple[int, int | None, str] | None:
