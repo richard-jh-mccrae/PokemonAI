@@ -19,8 +19,13 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         return None
     scores = sorted((o.score for o in opts), reverse=True)
     margin = round(scores[0] - scores[1], 3) if len(scores) > 1 else 0.0
-    lethal = getattr(decision, "lethal", None)   # Lethal Solver's verdict (ADR-0030), or None
-    planned = getattr(decision, "planned", None)  # Turn Planner's committed line (ADR-0031), or None
+    line = getattr(decision, "planned", None)     # the Turn Planner's committed line (ADR-0031/0037)
+    # One in-memory type, two wire keys (ADR-0037): a goal=="win" line IS the Lethal Solver's lock
+    # and serialises under the historical `lethal` key; any other goal under `planned`. The wire
+    # format is byte-identical to the two-field era, so tune/propose/retest and every historical
+    # correction's live_trace keep reading unchanged.
+    lethal = line if (line is not None and line.goal == "win") else None
+    planned = line if (line is not None and line.goal != "win") else None
     rec = {
         "plan": opts[0].plan.value,
         "tier": tier,
@@ -36,8 +41,8 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         "lethal": ({"step": list(lethal.next_step), "kind": lethal.kind, "why": lethal.rationale,
                     "verified": getattr(lethal, "verified", None)}
                    if lethal else None),
-        # Turn Planner's committed line rides alongside lethal verdict — always present (None
-        # when Planner didn't commit), so a Correction can filter on it the same way (ADR-0031).
+        # Turn Planner's committed heuristic line rides alongside — always present (None when the
+        # Planner didn't commit), so a Correction can filter on it the same way (ADR-0031).
         "planned": ({"step": list(planned.next_step), "goal": planned.goal, "why": planned.rationale}
                     if planned else None),
         "margin": margin,
@@ -50,6 +55,8 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     refuted = getattr(decision, "lethal_refuted", 0)
     if refuted:                                   # sparse: only when the engine denied a closed-form
         rec["lethal_refuted"] = refuted           # "win" (the lethal_verify divergence signal)
+    if getattr(decision, "lethal_lost", False):   # sparse: a locked verified line diverged from the
+        rec["lethal_lost"] = True                 # live game and was dropped (`lethal_veto`, ADR-0037)
     return rec
 
 

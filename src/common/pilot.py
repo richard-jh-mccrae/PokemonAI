@@ -21,7 +21,6 @@ from common.scouting.briefs import Brief, match_brief
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
-from common.strategy.lethal import LethalLine, LethalMixin
 from common.strategy.planner import PlannerMixin, TurnLine
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
@@ -437,24 +436,29 @@ class Decision:
     chosen: list
     options: list = field(default_factory=list)
     read: Read | None = None     # the per-decision Scouting Read (ADR-0026), surfaced for legibility
-    lethal: LethalLine | None = None  # the locked guaranteed-win line this turn (ADR-0030), or None
-    planned: TurnLine | None = None   # the committed Turn Line this turn (ADR-0031), or None —
-                                      # below-win Goal-Ladder plan the Planner steered this decision toward
-    lethal_refuted: int = 0      # direct lethal candidates the engine backstop REFUTED this decision
+    planned: TurnLine | None = None   # the committed Turn Line this turn (ADR-0031/0037), or None.
+                                      # goal "win" = the Lethal Solver's LOCK (the sound top rung;
+                                      # telemetry serialises it under the wire-compatible `lethal`
+                                      # key); any other goal = a below-win heuristic Goal-Ladder plan
+    lethal_refuted: int = 0      # direct lethal candidates the engine backstop REFUTED this plan
                                  # (`lethal_verify`, ADR-0030) — nonzero means closed-form claimed a win
                                  # the engine denied, the exact divergence an A/B or correction wants
+    lethal_lost: bool = False    # a locked verified line DIVERGED from the live game and was dropped
+                                 # (`lethal_veto`, ADR-0037 stage 3) — sparse telemetry key
 
 
-class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
-    """Composed from the Lethal Solver + Turn Planner (ADR-0030/0031) and four doctrine mixins (gust /
-    fetch / shuffle-refresh / tool) — each contributes its closed-form Pilot-side methods; the shared
-    Sense→Plan→Score→Act core is defined here. See common/strategy/."""
+class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+    """Composed from the Turn Planner — whose sound top rung IS the Lethal Solver (ADR-0030/0031/0037,
+    one entry point) — and four doctrine mixins (gust / fetch / shuffle-refresh / tool) — each
+    contributes its closed-form Pilot-side methods; the shared Sense→Plan→Score→Act core is defined
+    here. See common/strategy/."""
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, effects=None, attacks=None, attack_costs=None, recoil=None,
                  bench_snipe=None, ignores_active_effects=None, attack_stats=None,
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
-                 planner_engine_rank=False, planner_key_threat=False):
+                 planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
+                 lethal_veto=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -486,8 +490,21 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                                                         # engine only sharpens the committed line's value)
         self.planner_key_threat = planner_key_threat    # ADR-0031 kill-switch: the KO-the-key-threat
                                                         # Goal-Ladder rung (snipe-KO the benched top threat)
-        self._lethal_refutes = 0                        # per-decision count of engine-refuted lethal
-                                                        # candidates (rides in telemetry when > 0)
+        self.lethal_family = lethal_family              # ADR-0037 kill-switch: the ONE win-generator
+                                                        # family (single+multi-develop, gust, tutor; all
+                                                        # min-bound) + verify on EVERY win lock; OFF =
+                                                        # the legacy hook-trace rungs, direct-verify only
+        self.lethal_veto = lethal_veto                  # ADR-0037 stage-3 kill-switch: a VERIFIED win
+                                                        # lock materializes its confirmed cascade and
+                                                        # REPLAYS it (identity-matched; mismatch -> fall
+                                                        # back + `lethal_lost`); presumes lethal_family
+        self._locked_line = None                        # the materialized verified line (turn-scoped):
+                                                        # {"turn": n, "queue": [entries]} or None
+        self._lethal_lost = False                       # this decision lost a locked line to a live
+                                                        # mismatch (sparse telemetry key `lethal_lost`)
+        self._lethal_refutes = 0                        # per-plan count of engine-refuted lethal
+                                                        # candidates (rides in telemetry when > 0;
+                                                        # reset at each plan_turn, ADR-0037)
         from common.transients import TransientTracker, TurnBoostTracker
         self._transients = TransientTracker(self._attack_stat)   # ADR-0033: live next-turn grants
                                                         # (Frost Barrier class) inferred from ATTACK
@@ -521,15 +538,17 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
         options = select.get("option") or []
         board = self._board(obs, select)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
-        lethal = self.find_lethal_line(obs, select, board, options, traces)  # ADR-0030: take the win now
-        refuted = self._lethal_refutes                  # engine-refuted candidates (lethal_verify) — kept
-        if lethal is not None:                          # on every Decision shape so a refute is countable
-            return Decision(chosen=lethal.next_step, options=traces, read=board.read, lethal=lethal,
-                            lethal_refuted=refuted)
-        planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0031: below-win Goal Ladder
-        if planned is not None:
-            return Decision(chosen=planned.next_step, options=traces, read=board.read, planned=planned,
-                            lethal_refuted=refuted)
+        replayed = self.replay_locked_line(obs, select)   # ADR-0037 stage 3: a verified locked line
+        if replayed is not None:                          # owns the turn — identity-matched replay,
+            chosen, line = replayed                       # any divergence falls through below
+            return Decision(chosen=chosen, options=traces, read=board.read, planned=line,
+                            lethal_refuted=self._lethal_refutes)
+        planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
+        refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
+        if planned is not None:                         # the below-win Goal Ladder. Refutes kept on every
+            return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
+                            options=traces, read=board.read, planned=planned,
+                            lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
         # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
@@ -542,7 +561,8 @@ class Pilot(LethalMixin, PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixi
                                        select.get("minCount", 0), max_count)
         else:
             chosen = order[:max_count]
-        return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted)
+        return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
+                        lethal_lost=self._lethal_lost)
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:

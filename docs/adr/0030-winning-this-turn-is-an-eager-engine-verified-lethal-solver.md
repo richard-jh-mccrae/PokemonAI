@@ -1,6 +1,9 @@
 # ADR-0030: Winning this turn is an eager, engine-verified Lethal Solver (sound, shortest-line, execute-only)
 
-**Status.** Accepted (grilled 2026-07-01, `/grill-with-docs`). **Closed-form layer implemented
+**Status.** Accepted (grilled 2026-07-01, `/grill-with-docs`). **Superseded in layout by
+[ADR-0037](0037-lethal-solver-is-the-turn-planners-top-rung.md) (2026-07-03): the Solver becomes the
+Turn Planner's sound top rung — one entry point, one generator family; 0037 also closes this ADR's
+two deferred TODOs (multi-step drive, strict execute-only) and the four-hook lethal collapse.** **Closed-form layer implemented
 2026-07-01** (`/tdd`, TDD): the **Lethal Solver** ([lethal.py](../../src/common/strategy/lethal.py),
 `LethalMixin` composed into the Pilot) — prize-out + empty-bench wins, attach / retreat / evolve
 unlocks, shortest-first, with a **sound per-attack yield** check (`_attack_wins`, which caught and

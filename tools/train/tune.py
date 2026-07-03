@@ -57,13 +57,16 @@ def _build_pilot(agent: str):
         lethal_verify=strategy.params.get("lethal_verify", True),
         planner_engine_rank=strategy.params.get("planner_engine_rank", True),
         planner_key_threat=strategy.params.get("planner_key_threat", True),
+        lethal_family=strategy.params.get("lethal_family", True),
+        lethal_veto=strategy.params.get("lethal_veto", True),
     )
     return pilot, seeds
 
 
 def _layer_tag(planner: bool, lethal: bool) -> str:
     """Line marks for decisions the live trace shows were Planner/Solver-driven (ADR-0030/0031) —
-    scoring didn't choose there, so the fix is planner.py/lethal.py code, never a weight/when()."""
+    scoring didn't choose there, so the fix is planner.py code (the win rung for [LETHAL], the
+    heuristic rungs for [PLANNED] — one module since ADR-0037), never a weight/when()."""
     return ("[PLANNED] " if planner else "") + ("[LETHAL] " if lethal else "")
 
 
@@ -128,7 +131,7 @@ def main(argv=None):
         if n_layer:
             print(f"  *** {n_layer} correction(s) where the live pick was Planner/Solver-driven "
                   f"(live_trace planned/lethal non-null) — scoring didn't choose there; the fix "
-                  f"lives in planner.py / lethal.py, never a weight or when() ***")
+                  f"lives in planner.py (win rung vs heuristic rungs), never a weight or when() ***")
         sat = result.n_constraints - len(result.unsatisfied)
         if result.n_constraints:
             verb = "fit adopted" if result.fit_adopted else "seeds kept"

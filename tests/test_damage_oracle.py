@@ -316,8 +316,10 @@ def test_coin_attack_never_locks_a_phantom_lethal():
     # Lethal Solver must read sound floor (0) and refuse the lock (ADR-0030: a phantom
     # lethal is the one catastrophic error). A deterministic 120 still locks.
     p = _pilot(attack_stats={142: BEST_PUNCH, 1487: JETTING})
-    assert p.explain(_lethal_obs(142)).lethal is None          # coin floor 0 -> no guaranteed win
-    assert p.explain(_lethal_obs(1487)).lethal is not None     # deterministic KO -> locked
+    coin = p.explain(_lethal_obs(142)).planned                  # coin floor 0 -> no guaranteed win
+    assert coin is None or coin.goal != "win"
+    win = p.explain(_lethal_obs(1487)).planned                  # deterministic KO -> locked
+    assert win is not None and win.goal == "win"
 
 
 @pytest.mark.req("REQ-DMG-0009")
@@ -328,11 +330,13 @@ def test_hand_size_lethal_is_exact_and_lockable():
     obs = _lethal_obs(1072)
     obs["current"]["players"][0]["hand"] = [{"id": 1}, {"id": 1}]
     obs["current"]["players"][0]["handCount"] = 2
-    assert p.explain(obs).lethal is not None
+    win = p.explain(obs).planned
+    assert win is not None and win.goal == "win"
     lean = _lethal_obs(1072)                                   # 1 card -> 20 counters, no KO
     lean["current"]["players"][0]["hand"] = [{"id": 1}]
     lean["current"]["players"][0]["handCount"] = 1
-    assert p.explain(lean).lethal is None
+    lean_line = p.explain(lean).planned
+    assert lean_line is None or lean_line.goal != "win"
 
 
 @pytest.mark.req("REQ-DMG-0006")

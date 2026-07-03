@@ -40,7 +40,7 @@ def _engine_pilot(deck, **kw):
 def test_live_wiring_engine_refutes_a_phantom_direct_lock():
     """End-to-end backstop wiring (ADR-0030 item-1): with ``lethal_verify=True`` and closed-form math
     LYING that an early attack wins (a phantom lock), the REAL engine search refutes it — no lock, the
-    refute is counted — proving `find_lethal_line` drives `_engine_confirms_win` on the live
+    refute is counted — proving the win rung drives `_engine_confirms_win` on the live
     observation, not just that the primitive round-trips."""
     deck = _deck()
     pilot = _engine_pilot(deck, lethal_verify=True)
@@ -58,12 +58,62 @@ def test_live_wiring_engine_refutes_a_phantom_direct_lock():
                     and obs.get("search_begin_input")
                     and any(o.get("type") == 13 for o in (sel.get("option") or []))):  # an ATTACK option
                 d = pilot.explain(obs)
-                assert d.lethal is None               # the engine refuted every phantom candidate
+                assert d.planned is None or d.planned.goal != "win"   # every phantom candidate refuted
                 assert d.lethal_refuted >= 1
                 checked = True
                 break
             obs = battle_select(pilot.decide(obs))
         assert checked                                # the drive reached an attack menu to check
+    finally:
+        battle_finish()
+
+
+@pytest.mark.req("REQ-LETHAL-0023")
+def test_family_survives_a_live_drive_and_verified_locks_are_never_false():
+    """Live smoke for the generator family (`lethal_family=True` + `lethal_verify=True`): a real
+    mirror drive to completion must never crash, and every win lock that surfaces carries a
+    True-or-None verdict (False never rides a lock — a refuted candidate is dropped, ADR-0037)."""
+    deck = _deck()
+    pilot = _engine_pilot(deck, lethal_family=True, lethal_verify=True)
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    locks = []
+    try:
+        for _ in range(400):
+            cur = obs.get("current") or {}
+            if cur.get("result", -1) != -1:
+                break
+            d = pilot.explain(obs)
+            if d.planned is not None and d.planned.goal == "win":
+                locks.append(d.planned)
+            obs = battle_select(d.chosen)
+        assert all(ln.verified in (True, None) for ln in locks)
+    finally:
+        battle_finish()
+
+
+@pytest.mark.req("REQ-LETHAL-0029")
+def test_veto_survives_a_live_drive_and_replays_only_verified_locks():
+    """Live smoke for the materialized-replay veto (`lethal_veto=True` on top of the family): a real
+    mirror drive to completion must never crash; every replayed decision is marked kind="replay"
+    with verified True (only a confirmed cascade is ever replayed), and a lost lock — if any —
+    surfaces the sparse flag rather than a blind pick."""
+    deck = _deck()
+    pilot = _engine_pilot(deck, lethal_family=True, lethal_verify=True, lethal_veto=True)
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    replays, losses = [], 0
+    try:
+        for _ in range(400):
+            cur = obs.get("current") or {}
+            if cur.get("result", -1) != -1:
+                break
+            d = pilot.explain(obs)
+            if d.planned is not None and d.planned.kind == "replay":
+                replays.append(d.planned)
+            losses += 1 if d.lethal_lost else 0
+            obs = battle_select(d.chosen)
+        assert all(ln.goal == "win" and ln.verified is True for ln in replays)
     finally:
         battle_finish()
 

@@ -200,7 +200,8 @@ Then a human reviews the diff and commits. No executable rule is ever auto-commi
 **Layer routing (not weight-tunable at all).** A Correction whose live trace carries a non-null
 `lethal` (ADR-0030) or `planned` (ADR-0031) verdict was decided by a layer that **short-circuits**
 the scored pipeline — the fired features and weights never chose. Neither route above applies: the
-fix is code in that layer (`lethal.py` / `planner.py`) gated by a fixtured regression test, and the
+fix is code in that layer (`planner.py`: the win rung for `lethal`, the heuristic rungs for
+`planned` — one module since ADR-0037) gated by a fixtured regression test, and the
 tuner only *surfaces* these (`[LETHAL]` / `[PLANNED]` line tags, `lethal_locked` /
 `planner_committed` snapshot flags) so `/blunder-buster` routes them out of rule authoring.
 

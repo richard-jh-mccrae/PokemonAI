@@ -1,6 +1,9 @@
 # ADR-0031: The Turn Planner is a goal-directed, engine-simulated whole-turn optimizer (Tier-1 Search)
 
-**Status.** Accepted (grilled 2026-07-01, `/grill-with-docs`). **Implemented 2026-07-01** (`/tdd`, TDD):
+**Status.** Accepted (grilled 2026-07-01, `/grill-with-docs`). **Extended by
+[ADR-0037](0037-lethal-solver-is-the-turn-planners-top-rung.md) (2026-07-03): the "subsumes the
+Lethal Solver" claim becomes literal — the win goal is the Planner's in-module sound top rung, the
+two entry points merge, and `TurnLine` becomes the one line type (wire format preserved).** **Implemented 2026-07-01** (`/tdd`, TDD):
 the **Turn Planner** ([planner.py](../../src/common/strategy/planner.py), `PlannerMixin`/`TurnLine`
 composed into the Pilot, running after the Lethal Solver and before the tuned scoring). Built the whole
 ladder: **(0)** the cost spike measured `search_step`≈0.1 ms → ~0.05 ms/line → **always-engine-sim** (no

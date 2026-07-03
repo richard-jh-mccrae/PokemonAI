@@ -114,8 +114,8 @@ def test_engine_ranking_survives_a_live_drive():
             if cur.get("result", -1) != -1:
                 break
             d = pilot.explain(obs)
-            if d.planned is not None:
-                committed.append(d.planned)
+            if d.planned is not None and d.planned.goal != "win":   # win locks preempt ranking
+                committed.append(d.planned)                         # (ADR-0037), no provenance to carry
             obs = battle_select(d.chosen)
         assert all(ln.ranked_by in ("engine", "closed") for ln in committed)
     finally:
