@@ -84,3 +84,58 @@ class TransientTracker:
             if grant.get("serial") == serial:
                 return grant
         return None
+
+
+_PLAY = 10
+
+
+class TurnBoostTracker:
+    """Match-scoped store of the flat damage-boosts live THIS turn (the OHKO-line model's play
+    half). A PLAY log of a Trainer carrying a parsed ``CardStat.damageBoost`` (Premium Power Pro,
+    Black Belt's Training — "During this turn, attacks used by your … Pokémon do N more damage")
+    accumulates ``(amount, attackerType, vsExOnly)`` for the playing side; every boost dies at the
+    next TURN_START (a this-turn effect cannot outlive the turn it was played — clearing on any
+    turn flip is safe because only the turn player attacks). Tool boosts (Maximum Belt) are NOT
+    tracked here — an attached Tool is visible board state, read directly at damage-context build.
+    Same soundness contract as ``TransientTracker``: deterministic log facts, idempotent per-viewer
+    replay (re-observing the same PLAY re-appends after the same TURN_START cleared — the stream is
+    ordered), new-match reset on a turn regression.
+
+    Args:
+        card_stat: callable ``cardId -> CardStat | None`` (the Pilot's stats getter).
+    """
+
+    def __init__(self, card_stat) -> None:
+        self._card_stat = card_stat
+        self._by_side: dict[int, list] = {}     # side -> [(amount, attackerType|None, vsEx), …]
+        self._last_turn = 0
+
+    def observe(self, obs: dict) -> None:
+        """Consume one observation's logs; never raises (a malformed obs is ignored)."""
+        try:
+            turn = ((obs or {}).get("current") or {}).get("turn") or 0
+            if turn and turn < self._last_turn:             # a NEW match: state must not leak
+                self._by_side.clear()
+            if turn:
+                self._last_turn = turn
+            for lg in (obs or {}).get("logs") or []:
+                t = (lg or {}).get("type")
+                side = lg.get("playerIndex")
+                if t == _TURN_START:
+                    self._by_side.clear()                   # this-turn effects die at the turn flip
+                elif t == _PLAY and side is not None:
+                    st = self._card_stat(lg.get("cardId"))
+                    # Trainers only (hp 0), and never a Tool (cardType 2): a Tool's boost lives
+                    # while ATTACHED — visible board state, priced off the holder directly.
+                    if (st is not None and getattr(st, "damageBoost", 0)
+                            and getattr(st, "hp", 0) == 0 and getattr(st, "cardType", None) != 2):
+                        self._by_side.setdefault(side, []).append(
+                            (st.damageBoost, st.damageBoostType, st.damageBoostVsEx))
+        except Exception:
+            return
+
+    def boosts_for(self, side) -> tuple:
+        """The live ``(amount, attackerType|None, vsExOnly)`` boosts for this side's attacks."""
+        if side is None:
+            return ()
+        return tuple(self._by_side.get(side, ()))

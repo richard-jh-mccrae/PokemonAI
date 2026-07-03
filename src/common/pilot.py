@@ -29,6 +29,15 @@ _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks pr
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe rider, capped below — a sub-prize
 _BENCH_SNIPE_CAP = 0.9     # tiebreak so among equal-outcome KO attacks the one that ALSO snipes a benched
                            # target wins (best total board value), without ever overriding a prize (ADR-0022 #14)
+_ENERGY_RECOVER = 75       # per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X}
+                           # from discard") on a NON-KO turn — chip-scale, so fueled Aura Jab beats bare Mega Brave
+_RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
+_RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
+_LOCK_COST = 40            # charge a self-locking attack (Mega Brave) when a LOCK-FREE one is affordable;
+                           # never charged on the only affordable attack (chipping still beats passing)
+_LOCK_KO = 0.3             # KO-branch sub-prize variant: among equal-prize KOs keep the nuke off cooldown
+_RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Active doomed (Wild Press at
+                           # 80 HP) — combat-scale; a KO/snipe-KO or already-doomed Active is never charged
 _ENERGIZED_SNIPE_TIER = 100000  # energized benched target is strictly higher snipe TIER than any
                            # bare one — attacks SOONER (imminence), sniped before a bigger latent
                            # threat (ADR-0020). Within a tier, threat magnitude orders the choice.
@@ -151,12 +160,6 @@ class Board:
     energy_placeable: bool = False     # some in-play Pokémon can still absorb Energy productively (it
                                        # carries fewer Energy than its highest-damage attack costs). False ->
                                        # no useful home this turn, `attach-before-hand-shuffle` can't veto a needed refresh (ep83038055 f40). Fail-open.
-    hand_is_dead: bool = False         # no non-refresh card in hand yields any positive-scoring play
-                                       # this turn (each virtually scored through real pipeline) —
-                                       # Shuffle-Refresh fallback gate (ADR-0024): refresh only a dead hand
-    deck_holds_a_need: bool = False    # my deck still holds a card I currently LACK (some deck card has
-                                       # positive grab-value, `_grab_value_of`) — gain-exists guard for
-                                       # `refresh-when-hand-is-dead` (don't refresh into a deck of dead cards)
     weakest_bench_hp: int | None = None  # least HP among opponent's benched snipe targets at a
                                          # DAMAGE select — target closest to a knockout
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among opponent's
@@ -244,6 +247,18 @@ class Board:
     brief: Brief | None = None            # matched hand-authored Matchup Brief for the recognized
                                           # opponent (ADR-0027, covers-routed); None = unrecognized / no
                                           # covering Brief / Posture off. Behavior-neutral: nothing scores off it yet.
+    my_discard_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in
+                                          # MY open discard — the recover-rider fuel (Aura Jab class)
+    active_best_attack_locked: bool = False  # my Active's HIGHEST-damage attack is transient-locked this
+                                          # turn (Mega Brave class, ADR-0033) — the swap trigger
+    opp_has_stage2: bool = False          # opponent has a Stage 2 in play (CardStat.stage2) — the
+                                          # Gravity Mountain tech read
+    opp_has_colorless_ability: bool = False  # opponent has a {C} Pokémon WITH an Ability in play —
+                                          # the Team Rocket's Watchtower read
+    hand_ids: frozenset = field(default_factory=frozenset)  # card ids in MY hand — generic hold/
+                                          # sequencing read (e.g. Watchtower waits while Meowth's in hand)
+    hand_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in MY
+                                          # hand — the last-attachable-F read (Lunar Cycle guard)
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -370,6 +385,10 @@ class Context:
     # NOTE: is_attack/tactical/is_ko = documented deck-Hypothesis trigger surface (deck-genie
     # authoring.md); no shipped rule reads them yet — don't prune as dead without updating that doc.
     is_attack: bool = False
+    attack_id: int | None = None   # engine attackId of an ATTACK option (None otherwise) — deck rules
+                                   # keying an attack-specific condition; prefer stat/tags/board reads
+    context_card_id: int | None = None  # the select's OWNER (`select.contextCard`): the card whose effect/
+                                   # Ability resolves (an ACTIVATE's bare YES/NO carries no card itself)
     tactical: float = 0.0          # option's closed-form combat value (>= KO_SCORE on a knockout)
     is_ko: bool = False            # this option is an attack that knocks out opponent's Active
     search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
@@ -384,6 +403,15 @@ class Context:
     search_confirmed_hit: bool = False  # this option PLAYS a search that PROVABLY hits: a fetch target
                                    # certainly still in deck (`Board.deck_definitely_has`, post-anchor) AND filling
                                    # a need (positive grab value). POSITIVE complement of the two whiff signals (ADR-0029); sound-or-silent. Drives `search-the-confirmed-hit`.
+    fetch_sheds_junk: bool = False  # this option PLAYS a cost_discard fetch whose 2 predicted sheds
+                                   # (top-2 pitch over hand minus the fetch, same discard rungs) BOTH score > 0 — junk cost, dig at the free band (`costly-fetch-sheds-junk`)
+    fetch_sheds_live: bool = False  # ...a predicted shed scores < 0 — a live card pays the cost
+                                   # (`dont-shed-a-live-card`)
+    fetch_sheds_key: bool = False   # ...`keep-key-cards-at-discard` fires on a predicted shed — an
+                                   # irreplaceable card is forced into the pitch (`dont-shed-a-key-card`)
+    refresh_probable_miss: bool = False  # this option PLAYS a shuffle_hand refresh whose N-card draw
+                                   # PROBABLY misses every needed card (post-anchor hypergeometric over the
+                                   # shuffle-grown pool, ADR-0024 amendment). Drives `dont-refresh-into-a-probable-miss`.
 
 
 @dataclass
@@ -477,10 +505,13 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         self._lethal_refutes = 0                        # per-plan count of engine-refuted lethal
                                                         # candidates (rides in telemetry when > 0;
                                                         # reset at each plan_turn, ADR-0037)
-        from common.transients import TransientTracker
+        from common.transients import TransientTracker, TurnBoostTracker
         self._transients = TransientTracker(self._attack_stat)   # ADR-0033: live next-turn grants
                                                         # (Frost Barrier class) inferred from ATTACK
                                                         # logs — obs exposes no effect state
+        self._turn_boosts = TurnBoostTracker(            # this-turn flat damage-boost plays (Power Pro
+            lambda cid: self.stats.get(cid) if (self.stats and cid is not None) else None)
+                                                        # class) — OHKO-line model's play half
         self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
@@ -503,6 +534,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             return Decision(chosen=list(self.deck))
         if not self._planning:                   # ADR-0033: consume the REAL log stream only —
             self._transients.observe(obs)        # engine-sim future must never mutate match state
+            self._turn_boosts.observe(obs)
         options = select.get("option") or []
         board = self._board(obs, select)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
@@ -619,6 +651,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._gust_stall_target_tactical(obs, select, board, option)
                     + self._attach_lethal_tactical(obs, select, board, option)
+                    + self._boost_lethal_tactical(obs, select, board, option)
                     + self._retreat_to_lethal_tactical(obs, board, option))
         ctx = self._context(obs, select, board, option, tactical)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
@@ -650,18 +683,23 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         hp = (opp or {}).get("hp", 0)
         # Damage oracle (ADR-0032): prevention/W/R pierced by the attack's own ignore flags; a
         # prevented ACTIVE hit (0) no longer hides bench-snipe credit below. Context scores scalers exactly.
-        dmg = self.predicted_damage(self._my_active_id(obs), attack_id, opp,
-                                    context=self._damage_context(obs))
+        dmg_ctx = self._damage_context(obs)
+        dmg = self.predicted_damage(self._my_active_id(obs), attack_id, opp, context=dmg_ctx)
         eff = _EFFICIENCY * self.attack_costs.get(attack_id, 0)   # cheaper of equal outcomes wins
+        recover = self._recover_units(attack_id, dmg_ctx, board)  # re-attachable discard fuel (Aura Jab)
+        locks = self._lock_cost_applies(attack_id, board)         # burns a cooldown a free attack avoids
         snipe_ko = self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(attack_id))
         if hp and dmg >= hp:
             if self._is_simultaneous_draw(board, attack_id, self._prize_value(opp)):
                 return dmg - eff                            # a simultaneous double-KO is a DRAW, not a win
             bonus = snipe_ko or self._bench_snipe_bonus(board, attack_id)  # snipe-KO is a full prize;
+            bonus += min(_RECOVER_KO_CAP, _RECOVER_KO * recover)  # sub-prize: the KO that also develops
+            bonus -= _LOCK_KO if locks else 0                     # sub-prize: keep the nuke off cooldown
             return KO_SCORE + self._prize_value(opp) - eff + bonus        # else a sub-prize chip tiebreak
         if snipe_ko:                                        # Active survives, but snipe rider KOs a
             return KO_SCORE + snipe_ko - eff                # benched Pokémon — a guaranteed PRIZE this turn
-        return dmg - eff
+        return (dmg - eff + _ENERGY_RECOVER * recover - (_LOCK_COST if locks else 0)
+                - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0))
 
     def _bench_snipe_bonus(self, board: Board, attack_id) -> float:
         """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes one of the opponent's Benched
@@ -833,6 +871,71 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                 best = max(best, val)
         return best
 
+    def _boost_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for a damage-boost Trainer that UNLOCKS a knockout this turn — the
+        executable core of the damage-boost OHKO-line model: playing this Premium Power Pro class
+        Item/Supporter (+N this turn, an Item stacks across the copies I hold) or attaching this
+        Maximum Belt class Tool (+N while attached, vs an ex Active) lifts my Active's best
+        affordable attack over the defender's HP (Mega Brave 270 + Belt 50 = 320 = the Dragapult ex
+        OHKO). Mirrors `_attach_lethal_tactical`: Tactical-layer (never a tunable weight), fires
+        only when the boost is NECESSARY (no affordable attack already KOs — else just attack) and
+        the crossing is exact oracle arithmetic (context-priced, so boosts ALREADY played this turn
+        are in the base; each further copy's play re-passes this check on the updated context).
+        `_finish_turn_last` then sequences the lethal play tier-0, ahead of the attack it enables.
+        Skips a crossing whose forced recoil would be a simultaneous draw. 0 otherwise."""
+        t = option.get("type")
+        if board.turn <= 1:            # turn 1 going first: can't attack, no boost is lethal
+            return 0
+        cid = self._option_card_id(obs, select, option)
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is None or not getattr(st, "damageBoost", 0):
+            return 0
+        if t == _PLAY and st.cardType in (1, 3):            # Item stacks; a Supporter is one/turn
+            copies = 1 if st.cardType == _SUPPORTER else self._hand_count_of(obs, cid)
+        elif (t == _ATTACH and st.cardType == 2
+              and option.get("inPlayArea") == _ACTIVE):     # a boost Tool onto my attacker
+            copies = 1
+        else:
+            return 0
+        opp = self._opp_active(obs)
+        opp_hp = (opp or {}).get("hp", 0)
+        active = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        if not (active and opp and opp_hp):
+            return 0
+        if st.damageBoostType is not None and active.energyType != st.damageBoostType:
+            return 0                                        # "your {F} Pokémon" — attacker-type gate
+        opp_stat = self.stats.get(opp.get("id")) if self.stats else None
+        if st.damageBoostVsEx and not (opp_stat and (opp_stat.ex or opp_stat.megaEx)):
+            return 0                                        # "{ex}" defender gate (incl. Mega ex)
+        ctx = self._damage_context(obs)
+        for aid in (active.attacks or ()):
+            cost = self.attack_costs.get(aid, 99)
+            if cost > board.my_active_energy:
+                continue
+            dmg = self.predicted_damage(board.my_active_id, aid, opp, context=ctx)
+            if dmg >= opp_hp:
+                return 0                                    # an affordable KO already exists — just attack
+        best = 0.0
+        for aid in (active.attacks or ()):
+            cost = self.attack_costs.get(aid, 99)
+            if cost > board.my_active_energy:
+                continue
+            dmg = self.predicted_damage(board.my_active_id, aid, opp, context=ctx)
+            if dmg <= 0:                                    # a boost never lifts a does-nothing attack
+                continue
+            if (dmg + st.damageBoost * copies >= opp_hp
+                    and not self._is_simultaneous_draw(board, aid, self._prize_value(opp))):
+                best = max(best, KO_SCORE + self._prize_value(opp) - _EFFICIENCY * cost)
+        return best
+
+    def _hand_count_of(self, obs: dict, card_id) -> int:
+        """Copies of `card_id` in MY hand (the stacking read for a Power-Pro-class crossing)."""
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        return sum(1 for c in (me.get("hand") or []) if c and c.get("id") == card_id)
+
     def _prize_value(self, poke: dict | None) -> int:
         """Prizes a knockout yields — Mega ex 3, ex 2, else 1 (read off the engine CardStat)."""
         stat = self.stats.get((poke or {}).get("id")) if self.stats else None
@@ -896,6 +999,120 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         st = self._attack_stat(attack_id)
         return st.recoil if st else 0
 
+    def _recover_units(self, attack_id, dmg_ctx: dict, board: Board) -> int:
+        """Energy this attack's recover rider would actually re-attach from my discard — the
+        development the Tactical layer credits (Aura Jab: attack + accelerate). min(recoverN, the
+        matching Basic-Energy fuel in my open discard), 0 when the rider's target scope has no
+        recipient (a bench-targeted recover with an empty Bench attaches nothing). Fuel comes off
+        the already-built damage context (`atk_discard_basic_by_type`), so the count is the same
+        one the discard-scaler oracle prices."""
+        st = self._attack_stat(attack_id)
+        if not st or not getattr(st, "recoverN", 0):
+            return 0
+        if st.recoverTarget == "bench" and not board.my_bench:
+            return 0
+        by_type = dmg_ctx.get("atk_discard_basic_by_type") or {}
+        fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
+                else sum(by_type.values()))
+        return min(st.recoverN, fuel)
+
+    def _board_has_stage2(self, player: dict | None) -> bool:
+        """True when this player has a Stage 2 Pokémon in play (`CardStat.stage2`) — the Gravity
+        Mountain tech read (its −30 HP hits exactly Stage 2s, both sides)."""
+        if not (self.stats and player):
+            return False
+        for p in ((player.get("active") or []) + (player.get("bench") or [])):
+            st = self.stats.get((p or {}).get("id")) if p else None
+            if st is not None and getattr(st, "stage2", False):
+                return True
+        return False
+
+    def _board_has_colorless_ability(self, player: dict | None) -> bool:
+        """True when this player has a Colorless Pokémon WITH an Ability in play — the Team Rocket's
+        Watchtower read ({C} Pokémon lose their Abilities under it, both sides)."""
+        if not (self.stats and player):
+            return False
+        for p in ((player.get("active") or []) + (player.get("bench") or [])):
+            st = self.stats.get((p or {}).get("id")) if p else None
+            if (st is not None and st.hp > 0 and st.energyType == 0
+                    and getattr(st, "hasAbility", False)):
+                return True
+        return False
+
+    def _hand_basic_energy(self, hand: list) -> dict:
+        """{EnergyType: count} of Basic Energy cards in my hand — the last-attachable-Energy read
+        (`CardStat.cardType` BASIC_ENERGY=5, mirroring `_discard_energy_counts`)."""
+        counts: dict = {}
+        for c in hand:
+            st = self.stats.get((c or {}).get("id")) if (self.stats and c) else None
+            if st is not None and getattr(st, "cardType", None) == 5 and st.energyType is not None:
+                counts[st.energyType] = counts.get(st.energyType, 0) + 1
+        return counts
+
+    def _recoil_flips_doom(self, attack_id, obs: dict, board: Board) -> bool:
+        """True when this NON-KO attack's unconditional recoil turns my currently-SAFE Active into a
+        free KO for the opponent — outright self-KO (recoil >= my HP on a chip attack), or the
+        post-recoil HP falls inside their next-turn reach (`_active_doomed` re-asked at hp−recoil).
+        The Wild-Press survival guard: 210 self-70 is fine as a prize trade (the KO branch is never
+        charged) but not as a chip that leaves an 80-HP Psychic-weak body for nothing. Stands down
+        when the Active is ALREADY doomed — chipping big before it dies is right."""
+        recoil = self._rider_recoil(attack_id)
+        hp = board.my_active_hp
+        if recoil <= 0 or not hp or board.active_doomed:
+            return False
+        if recoil >= hp:                                   # a non-KO suicide: a free body, no prize
+            return True
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        oa = next((p for p in (opp.get("active") or []) if p), None)
+        if not ma:
+            return False
+        return bool(self._active_doomed(dict(ma, hp=hp - recoil), oa, opp))
+
+    def _active_best_attack_locked(self, ma: dict | None) -> bool:
+        """True when my Active's HIGHEST-damage attack is transient-locked this turn — it used a
+        "can't use <this attack> next turn" attack last turn (Mega Brave class; a blanket self-lock
+        counts too). Read off the ADR-0033 tracker, serial-gated: a body that left the Active carries
+        a new serial, so the grant expires with the swap — which is exactly why swapping in a fresh
+        benched copy (`swap-out-the-locked-attacker`) restores the attack."""
+        grant = self._transients.grant_for_serial((ma or {}).get("serial"))
+        if not grant:
+            return False
+        if grant.get("self_lock"):
+            return True
+        same = grant.get("same_lock")
+        if same is None:
+            return False
+        stat = self.stats.get((ma or {}).get("id")) if self.stats else None
+        aids = getattr(stat, "attacks", None) or ()
+        if not aids:
+            return False
+        best = max(aids, key=lambda aid: self.attacks.get(aid, 0))
+        return same == best
+
+    def _lock_cost_applies(self, attack_id, board: Board) -> bool:
+        """True when this attack locks itself (or all attacks) for my next turn AND my Active could
+        have used a lock-free affordable attack instead — the flexibility cost of burning a cooldown
+        (Mega Brave: next turn it can't nuke, exactly when the next body arrives). Never True when
+        it's the Active's only affordable attack: attacking still beats passing (a lock charge must
+        never push the lone chip below END). Closed-form off the attack table + current Energy."""
+        st = self._attack_stat(attack_id)
+        if not st or not (getattr(st, "nextTurnSelfLock", False)
+                          or getattr(st, "nextTurnSameAttackLock", False)):
+            return False
+        active = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        for aid in (getattr(active, "attacks", None) or ()):
+            if aid == attack_id or self.attack_costs.get(aid, 99) > board.my_active_energy:
+                continue
+            alt = self._attack_stat(aid)
+            if alt and not (alt.nextTurnSelfLock or alt.nextTurnSameAttackLock):
+                return True                                  # a lock-free attack was affordable
+        return False
+
     def _damage_context(self, obs: dict, *, attacker_is_me: bool = True) -> dict:
         """Visible-state counts for the oracle's scaling term (ADR-0032 Damage Formula),
         ATTACKER-relative: ``attacker_is_me=True`` prices MY attack this decision;
@@ -911,6 +1128,19 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         aa = next((p for p in (atk.get("active") or []) if p), None)
         da = next((p for p in (dfn.get("active") or []) if p), None)
         total, by_type = self._discard_energy_counts(atk.get("discard") or [])
+        bench_names = tuple(                                    # bench-partner conditions (Cosmic
+            (self.stats.get(b.get("id")).name if self.stats and self.stats.get(b.get("id")) else "")
+            for b in (atk.get("bench") or []) if b)             # Beam needs Lunatone benched)
+        # flat damage-boosts live for the attacker's attacks: this-turn Trainer plays (tracker) +
+        # Tools ATTACHED to the attacking Active (visible board state; Maximum Belt). Both open
+        # information in either direction — the opponent's Power Pro play and their Belt are as
+        # visible as mine, so Incoming prices them too.
+        side = yi if attacker_is_me else 1 - yi
+        boosts = list(self._turn_boosts.boosts_for(side))
+        for tool in ((aa or {}).get("tools") or []):
+            t_stat = self.stats.get((tool or {}).get("id")) if self.stats else None
+            if t_stat is not None and getattr(t_stat, "damageBoost", 0):
+                boosts.append((t_stat.damageBoost, t_stat.damageBoostType, t_stat.damageBoostVsEx))
         def _counters(p):
             return max(0, ((p or {}).get("maxHp", 0) or 0) - ((p or {}).get("hp", 0) or 0)) // 10
 
@@ -926,6 +1156,8 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                "def_bench": sum(1 for p in (dfn.get("bench") or []) if p),
                "atk_discard_energy_total": total,
                "atk_discard_basic_by_type": by_type,
+               "atk_bench_names": bench_names,
+               "atk_boosts": tuple(boosts),
                "atk_self_counters": _counters(aa),      # damage counters on attacking Active
                "def_counters": _counters(da),           # ... and on defending Active
                "atk_prizes_taken": _taken(atk),         # prizes each side taken (6 - remaining)
@@ -1094,6 +1326,8 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
         search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
+        sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
+        refresh_miss = self._refresh_probable_miss(option, cid, tags, board, obs, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
         attach_from_concentrate = (select.get("context") == _ATTACH_FROM
                                    and board.attach_from_concentrate_slot is not None
@@ -1131,11 +1365,15 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                                                 and cid in self._stranded_evolution_set()),
                        roles=roles, tags=tags, stat=stat, board=board, params=self.strategy.params,
                        is_attack=is_attack,
+                       attack_id=(option.get("attackId") if is_attack else None),
+                       context_card_id=((select.get("contextCard") or {}).get("id")),
                        tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon,
                        search_targets_unlikely=search_unlikely,
-                       search_confirmed_hit=search_confirmed)
+                       search_confirmed_hit=search_confirmed,
+                       fetch_sheds_junk=sheds_junk, fetch_sheds_live=sheds_live,
+                       fetch_sheds_key=sheds_key, refresh_probable_miss=refresh_miss)
 
     # Fetch doctrine's comparator/oracle, deck-knowledge whiff/redundant signals, whether-to-play
     # lookahead, and greedy multi-pick live in doctrine_fetch (FetchMixin).
@@ -1345,6 +1583,13 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             bench_wincon_prize_value=self._bench_wincon_prize_value(me),
             bench_wincon_underpowered=self._bench_wincon_underpowered(me),
             basic_energy_in_deck=self._basic_energy_in_deck(deck_empty),
+            my_discard_basic_energy=self._discard_energy_counts(me.get("discard") or [])[1],
+            active_best_attack_locked=self._active_best_attack_locked(ma),
+            opp_has_stage2=self._board_has_stage2(opp),
+            opp_has_colorless_ability=self._board_has_colorless_ability(opp),
+            hand_ids=frozenset(c.get("id") for c in (me.get("hand") or [])
+                               if c and c.get("id") is not None),
+            hand_basic_energy=self._hand_basic_energy(me.get("hand") or []),
             opp_has_played_gust=self._opp_has_played_gust(opp),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             priority_wincon_slot=self._priority_wincon_slot(
@@ -1369,14 +1614,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             board = replace(board,                      # Tool is in hand (common case pays nothing)
                             tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
-        # Shuffle-Refresh fallback signals (ADR-0024) — only `refresh-when-hand-is-dead` reads them,
-        # fires only on a `shuffle_hand` option, so skip the whole-menu scan unless a refresh is in hand.
-        if not self._has_shuffle_refresh(me):
-            return board
-        plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
-        return replace(board,
-                       deck_holds_a_need=self._deck_holds_a_need(board, plan),
-                       hand_is_dead=self._hand_is_dead(obs, select, board))
+        return board
 
     # Shuffle-Refresh doctrine's signals live in doctrine_shuffle_refresh (ShuffleRefreshMixin); `_board` calls them.
 

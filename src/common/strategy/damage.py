@@ -49,6 +49,15 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
     """
     if attack is None:
         return 0
+    if (getattr(attack, "requiresBench", None) and bound != "max"
+            and (context or {}).get("atk_bench_names") is not None
+            and not all(n in context["atk_bench_names"] for n in attack.requiresBench)):
+        # a bench-partner condition ("does nothing without Lunatone on your Bench") unmet on the
+        # LIVE board: the attack does 0 this decision (exact AND min — the bench is what it is when
+        # the attack is scored; benching the partner first re-presents the menu with it met). The
+        # "max" bound keeps printed: Incoming is a worst case, and the opponent can bench the
+        # partner before attacking next turn. Fail-open without the context key.
+        return 0
     dmg = float(attack.damage or 0)
     if bound == "min" and attack.damageMin is not None:
         dmg = float(attack.damageMin)
@@ -86,6 +95,18 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
             dmg += attack.hiddenPerUnit * attack.hiddenSample  # no deck facts: assume every card fuels
     if not dmg:
         return 0
+    for amount, atype, vs_ex in (context or {}).get("atk_boosts") or ():
+        # flat Trainer damage-boosts live for this attack (Premium Power Pro plays this turn,
+        # an attached Maximum Belt) — "before applying Weakness and Resistance", so added here,
+        # ahead of the W/R step below, and only onto an attack already dealing damage (a boost
+        # never turns a does-nothing attack into 30). Each carries its own gates: an attacker
+        # EnergyType ("your {F} Pokémon") and/or a defender-{ex} scope (which includes Mega ex —
+        # rulebook.txt:337).
+        if atype is not None and (attacker is None or attacker.energyType != atype):
+            continue
+        if vs_ex and not (defender is not None and (defender.ex or defender.megaEx)):
+            continue
+        dmg += amount
     if not attack.ignoresEffects and _prevented(attacker, defender, defender_tags):
         return 0
     atype = attacker.energyType if attacker is not None else None

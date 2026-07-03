@@ -47,9 +47,18 @@ class CardStat:
     cardType: int | None = None        # CardType enum (ITEM=1, TOOL=2, SUPPORTER=3…) — distinguishes
                                        # Supporter gust (costs the slot) from free Item gust. ADR-0022 #12
     stage: str | None = None
+    stage2: bool = False               # engine CardData.stage2 — a Stage 2 Pokémon (Gravity Mountain's
+                                       # −30 HP hits exactly these; the opp-board stadium-tech read)
     evolvesFrom: str | None = None
     tera: bool = False                 # engine CardData.tera: takes NO damage from attacks while
                                        # BENCHED (32 in pool) — bench-snipe rider can never KO it
+    # Damage-boost Trainer facts (the OHKO-line model's card tier), parsed like hpBonus. Pool 4:
+    # Power Pro (Item {F}+30, stacks), Max Belt (Tool +50-vs-ex), Black Belt's (+40-vs-ex); Kieran
+    # ("Choose 1" multi-mode) fail-closed.
+    damageBoost: int = 0                    # flat "+N to opp Active" before W/R: Item/Supporter = the
+                                            # turn it's played; Tool = while attached to the attacker
+    damageBoostType: int | None = None      # attacker EnergyType gate ("your {F} Pokémon" -> 6); None=any
+    damageBoostVsEx: bool = False           # defender "{ex}" gate — includes Mega ex (rulebook.txt:337)
     # Defender-side dmg facts (ADR-0032 G1), from Ability text — parametric fields the boolean
     # prevent_ex_damage tag can't carry (Sylveon 330 shows the tag can silently miss).
     preventsDamageFrom: str | None = None   # "ex" (Crustle/Sylveon) | "basic_ex" (Farigiraf ex) —
@@ -301,6 +310,15 @@ class AttackStat:
     hiddenSample: int = 0              # units unknowable closed-form — "max" assumes every sampled card
                                        # fuels (Incoming ceiling); "min"/"exact" 0 unless deck tracker has hidden_units
     hiddenEnergyType: int | None = None  # deck facts + Basic-{X} filter -> oracle computes pigeonhole floor/EV
+    recoverN: int = 0                  # energy-recover rider ("Attach up to N Basic {X} from discard"):
+                                       # max cards re-attached (Aura Jab / Regi Charge; pool-verified 6)
+    recoverEnergyType: int | None = None   # the rider's Basic-{X} filter (None = any Basic Energy)
+    recoverTarget: str | None = None   # scope "self"/"bench"/"any" — Tactical credits
+                                       # min(recoverN, matching discard fuel) as development
+    requiresBench: tuple | None = None  # attack does NOTHING unless ALL these names sit on attacker's
+                                       # Bench (Cosmic Beam/Lunatone, Guardian Burst/Uxie+Azelf;
+                                       # pool 2). Oracle zeroes exact/min on the live board; "max"
+                                       # keeps printed (Incoming: they can bench the partner first)
     # Transient next-turn grants (ADR-0033): what USING this attack grants for one turn — tracked
     # match-scoped from ATTACK logs (common/transients.py), obs has no effect state.
     nextTurnReduction: int = 0         # defender-side: "takes N less damage" next turn (Frost Barrier)
@@ -519,6 +537,96 @@ def parse_attack_transients(text: str, attack_name: str) -> dict:
     return out
 
 
+# The energy-recover rider family (attach-from-discard). Pool-verified: exactly 6 — Aura Jab
+# (up to 3 Basic {F} → Benched), Pick and Stick (up to 2 Basic, any of your Pokémon), 3x Regi
+# Charge + Abundant Harvest (self). Attacking IS the acceleration for these decks, so the
+# Tactical layer credits the recoverable fuel as development value.
+_RECOVER_RE = re.compile(
+    r"Attach (?:up to (\d+) |a )Basic(?: \{(\w)\})? Energy cards? from your discard pile to "
+    r"(this Pok.mon|(?:1 of )?your Benched Pok.mon|(?:1 of )?your Pok.mon)")
+
+
+# The damage-boost Trainer families (the OHKO-line model's card facts). An Item/Supporter grants
+# "During this turn, attacks used by your [{X}] Pokémon do N more damage to your opponent's Active
+# Pokémon [{ex}]"; a Tool grants it while attached. Both "(before applying Weakness and
+# Resistance)" — the oracle adds the boost BEFORE the W/R step. Multi-mode cards ("Choose 1" —
+# Kieran) are fail-closed: the boost is only one of their modes, so no flat fact is sound.
+_BOOST_TURN_RE = re.compile(
+    r"During this turn, attacks used by your (?:\{(\w)\} )?Pok.mon do (\d+) more damage to your "
+    r"opponent.s Active Pok.mon( \{ex\})?")
+_BOOST_TOOL_RE = re.compile(
+    r"Attacks used by the Pok.mon this card is attached to do (\d+) more damage to your "
+    r"opponent.s Active Pok.mon( \{ex\})?")
+
+
+def parse_card_damage_boost(card) -> tuple[int, int | None, bool]:
+    """Flat damage-boost a Trainer grants: ``(amount, attackerEnergyType|None, vsExOnly)``.
+
+    Args:
+        card: an engine ``CardData`` record (skills carry the free text).
+
+    Returns:
+        e.g. Premium Power Pro → ``(30, 6, False)``; Maximum Belt → ``(50, None, True)``;
+        Black Belt's Training → ``(40, None, True)``; anything else (incl. the multi-mode
+        Kieran) → ``(0, None, False)``.
+    """
+    text = " ".join((s.text or "") for s in (getattr(card, "skills", None) or ())).replace("\n", " ")
+    if not text or "Choose 1" in text:
+        return (0, None, False)
+    m = _BOOST_TURN_RE.search(text)
+    if m:
+        return (int(m.group(2)), _TYPE_LETTER.get(m.group(1)) if m.group(1) else None,
+                bool(m.group(3)))
+    m = _BOOST_TOOL_RE.search(text)
+    if m:
+        return (int(m.group(1)), None, bool(m.group(2)))
+    return (0, None, False)
+
+
+# The bench-partner condition family ("If you don't have <X> on your Bench, this attack does
+# nothing"). Pool-verified: exactly 2 — Cosmic Beam (Lunatone), Guardian Burst (Uxie AND Azelf).
+# The generic does-nothing bounds parser already floors these to damageMin=0 (the Lethal guard);
+# this names the partner(s) so SCORING can zero the attack on the live board too.
+_REQUIRES_BENCH_RE = re.compile(
+    r"If you don.t have ([^,]{2,60}?) on your Bench, this attack does nothing")
+
+
+def parse_attack_bench_requirement(text: str) -> tuple[str, ...] | None:
+    """Bench-partner names an attack requires, or None (Cosmic Beam → ``("Lunatone",)``;
+    Guardian Burst → ``("Uxie", "Azelf")`` — an "and" list means ALL must be benched).
+
+    Args:
+        text: the attack's free-text effect.
+
+    Returns:
+        The required names tuple, or None when the attack carries no bench condition.
+    """
+    m = _REQUIRES_BENCH_RE.search((text or "").replace("\n", " "))
+    if not m:
+        return None
+    return tuple(n.strip() for n in m.group(1).split(" and ") if n.strip())
+
+
+def parse_attack_energy_recover(text: str) -> tuple[int, int | None, str] | None:
+    """Energy-recover rider read from attack text: ``(n, basicEnergyType|None, target)``.
+
+    Args:
+        text: the attack's free-text effect.
+
+    Returns:
+        e.g. Aura Jab → ``(3, 6, "bench")``; Regi Charge → ``(2, 3, "self")``; Pick and
+        Stick → ``(2, None, "any")``. None when the attack recovers nothing.
+    """
+    m = _RECOVER_RE.search((text or "").replace("\n", " "))
+    if not m:
+        return None
+    n = int(m.group(1)) if m.group(1) else 1
+    etype = _TYPE_LETTER.get(m.group(2)) if m.group(2) else None
+    tgt = m.group(3)
+    target = "self" if "this" in tgt else ("bench" if "Benched" in tgt else "any")
+    return (n, etype, target)
+
+
 def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, AttackStat]:
     """Pure transform: engine ``Attack`` records → ``{attackId: AttackStat}`` (ADR-0032).
 
@@ -539,6 +647,8 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
         bounds = parse_attack_damage_bounds(text, printed)
         scaling = parse_attack_scaling(text)
         hidden = parse_attack_hidden_scale(text)
+        recover = parse_attack_energy_recover(text)
+        requires_bench = parse_attack_bench_requirement(text)
         trans = parse_attack_transients(text, getattr(a, "name", "") or "")
         if printed == 0 and not scaling and not hidden:
             effect = parse_attack_effect_damage(text)   # fixed effect damage hides in text
@@ -563,6 +673,10 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
             hiddenPerUnit=(hidden[0] if hidden else 0),
             hiddenSample=(hidden[1] if hidden else 0),
             hiddenEnergyType=(hidden[2] if hidden else None),
+            recoverN=(recover[0] if recover else 0),
+            recoverEnergyType=(recover[1] if recover else None),
+            recoverTarget=(recover[2] if recover else None),
+            requiresBench=requires_bench,
             nextTurnReduction=trans.get("reduction", 0),
             nextTurnPreventAll=trans.get("prevent_all", False),
             nextTurnSelfLock=trans.get("self_lock", False),
@@ -611,11 +725,14 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         recoil = max((recoil_by_aid.get(aid, 0) for aid in c.attacks if dmg.get(aid, 0) == max_dmg),
                      default=0)
         prevents_from, prevents_at_least, dmg_reduction, reduction_types = parse_card_defense(c)
+        boost, boost_type, boost_vs_ex = parse_card_damage_boost(c)
         cache[c.cardId] = CardStat(
             cardId=c.cardId, name=c.name, hp=int(c.hp),
             ex=bool(c.ex), megaEx=bool(c.megaEx), aceSpec=bool(getattr(c, "aceSpec", False)),
             hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # Pokémon w/ Ability skill
             hpBonus=_parse_tool_hp_bonus(c),
+            stage2=bool(getattr(c, "stage2", False)),
+            damageBoost=boost, damageBoostType=boost_type, damageBoostVsEx=boost_vs_ex,
             recoil=int(recoil),
             handSizeDamage=int(max((hand_size_by_aid.get(aid, 0) for aid in c.attacks), default=0)),
             benchSnipeDamage=int(max((bench_snipe_by_aid.get(aid, 0) for aid in c.attacks), default=0)),

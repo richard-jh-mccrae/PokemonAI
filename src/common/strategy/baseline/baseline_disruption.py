@@ -6,6 +6,8 @@ from common.strategy.context import _PLAY
 from common.strategy.strategy import Hypothesis, Plan
 
 _POSTURE_UNFAVORED = 0.45     # matchup favorability at/below which a straight race loses (lever A)
+_POSTURE_FAVORED = 0.55       # ...at/above which deny the opponent outs (the favored half's mirror
+                              # constant; 0.45-0.55 = the noise band around the 0.5 prior)
 _POSTURE_MIN_COVERAGE = 0.25  # min matchup coverage to trust the favorability prior
 
 HYPOTHESES = [
@@ -40,11 +42,26 @@ HYPOTHESES = [
                   "an already-useful free disruption (`energy_denial` or `hand_disruption` against its "
                   "trigger) since the straight race loses. Rides on top of the base disruption rule so it "
                   "never boosts a wasteful one, stands down at even/unknown matchup, and never overrides "
-                  "a KO; the favored->race half is deferred (no aggressive-option tag yet).",
+                  "a KO; the favored half is `dont-gift-a-refresh-when-favored` (ADR-0026 amendment).",
         when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
         and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
         and c.board.favorability <= _POSTURE_UNFAVORED
         and (("energy_denial" in c.tags and c.board.opp_active_has_energy)
              or ("hand_disruption" in c.tags and c.board.opp_has_hand_size_attacker)),
         weight=18, status="testing"),
+    Hypothesis(
+        id="dont-gift-a-refresh-when-favored",
+        rationale="Lever A's favored half (ADR-0026 amendment) — the variance principle: unfavored "
+                  "seeks variance (the shipped half), FAVORED denies the opponent outs. The one "
+                  "durdle that gifts outs when ahead is a SYMMETRIC refresh as your dig — Judge / "
+                  "Harlequin (`hand_disruption`) refill the LOSING opponent's hand too; Lacey / "
+                  "Lillie's don't. −15 demotes it to a last resort (+20 dig → +5) without killing "
+                  "targeted counterplay (`play-harlequin-vs-hand-size` +25 → net +30). Coverage-gated, "
+                  "structurally exclusive with `disrupt-when-unfavored` (≥0.55 vs ≤0.45); "
+                  "board-dominated, never overrides a KO.",
+        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        and "hand_disruption" in c.tags
+        and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
+        and c.board.favorability >= _POSTURE_FAVORED,
+        weight=-15, status="testing"),
 ]

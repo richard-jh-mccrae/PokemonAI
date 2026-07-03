@@ -207,6 +207,66 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
     assert "disrupt-when-unfavored" not in even
 
 
+# ---- M2 lever A, favored half: don't gift the losing opponent a fresh hand (ADR-0026 amendment) ----
+
+JUDGE_SUP = 1213
+
+
+def _obs_judge_vs_mega_lucario():
+    """A symmetric refresh (Judge) as the only play, facing a recognized Mega Lucario ex. Pre-anchor
+    (no own_prizes), so the Layer-B post-anchor veto stays out of frame — the lever-A rung is
+    isolated."""
+    me = {"active": [{"id": 1, "energies": [1], "hp": 100}], "bench": [{"id": 2}],
+          "hand": [{"id": JUDGE_SUP}], "discard": [], "prize": []}
+    opp = {"active": [{"id": MEGA_LUCARIO, "energies": [1], "hp": 200}],
+           "bench": [{"id": SOLROCK}, {"id": RIOLU}], "discard": [], "prize": []}
+    return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 4},
+            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                       "option": [{"type": PLAY, "index": 0}], "deck": None}, "logs": []}
+
+
+def _favored_pilot(win_rate, funcs):
+    """`_unfavored_pilot` with a deck of startable Basics (id 77) — a realistic pull pool for the
+    refresh play under test."""
+    art = tiny_artifact()
+    art.dossiers["MyDeck"] = {"matchups": {"Mega Lucario ex": {"win_rate": win_rate, "n": 30.0}}}
+    return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[77] * 60,
+                 general_strategy=GENERAL_STRATEGY, stats=DictCardStatProvider({77: CardStat(77, hp=70)}),
+                 functions=funcs, attacks={}, scout=Scout(art))
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_favored_half_downweights_the_symmetric_refresh_gift():
+    """Lever A's favored half (ADR-0026 amendment): favorability ≥ 0.55 fires
+    `dont-gift-a-refresh-when-favored` on a `hand_disruption` play (refilling a losing opponent's
+    hand gifts outs); the rung stays silent at even AND at unfavored (structural exclusion with the
+    shipped half)."""
+    funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})
+    obs = _obs_judge_vs_mega_lucario()
+    favored = {h.id for h, _ in _favored_pilot(0.7, funcs).explain(obs).options[0].fired}
+    even = {h.id for h, _ in _favored_pilot(0.5, funcs).explain(obs).options[0].fired}
+    unfavored = {h.id for h, _ in _favored_pilot(0.3, funcs).explain(obs).options[0].fired}
+    assert "dont-gift-a-refresh-when-favored" in favored
+    assert "dont-gift-a-refresh-when-favored" not in even
+    assert "dont-gift-a-refresh-when-favored" not in unfavored
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_favored_half_never_kills_genuinely_triggered_disruption():
+    """Favored + the opponent runs a hand-size attacker: the targeted disruption endorsement (+25)
+    outweighs the gift rung (−15) — favored kills the gift, not the counterplay."""
+    HSATK = 4321
+    funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"],
+                           HSATK: ["hand_size_attacker"]})
+    obs = _obs_judge_vs_mega_lucario()
+    obs["current"]["players"][1]["bench"].append({"id": HSATK})   # benched; ML stays recognized
+    trace = _favored_pilot(0.7, funcs).explain(obs).options[0]
+    fired = {h.id for h, _ in trace.fired}
+    assert "dont-gift-a-refresh-when-favored" in fired
+    assert "play-harlequin-vs-hand-size" in fired
+    assert trace.score > 0                                 # still played as targeted disruption
+
+
 # ---- Brief-consumer wiring: the matched Matchup Brief on the Board (ADR-0027), behavior-neutral ----
 
 @pytest.mark.req("REQ-POSTURE-0005")

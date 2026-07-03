@@ -188,6 +188,50 @@ Among knockouts, prefer the **higher-prize target** — a KO yields `Mega ex →
 mapping; see below.) **Source:** F1 / F3 — TCG Protectors (Prize Trade); JustInBasil; PokeBeach
 ("Small is Good").
 
+### `energy-recover-credit` *(2026-07-02, mega_lucario deck-genie)*
+An attack with an **energy-recover rider** ("Attach up to N Basic {X} Energy cards from your
+discard pile…" — `AttackStat.recoverN/recoverEnergyType/recoverTarget`; pool-verified 6: Aura Jab,
+Pick and Stick, Regi Charge ×3, Abundant Harvest) is credited `_ENERGY_RECOVER` (75) per Energy it
+would ACTUALLY re-attach — `min(N, matching Basic fuel in my open discard)`, 0 when its target scope
+has no recipient (bench-targeted with an empty Bench). Attacking IS the acceleration for these
+decks, so a fueled Aura Jab (130 + load 3) outweighs a bare bigger chip (Mega Brave 270) while an
+unfueled one doesn't. Inside the KO branch the credit is **sub-prize** (0.25/Energy, cap 0.75) —
+"the cheaper KO that also develops" — never overriding a real prize difference.
+
+### `boost-lethal` — the damage-boost OHKO-line model *(2026-07-03, mega_lucario deck-genie)*
+The **breakpoint model** that was deferred here is now closed-form. Card facts: `CardStat.damageBoost/
+damageBoostType/damageBoostVsEx` parse the Trainer families ("During this turn, attacks used by your
+[{X}] Pokémon do N more damage to your opponent's Active [{ex}]" — Premium Power Pro; the attached-Tool
+variant — Maximum Belt; pool-verified 4, the multi-mode Kieran fail-closed). Live state: a match-scoped
+`TurnBoostTracker` (transients.py) accumulates this-turn boost PLAYs from the log stream; an attached
+Tool is read off the holder. The damage oracle applies each gated boost **before W/R** (both directions
+— the opponent's Power Pro play is as visible as mine), and `_boost_lethal_tactical` scores a PLAY/ATTACH
+that CROSSES an affordable KO line as KO_SCORE-class (a Power-Pro-class Item may cross with k held
+copies together; fires only when no affordable attack already KOs; skips a simultaneous-draw crossing).
+The {ex} defender gate includes Mega ex — rulebook.txt:337.
+
+### `recoil-doom` *(2026-07-03, mega_lucario deck-genie)*
+A NON-KO attack whose unconditional recoil FLIPS my currently-safe Active into a free KO (outright
+self-KO, or post-recoil HP inside `_active_doomed` re-asked at hp−recoil) is charged `_RECOIL_DOOM`
+(100, combat-scale) — Wild Press 210 self-70 is a fine prize trade (the KO branch is never charged)
+but not a chip that leaves an 80-HP body for nothing. An already-doomed Active is never charged
+(chip big before it dies).
+
+### Attack conditions — bench-partner gate *(2026-07-03, mega_lucario deck-genie)*
+`AttackStat.requiresBench` ("If you don't have <X> on your Bench, this attack does nothing" —
+pool-verified 2: Cosmic Beam needs Lunatone, Guardian Burst needs Uxie AND Azelf) + the live
+`atk_bench_names` context zero the attack's **exact/min** damage when the condition is unmet on the
+board — so scoring (not just the Lethal floor) sees the 0, and the phantom KO vs a low-HP Active dies.
+The **max** bound keeps printed damage: Incoming is a worst case and the opponent can bench the
+partner before attacking.
+
+### `self-lock-cost` *(2026-07-02, mega_lucario deck-genie)*
+An attack that locks itself (or all its user's attacks) for my next turn (`nextTurnSameAttackLock` /
+`nextTurnSelfLock` — Mega Brave class) is charged `_LOCK_COST` (40) **only when a lock-free attack
+was also affordable**: burning the nuke's cooldown on a non-KO turn wastes the turn it would KO. A
+lone locking attack is never charged (chipping still beats passing — Riolu's Accelerating Stab).
+Sub-prize (−0.3) inside the KO branch: among equal-prize KOs, keep the big attack off cooldown.
+
 ## Gust (Boss's Orders) — implemented (ADR-0022)
 
 The doctrine for a **gust** — force the opponent to switch a benched Pokémon into their Active Spot
@@ -362,8 +406,10 @@ discard adds that grab lacks is a deck-overridable **`good-in-discard`**: for a 
 accelerator deck the *right* pitch is a card it *wants* in the bin, so the deck lowers that card's
 effective keep-value.
 
-**(A) Whether to play now** — *positive endorsement shipped (`fetch-when-it-fills-a-need`); cost-netting
-deferred.* = `best_grab_value − cost_of_playing ≥ bar`, where `best_grab_value` is the
+**(A) Whether to play now** — *positive endorsement shipped (`fetch-when-it-fills-a-need`); shed-side
+cost-netting shipped 2026-07-03 (ADR-0023 amendment: `costly-fetch-sheds-junk` +12 /
+`dont-shed-a-live-card` −20 / `dont-shed-a-key-card` −25 over the predicted top-2 pitch, A/B 52% no
+regression).* = `best_grab_value − cost_of_playing ≥ bar`, where `best_grab_value` is the
 top candidate from the same comparator (≈ 0 when nothing's lacking or the deck whiffs → stand down) and
 `cost_of_playing` splits by economy: a **free Item** fetch fires on any positive grab (deck-thinning
 floors it); a **`cost_discard`** fetch subtracts the keep-value of the cards shed (delay it until the
@@ -375,10 +421,10 @@ digs first (tier 0), then the one-per-turn **Supporter** (tier 1, so a Pokégear
 you commit), then the blind Energy attach / `cost_discard` search (tier 2), then a `shuffle_hand`
 Supporter (tier 3, attach before nuking the hand), then the turn-ender (tier 4).
 
-**Deferred (designed-in seams, not built):** **(A) cost-netting + Plan-scaled bar** — the positive
-endorsement (`fetch-when-it-fills-a-need`) is shipped, but subtracting the shed cards' keep-value from a
-`cost_discard` fetch, the Supporter-economy opportunity cost, and a tuned per-Plan bar remain (the whiff /
-redundant / `cost_discard`-sequencing rules already cover the common stand-down cases). **Read-conditioned
+**Deferred (designed-in seams, not built):** **(A) Supporter-economy opportunity cost + Plan-scaled
+bar** — shed-side cost-netting shipped 2026-07-03 (the three `fetch_sheds_*` rungs); the
+Supporter-fetch economy (no `cost_discard` Supporter exists in the pool) and a tuned per-Plan bar
+stay deferred (re-affirmed at the 2026-07-03 grill: no correction evidence of plan-dependence). **Read-conditioned
 fetching** (grab a tech card *because* the Read names the matchup) → M2, via a Read-scaled bump on the
 deck's `disruption`/tech Role (drops in without reshaping the comparator), mirroring the Gust doctrine's
 Read deferral. **A prized win-condition raising the urgency to fetch its line-mate** → out of v1 (gap
@@ -397,8 +443,9 @@ as five need-gated Hypotheses + greedy multi-pick — the additive scored sum of
 the lookahead that scores the best grab with the **same** grab rungs (`_grab_value_of` over
 `_search_deck_set − deck_empty_ids`) before the search reveals the deck. Gives a discard-COST fetch
 (Ultra Ball) the positive driver `dig-before-commit` denies it; silent on a whiff / when nothing is
-lacking. Weighted **below a free needed development** (`power-up-attacker` nets +10 — the ep82228640-fr7
-shape), which also stands in for the deferred cost-netting. **Source:** ADR-0023; F12 — JustInBasil (Consistency).
+lacking. Weighted **below a free needed development** (`power-up-attacker` +15 — the ep82228640-fr7
+shape); the +8 is the NEUTRAL-shed band — the `fetch_sheds_*` netting rungs move it (junk → +20, live
+→ −12, key → −37). **Source:** ADR-0023 (+ its 2026-07-03 amendment); F12 — JustInBasil (Consistency).
 
 #### `play-a-tutor-for-the-unfound-wincon` · weight 25 · status: assumed *(folded from mega_starmie `tutor-the-wincon`, 2026-07-02)*
 > In SETUP, play a `tutor`-**Roled** card while the win-condition is unfound. Role-keyed (the deck
@@ -526,42 +573,40 @@ it, with **no grab and no discard** decision:
 - **Supporter-slot economy and the Plan-scaled bar** are the same as Fetch (A); deck-knowledge stays an
   **availability gate, never a forcer**.
 
-**"Dead hand" is a full play-scan, not a keep-value floor.** `Board.hand_is_dead` ⇔ **no non-refresh
-card in hand yields any positive-scoring play this turn** (each hand card virtually scored through the
-real hypothesis + closed-form tactical pipeline — the same virtual-scoring pattern as
-`_fetch_fills_a_need`), **and** the deck still holds something I lack (`deck_holds_a_need`). Keep-value
-≈ 0 alone is blind to a playable tutor / gust-for-KO / clutch heal and would refresh them away. The
-full scan **is** "use your key cards first" proven structurally: every useful card outscores the
-refresh, so the refresh is reached only when nothing else is worth doing. It never preempts an attack
-(the scan is hand-only; attacks stay last-tier turn-enders in `_finish_turn_last`, after the tier-3
-shuffle, so a dead-hand + lethal refreshes **then** KOs the same turn).
+**The refresh is endorsed by default, and only ever sees the dregs.** The 2026-06-30 refutation
+(hoarding cost ~3:1 in the mirror) made `dig-before-commit` (+20) endorse every Shuffle-Refresh as the
+hand-cycling draw it is; `_finish_turn_last` tiers it **3** (after every endorsed play, the tier-1
+Supporter and the tier-2 attach), so by shuffle time the hand is the residual. The keep-value
+**floors** guard what's keep-worthy-but-unplayable: `hold-wincon-dont-shuffle` (−25),
+`attach-before-hand-shuffle` (−60), `hold-wincon-with-base-dont-shuffle` (−15, stacking),
+`hold-successor-when-doomed` (−35). The `refresh-when-hand-is-dead` (+8) rung and its `hand_is_dead`
+full-menu scan were **RETIRED 2026-07-03** (ADR-0024 amendment): on a dead hand nothing else is
+endorsed, so the +20 already played the refresh — the rung changed no behavior.
 
-**v1 = Layer A (the dead-hand fallback) — shipped (ADR-0024), test-first (`tests/strategy/test_shuffle_refresh.py`).**
+**Layer B — the deck-side suppressor (shipped 2026-07-03, ADR-0024 amendment,
+`tests/strategy/test_shuffle_refresh.py` REQ-GEN-0066/0067).** The +20 is deck-blind; one rung fixes
+that. (A second, broader rung — a pre-anchor SOUND `dont-refresh-for-nothing` −40 off
+`deck_holds_a_need` — was built and **deleted the same day**: the 1000-game A/B regressed to 43%/47%
+because grab-rung "needs" under-count refresh *value* for a deck whose engine is the refresh; see the
+ADR's A/B-verdict note.)
 
-#### `refresh-when-hand-is-dead` · weight +8 · status: testing
-> Play a Shuffle-Refresh **only when the hand is dead** — `shuffle_hand and board.hand_is_dead and
-board.deck_holds_a_need`. Beats `End` (≈0), loses to any real play or rival Supporter (a dead hand
-can't *contain* a better Supporter, so the slot economy is subsumed). Board-only, all Plans, fires
-from turn 1. **`hand_is_dead`** scans the REAL menu: no non-refresh PLAY/EVOLVE/ATTACH scores positive
-and no Pokémon PLAY is a (non-discouraged) development out — a bare bench-development isn't positively
-scored in SETUP, so it counts structurally. The scan is gated behind a refresh actually being in hand,
-so the common decision pays nothing.
+#### `dont-refresh-into-a-probable-miss` · weight −25 · status: testing
+> PROBABILISTIC veto, **post-anchor only** (`deck_known_counts`): hypergeometric **P(≥1 needed card
+among the N drawn) < 0.20** over the shuffle-**grown** pool (deck + returned hand − the played card —
+returned dregs dilute; they never add needs, a held card is by definition not lacking). **K = 0 (a
+provably-spent deck) gives P = 0 and fires** — the spent deck is a post-anchor situation in practice.
+N comes from the id-keyed `_DRAW_COUNTS` fact table (verified at `data/EN_Card_Data.csv`): Lillie's
+Determination 6 (**8 at own prizes exactly 6**), Lacey 4 (**8 at opp prizes ≤ 3**), Judge 4, Harlequin
+exact over the coin branches (3/5). The conditional windows fold into N — no boost rung. Disruption
+endorsements (`play-harlequin-vs-hand-size` +25, `disrupt-when-unfavored` +18) clear the −25, so a
+Judge/Harlequin still plays *as disruption*. A/B: neutral (48%, CI 45–51) → ON.
 
-Three explicit keep-value **floors** stand beside the comparator:
-`hold-wincon-dont-shuffle` (−25) for the *wincon-in-hand-but-not-playable-this-turn* case,
-`attach-before-hand-shuffle` (−60) for held energy + sequencing, and
-`hold-wincon-with-base-dont-shuffle` (−15, PR#9 critical batch C5) which **strengthens the hold** when
-the held wincon already has a Line pre-evolution in play (`wincon in hand` + `line_preevo_in_play`) — it
-stacks additively with `hold-wincon-dont-shuffle` (net −40), because a wincon you can evolve into next
-turn is worth even more not to shuffle away.
-
-**Deferred (designed-in seams, not built):** **Layer B — stochastic pull-EV** (the "what can I expect
-to pull" pillar): a hypergeometric over the deck-tracker's exact `deck_known_counts`, live only
-**post-anchor**, refining "deck holds a need" into "P(the N-card draw fills it)" and unlocking the
-conditional 8-card windows (Lillie's at exactly 6 prizes, Lacey at opp ≤ 3) — and it must account for
-the shuffle **growing** the deck by the returned hand (a subtlety a fetch lacks). **`hand_disruption`
-offensive axis** (Judge / Harlequin wreck the opponent's hand — a term scaling with the opponent's hand
-size). **Deck-override** is mostly the existing `_weight` by-id path; no new seam.
+**Still deferred:** the **`hand_disruption` axis** — its offensive half (wreck a hoarded hand, scaling
+with opponent hand size) *and* the board-conditioned side of the symmetric-refill cost; the
+favorability-conditioned half shipped as `dont-gift-a-refresh-when-favored`
+([ADR-0026 amendment](adr/0026-posture-generic-core-is-net-new-read-levers.md)). Any hand-level value
+scalar stays a Base-Value-Model call (ADR-0007). **Deck-override** is mostly the existing `_weight`
+by-id path; no new seam.
 
 ## Tool doctrine — shipped (ADR-0028)
 
@@ -614,7 +659,7 @@ A "carrier retains the Cape's value" gate is a deferred refinement. See ADR-0028
 | Rule | Needs | Source |
 |---|---|---|
 | `gust-the-damaged` — **superseded** by the full **Gust (Boss's Orders)** doctrine above (board-only, KO-gated; the already-damaged case is just one KO-able target) | — see ADR-0022 | F9 — JustInBasil (Gusting) |
-| Damage-boost "crosses an OHKO line" (e.g. Maximum Belt +50 vs ex) | a damage **breakpoint model** + meta stat table; per-tool damage bonus is unstructured (free text), like `hpBonus` | F10 / F11 — JustInBasil (Damage) |
+| ~~Damage-boost "crosses an OHKO line" (e.g. Maximum Belt +50 vs ex)~~ — **BUILT 2026-07-03**: see `boost-lethal` in the Combat section (parsed card facts + `TurnBoostTracker` + oracle boosts + the crossing tactical) | — | F10 / F11 — JustInBasil (Damage) |
 
 One **closed-form breakpoint** stays here; the +HP-Tool half graduated into its own doctrine:
 - `Board.active_doomed` (incoming ≥ my Active's remaining HP), consumed by `dont-feed-the-doomed`.
