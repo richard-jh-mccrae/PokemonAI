@@ -259,6 +259,15 @@ class Board:
                                           # sequencing read (e.g. Watchtower waits while Meowth's in hand)
     hand_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in MY
                                           # hand — the last-attachable-F read (Lunar Cycle guard)
+    recycle_dead_only: bool = False       # my discard's recycle pool (Pokémon/Basic Energy) is non-empty
+                                          # yet every member is a dead pick (a stranded, hand-unplayable
+                                          # evolution; no Energy) — gates `dont-recycle-the-dead` (f33)
+    active_attack_payable: bool = True    # my Active can PAY some attack this turn (attached Energy +
+                                          # the best unspent hand attach ≥ its cheapest attack cost).
+                                          # True when unknown (fail-open) — gates the starved stall-gust
+    active_fully_powered: bool = False    # my Active already carries its HIGHEST-damage attack's cost
+                                          # (attached ≥ maxDamageCost) — a burst Energy has no urgent
+                                          # job; False when unknown (fail-closed keeps the keep rules)
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -608,6 +617,10 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             cid = traces[i].card_id
             return bool(self.functions) and cid is not None and "cost_discard" in self.functions.tags(cid)
 
+        def _is_gust_card(i: int) -> bool:
+            cid = traces[i].card_id
+            return bool(self.functions) and cid is not None and "gust" in self.functions.tags(cid)
+
         def _is_supporter(i: int) -> bool:
             cid = traces[i].card_id
             st = self.stats.get(cid) if (self.stats and cid is not None) else None
@@ -628,6 +641,10 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                 return 4
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
                 return 4                                             # would forfeit an available KO
+            if t == _PLAY and _is_gust_card(i) and ko_available:     # a gust SWAPS the defender: never
+                return 4                                             # ahead of a menu KO it would forfeit
+                                                                     # (its own KO-unlock rides tier 0 above;
+                                                                     # ep83456015 f38: 3-prize Nebula ≻ gust)
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
                 return 4
             if t == _PLAY and _is_shuffle_refresh(i):                # hand-nuke: AFTER the Energy attach, so
@@ -1541,6 +1558,14 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         active_doomed = self._active_doomed(ma, oa, opp)
         active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
+        # the Energy my Active can actually PAY an attack with this turn: attached + the best unspent
+        # hand attach (Ignition = 3 on an Evolution) — the gust/offense affordability gate (f31)
+        hand_ids_now = frozenset(c.get("id") for c in (me.get("hand") or [])
+                                 if c and c.get("id") is not None)
+        payable = (len((ma or {}).get("energies") or [])
+                   + (0 if state.get("energyAttached")
+                      else self._best_hand_attach_units(
+                          hand_ids_now, self.stats.get((ma or {}).get("id")) if self.stats else None)))
         board = Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
@@ -1555,11 +1580,14 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             active_cheap_attack_kos=active_lethal,
             active_can_ko=self._active_can_ko(ma, oa),
             active_maxed_kos=self._active_maxed_kos(ma, oa),
-            gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp),
-            active_ko_prizes=self._active_ko_prizes(ma, oa),
+            gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp, payable),
+            active_ko_prizes=self._active_ko_prizes(ma, oa, payable),
             my_prizes_remaining=len(me.get("prize") or []),
             opp_prizes_remaining=len(opp.get("prize") or []),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
+            recycle_dead_only=self._recycle_dead_only(me),
+            active_attack_payable=self._active_attack_payable(ma, payable),
+            active_fully_powered=self._active_fully_powered(ma),
             energy_placeable=self._energy_placeable(me),
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
@@ -2073,10 +2101,12 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         """Worst-case incoming damage if the opponent EVOLVES their Active's line next turn — the
         Posture read (play AS IF they evolve; ep82754875 f52: Kadabra → Alakazam, whose Powerful Hand
         places 2 counters per card in hand = 20 dmg/card and KOs my 130-HP Cinderace, though Kadabra's
-        own attack can't). For each form the opp Active evolves INTO that is a ``hand_size_attacker``,
-        damage is ``handSizeDamage × the opp's hand`` (counters ignore Weakness/Resistance), gated to a
-        forward attack the opp could afford next turn (its Active's Energy + one attach). The opp spends
-        ≥1 card to play the evolution, so the hand is counted one short. 0 when unknown / no such line.
+        own attack can't). For each form the opp Active evolves INTO, gated to a forward attack the
+        opp could afford next turn (its Active's Energy + one attach): a ``hand_size_attacker``
+        contributes ``handSizeDamage × the opp's hand`` (counters ignore Weakness/Resistance, hand
+        counted one short — ≥1 card spent playing the evolution); ANY form contributes its printed
+        damage, W/R-adjusted vs my Active (the general evolves-into-attacker doom — ep83457493 f20:
+        Riolu → Mega Lucario ex KOs my Cinderace though Riolu's own attack can't). 0 when unknown.
 
         Args:
             ma: my Active Pokémon dict.
@@ -2084,7 +2114,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             opp: the opponent player dict (for ``handCount``); None → 0 (no forward read).
 
         Returns:
-            The greatest forward hand-size KO threat to my Active (0 if none).
+            The greatest forward KO threat to my Active (0 if none).
         """
         if not (self.stats and self.functions and ma and oa and opp):
             return 0
@@ -2095,11 +2125,13 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         best = 0
         for fid in self._forward_card_ids(oa.get("id")):
             fstat = self.stats.get(fid)
-            if not fstat or "hand_size_attacker" not in self.functions.tags(fid):
+            if not fstat:
                 continue
             if (fstat.minAttackCost or 0) > oa_energy + 1:   # unaffordable even with next turn's attach
                 continue
-            best = max(best, (fstat.handSizeDamage or 0) * hand)   # counter dmg ignores Weakness/Resist
+            if "hand_size_attacker" in self.functions.tags(fid):
+                best = max(best, (fstat.handSizeDamage or 0) * hand)   # counters ignore Weakness/Resist
+            best = max(best, int(self._predicted_max_damage(fstat, ma)))  # printed forward attack, W/R vs me
         return best
 
     def _ability_prevents_damage(self, attacker_stat, defender_id: int | None,
@@ -2235,6 +2267,25 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             return frozenset(cid for cid, n in deck_counts.items()
                              if n - seen.get(cid, 0) - prizes.get(cid, 0) <= 0)
         return frozenset(cid for cid, n in deck_counts.items() if seen.get(cid, 0) >= n)
+
+    def _active_attack_payable(self, ma: dict | None, payable: int) -> bool:
+        """My Active can PAY some attack this turn: ``payable`` (attached Energy + the best unspent
+        hand attach) covers its cheapest attack cost. True on unknown stats (fail-open — the starved
+        stall-gust must only fire on a PROVABLE famine, ep83457493 f20)."""
+        stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
+        if stat is None:
+            return True
+        return payable >= (stat.minAttackCost or 0)
+
+    def _active_fully_powered(self, ma: dict | None) -> bool:
+        """My Active already carries the Energy for its HIGHEST-damage attack (attached ≥
+        `maxDamageCost`) — a burst Energy (Ignition) has no urgent job on it. False when the stat /
+        cost is unknown (fail-closed: the keep-at-discard rules stay protective, ep83454549 f36)."""
+        stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
+        cost = getattr(stat, "maxDamageCost", 0) or 0
+        if not cost:
+            return False
+        return len((ma or {}).get("energies") or []) >= cost
 
     def _deck_known_counts(self, me: dict, prizes: dict | None) -> dict | None:
         """EXACT count of each card still in my deck (``decklist − visible − prizes``), once the

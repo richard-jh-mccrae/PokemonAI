@@ -114,3 +114,38 @@ def test_a_hand_shuffle_supporter_is_sequenced_after_the_energy_attach():
     traces = pilot.explain(obs).options
     assert traces[0].score > 0                       # shuffle endorsed (positive) despite the -60 ...
     assert pilot.decide(obs) == [1]                  # ... yet Energy attach sequenced first
+
+
+# ----------------------------------------------- (d) a gust never sequences ahead of a menu KO
+BOSS = 1182                                          # Boss's Orders — gust Supporter
+OPPFRAIL = 678                                       # opponent's Active: 190 HP (Nebula 210 KOs it)
+OPPBENCHIE = 679                                     # opponent's benched 70-HP body (the gust bait)
+
+
+@pytest.mark.req("REQ-PILOT-0026")
+def test_a_gust_play_is_never_sequenced_ahead_of_a_menu_ko():
+    """ep83456015 f38: my Mega can Nebula-KO the opponent's 190-HP Active (3 prizes), but the
+    endorsed Boss's Orders — an 'informative Supporter' by the old ladder — sequenced FIRST, and the
+    gust SWAPPED the defender: the KO the menu offered was forfeited for a 1-prize bait. A gust is a
+    defender-changing commitment, so with a KO on the menu it drops to the last tier; its own
+    KO-UNLOCK path (KO_SCORE-class gust tactical) still rides tier 0."""
+    stats = _stats()
+    stats._stats[BOSS] = CardStat(BOSS, name="Boss's Orders", hp=0, cardType=SUPPORTER)
+    stats._stats[OPPFRAIL] = CardStat(OPPFRAIL, name="opp mega", hp=330, energyType=7)
+    stats._stats[OPPBENCHIE] = CardStat(OPPBENCHIE, name="opp benchie", hp=70, energyType=7)
+    strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
+                     lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)],
+                     hypotheses=[Hypothesis(id="t-endorse-gust", rationale="test", weight=100,
+                                            when=lambda c: c.card_id == BOSS)])
+    pilot = _pilot(strat=strat)
+    pilot.stats = stats
+    pilot.functions = CardFunctions({BOSS: ["gust"]})
+    play_boss = opt(PLAY, area=HAND, index=0)
+    board = state(active=poke(WINCON, energy=3, hp=330), hand=[BOSS],
+                  opp_active=poke(OPPFRAIL, hp=190), opp_bench=[poke(OPPBENCHIE, hp=70)],
+                  prizes=6, opp_prizes=6)
+    obs = make_select([play_boss, opt(type=13, attackId=10), opt(type=14)], current=board)
+    traces = pilot.explain(obs).options
+    assert traces[1].tactical >= 1000                # the Nebula KO is on the menu
+    assert traces[0].score > 0                       # the gust is endorsed ...
+    assert pilot.decide(obs) == [1]                  # ... yet the KO goes first; the gust never forfeits it

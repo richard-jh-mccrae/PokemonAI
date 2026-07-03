@@ -715,6 +715,147 @@ def test_development_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkey
                                                     threat_removed=10_000, development=10_000)
 
 
+# --------------------------------- heal-before-attach (corpus 6858 shape): the attach-carried KO
+IGNITION = 17   # discard-at-end-of-turn special Energy — {C}, or {C}{C}{C} on an Evolution
+BRUISER = 681   # opponent's Active: 180 HP, hits for 210 (dooms my damaged Mega)
+
+
+def _ignition_pilot(**kw):
+    strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
+    stats = _stats()
+    stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
+    stats._stats[BRUISER] = CardStat(BRUISER, name="bruiser", hp=180, energyType=7,
+                                     minAttackCost=1, minCostDamage=210, maxDamage=210)
+    fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot"]})
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=fns,
+                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, OPEN_ATK: 30},
+                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, OPEN_ATK: 1}, **kw)
+
+
+@pytest.mark.req("REQ-PLANNER-0036")
+def test_stabilize_fires_when_the_ko_rides_the_attach_and_the_burst_survives_the_bounce():
+    """6858 shape: my Mega (200/330, 0 Energy) is doomed to the opponent's 210 hit, and the only KO
+    is attach-CARRIED — Ignition's {C}{C}{C} on the Evolution unlocks Nebula Beam (210 ≥ 180); no
+    ATTACK option is even on the menu. Healing FIRST (Wally's bounces nothing it needs — the burst
+    attach lands after) keeps both: the stabilize-then-KO rung must see the attach-carried KO and
+    commit the heal ahead of the attach."""
+    pilot = _ignition_pilot()
+    play_wallys = opt(PLAY, area=HAND, index=0)
+    attach_ign = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
+    board = state(active=poke(WINCON, energy=0, hp=200), opp_active=poke(BRUISER, hp=180),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS, IGNITION],
+                  prizes=6, opp_prizes=6)
+    obs = make_select([play_wallys, attach_ign, opt(END)], current=board)
+    d = pilot.explain(obs)
+    assert d.planned is not None and d.planned.goal == "stabilize_then_ko"
+    assert d.planned.next_step == [0]                  # Wally's FIRST; the Ignition attach follows
+    assert pilot.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-PLANNER-0036")
+def test_stabilize_stands_down_when_no_re_attach_exists_after_the_bounce():
+    """Soundness: same doom, but the hand holds NO Energy — after Wally's bounce nothing re-powers
+    the Mega, so the KO is genuinely forfeited by healing. The rung must not commit (no candidate
+    KO on the menu or the attach), leaving the decision to the tuned scoring."""
+    pilot = _ignition_pilot()
+    board = state(active=poke(WINCON, energy=0, hp=200), opp_active=poke(BRUISER, hp=180),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS], prizes=6, opp_prizes=6)
+    obs = make_select([opt(PLAY, area=HAND, index=0), opt(END)], current=board)
+    assert pilot.explain(obs).planned is None
+
+
+# ------------------------------------------- the evolution-tutor line (Salvatore, corpus a212 shape)
+SALV = 1189     # Salvatore — Supporter that evolves an in-play Pokémon straight from the deck
+ABIL = 902      # an ability-bearing evolution (Salvatore's own filter excludes it)
+
+
+def _salvatore_pilot(deck=None, stats=None, **kw):
+    strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
+    fns = CardFunctions({SALV: ["search", "rush_evolve"]})
+    return Pilot(strat, deck=deck or ([WINCON] * 3 + [1] * 57), general_strategy=GENERAL_STRATEGY,
+                 stats=stats or _stats(), functions=fns,
+                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, OPEN_ATK: 30},
+                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, OPEN_ATK: 1}, **kw)
+
+
+def _salvatore_obs(options=None, *, anchored=False):
+    """The a212 shape: spent opener Active, a bare benched Staryu, Salvatore + a {W} Energy in hand,
+    the opponent's last body (70 HP) Active with an EMPTY bench — Salvatore evolves the Staryu into
+    the deck's Mega Starmie, the free retreat + attach bring Jetting Blow (120) online: KO empties
+    their board. ``anchored=True`` rides the deck-tracker's exact prize resolution (`own_prizes`)."""
+    board = state(active=poke(OPENER, energy=0, hp=110), bench=[poke(PREEVO, energy=0, hp=70)],
+                  opp_active=poke(THREAT, hp=70), opp_bench=[],
+                  hand=[SALV, WATER], prizes=6, opp_prizes=6, deck_count=44)
+    obs = make_select(options or [opt(PLAY, area=HAND, index=0), opt(RETREAT), opt(END)],
+                      current=board)
+    if anchored:
+        obs["own_prizes"] = {}                         # prizes resolved: nothing relevant is prized
+    return obs
+
+
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_evolution_tutor_win_lock_on_deck_certainty():
+    """The win rung's tier-4 (a212): with the deck-tracker ANCHORED (`own_prizes`) the Mega Starmie
+    is PROVABLY still in the deck, so Salvatore -> evolve the benched Staryu -> retreat -> attach ->
+    Jetting Blow empties the opponent's board — a sound, guaranteed win. The Lethal Solver locks the
+    Supporter as the line's first step."""
+    pilot = _salvatore_pilot(lethal_family=True)
+    obs = _salvatore_obs(anchored=True)
+    d = pilot.explain(obs)
+    assert d.planned is not None and d.planned.goal == "win"
+    assert d.planned.next_step == [0]                  # play Salvatore now
+    assert pilot.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_evolution_tutor_win_needs_positive_deck_certainty():
+    """Soundness: without the tracker's positive certainty (no `own_prizes` anchor) the evolution
+    could be prized — the win rung must NOT lock it (the heuristic ko_for_prizes rung may still
+    rank-commit the line, but never as a guaranteed win)."""
+    pilot = _salvatore_pilot(lethal_family=True)
+    d = pilot.explain(_salvatore_obs())
+    assert d.planned is None or d.planned.goal != "win"
+
+
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_evolution_tutor_excludes_ability_bearing_evolutions():
+    """Salvatore's own filter: it can only fetch a card with NO Abilities. A deck whose only
+    evolution of the benched Staryu carries an Ability yields no line — neither the win rung nor
+    the heuristic rung may plan on an ineligible fetch."""
+    stats = _stats()
+    stats._stats[ABIL] = CardStat(ABIL, name="Abil Starmie ex", hp=330, energyType=3,
+                                  minAttackCost=1, minCostDamage=120, maxDamage=120,
+                                  attacks=(JETTING,), evolvesFrom="Staryu", hasAbility=True)
+    pilot = _salvatore_pilot(deck=[ABIL] * 3 + [1] * 57, stats=stats, lethal_family=True)
+    obs = _salvatore_obs(anchored=True)
+    assert pilot.explain(obs).planned is None
+
+
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_evolution_tutor_benched_target_needs_the_retreat_on_the_menu():
+    """Soundness: the winning attacker evolves on the BENCH, so the line needs this turn's retreat
+    to bring it Active. With no retreat offered (e.g. already spent), the line can't execute —
+    nothing is planned."""
+    pilot = _salvatore_pilot(lethal_family=True)
+    obs = _salvatore_obs(options=[opt(PLAY, area=HAND, index=0), opt(END)], anchored=True)
+    assert pilot.explain(obs).planned is None
+
+
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_evolution_tutor_heuristic_commits_the_ko_line_without_certainty():
+    """The rank-grade half (the retest path — tracker cold): no `own_prizes`, but the Mega is
+    majority-LIKELY still in the deck (deck odds), so the KO-for-prizes rung commits Salvatore as
+    the enabling first step of the evolve -> retreat -> attach -> KO line the greedy scorer can't
+    see."""
+    pilot = _salvatore_pilot()
+    obs = _salvatore_obs()
+    d = pilot.explain(obs)
+    assert d.planned is not None and d.planned.goal == "ko_for_prizes"
+    assert "evolution tutor" in d.planned.rationale
+    assert d.planned.next_step == [0]
+    assert pilot.decide(obs) == [0]
+
+
 @pytest.mark.req("REQ-PLANNER-0022")
 def test_energy_tutor_stands_down_when_the_turns_attach_is_already_spent():
     """Soundness: the tutor-energy line only works because the fetched Energy can be attached THIS turn.

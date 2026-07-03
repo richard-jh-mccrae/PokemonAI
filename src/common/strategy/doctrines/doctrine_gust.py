@@ -61,6 +61,10 @@ class GustMixin:
         if not target:
             return 0
         my_stat = self.stats.get(board.my_active_id) if self.stats else None
+        payable = board.my_active_energy + (0 if board.energy_attached
+                                            else self._best_hand_attach_units(board.hand_ids, my_stat))
+        if my_stat and (my_stat.minAttackCost or 99) > payable:
+            return 0                                     # the KO premise is unpayable this turn (f31)
         if not self._can_ko(my_stat, target):
             return 0
         return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
@@ -146,13 +150,18 @@ class GustMixin:
         return 0
 
     # ── Board-signal builders (called from Pilot._board to populate gust gap signals) ──
-    def _active_ko_prizes(self, ma: dict | None, oa: dict | None) -> int:
+    def _active_ko_prizes(self, ma: dict | None, oa: dict | None, payable: int = 99) -> int:
         """Prizes from Knocking Out the opponent's CURRENT Active with my cheapest attack this turn
         (0 if I can't) — the baseline a gust must beat (gusting benches their current Active, so a gust
-        is only worth the Supporter for a strictly bigger KO)."""
+        is only worth the Supporter for a strictly bigger KO). ``payable`` = the Energy my Active can
+        actually pay an attack with this turn (attached + the best unspent hand attach): a KO I cannot
+        afford is no KO (ep83457493 f31)."""
         if not (self.stats and ma and oa):
             return 0
-        return self._prize_value(oa) if self._can_ko(self.stats.get(ma.get("id")), oa) else 0
+        my_stat = self.stats.get(ma.get("id"))
+        if my_stat and (my_stat.minAttackCost or 99) > payable:
+            return 0                                     # cheapest attack unpayable this turn
+        return self._prize_value(oa) if self._can_ko(my_stat, oa) else 0
 
     def _opp_active_condition_gift(self, opp: dict | None) -> bool:
         """True if the opponent's Active carries ANY special condition (poison/burn/sleep/paralyze/
@@ -175,14 +184,19 @@ class GustMixin:
         tick = (10 if opp.get("poisoned") else 0) + (20 if opp.get("burned") else 0)
         return self._prize_value(oa) if (0 < hp <= tick) else 0
 
-    def _gust_best_ko_prizes(self, ma: dict | None, opp: dict | None) -> int:
+    def _gust_best_ko_prizes(self, ma: dict | None, opp: dict | None, payable: int = 99) -> int:
         """Best prizes among the opponent's benched Pokémon my Active could Knock Out this turn after
         gusting it to the Active Spot — the whether-to-play signal for a gust Supporter (ADR-0022).
         Applies the shared `_can_ko` oracle to each bench defender; the max `_prize_value` among the
-        KO-able ones (0 if none). Closed-form off engine stats, no Search."""
+        KO-able ones (0 if none). ``payable`` gates the whole signal on the Energy my Active can
+        actually pay this turn (attached + the best unspent hand attach) — an unpayable KO must not
+        endorse the gust (ep83457493 f31: 0 Energy, no Energy in hand, yet `gust-for-the-ko` fired).
+        Closed-form off engine stats, no Search."""
         if not (self.stats and ma and opp):
             return 0
         my_stat = self.stats.get(ma.get("id"))
+        if my_stat and (my_stat.minAttackCost or 99) > payable:
+            return 0                                     # cheapest attack unpayable this turn
         best = 0
         for b in (opp.get("bench") or []):
             if b and self._can_ko(my_stat, b):
@@ -251,6 +265,24 @@ HYPOTHESES = [
         and c.board.stall_target_exists
         and not c.board.opp_active_condition_gift,
         weight=10, status="assumed"),
+    Hypothesis(
+        id="stall-gust-over-dev-when-starved",
+        rationale="When my Active is DOOMED (incl. the forward evolves-into-attacker read: their Riolu "
+                  "becomes Mega Lucario ex next turn) and I cannot pay ANY attack this turn "
+                  "(`active_attack_payable` False — no attached Energy, none in hand), development "
+                  "that doesn't remove the doom loses to a hard tempo stall: gust a strandable body "
+                  "Active (energyless, high-retreat — it can't attack and may be stuck for turns) and "
+                  "deny the evolve-and-KO a turn. Outranks a tutor's dig stack ONLY under the "
+                  "energy-famine gate, so normal development is untouched (ep83457493 f20: Boss's "
+                  "gust Makuhita ≻ Salvatore while Cinderace faces the Mega Lucario line with zero "
+                  "Energy anywhere). Stacks on `gust-for-the-stall`; same condition-gift guard.",
+        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
+        and c.board.active_doomed
+        and not c.board.active_attack_payable
+        and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
+        and c.board.stall_target_exists
+        and not c.board.opp_active_condition_gift,
+        weight=95, status="assumed"),
     Hypothesis(
         id="gust-to-strand-the-key-attacker",
         rationale="When the stall-gust target is the opponent's KEY attacker — an energyless, high-retreat "
