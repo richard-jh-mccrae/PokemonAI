@@ -68,3 +68,43 @@ def test_discards_the_dead_opener_and_the_disruption_card_over_the_engine():
     assert "keep-engine-supporter-at-discard" in _fired(dec.options[0])   # Lillie's: kept
     assert "keep-engine-supporter-at-discard" not in _fired(dec.options[2])  # Harlequin: disruption, fodder
     assert set(pilot.decide(obs)) == {3, 2}                               # Cinderace + Harlequin
+
+
+IGNITION = 17
+
+
+def _powered_setup(hand_ids, *, active_energy):
+    """f36 shape: my Mega Starmie ACTIVE at ``active_energy`` (3 = Nebula's cost — fully powered),
+    a forced Discard-2 over ``hand_ids``."""
+    pilot, obs = _setup(hand_ids)
+    pilot.stats._stats[MEGA] = CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True,
+                                        maxDamage=210, maxDamageCost=3, minAttackCost=1,
+                                        attacks=(10, 11))
+    pilot.stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
+    pilot.functions = CardFunctions({**{k: list(v) for k, v in pilot.functions._table.items()},
+                                     IGNITION: ["discard_eot"]})
+    me = obs["current"]["players"][0]
+    me["active"] = [{"id": MEGA, "hp": 330, "maxHp": 330, "energies": [0] * active_energy,
+                     "energyCards": [], "tools": [], "preEvolution": []}]
+    return pilot, obs
+
+
+@pytest.mark.req("REQ-GEN-0067")
+def test_burst_energy_keep_decays_once_the_active_is_fully_powered():
+    """ep83454549 f36: the Active Mega already carries Nebula Beam's cost — Ignition's burst has no
+    urgent job, so the keep-key premise is void and the hand-refresh engine Supporter (Lillie's)
+    outkeeps it: pitch [dead opener, Ignition], keep Lillie's."""
+    pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=3)
+    dec = pilot.explain(obs)
+    assert "keep-key-cards-at-discard" not in _fired(dec.options[2])      # premise void: no keep
+    assert set(pilot.decide(obs)) == {0, 2}                               # pitch opener + Ignition
+
+
+@pytest.mark.req("REQ-GEN-0067")
+def test_burst_energy_stays_protected_while_the_active_still_needs_it():
+    """Control: the same hand with the Active at 1 Energy — the burst is still the route to the big
+    attack, so `keep-key-cards-at-discard` protects Ignition and the pitch falls elsewhere."""
+    pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=1)
+    dec = pilot.explain(obs)
+    assert "keep-key-cards-at-discard" in _fired(dec.options[2])          # still protected
+    assert IGNITION not in {[CINDERACE, LILLIES, IGNITION][i] for i in pilot.decide(obs)}

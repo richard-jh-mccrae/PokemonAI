@@ -517,5 +517,20 @@
     "disposition": "covered",
     "reason": "Accepted multi-turn limitation (ADR-0031 single-turn planner boundary): the human's own rationale says 'requires planning over multiple turns' — Jetting Blow (120 + 50 bench-snipe) over Nebula Beam builds a faster multi-turn clock via accumulated bench damage. The single-turn Pilot picks max-damage Nebula Beam [2] (210, leaves Mega Lucario ~20hp — reasonable single-turn, neither KOs). The multi-turn snipe-accumulation plan needs the future multi-turn planning layer; kept as-is by the architectural boundary, not a weight/rule gap.",
     "round": "2026-07-02"
+  },
+  "83455356-11": {
+    "disposition": "covered",
+    "reason": "planner-layer FIXED (scoring short-circuited, W-route blind to it): win-rung tier-4 evolution-tutor (Salvatore) + ko_for_prizes heuristic commit Salvatore; retest chosen [1]->[6]=correct; gated by tests/strategy/test_planner_engine.py::test_critical_a212_* on fixture planner_a212.json",
+    "round": "2026-07-03"
+  },
+  "83456015-35": {
+    "disposition": "covered",
+    "reason": "planner-layer FIXED (scoring short-circuited, W-route blind to it): stabilize_then_ko now sees the attach-carried KO + Ignition=3 hand-attach units; retest chosen [1]->[3]=correct; gated by test_planner_engine.py::test_critical_6858_* on fixture planner_6858.json",
+    "round": "2026-07-03"
+  },
+  "83456015-47": {
+    "disposition": "covered",
+    "reason": "per human ack 2026-07-03: the intended Wally's->Ignition->Nebula sequence belongs to turn 8's PRE-ATTACH decision point, now committed by the f35 stabilize_then_ko fix (proven on the rewound state: test_e1db_intended_sequence_commits_from_the_turn8_pre_attach_state); at the tagged f47 frame the attach was already spent, so the heal would forfeit the certain 3-prize KO (refutation-proof test pins it)",
+    "round": "2026-07-03"
   }
 }

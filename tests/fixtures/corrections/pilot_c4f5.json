@@ -1,0 +1,340 @@
+{
+ "id": "c4f51ab337f1",
+ "episode_id": 83454549,
+ "chosen": [
+  0,
+  1
+ ],
+ "correct": [
+  0,
+  2
+ ],
+ "rationale": "With this hand, its more important to prepare our second Mega Starmie, and then refresh our hand with 8 new cards.\n\nShould have discarded Cinderace and Ignition enegry (because our active mega starmie is already fully energized), and then play lillie's determination to refill hand.",
+ "obs": {
+  "current": {
+   "energyAttached": false,
+   "firstPlayer": 1,
+   "looking": null,
+   "players": [
+    {
+     "active": [
+      {
+       "appearThisTurn": true,
+       "energies": [
+        3,
+        3,
+        3
+       ],
+       "energyCards": [
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 4
+        },
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 5
+        },
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 9
+        }
+       ],
+       "hp": 330,
+       "id": 1031,
+       "maxHp": 330,
+       "playerIndex": 0,
+       "preEvolution": [
+        {
+         "id": 1030,
+         "playerIndex": 0,
+         "serial": 21
+        }
+       ],
+       "serial": 24,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 1030,
+       "maxHp": 70,
+       "playerIndex": 0,
+       "preEvolution": [],
+       "serial": 22,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 42,
+     "discard": [
+      {
+       "id": 17,
+       "playerIndex": 0,
+       "serial": 14
+      },
+      {
+       "id": 666,
+       "playerIndex": 0,
+       "serial": 16
+      }
+     ],
+     "hand": [
+      {
+       "id": 666,
+       "playerIndex": 0,
+       "serial": 18
+      },
+      {
+       "id": 1227,
+       "playerIndex": 0,
+       "serial": 57
+      },
+      {
+       "id": 17,
+       "playerIndex": 0,
+       "serial": 12
+      }
+     ],
+     "handCount": 3,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    {
+     "active": [
+      {
+       "appearThisTurn": false,
+       "energies": [
+        4,
+        6
+       ],
+       "energyCards": [
+        {
+         "id": 4,
+         "playerIndex": 1,
+         "serial": 77
+        },
+        {
+         "id": 6,
+         "playerIndex": 1,
+         "serial": 82
+        }
+       ],
+       "hp": 190,
+       "id": 63,
+       "maxHp": 240,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 87,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": false,
+       "energies": [
+        1
+       ],
+       "energyCards": [
+        {
+         "id": 1,
+         "playerIndex": 1,
+         "serial": 73
+        }
+       ],
+       "hp": 210,
+       "id": 96,
+       "maxHp": 210,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 90,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [
+        1
+       ],
+       "energyCards": [
+        {
+         "id": 1,
+         "playerIndex": 1,
+         "serial": 75
+        }
+       ],
+       "hp": 210,
+       "id": 96,
+       "maxHp": 210,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 88,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [
+        1
+       ],
+       "energyCards": [
+        {
+         "id": 1,
+         "playerIndex": 1,
+         "serial": 67
+        }
+       ],
+       "hp": 210,
+       "id": 96,
+       "maxHp": 210,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 91,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 240,
+       "id": 63,
+       "maxHp": 240,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 84,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 240,
+       "id": 63,
+       "maxHp": 240,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 85,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 29,
+     "discard": [
+      {
+       "id": 1126,
+       "playerIndex": 1,
+       "serial": 108
+      },
+      {
+       "id": 1122,
+       "playerIndex": 1,
+       "serial": 105
+      },
+      {
+       "id": 1227,
+       "playerIndex": 1,
+       "serial": 120
+      },
+      {
+       "id": 1,
+       "playerIndex": 1,
+       "serial": 70
+      },
+      {
+       "id": 1,
+       "playerIndex": 1,
+       "serial": 64
+      },
+      {
+       "id": 1,
+       "playerIndex": 1,
+       "serial": 74
+      }
+     ],
+     "hand": null,
+     "handCount": 9,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    }
+   ],
+   "result": -1,
+   "retreated": false,
+   "stadium": [],
+   "stadiumPlayed": false,
+   "supporterPlayed": false,
+   "turn": 4,
+   "turnActionCount": 3,
+   "yourIndex": 0
+  },
+  "logs": [
+   {
+    "cardId": 1121,
+    "playerIndex": 0,
+    "serial": 36,
+    "type": 10
+   }
+  ],
+  "remainingOverageTime": 599.0218039999997,
+  "select": {
+   "context": 8,
+   "contextCard": null,
+   "deck": null,
+   "effect": {
+    "id": 1121,
+    "playerIndex": 0,
+    "serial": 36
+   },
+   "maxCount": 2,
+   "minCount": 2,
+   "option": [
+    {
+     "area": 2,
+     "index": 0,
+     "playerIndex": 0,
+     "type": 3
+    },
+    {
+     "area": 2,
+     "index": 1,
+     "playerIndex": 0,
+     "type": 3
+    },
+    {
+     "area": 2,
+     "index": 2,
+     "playerIndex": 0,
+     "type": 3
+    }
+   ],
+   "remainDamageCounter": 0,
+   "remainEnergyCost": 0,
+   "type": 1
+  },
+  "step": 37
+ }
+}

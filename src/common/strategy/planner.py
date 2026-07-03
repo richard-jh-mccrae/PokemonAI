@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _COIN_HEAD, _EVOLVE, _MAIN, _PLAY,
-                                     _RETREAT, KO_SCORE)
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _COIN_HEAD, _EVOLVE,
+                                     _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, KO_SCORE)
 
 
 def _prune_none(v):
@@ -309,23 +309,38 @@ class PlannerMixin:
         # tier 3: the energy-tutor Supporter supplies the attach the line lacks (the 4298 shape,
         # game-winning). SOUND only when the deck DEFINITELY still holds a reusable Energy (the
         # match-scoped tracker's positive certainty) — a probable fetch is never a win.
-        if board.energy_attached or board.reusable_energy_in_hand:
-            return
-        if not self._tutor_energy_certain(board):
-            return
         me = self._my_player(obs)
         retreat_on_menu = any(o.get("type") == _RETREAT for o in options)
+        if (not (board.energy_attached or board.reusable_energy_in_hand)
+                and self._tutor_energy_certain(board)):
+            for i, o in enumerate(options):
+                if i in seen or o.get("type") != _PLAY or not self._is_energy_tutor(obs, select, o):
+                    continue
+                win = self._develop_wins(obs, board, opp, board.my_active_id, board.my_active_energy + 1)
+                if not win and retreat_on_menu:
+                    win = any(self._develop_wins(obs, board, opp, p.get("id"),
+                                                 len(p.get("energies") or []) + 1)
+                              for p in (me.get("bench") or []) if p)
+                if win:
+                    seen.add(i)
+                    yield TurnLine(next_step=[i], goal="win", kind="unlock",
+                                   rationale="lethal (unlock): the energy tutor fetches the winning attach")
+        # tier 4: the evolution-tutor Supporter line (Salvatore, `rush_evolve` — the a212 shape):
+        # evolve a deck-certain, no-Ability DIRECT evolution onto an in-play body straight from the
+        # deck, then (for a benched body) retreat into it and attach — e.g. Salvatore -> Mega Starmie
+        # onto a Staryu, free-retreat the opener, attach, Jetting Blow the last body: bench-empty win.
+        # Salvatore's own allowance covers every in-play target (setup-placed / played this turn;
+        # anything older is normal-legal), so no timing gate. SOUND on the tracker's positive deck
+        # certainty + min-bound KO math; the engine verify cascade backstops the rest.
+        targets = [(p, False) for p in (me.get("active") or []) if p]
+        if retreat_on_menu:
+            targets += [(p, True) for p in (me.get("bench") or []) if p]
         for i, o in enumerate(options):
-            if i in seen or o.get("type") != _PLAY or not self._is_energy_tutor(obs, select, o):
+            if i in seen or o.get("type") != _PLAY or not self._is_evolution_tutor(obs, select, o):
                 continue
-            win = self._develop_wins(obs, board, opp, board.my_active_id, board.my_active_energy + 1)
-            if not win and retreat_on_menu:
-                win = any(self._develop_wins(obs, board, opp, p.get("id"),
-                                             len(p.get("energies") or []) + 1)
-                          for p in (me.get("bench") or []) if p)
-            if win:
+            if any(self._tutor_evolution_wins(obs, board, opp, p) for p, _ in targets):
                 yield TurnLine(next_step=[i], goal="win", kind="unlock",
-                               rationale="lethal (unlock): the energy tutor fetches the winning attach")
+                               rationale="lethal (unlock): the evolution tutor evolves the winning attacker")
 
     def _develop_wins(self, obs, board, opp, attacker_id, energy) -> bool:
         """SOUND: this attacker, carrying ``energy``, takes a min-bound affordable KO of the
@@ -573,9 +588,12 @@ class PlannerMixin:
         (they were all `return`-first before multi-candidate ranking; ties still break to the first)."""
         if not board.active_doomed:
             return []
-        if not any(o.get("type") == _ATTACK and t.tactical >= KO_SCORE
+        if not any(o.get("type") in (_ATTACK, _ATTACH) and t.tactical >= KO_SCORE
                    for o, t in zip(options, traces)):
-            return []                                 # no KO on menu -> nothing to preserve; defer to hold-clutch-heal
+            return []                                 # no KO reachable (on the menu, or unlocked by an
+                                                      # attach — `_attach_lethal_tactical`, the 6858 shape:
+                                                      # heal FIRST so the one attach lands post-bounce);
+                                                      # nothing to preserve -> defer to hold-clutch-heal
         opp = self._opp_active(obs)
         active_stat = (self.stats.get(board.my_active_id)
                        if (self.stats and board.my_active_id is not None) else None)
@@ -626,7 +644,7 @@ class PlannerMixin:
         clause carries a ``condition`` the closed form can't evaluate (fail-closed: don't plan on
         an amount that might not materialise)."""
         max_hp = getattr(active_stat, "hp", 0) or 0
-        attach = 0 if board.energy_attached else 1
+        attach = 0 if board.energy_attached else self._best_hand_attach_units(board.hand_ids, active_stat)
         for clause in (self.effects.clauses(cid) if self.effects else ()):
             if clause.get("kind") != "heal":
                 continue
@@ -648,6 +666,31 @@ class PlannerMixin:
         if self.functions and "clutch_heal" in self.functions.tags(cid):
             return (max_hp, attach)                   # legacy tag path: full heal + Energy bounce
         return None
+
+    def _best_hand_attach_units(self, hand_ids, active_stat) -> int:
+        """Energy units the best single attach from MY hand (``hand_ids``) provides my Active — 3
+        for a discard-burst special (`discard_eot`, Ignition: CCC) onto an Evolution, 1 for any
+        other Energy card, 0 when the hand holds none (`_attach_provided`'s model, hand-scanned:
+        the 6858 heal-then-attach line re-powers Nebula Beam with the bounced-around Ignition, and
+        a heal whose re-attach doesn't exist can no longer fake a preserved KO). Also the
+        gust-affordability read (`_board`'s ``payable`` — the f31 no-energy gust gate)."""
+        best = 0
+        is_evo = bool(getattr(active_stat, "evolvesFrom", None))
+        for cid in hand_ids:
+            st = self.stats.get(cid) if self.stats else None
+            if st is None or getattr(st, "hp", 0):
+                continue
+            tags = self.functions.tags(cid) if self.functions else []
+            # an Energy card: a typed Energy, a Basic/Special by cardType, or the colourless
+            # discard-burst special (engine reports Ignition's energyType as 0 — cf `_has_reusable_energy`)
+            if not (getattr(st, "energyType", 0) not in (None, 0)
+                    or getattr(st, "cardType", None) in (_BASIC_ENERGY, _SPECIAL_ENERGY)
+                    or "discard_eot" in tags):
+                continue
+            best = max(best, 3 if ("discard_eot" in tags and is_evo) else 1)
+            if best == 3:
+                break
+        return best
 
     def _engine_rank(self, obs, line: TurnLine) -> TurnLine:
         """Refine a committed line's leaf VALUE with the Tier-1 engine sim (ADR-0031 phase 3) — the exact
@@ -707,6 +750,11 @@ class PlannerMixin:
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra)
                 kind = "evolve"
+            elif o.get("type") == _PLAY and self._is_evolution_tutor(obs, select, o):
+                retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
+                cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, extra,
+                                                       retreat_on_menu)
+                kind = "evolution tutor"
             elif o.get("type") == _PLAY:
                 cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player)
                 kind = "energy tutor"
@@ -817,6 +865,37 @@ class PlannerMixin:
         cid = self._option_card_id(obs, select, option)
         return bool(cid is not None and self.functions and "tutor_energy" in self.functions.tags(cid))
 
+    def _is_evolution_tutor(self, obs, select, option) -> bool:
+        """This PLAY option is a `rush_evolve` Trainer (Salvatore class) — it evolves one of my
+        in-play Pokémon straight from the deck, its own allowance covering setup-placed and
+        this-turn bodies (so every in-play body is a legal target)."""
+        cid = self._option_card_id(obs, select, option)
+        return bool(cid is not None and self.functions and "rush_evolve" in self.functions.tags(cid))
+
+    def _tutor_evolution_wins(self, obs, board, opp, body) -> bool:
+        """SOUND: some DIRECT evolution of ``body`` (its `evolvesFrom` names the body) is PROVABLY
+        still in my deck (the tracker's positive certainty, `Board.deck_definitely_has`), is
+        Salvatore-eligible (no Abilities — the card's own fetch filter), and — carrying the body's
+        Energy plus this turn's one attach — takes a min-bound winning KO (`_develop_wins`). The
+        family's tier-4 win test; multi-hop descendants are excluded (one Salvatore = one hop)."""
+        if not self.stats:
+            return False
+        base = self.stats.get(body.get("id"))
+        if base is None or not getattr(base, "name", None):
+            return False
+        energy = len(body.get("energies") or [])
+        extra = 1 if (board.reusable_energy_in_hand and not board.energy_attached) else 0
+        for cid in set(self.deck):
+            st = self.stats.get(cid)
+            if (st is None or getattr(st, "evolvesFrom", None) != base.name
+                    or getattr(st, "hasAbility", False)):
+                continue
+            if not board.deck_definitely_has(cid):
+                continue
+            if self._develop_wins(obs, board, opp, cid, energy + extra):
+                return True
+        return False
+
     def _retreat_ko_candidate(self, obs, board, opp, opp_player, extra: int):
         """``(prizes, active_survives)`` for the best benched body that KOs the opponent's Active AFTER a
         retreat plus this turn's one attach — but that does NOT already KO at its current Energy (that
@@ -837,6 +916,43 @@ class PlannerMixin:
             cand = (self._prize_value(opp), self._survives_after_ko(p.get("id"), p.get("hp", 0), opp_player))
             if best is None or cand > best:           # prefer more prizes, then survival (bool > bool)
                 best = cand
+        return best
+
+    def _tutor_evolve_ko_candidate(self, obs, board, opp, opp_player, extra: int,
+                                   retreat_on_menu: bool):
+        """``(prizes, active_survives)`` if playing an **evolution-tutor Supporter** (Salvatore: evolve
+        one of my in-play Pokémon straight from the deck — the ``rush_evolve`` tag) unlocks an
+        otherwise-missed KO of the opponent's Active: some DIRECT, no-Ability evolution still LIKELY in
+        my deck (``deck_contains_probability`` majority-odds — rank-grade, the win rung upstream owns
+        the certain case), put onto an in-play body and carried to the Active (a benched body needs the
+        retreat still on the menu), affords a KO with the body's Energy plus this turn's one attach.
+        No closed-form hook scores a Supporter first-step, so this is net-new (the a212 shape:
+        Salvatore -> Mega Starmie onto a setup Staryu -> free retreat -> attach -> Jetting Blow).
+        None when no such evolution reaches a KO."""
+        me = self._my_player(obs)
+        bodies = [p for p in (me.get("active") or []) if p]
+        if retreat_on_menu:
+            bodies += [p for p in (me.get("bench") or []) if p]
+        best = None
+        for body in bodies:
+            base = self.stats.get(body.get("id")) if self.stats else None
+            if base is None or not getattr(base, "name", None):
+                continue
+            energy = len(body.get("energies") or [])
+            for cid in set(self.deck):
+                st = self.stats.get(cid)
+                if (st is None or getattr(st, "evolvesFrom", None) != base.name
+                        or getattr(st, "hasAbility", False)):
+                    continue
+                if board.deck_contains_probability(cid) <= 0.5:
+                    continue                          # likely whiff: never plan on a improbable fetch
+                if self._best_affordable_ko_value(obs, board, opp, cid, energy + extra) <= 0:
+                    continue
+                my_hp = getattr(st, "hp", 0) or 0
+                cand = (self._prize_value(opp),
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
+                if best is None or cand > best:
+                    best = cand
         return best
 
     def _supporter_ko_candidate(self, obs, select, board, option, opp, opp_player):

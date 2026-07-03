@@ -52,6 +52,32 @@ class FetchMixin:
     and greedy multi-pick (`_greedy_grab`). Reads shared Pilot helpers (`_wincon_set`,
     `_line_preevo_set`, `_weight`, `_option_trace`) + the deck-knowledge `Board.deck_empty_ids`."""
 
+    def _recycle_dead_only(self, me: dict) -> bool:
+        """True iff my discard's recycle pool (Pokémon / Basic Energy — Night Stretcher's targets)
+        is non-empty and EVERY member is a dead pick: a Pokémon this deck can never deploy from
+        hand (`_stranded_evolution_set` — the setup-only Explosiveness opener). Basic Energy is
+        never dead (always a future attach); an unknown stat fails OPEN (counted live, never a
+        false suppression). The discard-side sibling of `dont-search-an-empty-deck`'s whiff
+        oracle; backs `Board.recycle_dead_only` (ep83457493 f33)."""
+        pool = live = 0
+        stranded = self._stranded_evolution_set()
+        for c in (me.get("discard") or []):
+            cid = c.get("id") if c else None
+            if cid is None:
+                continue
+            st = self.stats.get(cid) if self.stats else None
+            if st is None:
+                pool += 1
+                live += 1                                # unknown facts: fail-open
+            elif getattr(st, "hp", 0):                   # a Pokémon
+                pool += 1
+                if cid not in stranded:
+                    live += 1
+            elif getattr(st, "energyType", 0) not in (None, 0):   # a (typed) Energy card
+                pool += 1
+                live += 1
+        return pool > 0 and live == 0
+
     def _search_signals(self, option: dict, tags: list, board) -> tuple[bool, bool]:
         """The two deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
         (every card it can fetch is provably gone from the deck) and whether it is a REDUNDANT
@@ -336,6 +362,17 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and c.search_targets_exhausted,
         weight=-60, status="testing"),
     Hypothesis(
+        id="dont-recycle-the-dead",
+        rationale="A discard-recycler (Function Tag `recycle`, Night Stretcher) is a wasted card when "
+                  "EVERY target in my discard is dead — a Pokémon this deck can never deploy from hand "
+                  "(the stranded-evolution set: the setup-only Explosiveness Cinderace) and no Basic "
+                  "Energy. Recycling a dead card burns the Item AND jams the hand with an unplayable "
+                  "card (ep83457493 f33: End turn ≻ Night Stretcher fetching Cinderace). Deck-static "
+                  "and SOUND like `dont-search-an-empty-deck`; any Basic Energy or deployable Pokémon "
+                  "in the discard keeps it silent.",
+        when=lambda c: c.option_type == _PLAY and "recycle" in c.tags and c.board.recycle_dead_only,
+        weight=-40, status="assumed"),
+    Hypothesis(
         id="dont-search-a-probable-whiff",
         rationale="PROBABILISTIC complement to `dont-search-an-empty-deck` (ADR-0029): reads "
                   "`Context.search_targets_unlikely` — best reachable target's hypergeometric P(deck still "
@@ -523,9 +560,12 @@ HYPOTHESES = [
         rationale="At a cost-discard, don't throw away irreplaceable pieces — a `discard_eot` burst Energy "
                   "(Ignition), the win-condition, or an ACE SPEC (`CardStat.aceSpec`, never recoverable). "
                   "Negative weight ranks those last, so the agent sheds a redundant Supporter instead (this "
-                  "guards what a cost DISCARDS; `fetch-the-wincon` handles what a search FETCHES).",
+                  "guards what a cost DISCARDS; `fetch-the-wincon` handles what a search FETCHES). The "
+                  "burst-Energy keep is PREMISE-GATED: once my Active already carries its biggest attack's "
+                  "cost (`active_fully_powered`) the burst has no urgent job, and a hand-refresh engine "
+                  "Supporter outkeeps it (ep83454549 f36: pitch Ignition, keep Lillie's Determination).",
         when=lambda c: c.select_context == _DISCARD
-        and ("discard_eot" in c.tags or c.card_is_wincon
+        and (("discard_eot" in c.tags and not c.board.active_fully_powered) or c.card_is_wincon
              or bool(c.stat and getattr(c.stat, "aceSpec", False))),
         weight=-30, status="testing"),
     Hypothesis(

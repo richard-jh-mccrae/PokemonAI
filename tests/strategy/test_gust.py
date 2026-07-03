@@ -111,6 +111,30 @@ def test_gust_for_the_ko_plays_bosss_to_reach_a_benched_ko():
     assert p.decide(obs) == [1]
 
 
+@pytest.mark.req("REQ-GUST-0012")
+def test_gust_for_the_ko_needs_a_payable_attack_this_turn():
+    """ep83457493 f31: my Active had NO Energy and the hand held none — no attack was payable, so
+    'gust for the KO' had no KO to convert (it fired anyway and Boss's beat the hand-refresh the
+    dead hand needed). The whether-to-play signal now gates on the Energy the Active can actually
+    pay this turn (attached + the best unspent hand attach): with none the gust is silent; hand
+    the Active a {W} Energy and the same board endorses it again."""
+    WATER_CARD = 3
+    stats = DictCardStatProvider(dict(_STATS._stats))
+    stats._stats[WATER_CARD] = CardStat(WATER_CARD, name="Basic {W} Energy", hp=0, energyType=WATER)
+
+    def _obs(hand):
+        return make_select(
+            [opt(PLAY, area=HAND, index=0), opt(END)], context=MAIN,
+            current=state(active=poke(WINCON, energy=0, hp=200),
+                          opp_active=poke(WALL, hp=330),
+                          opp_bench=[poke(BENCHIE, hp=60)], hand=hand))
+
+    p = Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
+              general_strategy=GENERAL_STRATEGY, stats=stats, functions=_TAGS)
+    assert "gust-for-the-ko" not in _fired(p.explain(_obs([BOSS])).options[0])   # unpayable: silent
+    assert "gust-for-the-ko" in _fired(p.explain(_obs([BOSS, WATER_CARD])).options[0])  # payable: fires
+
+
 @pytest.mark.req("REQ-GUST-0001")
 def test_gust_for_the_ko_stands_down_in_setup_before_the_wincon_is_online():
     """SETUP with no win-condition in play: a cheap gustable prize must not preempt developing the
@@ -415,6 +439,44 @@ def test_not_doomed_when_hand_too_small_for_the_forward_attacker():
                       current=state(active=poke(MY_FRAGILE, hp=130),
                                     opp_active=poke(KADA, energy=1), opp_hand_count=1))
     assert _pilot()._board(obs).active_doomed is False
+
+
+@pytest.mark.req("REQ-GUST-0013")
+def test_active_doomed_by_general_forward_evolution_attack():
+    """ep83457493 f20: the opp's Active (Riolu-like, tiny printed attack) EVOLVES into a 270-damage
+    attacker next turn — `active_doomed` must see the general printed forward threat (not just the
+    hand_size special case): 270 ≥ my 130. Same affordability gate (their Energy + one attach)."""
+    obs = make_select([opt(END)],
+                      current=state(active=poke(MY_FRAGILE, hp=130),
+                                    opp_active=poke(PREEVO_THREAT, energy=1, hp=60),
+                                    opp_hand_count=4))
+    assert _pilot()._board(obs).active_doomed is True
+
+
+@pytest.mark.req("REQ-GUST-0013")
+def test_starved_stall_gust_outranks_development_only_under_the_energy_famine():
+    """ep83457493 f20 end to end: forward-doomed (Riolu → 270 attacker) AND a provable energy famine
+    (0 attached, none in hand — no attack payable), so `stall-gust-over-dev-when-starved` lifts
+    Boss's over a strongly-endorsed tutor. Hand the Active one {W} Energy (attack payable again) and
+    the rule stands down — normal development resumes."""
+    stats = DictCardStatProvider(dict(_STATS._stats))
+    stats._stats[3] = CardStat(3, name="Basic {W} Energy", hp=0, energyType=WATER)
+    p = Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
+              general_strategy=GENERAL_STRATEGY, stats=stats, functions=_TAGS)
+
+    def _obs(hand):
+        return make_select(
+            [opt(PLAY, area=HAND, index=0), opt(END)], context=MAIN,
+            current=state(active=poke(MY_FRAGILE, energy=0, hp=130),
+                          opp_active=poke(PREEVO_THREAT, energy=1, hp=60),
+                          opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
+                          hand=hand, opp_hand_count=4))
+
+    starved = _obs([BOSS])
+    assert "stall-gust-over-dev-when-starved" in _fired(p.explain(starved).options[0])
+    assert p.decide(starved) == [0]
+    fed = _obs([BOSS, 3])                              # a {W} in hand: cheapest attack payable again
+    assert "stall-gust-over-dev-when-starved" not in _fired(p.explain(fed).options[0])
 
 
 # --- tier-5 defensive stall-gust: strand an energyless high-retreat body (ADR-0022) ---------------

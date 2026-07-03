@@ -554,3 +554,49 @@ def test_junk_boost_is_gated_on_a_real_need():
     fired = _fired(pilot.explain(obs).options[0])
     assert "costly-fetch-sheds-junk" not in fired
     assert "fetch-when-it-fills-a-need" not in fired
+
+
+# --- dont-recycle-the-dead: a discard-recycler with only dead targets is a wasted card -----------
+NIGHTS = 1097          # Night Stretcher-like recycler (Function Tag `recycle`)
+STRANDED = 666         # a Stage-2 setup-only opener (Cinderace): hand-unplayable in this deck
+LIVEMON = 764          # a Basic Pokémon: always a live recycle target
+WENERGY = 3            # a Basic {W} Energy: never dead
+
+
+def _recycle_pilot(deck):
+    stats = DictCardStatProvider({
+        NIGHTS: CardStat(NIGHTS, hp=0),
+        STRANDED: CardStat(STRANDED, name="Cinderace", hp=160, evolvesFrom="Raboot"),
+        LIVEMON: CardStat(LIVEMON, name="Staryu", hp=70),
+        WENERGY: CardStat(WENERGY, name="Basic {W} Energy", hp=0, energyType=3),
+    })
+    return Pilot(Strategy(), deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
+                 functions=CardFunctions({NIGHTS: ["recycle"]}))
+
+
+@pytest.mark.req("REQ-GEN-0066")
+def test_dont_recycle_the_dead_holds_the_recycler_when_every_target_is_stranded():
+    """ep83457493 f33: the only recycle target is the setup-only Explosiveness opener — a card this
+    deck can never play from hand (no previous stage on the deck list). Fetching it back just burns
+    the Item and jams the hand: End turn beats the recycler."""
+    pilot = _recycle_pilot(deck=[STRANDED] * 2 + [1] * 58)      # no Raboot in deck -> stranded
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1), hand=[NIGHTS],
+                                    discard=[STRANDED]))
+    assert "dont-recycle-the-dead" in _fired(pilot.explain(obs).options[0])
+    assert pilot.decide(obs) == [1]                             # End turn, not the dead recycle
+
+
+@pytest.mark.req("REQ-GEN-0066")
+def test_dont_recycle_the_dead_stays_silent_on_a_live_target():
+    """A Basic Energy (or any deployable Pokémon) in the discard keeps the rule silent — recycling
+    stays a normal option."""
+    pilot = _recycle_pilot(deck=[STRANDED] * 2 + [1] * 58)
+    live_energy = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                              current=state(active=poke(900, energy=1), hand=[NIGHTS],
+                                            discard=[STRANDED, WENERGY]))
+    assert "dont-recycle-the-dead" not in _fired(pilot.explain(live_energy).options[0])
+    live_mon = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                           current=state(active=poke(900, energy=1), hand=[NIGHTS],
+                                         discard=[LIVEMON]))
+    assert "dont-recycle-the-dead" not in _fired(pilot.explain(live_mon).options[0])
