@@ -31,6 +31,16 @@
       "type": "bool",
       "consumer": "unwired",
       "note": "the deck has a payoff attack whose damage IGNORES effects on your Active Pokémon (damage-reduction, protection, 'can't be damaged', Weakness/Resistance tricks) — so effect-based Active defenses are bypassed and only raw HP, healing, board removal, or a Weakness-type attacker answer it. Distinct from opp_is_heal_wall (which is about the OPPONENT's own bulk/heal making OUR chip worthless); this is about OUR defensive effects being void against THEIR burst. Lever (future): for any of our decks that lean on Active-effect defenses, deprioritise those tools vs this opp and prefer raw-HP / heal / removal / Weakness lines. First minted for cinderace_mega_starmie_ex (Mega Starmie ex — Nebula Beam 210 ignores Weakness/Resistance and any effects on the opponent's Active; note it is Ignition-gated burst, NOT its sustained Jetting Blow)."
+    },
+    "opp_hand_size_attacker": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck's damage scales with the OPPONENT-player's own hand size (an attack with no fixed base, e.g. Alakazam Powerful Hand = 2 damage counters per card in hand), typically Active-only/single-target. Lever (future): raise the value of (a) hand-disruption / shuffle-hand-down TIMED to the swing turn (off-turn is refunded by the deck's own draw), and (b) high-HP walling the Active + promoting a fresh full-HP body after a KO to reset the damage clock; discount chip/out-grind lines. First minted for alakazam (Powerful Hand). Mirrors the `hand_size_attacker` function tag. Reusable for any hand-size-scaling attacker."
+    },
+    "opp_single_prize": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "every attacker the deck fields is a 1-prize body (no ex / Mega-ex), so there is no multi-prize insurance and no 2-for-1 gust swing to farm — but the attacker line does not self-recur, so each KO is real progress toward six. Lever (future): value even-trade tempo and cheap recurring single-prize attackers over multi-prize burst; deprioritise gust-for-a-2-prize-swing plans that have no target here. First minted for alakazam (all-1-prize Alakazam/Dudunsparce toolbox). Reusable for any single-prize toolbox archetype."
     }
   }
 }
