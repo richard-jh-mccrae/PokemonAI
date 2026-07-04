@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from common.scouting.briefs import Brief, load_briefs, match_brief
+from common.scouting.briefs import Brief, load_briefs, match_brief, resolve_brief_cards
 from common.scouting.read import Read
 
 
@@ -56,3 +56,46 @@ def test_match_brief_none_when_unrecognized(tmp_path):
     assert match_brief(briefs, _read(("Some Off-Meta Deck", 0.3))) is None   # no covering Brief
     assert match_brief(briefs, _read()) is None                              # no candidates
     assert match_brief(briefs, None) is None                                 # no Read
+
+
+# ---- resolve_brief_cards: name-keyed threats/targets -> card ids (the Board consumer's substrate) ----
+
+def _ml_brief(**extra):
+    """A Mega Lucario ex Brief carrying threats + role-tagged targets (name-keyed)."""
+    return Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
+                 threats=extra.get("threats", [{"card": "Mega Lucario ex", "why": "270"}]),
+                 targets=extra.get("targets", [{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}]))
+
+
+def test_resolve_brief_cards_maps_names_to_ids_and_roles():
+    # A threat name -> a threat id; a target name -> {id: role}. Names resolve via the injected lookup.
+    name_ids = {"Mega Lucario ex": {678}, "Riolu": {677}}
+    threat_ids, target_roles = resolve_brief_cards(_ml_brief(), lambda n: name_ids.get(n, ()))
+    assert threat_ids == frozenset({678})
+    assert target_roles == {677: "fragile_preevo"}
+
+
+def test_resolve_brief_cards_skips_unresolvable_names():
+    # A name the lookup doesn't know resolves to no id -> silently skipped, never raises.
+    threat_ids, target_roles = resolve_brief_cards(
+        _ml_brief(targets=[{"card": "Ghost Card", "role": "engine", "why": "?"}]),
+        lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
+    assert threat_ids == frozenset({678})
+    assert target_roles == {}                    # "Ghost Card" unknown -> dropped
+
+
+def test_resolve_brief_cards_maps_a_name_to_all_its_ids():
+    # A name printed under several card ids (reprints) maps ALL of them to the role.
+    _, target_roles = resolve_brief_cards(
+        _ml_brief(threats=[], targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "x"}]),
+        lambda n: {"Riolu": {677, 6771}}.get(n, ()))
+    assert target_roles == {677: "fragile_preevo", 6771: "fragile_preevo"}
+
+
+def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
+    # Mega Lucario ex is BOTH a threat (respect) and a prize_liability target (exploit) -> both outputs.
+    brief = _ml_brief(threats=[{"card": "Mega Lucario ex", "why": "270"}],
+                      targets=[{"card": "Mega Lucario ex", "role": "prize_liability", "why": "3 prizes"}])
+    threat_ids, target_roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
+    assert threat_ids == frozenset({678})
+    assert target_roles == {678: "prize_liability"}

@@ -7,7 +7,7 @@ See ADR-0026 (the wiring staircase) and docs/scouting.md (the Read).
 import pytest
 
 from common.cards import CardFunctions
-from common.pilot import Pilot
+from common.pilot import Board, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.scouting.briefs import Brief
 from common.scouting.read import EvoPath, Read
@@ -286,3 +286,103 @@ def test_no_brief_on_board_when_unknown_unmatched_or_posture_off():
     assert _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[other]), ml).brief is None   # no cover
     assert _board_of(_pilot(scout=None, briefs=[brief]), ml).brief is None                      # no Scout
     assert _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[brief], posture=False), ml).brief is None
+
+
+# ---- Brief-consumer surface: opponent_properties readable off the Board (ADR-0027) ----
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_opp_property_reads_a_brief_asserted_lever():
+    # Surface A: the matched Brief's opponent_properties are readable off the Board by key.
+    board = Board(brief=Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
+                              opponent_properties={"opp_tempo": "midrange"}))
+    assert board.opp_property("opp_tempo") == "midrange"
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_opp_property_omitted_key_returns_default():
+    # Assert-true-only Briefs omit their FALSE levers; an omitted key reads as its default.
+    board = Board(brief=Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
+                              opponent_properties={"opp_tempo": "midrange"}))
+    assert board.opp_property("opp_is_engine_dependent", False) is False
+    assert board.opp_property("opp_donk_vulnerable", False) is False
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_opp_property_safe_when_no_brief():
+    # No matched Brief (unrecognized opponent / Posture off) -> default, never raises.
+    assert Board().opp_property("opp_tempo") is None
+    assert Board().opp_property("opp_tempo", "x") == "x"
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_brief_target_and_threat_accessors_read_resolved_ids():
+    # Surface B: the Brief's threats/targets, resolved to ids, are queryable off the Board by id/role.
+    board = Board(brief_threat_ids=frozenset({MEGA_LUCARIO}),
+                  brief_target_roles={RIOLU: "fragile_preevo", SOLROCK: "engine"})
+    assert board.brief_target_role(RIOLU) == "fragile_preevo"
+    assert board.brief_target_role(999) is None
+    assert board.brief_is_threat(MEGA_LUCARIO) is True
+    assert board.brief_is_threat(999) is False
+    assert board.brief_target_ids("engine") == frozenset({SOLROCK})
+    assert board.brief_target_ids() == frozenset({RIOLU, SOLROCK})
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_brief_accessors_safe_when_no_brief():
+    # No resolved Brief cards -> every accessor returns an empty/None default, never raises.
+    board = Board()
+    assert board.brief_target_role(RIOLU) is None
+    assert board.brief_is_threat(RIOLU) is False
+    assert board.brief_target_ids() == frozenset()
+    assert board.brief_target_ids("engine") == frozenset()
+
+
+def _ml_stats():
+    """A provider that knows the Mega Lucario ex line by name (so the Brief's cards resolve to ids)."""
+    return DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True,
+                       minAttackCost=1, minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, evolvesFrom=None),
+        SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110),
+    })
+
+
+def _ml_brief_full():
+    return Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
+                 opponent_properties={"opp_tempo": "midrange"},
+                 threats=[{"card": "Mega Lucario ex", "why": "270"}],
+                 targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"},
+                          {"card": "Solrock", "role": "engine", "why": "draw"}])
+
+
+def _ml_pilot(briefs):
+    """A posture Pilot that recognizes Mega Lucario ex and knows its line by name (so a matched
+    Brief's threats/targets resolve to ids)."""
+    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
+                     roles={MEGA: ["win_condition", "primary_attacker"]})
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_ml_stats(),
+                 attacks={11: 120}, attack_costs={11: 1}, scout=Scout(tiny_artifact()),
+                 briefs=briefs, posture=True)
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_board_resolves_the_matched_briefs_threats_and_targets_to_ids():
+    # End-to-end wiring: a recognized opponent -> _board() resolves the matched Brief's name-keyed
+    # threats/targets to ids via the provider, so the Board's brief_* accessors answer by id.
+    board = _board_of(_ml_pilot([_ml_brief_full()]), _obs_facing_mega_lucario())
+    assert board.brief is not None                                 # recognized -> Brief on the Board
+    assert board.opp_property("opp_tempo") == "midrange"
+    assert board.brief_target_role(RIOLU) == "fragile_preevo"      # resolved from brief.targets
+    assert board.brief_target_role(SOLROCK) == "engine"
+    assert board.brief_is_threat(MEGA_LUCARIO) is True             # resolved from brief.threats
+
+
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_resolving_the_brief_changes_no_decision_or_score():
+    # Behavior-neutral wiring (the M2 staircase): resolving the Brief's threats/targets onto the Board
+    # must yield byte-identical choices AND scores vs a Pilot with no Brief -- nothing scores off it yet.
+    obs = _obs_two_option_menu()
+    on, off = _ml_pilot([_ml_brief_full()]), _ml_pilot(None)
+    assert on.decide(obs) == off.decide(obs)
+    assert [o.score for o in on.explain(obs).options] == [o.score for o in off.explain(obs).options]

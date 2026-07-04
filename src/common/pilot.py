@@ -15,7 +15,7 @@ from common import deck_odds
 from common.strategy import Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
-from common.scouting.briefs import Brief, match_brief
+from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
@@ -265,6 +265,12 @@ class Board:
     brief: Brief | None = None            # matched hand-authored Matchup Brief for the recognized
                                           # opponent (ADR-0027, covers-routed); None = unrecognized / no
                                           # covering Brief / Posture off. Behavior-neutral: nothing scores off it yet.
+    brief_threat_ids: frozenset = field(default_factory=frozenset)  # opp card ids the matched Brief lists
+                                          # as THREATS to respect (attackers), resolved from brief.threats
+                                          # via the provider name->id (ADR-0027 consumer). Empty = no Brief.
+    brief_target_roles: dict = field(default_factory=dict)  # {opp card id: Dossier role} the Brief lists as
+                                          # disruption/snipe TARGETS (fragile_preevo/prize_liability/engine).
+                                          # Behavior-neutral: the surface exists; nothing scores off it yet.
     my_discard_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in
                                           # MY open discard — the recover-rider fuel (Aura Jab class)
     active_best_attack_locked: bool = False  # my Active's HIGHEST-damage attack is transient-locked this
@@ -312,6 +318,31 @@ class Board:
         if self.deck_contains_odds is None:
             return 1.0
         return self.deck_contains_odds.get(card_id, 0.0)
+
+    def opp_property(self, key: str, default=None):
+        """Value of opponent-property ``key`` from the matched Matchup Brief (ADR-0027,
+        ``brief.opponent_properties``), or ``default`` when no Brief is matched (unrecognized
+        opponent / Posture off) or the key isn't asserted. Never raises. The Brief is
+        assert-true-only, so an omitted key (e.g. ``opp_is_engine_dependent``) reads as ``default``."""
+        if self.brief is None:
+            return default
+        return self.brief.opponent_properties.get(key, default)
+
+    def brief_is_threat(self, card_id: int) -> bool:
+        """True if the matched Brief lists ``card_id`` as a threat to respect (ADR-0027)."""
+        return card_id in self.brief_threat_ids
+
+    def brief_target_role(self, card_id: int):
+        """The matched Brief's target role for ``card_id`` (``fragile_preevo`` / ``prize_liability`` /
+        ``engine``), or None if it isn't a Brief target (or no Brief matched)."""
+        return self.brief_target_roles.get(card_id)
+
+    def brief_target_ids(self, role: str | None = None) -> frozenset[int]:
+        """Card ids the matched Brief lists as disruption/snipe targets — filtered to ``role`` when
+        given, else all of them. Empty when no Brief matched."""
+        if role is None:
+            return frozenset(self.brief_target_roles)
+        return frozenset(cid for cid, r in self.brief_target_roles.items() if r == role)
 
 
 @dataclass
@@ -1860,6 +1891,12 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         # covers-routed (ADR-0027), γ-gated to a RECOGNIZED opponent: on an empty early board the Read's
         # top candidate is just the prior favourite -> gate on γ>0 to keep board.brief off until recognized.
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
+        # Resolve the matched Brief's name-keyed threats/targets to card ids (ADR-0027 consumer). Guarded
+        # like forward_max_damage: an old/None provider -> empty, never crashes. Behavior-neutral surface.
+        _ids_for_name = getattr(self.stats, "ids_for_name", None)
+        brief_threat_ids, brief_target_roles = (
+            resolve_brief_cards(brief, _ids_for_name)
+            if (brief is not None and _ids_for_name is not None) else (frozenset(), {}))
         active_doomed = self._active_doomed(ma, oa, opp)
         active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
         # the Energy my Active can actually PAY an attack with this turn: attached + the best unspent
@@ -1949,6 +1986,8 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             posture_confidence=gamma,                               # γ ∈ [0,1] the levers scale by
             favorability=fav, matchup_coverage=cov,                 # lever-A signal + its reliability
             brief=brief,                                            # matched Matchup Brief (ADR-0027); None = off
+            brief_threat_ids=brief_threat_ids,                      # its threats/targets resolved to card ids
+            brief_target_roles=brief_target_roles,                  # (behavior-neutral consumer surface)
         )
         if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
             board = replace(board,                      # Tool is in hand (common case pays nothing)
