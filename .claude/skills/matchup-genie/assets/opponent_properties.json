@@ -16,6 +16,16 @@
       "values": ["fast", "midrange", "slow"],
       "consumer": "unwired",
       "note": "how fast the deck comes online and starts taking prizes; sets the race clock. Lever (future): race a slow deck; stabilise-then-grind against a fast one."
+    },
+    "opp_is_heal_wall": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck stacks effective HP + damage-reduction + healing so chip damage is undone (and may be punished, e.g. a scaling counter-attack); grinding it down is wasted. Lever (future): prefer burst/OHKO lines that clear the heal in one hit and value a weakness-type attacker; deprioritise chip. First minted for archaludon_ex_cinderace (Full Metal Lab -30 + Jumbo Ice Cream heal 80 + Raging Hammer punish). Reusable for any tank/stall archetype."
+    },
+    "opp_accel_dependent": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck's setup hinges on a specific ENERGY-ACCELERATION Pokémon (not draw/search); gusting + KOing it strangles the ramp and slows the payoff by turns. Distinct from opp_is_engine_dependent (draw/search engine). Lever (future): raise disruption value against its `engine` target when that target is an accelerator. First minted for archaludon_ex_cinderace (Cinderace — sole Metal accel, setup-only, unrecoverable)."
     }
   }
 }
