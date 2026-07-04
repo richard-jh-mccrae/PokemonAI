@@ -43,6 +43,16 @@ about *whose* KO advances *whose* win). That is the designed-but-unbuilt **M3 de
 **Do not** bolt multi-turn onto the closed-form Planner; it belongs behind the engine-search escalation +
 the value-model leaf-eval, exactly where the roadmap puts it.
 
+> **Correction ([ADR-0040](../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md),
+> 2026-07-05): the prescription above is PARTIALLY REVERSED.** Opponent-*static* multi-turn
+> arithmetic — the **KO Race** (turns-to-KO attack sequences, riders credited to Prize-Path
+> targets) — is closed-form at the same epistemic tier as Incoming/Survival Window and is the
+> designed home for `a21472` ([Tier 3](../architecture/tier-3-match-objectives.md)), NOT the engine
+> tree. The engine-search escalation keeps only the opponent-*choice*-dominated residue
+> ([Tier 6](../architecture/tier-6-escalation-search.md)). `b4649`'s "Prize-Race Planner" is
+> realized as the two-sided **Prize Path** objective (Tier 3): fuzzy, γ-gated, non-committal — as
+> ADR-0030 required.
+
 ---
 
 ## `a21472f6f4d2` — the live gap: pick the multi-turn attack *sequence*, not the biggest single hit

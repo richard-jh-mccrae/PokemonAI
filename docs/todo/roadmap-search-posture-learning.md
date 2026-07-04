@@ -1,5 +1,14 @@
 # Roadmap — graduating the Pilot: cheap f75 → Posture → Tier-1 Search → Self-play & Value Model
 
+> **SUPERSEDED as the architecture reference (2026-07-05).** The final architecture now lives in
+> [docs/architecture/tiers.md](../architecture/tiers.md) (seven tier docs with %-complete), decided
+> in [ADR-0039](../adr/0039-gamble-lines-are-closed-form-expectimax-over-outcome-classes.md) /
+> [ADR-0040](../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md). This file stays as
+> the M0–M4 **milestone history** (provenance links remain valid). Mapping: M0/M2 → Tier 4,
+> M1 → the cross-tier A/B gate, M3 → Tiers 1+6 (M3's "multi-turn only behind engine search"
+> prescription is partially reversed by ADR-0040 — closed-form KO-Race arithmetic is Tier 3),
+> M4 → Tier 5. The IS_FIRST gap in the decision log is FIXED (`baseline_opening.py`).
+
 **Status:** plan (2026-06-27). Sequencing + concrete scope for the four next capability jumps past the
 Tier-0 rules Pilot. Trigger-gated, not date-gated. Anchored to
 [ADR-0007](../adr/0007-learning-is-one-offline-value-model.md),
