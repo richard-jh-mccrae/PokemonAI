@@ -1,0 +1,55 @@
+{
+  "slug": "alakazam",
+  "label": "Alakazam",
+  "covers": [
+    "Alakazam",
+    "Alakazam / Frillish"
+  ],
+  "authored": "2026-07-04",
+  "tempo": "midrange",
+  "summary": "Single-prize hand-size grinder: Abra -> Kadabra -> Alakazam (140 HP, 1 prize) whose Powerful Hand (cost P, base 0) places 2 damage counters per card in hand on the ACTIVE only, no floor. A heavy draw engine (Kadabra/Alakazam Psychic Draw on evolve, repeatable Dudunsparce Run Away Draw, Enriching draw-4) inflates the hand to fire; every body is 1 prize. Beat it by winning the prize race on even trades and REMOVING the body, never out-grinding the hand: hand-disruption timed to the swing turn, wall the Active + promote fresh after a KO, and hit through Darkness weakness (never Fighting, the line resists -30). Do not target Dudunsparce (self-shuffles).",
+  "opponent_properties": {
+    "opp_hand_size_attacker": true,
+    "opp_single_prize": true,
+    "opp_tempo": "midrange"
+  },
+  "threats": [
+    {
+      "card": "Alakazam",
+      "why": "The sole win condition. Powerful Hand (cost P, base 0) = 20 x cards-in-hand on the Active with NO cap — OHKOs essentially any single Active given a big enough hand. Active-only/single-target (no bench spread), 140 HP, 1 prize, Darkness-weak."
+    },
+    {
+      "card": "Boss's Orders",
+      "why": "The deck's ONLY reach to our bench (Powerful Hand is Active-only). Gusts a fragile setup piece into the Active to pick it off, or drags a benched wincon out to KO around our wall. Don't bench a snipeable key piece assuming it's safe."
+    },
+    {
+      "card": "Enhanced Hammer",
+      "why": "Special-energy tax, x4. Engine diverges from real-TCG: discards a Special Energy from ANY of our Pokemon (not Active-only). Attack off Basic energy where possible to make all four dead cards; don't pre-load special energy on a single body. (Energy denial vs THEM is near-useless — Alakazam attacks off one Basic.)"
+    }
+  ],
+  "targets": [
+    {
+      "card": "Alakazam",
+      "role": "engine",
+      "why": "Sole attacker and payoff; the Psychic line does NOT self-shuffle, so KOing the body is real prize progress AND tempo denial (slow to re-assemble). Darkness x2 (140 -> 70-base OHKO), or any 140 hit. Remove it — do not out-grind its hand size."
+    },
+    {
+      "card": "Abra",
+      "role": "fragile_preevo",
+      "why": "50 HP, 1 prize, Darkness-weak, base of the ONLY win line. KO pre-evolution to deny an Alakazam and tax their search (they re-find via Buddy Poffin / Poke Pad / Dawn / Hilda). BATTLE CAGE CAVEAT: it blocks damage counters on the bench, so a benched-Abra snipe is blanked while the Cage is up — gust it Active (Active hits land normally) or overwrite the Cage with our own stadium. Also resists Fighting (-30). NOTE: do NOT spend removal on Dudunsparce (Run Away Draw self-shuffles it back — refunded)."
+    },
+    {
+      "card": "Kadabra",
+      "role": "fragile_preevo",
+      "why": "80 HP, 1 prize, Darkness-weak middle of the line and a draw node (Psychic Draw +2 on evolve). KOing it (or the Abra under it) before Alakazam lands sets the engine back a full evolution step. Same Battle Cage caveat — route the hit through the Active, not the bench. Resists Fighting (-30)."
+    }
+  ],
+  "sources": [
+    "Alakazam (MEG 56) (Limitless TCG) - https://limitlesstcg.com/cards/MEG/56",
+    "Battle Cage (PFL 85) / Enhanced Hammer (TWM 148) (Limitless TCG) - https://limitlesstcg.com/cards/PFL/85",
+    "Alakazam deck overview + matchups (Limitless TCG) - https://limitlesstcg.com/decks/350",
+    "This Deck is Legitimately Broken (with the Right Matchups) (PokeBeach) - https://www.pokebeach.com/2026/04/this-deck-is-legitimately-broken-with-the-right-matchups",
+    "...can draw you cards for days / Iono-was-the-counter (Wargamer) - https://www.wargamer.com/pokemon-trading-card-game/alakazam-card-draw",
+    "engine ground truth - data/EN_Card_Data.csv + docs/rules.md (weakness/resist + damage order)"
+  ]
+}
