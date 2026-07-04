@@ -1,0 +1,50 @@
+{
+  "slug": "cinderace_mega_starmie_ex",
+  "label": "Cinderace / Mega Starmie ex",
+  "covers": [
+    "Cinderace / Mega Froslass ex / Mega Starmie ex",
+    "Cinderace / Mega Starmie ex"
+  ],
+  "authored": "2026-07-05",
+  "tempo": "fast",
+  "summary": "Fast Mega-ex beatdown: one evolution hop (Staryu -> Mega Starmie ex, 330 HP / 3 prizes / Lightning x2) rushed online turn 1-2 by Salvatore + Mega Signal + Hilda + Poffin, with a setup-only Cinderace front-loading Water so Jetting Blow ({W}, 120 + 50 bench snipe) sustains a turn early. Burst gear = Nebula Beam ({C}{C}{C} = one Ignition on the Evolution, 210) which ignores Weakness/Resistance AND any effects on your Active. Wally's Compassion full-heals + recycles all its Energy (de-powering it for a turn). Brittle at the root: only 3 Staryu -> 3 Mega lines with no replacement, so deny the pre-evo (snipe/gust Staryu before it evolves) or exploit Lightning x2 to OHKO the 330 body; prefer burst-lethal over chip (Wally erases non-lethal). Not accel-dependent (Ignition/Water self-power) and not a heal-wall (no passive reduction).",
+  "opponent_properties": {
+    "opp_tempo": "fast",
+    "opp_pierces_active_effects": true
+  },
+  "threats": [
+    {
+      "card": "Mega Starmie ex",
+      "why": "The entire win condition (330 HP, 3 prizes, Lightning x2). Jetting Blow ({W}, 120 + 50 to one Benched) is a cheap sustained two-target chipper off 9 Water + Cinderace accel; Nebula Beam ({C}{C}{C} via one Ignition, 210) is an on-demand burst that ignores Weakness/Resistance AND any effects on your Active (damage-reduction/protection do not stop it). Respect it as both a chipper and a wall-piercer, but note it gives 3 prizes on the trade."
+    },
+    {
+      "card": "Cinderace",
+      "why": "The tempo enabler, not a payoff: Turbo Flare ({C}, 50) accelerates up to 3 Basic Water to the Bench, bringing the Mega online a turn early. Soft body (160 HP, Water x2, 1 prize, retreat 0). Respect the acceleration it grants, not the 50 attack; only one ever enters play (Explosiveness at setup, no Raboot line)."
+    }
+  ],
+  "targets": [
+    {
+      "card": "Staryu",
+      "role": "fragile_preevo",
+      "why": "70 HP, 1 prize, Lightning x2 and the SOLE foundation for the 3-prize Mega Starmie ex; only 3 in deck with no un-evolve or replacement path. Sniping/gusting a Staryu the turn it lands, before Salvatore/Mega Signal rush-evolve, is the highest-leverage early play: 70 damage (or any Lightning ping) denies a full 3-prize Mega for a 1-prize trade and permanently taxes a 3-line deck. Tiny KO window."
+    },
+    {
+      "card": "Mega Starmie ex",
+      "role": "prize_liability",
+      "why": "Gives 3 prizes when KO'd and is Lightning x2, so trading into it is prize-positive: a ~165-raw Lightning hit OHKOs the 330 body. Best answered by a Lightning OHKO or by killing it before it evolves. Do NOT rely on effect-based Active protection/damage-reduction against Nebula Beam (it ignores all of that, and Weakness/Resistance); only raw HP, healing, board removal, or Lightning-play work against the burst. Prefer a one-turn OHKO so Wally's Compassion has nothing to heal."
+    },
+    {
+      "card": "Cinderace",
+      "role": "engine",
+      "why": "The one-and-only accelerator (no Raboot line = irreplaceable), but NOT load-bearing: Ignition self-powers Nebula and one Water self-powers Jetting Blow, so removing it costs only a turn of tempo, not the gameplan. KO yields just 1 prize and it has usually already fired Turbo Flare, so prefer denying the Water it distributed (strip/deny) or racing the benched Staryu over spending resources on the 160-HP body; gusting the retreated Cinderace back Active can strand their Active slot."
+    }
+  ],
+  "sources": [
+    "Mega Starmie ex Deck Guide (Perfect Order) - Deltia's Gaming - https://deltiasgaming.com/pokemon-tcg-mega-starmie-ex-deck-guide-perfect-order/",
+    "Best Cinderace Deck Guide (Mega Evolution) - Deltia's Gaming - https://deltiasgaming.com/pokemon-tcg-best-cinderace-deck-guide-mega-evolution/",
+    "Build a Mega Starmie ex Deck - Pokemon.com - https://www.pokemon.com/us/strategy/build-a-mega-starmie-ex-deck-from-pokemon-tcg-mega-evolution-perfect-order",
+    "Mega Starmie ex (POR 21) / Cinderace (MEG 28) / Wally's Compassion (MEG 132) / Ignition Energy (WHT 86) - Limitless TCG - https://limitlesstcg.com/cards/POR/21",
+    "Mega Starmie deck overview - Limitless TCG - https://limitlesstcg.com/decks/362",
+    "engine ground truth - data/EN_Card_Data.csv + dump_deck.py + docs/rules.md (weakness x2, damage order, Ignition CCC-on-evolution)"
+  ]
+}

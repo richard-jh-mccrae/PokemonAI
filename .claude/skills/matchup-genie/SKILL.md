@@ -156,7 +156,8 @@ python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>
 It checks the schema, that `covers` is non-empty (and matches `index.json`), that every `threat`/`target`
 card actually appears in the deck, that `target` roles are legal, and that every `opponent_properties`
 key is registered (unknown → flagged, not silently accepted). Present the diff (`briefs/<slug>.json`
-+ any `opponent_properties.json` additions). The human reviews and commits.
++ any `opponent_properties.json` additions). The human reviews and commits. **Every matchup-genie commit
+message begins with `matchup: `** (see [references/authoring.md](references/authoring.md) §5).
 
 ## Completion discipline — build to feature-complete (no convenient stopping points)
 

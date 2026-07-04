@@ -45,27 +45,36 @@ def test_live_wiring_engine_refutes_a_phantom_direct_lock():
     deck = _deck()
     pilot = _engine_pilot(deck, lethal_verify=True)
     pilot._attack_wins = lambda *a, **kw: True        # the closed-form lie: every attack "wins"
-    obs, start = battle_start(deck, list(deck))
-    assert start.errorPlayer < 0
-    try:
-        checked = False
-        for _ in range(120):
-            cur = obs.get("current") or {}
-            if cur.get("result", -1) != -1:
-                break
-            sel = obs.get("select")
-            if (sel is not None and sel.get("context") == 0 and sel.get("maxCount", 0) == 1
-                    and obs.get("search_begin_input")
-                    and any(o.get("type") == 13 for o in (sel.get("option") or []))):  # an ATTACK option
-                d = pilot.explain(obs)
-                assert d.planned is None or d.planned.goal != "win"   # every phantom candidate refuted
-                assert d.lethal_refuted >= 1
-                checked = True
-                break
-            obs = battle_select(pilot.decide(obs))
-        assert checked                                # the drive reached an attack menu to check
-    finally:
-        battle_finish()
+    # battle_start shuffles unseeded (no seed param on the native API), so the first attack menu the
+    # drive reaches is *occasionally* a genuine lethal — a donk the engine rightly confirms
+    # (planned.goal=="win", verified True) rather than the phantom this test wants to refute. Retry
+    # over fresh battles until we reach a menu where the engine actually has to refute the lie.
+    refuted = False
+    for _attempt in range(20):
+        obs, start = battle_start(deck, list(deck))
+        assert start.errorPlayer < 0
+        try:
+            for _ in range(120):
+                cur = obs.get("current") or {}
+                if cur.get("result", -1) != -1:
+                    break
+                sel = obs.get("select")
+                if (sel is not None and sel.get("context") == 0 and sel.get("maxCount", 0) == 1
+                        and obs.get("search_begin_input")
+                        and any(o.get("type") == 13 for o in (sel.get("option") or []))):  # an ATTACK option
+                    d = pilot.explain(obs)
+                    if d.planned is not None and d.planned.goal == "win" and d.planned.verified:
+                        break                         # a real engine-confirmed donk, not a phantom — retry
+                    assert d.planned is None or d.planned.goal != "win"   # phantom candidate refuted
+                    assert d.lethal_refuted >= 1
+                    refuted = True
+                    break
+                obs = battle_select(pilot.decide(obs))
+        finally:
+            battle_finish()
+        if refuted:
+            break
+    assert refuted, "no attack menu reached where the engine had to refute a phantom lock"
 
 
 @pytest.mark.req("REQ-LETHAL-0023")
