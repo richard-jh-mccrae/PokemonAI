@@ -1,6 +1,6 @@
 ---
 name: blunder-buster
-description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), routes Lethal-Solver/Turn-Planner-layer blunders (live_trace lethal/planned) to code fixes in that layer instead of weights or when() rules, gates each rule with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — or, solely when the sound fix is a designed-but-unbuilt roadmap capability (e.g. multi-turn search), an evidenced capability-gap (real-Pilot re-measure + state fixture + todo definition-of-done + ledger); nothing is silently punted to a future run. Corrections whose rationale carries the uppercase CRITICAL marker are surfaced first and resolved one at a time, blocking the rest of the run until each reaches a terminal outcome. Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
+description: Bust a round of blunder corrections into verified Strategy improvements — exhaustively. Reads the correction log, clusters EVERY still-open missing_hypothesis blunder, authors a general when() trigger per cluster (building any missing Context/tag/enum infra in-session when a rule needs it), routes Lethal-Solver/Turn-Planner-layer blunders (live_trace lethal/planned) to code fixes in that layer instead of weights or when() rules, reads the live Scouting posture (live_trace.posture) so a matchup misplay — the opponent Read flagged wrong, or a cluster sharing one believed archetype — is tied to that archetype and routed to its Matchup Brief / recognition (or handed to /matchup-genie) instead of a deck-agnostic weight, gates each rule with the deterministic Verifier, and presents diffs to commit. Every open correction is resolved in-session to fixed / covered / refuted — or, solely when the sound fix is a designed-but-unbuilt roadmap capability (e.g. multi-turn search), an evidenced capability-gap (real-Pilot re-measure + state fixture + todo definition-of-done + ledger); nothing is silently punted to a future run. Corrections whose rationale carries the uppercase CRITICAL marker are surfaced first and resolved one at a time, blocking the rest of the run until each reaches a terminal outcome. Optionally fans file-and-behavior-independent clusters out to parallel worktree agents at the spawning session's effort, then a serial join union-verifies the merged result so rules don't step on each other. Refreshes the reports/blunders.html trend dashboard at the round boundaries. Invoke as /blunder-buster [corrections.jsonl] (defaults to data/corrections/corrections.jsonl). Use after a round of manual blunder tagging (ADR-0018).
 ---
 
 # blunder-buster — corrections → verified Strategy improvements
@@ -241,6 +241,45 @@ style; skip only the ones that don't apply to serial mode):
    (`docs/todo/deferred-multi-turn-criticals.md`) — that correction is a **capability-gap**: follow
    the carve-out in the completion mandate above.
 
+   **Then read `live_trace.posture` — WHO the agent thought it faced (ADR-0041).** Every `@T` record
+   carries the Scouting Posture at that decision: `{cands, conf, unknown, gamma, fav, cov, brief}` —
+   the believed opponent **archetype(s)** (`cands[0]` = top `[archetype, posterior]`), the applied
+   confidence **γ** (0 = unrecognized / Posture off), the modeled matchup **favorability**, and the
+   matched **Matchup Brief** slug (or `null`). This is the *matchup context* for every blunder — read
+   it on **each** cluster member so a misplay is tied to the opponent it happened against.
+   - **A `posture_mismatch` correction is a MATCHUP-DOCTRINE miss, NOT a weight/when().** When the
+     human ticked "opponent read was wrong" (or the rationale says "vs `<archetype>` I should…"), the
+     fix lives in the **posture/matchup layer**, never a generic Hypothesis — authoring a deck-agnostic
+     `when()` for a one-archetype misplay is exactly the mistake this routing prevents. Diagnose which
+     of three it is, from the `posture` block + rationale:
+     - **The Read was RIGHT but our counterplay was wrong** (γ high, `cands[0]` is the real opponent) →
+       the **Matchup Brief** is wrong/thin. If a Brief already `covers` that archetype, the fix is a
+       small, testable **Brief data change** (its `threats` / `targets` / `opponent_properties` levers)
+       or a **posture lever** in `pilot.py` — make it in-session and prove it with the retest (the
+       Brief loads through the Pilot, so `decide()` moves and retest sees it). If the fix needs the
+       full research + grill (re-scoping the doctrine, a new variant, a lever that doesn't exist yet),
+       **route to `/matchup-genie <slug>`** — name the slug; that skill owns Brief authoring.
+     - **No Brief covers the believed archetype** (`brief: null` but γ high) → the archetype is
+       recognized (it's in the artifact's dossiers) but has **no counterplay doctrine yet**. Route to
+       **`/matchup-genie <slug>`** to author it — the posture analog of "build the missing signal,"
+       except the sound authoring path is a dedicated skill, so it is a **named hand-off, not a bare
+       defer** (record it per step 10).
+     - **The Read itself was WRONG** (γ low, or `cands[0]` is not who the opponent actually was) → a
+       **recognition** gap in the Scout/artifact, *upstream* of any Brief. The artifact is compiled
+       offline from the meta corpus ([[card2vec-rejected]], ADR-0003), so unless a quick signature/prior
+       tweak covers it, recognition retraining is a **capability-gap** (roadmap layer) — follow the
+       four-artifact carve-out, ledgered with the archetype.
+   - **Even when `posture_mismatch` is False**, use `believed_archetype` as **clustering context**: a
+     handful of `bad_target` / `sequencing_error` misplays that all happened vs one archetype is a
+     signal to sharpen *that matchup's* Brief, not to author a general rule that would misfire in every
+     other matchup. Group by believed archetype before you decide the fix layer.
+
+   **You do not hand-grep for posture mismatches** — `tune.py` tags each flagged `PROPOSE` /
+   `UNSATISFIED` / `SKIP` line `[POSTURE≠ <archetype>]` and prints a `*** N correction(s) flagged
+   POSTURE-MISMATCH … ***` banner; `data/proposals/<deck>.json` `open[]` / `skipped[]` entries carry
+   `"posture_mismatch": true` + `"believed_archetype"`. Build the posture cohort from those, exactly as
+   you build the `[LETHAL]` / `[PLANNED]` cohorts.
+
 3. **Read the feature catalog** (author against the LIVE source, never memory):
    - `src/common/pilot.py` — the `Context` / `Board` fields a `when(ctx)` may read.
    - `src/cg/api.py` — `SelectContext` / `OptionType` / `AreaType` / `EnergyType` enums.
@@ -325,11 +364,20 @@ style; skip only the ones that don't apply to serial mode):
     - `refuted` — a bad correction (e.g. it forgoes a **KO** / a high-value attack; `tactical ≈ 1000`).
       **Prove it first** (retest shows the agent's pick is the KO), then record. Also dropped from the
       weight fit so the bad label stops pressuring weights. (See [[forgo-ko-corrections-are-refuted]].)
-    - `covered` — already handled by an existing Hypothesis; **name it**, and confirm with the real
-      Pilot `decide()` that it actually fires (not just the W-route).
-    - `deferred` — **only** for an evidenced **capability-gap** (see the completion mandate): all four
-      artifacts exist (real-Pilot re-measure, state fixture, `docs/todo/` entry with a
-      definition-of-done, this ledger line), and the reason names the layer + the todo doc.
+    - `covered` — already handled by an existing Hypothesis (or, for a posture-mismatch, an existing
+      **Brief / posture lever**); **name it**, and confirm with the real Pilot `decide()` that it
+      actually fires (not just the W-route).
+    - **posture-mismatch → matchup route** (ADR-0041) — an opponent-Read miss whose sound fix is a
+      Matchup Brief, a posture lever, or recognition (step 2, `posture_mismatch` / a `believed_archetype`
+      cluster). A small, **retest-verified Brief/lever change** you made in-session is **fixed** (step 8
+      places the Brief/lever diff). If it needs the full research + grill, **route to
+      `/matchup-genie <slug>`** and record `deferred` with reason `posture-mismatch: /matchup-genie
+      <slug>` — a **named hand-off, not a bare punt** (`believed_archetype` names the archetype). A
+      wrong *Read* that's really a recognition gap follows the `deferred` capability-gap shape below.
+    - `deferred` — **only** for an evidenced **capability-gap** (see the completion mandate) or the
+      posture matchup route above: all four artifacts exist (real-Pilot re-measure, state fixture,
+      `docs/todo/` entry with a definition-of-done, this ledger line) — or, for the matchup route, the
+      `/matchup-genie <slug>` target — and the reason names the layer + the todo doc / slug.
     There is **no bare `deferred`.** A correction blocked only by a missing signal is **not** set
     aside — you built the infra in step 4b and authored the rule. Next `tune.py` run excludes the
     recorded set-asides (shown under `reviewed (excluded)`), so the next round only surfaces genuinely
@@ -472,6 +520,11 @@ fan-out-then-converge schedule.
   a CRITICAL that would be `refuted` **hard-stops for human acknowledgement** (see *CRITICAL
   corrections*). The cohort never fans out — it runs serially ahead of the parallel batch.
 - One Hypothesis per cluster, verified against **all** its members — not per-correction point-fixes.
+- **Posture is first-class (ADR-0041).** A `posture_mismatch` correction — or a cluster sharing one
+  `believed_archetype` from `live_trace.posture` — is a **matchup-doctrine** fix (its Matchup Brief, a
+  posture lever, or recognition), **never** a deck-agnostic `when()`/weight that would misfire in other
+  matchups. Route full Brief authoring to `/matchup-genie <slug>` and record the route (step 10). Read
+  `live_trace.posture` on every member the way you read `lethal` / `planned`.
 - **Parallel mode is scheduling only.** Fanning clusters out (see *Parallel mode*) never weakens a
   gate: the Verifier still gates every cluster, the join's **union-verify + full `pytest` + step-11**
   must pass over the **merged** tree, and a dead/failed agent **re-queues serial** — never a silently

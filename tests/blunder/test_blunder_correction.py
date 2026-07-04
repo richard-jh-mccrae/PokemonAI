@@ -96,6 +96,21 @@ def test_correction_carries_build_identity():
     assert Correction.from_dict(corr.to_dict()) == corr
 
 
+def test_posture_mismatch_flag_roundtrips_and_defaults_false():
+    """ADR-0041: the human's 'opponent read was wrong' verdict rides on the Correction, round-trips
+    through the log, and legacy records saved before the field default it to False."""
+    d = _a_main_decision()
+    flagged = build_correction(d, source="own", agent="mega_starmie", correct=[4],
+                               category="bad_target", rationale="vs Mega Lucario ex, snipe Riolu",
+                               posture_mismatch=True)
+    assert flagged.posture_mismatch is True
+    assert Correction.from_dict(flagged.to_dict()).posture_mismatch is True   # survives the JSONL round-trip
+    plain = build_correction(d, source="own", agent="x", correct=[4], category="bad_target", rationale="r")
+    assert plain.posture_mismatch is False                                    # default off
+    legacy = plain.to_dict(); legacy.pop("posture_mismatch")                  # pre-field record
+    assert Correction.from_dict(legacy).posture_mismatch is False
+
+
 def test_corrections_have_unique_ids_and_legacy_records_get_stable_ids():
     """REQ-BLUNDER-0013: every Correction has a unique id; records saved before ids
     existed get a stable, deterministic id on load (so they can be edited/removed)."""

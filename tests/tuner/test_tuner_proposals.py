@@ -50,4 +50,34 @@ def test_write_proposals_snapshot_is_durable_and_traceable(tmp_path):
     assert data["open"][0]["critical"] is False          # no CRITICAL marker in this rationale
     assert data["skipped"][0] == {"episode_id": 81785223, "frame": 32, "reason": "tactical",
                                   "critical": False,
-                                  "planner_committed": False, "lethal_locked": False}
+                                  "planner_committed": False, "lethal_locked": False,
+                                  "posture_mismatch": False, "believed_archetype": None}
+
+
+def _corr_posture(mismatch=True):
+    """A correction whose live trace carries a Scouting posture (ADR-0041), flagged an opponent-Read
+    miss — the shape /blunder-buster routes to the believed archetype's matchup doctrine."""
+    dec = Decision(episode_id=81785223, frame=40, seat=0, turn=5, select_context="Damage",
+                   select_type="Damage", options=[{"type": 7}, {"type": 13}], chosen=[0], current={})
+    return build_correction(dec, source="own", agent="mega_starmie", correct=[1],
+                            category="bad_target", rationale="vs Mega Lucario ex, snipe Riolu",
+                            chosen_label="Solrock", correct_label="Riolu", agent_build=BUILD,
+                            live_trace={"posture": {"cands": [["Mega Lucario ex", 0.9]], "gamma": 0.8}},
+                            posture_mismatch=mismatch)
+
+
+def test_proposal_carries_posture_mismatch_and_believed_archetype(tmp_path):
+    """ADR-0041: a posture-flagged correction surfaces its mismatch + believed archetype on the
+    proposal AND in the durable snapshot (open + skipped), so /blunder-buster routes it to the
+    matchup layer instead of authoring a deck-agnostic weight."""
+    p = propose_hypothesis(_corr_posture())
+    assert p.posture_mismatch is True
+    assert p.believed_archetype == "Mega Lucario ex"
+
+    out = write_proposals(tmp_path / "m.json", "mega_starmie", [p], [(_corr_posture(), "tactical")],
+                          generated_at="2026-07-05T00:00:00")
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["open"][0]["posture_mismatch"] is True
+    assert data["open"][0]["believed_archetype"] == "Mega Lucario ex"
+    assert data["skipped"][0]["posture_mismatch"] is True
+    assert data["skipped"][0]["believed_archetype"] == "Mega Lucario ex"

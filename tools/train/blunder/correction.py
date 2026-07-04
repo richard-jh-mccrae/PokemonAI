@@ -62,7 +62,12 @@ class Correction:
     obs: dict | None = None     # agent observation (int-enum) so Tuner can replay Pilot
     agent_build: str | None = None  # submission-folder stem of build that played (traceability)
     built_at: str | None = None     # that build's timestamp (ISO), parsed from stem
-    live_trace: dict | None = None  # live @T Decision Telemetry record this game emitted (ADR-0019)
+    live_trace: dict | None = None  # live @T Decision Telemetry record this game emitted (ADR-0019),
+                                    # incl. `posture` — who the agent thought it faced (ADR-0041)
+    posture_mismatch: bool = False  # human judged the agent's opponent Read/Posture WRONG here
+                                    # (ADR-0041): a matchup-doctrine miss to tie to that archetype's
+                                    # Brief / recognition, not a generic weight. The believed archetype
+                                    # lives in `live_trace["posture"]`; the intended line in `rationale`.
 
     @property
     def is_critical(self) -> bool:
@@ -106,6 +111,7 @@ def build_correction(
     agent_build: str | None = None,
     built_at: str | None = None,
     live_trace: dict | None = None,
+    posture_mismatch: bool = False,
 ) -> Correction:
     """Validate and assemble a Correction from a tagged Decision.
 
@@ -144,4 +150,5 @@ def build_correction(
         agent_build=agent_build,
         built_at=built_at,
         live_trace=live_trace,
+        posture_mismatch=bool(posture_mismatch),
     )

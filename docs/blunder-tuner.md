@@ -143,6 +143,16 @@ blunder loop reads end to end:
   snapshot carries `"lethal_locked"` / `"planner_committed"` per entry — so `/blunder-buster` routes
   these clusters to the layer, not to rule authoring. (Only the committed half is auto-taggable; a
   `null` verdict on a missed win/line is the skill's step-2 read.)
+- **Posture routing** ([ADR-0041](adr/0041-posture-is-observable-in-decision-telemetry.md)) — the live
+  trace also carries `posture`: **who the agent thought it faced** (believed archetype `cands`, applied
+  `gamma`, matched Brief `slug`). A misplay against a recognized opponent is a **matchup-doctrine**
+  issue — fix the archetype's **Matchup Brief** / a posture lever / recognition, **never** a
+  deck-agnostic `when()` that would misfire in other matchups. The inspector's **"opponent read was
+  wrong"** checkbox writes a structured `Correction.posture_mismatch`; `tune.py` tags flagged lines
+  `[POSTURE≠ <archetype>]` (with a banner) and the proposals snapshot carries
+  `"posture_mismatch"` + `"believed_archetype"`, so `/blunder-buster` clusters by believed archetype
+  and routes to the Brief (or hands full authoring to `/matchup-genie`). Even unflagged corrections
+  carry `believed_archetype` as clustering context.
 
 ### Build order (shipped)
 1. **Wire weights** (deterministic) — done: `main.py` loads `overrides=_read_tuned()`,
