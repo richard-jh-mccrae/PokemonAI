@@ -9,6 +9,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from train.tuner.propose import believed_archetype   # posture belief off a Correction (ADR-0041)
+
 
 def authored_seeds(general_strategy, strategy) -> dict:
     """The authored-EFFECTIVE seed baseline (ADR-0035): Hypothesis defaults merged with the deck's
@@ -81,7 +83,9 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
     Each ``open``/``skipped`` entry carries ``"critical": bool`` (the rationale's CRITICAL marker)
     so ``/blunder-buster`` can partition the must-fix-first cohort straight from the snapshot,
     plus ``"planner_committed"``/``"lethal_locked"`` (the live trace's ``planned``/``lethal``
-    verdicts) so planner/solver-layer blunders are routed to code fixes, never a ``when()``.
+    verdicts) so planner/solver-layer blunders are routed to code fixes, never a ``when()``,
+    and ``"posture_mismatch"`` + ``"believed_archetype"`` (ADR-0041) so a matchup misplay is routed
+    to the believed archetype's Brief / recognition, never a generic weight.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,13 +101,16 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
              "seed_weight": p.seed_weight, "trigger_sketch": p.trigger_sketch,
              "rationale": p.rationale, "agent_build": p.agent_build, "built_at": p.built_at,
              "critical": p.critical, "planner_committed": p.planner_committed,
-             "lethal_locked": p.lethal_locked}
+             "lethal_locked": p.lethal_locked, "posture_mismatch": p.posture_mismatch,
+             "believed_archetype": p.believed_archetype}
             for p in proposals
         ],
         "skipped": [
             {"episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason,
              "critical": c.is_critical, "planner_committed": _live(c, "planned"),
-             "lethal_locked": _live(c, "lethal")}
+             "lethal_locked": _live(c, "lethal"),
+             "posture_mismatch": bool(getattr(c, "posture_mismatch", False)),
+             "believed_archetype": believed_archetype(c)}
             for c, reason in skipped
         ],
         "reviewed": [

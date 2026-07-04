@@ -128,6 +128,7 @@ class _Handler(BaseHTTPRequestHandler):
                 live_records=game.get("live_records"),
                 replace_id=form.get("editing_id") or None,
                 attribution=form.get("attribution") or None,
+                posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)
             )
         except (KeyError, ValueError) as exc:
             return _json(self, {"error": str(exc)}, 400)
@@ -196,6 +197,10 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  .crit input{width:auto;margin:0}
  .live{margin-top:6px;font-size:12px;color:#333;background:#eef4ee;padding:6px 8px;border-radius:5px}
  .live .verd{font-weight:700} .live .warn{color:#a50;font-weight:400}
+ .posture{margin-top:5px;font-size:12px;color:#334;background:#eef1f8;padding:6px 8px;border-radius:5px}
+ .posture .alt{color:#777} .posture .off{color:#999}
+ .pmark{display:flex;align-items:center;gap:6px;color:#4457b8;font-weight:700;margin:8px 0 0}
+ .pmark input{width:auto;margin:0} .pmark .h{color:#888;font-weight:400;font-size:12px}
 </style></head><body>
 <div id="left">
  <div id="vbar">
@@ -220,6 +225,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
   <button id="next">▶</button>
  </div>
  <div class="now" id="now"></div>
+ <label class="pmark" title="Flags the agent's opponent Read/Posture as wrong at this decision. /blunder-buster ties it to the believed archetype's Matchup Brief / recognition, not a generic weight."><input type="checkbox" id="posture_wrong"> Opponent read was wrong<span class="h">— tie this blunder to the matchup (archetype above)</span></label>
  <label>Category (the blunder identifier)</label><select id="category"></select>
  <label>Correct move(s) — the better legal option</label><select id="correct" multiple></select>
  <label>Source</label><select id="source"></select>
@@ -234,7 +240,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 <script>
 let FR=[],META={},i=0,replayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
 const $=id=>document.getElementById(id);
-const FORM=['category','correct','source','attribution','critical','rationale','save'];
+const FORM=['category','correct','source','attribution','critical','posture_wrong','rationale','save'];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 // The CRITICAL marker lives IN the rationale (case-sensitive word-boundary token, mirrors
 // train.blunder.correction.is_critical). The checkbox is a bidirectional toggle of that token,
@@ -267,7 +273,8 @@ async function refreshList(){
     `<div class="item"><span class="x" onclick="removeItem(${k})">✕</span>`+
     `<span class="ed" onclick="editItem(${k})">edit</span>`+
     `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}`+
-    (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+`<br>`+
+    (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+
+    (it.posture_mismatch?' · <b style="color:#4457b8">🔮 read wrong</b>':'')+`<br>`+
     `→ ${esc(it.correct_label||('opt '+it.correct.join(',')))}`+
     (it.rationale?`<br><i>${esc(it.rationale)}</i>`:'')+`</div>`).join('');
 }
@@ -281,6 +288,7 @@ function editItem(k){
   const it=LIST[k]; if(!it) return;
   gotoStep(it.step);
   $('category').value=it.category; $('rationale').value=it.rationale||''; $('source').value=it.source;
+  $('posture_wrong').checked=!!it.posture_mismatch;   // after gotoStep→show() reset it
   syncCrit();
   [...$('correct').options].forEach(o=>o.selected=it.correct.includes(+o.value));
   editingId=it.id; $('msg').className=''; $('msg').textContent='editing — Save to replace'; $('right').scrollTop=0;
@@ -338,9 +346,22 @@ function show(n){
       ((L.lethal||L.planned)?`<div class="warn">solver/planner drove this pick — scores didn't; fix = planner.py (win rung vs heuristic rungs), not weights</div>`:'')+
       `</div>`;
   }
+  if(f.live&&f.live.posture){
+    // The Scouting Posture the shipped agent held at this decision (ADR-0041): who it thought it
+    // faced (top-k archetype candidates + posterior), the applied confidence γ, and the matched
+    // Matchup Brief. This is the context for the "opponent read was wrong" checkbox below.
+    const P=f.live.posture, c=P.cands||[];
+    const top=c[0]?`${esc(c[0][0])} <span class="off">p=${c[0][1]}</span>`:'<span class="off">unrecognized</span>';
+    const alt=c.slice(1,3).map(x=>`${esc(x[0])} ${x[1]}`).join(', ');
+    h+=`<div class="posture">&#128302; agent read: <b>${top}</b> &nbsp;·&nbsp; &gamma;=${P.gamma??'?'}`+
+      (P.brief?` · brief <b>${esc(P.brief)}</b>`:` · <span class="off">no brief</span>`)+
+      (P.fav!=null?` · fav ${P.fav}`:'')+
+      (alt?`<div class="alt">also weighed: ${alt}</div>`:'')+`</div>`;
+  }
   $('now').innerHTML=h;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);
+  $('posture_wrong').checked=false;    // fresh frame -> unflagged (editItem re-checks it after)
   $('msg').className=''; $('msg').textContent=f.taggable?'':'(not a taggable frame — step to a decision)';
   syncCrit();
 }
@@ -370,6 +391,7 @@ $('save').onclick=async()=>{
   const body={frame:f.frame,correct,category:$('category').value,rationale,
     source:$('source').value, agent: own?META.agent:pname(f.seat),
     submission_id: own?META.submission_id:null, attribution:$('attribution').value,
+    posture_mismatch:$('posture_wrong').checked,   // opponent Read flagged wrong (ADR-0041)
     editing_id: editingId||''};   // edit flow: lets the server allow replacing this same tag
   const r=await fetch('/correction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json(); $('msg').className=j.ok?'ok':'ko';

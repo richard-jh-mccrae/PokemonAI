@@ -3,6 +3,11 @@
 The agent emits one tagged record per decision; the grader captures it in the match log's
 `stderr`, and `collect` parses it back. Pure + tiny: `to_record` is testable without I/O,
 `emit` does the one print. Tag is greppable so non-telemetry stderr is ignored.
+
+Carries the Turn Planner / Lethal Solver verdicts (`planned` / `lethal`) and the Scouting
+**posture** (ADR-0041) — what the Read believed about the opponent (archetype candidates, γ,
+matched Brief) — so every blunder Correction's `live_trace` records how the agent decided AND who
+it thought it was facing. The posture block ties a matchup misplay to a specific archetype.
 """
 from __future__ import annotations
 
@@ -57,7 +62,11 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         rec["lethal_refuted"] = refuted           # "win" (the lethal_verify divergence signal)
     if getattr(decision, "lethal_lost", False):   # sparse: a locked verified line diverged from the
         rec["lethal_lost"] = True                 # live game and was dropped (`lethal_veto`, ADR-0037)
-    return rec
+    posture = getattr(decision, "posture", None)  # the Read's belief about the opponent at this
+    if posture:                                   # decision (ADR-0041): believed archetype(s), γ,
+        rec["posture"] = posture                  # matched Brief. Sparse: only when a Scout was wired.
+    return rec                                     # Rides into every Correction's live_trace so the
+                                                  # inspector shows it + /blunder-buster ties it to a matchup.
 
 
 def emit(decision, *, tier: int = 0, out=None) -> None:

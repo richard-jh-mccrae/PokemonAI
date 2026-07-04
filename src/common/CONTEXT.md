@@ -22,7 +22,9 @@ How the agent changes play in response to the Read — the Read-conditioned Leve
 (matchup favorability, Read-accurate development, Matchup-Brief doctrine), each scaled by
 the Read's confidence (γ) so an unrecognized opponent moves nothing. Generic
 "seek targets / avoid threats" is deliberately absent (ADR-0026) — card facts already
-cover it. A *consumer* of the Read, not part of Scouting itself.
+cover it. A *consumer* of the Read, not part of Scouting itself. **Observable** (ADR-0041):
+each decision's Decision Telemetry carries a compact `posture` block (believed archetype,
+applied γ, matched Brief) so a blunder is tied to the matchup it happened in.
 _Avoid_: stance, strategy, seek/avoid (the retired ADR-0008 framing)
 
 **Lever**:
@@ -289,6 +291,8 @@ _Avoid_: rule, heuristic (too generic), magic number
 A labelled blunder record — `(state, chosen, correct, attribution, rationale)` — from
 marking a decision in any replay featuring this deck (ours or a peer's). The curated unit of
 weight tuning; may also create or edit a Hypothesis (its reasoning becomes the `rationale`).
+Carries `posture_mismatch` (ADR-0041): the human's verdict that the agent's opponent Read was
+wrong here — a matchup-doctrine miss routed to the believed archetype's Brief, not a weight.
 _Avoid_: annotation, fix, label (too generic)
 
 **Tactical Evaluator**:

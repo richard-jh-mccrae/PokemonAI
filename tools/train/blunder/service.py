@@ -112,6 +112,7 @@ def list_corrections(replay: dict, store_path: Path | str = DEFAULT_PATH) -> lis
             "id": c.id, "frame": frame, "step": (frame or 0) + 1, "turn": c.decision.get("turn"),
             "seat": c.seat, "source": c.source, "category": c.category,
             "correct": c.correct, "correct_label": c.correct_label, "rationale": c.rationale,
+            "posture_mismatch": c.posture_mismatch,   # human flagged the opponent Read wrong (ADR-0041)
         })
     return out
 
@@ -132,10 +133,12 @@ def record_correction(
 ) -> Correction:
     """Build, validate (ADR-0015) and append a Correction for the Decision at ``frame``.
 
-    ``chosen``/``correct`` are auto-labeled via the decoder. ``identity`` forwards
-    optional keys (submission_id, agent_version, episode_time, tagged_at, attribution).
+    ``chosen``/``correct`` are auto-labeled via the decoder. ``identity`` forwards optional keys
+    (submission_id, agent_version, episode_time, tagged_at, attribution, ``posture_mismatch``).
     When ``live_records`` is supplied, the live @T Decision Telemetry record for this frame
-    (ADR-0019) is joined and embedded as ``live_trace`` -- ground truth for how the agent decided.
+    (ADR-0019) is joined and embedded as ``live_trace`` -- ground truth for how the agent decided
+    (incl. its ``posture``: who it thought it faced, ADR-0041); ``posture_mismatch`` records the
+    human's verdict that that opponent Read was wrong.
 
     **One Correction per decision:** raises ``ValueError`` if a Correction already exists for this
     ``(episode, seat, frame)`` -- to change it, edit/remove the existing one (the inspector's edit

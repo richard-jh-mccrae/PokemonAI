@@ -573,3 +573,29 @@ def test_gust_target_prefers_the_dependent_engine_sub_prize():
                     brief_target_roles={SOLROCK: "engine"})   # no property asserted
     assert (on._gust_target_tactical(obs, select, ungated, select["option"][0])
             == on._gust_target_tactical(obs, select, ungated, select["option"][1]))
+
+
+# ---- ADR-0041: the posture record on the Decision -> Decision Telemetry (stderr) ----
+
+@pytest.mark.req("REQ-POSTURE-0009")
+def test_explain_emits_a_posture_record_that_telemetry_serialises():
+    # The Decision carries a compact posture summary (who we think we face + how strongly Posture
+    # acted); telemetry emits it verbatim so every Correction's live_trace records the matchup.
+    from common.telemetry import to_record
+    decision = _pilot(scout=Scout(tiny_artifact())).explain(_obs_facing_mega_lucario())
+    p = decision.posture
+    assert p is not None
+    assert p["cands"][0][0] == "Mega Lucario ex"       # believed archetype (top candidate)
+    assert p["gamma"] > 0.5                             # recognized -> Posture acted
+    assert set(p) >= {"cands", "conf", "unknown", "gamma", "fav", "cov", "brief"}
+    assert to_record(decision)["posture"] == p          # rides into the @T record unchanged
+
+
+@pytest.mark.req("REQ-POSTURE-0009")
+def test_no_scout_means_no_posture_record_and_a_sparse_wire():
+    # No Scout wired -> Posture structurally off -> no posture on the Decision, and telemetry omits
+    # the sparse key entirely (byte-unchanged wire for a non-posture agent).
+    from common.telemetry import to_record
+    decision = _pilot(scout=None).explain(_obs_facing_mega_lucario())
+    assert decision.posture is None
+    assert "posture" not in to_record(decision)

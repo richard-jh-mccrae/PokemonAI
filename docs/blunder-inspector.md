@@ -72,6 +72,13 @@ The build inlines everything into a single self-contained `dist/index.html` (~60
   sits beside the replay, the panel shows *how the agent actually decided* at the frame — each
   option's `score`, fired hypotheses (id + weight), and the decision `margin` — and embeds that
   `@T` record on the saved Correction as `live_trace`. Auto-loaded by the CLI (`telemetry_log`).
+- The **posture read** ([ADR-0041](adr/0041-posture-is-observable-in-decision-telemetry.md)): the same
+  `@T` record carries `posture` — **who the agent thought it faced** (believed archetype + posterior,
+  the applied confidence γ, the matched Matchup Brief). The panel shows it (`🔮 agent read: …`) at the
+  decision, and an **"opponent read was wrong"** checkbox flags a matchup misplay: it writes a
+  structured `Correction.posture_mismatch` (the intended line still goes in the rationale), so
+  `/blunder-buster` ties the blunder to that archetype's Brief / recognition instead of a generic
+  weight. Shown in the logged-blunder list as `🔮 read wrong`.
 - **Batch mode**: pass a *directory* (e.g. `data/replays/<build_stem>/`) instead of one file and
   the top bar gains `◀ k/N · ep <id> ▶` to step across its Replays (episode-id order) without
   leaving the tool. Each switch re-serves that Replay's frames + live trace and resets "Analyze as"

@@ -22,6 +22,7 @@ from train.blunder.reviewed import DEFAULT_REVIEWED, load_reviewed, partition_re
 from train.blunder.store import DEFAULT_PATH, load_corrections  # noqa: E402
 from train.tuner.fit import DEFAULT_REG  # noqa: E402
 from train.tuner.io import authored_seeds, sparse_overrides, write_meta, write_overrides, write_proposals  # noqa: E402
+from train.tuner.propose import believed_archetype  # noqa: E402  (posture belief, ADR-0041)
 from train.tuner.report_md import render_run_report  # noqa: E402
 from train.tuner.run import tune  # noqa: E402
 
@@ -80,6 +81,19 @@ def _live_layers(c) -> tuple[bool, bool]:
     return live.get("planned") is not None, live.get("lethal") is not None
 
 
+def _posture_tag(mismatch: bool, archetype) -> str:
+    """Line mark for a correction the human flagged as an opponent-Read miss (ADR-0041): the fix is a
+    matchup-doctrine change against ``archetype`` — its Matchup Brief (/matchup-genie) or recognition —
+    NOT a generic weight/when(). /blunder-buster routes on this the way it routes [PLANNED]/[LETHAL]."""
+    return f"[POSTURE≠ {archetype or '?'}] " if mismatch else ""
+
+
+def _live_posture(c) -> tuple[bool, object]:
+    """(posture_mismatch, believed_archetype) for a raw Correction — the human's Read verdict + who
+    the agent thought it faced (live_trace.posture top, ADR-0041)."""
+    return bool(getattr(c, "posture_mismatch", False)), believed_archetype(c)
+
+
 def main(argv=None):
     for stream in (sys.stdout, sys.stderr):           # labels carry '->'/curly quotes; cp1252 would crash
         try:
@@ -136,6 +150,13 @@ def main(argv=None):
             print(f"  *** {n_layer} correction(s) where the live pick was Planner/Solver-driven "
                   f"(live_trace planned/lethal non-null) — scoring didn't choose there; the fix "
                   f"lives in planner.py (win rung vs heuristic rungs), never a weight or when() ***")
+        n_posture = sum(p.posture_mismatch for p in result.proposals) + sum(
+            _live_posture(c)[0] for c in result.unsatisfied) + sum(
+            _live_posture(c)[0] for c, _ in result.skipped)
+        if n_posture:
+            print(f"  *** {n_posture} correction(s) flagged POSTURE-MISMATCH (opponent Read wrong) — "
+                  f"tie each to its believed archetype's Matchup Brief / recognition (/matchup-genie), "
+                  f"never a generic weight or when() (ADR-0041) ***")
         sat = result.n_constraints - len(result.unsatisfied)
         if result.n_constraints:
             verb = "fit adopted" if result.fit_adopted else "seeds kept"
@@ -149,7 +170,8 @@ def main(argv=None):
         elif not changed:
             print("  (no weight changes from authored defaults - leverage is in the proposals below)")
         for c in result.unsatisfied:                  # fit couldn't honour these (conflict / needs a rule)
-            mark = ("[CRITICAL] " if c.is_critical else "") + _layer_tag(*_live_layers(c))
+            mark = ("[CRITICAL] " if c.is_critical else "") + _layer_tag(*_live_layers(c)) \
+                + _posture_tag(*_live_posture(c))
             print(f"  {mark}UNSATISFIED ep {c.episode_id} frame {c.decision.get('frame')} "
                   f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
             if c.rationale:                            # show it so CRITICAL marker visible here too
@@ -160,11 +182,12 @@ def main(argv=None):
             reviewed=dispositioned)
         print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
         for p in result.proposals:
-            mark = ("[CRITICAL] " if p.critical else "") + _layer_tag(p.planner_committed, p.lethal_locked)
+            mark = ("[CRITICAL] " if p.critical else "") + _layer_tag(p.planner_committed, p.lethal_locked) \
+                + _posture_tag(p.posture_mismatch, p.believed_archetype)
             print(f"  {mark}PROPOSE {p.id} (seed {p.seed_weight}): {p.trigger_sketch}")
             print(f"    rationale: {p.rationale}")
         for c, why in result.skipped:
-            mark = _layer_tag(*_live_layers(c))
+            mark = _layer_tag(*_live_layers(c)) + _posture_tag(*_live_posture(c))
             print(f"  {mark}SKIP frame {c.decision.get('frame')}: {why}")
         if dispositioned:                                 # already-assessed blunders, held off fresh work
             from collections import Counter

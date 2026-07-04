@@ -204,6 +204,18 @@ def agent(obs_dict):
 - **Band prior**: the blended default (the agent can never observe its own band).
 - **Fail-safe**: schema mismatch or load error → degrade to observed-only intel.
 
+## Observability (the Read in telemetry)
+
+The Read is emitted end-to-end so a misplay can be tied to the matchup it happened in
+([ADR-0041](adr/0041-posture-is-observable-in-decision-telemetry.md)). Each decision's `@T` Decision
+Telemetry record ([ADR-0019](adr/0019-submissions-are-traceable-and-tracked.md)) carries a compact
+`posture` block — the believed archetype(s) (`cands`), applied confidence `gamma`, favorability, and
+the matched Brief `slug` — sourced from `Board` via `Pilot._posture_record`. It rides into every
+blunder Correction's `live_trace`, so the [inspector](blunder-inspector.md) shows *who the agent
+thought it faced* and its **"opponent read was wrong"** checkbox routes a matchup misplay to the
+Brief / recognition layer, never a deck-agnostic weight. Legibility only — nothing scores off the
+emitted block.
+
 ## Build & packaging
 
 - **Compile daily** (after the fetch) so the local artifact tracks the meta; **submit

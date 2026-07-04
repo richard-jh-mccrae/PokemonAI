@@ -520,6 +520,9 @@ class Decision:
     chosen: list
     options: list = field(default_factory=list)
     read: Read | None = None     # the per-decision Scouting Read (ADR-0026), surfaced for legibility
+    posture: dict | None = None  # compact posture summary for telemetry (ADR-0041): the believed
+                                 # archetype(s) + how strongly Posture acted, sourced from the Board.
+                                 # None when no Scout is wired; telemetry emits it under `posture`
     planned: TurnLine | None = None   # the committed Turn Line this turn (ADR-0031/0037), or None.
                                       # goal "win" = the Lethal Solver's LOCK (the sound top rung;
                                       # telemetry serialises it under the wire-compatible `lethal`
@@ -633,12 +636,14 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         if replayed is not None:                          # owns the turn — identity-matched replay,
             chosen, line = replayed                       # any divergence falls through below
             return Decision(chosen=chosen, options=traces, read=board.read, planned=line,
+                            posture=self._posture_record(board),
                             lethal_refuted=self._lethal_refutes)
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
         refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
         if planned is not None:                         # the below-win Goal Ladder. Refutes kept on every
             return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read, planned=planned,
+                            posture=self._posture_record(board),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -660,7 +665,27 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             while len(chosen) > min_count and traces[chosen[-1]].score < 0:
                 chosen = chosen[:-1]
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
-                        lethal_lost=self._lethal_lost)
+                        posture=self._posture_record(board), lethal_lost=self._lethal_lost)
+
+    @staticmethod
+    def _posture_record(board: Board) -> dict | None:
+        """Compact posture summary for Decision Telemetry (ADR-0041): WHAT the Read believed about
+        the opponent at this decision + HOW strongly Posture acted, sourced from the Board. None when
+        no Scout is wired (Posture structurally off) so the wire key stays sparse. Consumed by the
+        blunder inspector (shows the believed archetype) and `/blunder-buster` (ties a correction to
+        a matchup). Pure, total, never raises — a byte-cheap belief snapshot, not decision input."""
+        read = board.read
+        if read is None:
+            return None
+        return {
+            "cands": [[a, round(p, 3)] for a, p in read.candidates],            # believed archetype(s), top-k
+            "conf": [round(read.confidence[0], 3), round(read.confidence[1], 3)],  # (top posterior, margin)
+            "unknown": round(read.unknown_mass, 3),                             # unmatched posterior mass
+            "gamma": round(board.posture_confidence, 3),   # APPLIED Posture strength (0 = off/unrecognized)
+            "fav": round(board.favorability, 3),           # modeled matchup win-rate (lever A); 0.5 = neutral
+            "cov": round(board.matchup_coverage, 3),       # posterior share behind `fav` (its reliability)
+            "brief": board.brief.slug if board.brief else None,   # matched Matchup Brief (ADR-0027), or None
+        }
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:

@@ -41,3 +41,9 @@ def test_agent_emits_decision_telemetry_to_stderr_in_a_real_match():
     assert all("score" in o for o in rec["opts"])            # each option carries its score
     assert any(o.get("fired") for o in recs[-1]["opts"]) or any(  # hypotheses fired somewhere
         o.get("fired") for r in recs for o in r["opts"])
+
+    # ADR-0041: the shipped agent wires a Scout, so each decision's @T record carries its opponent
+    # POSTURE (who it thinks it faces) -> every Correction's live_trace records the matchup.
+    postures = [r["posture"] for r in recs if "posture" in r]
+    assert postures, "agent must emit its opponent posture to stderr (ADR-0041)"
+    assert all({"cands", "gamma", "brief"} <= set(p) for p in postures)

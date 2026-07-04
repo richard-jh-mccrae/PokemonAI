@@ -76,6 +76,25 @@ def test_record_correction_embeds_the_live_trace(tmp_path):
     assert loaded.live_trace == rec.live_trace           # survives the JSONL round-trip
 
 
+def test_record_correction_persists_the_posture_mismatch_flag(tmp_path):
+    """ADR-0041: the tagging shell's 'opponent read was wrong' checkbox rides through
+    record_correction (via **identity) onto the Correction and survives the store round-trip."""
+    replay = load_replay(REPLAY)
+    records = load_log(LOG)
+    d = _seat0_taggable(replay)
+    correct = [next(i for i in range(len(d.options)) if i not in d.chosen)]
+    store = tmp_path / "c.jsonl"
+
+    rec = record_correction(replay, frame=d.frame, correct=correct, category="bad_target",
+                            rationale="vs Mega Lucario ex, snipe Riolu", source="own",
+                            agent="mega_starmie", store_path=store, live_records=records,
+                            posture_mismatch=True)
+
+    assert rec.posture_mismatch is True
+    [loaded] = load_corrections(store)
+    assert loaded.posture_mismatch is True               # survives the JSONL round-trip
+
+
 def test_frames_payload_attaches_live_trace_for_the_analyzed_seat():
     """REQ-TELE-0002: the inspector payload carries the live trace for the analyzed seat's
     taggable frames (so the tagger sees real scores/fired), and none for the other seat."""
