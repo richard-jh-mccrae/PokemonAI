@@ -52,6 +52,8 @@ _HAND = 2     # AreaType.HAND
 _DECK = 1     # AreaType.DECK — search candidate; ids revealed in select's `deck` list
 _ACTIVE = 4   # AreaType.ACTIVE
 _BENCH = 5    # AreaType.BENCH
+_LOOKING = 12  # AreaType.LOOKING — a face-up reveal (Pokégear/search top-N) in `current.looking`;
+              # a grab option's candidate resolves there (None entry = facedown, unresolvable)
 _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player-dict zone key
 
 # ── scoring / classification vocabulary ──
@@ -75,7 +77,7 @@ __all__ = [
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
-    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_ZONE",
+    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE",
     "KO_SCORE", "_SUPPORTER", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_EVOLVING_THREAT_DMG",
 ]

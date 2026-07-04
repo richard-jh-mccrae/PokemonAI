@@ -137,3 +137,24 @@ status block + the turn-planner memory when it lands.
 
 **`b4649`:** no gate to build today; if the Prize-Race Planner is pursued proactively, first mine a fresh
 failing prize-race example, then gate that.
+
+---
+
+## 2026-07-04 round — three more SOFT multi-turn/forward reads (all deferred here)
+
+Surfaced in the mega_starmie blunder-buster round (all re-measured through the shipped, fully-wired
+Pilot — still live, all beyond this-turn scope; all **SOFT**, not CRITICAL). State is embedded in each
+Correction's `obs` in `data/corrections/mega_starmie_*/corrections.jsonl` (retrievable by episode/frame),
+so no separate fixture is minted until the layer is built.
+
+| id | today, on its captured state | what it needs |
+|----|------------------------------|---------------|
+| `83661649-30` | live — Pilot develops then would pick max-damage Nebula (209.7) over Jetting (119.9) | multi-turn attack-*sequence* (Jetting Blow's 50 snipe builds a 2-turn KO; also anticipate the opp's Wally heal) — same shape as `a21472` |
+| `83667237-107` | live — snipe-the-top-threat targets the 2nd Mega Lucario ex (top threat rank) | opponent **prize-trajectory** model (we want 4 prizes = one Mega Lucario + 1; deny the 2nd via a future Boss's) — same shape as `b4649` |
+| `83661649-45` | live — snipe-the-top-threat targets the energized 70-HP Staryu (imminent attacker) | **forward-promotion** read (they'll promote the benched Mega Starmie ex next; pre-chip it) — 1-ply opponent-choice model the closed-form threat read lacks |
+
+**Definition of done (all three):** each becomes a real-state regression gate
+(`decision.chosen == correct`) once the M3/M4 multi-turn + opponent-modelling capability exists — the
+closed-form this-turn Planner and 1-ply threat read deliberately lack it, so **not** hacked in. The
+single-turn heuristics they "lose" to (max-damage attack, snipe-the-top-threat by threat rank) are the
+correct closed-form picks; the human's lines span turns / model the opponent's choices.

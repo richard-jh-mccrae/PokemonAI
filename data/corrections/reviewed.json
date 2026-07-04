@@ -532,5 +532,65 @@
     "disposition": "covered",
     "reason": "per human ack 2026-07-03: the intended Wally's->Ignition->Nebula sequence belongs to turn 8's PRE-ATTACH decision point, now committed by the f35 stabilize_then_ko fix (proven on the rewound state: test_e1db_intended_sequence_commits_from_the_turn8_pre_attach_state); at the tagged f47 frame the attach was already spent, so the heal would forfeit the certain 3-prize KO (refutation-proof test pins it)",
     "round": "2026-07-03"
+  },
+  "83661652-19": {
+    "disposition": "covered",
+    "reason": "develop-a-basic-in-setup develops Riolu over the poor Boss's Orders stall (retest [4]->[5]); W-route-blind. The poor-stall blunder is gone.",
+    "round": "2026-07-04"
+  },
+  "83661652-31": {
+    "disposition": "covered",
+    "reason": "Root is the f30 discard (now prevented by keep-line-base-at-discard): with Riolu no longer pitched, the discard->refetch waste never arises. On the isolated captured state (Riolu already discarded) grabbing the base is sound fetch-base-before-stranded-payoff doctrine.",
+    "round": "2026-07-04"
+  },
+  "83661652-33": {
+    "disposition": "covered",
+    "reason": "develop-a-basic-in-setup: real Pilot develops a basic (Solrock) before the Meowth Power Gem chip (retest [3]->[1]); _finish_turn_last tiers the tier-0 develop before the tier-4 attack. First-dev-differs; W-route-blind (chip outscores the develop).",
+    "round": "2026-07-04"
+  },
+  "83661652-44": {
+    "disposition": "covered",
+    "reason": "develop-a-basic-in-setup: real Pilot develops a basic (Makuhita) before the Meowth chip (retest [3]->[0]); same first-dev-differs as f33. The 'resisting to play basics' blunder is resolved.",
+    "round": "2026-07-04"
+  },
+  "83661649-45": {
+    "disposition": "deferred",
+    "reason": "capability-gap (forward-promotion opponent model): snipe-the-top-threat correctly picks the energized 70HP Staryu by the 1-ply threat read; 'chip the Mega Starmie ex they'll promote next' needs opponent-choice modelling. docs/todo/deferred-multi-turn-criticals.md 2026-07-04.",
+    "round": "2026-07-04"
+  },
+  "83662396-19": {
+    "disposition": "refuted",
+    "reason": "forgo-KO: Turbo Flare is a KO (tac 1000.9, weakness) on the 70HP opp Active; Mega Signal is ALSO a redundant tutor (Mega already in hand -> dont-tutor-the-held-wincon). A thin-the-deck tutor never overrides a KO.",
+    "round": "2026-07-04"
+  },
+  "83666442-27": {
+    "disposition": "covered",
+    "reason": "recover-to-refill-bench (Night Stretcher +22) AND Lillie's both play this turn (Main re-presents): the human wanted the refresh AND 'a bench for backup'; the empty bench refills first, the refresh follows. First-dev-differs.",
+    "round": "2026-07-04"
+  },
+  "83667237-87": {
+    "disposition": "covered",
+    "reason": "recover-to-refill-bench: real Pilot plays Night Stretcher to refill the EMPTY bench BEFORE the Jetting Blow KO (retest [4]->[2]); _finish_turn_last tiers tier-0 recover before the tier-4 KO. W-route-blind (KO outscores +22).",
+    "round": "2026-07-04"
+  },
+  "83667237-107": {
+    "disposition": "deferred",
+    "reason": "capability-gap (opponent prize-trajectory model): snipe-the-top-threat picks the top-rank Mega Lucario ex; 'need 4 prizes = one Mega Lucario + 1, avoid the 2nd via future Boss's' spans turns. Same class as b4649. docs/todo/deferred-multi-turn-criticals.md.",
+    "round": "2026-07-04"
+  },
+  "83661649-30": {
+    "disposition": "deferred",
+    "reason": "capability-gap (multi-turn attack-sequence): pilot develops first then the single-turn planner picks max-damage Nebula (209.7) over Jetting Blow (119.9); the Jetting-Blow-2-turn-snipe-KO line needs multi-turn search. Same as a21472. docs/todo/deferred-multi-turn-criticals.md.",
+    "round": "2026-07-04"
+  },
+  "83661649-54": {
+    "disposition": "covered",
+    "reason": "_wins_now fix (gate on active_can_ko): Jetting Blow's KO-class score was a 1-prize BENCH snipe (20HP Staryu), mis-credited as a game-winning 3-prize ACTIVE KO -> taken immediately. Now the snipe defers behind the beneficial attach (attack-last): Pilot builds toward Nebula Beam AND takes the snipe-KO same turn. Gated by tests/strategy/test_incoming_affordability.py on wins_now_f54.json. Residual (attaches to bench vs active Mega, from the active_doomed Energy-affordability over-estimate) deferred: docs/todo/incoming-affordability.md. Human reversed the initial refuted call 2026-07-04; investigation found + fixed the primary bug.",
+    "round": "2026-07-04"
+  },
+  "83661652-3": {
+    "disposition": "covered",
+    "reason": "FIXED on investigation (not a mislabel): the Pilot literally could not DECLINE an optional single-pick (decide() always took maxCount, ignoring minCount=0). Added (a) single-pick take-fewer — decline a score<0 pick at a minCount=0 select; (b) dont-pre-bench-the-supporter-tutor (-15) at _SETUP_BENCH. decide(f3)=[0]->[] (declines benching Meowth ex — saved for the Active Spot / an in-game bench to trigger Last-Ditch Catch). W-route can't measure it (correct==chosen==[0] tag can't encode select-nothing); gated by tests/strategy/test_setup_bench_decline.py on setup_bench_decline_f3.json. Human reversed the refuted call 2026-07-04.",
+    "round": "2026-07-04"
   }
 }

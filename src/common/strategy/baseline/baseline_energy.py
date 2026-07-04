@@ -37,6 +37,18 @@ HYPOTHESES = [
         and c.attach_target_needs,
         weight=15, status="assumed"),
     Hypothesis(
+        id="dont-waste-off-type-energy",
+        rationale="Don't attach an Energy of a TYPE the target already has enough of when its attack "
+                  "still LACKS a different specific type (`attach_type_wasted`) — verify the Pokémon's "
+                  "energy NEEDS, then attach the type it's short of. A multi-type wincon (Dragapult's "
+                  "Phantom Dive [Fire, Psychic]) was fed a 2nd Psychic while the Fire went unmet, "
+                  "stranding the attack (ep83686860 f45); the count-only `power-up-attacker`/`build-"
+                  "active-wincon` can't see type. −12 nets the wasted attach below the on-type one "
+                  "(both otherwise +10) so the needed type wins; silent for single-type decks and "
+                  "colourless slots (sound-or-silent, no false suppression).",
+        when=lambda c: c.option_type == _ATTACH and c.attach_type_wasted,
+        weight=-12, status="assumed"),
+    Hypothesis(
         id="prefer-active-attach-in-setup",
         rationale="Prefer the ACTIVE attacker over a benched pre-evolution for the turn's manual Energy — "
                   "the Active can use it THIS turn, fixing the dead-heat tie that left Active Cinderace "

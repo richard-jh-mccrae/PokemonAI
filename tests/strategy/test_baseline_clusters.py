@@ -28,20 +28,21 @@ CLUSTERS = {
         "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator",
         "dont-attach-discard-energy-turn1", "concentrate-accel-on-one-line-body",
         "conserve-burst-when-no-ko", "advance-the-accel-pieces",
-        "conserve-discard-energy-prefer-basic"}),
+        "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
-                                 "develop-the-accel-recipient"}),
+                                 "develop-the-accel-recipient", "develop-a-basic-in-setup"}),
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
         "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach"}),
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker",
                                      "swap-out-the-locked-attacker"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
-        "evolve-into-wincon", "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
+        "evolve-into-wincon", "advance-the-evolution-line", "evolve-the-energized-body-first",
+        "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
                                      "honor-preferred-start"}),
