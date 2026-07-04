@@ -11,11 +11,31 @@ export const meta = {
 }
 
 // ── Inputs (all from `args`; the SKILL gathers these from the engine dump + Phase-1 overview) ──
-const ARCH = (args && args.archetype) || 'this opponent deck'
-const FACTS = (args && args.facts) || '(no engine facts supplied — flag this as a gap)'
-const GAMEPLAN = (args && args.gameplan) || '(how it wins not yet confirmed)'
-const ANGLES = (args && args.angles) || []                 // [{key, q}] — include a "counters" angle
-const KEY_CARDS = (args && args.key_cards) || []           // [{name, why}] — its threats + engine
+// NOTE: the Workflow harness delivers a nested `args` object JSON-STRINGIFIED (typeof args === 'string'),
+// so reading `args.archetype` directly yields undefined and the whole sweep silently no-ops. Parse
+// defensively — works whether args arrives as a string (current harness) or an object (contract).
+let ARGV
+try {
+  ARGV = (typeof args === 'string') ? JSON.parse(args) : (args || {})
+} catch (e) {
+  throw new Error(`matchup-genie-research: could not parse args (${String((e && e.message) || e)}). ` +
+    `Invoke as Workflow({ scriptPath, args: { archetype, gameplan, facts, angles:[...], key_cards:[...] } }). ` +
+    `Raw args prefix: ${String(args).slice(0, 200)}`)
+}
+
+const ARCH = ARGV.archetype || 'this opponent deck'
+const FACTS = ARGV.facts || '(no engine facts supplied — flag this as a gap)'
+const GAMEPLAN = ARGV.gameplan || '(how it wins not yet confirmed)'
+const ANGLES = ARGV.angles || []                           // [{key, q}] — include a "counters" angle
+const KEY_CARDS = ARGV.key_cards || []                     // [{name, why}] — its threats + engine
+
+// Fail LOUDLY rather than silently running an empty sweep (the original args-binding bug's symptom:
+// 0 angles · 0 key cards · 0 sources · only the self-serving synth agent ran).
+if (ANGLES.length === 0 && KEY_CARDS.length === 0) {
+  throw new Error(`matchup-genie-research: no angles AND no key_cards after parsing args — refusing to ` +
+    `run an empty sweep. typeof args=${typeof args}; parsed keys=${JSON.stringify(Object.keys(ARGV))}. ` +
+    `Ensure the Workflow call passes args: { archetype, gameplan, facts, angles:[...], key_cards:[...] }.`)
+}
 
 // Shared preamble: the set is the physical/online TCG (NOT Pocket); the simulator's card facts OVERRIDE
 // any web guide (Scarlet & Violet Mega era + simulator deltas — see CLAUDE.md / docs/rules.md). FACTS is

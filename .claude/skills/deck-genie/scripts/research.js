@@ -12,12 +12,32 @@ export const meta = {
 }
 
 // ── Inputs (all from `args`; the SKILL gathers these from the engine dump + Phase-1 overview) ──
-const DECK = (args && args.deck) || 'this deck'
-const FACTS = (args && args.facts) || '(no engine facts supplied — flag this as a gap)'
-const GAMEPLAN = (args && args.gameplan) || '(win condition not yet confirmed)'
-const ANGLES = (args && args.angles) || []                 // [{key, q}]
-const CONFUSING = (args && args.confusing_cards) || []      // [{name, why}]
-const TRAINERS = (args && args.trainers) || []             // [{name, tags}] or ["name", ...]
+// NOTE: the Workflow harness delivers a nested `args` object JSON-STRINGIFIED (typeof args === 'string'),
+// so reading `args.deck` directly yields undefined and the whole sweep silently no-ops. Parse
+// defensively — works whether args arrives as a string (current harness) or an object (contract).
+let ARGV
+try {
+  ARGV = (typeof args === 'string') ? JSON.parse(args) : (args || {})
+} catch (e) {
+  throw new Error(`deck-genie-research: could not parse args (${String((e && e.message) || e)}). ` +
+    `Invoke as Workflow({ scriptPath, args: { deck, gameplan, facts, angles:[...], confusing_cards:[...], trainers:[...] } }). ` +
+    `Raw args prefix: ${String(args).slice(0, 200)}`)
+}
+
+const DECK = ARGV.deck || 'this deck'
+const FACTS = ARGV.facts || '(no engine facts supplied — flag this as a gap)'
+const GAMEPLAN = ARGV.gameplan || '(win condition not yet confirmed)'
+const ANGLES = ARGV.angles || []                           // [{key, q}]
+const CONFUSING = ARGV.confusing_cards || []               // [{name, why}]
+const TRAINERS = ARGV.trainers || []                       // [{name, tags}] or ["name", ...]
+
+// Fail LOUDLY rather than silently running an empty sweep (the args-binding bug's symptom:
+// 0 angles · 0 cards · 0 sources · only the self-serving synth agent ran).
+if (ANGLES.length === 0 && CONFUSING.length === 0 && TRAINERS.length === 0) {
+  throw new Error(`deck-genie-research: no angles, confusing_cards, OR trainers after parsing args — ` +
+    `refusing to run an empty sweep. typeof args=${typeof args}; parsed keys=${JSON.stringify(Object.keys(ARGV))}. ` +
+    `Ensure the Workflow call passes args: { deck, gameplan, facts, angles:[...], confusing_cards:[...], trainers:[...] }.`)
+}
 
 // One shared preamble so every web agent knows the set is the physical/online TCG (NOT Pocket) and
 // that the competition simulator's card facts OVERRIDE any web guide (Scarlet & Violet Mega era +
