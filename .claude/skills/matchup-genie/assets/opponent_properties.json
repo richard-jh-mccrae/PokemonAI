@@ -26,6 +26,11 @@
       "type": "bool",
       "consumer": "unwired",
       "note": "the deck's setup hinges on a specific ENERGY-ACCELERATION Pokémon (not draw/search); gusting + KOing it strangles the ramp and slows the payoff by turns. Distinct from opp_is_engine_dependent (draw/search engine). Lever (future): raise disruption value against its `engine` target when that target is an accelerator. First minted for archaludon_ex_cinderace (Cinderace — sole Metal accel, setup-only, unrecoverable)."
+    },
+    "opp_pierces_active_effects": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck has a payoff attack whose damage IGNORES effects on your Active Pokémon (damage-reduction, protection, 'can't be damaged', Weakness/Resistance tricks) — so effect-based Active defenses are bypassed and only raw HP, healing, board removal, or a Weakness-type attacker answer it. Distinct from opp_is_heal_wall (which is about the OPPONENT's own bulk/heal making OUR chip worthless); this is about OUR defensive effects being void against THEIR burst. Lever (future): for any of our decks that lean on Active-effect defenses, deprioritise those tools vs this opp and prefer raw-HP / heal / removal / Weakness lines. First minted for cinderace_mega_starmie_ex (Mega Starmie ex — Nebula Beam 210 ignores Weakness/Resistance and any effects on the opponent's Active; note it is Ignition-gated burst, NOT its sustained Jetting Blow)."
     }
   }
 }

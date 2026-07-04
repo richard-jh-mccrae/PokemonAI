@@ -59,6 +59,11 @@ keys), and the validator result. Note any newly-minted key as "needs consumer wi
 and commits. The Brief's effect on play is confirmed later, once the consumer exists and the M1 A/B
 measures it — the skill never self-validates gameplay impact.
 
+**Commit-message convention:** every matchup-genie commit message **begins with `matchup: `** (e.g.
+`matchup: Cinderace / Mega Starmie ex counterplay doctrine`). This applies whether the human commits or
+the skill drafts/squashes the commit — the prefix namespaces the Brief work in the log. Keep the rest
+terse + imperative.
+
 ## Anti-patterns
 
 - A `target`/`threat` card the deck doesn't run — the validator hard-fails it; ground every card in the dump.
