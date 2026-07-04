@@ -4,8 +4,9 @@ Pure and lib-free (mirrors ``artifact.load_artifact`` + ``matchup.matchup_favora
 objective, shared counterplay profile of one opponent **Variant Cluster**, authored by ``/matchup-genie``
 at ``src/common/scouting/briefs/<slug>.json``. This bridge loads them and, given the Scouting Read,
 returns the Brief whose ``covers`` list contains the Read's top candidate archetype — the variant routing
-of ADR-0027. It never acts; a (future, γ-gated) consumer decides what to do with the match, exactly as
-the card-fact posture and ``matchup_favorability`` do.
+of ADR-0027. It never acts; the γ-gated consumers live in the Pilot's Tactical layer (ADR-0038: the
+`fragile_preevo` / `engine` snipe-rank boosts and gust tie-breaks), exactly as the card-fact posture and
+``matchup_favorability`` stay data the Pilot reads.
 """
 from __future__ import annotations
 

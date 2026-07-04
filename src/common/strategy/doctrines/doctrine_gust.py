@@ -19,6 +19,10 @@ _STALL_RETREAT = 1           # min retreat cost of a STRANDABLE energyless body:
                              # spend a turn's attach to retreat it — real tempo cost even at 1 (ep82754875)
 _EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so
                              # never overrides a real prize difference)
+_BRIEF_GUST_DENIAL = 0.4     # γ-scaled sub-prize tie-break for gusting a Brief target (ADR-0038):
+                             # fragile_preevo, or engine gated on opp_is_engine_dependent. 0.4 so the
+                             # worst stack (0.5 evolving + 0.4γ brief) stays < 1 prize — the Brief
+                             # aligns the gust pick with the snipe order, never beats a prize difference
 
 
 class GustMixin:
@@ -68,7 +72,8 @@ class GustMixin:
         if not self._can_ko(my_stat, target):
             return 0
         return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
-                + self._gust_forward_denial(target) + self._gust_snipe_synergy(board, my_stat, target))
+                + self._gust_forward_denial(target) + self._gust_brief_denial(board, target)
+                + self._gust_snipe_synergy(board, my_stat, target))
 
     def _gust_snipe_synergy(self, board, my_stat, target: dict) -> int:
         """Extra prize when KOing the gusted target ALSO lets my bench-snipe rider finish a SECOND
@@ -114,6 +119,24 @@ class GustMixin:
         if fwd is None or cid is None:
             return 0
         return _EVOLVING_GUST_DENIAL if (fwd(cid) or 0) >= _EVOLVING_THREAT_DMG else 0
+
+    def _gust_brief_denial(self, board, target: dict) -> float:
+        """γ-scaled sub-prize tie-break for gusting a Matchup-Brief target (ADR-0038): a
+        `fragile_preevo` (payoff-denial — the gust+KO the Brief doctrine names), or an `engine` body
+        when the Brief asserts `opp_is_engine_dependent`. Keyed on the Brief's resolved role ids so
+        the gust pick agrees with the sharpened snipe order; γ and the per-lever kill-switches keep
+        it silent vs an unrecognized opponent or an unwired agent. 0 otherwise."""
+        cid = (target or {}).get("id")
+        gamma = getattr(board, "posture_confidence", 0.0)
+        if cid is None or not gamma:
+            return 0
+        role = board.brief_target_role(cid)
+        if self.brief_preevo and role == "fragile_preevo":
+            return gamma * _BRIEF_GUST_DENIAL
+        if (self.brief_engine and role == "engine"
+                and bool(board.opp_property("opp_is_engine_dependent", False))):
+            return gamma * _BRIEF_GUST_DENIAL
+        return 0
 
     def _gust_stall_target_tactical(self, obs: dict, select: dict, board, option: dict) -> float:
         """Small value for a defensive stall-gust TARGET — at a SWITCH select, an ENERGYLESS,

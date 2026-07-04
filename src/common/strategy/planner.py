@@ -785,7 +785,9 @@ class PlannerMixin:
         bench = [p for p in (opp_player.get("bench") or []) if p]
         if not bench:
             return []
-        ranked = [(self._body_threat_rank(obs, p, board.read, board.posture_confidence), p)
+        ranked = [(self._body_threat_rank(obs, p, board.read, board.posture_confidence,
+                                          board.brief_target_roles,
+                                          bool(board.opp_property("opp_is_engine_dependent", False))), p)
                   for p in bench]
         top_rank, top = max(ranked, key=lambda t: t[0])
         top_stat = self.stats.get(top.get("id")) if self.stats else None

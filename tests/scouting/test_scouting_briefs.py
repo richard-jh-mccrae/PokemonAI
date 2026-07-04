@@ -1,7 +1,7 @@
 """Brief-consumer runtime: load Matchup Briefs + match one to the Read (ADR-0027).
 
 Offline, synthetic briefs. The bridge (load + match) mirrors artifact.load_artifact +
-matchup.matchup_favorability; the Board wiring is behavior-neutral (nothing scores off it yet).
+matchup.matchup_favorability; the γ-gated consumers are the ADR-0038 Tactical levers (test_posture_read).
 """
 import json
 
@@ -99,3 +99,17 @@ def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
     threat_ids, target_roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
     assert target_roles == {678: "prize_liability"}
+
+
+# ---- shipped-dir invariants (ADR-0038 hardening): the REAL briefs/ dir stays collision-free ----
+
+def test_shipped_briefs_have_no_covers_collision():
+    """REQ-BRIEF-0001: no archetype string appears in two shipped Briefs' `covers` — match_brief
+    returns the alphabetically-first covering Brief, so an overlap would misroute SILENTLY."""
+    seen: dict[str, str] = {}
+    for brief in load_briefs():                    # the real src/common/scouting/briefs/ dir
+        for arch in brief.covers:
+            assert arch not in seen, (
+                f"archetype {arch!r} covered by both {seen[arch]!r} and {brief.slug!r} — "
+                f"every archetype string must route to exactly ONE Brief")
+            seen[arch] = brief.slug

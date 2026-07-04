@@ -69,6 +69,13 @@ _pilot = Pilot(
                                                       # family + verify-every-lock (A/B-cleared 2026-07-03)
     lethal_veto=_params.get("lethal_veto", True),     # ADR-0037 stage-3 kill-switch: replay the verified
                                                       # cascade (A/B-cleared 2026-07-03)
+    brief_preevo=_params.get("brief_preevo", True),  # ADR-0038 kill-switch: Brief fragile_preevo lever
+                                                      # (A/B-cleared 2026-07-04: 68% vs 69% baseline vs
+                                                      # mega_lucario, mirror 52% — non-degradation + neutral)
+    brief_engine=_params.get("brief_engine", False),  # ADR-0038 kill-switch: Brief engine lever, gated on
+                                                      # opp_is_engine_dependent. DEFAULT OFF: the stress leg
+                                                      # priced a WRONG assertion at ~4% (46%, CI 43-49) — arms
+                                                      # via the first real true-asserting Brief's own A/B
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
 _TELEMETRY = os.environ.get("AGENT_NO_TELEMETRY") != "1"     # always-on Decision Telemetry (ADR-0019)

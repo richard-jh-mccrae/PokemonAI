@@ -50,6 +50,14 @@ _HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evo
 _PREVENT_EX_SNIPE_BOOST = 500  # snipe-rank boost for a benched body whose line reaches a Pokémon that
                            # PREVENTS my ex attacker's damage (`prevent_ex_damage`, e.g. Dwebble→Crustle) —
                            # hard counter once evolved, snipe the fragile pre-evo NOW (ep82225138 f46).
+_BRIEF_PREEVO_SNIPE_BOOST = 200000  # γ-scaled, TIER-CROSSING boost for a Brief `fragile_preevo` target
+                           # (ADR-0038): authored payoff-denial ("KO Riolu before it becomes the 3-prize
+                           # Mega") overtakes even the energized tier once recognition firms (γ ≳ 0.5) —
+                           # the pre-evo's deadline (it evolves NEXT turn) justifies the crossing.
+_BRIEF_ENGINE_SNIPE_BOOST = 500  # γ-scaled, sub-tier boost for a Brief `engine` target, hard-gated on
+                           # the Brief asserting `opp_is_engine_dependent` (ADR-0038): strangle the
+                           # engine when nothing is imminent — an energized live attacker still wins
+                           # (an engine kill has no deadline).
 _RETREAT_POSITION_EPS = 0.001  # positioning tie-break for retreat-to-lethal lookahead: when retreating
                            # into a ready wincon takes the SAME KO the spent Active could, prefer it (wincon
                            # ends up Active) — tiny, only breaks exact ties, never beats a real edge.
@@ -534,7 +542,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                  bench_snipe=None, bench_spread=None, ignores_active_effects=None, attack_stats=None,
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
-                 lethal_veto=False):
+                 lethal_veto=False, brief_preevo=False, brief_engine=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -577,6 +585,10 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                                                         # lock materializes its confirmed cascade and
                                                         # REPLAYS it (identity-matched; mismatch -> fall
                                                         # back + `lethal_lost`); presumes lethal_family
+        self.brief_preevo = brief_preevo                # ADR-0038 kill-switch: the Brief fragile_preevo
+                                                        # lever (tier-crossing snipe boost + gust tie-break)
+        self.brief_engine = brief_engine                # ADR-0038 kill-switch: the Brief engine lever,
+                                                        # hard-gated on opp_is_engine_dependent
         self._locked_line = None                        # the materialized verified line (turn-scoped):
                                                         # {"turn": n, "queue": [entries]} or None
         self._lethal_lost = False                       # this decision lost a locked line to a live
@@ -1564,7 +1576,9 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             and target_forward_damage == board.strongest_forward_bench
             and target_forward_damage >= _EVOLVING_THREAT_DMG)
         target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp)
-        target_rank = self._target_threat_rank(obs, select, option, board.read, board.posture_confidence)
+        target_rank = self._target_threat_rank(
+            obs, select, option, board.read, board.posture_confidence, board.brief_target_roles,
+            bool(board.opp_property("opp_is_engine_dependent", False)))
         target_is_top_threat = (target_rank is not None and target_rank > 0
                                 and board.strongest_threat_rank > 0
                                 and target_rank == board.strongest_threat_rank)
@@ -1897,6 +1911,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         brief_threat_ids, brief_target_roles = (
             resolve_brief_cards(brief, _ids_for_name)
             if (brief is not None and _ids_for_name is not None) else (frozenset(), {}))
+        engine_dep = bool(brief.opponent_properties.get("opp_is_engine_dependent")) if brief else False
         active_doomed = self._active_doomed(ma, oa, opp)
         active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
         # the Energy my Active can actually PAY an attack with this turn: attached + the best unspent
@@ -1946,7 +1961,8 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             bench_threat_present=self._bench_threat_present(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
-            strongest_threat_rank=self._strongest_threat_rank(obs, select, read, gamma),
+            strongest_threat_rank=self._strongest_threat_rank(obs, select, read, gamma,
+                                                              brief_target_roles, engine_dep),
             best_counter_slot=self._best_counter_slot(obs, select) if select else None,
             best_counter_source_slot=self._best_counter_source_slot(obs, select) if select else None,
             max_counter_move_number=self._max_counter_move_number(select) if select else 0,
@@ -2276,7 +2292,8 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         return max((self._rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
 
     def _target_threat_rank(self, obs: dict, select: dict, option: dict,
-                            read=None, gamma: float = 0.0) -> float | None:
+                            read=None, gamma: float = 0.0, brief_roles=None,
+                            engine_dependent: bool = False) -> float | None:
         """Snipe-priority THREAT rank for a benched DAMAGE target (None off a Damage/bench option).
 
         Higher = snipe first when no KO is available. The rank is the body's eventual attack power —
@@ -2286,16 +2303,18 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         Dreepy on the same line; energized = sooner). A line that CERTAINLY reaches a hand-size
         attacker gets `_HAND_SIZE_ATTACKER_BOOST` (the latent Alakazam, hidden by its 10 printed
         damage). This is the single threat order behind `snipe-the-top-threat`; it never rewards a
-        low-HP SUPPORT body the flat `snipe-the-weakest` would."""
+        low-HP SUPPORT body the flat `snipe-the-weakest` would. `brief_roles`/`engine_dependent`
+        thread the matched Matchup Brief's γ-scaled boosts (ADR-0038)."""
         if (select.get("context") != _DAMAGE or option.get("type") != _CARD
                 or option.get("area") != _BENCH):
             return None
         poke = self._option_pokemon(obs, select, option)
         if (poke or {}).get("id") is None:
             return None
-        return self._body_threat_rank(obs, poke, read, gamma)
+        return self._body_threat_rank(obs, poke, read, gamma, brief_roles, engine_dependent)
 
-    def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0) -> float:
+    def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0,
+                          brief_roles=None, engine_dependent: bool = False) -> float:
         """The select-independent threat-rank core behind `_target_threat_rank` — rank ANY benched
         opponent body (a raw player-dict Pokémon), so the Planner's KO-the-key-threat rung can rank
         the bench at the MAIN menu with exactly the same order the DAMAGE-select snipe uses. 0 when
@@ -2320,6 +2339,12 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                 rank += _PREVENT_EX_SNIPE_BOOST                        # this line once evolved — kill now
         if poke.get("energies"):                              # energized = imminent: a higher snipe tier
             rank += _ENERGIZED_SNIPE_TIER
+        if gamma and brief_roles:                             # Brief levers (ADR-0038), γ-scaled
+            role = brief_roles.get(cid)
+            if self.brief_preevo and role == "fragile_preevo":
+                rank += gamma * _BRIEF_PREEVO_SNIPE_BOOST     # tier-crossing payoff-denial
+            elif (self.brief_engine and role == "engine" and engine_dependent):
+                rank += gamma * _BRIEF_ENGINE_SNIPE_BOOST     # sub-tier engine strangle
         return rank
 
     def _forward_card_ids(self, cid: int | None) -> frozenset:
@@ -2340,16 +2365,18 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         confirmed = any(p.seen_cardId == cid for p in read.evolution_paths)
         return fwd if confirmed else fwd * (1.0 - gamma)
 
-    def _strongest_threat_rank(self, obs: dict, select: dict | None, read=None, gamma: float = 0.0) -> float:
+    def _strongest_threat_rank(self, obs: dict, select: dict | None, read=None, gamma: float = 0.0,
+                               brief_roles=None, engine_dependent: bool = False) -> float:
         """Greatest `_target_threat_rank` among the benched DAMAGE targets — the body to snipe when no KO
-        is on the menu. 0 off a Damage select. read/γ thread lever C (ADR-0026) consistently with the
-        per-option rank, so `target_is_top_threat` stays a valid equality."""
+        is on the menu. 0 off a Damage select. read/γ thread lever C (ADR-0026) — and brief_roles/
+        engine_dependent the ADR-0038 Brief boosts — consistently with the per-option rank, so
+        `target_is_top_threat` stays a valid equality."""
         if not select or select.get("context") != _DAMAGE:
             return 0.0
         best = 0.0
         for o in (select.get("option") or []):
             if o.get("type") == _CARD and o.get("area") == _BENCH:
-                r = self._target_threat_rank(obs, select, o, read, gamma)
+                r = self._target_threat_rank(obs, select, o, read, gamma, brief_roles, engine_dependent)
                 if r is not None and r > best:
                     best = r
         return best
