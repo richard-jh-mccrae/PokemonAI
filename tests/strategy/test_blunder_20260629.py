@@ -323,7 +323,7 @@ def _board_of(pilot, current):
 def _ctx(pilot, obs, i):
     """The per-option Context the Pilot scores — to inspect the deck-knowledge search signals."""
     select = obs["select"]
-    return pilot._context(obs, select, pilot._board(obs, select), select["option"][i], 0.0)
+    return pilot._context(obs, select, pilot._board(obs, select), select["option"][i])
 
 
 @pytest.mark.req("REQ-GEN-0032")

@@ -12,7 +12,7 @@ These files drift; read them now, don't trust this doc's snapshot of them:
 
 - **`src/common/pilot.py`** — the `Context` and `Board` fields a `when(ctx)` may read. This is the
   *only* vocabulary a trigger has. Common fields seen in existing rules: `c.plan`, `c.option_type`,
-  `c.select_context`, `c.tags`, `c.roles`, `c.stat`, `c.is_attack`, `c.is_ko`, `c.tactical`,
+  `c.select_context`, `c.tags`, `c.roles`, `c.stat`,
   `c.option_area`, `c.target_is_threat`, `c.attach_target_area`, `c.attach_target_roles`, and
   `c.board.*` (`my_bench`, `turn`, `active_doomed`, `hand_startable`, `wincon_in_play`,
   `my_active_energy`, `reusable_energy_in_hand`, …). **Confirm each field exists before using it.**
