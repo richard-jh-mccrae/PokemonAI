@@ -55,7 +55,7 @@ def _pilot(deck):
 
 def _ctx(pilot, obs, i):
     select = obs["select"]
-    return pilot._context(obs, select, pilot._board(obs, select), select["option"][i], 0.0)
+    return pilot._context(obs, select, pilot._board(obs, select), select["option"][i])
 
 
 # ---------------------------------------------------------------- the rush_evolve fetch-filter

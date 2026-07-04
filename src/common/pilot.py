@@ -466,15 +466,8 @@ class Context:
     tags: list = field(default_factory=list)
     stat: object | None = None     # option card's engine CardStat (hp/weakness/prize value/…)
     board: Board = field(default_factory=Board)   # per-decision board summary (same for all options)
-    # NOTE: is_attack/tactical/is_ko = documented deck-Hypothesis trigger surface (deck-genie
-    # authoring.md); no shipped rule reads them yet — don't prune as dead without updating that doc.
-    is_attack: bool = False
-    attack_id: int | None = None   # engine attackId of an ATTACK option (None otherwise) — deck rules
-                                   # keying an attack-specific condition; prefer stat/tags/board reads
     context_card_id: int | None = None  # the select's OWNER (`select.contextCard`): the card whose effect/
                                    # Ability resolves (an ACTIVATE's bare YES/NO carries no card itself)
-    tactical: float = 0.0          # option's closed-form combat value (>= KO_SCORE on a knockout)
-    is_ko: bool = False            # this option is an attack that knocks out opponent's Active
     search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
                                    # fetch target (see doctrine_fetch._FETCH_FILTERS) is PROVABLY gone from
                                    # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / unknown filter
@@ -788,7 +781,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
                     + self._retreat_to_lethal_tactical(obs, board, option))
-        ctx = self._context(obs, select, board, option, tactical)
+        ctx = self._context(obs, select, board, option)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         score = sum(w for _, w in fired) + tactical
@@ -1573,8 +1566,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         actives = players[oi].get("active") or []
         return actives[0] if actives else None
 
-    def _context(self, obs: dict, select: dict, board: Board, option: dict,
-                 tactical: float = 0.0) -> Context:
+    def _context(self, obs: dict, select: dict, board: Board, option: dict) -> Context:
         state = obs.get("current") or {}
         plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
         cid = self._option_card_id(obs, select, option)
@@ -1590,7 +1582,6 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         card_is_hand_duplicate = cid is not None and cid in board.hand_duplicate_ids
         fetch_fills_a_need = (option.get("type") == _PLAY
                               and self._fetch_fills_a_need(board, tags, plan))
-        is_attack = option.get("type") == _ATTACK
         target_energy = self._target_energy(obs, select, option)
         target_hp = self._target_hp(obs, select, option)
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
@@ -1686,10 +1677,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                        card_stranded_evolution=(cid is not None
                                                 and cid in self._stranded_evolution_set()),
                        roles=roles, tags=tags, stat=stat, board=board, params=self.strategy.params,
-                       is_attack=is_attack,
-                       attack_id=(option.get("attackId") if is_attack else None),
                        context_card_id=((select.get("contextCard") or {}).get("id")),
-                       tactical=tactical, is_ko=is_attack and tactical >= KO_SCORE,
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon,
                        search_targets_unlikely=search_unlikely,

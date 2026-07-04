@@ -179,7 +179,7 @@ def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prize
     cur = state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5, deck_count=1)
     obs = make_select([play_signal, opt(END)], current=cur)
     assert pilot._context(obs, obs["select"], pilot._board(obs, obs["select"]),
-                          obs["select"]["option"][0], 0.0).search_targets_unlikely
+                          obs["select"]["option"][0]).search_targets_unlikely
     fired = _fired(pilot.explain(obs).options[0])
     assert "dont-search-a-probable-whiff" in fired
     assert "dont-search-an-empty-deck" not in fired         # NOT sound guard — still reachable
@@ -205,7 +205,7 @@ def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
     cur = state(discard=[STARYU], hand=[BASIC_TUTOR], prizes=6, deck_count=30)
     obs = make_select([play_poffin, opt(END)], current=cur)
     ctx = pilot._context(obs, obs["select"], pilot._board(obs, obs["select"]),
-                         obs["select"]["option"][0], 0.0)
+                         obs["select"]["option"][0])
     assert not ctx.search_targets_unlikely
     assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs).options[0])
     assert pilot.decide(obs) == [0]                          # play bench-filler — probably hits
