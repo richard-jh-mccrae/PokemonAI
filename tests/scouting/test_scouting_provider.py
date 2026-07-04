@@ -13,6 +13,17 @@ def test_dict_provider_returns_stats_or_none():
     assert p.get(999) is None
 
 
+@pytest.mark.req("REQ-POSTURE-0005")
+def test_ids_for_name_reverse_lookups_card_ids_by_name():
+    # The Matchup Brief consumer resolves card NAMES -> ids; the provider is the reverse index.
+    p = DictCardStatProvider({677: CardStat(677, name="Riolu"),
+                              678: CardStat(678, name="Mega Lucario ex"),
+                              679: CardStat(679, name="Riolu")})   # a reprint under the same name
+    assert p.ids_for_name("Riolu") == frozenset({677, 679})
+    assert p.ids_for_name("Mega Lucario ex") == frozenset({678})
+    assert p.ids_for_name("Nonexistent") == frozenset()
+
+
 @pytest.mark.req("REQ-GEN-0022")
 def test_forward_max_damage_reaches_the_evolution_lines_attacker():
     # Riolu (Basic, weak attack) evolves into Mega Lucario ex (270). Forward index reports the

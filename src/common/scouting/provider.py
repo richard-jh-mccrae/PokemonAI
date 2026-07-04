@@ -77,9 +77,18 @@ class DictCardStatProvider:
     def __init__(self, stats: dict[int, CardStat]):
         self._stats = stats
         self._forward: _ForwardIndex | None = None
+        self._name_ids: dict[str, frozenset[int]] | None = None
 
     def get(self, card_id: int) -> CardStat | None:
         return self._stats.get(card_id)
+
+    def ids_for_name(self, name: str) -> frozenset[int]:
+        """Card ids printed under ``name`` — the reverse of ``CardStat.name`` (names aren't unique).
+        The Matchup Brief consumer's name->id bridge (ADR-0027, ``briefs.resolve_brief_cards``);
+        empty for an unknown name."""
+        if self._name_ids is None:
+            self._name_ids = _name_index(self._stats)
+        return self._name_ids.get(name, frozenset())
 
     def forward_max_damage(self, card_id: int) -> int:
         """Max damage the card's evolution line eventually reaches (see ``_ForwardIndex``)."""
@@ -863,12 +872,23 @@ def _build_forward_index(cache: dict[int, CardStat]) -> _ForwardIndex:
     return _ForwardIndex(cache)
 
 
+def _name_index(cache: dict[int, CardStat]) -> dict[str, frozenset[int]]:
+    """Reverse index ``card name -> frozenset of ids printed under it`` (names aren't unique — folds
+    every printing). The Matchup Brief consumer's name->id bridge (ADR-0027). Pure/lib-free."""
+    idx: dict[str, set[int]] = {}
+    for cid, st in cache.items():
+        if st.name:
+            idx.setdefault(st.name, set()).add(cid)
+    return {name: frozenset(ids) for name, ids in idx.items()}
+
+
 class EngineCardStatProvider:
     """Lazily build a ``{cardId: CardStat}`` cache from the native engine (runtime only)."""
 
     def __init__(self):
         self._cache: dict[int, CardStat] | None = None
         self._forward: _ForwardIndex | None = None
+        self._name_ids: dict[str, frozenset[int]] | None = None
 
     def _ensure_cache(self) -> None:
         """Build the stat cache + forward index together, once. The single build site so the two
@@ -893,3 +913,10 @@ class EngineCardStatProvider:
         self._ensure_cache()
         st = self._cache.get(card_id)
         return self._forward.forward_card_ids(st.name) if st else frozenset()
+
+    def ids_for_name(self, name: str) -> frozenset[int]:
+        """Card ids printed under ``name`` (see ``DictCardStatProvider.ids_for_name``)."""
+        self._ensure_cache()
+        if self._name_ids is None:
+            self._name_ids = _name_index(self._cache)
+        return self._name_ids.get(name, frozenset())

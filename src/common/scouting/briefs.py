@@ -71,3 +71,31 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
         return None
     top = read.candidates[0][0]
     return next((b for b in briefs if top in b.covers), None)
+
+
+def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dict[int, str]]:
+    """Resolve a Brief's name-keyed ``threats``/``targets`` to card ids (ADR-0027 consumer substrate).
+
+    The authored Brief names cards, but the Pilot/Board works in card ids; this bridges the two via an
+    injected ``ids_for_name`` lookup (a ``name -> iterable[int]``, e.g. a provider's ``ids_for_name``),
+    which keeps the resolution pure and testable without the engine.
+
+    Args:
+        brief: the matched Matchup Brief.
+        ids_for_name: ``name -> iterable[int]`` — every card id printed under a card name.
+
+    Returns:
+        ``(threat_ids, target_roles)`` — ``threat_ids`` is the frozenset of ids of every
+        ``threats[].card``; ``target_roles`` maps each resolved ``targets[].card`` id to its ``role``.
+        A name that resolves to no id is skipped (never raises); a name mapping to several ids maps all
+        of them; a card that is both a threat and a target appears in both outputs (independent surfaces).
+    """
+    threat_ids: set[int] = set()
+    for t in brief.threats or []:
+        threat_ids.update(ids_for_name(t.get("card", "")) or ())
+    target_roles: dict[int, str] = {}
+    for t in brief.targets or []:
+        role = t.get("role")
+        for cid in ids_for_name(t.get("card", "")) or ():
+            target_roles[cid] = role
+    return frozenset(threat_ids), target_roles
