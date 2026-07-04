@@ -26,6 +26,14 @@ REQUIRED_SWITCHES = (
     "planner_key_threat",   # ADR-0031 KO-the-key-threat Goal-Ladder rung
     "lethal_family",        # ADR-0037 the ONE win-generator family + verify-every-lock
     "lethal_veto",          # ADR-0037 replay the verified cascade
+    "brief_preevo",         # ADR-0038 Brief fragile_preevo lever (A/B-cleared 2026-07-04)
+)
+
+# Wired-but-ARMED-OFF switches: present + overlay-controllable, default False — the ADR-0038 engine
+# lever's stress leg priced a wrong opp_is_engine_dependent assertion at ~4%, so it arms only via the
+# first real true-asserting Brief's own A/B (then it moves into REQUIRED_SWITCHES).
+ARMED_OFF_SWITCHES = (
+    "brief_engine",         # ADR-0038 Brief engine lever (stress leg 2026-07-04: 46%, CI 43-49)
 )
 
 AGENT_MAINS = sorted((REPO / "src" / "agents").glob("*/main.py"))
@@ -40,8 +48,8 @@ def _pilot_call(main_py: Path) -> ast.Call:
     return calls[0]
 
 
-def _is_params_get_true(node: ast.AST, key: str) -> bool:
-    """True iff ``node`` is exactly ``_params.get("<key>", True)`` (default ON, overlay-controllable)."""
+def _is_params_get(node: ast.AST, key: str, default: bool) -> bool:
+    """True iff ``node`` is exactly ``_params.get("<key>", <default>)`` (overlay-controllable)."""
     if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
             and node.func.attr == "get" and isinstance(node.func.value, ast.Name)
             and node.func.value.id == "_params"):
@@ -50,7 +58,7 @@ def _is_params_get_true(node: ast.AST, key: str) -> bool:
         return False
     key_arg, default_arg = node.args
     return (isinstance(key_arg, ast.Constant) and key_arg.value == key
-            and isinstance(default_arg, ast.Constant) and default_arg.value is True)
+            and isinstance(default_arg, ast.Constant) and default_arg.value is default)
 
 
 @pytest.mark.parametrize("main_py", AGENT_MAINS, ids=[p.parent.name for p in AGENT_MAINS])
@@ -63,6 +71,34 @@ def test_agent_wires_deployment_switches_on(main_py):
         assert switch in kwargs, (
             f"{main_py}: Pilot(...) is missing `{switch}=` — the agent would run that layer at the "
             f"ctor default (OFF). Wire it as {switch}=_params.get(\"{switch}\", True).")
-        assert _is_params_get_true(kwargs[switch], switch), (
+        assert _is_params_get(kwargs[switch], switch, True), (
             f"{main_py}: `{switch}=` must be _params.get(\"{switch}\", True) (default ON, "
             f"overlay-controllable), not {ast.dump(kwargs[switch])}.")
+
+
+@pytest.mark.parametrize("main_py", AGENT_MAINS, ids=[p.parent.name for p in AGENT_MAINS])
+def test_agent_wires_armed_off_switches(main_py):
+    """REQ-WIRE-0001: an armed-off switch is WIRED (present, overlay-controllable) but defaults
+    False — deliberately dark until its evidence gate clears (see ARMED_OFF_SWITCHES notes)."""
+    call = _pilot_call(main_py)
+    kwargs = {kw.arg: kw.value for kw in call.keywords if kw.arg}
+    for switch in ARMED_OFF_SWITCHES:
+        assert switch in kwargs, (
+            f"{main_py}: Pilot(...) is missing `{switch}=` — wire it as "
+            f"{switch}=_params.get(\"{switch}\", False) (armed-off, overlay can force on).")
+        assert _is_params_get(kwargs[switch], switch, False), (
+            f"{main_py}: `{switch}=` must be _params.get(\"{switch}\", False) (armed-off; its "
+            f"evidence gate has NOT cleared), not {ast.dump(kwargs[switch])}.")
+
+
+@pytest.mark.parametrize("main_py", AGENT_MAINS, ids=[p.parent.name for p in AGENT_MAINS])
+def test_agent_wires_scout_and_briefs(main_py):
+    """REQ-WIRE-0002: every shipped agent passes ``scout=`` and ``briefs=`` into its Pilot — an
+    agent that omits ``briefs=`` silently gets ZERO Matchup Briefs (ctor default None → []), so a
+    recognized opponent's counterplay never reaches the Board (the ADR-0038 levers run dark)."""
+    call = _pilot_call(main_py)
+    kwargs = {kw.arg for kw in call.keywords if kw.arg}
+    for required in ("scout", "briefs"):
+        assert required in kwargs, (
+            f"{main_py}: Pilot(...) is missing `{required}=` — recognition/Brief routing would be "
+            f"silently OFF for this agent.")

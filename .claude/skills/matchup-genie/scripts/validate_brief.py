@@ -90,6 +90,21 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
     else:
         warnings.append(f"no {index_path} — skipped covers cross-check")
 
+    # --- covers collision vs every OTHER shipped Brief (ADR-0038 hardening): match_brief routes an
+    # archetype to the alphabetically-FIRST covering Brief, so an overlap misroutes SILENTLY ---
+    if isinstance(covers, list) and brief_path.parent.is_dir():
+        for other in sorted(brief_path.parent.glob("*.json")):
+            if other.name == brief_path.name:
+                continue
+            try:
+                oc = json.loads(other.read_text(encoding="utf-8")).get("covers", [])
+            except json.JSONDecodeError:
+                continue
+            clash = sorted(set(covers) & set(oc))
+            if clash:
+                problems.append(f"covers collide with {other.name}: {clash} — every archetype string "
+                                f"must route to exactly ONE Brief (match_brief takes the first)")
+
     # --- threats / targets reference real cards in the deck ---
     names = _deck_names(deck_dir, repo)
     if names is None:

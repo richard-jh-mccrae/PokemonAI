@@ -18,11 +18,21 @@ targets. Pure data — it describes the matchup, it does not act on it.
 _Avoid_: matchup, scout result, prediction
 
 **Posture**:
-How the agent changes play in response to the Read — a deck-agnostic generic core in the
-Pilot (seek `targets`, avoid `threats`, calibrate aggression to favourability) plus
-deck-specific Read-conditioned Hypotheses, all scaled by the Read's confidence. A
-*consumer* of the Read, not part of Scouting itself.
-_Avoid_: stance, strategy
+How the agent changes play in response to the Read — the Read-conditioned Levers
+(matchup favorability, Read-accurate development, Matchup-Brief doctrine), each scaled by
+the Read's confidence (γ) so an unrecognized opponent moves nothing. Generic
+"seek targets / avoid threats" is deliberately absent (ADR-0026) — card facts already
+cover it. A *consumer* of the Read, not part of Scouting itself.
+_Avoid_: stance, strategy, seek/avoid (the retired ADR-0008 framing)
+
+**Lever**:
+One Read/Brief-conditioned behavior change, γ-scaled. Realized **sharpen-first**: the
+signal feeds the existing decision machinery that already owns the behavior (e.g. the
+snipe threat order) rather than a parallel rule; a new Hypothesis is minted only for a
+behavior nothing owns yet. Never overrides a KO; kill-switched and A/B-measured before
+default-ON.
+_Avoid_: rule (a Hypothesis is one *kind* of lever realization), boost (the additive
+mechanics inside a rank, not the lever itself)
 
 **Signature**:
 A card highly diagnostic of an Archetype — it appears in most of that archetype's

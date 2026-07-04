@@ -29,9 +29,11 @@ a deterministic validator, not per-Hypothesis trigger checks.
 
 **Minting a new `opponent_properties` key** is a real event: add it to
 `assets/opponent_properties.json` with `consumer: "unwired"` and a `note` describing the lever it *will*
-drive, and **call it out in the diff** — the consumer (a separate, unbuilt item) must wire it onto a
-`Board` field before it does anything. Until then the key is an inert forward contract. Prefer reusing an
-existing key; the vocabulary stays small on purpose.
+drive, and **call it out in the diff** — the consumer must wire it before it does anything. Until then
+the key is an inert forward contract. Prefer reusing an existing key; the vocabulary stays small on
+purpose. **Asserting a WIRED key is a high-bar call** — check the registry's `consumer` field: e.g.
+`opp_is_engine_dependent` drives the ADR-0038 engine lever, and the stress A/B priced a wrong assertion
+at ~4% win-rate. Assert only what the weakness grill actually established.
 
 ## 3 · Gate — the deterministic validator
 
@@ -39,25 +41,29 @@ existing key; the vocabulary stays small on purpose.
 python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>
 ```
 
-It hard-fails on: missing/mistyped required fields; `slug` ≠ filename; empty `covers`; a `threat`/`target`
-card **not present in the deck** (catches typos / hallucinated cards — the analogue of deck-genie's
-trigger checks); an illegal `target` role. It **warns** (does not fail) on: `covers` diverging from
-`index.json` (the meta regenerates, so a drift is worth a look, not a block); an `opponent_properties`
-key not in the registry (mint it, don't ignore it). Fix every hard failure; resolve every warning
-consciously.
+It hard-fails on: missing/mistyped required fields; `slug` ≠ filename; empty `covers`; a `covers` string
+already covered by ANOTHER shipped Brief (`match_brief` routes alphabetically-first — a collision
+misroutes silently; ADR-0038 hardening); a `threat`/`target` card **not present in the deck** (catches
+typos / hallucinated cards — the analogue of deck-genie's trigger checks); an illegal `target` role. It
+**warns** (does not fail) on: `covers` diverging from `index.json` (the meta regenerates, so a drift is
+worth a look, not a block); an `opponent_properties` key not in the registry (mint it, don't ignore it).
+Fix every hard failure; resolve every warning consciously.
 
 ## 4 · Suite-green (cheap safety)
 
-`python -m pytest tests/ -q` should stay green. The Brief is inert data today (no consumer reads it), so
-this mainly guards the validator + any registry parsing — but run it, don't assume.
+`python -m pytest tests/ -q` should stay green. A Brief is LIVE data since ADR-0038 — the Pilot's
+`brief_preevo`/`brief_engine` levers score off its `fragile_preevo`/`engine` targets and
+`opp_is_engine_dependent` (see docs/scouting.md's consumer table) — and the suite pins the shipped
+dir's covers-collision freedom, so run it, don't assume.
 
 ## 5 · Present the diff — the human commits
 
 Show `src/common/scouting/briefs/<slug>.json` (+ any `assets/opponent_properties.json` additions) as a
 diff, with a one-line note: the archetype, its `covers` count, the seams it encodes (`opponent_properties`
 keys), and the validator result. Note any newly-minted key as "needs consumer wiring." The human reviews
-and commits. The Brief's effect on play is confirmed later, once the consumer exists and the M1 A/B
-measures it — the skill never self-validates gameplay impact.
+and commits. The Brief's effect on play is confirmed later by A/B (ADR-0038's evidence gate) — the wired
+levers (`fragile_preevo`/`engine` targets, `opp_is_engine_dependent`) act as soon as the Brief ships;
+the skill never self-validates gameplay impact.
 
 **Commit-message convention:** every matchup-genie commit message **begins with `matchup: `** (e.g.
 `matchup: Cinderace / Mega Starmie ex counterplay doctrine`). This applies whether the human commits or

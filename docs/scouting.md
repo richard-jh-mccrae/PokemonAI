@@ -133,14 +133,31 @@ authored by the `matchup-genie` skill at `src/common/scouting/briefs/<slug>.json
 `matchup_favorability`):
 
 - `load_briefs()` — fail-safe load of every `briefs/*.json` (a bad file is skipped; empty dir → `[]`).
+  No two Briefs may share a `covers` string (`match_brief` takes the alphabetically-first cover) —
+  pinned by `test_shipped_briefs_have_no_covers_collision` + a `validate_brief.py` hard check.
 - `match_brief(briefs, read)` — routes `read.candidates[0]` (the top archetype) to the Brief whose
   `covers` list contains it, so an archetype's variants all resolve to one Brief. Plain string routing
   (ADR-0027); γ tempers *use*, not the match.
+- `resolve_brief_cards(brief, ids_for_name)` — the matched Brief's name-keyed threats/targets as card
+  ids, surfaced on `Board` (`brief_threat_ids`, `brief_target_roles`, and the `opp_property` /
+  `brief_target_role` / `brief_target_ids` accessors).
 
 The matched Brief rides on **`Board.brief`**, γ-gated to a recognized opponent (`None` when unknown /
-uncovered / Posture off). **Behavior-neutral today**: nothing scores off `Board.brief` yet — the
-Read-conditioned Hypothesis that consumes it (and the engine-removal lever) is the next, M1-measured
-step (ADR-0027 / ADR-0026), deck-specialised via the expand-vs-override rule.
+uncovered / Posture off). **Consumption is ADR-0038**: Brief intel *sharpens the owning Tactical
+signal* (γ-scaled) rather than minting parallel Hypotheses. The consumer table — what each Brief
+surface drives (every agent opts in via `main.py`; pinned by `tests/agents/test_agent_wiring.py`):
+
+| Brief surface | Consumer | Kill-switch |
+|---|---|---|
+| target `fragile_preevo` | tier-crossing snipe-rank boost in `_body_threat_rank` (snipe rules + planner key-threat rung inherit) + gust-target tie-break | `brief_preevo` |
+| target `engine` + `opp_is_engine_dependent` | sub-tier snipe-rank boost + gust tie-break, hard-gated on the asserted bool | `brief_engine` (**default OFF** — the stress leg priced a wrong assertion at ~4%; arms via the first real true-asserting Brief's own A/B) |
+| target `prize_liability` | **covered, no lever** — `_prize_value` (ex/Mega off CardStat), `gust_best_ko_prizes`, the Lethal Solver's prize math and `stall_target_is_keystone` already act on prize-heavy bodies | — |
+| `threats` (`brief_threat_ids`) | **covered, no lever** — the threat rank sees attackers by printed damage; the defensive half is `active_doomed`'s forward-doom | — |
+| `opp_donk_vulnerable` | **deferred** — the snipe half is delivered by the `fragile_preevo` lever; the residual "early aggression" half awaits a true-asserting Brief + correction evidence | — |
+| `opp_tempo` | **deferred** — race/stabilize collides with ADR-0026's killed framings (a prior must not drive the Plan) and would double-count Lever A favorability | — |
+
+Weakness ×2 stays the KO oracle's — Brief levers set the *gameplan* (which body wins the target
+queue), never combat math (ADR-0038).
 
 ## The compiler (offline)
 
