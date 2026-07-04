@@ -287,6 +287,9 @@ class AttackStat:
     attackId: int
     damage: int = 0
     cost: int = 0                      # energy count (efficiency tiebreaks, affordability)
+    energyTypes: tuple = ()            # the cost's per-slot Energy TYPE codes (EnergyType enum; 0 =
+                                       # colorless/any) — e.g. Phantom Dive [Fire, Psychic]. Backs the
+                                       # type-aware attach (attach the type the wincon still LACKS, not a redundant one)
     recoil: int = 0                    # unconditional self-damage (ADR-0022 #2)
     benchSnipe: int = 0                # unconditional opp-bench rider (ADR-0022 #14); ignores W/R
     benchSpread: int = 0               # distributable opp-bench counter spread total (Phantom Dive
@@ -712,6 +715,7 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
         table[a.attackId] = AttackStat(
             attackId=a.attackId, damage=printed,
             cost=len(getattr(a, "energies", None) or []),
+            energyTypes=tuple(getattr(a, "energies", None) or []),
             recoil=parse_attack_recoil(text),
             benchSnipe=parse_attack_bench_snipe(text) or free_target_snipe,
             benchSpread=parse_attack_bench_spread(text),

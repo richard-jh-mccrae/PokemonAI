@@ -30,11 +30,12 @@ def _build_pilot(agent: str):
     """The agent's real (engine-backed) Pilot + its authored seed weights, mirroring main.py."""
     from cg.api import all_attack
     from common.cards import CardFunctions
+    from common.effects import CardEffects
     from common.strategy.general_strategy import GENERAL_STRATEGY
     from common.pilot import Pilot
     from common.scouting.provider import (
-        EngineCardStatProvider, parse_attack_bench_snipe,
-        parse_attack_ignores_active_effects, parse_attack_recoil)
+        EngineCardStatProvider, build_attack_stats, load_attack_overrides,
+        parse_attack_bench_snipe, parse_attack_ignores_active_effects, parse_attack_recoil)
 
     agent_dir = REPO / "src" / "agents" / agent
     spec = importlib.util.spec_from_file_location(f"{agent}_strategy", agent_dir / "strategy.py")
@@ -52,6 +53,9 @@ def _build_pilot(agent: str):
         recoil={a.attackId: parse_attack_recoil(a.text) for a in attacks},
         bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in attacks},
         ignores_active_effects={a.attackId: parse_attack_ignores_active_effects(a.text) for a in attacks},
+        effects=CardEffects.load(),                            # ADR-0032 Effect Clauses (mirror main.py)
+        attack_stats=build_attack_stats(attacks, load_attack_overrides()),  # ADR-0032 per-attack records
+                                                              # incl. energyTypes — the type-aware attach reads them
         # the wiring-pass kill-switches at main.py's shipped defaults (A/B-cleared 2026-07-02) — a
         # retest must decide with the same backstops the live agent runs
         lethal_verify=strategy.params.get("lethal_verify", True),

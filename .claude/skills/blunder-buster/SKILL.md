@@ -479,6 +479,9 @@ fan-out-then-converge schedule.
 - The Verifier is non-negotiable: **no commit without `passed`** — except Solver/Planner-layer code
   fixes (step 2), which it cannot gate: there the fixtured regression test + retest + suite-green are
   the gate, and **a layer-driven decision is never "fixed" with a weight or `when()`**.
+- **Commit-message prefix.** Every commit message produced for a blunder-busting run **starts with the
+  literal `Blunder Bustin':`** (that exact spelling, then a space and the summary line). Applies to any
+  commit you author or squash for the run — the subject line begins with it.
 - **Exhaustive or not finished.** Every open correction must reach a terminal outcome
   (fixed / covered / refuted / evidenced capability-gap) **this session**; the run is finished only
   when the open set is empty (step 11). No bare `deferred`, no "future run", no leaving a correction

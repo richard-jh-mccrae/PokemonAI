@@ -22,6 +22,12 @@ from common.strategy.strategy import Hypothesis, Plan
 # situational `hand_disruption` one (Harlequin: symmetric shuffle refills opponent too).
 _KEEP_ENGINE_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 
+# Win-condition LINE bases (a deck's Line pre-evolutions: Riolu, Dreepy, Makuhita) — the pieces an
+# evolution deck must keep to field its attackers. Deck-declared Roles, so the discard side can floor
+# them above a spent draw Supporter and exempt them from the redundant/duplicate pitch endorsement (a
+# 2nd Dreepy is a 2nd LINE, not junk). ep83661652 f30 / ep83686860 f18.
+_BASE_ROLES = frozenset({"win_condition_base", "evolution_base"})
+
 # FETCH FILTER: cards a search can pull OUT of deck, predicate over CardStat, keyed by Function Tag.
 # Shared basis for whiff/redundancy signals (all targets gone/held = dead card). Add filter tag+predicate per new search card.
 _FETCH_FILTERS = {
@@ -373,6 +379,19 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "recycle" in c.tags and c.board.recycle_dead_only,
         weight=-40, status="assumed"),
     Hypothesis(
+        id="recover-to-refill-bench",
+        rationale="Play a `recycle` Item (Night Stretcher) to refill a THIN Bench when the discard holds "
+                  "a recoverable body (`not recycle_dead_only`) — an empty/thin Bench loses the game if "
+                  "the Active is Knocked Out with nothing to promote (ep83667237 f87/f120: a Staryu sat "
+                  "in the discard — the whole point of Night Stretcher — while the Bench was empty and "
+                  "the agent attacked / refreshed instead). +22 sequences it TIER-0 (development) ahead "
+                  "of a hand-refresh (`dig-before-commit` +20) and, via `_finish_turn_last`, before a "
+                  "turn-ending attack — refill THEN attack. `dont-recycle-the-dead` (−40) owns the "
+                  "all-dead-pool case, so the two never both fire.",
+        when=lambda c: c.option_type == _PLAY and "recycle" in c.tags
+        and c.board.my_bench < _THIN_BENCH and not c.board.recycle_dead_only,
+        weight=22, status="assumed"),
+    Hypothesis(
         id="dont-search-a-probable-whiff",
         rationale="PROBABILISTIC complement to `dont-search-an-empty-deck` (ADR-0029): reads "
                   "`Context.search_targets_unlikely` — best reachable target's hypergeometric P(deck still "
@@ -526,6 +545,18 @@ HYPOTHESES = [
         and "supporter_tutor" in c.tags and c.board.no_supporter_in_hand,
         weight=25, status="assumed"),
     Hypothesis(
+        id="dont-pre-bench-the-supporter-tutor",
+        rationale="At the PREGAME bench placement (`_SETUP_BENCH`, minCount 0), DON'T place a "
+                  "`supporter_tutor` Pokémon (Meowth ex — Last-Ditch Catch) on the Bench: its tutor "
+                  "Ability triggers on an IN-GAME bench-from-hand, NOT a pregame setup placement, so "
+                  "benching it now wastes the free Supporter fetch — and when it is the only Basic it "
+                  "should take the Active Spot, not sit benched. Negative so the Pilot DECLINES the "
+                  "optional placement (decide()'s single-pick take-fewer; ep83661652 f3). The in-game "
+                  "half is `bench-the-supporter-tutor` (+25, a Main-phase PLAY when holding no "
+                  "Supporter) — the two never fire together (different select contexts).",
+        when=lambda c: c.select_context == _SETUP_BENCH and "supporter_tutor" in c.tags,
+        weight=-15, status="assumed"),
+    Hypothesis(
         id="grab-a-gust-supporter-for-the-ko",
         rationale="At a TO_HAND Supporter grab (Meowth ex Last-Ditch Catch, or any supporter tutor), "
                   "take a `gust`-tagged Supporter (Boss's Orders) when a gust would KO/close NOW "
@@ -541,9 +572,26 @@ HYPOTHESES = [
         rationale="The setup default of the context-ranked Supporter grab: with no closing gust "
                   "available, take a `draw` Supporter (Lillie's / Judge) to keep digging. Below the "
                   "gust rung (+20) so the closing gust still wins, and modest so `fetch-the-wincon` "
-                  "(+30) and a genuinely needed non-draw grab still outrank it.",
-        when=lambda c: c.plan == Plan.SETUP and c.select_context == _TO_HAND and "draw" in c.tags,
+                  "(+30) and a genuinely needed non-draw grab still outrank it. Gated to a Supporter "
+                  "CARD (`cardType`): a Pokémon carrying a `draw` ABILITY tag (Drakloak's Dig) is NOT a "
+                  "draw Supporter to fetch — that mis-fire made a dead mid-line Drakloak out-grab a live "
+                  "Basic (ep83686860 f33).",
+        when=lambda c: c.plan == Plan.SETUP and c.select_context == _TO_HAND and "draw" in c.tags
+        and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
         weight=10, status="assumed"),
+    Hypothesis(
+        id="dont-grab-a-baseless-mid-evolution",
+        rationale="Don't take a mid-Line EVOLUTION into hand at a search when you hold no base to evolve "
+                  "it onto — no copy of its pre-evolution in play or hand (`card_evolution_baseless`), so "
+                  "the grabbed card is dead weight (ep83686860 f33: a 3rd Drakloak with every Dreepy "
+                  "already evolved or discarded — take the playable Munkidori instead). Board-SOUND "
+                  "(visible zones only, no deck-content claim); gated to a `card_is_line_preevo` (a "
+                  "mid-Line piece — never a Basic base or the payoff), so single-hop lines with Basic "
+                  "bases (Riolu/Staryu) are untouched. −25 nets the baseless grab below "
+                  "`prefer-wincon-line-piece` (+18) so a live Basic wins the pick.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_line_preevo
+        and c.card_evolution_baseless,
+        weight=-25, status="assumed"),
     Hypothesis(
         id="hold-costly-fetch-when-line-assembled",
         rationale="The GRAB-side net of a DISCARD-cost fetch (the shed side is the `fetch_sheds_*` rungs): once "
@@ -579,8 +627,11 @@ HYPOTHESES = [
         rationale="At a forced discard, shed the lowest keep-value card first — v1's redundancy signal is a "
                   "hand copy of a Pokémon already in play (`Context.card_is_redundant`). Positive weight ranks "
                   "it above a still-needed card (mirrors the grab comparator: shed what you'd not fetch back); "
-                  "pairs with `keep-key-cards-at-discard` to protect the key while pitching the redundant.",
-        when=lambda c: c.select_context == _DISCARD and c.card_is_redundant,
+                  "pairs with `keep-key-cards-at-discard` to protect the key while pitching the redundant. "
+                  "Exempts a win-condition LINE base (`_BASE_ROLES`): a 2nd Dreepy in play is a 2nd LINE to "
+                  "field, not junk — pitching it drops you below your line count (ep83686860 f18).",
+        when=lambda c: c.select_context == _DISCARD and c.card_is_redundant
+        and not (_BASE_ROLES & set(c.roles)),
         weight=20, status="testing"),
     Hypothesis(
         id="discard-the-hand-duplicate",
@@ -588,8 +639,11 @@ HYPOTHESES = [
                   "extra is redundant this turn (`Context.card_is_hand_duplicate`, 2+ in hand, fungible Energy "
                   "excluded). Hand-internal mirror of `discard-the-redundant`; protects lone disruptors (a "
                   "single Boss's Orders scoring 0 would otherwise lose the index tie-break) over a duplicate "
-                  "engine Supporter, and pairs with `keep-key-cards-at-discard` so a 3rd wincon still nets negative.",
-        when=lambda c: c.select_context == _DISCARD and c.card_is_hand_duplicate,
+                  "engine Supporter, and pairs with `keep-key-cards-at-discard` so a 3rd wincon still nets negative. "
+                  "Exempts a win-condition LINE base (`_BASE_ROLES`): two Dreepy in hand are two LINES you want, "
+                  "not a redundant duplicate — `keep-line-base-at-discard` floors them instead (ep83686860 f18).",
+        when=lambda c: c.select_context == _DISCARD and c.card_is_hand_duplicate
+        and not (_BASE_ROLES & set(c.roles)),
         weight=12, status="testing"),
     Hypothesis(
         id="keep-key-cards-at-discard",
@@ -604,6 +658,35 @@ HYPOTHESES = [
         and (("discard_eot" in c.tags and not c.board.active_fully_powered) or c.card_is_wincon
              or bool(c.stat and getattr(c.stat, "aceSpec", False))),
         weight=-30, status="testing"),
+    Hypothesis(
+        id="keep-line-base-at-discard",
+        rationale="At a forced discard, keep a win-condition LINE base (`_BASE_ROLES`: Riolu / Dreepy / "
+                  "Makuhita — a Line pre-evolution you must field to attack) over a spent draw Supporter. "
+                  "`keep-key-cards-at-discard` (−30) protects only the PAYOFF / burst / ACE SPEC, so the "
+                  "deep-evolution decks pitched their own bases (ep83661652 f30: discarded Riolu+Makuhita "
+                  "over Lillie's; ep83686860 f18: discarded both Dreepy over Judge). −15 nets a base below "
+                  "a `keep-engine-supporter-at-discard` Supporter (−8) so the Supporter is shed first; "
+                  "combined with the `_BASE_ROLES` exemption on `discard-the-redundant`/`-hand-duplicate` "
+                  "(else a 2nd line body scores +32 junk), it keeps the lines. Milder than the key floor: "
+                  "a base is recoverable in principle, so a forced 2nd shed can still take one.",
+        when=lambda c: c.select_context == _DISCARD and bool(_BASE_ROLES & set(c.roles)),
+        weight=-15, status="assumed"),
+    Hypothesis(
+        id="keep-basic-energy-when-starved",
+        rationale="At a forced discard, keep a reusable Basic Energy when the board is energy-STARVED "
+                  "(my Active carries none) over a spent draw Supporter — with no Energy in play the "
+                  "next attach is the whole turn's tempo, so shedding Energy 'when we otherwise have no "
+                  "energy is a bad trade' (ep83686860 f11: discarded the Fire Energy the wincon needs). "
+                  "−12 nets it below a `keep-engine-supporter-at-discard` Supporter (−8); gated on a "
+                  "real Active carrying zero Energy (`my_active_id` set, `my_active_energy == 0`) so a "
+                  "powered board — or an empty-Active setup state — still cycles a surplus Energy freely. "
+                  "Basic Energy only (typed, non-`discard_eot`) — a burst is `keep-key-cards`' job.",
+        when=lambda c: c.select_context == _DISCARD and c.board.my_active_id is not None
+        and c.board.my_active_energy == 0
+        and bool(c.stat and getattr(c.stat, "hp", 0) == 0
+                 and getattr(c.stat, "energyType", None) not in (None, 0))
+        and "discard_eot" not in c.tags,
+        weight=-12, status="assumed"),
     Hypothesis(
         id="discard-the-redundant-tutor",
         rationale="At a forced discard, shed a `rush_evolve`/`tutor_mega` search whose job is done once the "

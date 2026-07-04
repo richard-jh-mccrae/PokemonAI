@@ -145,6 +145,9 @@ class Board:
                                        # (None off a search / no list / none present) — Tier-3 override
     line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
                                        # play — so there's something a rush-evolve tutor can evolve
+    line_preevo_in_hand: bool = False  # a non-payoff Line member (a base/mid-line pre-evolution) is in
+                                       # my HAND — a piece to deploy, so a hand-shuffle refresh would bury
+                                       # it (Riolu/Drakloak); gates `hold-line-piece-dont-shuffle` (ep83686860 f13)
     wincon_base_deployable: bool = False  # a Line pre-evolution (a base to evolve payoff from) is in
                                        # play OR in hand — evolved payoff deployable. False -> fetching
                                        # payoff strands it: prefer base (`fetch-base-before-stranded-payoff`)
@@ -336,6 +339,9 @@ class Context:
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
                                            # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
+    attach_type_wasted: bool = False       # this ATTACH provides an Energy TYPE the target already has
+                                           # enough of for its attack, while a DIFFERENT specific type is
+                                           # still short — a wasted off-type attach (Phantom Dive needs Fire+Psychic; 2nd Psychic wasted). Gates `dont-waste-off-type-energy`
     attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
                                            # survival-turns picker chose (== board.tool_deploy_slot) —
                                            # proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
@@ -353,6 +359,9 @@ class Context:
                                            # concentrate_slot) — build ONE body, the counterpart of attach_from_target_needs' spread
     card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
                                        # pre-evolution that builds toward the win-condition)
+    card_evolution_baseless: bool = False  # this grab candidate is an EVOLUTION with NO base to evolve
+                                       # it onto in my play or hand — a dead grab (a 3rd Drakloak, every
+                                       # Dreepy evolved/gone). Board-sound; gates `dont-grab-a-baseless-mid-evolution`
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
                                        # win_condition / primary_attacker)
     card_is_starter: bool = False      # this option's card is a startable Basic Pokémon (hp > 0, no
@@ -600,6 +609,13 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                                        select.get("minCount", 0), max_count)
         else:
             chosen = order[:max_count]
+            # take-fewer at an OPTIONAL select (minCount 0): DECLINE a pick a Hypothesis actively
+            # discourages (score < 0) rather than placing it — the single-pick analog of _greedy_grab's
+            # take-fewer, so the Pilot can decline an optional bench placement it's told not to make
+            # (ep83661652 f3: don't pre-bench Meowth ex — save Last-Ditch Catch for an in-game bench).
+            min_count = select.get("minCount", 0)
+            while len(chosen) > min_count and traces[chosen[-1]].score < 0:
+                chosen = chosen[:-1]
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
                         lethal_lost=self._lethal_lost)
 
@@ -635,12 +651,16 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                            for i in order)
 
         def _wins_now(i: int) -> bool:
-            """This ATTACK is a KO that takes my LAST prize — it wins the match, so it goes first
-            (nothing to develop for). Conservative: the opponent's Active KO for prizes >= mine
-            (a snipe-only win falls back to develop-first — no regression, just unoptimised)."""
+            """This ATTACK is a KO of the opponent's ACTIVE that takes my LAST prize — it wins the
+            match, so it goes first (nothing to develop for). Conservative: gated on `active_can_ko`
+            (my Active actually KOs the opp Active this turn), so a KO-class score coming ONLY from a
+            bench SNIPE (which credits the opp Active's prize value for a lower-prize benched KO — the
+            ep83661649 f54 bug: a 1-prize Staryu snipe read as a 3-prize Active KO) falls back to
+            develop-first. The snipe-KO is still taken this turn, just AFTER the beneficial attach —
+            no prize forfeited, and the attach toward Nebula Beam lands (attack-last)."""
             if options[i].get("type") != _ATTACK or traces[i].tactical < KO_SCORE:
                 return False
-            return (board.my_prizes_remaining > 0
+            return (board.my_prizes_remaining > 0 and board.active_can_ko
                     and self._prize_value(self._opp_active(obs)) >= board.my_prizes_remaining)
 
         def _cost_discard(i: int) -> bool:
@@ -1432,7 +1452,13 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         every Incoming estimate (ADR-0032): per-attack, so an opponent's ignore-flag attack is
         priced full vs my resist body, my prevent_ex_damage wall fears only what pierces it, and
         their SCALERS price off the per-decision opponent context (`_opp_attack_context`, set by
-        `_board`) — hand size, bench, attached Energy, and their open discard (Riptide-exact)."""
+        `_board`) — hand size, bench, attached Energy, and their open discard (Riptide-exact).
+
+        NOTE: does NOT filter by the opponent's Energy affordability — the Incoming estimate assumes
+        the opponent can power its biggest attack (conservative over-estimate). Making it
+        affordability-aware is the sound fix for the ep83661649 f54 active-vs-bench mis-feed, but it is
+        a load-bearing subsystem change (re-baselines every `active_doomed` consumer + 19 fixtures +
+        the planner CRITICAL gates) — see docs/todo/incoming-affordability.md."""
         if not attacker_stat:
             return 0
         aids = tuple(a for a in (attacker_stat.attacks or ()) if a != exclude_attack)
@@ -1552,12 +1578,14 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                        attach_target_needs=self._attach_target_needs(at_target),
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
+                       attach_type_wasted=self._attach_type_wasted(stat, at_target),
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
                        attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
                        attach_from_target_needs=attach_from_needs,
                        attach_from_target_is_concentrate=attach_from_concentrate,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
+                       card_evolution_baseless=self._evolution_baseless(obs, cid),
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
                        card_is_redundant=card_is_redundant,
@@ -1630,6 +1658,75 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             return True
         have = len((target.get("energies") or []))
         return have < _min_attack_cost(self.stats, target.get("id"))
+
+    def _attached_type_counts(self, target: dict) -> dict:
+        """{EnergyType: count} of the SPECIFIC (typed Basic) Energy attached to `target`, mapping each
+        attached Energy-card id through its ``CardStat.energyType`` (a special/colourless Energy reports
+        type 0 — it pays a colourless slot, never a specific one, so it isn't counted here). Fail-open:
+        an unresolvable id is skipped (undercount only relaxes the wasted-type test, never over-fires it)."""
+        from collections import Counter
+        counts: Counter = Counter()
+        for eid in (target.get("energies") or []):
+            est = self.stats.get(eid) if (self.stats and eid is not None) else None
+            t = getattr(est, "energyType", None) if est else None
+            if t not in (None, 0):
+                counts[t] += 1
+        return counts
+
+    def _attach_type_wasted(self, energy_stat, target: dict | None) -> bool:
+        """True iff this ATTACH puts an Energy of a TYPE the target already has ENOUGH of for its
+        most type-demanding attack, while that attack still LACKS a DIFFERENT specific type — a wasted
+        attach when the needed type is on offer (ep83686860 f45: a 2nd Psychic onto a Drakloak that
+        holds its Psychic but needs the Fire for Phantom Dive [Fire, Psychic]). Sound-or-silent: False
+        for an untyped/colourless Energy, a targetless option, or a target whose attack type-costs can't
+        be resolved. Colourless (type-0) cost slots never make an attach wasted — only an unmet SPECIFIC
+        type on another slot does."""
+        etype = getattr(energy_stat, "energyType", None) if energy_stat else None
+        if etype in (None, 0) or getattr(energy_stat, "hp", 1) != 0:   # a typed Basic Energy only
+            return False
+        if not target:
+            return False
+        tst = self.stats.get(target.get("id")) if self.stats else None
+        aids = getattr(tst, "attacks", ()) if tst else ()
+        if not aids:
+            return False
+        best_types, best_specific = (), -1                 # the attack demanding the most typed Energy
+        for aid in aids:
+            ast = self.attack_stats.get(aid) if self.attack_stats else None
+            types = getattr(ast, "energyTypes", ()) if ast else ()
+            n_specific = sum(1 for t in types if t not in (0, None))
+            if n_specific > best_specific:
+                best_types, best_specific = types, n_specific
+        if best_specific <= 0:
+            return False
+        from collections import Counter
+        cost = Counter(t for t in best_types if t not in (0, None))
+        attached = self._attached_type_counts(target)
+        if cost.get(etype, 0) - attached.get(etype, 0) > 0:   # this type fills its own unmet need
+            return False
+        return any(cost.get(t, 0) - attached.get(t, 0) > 0 for t in cost if t != etype)
+
+    def _evolution_baseless(self, obs: dict, cid: int | None) -> bool:
+        """True iff grab candidate `cid` is an EVOLUTION (has an `evolvesFrom` base) but I hold NO copy
+        of that base in play or hand to evolve it onto — a speculative/dead grab (a 3rd Drakloak when
+        every Dreepy is already evolved or gone, ep83686860 f33: take the playable Munkidori instead).
+        Board-derivable and SOUND (no deck-content claim): checks only the visible own zones (an evolved
+        base shows as its evolution's top card, so a name match means a still-bare base). False for a
+        Basic (no base needed) or when a base body is present."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        base_name = getattr(st, "evolvesFrom", None) if st else None
+        if not base_name:
+            return False
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        bodies = (me.get("active") or []) + (me.get("bench") or []) + (me.get("hand") or [])
+        for b in bodies:
+            bst = self.stats.get(b.get("id")) if (b and self.stats) else None
+            if bst and getattr(bst, "name", None) == base_name:
+                return False
+        return True
 
     def _attach_target_under_max(self, target: dict | None) -> bool:
         """True if the Pokémon an attach option targets carries fewer Energy than its HIGHEST-damage
@@ -1799,6 +1896,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             wincon_in_play=self._wincon_in_play(me),
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
+            line_preevo_in_hand=self._line_preevo_in_hand(me),
             wincon_base_deployable=(self._line_preevo_in_play(me)
                                     or self._line_preevo_in_hand(me)),
             accel_recipient_missing=self._accel_recipient_missing(me),
@@ -2603,6 +2701,9 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             deck = (select or {}).get("deck") or []
             return deck[index] if 0 <= index < len(deck) else None
         state = obs.get("current") or {}
+        if area == _LOOKING:                               # a face-up reveal (Pokégear/search top-N):
+            looking = state.get("looking") or []           # candidates live in current.looking, not a
+            return looking[index] if 0 <= index < len(looking) else None   # player zone (None = facedown)
         players = state.get("players") or []
         pi = option.get("playerIndex", state.get("yourIndex", 0))
         if not (0 <= pi < len(players)) or players[pi] is None:

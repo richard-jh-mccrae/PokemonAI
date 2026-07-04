@@ -1,0 +1,38 @@
+{
+  "deck": "mega_lucario",
+  "generated_at": "2026-07-04T13:29:23",
+  "open": [],
+  "skipped": [],
+  "reviewed": [
+    {
+      "episode_id": 83661652,
+      "frame": 3,
+      "disposition": "covered",
+      "reason": "FIXED on investigation (not a mislabel): the Pilot literally could not DECLINE an optional single-pick (decide() always took maxCount, ignoring minCount=0). Added (a) single-pick take-fewer — decline a score<0 pick at a minCount=0 select; (b) dont-pre-bench-the-supporter-tutor (-15) at _SETUP_BENCH. decide(f3)=[0]->[] (declines benching Meowth ex — saved for the Active Spot / an in-game bench to trigger Last-Ditch Catch). W-route can't measure it (correct==chosen==[0] tag can't encode select-nothing); gated by tests/strategy/test_setup_bench_decline.py on setup_bench_decline_f3.json. Human reversed the refuted call 2026-07-04."
+    },
+    {
+      "episode_id": 83661652,
+      "frame": 19,
+      "disposition": "covered",
+      "reason": "develop-a-basic-in-setup develops Riolu over the poor Boss's Orders stall (retest [4]->[5]); W-route-blind. The poor-stall blunder is gone."
+    },
+    {
+      "episode_id": 83661652,
+      "frame": 31,
+      "disposition": "covered",
+      "reason": "Root is the f30 discard (now prevented by keep-line-base-at-discard): with Riolu no longer pitched, the discard->refetch waste never arises. On the isolated captured state (Riolu already discarded) grabbing the base is sound fetch-base-before-stranded-payoff doctrine."
+    },
+    {
+      "episode_id": 83661652,
+      "frame": 33,
+      "disposition": "covered",
+      "reason": "develop-a-basic-in-setup: real Pilot develops a basic (Solrock) before the Meowth Power Gem chip (retest [3]->[1]); _finish_turn_last tiers the tier-0 develop before the tier-4 attack. First-dev-differs; W-route-blind (chip outscores the develop)."
+    },
+    {
+      "episode_id": 83661652,
+      "frame": 44,
+      "disposition": "covered",
+      "reason": "develop-a-basic-in-setup: real Pilot develops a basic (Makuhita) before the Meowth chip (retest [3]->[0]); same first-dev-differs as f33. The 'resisting to play basics' blunder is resolved."
+    }
+  ]
+}

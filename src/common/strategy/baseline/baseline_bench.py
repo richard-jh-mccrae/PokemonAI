@@ -40,6 +40,23 @@ HYPOTHESES = [
         when=lambda c: c.plan == Plan.RACE and c.option_type == _PLAY and _is_pokemon(c.stat),
         weight=25, status="assumed"),
     Hypothesis(
+        id="develop-a-basic-in-setup",
+        rationale="During SETUP, play a Basic Pokémon from hand to develop the Bench — the core tempo "
+                  "of an evolution deck: lay the Line bases down so they can evolve next turn. The RACE "
+                  "mirror `pre-position-attacker` (+25) covers the later game; this fills the SETUP gap "
+                  "that left a bare `Play Riolu` at score 0, so a weak chip attack (Meowth's Power Gem) "
+                  "or a hand-shuffle out-ranked developing the board and `_finish_turn_last` never "
+                  "sequenced the develop first (ep83661652 f29/f33/f40/f44 — mega_lucario 'resisting to "
+                  "play basics to bench'). Positive so the develop rides TIER-0, ahead of the tier-2 "
+                  "attach / tier-3 shuffle / tier-4 chip attack — develop first, then commit; a real KO "
+                  "still dominates (KO_SCORE). Excludes a multi-prize ex (`dont-bench-multiprize` owns "
+                  "whether to bench one) and a setup-only `opener` (a stranded body played only turn 1); "
+                  "gap-gated on a non-full Bench. mega_starmie develops via `bench_fill`/Turbo Flare so "
+                  "it never surfaced this; the deep-evolution decks play their bases from hand.",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and _is_pokemon(c.stat)
+        and c.board.my_bench < _BENCH_MAX and not _multi_prize(c.stat) and "opener" not in c.tags,
+        weight=12, status="assumed"),
+    Hypothesis(
         id="develop-the-accel-recipient",
         rationale="An `accel_source`-Role Active (e.g. Cinderace's Turbo Flare, which loads the Bench) "
                   "accelerates onto nothing while the Bench holds no win-condition-Line recipient "

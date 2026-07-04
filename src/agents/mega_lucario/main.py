@@ -59,6 +59,16 @@ _pilot = Pilot(
     scout=_scout,                                     # opponent recognition → the Read on Board (ADR-0026)
     briefs=_briefs,                                   # matched Matchup Brief on Board (ADR-0027), covers-routed
     posture=_params.get("posture", True),             # ADR-0026 kill-switch (overlay can force Posture off for A/B)
+    lethal_verify=_params.get("lethal_verify", True),  # ADR-0030 kill-switch: engine-confirm direct
+                                                      # lethal locks (A/B-cleared 2026-07-02; overlay can force off)
+    planner_engine_rank=_params.get("planner_engine_rank", True),  # ADR-0031 kill-switch: engine-sim
+                                                      # ranks the Planner's candidates (A/B-cleared 2026-07-02)
+    planner_key_threat=_params.get("planner_key_threat", True),  # ADR-0031 kill-switch: the
+                                                      # KO-the-key-threat ladder rung (A/B-cleared 2026-07-02)
+    lethal_family=_params.get("lethal_family", True),  # ADR-0037 kill-switch: the ONE win-generator
+                                                      # family + verify-every-lock (A/B-cleared 2026-07-03)
+    lethal_veto=_params.get("lethal_veto", True),     # ADR-0037 stage-3 kill-switch: replay the verified
+                                                      # cascade (A/B-cleared 2026-07-03)
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
 _TELEMETRY = os.environ.get("AGENT_NO_TELEMETRY") != "1"     # always-on Decision Telemetry (ADR-0019)

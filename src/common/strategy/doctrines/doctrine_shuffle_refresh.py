@@ -103,6 +103,18 @@ HYPOTHESES = [
         and c.board.wincon_in_hand and not c.board.wincon_in_play,
         weight=-25, status="assumed"),
     Hypothesis(
+        id="hold-line-piece-dont-shuffle",
+        rationale="Don't shuffle away a hand holding a win-condition LINE piece you just dug for — a base "
+                  "or mid-Line pre-evolution (`line_preevo_in_hand`, e.g. a fetched Drakloak) — with a "
+                  "`shuffle_hand` refresh: refilling sends it back into the deck, wasting the dig "
+                  "(ep83686860 f13: Ultra Ball'd 2 Energy for a Drakloak, then Lillie's shuffled it away "
+                  "for zero gain). The LINE-piece mirror of `hold-wincon-dont-shuffle` (the payoff case); "
+                  "−25 nets below `dig-before-commit` (+20). Stands down once the win-condition is IN PLAY "
+                  "(a redundant hand duplicate is safe to cycle).",
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
+        and c.board.line_preevo_in_hand and not c.board.wincon_in_play,
+        weight=-25, status="assumed"),
+    Hypothesis(
         id="hold-wincon-with-base-dont-shuffle",
         rationale="Strengthen `hold-wincon-dont-shuffle` when the win-condition's base is ALREADY IN PLAY "
                   "to evolve onto next turn (`line_preevo_in_play`, e.g. benched Staryu under a Mega "

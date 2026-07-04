@@ -14,6 +14,30 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _EVOLVE and bool(_WINCON_ROLES & set(c.roles)),
         weight=40, status="testing"),
     Hypothesis(
+        id="evolve-the-energized-body-first",
+        rationale="When two pre-evolutions can both become the win-condition, evolve the one that already "
+                  "carries Energy (`evolve_body_energy > 0`) — the result can ATTACK this turn (sprint), "
+                  "while evolving a bare body wastes the tempo (ep83664991 f25: two Staryu, one at 3 "
+                  "Energy — evolve THAT one, then disrupt). A small tie-break (+5) on top of "
+                  "`evolve-into-wincon` (+40) so it only orders the WHICH-body pick between equal evolves; "
+                  "a KO still dominates (KO_SCORE).",
+        when=lambda c: c.option_type == _EVOLVE and bool(_WINCON_ROLES & set(c.roles))
+        and (c.evolve_body_energy or 0) > 0,
+        weight=5, status="assumed"),
+    Hypothesis(
+        id="advance-the-evolution-line",
+        rationale="Evolving a MID-Line piece (e.g. Dreepy -> Drakloak toward Dragapult ex) advances the "
+                  "win-condition line even though the result isn't yet the payoff — `evolve-into-wincon` "
+                  "(+40) only fires on the final Role-carrying evolution, so a bare mid-line Evolve sat at "
+                  "score 0 and lost to a spread attach onto a 3rd bare base (ep83686860 f29: 'better to "
+                  "fully charge single wincon line then spread out energy'). Endorse it so concentrating "
+                  "the started line beats spreading; +15 clears `power-up-attacker` (+15 net +10 after "
+                  "`attach-energy-last`) but stays below `evolve-into-wincon` (+40). Gated on the result "
+                  "being a Line pre-evolution (`card_is_line_preevo`); a KO still dominates (KO_SCORE). "
+                  "Silent for single-hop lines (Riolu->Mega, Staryu->Mega) with no mid-Line piece.",
+        when=lambda c: c.option_type == _EVOLVE and c.card_is_line_preevo,
+        weight=15, status="assumed"),
+    Hypothesis(
         id="prefer-rush-evolve-tutor",
         rationale="A `rush_evolve` tutor (e.g. Salvatore: fetch a Pokémon and evolve it the same turn "
                   "its pre-evolution was played) collapses two setup turns into one, so prefer it — "

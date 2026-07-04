@@ -15,6 +15,11 @@ from __future__ import annotations
 from common.strategy.context import _ACTIVE, _ATTACH, _BENCH, _PLAY, _WINCON_ROLES
 from common.strategy.strategy import Hypothesis
 
+# A non-win-condition WALL earns the one-per-deck ACE SPEC +HP Tool only when it is actually dying
+# soon — baseline survival this many turns or fewer. A safe body's survival 'gain' is nominal (the
+# Tool is better spent as tempo; the held ACE SPEC stays shuffle-safe). ep83665798 f12.
+_WALL_THREAT_TURNS = 2
+
 
 def _is_hp_tool(stat, tags) -> bool:
     """A Pokémon Tool that grants flat HP — Function Tag `tool` + a parsed `CardStat.hpBonus` > 0
@@ -130,15 +135,24 @@ class ToolMixin:
             out.append(((_BENCH, i), b.get("hp", 0), bench_inc, bid in wincon or bid in preevo))
         return out
 
-    def _best_gain_slot(self, candidates: list, bonus: int, *, wincon: bool) -> tuple | None:
+    def _best_gain_slot(self, candidates: list, bonus: int, *, wincon: bool,
+                        require_threat: bool = False) -> tuple | None:
         """Among `candidates` of the chosen kind (win-condition-related, or not), the slot where the +HP
         boost buys the MOST survival turns — None if none gains a full turn. Ties favour the Active (the
         body already in the fight). The comparison key is an int tuple, so the slot is never compared
-        (the tuple-vs-None crash this avoids)."""
+        (the tuple-vs-None crash this avoids).
+
+        `require_threat` (the non-win-condition WALL branch): only a body actually IN DANGER — one whose
+        baseline survival is `_WALL_THREAT_TURNS` turns or fewer — is worth the one-per-deck ACE SPEC; a
+        safe body's survival 'gain' is nominal (a 160-HP Cinderace vs 20 incoming survives 8 turns → 13,
+        a meaningless +5), and the Tool is better spent as tempo (attach Energy) while the held ACE SPEC
+        stays shuffle-safe under `hold-irreplaceable-tool-dont-shuffle` (ep83665798 f12)."""
         best_key, best_slot = (0, 0), None
         for slot, hp, incoming, is_wincon in candidates:
             if is_wincon != wincon:
                 continue
+            if require_threat and self._survival_turns(hp, incoming) > _WALL_THREAT_TURNS:
+                continue                          # a wall not actually dying soon — don't burn the ACE SPEC
             key = (self._survival_gain(hp, incoming, bonus), 1 if slot[0] == _ACTIVE else 0)
             if key > best_key:
                 best_key, best_slot = key, slot
@@ -168,7 +182,8 @@ class ToolMixin:
             return slot
         if board.active_is_wincon and not successor_mode:                  # (2) proactive default
             return (_ACTIVE, 0)
-        return self._best_gain_slot(candidates, bonus, wincon=False)       # (3) a wall, only if it gains a turn
+        return self._best_gain_slot(candidates, bonus, wincon=False,       # (3) a wall, only if it is
+                                    require_threat=True)                   # actually in danger (not a safe body)
 
 
 # ── deploy rung: positive endorsement so equip scores > 0, tiers BEFORE a hand-shuffle ──
