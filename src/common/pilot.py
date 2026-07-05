@@ -1174,13 +1174,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return 0
 
     def _attack_type_payable(self, aid, target: dict | None, *, extra_type=None,
-                             extra_units: int = 0) -> bool:
+                             extra_units: int = 0, wild_units: int = 0) -> bool:
         """Sound-or-silent TYPE affordability on top of the count check: every SPECIFIC-type slot of
         ``aid``'s cost (`AttackStat.energyTypes`) must be covered by the target's attached typed
         Energy, plus ``extra_units`` of ``extra_type`` when that is a specific type — a colourless /
         special extra (type 0/None, e.g. Ignition's {C}{C}{C}) pays colourless slots only, never a
-        {W}. True whenever the record doesn't resolve (the count check stays the sole authority —
-        never a false suppression)."""
+        {W} — plus ``wild_units`` hypothetical attaches of UNKNOWN type, each able to cover any one
+        specific slot (fail-open: the hand/deck might supply the needed type). An attached Energy
+        whose type can't be resolved counts as wild too — it MIGHT be the needed typed Basic, so it
+        never grounds a suppression. True whenever the attack record doesn't resolve (the count
+        check stays the sole authority — never a false suppression)."""
         ast = self.attack_stats.get(aid) if self.attack_stats else None
         types = getattr(ast, "energyTypes", ()) if ast else ()
         from collections import Counter
@@ -1191,7 +1194,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if extra_type not in (None, 0) and extra_units > 0:
             attached = attached.copy()
             attached[extra_type] += extra_units
-        return all(attached.get(t, 0) >= n for t, n in need.items())
+        unresolved = sum(
+            1 for eid in (target.get("energies") or [])
+            if getattr(self.stats.get(eid) if (self.stats and eid is not None) else None,
+                       "energyType", None) is None)
+        missing = sum(max(0, n - attached.get(t, 0)) for t, n in need.items())
+        return missing <= wild_units + unresolved
 
     def _retreat_to_lethal_tactical(self, obs: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for a RETREAT that brings a READY benched win-condition to the Active
@@ -1223,40 +1231,57 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         opp = self._opp_active(obs)
         if not (opp and opp.get("hp")):
             return 0
-        # Best KO the CURRENT Active can already take (0 if not, incl. ex-immune). Retreat is worth it
-        # ONLY for a strictly better KO; same prize via a benched body wastes the Active's attack + turn.
-        my_active_ko = self._best_affordable_ko_value(
-            obs, board, opp, board.my_active_id, board.my_active_energy)
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
         me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        # Best KO the CURRENT Active can already take (0 if not, incl. ex-immune). Retreat is worth it
+        # ONLY for a strictly better KO; same prize via a benched body wastes the Active's attack + turn.
+        my_active_ko = self._best_affordable_ko_value(
+            obs, board, opp, board.my_active_id, board.my_active_energy, body=ma)
         best = 0.0
         for p in (me.get("bench") or []):
             if not p:
                 continue
             energy = len((p.get("energies") or []))
-            best = max(best, self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy))
+            best = max(best, self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy, body=p))
         if best <= my_active_ko:                         # the Active already takes this KO (or better):
             return 0                                     # just attack — don't waste the retreat
         return best + _RETREAT_POSITION_EPS
 
     def _best_affordable_ko_value(self, obs: dict, board: Board, opp: dict, attacker_id: int | None,
-                                  energy: int, *, bound: str = "exact") -> float:
+                                  energy: int, *, bound: str = "exact", body: dict | None = None,
+                                  extra_type=None, extra_units: int = 0) -> float:
         """The best KO value `attacker_id` (carrying `energy` Energy) reaches against the opponent's
         Active — KO_SCORE + prize − efficiency + bench-snipe rider, mirroring `_tactical`'s KO branch
         so a hypothetical attacker is valued exactly like the real one. 0 if no affordable attack
         knocks the defender out. The shared KO-valuation behind the retreat lookahead; the Lethal
-        Solver's evolve rung passes ``bound="min"`` so a coin-conditional KO never locks a phantom."""
+        Solver's evolve rung passes ``bound="min"`` so a coin-conditional KO never locks a phantom.
+
+        ``body`` (the attacker's on-board dict) arms the `_attack_type_payable` guard: an attack
+        whose SPECIFIC-type slots the body's attached Energy provably can't cover is dropped even
+        when the count suffices (Ignition's {C}{C}{C} never funds Jetting Blow's {W}). Energy budget
+        beyond the body's attached cards — a planned attach — is `extra_units` of `extra_type` when
+        the caller knows the card, else counted WILD (any type, fail-open). ``body=None`` keeps the
+        legacy count-only check."""
         stat = self.stats.get(attacker_id) if (self.stats and attacker_id is not None) else None
         opp_hp = (opp or {}).get("hp", 0)
         if not (stat and opp_hp):
             return 0.0
+        wild = (max(0, energy - len(body.get("energies") or []) - extra_units)
+                if body is not None else 0)
+        if extra_type is None and extra_units:
+            wild += extra_units     # UNKNOWN-type extra stays wild — only a provably-colourless
+                                    # extra (extra_type=0, Ignition) is strict; never false-suppress
         best = 0.0
         for aid in (stat.attacks or ()):
             cost = self.attack_costs.get(aid, 99)
             if cost > energy:                                   # can't afford this attack right now
                 continue
+            if body is not None and not self._attack_type_payable(
+                    aid, body, extra_type=extra_type, extra_units=extra_units, wild_units=wild):
+                continue                                        # count met, a specific-type slot is not
             # per-attack oracle (ADR-0032): prevention is attack-scoped now — a benched non-ex (or an
             # ignore-flag attack) still registers its KO against a prevent_ex_damage wall
             dmg = self.predicted_damage(attacker_id, aid, opp, bound=bound)
