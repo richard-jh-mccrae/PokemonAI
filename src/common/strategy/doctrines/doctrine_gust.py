@@ -272,7 +272,7 @@ HYPOTHESES = [
         and c.board.gust_best_ko_prizes > max(c.board.active_ko_prizes,
                                               c.board.active_condition_ko_prizes)
         and not (getattr(c.stat, "cardType", None) == _SUPPORTER       # Supporter-economy damping only
-                 and c.plan == Plan.SETUP and not c.board.wincon_in_play),
+                 and not c.board.line_ready and not c.board.wincon_in_play),
         weight=50, status="assumed"),
     Hypothesis(
         id="gust-for-the-stall",

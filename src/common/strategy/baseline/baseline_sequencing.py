@@ -3,7 +3,7 @@ irreversible commitments. Pure data, no Mixin. (The free-dig family; `_finish_tu
 handles attack-last sequencing structurally.)
 """
 from common.strategy.context import _PLAY
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
     Hypothesis(
@@ -14,7 +14,7 @@ HYPOTHESES = [
                   "(`cost_discard`, not free); DOES endorse Shuffle-Refresh (`shuffle_hand`) as a "
                   "hand-cycling draw — ADR-0024's 'only when hand is dead' premise was REFUTED "
                   "2026-06-30 (hoarding cost ~3:1 in the mega_starmie mirror).",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        when=lambda c: c.option_type == _PLAY
         and ("draw" in c.tags or "search" in c.tags)
         and "cost_discard" not in c.tags,
         weight=20, status="assumed"),

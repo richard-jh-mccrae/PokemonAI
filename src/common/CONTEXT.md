@@ -239,9 +239,14 @@ _Avoid_: agent (the Kaggle entry function), brain, AI
 
 **Plan**:
 The Pilot's current-turn strategic mode — one of a closed set (`SETUP`, `RACE`,
-`STABILIZE`, `CLOSE`) — chosen by shared Pilot logic parameterized by the Strategy's
-win-condition-readiness predicate. It conditions option scoring.
-_Avoid_: Strategy, Posture, AttackPlan (that's the Score-layer attack choice)
+`STABILIZE`, `CLOSE`) — DERIVED each turn as a pure function of the Match Objectives (readiness,
+KO Race, both Prize Paths), memoryless (transitions run backwards as freely as forwards) with a
+hysteretic label (anti-oscillation). **Advisory by contract**: a legibility label plus small
+confidence-scaled weight bands — never an eligibility gate (no rule keys `plan == X`); a wrong
+phase read biases a few points for a turn, it cannot silence a rule family. Ablation must land
+within noise.
+_Avoid_: Strategy, Posture, AttackPlan (that's the Score-layer attack choice), phase gate (banned
+— the label never gates rule eligibility), state machine (it is derived, not authored/transitioned)
 
 **Strategy**:
 A deck's static, declared doctrine — win-condition line(s), setup priorities, energy
@@ -376,6 +381,28 @@ the *win* goal). Generated backward from the goal, scored by simulating it throu
 end-of-turn, and executed one step per decision as the engine re-opens the menu.
 _Avoid_: Lethal Line (the win-goal special case), Plan (the mode), plan / sequence (too generic)
 
+**Chance Node**:
+The single point in a candidate Turn Line where the action's outcome is stochastic at plan time — a
+Hand Refresh's draw, a fetch against uncertain deck contents, a coin-flip attack. Own-side only (the
+opponent's hidden zones are Posture/Read territory, not a Chance Node).
+_Avoid_: randomness/RNG (vague), determinization (a sampled resolution — the rejected Monte-Carlo
+mechanism), hidden information (the opponent's zones — explicitly out of scope)
+
+**Outcome Class**:
+The macro-partition of a Chance Node's outcomes that share one best follow-up ("≥1 {W} Basic Energy
+among the 6 drawn" vs "none") — never raw card permutations. Weighted exactly: own-deck composition
+is known (decklist − seen), with prize uncertainty split hypergeometrically (Deck-Content Odds).
+_Avoid_: outcome/branch (unqualified), sample (implies Monte-Carlo)
+
+**Gamble Line**:
+A Turn Line containing exactly ONE Chance Node, valued by the exact-probability EV over its Outcome
+Classes — each branch's best follow-up valued closed-form — and competing on the Goal Ladder against
+deterministic lines by that EV. Deliberately probabilistic: it can NEVER outrank the sound win rung
+(a Lethal preempts every gamble), and its EV never feeds the sound Lethal/Incoming math (which stay
+worst-case). Depth-1 by definition; a line needing two gambles is not generated.
+_Avoid_: Lethal Line (sound, worst-case — the opposite epistemic), expected value / EV (bare — say
+whose: the sound math forbids it, a Gamble Line is built on it), risky line (unquantified)
+
 **Incoming**:
 The closed-form estimate of the worst damage the opponent can deal to one of my bodies next turn —
 from their best **affordable** attacker (one whose attached Energy can pay an attack now, allowing for
@@ -393,11 +420,59 @@ nothing. Drives both *whether* to deploy a +HP Tool and *which* body gets it.
 _Avoid_: breakpoint (one threshold; the Window is the turn count across repeated hits), heal value
 (restoring HP, not extending the count against future Incoming)
 
+**KO Race**:
+The closed-form turns-to-KO computation, both directions: the fewest of MY turns to fell a standing
+target under my best attack SEQUENCE (damage accumulation across turns, snipe riders credited to
+Prize-Path targets), and the fewest of THEIR turns to fell each of my bodies (Survival Window
+generalized board-wide). Opponent-static per computation, re-derived every turn. Feeds
+attack-sequence choice (the a21472 class), Prize-Path feasibility weights, and race posture
+(ahead/behind in turns). Exact arithmetic under the standing-board assumption — never a claim about
+opponent choice; boards where opponent CHOICE dominates are the (deferred) engine-tree escalation.
+_Avoid_: Survival Window (the single-body defensive case this generalizes), lookahead/tree search
+(the engine-simmed branching this deliberately is not), tempo (vague — say turns-ahead/behind)
+
+**Prize Path**:
+One concrete route to a side's remaining prizes: an assignment of KOs over the other side's
+KO-able bodies whose prize values ({1,2,3} — regular/ex/Mega-ex) sum to the prizes that side still
+needs. Computed BOTH directions every turn — my cheapest feasible acquisition path over their board,
+and their cheapest path over mine — feasibility-weighted (damage math, replacement, tempo),
+re-derived fresh each turn with mild stickiness. A ranking OBJECTIVE that conditions decisions
+(KO-target choice, promote, bench discipline); never a lock (the phantom-lethal mistake at match
+scale). Small by construction: ≤6 bodies a side, subset-sums over {1,2,3}.
+_Avoid_: prize race (the whole dynamic; a Path is one route through it), win condition (a deck
+Role), Lethal (sound, this-turn — a Path is fuzzy and multi-turn), plan/lock (it never commits)
+
+**Path Denial**:
+Shaping my board so the opponent's cheapest Prize Path lengthens — bench discipline (never gift the
+body that completes their ≤6-prize route), promote order (interpose generalized), KO-priority on
+their path-critical attackers. The defensive half of the two-sided Prize-Path objective: "make them
+take 7 prizes, not 6."
+_Avoid_: stalling (a play-role), walling (one tactic; Denial is the objective it serves)
+
 **Base Value Model**:
-The single deck-agnostic, replay-trained estimator of win probability from a game state;
-the project's one learned component, used as Search leaf-evaluation or Score tiebreaker
-and gated by the Read's confidence.
-_Avoid_: policy (it scores states, not moves), RL agent, neural net, card embedding
+The single deck-agnostic, replay-trained estimator of win probability from a game state; the
+project's one learned component (ADR-0007/0042). Realized as a **dependency-free logistic** whose
+FEATURES are the Tier-3/Tier-4 objective primitives (race delta, both Prize-Path turns, favorability,
+development, prize/hand/energy counts) — the symbolic tiers do the credit assignment, so the learned
+layer is a thin, legible linear model, not a raw-board encoder. Trained offline in pure Python
+(`tools/train/value/`) on mined replay states (label = eventual winner), shipped as a JSON artifact
+a pure-stdlib runtime evaluates (`common/value/`). **Absent-safe** (no artifact → null model, P=0.5,
+zero influence) and **refines judgment only** — a capped sub-prize planner-leaf term + `win_prob`
+telemetry, NEVER overriding a sound rung.
+_Avoid_: policy (it scores states, not moves), RL agent, neural net, card embedding, LightGBM/GBDT
+(the inference model is a stdlib logistic — a tree ensemble stays a rejected/deferred alternative)
+
+**Escalation Search**:
+The Tier-6 budgeted engine tree (ADR-0043) for the opponent-CHOICE residue the opponent-static
+closed-form tiers can't see. Triggered ONLY on a close attack tie (top ATTACK options within an ε),
+it sims each tied attack two-ply — my turn AND the opponent's reply (our own policy as the proxy) —
+via the Engine Search, ranks by the leaf (Base Value Model when present, else closed-form), and
+commits only a strict improvement over the tuned tie-pick. Hard per-move step budget; the tuned pick
+is the guaranteed fallback (budget spent / engine absent → defer). Default OFF (a search seam ships
+only after its budgeted ladder A/B).
+_Avoid_: Engine Search (the primitive it drives — Escalation Search is the budgeted policy over it),
+Lethal Solver (sound, this-turn win; escalation is heuristic tie-breaking), Turn Planner (the whole
+optimizer; escalation is its last, opt-in rung)
 
 ### Strategy lifecycle
 

@@ -47,6 +47,14 @@ _PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by 
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize
 _PLANNER_DEV_W = 1.0           # development left on my end-of-turn board (engine-rank phase: bodies
 _PLANNER_DEV_CAP = 100.0       # + attached Energy, `_board_development`) … capped below a prize
+_PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on MY cheapest Prize
+                               # Path — sub-prize, ranks lines within the rung, never beats a prize
+_PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Base Value Model's P(win) on the simmed
+                               # end-of-turn board scales into a sub-prize band (< one KO_SCORE), so
+                               # the learned leaf breaks prize-EQUAL ties, never overriding a prize
+_ESCALATE_EPS = 15.0          # Tier-6 (ADR-0043): two attacks within this many tactical points are a
+                               # "close race tie" the closed-form can't separate — the escalation
+                               # trigger. Narrow, so only genuinely ambiguous attack picks pay the tree
 _PRIZE_AREA = 6                # AreaType.PRIZE — a hidden-zone pick: the sim's ids are predictions,
                                # so a recorded prize pick is policy-driven at replay (ADR-0037 stage 3)
 
@@ -117,6 +125,10 @@ class PlannerMixin:
         if line is None:
             candidates = self._closed_form_candidates(obs, select, board, options, traces)
             line = self._commit_best(obs, candidates)
+        if line is None:                              # Tier-2 Gamble rung (ADR-0039): below every
+            line = self._best_gamble_line(obs, select, board, options, traces)   # deterministic goal
+        if line is None:                              # Tier-6 escalation (ADR-0043): a close
+            line = self._escalate(obs, select, board, options, traces)   # attack tie → depth-2 tree
         self._turn_plan = (fp, line)
         return line
 
@@ -830,10 +842,162 @@ class PlannerMixin:
                 continue
             value = self._leaf_value(prizes=prizes, active_survives=bool(cand),
                                      threat_removed=threat_mag)
+            if (getattr(self, "objectives_path", False)          # Tier-3 (ADR-0040): a key threat ON my
+                    and top.get("id") in board.path_target_ids):  # cheapest Prize Path advances the MATCH
+                value += _PLANNER_PATH_W                          # win — sub-prize bump, ranks within rung
             lines.append(TurnLine(
                 next_step=[i], goal="ko_key_threat", value=value,
                 rationale=f"plan (ko_key_threat): {kind} unlocks the snipe-KO of the benched key threat"))
         return lines
+
+    # ═══ THE GAMBLE RUNG — Tier-2 (ADR-0039): closed-form expectimax over Outcome Classes ═══
+    # Deliberately probabilistic and BELOW every deterministic goal: it runs only when the win rung
+    # and the whole heuristic pool passed. Exact probabilities (tracker-anchored hypergeometrics),
+    # closed-form branch values, NO engine sim through the chance node (a fork is ONE predicted
+    # determinization — untrusted for prediction-dependent outcomes). Depth-1 by construction.
+
+    def _best_gamble_line(self, obs, select, board, options, traces):
+        """The best **Gamble Line** on this menu, or None: play a Hand Refresh (`shuffle_hand`)
+        FIRST — before the turn's attach — because the draw probably yields the Energy that turns
+        this turn into a KO the held hand cannot reach (the Lillie's-Determination class,
+        ADR-0039/REQ-GAMBLE-0001).
+
+        EV = P(enabling Outcome Class) × the enabled KO's tactical value, exact hypergeometric over
+        the shuffle-grown pool (tracker-anchored counts + the returned hand); committed only when it
+        beats the DETERMINISTIC baseline (the best menu tactical, or the best after-attach chip the
+        held Energy reaches) — EV equality is the break-even, never a fixed threshold. Stands down:
+        switch off / mid-sim (the engine re-run stays deterministic policy) / turn 1 / attach already
+        spent / a KO already on the tuned menu / a protected hand (wincon, line piece, ACE-SPEC Tool
+        — the keep-value floors own those shuffles) / pre-anchor (no exact counts, mirroring
+        `dont-refresh-into-a-probable-miss`) / the hand already holds an enabler (just attach it)."""
+        if (not getattr(self, "gamble_lines", False) or self._planning
+                or board.turn <= 1 or board.energy_attached or board.active_can_ko):
+            return None
+        if any(t.tactical >= KO_SCORE for t in traces):
+            return None
+        if ((board.wincon_in_hand and not board.wincon_in_play) or board.line_preevo_in_hand
+                or board.irreplaceable_tool_in_hand):
+            return None
+        counts = board.deck_known_counts
+        if not counts:
+            return None
+        from common.strategy.doctrines.doctrine_shuffle_refresh import _DRAW_COUNTS
+        me = self._my_player(obs)
+        hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        opp = self._opp_active(obs)
+        hp = (opp or {}).get("hp", 0)
+        stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        if not (hp and stat and ma):
+            return None
+        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand)
+        if not classes:
+            return None
+        det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
+        pool = sum(counts.values()) + max(0, len(hand) - 1)   # the shuffle-grown draw pool
+        burst_copies = self._gamble_burst_copies(counts, hand, stat)   # the recovery class (below)
+        best = None                                           # (ev, index, rationale)
+        for i, o in enumerate(options):
+            if o.get("type") != _PLAY:
+                continue
+            cid = self._option_card_id(obs, select, o)
+            branches = _DRAW_COUNTS.get(cid)
+            if (branches is None or cid is None or not self.functions
+                    or "shuffle_hand" not in self.functions.tags(cid)):
+                continue
+            ns = branches(board)
+            for copies, ko_value, label in classes:
+                from common.deck_odds import draw_hit_probability
+                p = sum(draw_hit_probability(copies, pool, n) for n in ns) / len(ns)
+                ev = p * ko_value
+                if burst_copies and det > 0:
+                    # the RECOVERY class: the miss branch may still redraw the held burst Energy
+                    # (returned to the pool by the shuffle) and bank the same after-attach chip the
+                    # deterministic line held — the "no {W}, but the Ignition came back → Nebula
+                    # anyway" branch. Independence approximation on the conditional (documented;
+                    # errs small, and only ever ADDS honest EV to the miss side).
+                    p_re = sum(draw_hit_probability(burst_copies, pool, n) for n in ns) / len(ns)
+                    ev += (1 - p) * p_re * det
+                if ev > det and (best is None or ev > best[0]):
+                    best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
+                                   f"for the KO (EV {ev:.0f} > held line {det:.0f})")
+        if best is None:
+            return None
+        return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
+
+    def _gamble_burst_copies(self, counts: dict, hand: list, stat) -> int:
+        """Copies (pool-wide, INCLUDING the returned hand copy) of a held `discard_eot` burst Energy
+        that funds an attack of my Active by COUNT — the recovery-class enabler: a miss that redraws
+        it re-banks the deterministic after-attach line. 0 when no such burst is held."""
+        best = 0
+        for c in hand:
+            cid = c.get("id")
+            est = self.stats.get(cid) if (self.stats and cid is not None) else None
+            if not est or getattr(est, "hp", 1) != 0:
+                continue
+            tags = self.functions.tags(cid) if self.functions else []
+            if "discard_eot" not in tags:
+                continue
+            in_hand = sum(1 for c2 in hand if c2.get("id") == cid)
+            best = max(best, counts.get(cid, 0) + in_hand)
+        return best
+
+    def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list):
+        """The KO-enabling **Outcome Classes** of a refresh draw: for each of my Active's attacks
+        exactly ONE Energy short whose damage fells the opponent's Active, the class of draws
+        containing ≥1 Basic Energy that fills the missing slot (its specific type, or any Basic for
+        a colourless slot). Returns ``[(enabler_copies_in_pool, ko_value, label), …]``; an enabler
+        already in HAND voids the class (no gamble needed — attaching it is the deterministic line)."""
+        out = []
+        attached = self._attached_type_counts(ma)
+        hand_ids = [c.get("id") for c in hand]
+        for aid in (stat.attacks or ()):
+            cost = self.attack_costs.get(aid, 99)
+            if cost != board.my_active_energy + 1:            # exactly one attach short
+                continue
+            if self.predicted_damage(board.my_active_id, aid, opp) < hp:
+                continue
+            ast = self.attack_stats.get(aid) if self.attack_stats else None
+            types = getattr(ast, "energyTypes", ()) if ast else ()
+            from collections import Counter
+            need = Counter(t for t in types if t not in (0, None))
+            deficit = {t: n - attached.get(t, 0) for t, n in need.items() if n - attached.get(t, 0) > 0}
+            if sum(deficit.values()) > 1:
+                continue                                      # more than one specific slot short
+            want = next(iter(deficit), None)                  # None -> the short slot is colourless
+
+            def _enables(cid) -> bool:
+                est = self.stats.get(cid) if self.stats else None
+                if not est or getattr(est, "hp", 1) != 0:
+                    return False
+                if getattr(est, "cardType", None) not in (_BASIC_ENERGY,):
+                    return False                              # Basics only (a special Energy pays
+                et = getattr(est, "energyType", None)         # colourless slots — under-counted, safe)
+                return (et == want) if want is not None else True
+            if any(_enables(cid) for cid in hand_ids):
+                continue                                      # hand already holds the enabler
+            copies = sum(n for cid, n in counts.items() if n > 0 and _enables(cid))
+            if copies <= 0:
+                continue
+            label = f"a type-{want} Basic Energy" if want is not None else "any Basic Energy"
+            out.append((copies, KO_SCORE + self._prize_value(opp), label))
+        return out
+
+    def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
+        """The DETERMINISTIC baseline a gamble must beat: the best tactical already on the menu, or
+        the best after-attach chip the HELD Energy reaches (attach the best hand Energy → biggest
+        affordable non-KO damage) — the value the banked line (attach first, refresh after) keeps."""
+        det = max((t.tactical for t in traces), default=0.0)
+        hand_ids = frozenset(c.get("id") for c in hand)
+        units = self._best_hand_attach_units(hand_ids, stat)
+        energy_after = board.my_active_energy + units
+        for aid in (stat.attacks or ()):
+            if (self.attack_costs.get(aid, 99) <= energy_after
+                    and self._attack_type_payable(aid, ma, extra_type=0, extra_units=units)):
+                det = max(det, self.predicted_damage(board.my_active_id, aid, opp))
+                # extra_type=0: the held attach is priced as colourless — funds {C} slots only, the
+                # conservative read (a held TYPED enabler voids the gamble class upstream anyway)
+        return det
 
     def _retreat_snipe_candidate(self, me, others, target_hp: int, extra: int):
         """``active_survives`` (bool) for the best benched body that, once retreated INTO (its Energy
@@ -991,18 +1155,19 @@ class PlannerMixin:
 
     # ---- leaf evaluation (ADR-0031 decision 4): scalar over the resulting end-of-turn board ---------
     def _leaf_value(self, *, prizes: float, active_survives: bool, threat_removed: float = 0.0,
-                    development: float = 0.0) -> float:
+                    development: float = 0.0, value: float = 0.0) -> float:
         """The leaf-eval scalar over a resulting board: prizes taken (dominant, KO_SCORE-weighted) +
         the threat removed + my Active's survival vs Incoming + the development left on my board
-        (engine-rank phase input, `_board_development`; 0 for closed-form candidates). EVERY
-        positional term is capped, and their capped sum stays below one prize, so a bigger KO always
-        ranks first — a positional score can NEVER outrank a real prize (the hard-rung invariant,
-        ADR-0031 decision 3). Hand-weighted + tunable; the Base Value Model (ADR-0007) is the drop-in
-        replacement later."""
+        (engine-rank phase input, `_board_development`; 0 for closed-form candidates) + the Base
+        Value Model's re-centred P(win) (``value ∈ [-0.5, 0.5]``, Tier-5/ADR-0042; 0 when off/absent).
+        EVERY positional term is capped, and their capped sum stays below one prize, so a bigger KO
+        always ranks first — a positional score can NEVER outrank a real prize (the hard-rung
+        invariant, ADR-0031 decision 3). The learned term REFINES; it never overrides a sound rung."""
         return (KO_SCORE * prizes
                 + min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)
                 + (_PLANNER_SURVIVAL_W if active_survives else 0.0)
-                + min(_PLANNER_DEV_CAP, _PLANNER_DEV_W * development))
+                + min(_PLANNER_DEV_CAP, _PLANNER_DEV_W * development)
+                + _PLANNER_VALUE_W * value)
 
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
         """True if my body (``my_id`` at ``my_hp``) survives the opponent's Incoming AFTER I KO their
@@ -1075,7 +1240,36 @@ class PlannerMixin:
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
         return self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                development=self._board_development(me))
+                                development=self._board_development(me),
+                                value=self._value_term(end))    # Tier-5 learned leaf (ADR-0042)
+
+    def _board_hypothetical(self, obs):
+        """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
+        only, WITHOUT letting it pollute the live turn-scoped memory — ``_board`` mutates the phase
+        hysteresis (``_phase_prev``) and the path stickiness (``_my_path_prev``) as a side effect of
+        the in-order decision sequence, which a ranked/escalated future must not perturb. Snapshot +
+        restore both around the build (ADR-0042/0043)."""
+        saved_phase = getattr(self, "_phase_prev", None)
+        saved_path = getattr(self, "_my_path_prev", None)
+        try:
+            return self._board(obs, (obs or {}).get("select"))
+        finally:
+            self._phase_prev = saved_phase
+            self._my_path_prev = saved_path
+
+    def _value_term(self, end_obs) -> float:
+        """The Base Value Model's contribution to a simmed leaf (ADR-0042): P(win) on the end-of-turn
+        board, re-centred to ``[-0.5, 0.5]`` so a better-than-even board adds and a worse-than-even
+        board subtracts. 0.0 when the model is off or absent (the null model returns 0.5 → term 0),
+        so the closed-form leaf is unchanged. `_leaf_value` scales + caps it below a prize."""
+        if not getattr(self, "value_model", None) or not self.value_model.present:
+            return 0.0
+        try:
+            board = self._board_hypothetical(end_obs)
+            from common.value.features import features_from_board
+            return self.value_model.predict(features_from_board(board)) - 0.5
+        except Exception:
+            return 0.0                                   # a featurize/predict slip never crashes ranking
 
     @staticmethod
     def _board_development(me: dict) -> float:
@@ -1087,7 +1281,7 @@ class PlannerMixin:
         bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
         return 10.0 * len(bodies) + 5.0 * sum(len(p.get("energies") or []) for p in bodies)
 
-    def _simulate_line(self, obs, first_step, max_steps: int = 40):
+    def _simulate_line(self, obs, first_step, max_steps: int = 40, *, opponent_reply: bool = False):
         """Forward-simulate a candidate line through the Engine Search to my end-of-turn board (the
         Tier-1 seam). Steps ``first_step``, then re-runs my own closed-form policy (``decide``) on each
         intermediate SearchState until my turn ends (the select passes to the opponent) or the game
@@ -1095,6 +1289,12 @@ class PlannerMixin:
         ``(end_obs_dict, my_index, start_prizes, result)`` or **None** when the search is unavailable,
         the observation carries no ``search_begin_input``, or anything errors (the caller falls back to
         the closed-form value — never crashes).
+
+        With ``opponent_reply=True`` (Tier-6, ADR-0043) the sim does NOT stop at my turn end: it keeps
+        stepping through the OPPONENT's turn using our own policy as the reply proxy, until it is my
+        turn again or the game finishes — so the returned board is the start of MY next turn, seeing
+        the opponent's best (proxy) answer. Every step decrements the per-move ``_search_steps``
+        budget; the sim halts when it is spent (returns the board reached so far).
 
         Heuristic, not sound (ADR-0031): coins auto-resolve (``manual_coin=False``) and the opponent's
         hidden zones are predicted from my own deck list, so the end-of-turn board is trusted for
@@ -1118,17 +1318,34 @@ class PlannerMixin:
         def take(n):
             return deck[: max(0, n)]
 
+        def budget_ok() -> bool:
+            if not opponent_reply:
+                return True                            # Tier-1 sims are unbudgeted (the original path)
+            self._search_steps = getattr(self, "_search_steps", 0) + 1
+            return self._search_steps <= self.search_budget
+
+        self._planning = True                          # never nest a search inside the reply policy
         try:
             ob = cgapi.to_observation_class(obs)
             st = cgapi.search_begin(ob, take(me.get("deckCount", 0)), take(start_prizes),
                                     take(opp.get("deckCount", 0)), take(len(opp.get("prize") or [])),
                                     take(opp.get("handCount", 0)), [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))
+            crossed_my_turn_end = False
             for _ in range(max_steps):
                 o = st.observation
                 c = o.current
-                if c is None or c.result != -1 or o.select is None or c.yourIndex != my_index:
-                    break                                 # game over, or my turn ended
+                if c is None or c.result != -1 or o.select is None:
+                    break                                 # game over
+                mine = c.yourIndex == my_index
+                if not mine and not opponent_reply:
+                    break                                 # Tier-1: stop at my turn end
+                if not mine:
+                    crossed_my_turn_end = True             # into the opponent's reply now
+                elif crossed_my_turn_end:
+                    break                                 # back to MY next turn — the depth-2 leaf
+                if not budget_ok():
+                    break                                 # per-move engine budget spent
                 st = cgapi.search_step(st.searchId, list(self.decide(_prune_none(asdict(o)))))
             end = _prune_none(asdict(st.observation))
             result = st.observation.current.result if st.observation.current else -1
@@ -1140,3 +1357,91 @@ class PlannerMixin:
             except Exception:
                 pass
             return None
+        finally:
+            self._planning = False
+
+    # ═══ TIER-6 ESCALATION (ADR-0043): budgeted depth-2 tree for the opponent-CHOICE residue ═══
+    # Closed-form (Tiers 0-3) is blind to the opponent's REPLY: two attacks can price identically
+    # this turn yet leave very different boards after the opponent's best answer. When the tuned
+    # scoring can't separate the top attacks (a race tie within ε), escalate — sim each candidate
+    # through MY turn AND the opponent's reply (our own policy as the proxy), then rank by the leaf
+    # (value model when present, else closed-form). Hard per-move step budget; the tuned pick is the
+    # guaranteed fallback (budget exhausted / engine absent → return None → tuned scoring decides).
+
+    def _escalate(self, obs, select, board, options, traces):
+        """A committed Turn Line from the depth-2 escalation, or None to defer to the tuned scoring.
+
+        Fires only when: the ``escalation`` switch is on, a search budget is set, we're not already
+        mid-sim, and the top attack options are a **close race tie** (``_close_attack_tie``). Each
+        tied attack is simulated two-ply (my turn + the opponent's reply) and ranked by the
+        resulting board's leaf value; the best commits ONLY if it strictly beats the tuned top
+        attack's own two-ply value (else defer — escalation never overturns a clear tuned pick).
+        Budget-guarded: ``_search_steps`` is capped per move, and any engine slip returns None."""
+        if (not getattr(self, "escalation", False) or self._planning
+                or self.search_budget <= 0 or not (obs or {}).get("search_begin_input")):
+            return None
+        tied = self._close_attack_tie(options, traces)
+        if len(tied) < 2:
+            return None
+        self._search_steps = 0                         # per-move engine-step budget (reset per plan)
+        scored = []
+        for i in tied:
+            val = self._two_ply_value(obs, [i])
+            if val is not None:
+                scored.append((val, i))
+            if self._search_steps >= self.search_budget:
+                break                                  # budget spent — rank what we reached
+        if len(scored) < 2:
+            return None                                # not enough sims completed → defer (fallback)
+        scored.sort(reverse=True)
+        best_val, best_i = scored[0]
+        tuned_top = max(tied, key=lambda i: traces[i].tactical)   # the pick tuned scoring would make
+        if best_i == tuned_top:
+            return None                                # escalation agrees → let tuned scoring own it
+        tuned_val = next((v for v, i in scored if i == tuned_top), None)
+        if tuned_val is None or best_val <= tuned_val:
+            return None                                # no strict improvement → defer
+        return TurnLine(next_step=[best_i], goal="escalation", value=best_val,
+                        rationale=f"escalation: depth-2 tree prefers attack [{best_i}] over the "
+                                  f"tuned tie-pick [{tuned_top}] (opponent-reply-aware)")
+
+    def _close_attack_tie(self, options, traces) -> list:
+        """Indices of the ATTACK options whose tactical score is within ``_ESCALATE_EPS`` of the top
+        attack — the close race tie the closed-form can't separate. Empty (or singleton) when one
+        attack clearly leads, a KO is on the menu (KO_SCORE-class — no tie to break), or there are
+        fewer than two attacks. Only these few candidates pay the engine cost."""
+        atks = [(t.tactical, i) for i, (o, t) in enumerate(zip(options, traces))
+                if o.get("type") == _ATTACK and t.tactical > 0]
+        if len(atks) < 2:
+            return []
+        top = max(a[0] for a in atks)
+        if top >= KO_SCORE:
+            return []                                  # a KO dominates — nothing to escalate
+        tie = [i for score, i in atks if top - score <= _ESCALATE_EPS]
+        return tie if len(tie) >= 2 else []            # a lone leader is no tie to break
+
+    def _two_ply_value(self, obs, first_step) -> float | None:
+        """The leaf value of ``first_step`` after MY turn AND the opponent's reply (ADR-0043): sim my
+        turn to its end, then continue stepping the engine through the OPPONENT's turn using our own
+        policy as the reply proxy, until it is my turn again or the game ends, and read the leaf on
+        that board. The opponent-choice-aware read closed-form lacks. None when the search is
+        unavailable / the budget is spent / anything errors (caller falls back)."""
+        sim = self._simulate_line(obs, first_step, opponent_reply=True)
+        if sim is None:
+            return None
+        end, my_index, start_prizes, result = sim
+        players = (end.get("current") or {}).get("players") or []
+        me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
+        opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
+        if result == my_index:
+            return KO_SCORE * (start_prizes + 1)
+        if result == 1 - my_index:
+            return -KO_SCORE                           # the reply WON for them — worst outcome
+        prizes_taken = max(0, start_prizes - len(me.get("prize") or []))
+        active = next((p for p in (me.get("active") or []) if p), None)
+        survives = False
+        if active and active.get("hp"):
+            bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+            survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
+        return self._leaf_value(prizes=prizes_taken, active_survives=survives,
+                                development=self._board_development(me), value=self._value_term(end))

@@ -11,7 +11,7 @@ HYPOTHESES = [
         rationale="During setup, don't retreat the Active — it's still your starter/accelerator and "
                   "a setup retreat wastes the whole turn. Discourages Retreat at the open turn menu "
                   "while Plan is SETUP.",
-        when=lambda c: c.plan == Plan.SETUP and c.select_context == _MAIN
+        when=lambda c: not c.board.line_ready and c.select_context == _MAIN
         and c.option_type == _RETREAT,
         weight=-25, status="testing"),
     Hypothesis(

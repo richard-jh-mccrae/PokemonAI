@@ -5,7 +5,7 @@ no Mixin. The `_multi_prize` / `_is_pokemon` CardStat predicates live here becau
 rules read them.
 """
 from common.strategy.context import _BENCH_MAX, _EVOLVE, _PLAY, _WINCON_ROLES
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.strategy import Hypothesis
 
 
 def _multi_prize(stat) -> bool:
@@ -24,7 +24,7 @@ HYPOTHESES = [
         rationale="Avoid putting a 2-prize (ex) or 3-prize (Mega ex) Pokémon into play during setup "
                   "unless it's your win-condition attacker — every benched multi-prizer is an easy "
                   "multi-prize knockout for the opponent.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _EVOLVE)
+        when=lambda c: not c.board.line_ready and c.option_type in (_PLAY, _EVOLVE)
         and _multi_prize(c.stat) and not (_WINCON_ROLES & set(c.roles)),
         weight=-15, status="assumed"),
     Hypothesis(
@@ -37,7 +37,7 @@ HYPOTHESES = [
         id="pre-position-attacker",
         rationale="While racing, keep developing the next attacker on the Bench so a Knocked-Out "
                   "Active is replaced without losing a turn.",
-        when=lambda c: c.plan == Plan.RACE and c.option_type == _PLAY and _is_pokemon(c.stat),
+        when=lambda c: c.board.line_ready and c.option_type == _PLAY and _is_pokemon(c.stat),
         weight=25, status="assumed"),
     Hypothesis(
         id="develop-a-basic-in-setup",
@@ -53,9 +53,18 @@ HYPOTHESES = [
                   "whether to bench one) and a setup-only `opener` (a stranded body played only turn 1); "
                   "gap-gated on a non-full Bench. mega_starmie develops via `bench_fill`/Turbo Flare so "
                   "it never surfaced this; the deep-evolution decks play their bases from hand.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and _is_pokemon(c.stat)
+        when=lambda c: not c.board.line_ready and c.option_type == _PLAY and _is_pokemon(c.stat)
         and c.board.my_bench < _BENCH_MAX and not _multi_prize(c.stat) and "opener" not in c.tags,
         weight=12, status="assumed"),
+    Hypothesis(
+        id="dont-bench-onto-their-path",
+        rationale="Tier-3 Path Denial (ADR-0040, 'force 7 — not 6'): benching this Pokémon strictly "
+                  "improves the opponent's cheapest Prize Path — completing a previously-uncompletable "
+                  "route or shortening it (the classic: the second Mega ex completes their exact 6). "
+                  "A soft brake, not a ban — development value can still outweigh it (`keep-a-bench` "
+                  "at +60 always wins an empty-bench emergency); silent when the signal/switch is off.",
+        when=lambda c: c.bench_shortens_their_path,
+        weight=-10, status="testing"),
     Hypothesis(
         id="develop-the-accel-recipient",
         rationale="An `accel_source`-Role Active (e.g. Cinderace's Turbo Flare, which loads the Bench) "

@@ -57,6 +57,12 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         rec["planned"]["ranked"] = ranked         # ran (`planner_engine_rank`) — how the committed
         rec["planned"]["diverged"] = bool(getattr(planned, "diverged", False))   # line was valued +
                                                   # whether it beat the closed-form pick (A/B signal)
+    objectives = getattr(decision, "objectives", None)
+    if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)
+        rec["objectives"] = objectives            # — race delta + both cheapest-path turns
+    win_prob = getattr(decision, "win_prob", None)
+    if win_prob is not None:                      # sparse: the Base Value Model's P(win) (ADR-0042) —
+        rec["win_prob"] = win_prob                # calibration + legibility (None when the model is off)
     refuted = getattr(decision, "lethal_refuted", 0)
     if refuted:                                   # sparse: only when the engine denied a closed-form
         rec["lethal_refuted"] = refuted           # "win" (the lethal_verify divergence signal)

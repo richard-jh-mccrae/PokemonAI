@@ -41,6 +41,15 @@ HYPOTHESES = [
                   "targets above bare ones) as the legible imminence signal on top of it.",
         when=lambda c: c.select_context == _DAMAGE and c.target_is_threat,
         weight=20, status="testing"),
+    Hypothesis(
+        id="snipe-on-the-path",
+        rationale="Tier-3 Prize Path (ADR-0040): this target sits on my cheapest route to my remaining "
+                  "prizes, so its damage/KO advances the MATCH win, not just the board. A path-economy "
+                  "axis stacking with the threat rank — a low-threat 1-prize body can still be the "
+                  "right path member ('KO one Mega + snipe 3 smalls'). Silent when the path is unknown "
+                  "(runs through bodies not yet in play) or the `objectives_path` switch is off.",
+        when=lambda c: c.select_context == _DAMAGE and c.target_on_path,
+        weight=12, status="testing"),
     # NOTE: flat `snipe-the-weakest`/`snipe-the-evolving-threat`/`snipe-the-strongest-evolving-threat`
     # RETIRED — `snipe-the-top-threat` subsumes all 3 (round-b7e483a bad-target blunders). `EVOLVING_THREAT_DMG` floor stays (Read consumer may still ref it).
 

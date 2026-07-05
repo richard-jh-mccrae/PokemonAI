@@ -29,6 +29,26 @@ from __future__ import annotations
 from math import comb
 
 
+def draw_hit_probability(copies, pool, draws) -> float:
+    """P(≥1 of ``copies`` target cards among ``draws`` cards drawn from a ``pool``) — the exact
+    hypergeometric ``1 − C(pool−copies, draws) / C(pool, draws)`` behind a Gamble Line's Outcome
+    Classes (ADR-0039). Draws beyond the pool are clamped; never raises — bad input → **0.0**, the
+    conservative direction for an ENDORSER (a gamble must never fire on garbage; contrast
+    ``p_contains``'s 1.0 default, which guards a SUPPRESSOR)."""
+    try:
+        c, p, n = int(copies), int(pool), int(draws)
+    except Exception:
+        return 0.0
+    if c <= 0 or p <= 0:
+        return 0.0
+    n = min(n, p)
+    if n <= 0:
+        return 0.0
+    if c >= p:
+        return 1.0
+    return 1.0 - comb(p - c, n) / comb(p, n)
+
+
 def p_contains(unseen_copies, prizes_hidden, deck_count) -> float:
     """P(my deck still contains ≥1 copy of a card) from the hypergeometric split of its ``unseen_copies``
     over the ``deck_count + prizes_hidden`` hidden positions (of which ``prizes_hidden`` are face-down

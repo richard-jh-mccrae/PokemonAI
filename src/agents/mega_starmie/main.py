@@ -17,6 +17,7 @@ from common.scouting.provider import (
 from common.scouting.scout import Scout
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs
+from common.value import ValueModel
 from strategy import STRATEGY
 
 
@@ -78,6 +79,20 @@ _pilot = Pilot(
                                                       # opp_is_engine_dependent. DEFAULT OFF: the stress leg
                                                       # priced a WRONG assertion at ~4% (46%, CI 43-49) — arms
                                                       # via the first real true-asserting Brief's own A/B
+    objectives_race=_params.get("objectives_race", True),  # ADR-0040 kill-switch: Tier-3 KO Race —
+                                                      # wall attacks priced by best min-turn SEQUENCE
+                                                      # (chip included), not the biggest single hit
+    objectives_path=_params.get("objectives_path", True),  # ADR-0040 kill-switch: Prize-Path consumers
+                                                      # (snipe-on-the-path, bench denial, planner bump)
+    objectives_phases=_params.get("objectives_phases", True),  # ADR-0040 kill-switch: derived ADVISORY
+                                                      # phases (STABILIZE/CLOSE + baseline_phases bands)
+    gamble_lines=_params.get("gamble_lines", True),   # ADR-0039 kill-switch: Tier-2 Gamble rung —
+                                                      # refresh-first when exact-odds EV beats the held line
+    value_model=(ValueModel.load() if _params.get("value_model", False) else None),  # ADR-0042 Tier-5:
+                                                      # learned leaf; DEFAULT OFF (a learned seam ships
+                                                      # only after its own ladder A/B) + absent-safe
+    escalation=_params.get("escalation", False),      # ADR-0043 Tier-6: depth-2 tree on a close attack
+                                                      # tie (needs search_budget>0); DEFAULT OFF
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
 _TELEMETRY = os.environ.get("AGENT_NO_TELEMETRY") != "1"     # always-on Decision Telemetry (ADR-0019)

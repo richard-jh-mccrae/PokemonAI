@@ -34,6 +34,7 @@ def _build_pilot(agent: str):
     from common.effects import CardEffects
     from common.strategy.general_strategy import GENERAL_STRATEGY
     from common.pilot import Pilot
+    from common.value import ValueModel
     from common.scouting.provider import (
         EngineCardStatProvider, build_attack_stats, load_attack_overrides,
         parse_attack_bench_snipe, parse_attack_ignores_active_effects, parse_attack_recoil)
@@ -64,6 +65,13 @@ def _build_pilot(agent: str):
         planner_key_threat=strategy.params.get("planner_key_threat", True),
         lethal_family=strategy.params.get("lethal_family", True),
         lethal_veto=strategy.params.get("lethal_veto", True),
+        objectives_race=strategy.params.get("objectives_race", True),  # ADR-0040 Tier-3 KO Race
+        objectives_path=strategy.params.get("objectives_path", True),  # ADR-0040 Prize-Path consumers
+        objectives_phases=strategy.params.get("objectives_phases", True),  # ADR-0040 derived phases
+        gamble_lines=strategy.params.get("gamble_lines", True),  # ADR-0039 Tier-2 Gamble rung
+        value_model=(ValueModel.load() if strategy.params.get("value_model", False) else None),  # ADR-0042
+        escalation=strategy.params.get("escalation", False),  # ADR-0043 Tier-6 (needs search_budget>0)
+        search_budget=strategy.params.get("search_budget", 0),
     )
     return pilot, seeds
 

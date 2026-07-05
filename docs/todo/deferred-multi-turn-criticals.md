@@ -1,5 +1,12 @@
 # TODO — the two multi-turn CRITICAL corrections (`a21472`, `b4649`)
 
+> ✅ **RESOLVED 2026-07-05** (`/tdd`, ADR-0040 / Tier 3): `a21472` is a GREEN regression gate —
+> `REQ-OBJ-0001` in [tests/strategy/test_objectives.py](../../tests/strategy/test_objectives.py)
+> replays the captured state through the shipped Pilot, which now picks Jetting via the **KO Race**
+> (`objectives_race`, closed-form attack-sequence arithmetic — NOT the engine tree, per the
+> ADR-0040 correction below). `b4649` stays covered; its Prize-Race capability shipped as the
+> two-sided **Prize Path** objective. This file remains as the characterisation record.
+
 **Status:** open (2026-07-01), split out of the Turn Planner build
 ([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md)) as **out of
 this-turn scope**. The Planner fixed the three *this-turn* CRITICALs that named it (`7f48`, `0cbc`, `4298`
@@ -42,6 +49,16 @@ about *whose* KO advances *whose* win). That is the designed-but-unbuilt **M3 de
 
 **Do not** bolt multi-turn onto the closed-form Planner; it belongs behind the engine-search escalation +
 the value-model leaf-eval, exactly where the roadmap puts it.
+
+> **Correction ([ADR-0040](../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md),
+> 2026-07-05): the prescription above is PARTIALLY REVERSED.** Opponent-*static* multi-turn
+> arithmetic — the **KO Race** (turns-to-KO attack sequences, riders credited to Prize-Path
+> targets) — is closed-form at the same epistemic tier as Incoming/Survival Window and is the
+> designed home for `a21472` ([Tier 3](../architecture/tier-3-match-objectives.md)), NOT the engine
+> tree. The engine-search escalation keeps only the opponent-*choice*-dominated residue
+> ([Tier 6](../architecture/tier-6-escalation-search.md)). `b4649`'s "Prize-Race Planner" is
+> realized as the two-sided **Prize Path** objective (Tier 3): fuzzy, γ-gated, non-committal — as
+> ADR-0030 required.
 
 ---
 

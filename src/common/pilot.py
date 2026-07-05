@@ -21,6 +21,7 @@ from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
+from common.strategy.objectives import ObjectivesMixin
 from common.strategy.planner import PlannerMixin, TurnLine
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
@@ -308,6 +309,24 @@ class Board:
                                           # job; False when unknown (fail-closed keeps the keep rules)
     no_supporter_in_hand: bool = False   # MY hand holds NO Supporter (cardType 3) — the
                                           # `supporter_tutor` bench trigger (bench Meowth ex to fetch one)
+    my_path_turns: float | None = None    # Tier-3 Prize Path (ADR-0040): total feasibility turns of MY
+                                          # cheapest path to my remaining prizes over their VISIBLE bodies;
+                                          # None = runs through bodies not yet in play (consumers silent)
+    their_path_turns: float | None = None # their cheapest path over MY bodies (the denial side) — the
+                                          # worst-case ceiling read (affordability not charged, like Incoming)
+    race_ahead: float | None = None       # their_path_turns − my_path_turns: positive = I'm ahead in the
+                                          # race; None when either side's path is unknown. Feeds phases.
+    path_target_ids: frozenset = field(default_factory=frozenset)  # opp card ids on MY cheapest Prize
+                                          # Path — the on-path KO/snipe preference (`target_on_path`)
+    their_path_my_ids: frozenset = field(default_factory=frozenset)  # MY card ids on THEIR cheapest path —
+                                          # the bodies whose exposure/denial matters ("force 7, not 6")
+    line_ready: bool = False              # a win-condition Line payoff is in play with enough Energy to
+                                          # attack (the `choose_plan` readiness core) — the REAL signal the
+                                          # old plan==SETUP/RACE gates migrated to (ADR-0040 gate ban)
+    phase: Plan = Plan.SETUP              # the DERIVED advisory phase (ADR-0040): readiness SETUP→RACE +
+                                          # objective overrides (behind+doomed→STABILIZE, ≤2-prizes+ready→
+                                          # CLOSE), hysteretic, memoryless backwards. ADVISORY ONLY — small
+                                          # band weights (baseline_phases) + trace; never an eligibility gate
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -458,6 +477,15 @@ class Context:
     target_forward_damage: int | None = None  # Evolving Threat signal (ADR-0020): max damage
                                               # snipe target's evolution line eventually reaches
                                               # (None off a Damage option / no chain / no provider)
+    target_on_path: bool = False        # Tier-3 (ADR-0040): this damage/snipe target sits on MY
+                                        # cheapest Prize Path — its KO advances the MATCH win
+                                        # (`snipe-on-the-path`); False when the path is unknown
+    bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
+                                        # strictly improves the opponent's cheapest Prize Path
+                                        # (completes/shortens their route) — `dont-bench-onto-their-path`
+    promote_target_on_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): this promote/switch
+                                        # candidate sits on THEIR cheapest path — bringing it up walks
+                                        # it into the KO they want (`dont-promote-onto-their-path`)
     counter_is_best_placement: bool = False   # this option puts the current counter on the knapsack-
                                               # optimal opp target at a DAMAGE_COUNTER_ANY/DAMAGE_COUNTER
                                               # select (== board.best_counter_slot) — `place-counter-to-convert`
@@ -529,22 +557,30 @@ class Decision:
     lethal_refuted: int = 0      # direct lethal candidates the engine backstop REFUTED this plan
                                  # (`lethal_verify`, ADR-0030) — nonzero means closed-form claimed a win
                                  # the engine denied, the exact divergence an A/B or correction wants
+    objectives: dict | None = None   # sparse Tier-3 trace (ADR-0040): {"race", "my", "their"} — the
+                                     # live race delta + both cheapest-path turns; None off-board /
+                                     # both paths unknown. Telemetry emits it for the writeup/tuner.
+    win_prob: float | None = None    # Tier-5 (ADR-0042): the Base Value Model's P(win) on THIS
+                                     # decision's board — emitted for calibration measurement on real
+                                     # games; None when the model is off/absent (no learned claim)
     lethal_lost: bool = False    # a locked verified line DIVERGED from the live game and was dropped
                                  # (`lethal_veto`, ADR-0037 stage 3) — sparse telemetry key
 
 
-class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
     """Composed from the Turn Planner — whose sound top rung IS the Lethal Solver (ADR-0030/0031/0037,
-    one entry point) — and four doctrine mixins (gust / fetch / shuffle-refresh / tool) — each
-    contributes its closed-form Pilot-side methods; the shared Sense→Plan→Score→Act core is defined
-    here. See common/strategy/."""
+    one entry point) — the Tier-3 Match Objectives (ADR-0040: the KO Race), and four doctrine mixins
+    (gust / fetch / shuffle-refresh / tool) — each contributes its closed-form Pilot-side methods;
+    the shared Sense→Plan→Score→Act core is defined here. See common/strategy/."""
 
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, effects=None, attacks=None, attack_costs=None, recoil=None,
                  bench_snipe=None, bench_spread=None, ignores_active_effects=None, attack_stats=None,
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
-                 lethal_veto=False, brief_preevo=False, brief_engine=False):
+                 lethal_veto=False, brief_preevo=False, brief_engine=False, objectives_race=False,
+                 objectives_path=False, objectives_phases=False, gamble_lines=False,
+                 value_model=None, escalation=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -591,6 +627,31 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                                                         # lever (tier-crossing snipe boost + gust tie-break)
         self.brief_engine = brief_engine                # ADR-0038 kill-switch: the Brief engine lever,
                                                         # hard-gated on opp_is_engine_dependent
+        self.objectives_race = objectives_race          # ADR-0040 kill-switch: the Tier-3 KO Race —
+                                                        # vs a standing wall, price attacks by their
+                                                        # best min-turn SEQUENCE (chip included), not
+                                                        # the biggest single hit
+        self.objectives_path = objectives_path          # ADR-0040 kill-switch: the Prize-Path
+                                                        # CONSUMERS (snipe-on-the-path, bench denial,
+                                                        # planner on-path bump) — the Board signals
+                                                        # themselves are always-on data
+        self.objectives_phases = objectives_phases      # ADR-0040 kill-switch: the derived ADVISORY
+                                                        # phases (STABILIZE/CLOSE overrides + the
+                                                        # baseline_phases bands); off = readiness
+                                                        # SETUP→RACE exactly as before
+        self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
+                                                        # the ONE stateful bit of the phase label
+        self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
+                                                        # play a Hand Refresh FIRST when the draw's
+                                                        # exact-odds EV beats the held (banked) line
+        self.value_model = value_model                  # ADR-0042 Base Value Model (Tier-5): a loaded
+                                                        # ValueModel refines the planner leaf + rides
+                                                        # telemetry; None / null model = off (heuristic
+                                                        # leaf unchanged), so it default-OFF until an A/B
+        self.escalation = escalation                    # ADR-0043 kill-switch: Tier-6 depth-2 tree on a
+                                                        # close attack tie (needs search_budget>0); the
+                                                        # tuned pick is the guaranteed fallback. Default OFF
+        self._search_steps = 0                          # per-move Engine-Search step budget counter
         self._locked_line = None                        # the materialized verified line (turn-scoped):
                                                         # {"turn": n, "queue": [entries]} or None
         self._lethal_lost = False                       # this decision lost a locked line to a live
@@ -636,6 +697,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             chosen, line = replayed                       # any divergence falls through below
             return Decision(chosen=chosen, options=traces, read=board.read, planned=line,
                             posture=self._posture_record(board),
+                            objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                             lethal_refuted=self._lethal_refutes)
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
         refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
@@ -643,6 +705,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read, planned=planned,
                             posture=self._posture_record(board),
+                            objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -664,7 +727,9 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             while len(chosen) > min_count and traces[chosen[-1]].score < 0:
                 chosen = chosen[:-1]
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
-                        posture=self._posture_record(board), lethal_lost=self._lethal_lost)
+                        posture=self._posture_record(board),
+                        objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
+                        lethal_lost=self._lethal_lost)
 
     @staticmethod
     def _posture_record(board: Board) -> dict | None:
@@ -685,6 +750,27 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             "cov": round(board.matchup_coverage, 3),       # posterior share behind `fav` (its reliability)
             "brief": board.brief.slug if board.brief else None,   # matched Matchup Brief (ADR-0027), or None
         }
+
+    def _objectives_trace(self, board: Board) -> dict | None:
+        """The sparse Tier-3 objectives record for this Decision (ADR-0040 trace): the live race
+        delta + both cheapest-path turns. None when neither path resolves (early boards) — the
+        telemetry line stays lean."""
+        if board.my_path_turns is None and board.their_path_turns is None:
+            return None
+        return {"race": board.race_ahead, "my": board.my_path_turns, "their": board.their_path_turns}
+
+    def _win_prob(self, board: Board) -> float | None:
+        """The Base Value Model's P(win) on this decision's board (ADR-0042), rounded for the wire;
+        None when the model is off/absent (no learned claim to emit). Legibility + calibration only
+        — the leaf blend is where it changes a decision."""
+        vm = getattr(self, "value_model", None)
+        if not vm or not vm.present:
+            return None
+        try:
+            from common.value.features import features_from_board
+            return round(vm.predict(features_from_board(board)), 4)
+        except Exception:
+            return None
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
@@ -836,6 +922,20 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             return KO_SCORE + self._prize_value(opp) - eff + bonus
         if bench_ko:                                        # Active survives, but a snipe rider / a
             return KO_SCORE + bench_ko - eff                # distributable spread KOs benched Pokémon — a PRIZE this turn
+        race = self._race_attack_tactical(obs, board, attack_id, dmg_ctx)   # Tier-3 KO Race (ADR-0040):
+        if race is not None:                                # vs a standing wall the single hit is fake
+            return (race - eff + _ENERGY_RECOVER * recover  # value — price the SEQUENCE (chip included,
+                    - (_LOCK_COST if locks else 0)          # so no separate spread bonus here)
+                    - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
+                    + self._self_return_escape_credit(attack_id, board))
+        if self.objectives_race:                            # honest coin pricing for RANKING (ADR-0039):
+            lo = self.predicted_damage(self._my_active_id(obs), attack_id, opp, bound="min",
+                                       context=dmg_ctx)
+            hi = self.predicted_damage(self._my_active_id(obs), attack_id, opp, bound="max",
+                                       context=dmg_ctx)
+            if hi > lo:                                     # a coin/conditional CHIP ranks by its mean;
+                dmg = (lo + hi) / 2                         # the KO test above and every sound path
+                                                            # (Lethal floor / Incoming ceiling) untouched
         return (dmg - eff + _ENERGY_RECOVER * recover - (_LOCK_COST if locks else 0)
                 - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
                 + self._bench_spread_bonus(board, attack_id)     # a non-KO spread still chips the Bench (pre-load)
@@ -1048,20 +1148,50 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         etags = self.functions.tags(eid) if (self.functions and eid is not None) else []
         is_evo = bool(getattr(active_stat, "evolvesFrom", None))   # Mega Starmie evolvesFrom Staryu
         provided = 3 if ("discard_eot" in etags and is_evo) else 1   # Ignition: CCC on an Evolution
+        estat = self.stats.get(eid) if (self.stats and eid is not None) else None
+        etype = getattr(estat, "energyType", None)          # 0/None = colourless/special — pays a {C}
+                                                            # slot, NEVER a specific one (Ignition can't
+                                                            # fund Jetting Blow's {W})
+        me = self._my_player(obs)
+        ma = next((p for p in (me.get("active") or []) if p), None)
 
-        def best_affordable(energy: int) -> float:
+        def best_affordable(energy: int, extra_units: int = 0) -> float:
             # per-attack oracle (ADR-0032): adjust-then-max, so an ignore-flag attack is seen and a
-            # prevented (ex-locked) defender correctly yields 0 — no lethal-attach onto a whiff
+            # prevented (ex-locked) defender correctly yields 0 — no lethal-attach onto a whiff.
+            # Type-guarded (sound-or-silent): a specific-type slot the attach can't fund fails the
+            # attack even when the COUNT suffices.
             return max((self.predicted_damage(board.my_active_id, aid, opp)
                         for aid in (active_stat.attacks or ())
-                        if self.attack_costs.get(aid, 99) <= energy), default=0)
+                        if self.attack_costs.get(aid, 99) <= energy
+                        and self._attack_type_payable(aid, ma, extra_type=etype,
+                                                      extra_units=extra_units)), default=0)
 
         cur = board.my_active_energy
         if best_affordable(cur) >= opp_hp:                  # already lethal — no attach needed
             return 0
-        if best_affordable(cur + provided) >= opp_hp:
+        if best_affordable(cur + provided, extra_units=provided) >= opp_hp:
             return KO_SCORE + self._prize_value(opp)
         return 0
+
+    def _attack_type_payable(self, aid, target: dict | None, *, extra_type=None,
+                             extra_units: int = 0) -> bool:
+        """Sound-or-silent TYPE affordability on top of the count check: every SPECIFIC-type slot of
+        ``aid``'s cost (`AttackStat.energyTypes`) must be covered by the target's attached typed
+        Energy, plus ``extra_units`` of ``extra_type`` when that is a specific type — a colourless /
+        special extra (type 0/None, e.g. Ignition's {C}{C}{C}) pays colourless slots only, never a
+        {W}. True whenever the record doesn't resolve (the count check stays the sole authority —
+        never a false suppression)."""
+        ast = self.attack_stats.get(aid) if self.attack_stats else None
+        types = getattr(ast, "energyTypes", ()) if ast else ()
+        from collections import Counter
+        need = Counter(t for t in types if t not in (0, None))
+        if not need or target is None:
+            return True
+        attached = self._attached_type_counts(target)
+        if extra_type not in (None, 0) and extra_units > 0:
+            attached = attached.copy()
+            attached[extra_type] += extra_units
+        return all(attached.get(t, 0) >= n for t, n in need.items())
 
     def _retreat_to_lethal_tactical(self, obs: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for a RETREAT that brings a READY benched win-condition to the Active
@@ -1574,7 +1704,9 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
 
     def _context(self, obs: dict, select: dict, board: Board, option: dict) -> Context:
         state = obs.get("current") or {}
-        plan = choose_plan(state, self.strategy, self.stats) if state.get("players") else Plan.SETUP
+        plan = board.phase                # the DERIVED advisory phase (ADR-0040) — one compute point
+                                          # (`_board`), shared by every option; rules no longer gate
+                                          # on it (the gate-ban migration), traces still record it
         cid = self._option_card_id(obs, select, option)
         roles = self.strategy.roles.get(cid, []) if cid is not None else []
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
@@ -1598,6 +1730,10 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             and target_forward_damage == board.strongest_forward_bench
             and target_forward_damage >= _EVOLVING_THREAT_DMG)
         target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp)
+        target_on_path = self._target_on_path(obs, select, option, board)   # Tier-3 (ADR-0040)
+        bench_shortens = self._bench_shortens_their_path(obs, select, option, stat, board)
+        promote_on_their_path = (select.get("context") in (_TO_ACTIVE, _SWITCH)
+                                 and self._promote_target_on_their_path(obs, select, option, board))
         target_rank = self._target_threat_rank(
             obs, select, option, board.read, board.posture_confidence, board.brief_target_roles,
             bool(board.opp_property("opp_is_engine_dependent", False)))
@@ -1663,6 +1799,8 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                        target_is_strongest_forward=target_is_strongest_forward,
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
+                       target_on_path=target_on_path, bench_shortens_their_path=bench_shortens,
+                       promote_target_on_their_path=promote_on_their_path,
                        counter_is_best_placement=(
                            board.best_counter_slot is not None
                            and (option.get("area"), option.get("index"),
@@ -1941,6 +2079,15 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
                    + (0 if state.get("energyAttached")
                       else self._best_hand_attach_units(
                           hand_ids_now, self.stats.get((ma or {}).get("id")) if self.stats else None)))
+        base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
+                     else Plan.SETUP)                   # the readiness core (SETUP→RACE)
+        path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
+                                      len(me.get("prize") or []),   # re-derived every decision,
+                                      len(opp.get("prize") or []),  # ranking data only; their-side
+                                      read, gamma)                  # sees the γ-gated Read overlay (T4)
+        phase = self._derive_phase(base_plan, path_sig["race_ahead"], active_doomed,
+                                   len(me.get("prize") or []),   # derived ADVISORY phase (hysteretic)
+                                   favorability=fav, coverage=cov)   # + Tier-4 favorability (Lever A)
         board = Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
@@ -2024,6 +2171,11 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             brief=brief,                                            # matched Matchup Brief (ADR-0027); None = off
             brief_threat_ids=brief_threat_ids,                      # its threats/targets resolved to card ids
             brief_target_roles=brief_target_roles,                  # (behavior-neutral consumer surface)
+            **path_sig,                                             # Tier-3 two-sided Prize Path
+            line_ready=(base_plan == Plan.RACE),                    # the readiness signal old plan
+                                                                    # gates migrated to (ADR-0040)
+            phase=phase,                                            # derived ADVISORY phase — bands +
+                                                                    # trace only, never a gate
         )
         if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
             board = replace(board,                      # Tool is in hand (common case pays nothing)

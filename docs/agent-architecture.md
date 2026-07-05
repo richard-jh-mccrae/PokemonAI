@@ -5,6 +5,9 @@ into a legal move the same way for every deck; a deck contributes only its `deck
 declarative `strategy.py`. Optimised for **legibility** — every decision is explainable —
 because in the Strategy Category the deliverable is the *reasoning*, not the ladder rank.
 
+**Final architecture & completion status:** [architecture/tiers.md](architecture/tiers.md) — seven
+tiers, %-complete each (grilled 2026-07-05, ADR-0039/0040).
+
 Glossary: [common/CONTEXT.md](../src/common/CONTEXT.md). Decisions:
 [ADR-0012](adr/0012-optimize-for-strategy-category.md) (optimise for the Strategy Category),
 [ADR-0008](adr/0008-pilot-is-a-layered-rules-pipeline.md) (this pipeline),
