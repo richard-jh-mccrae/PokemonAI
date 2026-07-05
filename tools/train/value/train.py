@@ -1,4 +1,4 @@
-"""Train the Base Value Model and write the shipped artifact (ADR-0042).
+"""Train the Automatic Value Model and write the shipped artifact (ADR-0042).
 
     python tools/train/value/train.py <agent> [--replays <dir> ...] [--holdout 0.2]
 
@@ -70,7 +70,7 @@ def train(agent: str, replay_dirs, *, holdout: float = 0.2, out: Path | None = N
 
 def main(argv=None) -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="Train the Base Value Model (ADR-0042).")
+    ap = argparse.ArgumentParser(description="Train the Automatic Value Model (ADR-0042).")
     ap.add_argument("agent", nargs="?", default="mega_starmie")
     ap.add_argument("--replays", nargs="*", default=[str(REPO / "data" / "replays" / "selfplay")])
     ap.add_argument("--holdout", type=float, default=0.2)

@@ -2,9 +2,10 @@
 
 Offline tooling that turns downloaded **Replays** into curated learning signal. Its first
 component is the **blunder inspector** (`blunder_correction`): it replays an Episode in the
-official cabt viewer and lets a human mark a blunder, emitting a **Correction**. The
-weight-tuner and value-trainer ([ADR-0009](../../docs/adr/0009-training-methodology.md)) are
-planned siblings here.
+official cabt viewer and lets a human mark a blunder, emitting a **Correction**. The **Tuner**
+(Job A, planned) and the **Automatic Value Trainer** (Job B, `tools/train/value/`, built)
+([ADR-0009](../../docs/adr/0009-training-methodology.md)) are its two sibling training jobs —
+distinct mechanisms (see those terms below), both offline.
 
 Shared vocabulary — **Correction** is defined in the
 [Agent Runtime](../../src/common/CONTEXT.md) context and reused verbatim; **Replay**,
@@ -52,9 +53,27 @@ The offline component (`tools/train/`, planned) that compiles the **Correction**
 improvements. It derives each Correction's **Attribution** (replaying the Pilot on the embedded
 `obs`), then *fans out*: `hypothesis:<id>` → a Tier-0 weight override (`tuned.json`);
 `missing_hypothesis` → a proposed new **Hypothesis** (assisted, human-committed); plus a Hypothesis
-**status** transition. Job A of [ADR-0009](../../docs/adr/0009-training-methodology.md); designed in
-[ADR-0017](../../docs/adr/0017-corrections-compile-to-hypotheses.md).
-_Avoid_: weight-tuner (too narrow — it also authors Hypotheses), trainer (the value model, Job B)
+**status** transition. **Job A** of [ADR-0009](../../docs/adr/0009-training-methodology.md); designed in
+[ADR-0017](../../docs/adr/0017-corrections-compile-to-hypotheses.md). Its input is **human-tagged**
+Corrections, never game outcomes — it trains the **rules** (`tuned.json`).
+_Avoid_: weight-tuner (too narrow — it also authors Hypotheses), Automatic Value Trainer (Job B, the value model)
+
+**Automatic Value Trainer**:
+The offline trainer (`tools/train/value/`) that fits the **Automatic Value Model** — the
+`state → P(win)` evaluator — by supervised gradient descent on mined **Self-Play** states (label =
+the game's eventual winner). **Job B** of [ADR-0009](../../docs/adr/0009-training-methodology.md)
+(ADR-0042). The counterpart to the **Tuner** (Job A), and the two disambiguate the overloaded word
+*training*:
+- **Tuner (Job A)** — input is **human Corrections**; output changes the **rules** (`tuned.json`);
+  manual, correction-driven.
+- **Automatic Value Trainer (Job B)** — input is **game outcomes** (W/L) as automatic labels; output
+  changes the **Automatic Value Model** (`value_model.json`), a tie-break leaf that only *advises*
+  the rules; automatic, supervised.
+Neither is RL: Job A never reads outcomes, and Job B trains an **evaluator that never becomes the
+policy** — so a win never auto-rewrites a rule weight (the ADR-0007 line). Its data is Self-Play (the
+ladder film is discarded, ADR-0002).
+_Avoid_: RL / self-play trainer (the rejected outcome→policy loop — this is outcome→evaluator), Tuner
+(Job A, the rules), fine-tuning (ambiguous — say which Job)
 
 **Verifier**:
 The deterministic accuracy gate for an authored **Hypothesis**: inject the candidate (its

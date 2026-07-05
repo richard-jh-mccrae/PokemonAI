@@ -23,7 +23,7 @@ as the guaranteed fallback (`planner.py`, kill-switch `escalation`, needs `searc
    tied attack through MY turn AND the opponent's reply — continuing the engine steps through the
    opponent's turn using **our own policy as the reply proxy** (better than random; the same
    competent policy self-play already uses) — until it is my turn again, then read the leaf (the
-   Base Value Model when present, else the closed-form scalar). An opponent-reply WIN scores −KO_SCORE
+   Automatic Value Model when present, else the closed-form scalar). An opponent-reply WIN scores −KO_SCORE
    (the worst outcome), so escalation actively avoids the attack that hands them the game.
 3. **Commit conservatively**: the best two-ply attack commits ONLY if it strictly beats the tuned
    tie-pick's own two-ply value; otherwise defer. Escalation never overturns a clear tuned pick — it

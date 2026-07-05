@@ -1,4 +1,4 @@
-"""Tier 5 — the Base Value Model (ADR-0007/0042): the single learned seam.
+"""Tier 5 — the Automatic Value Model (ADR-0007/0042): the single learned seam.
 
 A dependency-free, replay-trained ``state -> P(win)`` estimator whose FEATURES are the Tier-3/Tier-4
 objective primitives (race delta, both Prize-Path turns, favorability, development, prize/hand/energy

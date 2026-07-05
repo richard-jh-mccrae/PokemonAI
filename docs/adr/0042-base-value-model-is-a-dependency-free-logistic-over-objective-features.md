@@ -1,10 +1,10 @@
-# ADR-0042: The Base Value Model is a dependency-free logistic over the objective features
+# ADR-0042: The Automatic Value Model is a dependency-free logistic over the objective features
 
 **Status.** Accepted + **Built 2026-07-05** (`/tdd`, Tier 5). The single learned seam (ADR-0007),
 scoped by the 2026-07-05 architecture grilling: its FEATURES are the Tier-3/Tier-4 objective
 primitives, and it refines judgment only. Build record:
 [docs/architecture/tier-5-value-model.md](../architecture/tier-5-value-model.md). Terms:
-*Base Value Model* in [src/common/CONTEXT.md](../../src/common/CONTEXT.md) (already defined ADR-0007).
+*Automatic Value Model* in [src/common/CONTEXT.md](../../src/common/CONTEXT.md) (already defined ADR-0007).
 
 **Context.** ADR-0007 committed to ONE learned component — a replay-trained `state → P(win)` — and
 named "state-feature encoding" the highest-leverage open question. Two constraints shape the
@@ -14,7 +14,7 @@ guaranteed present, so *inference* must be pure stdlib (the same constraint that
 prize-race primitives (both Prize-Path turns, KO-Race delta, favorability, development) that a raw
 board encoder would have to re-learn from scratch.
 
-**Decision.** The Base Value Model is a **logistic regression over the Tier-3/Tier-4 objective
+**Decision.** The Automatic Value Model is a **logistic regression over the Tier-3/Tier-4 objective
 features**, trained offline in pure Python and shipped as a JSON artifact a dependency-free runtime
 evaluates.
 

@@ -1,4 +1,4 @@
-"""The Base Value Model's feature vector (ADR-0042): the Tier-3/Tier-4 objective primitives read off
+"""The Automatic Value Model's feature vector (ADR-0042): the Tier-3/Tier-4 objective primitives read off
 a :class:`~common.pilot.Board`, in a FIXED, named order shared by the trainer and the runtime.
 
 The bet (ADR-0007): a raw board encoding would force the model to re-learn prize math and race

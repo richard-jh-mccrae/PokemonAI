@@ -180,7 +180,7 @@ real Hypothesis id (else it is silently ignored).
 
 ## Future improvements (for a later session)
 
-1. **Tier-1 value-preference labels** — once the Base Value Model (Job B) exists, emit
+1. **Tier-1 value-preference labels** — once the Automatic Value Model (Job B) exists, emit
    `V(after-correct) > V(after-chosen)`. Needs a one-step engine apply for `after-correct` (clean
    mid-turn; murky for turn-enders). Off-policy *rollout* stays rejected (ADR-0009).
 2. **Whole-game regression** — re-rank every Decision in a corrected replay with the new weights;

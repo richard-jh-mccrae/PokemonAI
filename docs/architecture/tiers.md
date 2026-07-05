@@ -39,7 +39,7 @@ T1 Turn Planner — Goal Ladder: sound win rung › heuristic lines › T2 Gambl
         ▼                                                   │
 T0 Rules & Tuned Scoring ◄──────────────────────── T2 Chance/EV (closed-form expectimax)
    (fallback for every tier; scores non-MAIN contexts)
-T5 Value Model — leaf refinement; features = T3/T4 primitives
+T5 Automatic Value Model — leaf refinement; features = T3/T4 primitives
 T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard budget
 ```
 
@@ -52,7 +52,7 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 | 2 | [Chance & EV](tier-2-chance-ev.md) | **70%** | Gamble Lines BUILT 2026-07-05 (A/B 52%, CI 50–54): exact-odds refresh-first KO gambles + coin-EV ranking |
 | 3 | [Match Objectives](tier-3-match-objectives.md) | **75%** | BUILT 2026-07-05: KO Race (a21472 green), two-sided Prize Path + denial, derived phases, gate-ban migration |
 | 4 | [Opponent Model](tier-4-opponent-model.md) | **70%** | Levers + Briefs shipped (main); the γ-continuous predicted-attacker overlay into T3 BUILT 2026-07-05 |
-| 5 | [Value Model](tier-5-value-model.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0042); cross-deck gauntlet A/B **regressed −0.55%** (CI [−1.27,+0.16], 6 matchups, 0 crashes) → **parked OFF** (features redundant with the closed-form leaf; matchup-conditioned model is the real unlock) |
+| 5 | [Automatic Value Model](tier-5-value-model.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0042); cross-deck gauntlet A/B **regressed −0.55%** (CI [−1.27,+0.16], 6 matchups, 0 crashes) → **parked OFF** (features redundant with the closed-form leaf; matchup-conditioned model is the real unlock) |
 | 6 | [Escalation Search](tier-6-escalation-search.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0043); attack-tie trigger inert (0/646) + density trigger fires but A/B **regressed to 44%** (PR #39) → **parked OFF** (two-ply proxy loses to the tuned scorer) |
 
 ## Build order (recommended)

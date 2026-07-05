@@ -1,5 +1,5 @@
 """The cross-deck gauntlet corpus generator (tools/sim/gauntlet): our real agents played against each
-other via the process-isolated battle loop + MatchRecorder, so the Base Value Model trains on states
+other via the process-isolated battle loop + MatchRecorder, so the Automatic Value Model trains on states
 where favorability actually VARIES (grilled 2026-07-05 — the seed's mirror-only corpus never did)."""
 import json
 import sys

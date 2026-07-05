@@ -89,7 +89,7 @@ def main(argv=None) -> int:
     from sim.battle import _git_short
 
     ap = argparse.ArgumentParser(
-        description="Generate the cross-deck gauntlet corpus for the Base Value Model (ADR-0042 "
+        description="Generate the cross-deck gauntlet corpus for the Automatic Value Model (ADR-0042 "
                     "finish plan): our real agents played against each other so favorability varies.")
     ap.add_argument("agents", nargs="+", help="agents under src/agents/ to cross (e.g. mega_starmie "
                                               "mega_lucario dragapult_ex)")
