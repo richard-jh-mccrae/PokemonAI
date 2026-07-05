@@ -39,7 +39,8 @@ CLUSTERS = {
                                  "dont-bench-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
-        "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach"}),
+        "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach",
+        "dont-promote-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker",
                                      "swap-out-the-locked-attacker"}),
     "evolution": (EVOLUTION_HYPOTHESES, {

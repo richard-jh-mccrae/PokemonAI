@@ -273,3 +273,85 @@ def test_race_values_rest_chip_maximizes_within_min_turns():
     vals = race_values({1: (100, 40), 2: (200, 0)}, 300)
     assert vals[1] == (2, 0)         # 100 first → 200 left → ONE 200 (min turns: 2, no chip room)
     assert vals[2] == (2, 40)        # 200 first → 100 left → one chipper (chip 40)
+
+
+# --------------------------------------------------------------- gap closure (ADR-0040 refinements)
+
+@pytest.mark.req("REQ-OBJ-0011")
+def test_path_stickiness_holds_the_previous_path_within_the_band():
+    """Path stickiness: a body newly seen this turn makes a marginally-cheaper path, but last
+    decision's path (still feasible, within _PATH_STICKY turns) is kept — coherent targeting. A
+    CLEARLY better path (> the band) always switches; an infeasible previous path drops instantly."""
+    pilot = _shipped_pilot()
+    # two disjoint 1-prize routes, a hair apart: A={10} at 2t, B={20} at 2.4t (within the 0.5 band)
+    mine = [(1, 1, 2.4, 20), (2, 1, 2.0, 10)]
+    from common.strategy.objectives import prize_paths
+    keys, turns = prize_paths([(k, pv, t) for k, pv, t, _c in mine], 1)
+    assert keys == {2}                                   # fresh cheapest = the 2.0-turn body (id 10)
+    pilot._my_path_prev = frozenset({20})                # but last turn we were on body 20 (2.4t)
+    keys2, turns2 = pilot._sticky_path(mine, 1, keys, turns)
+    assert keys2 == {1} and turns2 == 2.4               # held — within 0.5 of the new best
+    # now a clearly-better path (1.0t) must win over the sticky 2.4t previous
+    mine3 = [(1, 1, 2.4, 20), (3, 1, 1.0, 30)]
+    k3, t3 = prize_paths([(k, pv, t) for k, pv, t, _c in mine3], 1)
+    pilot._my_path_prev = frozenset({20})
+    k3s, t3s = pilot._sticky_path(mine3, 1, k3, t3)
+    assert k3s == {3} and t3s == 1.0                    # clearly better → switch
+
+
+@pytest.mark.req("REQ-OBJ-0012")
+def test_unfavored_read_relaxes_the_stabilize_enter_bar():
+    """Tier-4 favorability into phases (Lever A): at race_ahead −0.5 (inside the neutral enter bar,
+    normally RACE) a sufficiently-covered UNFAVORED Read shifts the enter threshold out a turn and
+    the phase becomes STABILIZE; a neutral/unknown matchup (low coverage) leaves it RACE — the
+    structural no-regression."""
+    from common.strategy.strategy import Plan
+    pilot = _shipped_pilot()
+    pilot._phase_prev = None
+    # neutral favorability → enter bar stays at −1, so −0.5 is NOT behind enough → RACE
+    assert pilot._derive_phase(Plan.RACE, -0.5, True, 5, favorability=0.5, coverage=0.5) is Plan.RACE
+    pilot._phase_prev = None
+    # unfavored + covered → bar relaxes to 0.0, so −0.5 now enters STABILIZE
+    assert pilot._derive_phase(Plan.RACE, -0.5, True, 5,
+                               favorability=0.4, coverage=0.5) is Plan.STABILIZE
+    pilot._phase_prev = None
+    # unfavored but UNKNOWN (coverage below the floor) → no shift → RACE (no regression)
+    assert pilot._derive_phase(Plan.RACE, -0.5, True, 5,
+                               favorability=0.4, coverage=0.1) is Plan.RACE
+
+
+@pytest.mark.req("REQ-OBJ-0010")
+def test_promote_onto_their_path_is_flagged_and_switched():
+    """Path Denial promote half: at a TO_ACTIVE promote, a candidate body that sits on the
+    opponent's cheapest path is flagged (`dont-promote-onto-their-path`); the kill-switch and the
+    empty-path case zero it."""
+    from common.pilot import Board
+    from common.strategy.context import _TO_ACTIVE
+    pilot = _shipped_pilot()
+    me = {"active": [{"id": 666, "hp": 210, "energies": []}],
+          "bench": [{"id": 1031, "hp": 330, "energies": []}], "hand": [], "prize": [None] * 6}
+    opp = {"active": [{"id": 678, "hp": 440, "energies": []}], "bench": [], "prize": [None] * 6,
+           "hand": []}
+    obs = {"current": {"yourIndex": 0, "turn": 8, "players": [me, opp]}}
+    select = {"context": _TO_ACTIVE, "option": [{"area": 5, "index": 0, "playerIndex": 0}]}
+    board = pilot._board(obs, select)
+    on_path = board.their_path_my_ids
+    ctx = pilot._context(obs, select, board, select["option"][0])
+    assert ctx.promote_target_on_their_path == (1031 in on_path)
+    pilot.objectives_path = False
+    assert pilot._context(obs, select, board, select["option"][0]).promote_target_on_their_path is False
+    pilot.objectives_path = True
+
+
+@pytest.mark.req("REQ-OBJ-0013")
+def test_objectives_trace_rides_the_decision_and_telemetry():
+    """The Tier-3 objectives trace (race delta + both paths) rides the Decision and the telemetry
+    record when a path resolves; it is None (and absent from the record) on an empty early board."""
+    from common.telemetry import to_record
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_a21472.json")
+                    .read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    decision = pilot.explain(fx["obs"])
+    assert decision.objectives is not None and "my" in decision.objectives   # path resolved on this board
+    rec = to_record(decision, tier=0)
+    assert rec["objectives"] == decision.objectives

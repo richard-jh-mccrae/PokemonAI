@@ -450,10 +450,29 @@ take 7 prizes, not 6."
 _Avoid_: stalling (a play-role), walling (one tactic; Denial is the objective it serves)
 
 **Base Value Model**:
-The single deck-agnostic, replay-trained estimator of win probability from a game state;
-the project's one learned component, used as Search leaf-evaluation or Score tiebreaker
-and gated by the Read's confidence.
-_Avoid_: policy (it scores states, not moves), RL agent, neural net, card embedding
+The single deck-agnostic, replay-trained estimator of win probability from a game state; the
+project's one learned component (ADR-0007/0042). Realized as a **dependency-free logistic** whose
+FEATURES are the Tier-3/Tier-4 objective primitives (race delta, both Prize-Path turns, favorability,
+development, prize/hand/energy counts) — the symbolic tiers do the credit assignment, so the learned
+layer is a thin, legible linear model, not a raw-board encoder. Trained offline in pure Python
+(`tools/train/value/`) on mined replay states (label = eventual winner), shipped as a JSON artifact
+a pure-stdlib runtime evaluates (`common/value/`). **Absent-safe** (no artifact → null model, P=0.5,
+zero influence) and **refines judgment only** — a capped sub-prize planner-leaf term + `win_prob`
+telemetry, NEVER overriding a sound rung.
+_Avoid_: policy (it scores states, not moves), RL agent, neural net, card embedding, LightGBM/GBDT
+(the inference model is a stdlib logistic — a tree ensemble stays a rejected/deferred alternative)
+
+**Escalation Search**:
+The Tier-6 budgeted engine tree (ADR-0043) for the opponent-CHOICE residue the opponent-static
+closed-form tiers can't see. Triggered ONLY on a close attack tie (top ATTACK options within an ε),
+it sims each tied attack two-ply — my turn AND the opponent's reply (our own policy as the proxy) —
+via the Engine Search, ranks by the leaf (Base Value Model when present, else closed-form), and
+commits only a strict improvement over the tuned tie-pick. Hard per-move step budget; the tuned pick
+is the guaranteed fallback (budget spent / engine absent → defer). Default OFF (a search seam ships
+only after its budgeted ladder A/B).
+_Avoid_: Engine Search (the primitive it drives — Escalation Search is the budgeted policy over it),
+Lethal Solver (sound, this-turn win; escalation is heuristic tie-breaking), Turn Planner (the whole
+optimizer; escalation is its last, opt-in rung)
 
 ### Strategy lifecycle
 

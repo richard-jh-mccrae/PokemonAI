@@ -52,8 +52,8 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 | 2 | [Chance & EV](tier-2-chance-ev.md) | **70%** | Gamble Lines BUILT 2026-07-05 (A/B 52%, CI 50–54): exact-odds refresh-first KO gambles + coin-EV ranking |
 | 3 | [Match Objectives](tier-3-match-objectives.md) | **75%** | BUILT 2026-07-05: KO Race (a21472 green), two-sided Prize Path + denial, derived phases, gate-ban migration |
 | 4 | [Opponent Model](tier-4-opponent-model.md) | **70%** | Levers + Briefs shipped (main); the γ-continuous predicted-attacker overlay into T3 BUILT 2026-07-05 |
-| 5 | [Value Model](tier-5-value-model.md) | **5%** | One supervised P(win) leaf over T3/T4 features — the single learned seam |
-| 6 | [Escalation Search](tier-6-escalation-search.md) | **10%** | Narrowly-triggered budgeted engine tree for opponent-choice residue |
+| 5 | [Value Model](tier-5-value-model.md) | **65%** | BUILT 2026-07-05 (ADR-0042): dependency-free logistic over T3/T4 features, seed holdout 0.60; DEFAULT OFF pending A/B |
+| 6 | [Escalation Search](tier-6-escalation-search.md) | **55%** | BUILT 2026-07-05 (ADR-0043): budgeted depth-2 tree on a close attack tie, our-policy reply proxy; DEFAULT OFF |
 
 ## Build order (recommended)
 
@@ -67,3 +67,10 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 
 Every step ships behind the M1 A/B pre-filter + real-ladder gate (ADR-0009/0021); every step
 degrades cleanly to the tier below it.
+
+**Build status (2026-07-05):** all seven tiers now have running implementations. T0–T4 default ON
+(A/Bs 50–52%, 0 crashes). T5 (ADR-0042) and T6 (ADR-0043) are built but **DEFAULT OFF** — a learned
+seam and a search seam each ship only after their own ladder A/B, and T5 wants a production-sized
+corpus first (the committed artifact is a 40-game seed). The learned/searched layers never override a
+sound rung: the value model is a capped sub-prize leaf term, escalation only breaks a tie the tuned
+layer already flagged as close.

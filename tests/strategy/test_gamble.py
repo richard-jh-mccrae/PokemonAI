@@ -141,3 +141,16 @@ def test_draw_hit_probability_is_exact_and_fail_closed():
     assert draw_hit_probability(3, 10, 20) == 1.0        # overdraw clamps to the pool → must hit
     assert draw_hit_probability(0, 40, 6) == 0.0
     assert draw_hit_probability("x", 40, 6) == 0.0
+
+
+@pytest.mark.req("REQ-GAMBLE-0006")
+def test_recovery_class_counts_the_held_burst_energy_copies():
+    """The recovery class enabler: `_gamble_burst_copies` returns the pool-wide copies (deck +
+    returned hand) of a held `discard_eot` burst Energy — the miss branch that redraws it re-banks
+    the deterministic line. Zero when no such burst is held."""
+    pilot = _shipped_pilot()
+    stat = pilot.stats.get(1031)                          # Mega Starmie ex
+    hand = [{"id": 17}]                                   # one Ignition (discard_eot) in hand
+    counts = {17: 3}                                      # three more in the deck
+    assert pilot._gamble_burst_copies(counts, hand, stat) == 4   # 3 deck + 1 returned hand copy
+    assert pilot._gamble_burst_copies({}, [{"id": 999}], stat) == 0   # nothing discard_eot held

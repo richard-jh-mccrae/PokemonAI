@@ -78,6 +78,16 @@ _PATH_BENCH_EXTRA = 1    # a benched body costs ~one extra turn to bring into KO
 _STAB_ENTER = -1.0       # STABILIZE hysteresis (ADR-0040): enter when clearly BEHIND in the race …
 _STAB_EXIT = 1.0         # … leave only when clearly AHEAD — between the two, hold the previous label
 _CLOSE_PRIZES = 2        # CLOSE: payoff online and at most this many of my prizes left to take
+_UNFAVORED = 0.45        # matchup favorability at/below which the straight race loses (Lever A band,
+                         # mirrors baseline_disruption._POSTURE_UNFAVORED) — an unfavored, sufficiently
+                         # covered Read shifts the STABILIZE enter bar out by one turn (survive-first)
+_FAV_MIN_COVERAGE = 0.25 # min matchup coverage to trust favorability as a phase input (else the 0.5
+                         # prior default drives nothing — the Read must actually recognize the opp)
+_FAV_STAB_SHIFT = 1.0    # how far the unfavored read relaxes the STABILIZE enter threshold (turns)
+
+_PATH_STICKY = 0.5       # path stickiness (ADR-0040): keep last decision's chosen prize path unless
+                         # the new cheapest is MORE than this many turns better — coherence across
+                         # turns without commitment (the anti-oscillation twin of the phase hysteresis)
 
 _PRED_LEAD = 2.0         # the γ-gated opponent OVERLAY (Tier 4, ADR-0040 §5): a Read-predicted,
                          # not-yet-fielded attacker joins the their-side math with a deploy lead of
@@ -230,6 +240,7 @@ class ObjectivesMixin:
             if t is not None:
                 theirs.append((id(body), self._prize_value(body), t + extra, body.get("id")))
         my_keys, my_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in mine], my_prizes)
+        my_keys, my_turns = self._sticky_path(mine, my_prizes, my_keys, my_turns)
         their_keys, their_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in theirs], opp_prizes)
         return {
             "my_path_turns": my_turns,
@@ -244,29 +255,57 @@ class ObjectivesMixin:
 
     # --------------------------------------------------------------------- the derived advisory phase
 
-    def _derive_phase(self, base, race_ahead, active_doomed: bool, my_prizes: int):
+    def _derive_phase(self, base, race_ahead, active_doomed: bool, my_prizes: int,
+                      favorability: float = 0.5, coverage: float = 0.0):
         """The ADVISORY match phase (ADR-0040, hardened by the 2026-07-05 phase grilling): a pure
         function of the objectives — memoryless (backwards transitions free) except the STABILIZE
         label's hysteresis (enter clearly behind at ``<= _STAB_ENTER``, leave only clearly ahead at
         ``>= _STAB_EXIT`` — the Schmitt trigger that kills near-threshold oscillation). CLOSE fires
-        with the payoff online and ≤``_CLOSE_PRIZES`` prizes left (endgame: force the line). NEVER an
-        eligibility gate — consumed only by the small baseline_phases band weights and the trace;
-        ``objectives_phases`` off → the readiness base (SETUP/RACE) unchanged."""
+        with the payoff online and ≤``_CLOSE_PRIZES`` prizes left (endgame: force the line).
+
+        The **Tier-4 favorability input** (Lever A, γ-gated): a sufficiently-covered UNFAVORED Read
+        relaxes the STABILIZE enter bar by ``_FAV_STAB_SHIFT`` turns — the straight race loses, so
+        survive-first sooner. Coverage-gated (an unrecognized opponent's 0.5 prior drives nothing),
+        so it never regresses an unknown matchup, and it moves only the ENTER threshold (the exit
+        hysteresis is unchanged), so it can't cause phase flicker.
+
+        NEVER an eligibility gate — consumed only by the small baseline_phases band weights and the
+        trace; ``objectives_phases`` off → the readiness base (SETUP/RACE) unchanged."""
         from common.strategy.strategy import Plan
         if not getattr(self, "objectives_phases", False):
             self._phase_prev = base
             return base
+        enter = _STAB_ENTER
+        if coverage >= _FAV_MIN_COVERAGE and favorability <= _UNFAVORED:
+            enter += _FAV_STAB_SHIFT                    # unfavored: enter STABILIZE one turn sooner
         phase = base
         if race_ahead is not None and active_doomed:
             if getattr(self, "_phase_prev", None) == Plan.STABILIZE:
                 if race_ahead < _STAB_EXIT:            # keep stabilizing until clearly ahead
                     phase = Plan.STABILIZE
-            elif race_ahead <= _STAB_ENTER:            # enter only clearly behind
+            elif race_ahead <= enter:                  # enter clearly behind (bar relaxed if unfavored)
                 phase = Plan.STABILIZE
         if base == Plan.RACE and 0 < my_prizes <= _CLOSE_PRIZES:
             phase = Plan.CLOSE                         # endgame overrides: force the finishing line
         self._phase_prev = phase
         return phase
+
+    def _sticky_path(self, mine: list, my_prizes: int, best_keys, best_turns):
+        """Path stickiness (ADR-0040): when LAST decision's chosen path (by opponent card-id set,
+        `self._my_path_prev`) is still feasible and within ``_PATH_STICKY`` turns of the new
+        cheapest, keep it — coherent multi-turn targeting without commitment (a clearly better
+        path always wins; an infeasible previous path is dropped instantly). Updates the memory."""
+        current = frozenset(cid for k, _pv, _t, cid in mine if k in best_keys and cid is not None)
+        prev = getattr(self, "_my_path_prev", None)
+        if best_turns is not None and prev and prev != current:
+            held = [(k, pv, t) for k, pv, t, cid in mine if cid in prev]
+            keys2, turns2 = prize_paths(held, my_prizes)
+            if turns2 is not None and turns2 <= best_turns + _PATH_STICKY:
+                self._my_path_prev = frozenset(
+                    cid for k, _pv, _t, cid in mine if k in keys2 and cid is not None)
+                return keys2, turns2
+        self._my_path_prev = current if best_turns is not None else prev
+        return best_keys, best_turns
 
     # ------------------------------------------------------------- per-option Path consumers (Context)
 
@@ -279,6 +318,16 @@ class ObjectivesMixin:
         poke = self._option_pokemon(obs, select, option)
         cid = (poke or {}).get("id")
         return cid is not None and cid in board.path_target_ids
+
+    def _promote_target_on_their_path(self, obs, select, option, board) -> bool:
+        """At a promote/switch pick, THIS candidate body sits on the opponent's cheapest Prize Path
+        (``board.their_path_my_ids``) — bringing it to the Active Spot walks it into the KO they
+        most want (REQ-OBJ-0010, the promote half of Path Denial). Gated by ``objectives_path``."""
+        if not getattr(self, "objectives_path", False) or not board.their_path_my_ids:
+            return False
+        poke = self._option_pokemon(obs, select, option)
+        cid = (poke or {}).get("id")
+        return cid is not None and cid in board.their_path_my_ids
 
     def _bench_shortens_their_path(self, obs, select, option, stat, board) -> bool:
         """Playing THIS Pokémon to my Bench would strictly IMPROVE the opponent's cheapest Prize

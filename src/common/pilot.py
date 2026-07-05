@@ -483,6 +483,9 @@ class Context:
     bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
                                         # strictly improves the opponent's cheapest Prize Path
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
+    promote_target_on_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): this promote/switch
+                                        # candidate sits on THEIR cheapest path — bringing it up walks
+                                        # it into the KO they want (`dont-promote-onto-their-path`)
     counter_is_best_placement: bool = False   # this option puts the current counter on the knapsack-
                                               # optimal opp target at a DAMAGE_COUNTER_ANY/DAMAGE_COUNTER
                                               # select (== board.best_counter_slot) — `place-counter-to-convert`
@@ -554,6 +557,12 @@ class Decision:
     lethal_refuted: int = 0      # direct lethal candidates the engine backstop REFUTED this plan
                                  # (`lethal_verify`, ADR-0030) — nonzero means closed-form claimed a win
                                  # the engine denied, the exact divergence an A/B or correction wants
+    objectives: dict | None = None   # sparse Tier-3 trace (ADR-0040): {"race", "my", "their"} — the
+                                     # live race delta + both cheapest-path turns; None off-board /
+                                     # both paths unknown. Telemetry emits it for the writeup/tuner.
+    win_prob: float | None = None    # Tier-5 (ADR-0042): the Base Value Model's P(win) on THIS
+                                     # decision's board — emitted for calibration measurement on real
+                                     # games; None when the model is off/absent (no learned claim)
     lethal_lost: bool = False    # a locked verified line DIVERGED from the live game and was dropped
                                  # (`lethal_veto`, ADR-0037 stage 3) — sparse telemetry key
 
@@ -570,7 +579,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
                  lethal_veto=False, brief_preevo=False, brief_engine=False, objectives_race=False,
-                 objectives_path=False, objectives_phases=False, gamble_lines=False):
+                 objectives_path=False, objectives_phases=False, gamble_lines=False,
+                 value_model=None, escalation=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -634,6 +644,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
                                                         # play a Hand Refresh FIRST when the draw's
                                                         # exact-odds EV beats the held (banked) line
+        self.value_model = value_model                  # ADR-0042 Base Value Model (Tier-5): a loaded
+                                                        # ValueModel refines the planner leaf + rides
+                                                        # telemetry; None / null model = off (heuristic
+                                                        # leaf unchanged), so it default-OFF until an A/B
+        self.escalation = escalation                    # ADR-0043 kill-switch: Tier-6 depth-2 tree on a
+                                                        # close attack tie (needs search_budget>0); the
+                                                        # tuned pick is the guaranteed fallback. Default OFF
+        self._search_steps = 0                          # per-move Engine-Search step budget counter
         self._locked_line = None                        # the materialized verified line (turn-scoped):
                                                         # {"turn": n, "queue": [entries]} or None
         self._lethal_lost = False                       # this decision lost a locked line to a live
@@ -679,6 +697,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             chosen, line = replayed                       # any divergence falls through below
             return Decision(chosen=chosen, options=traces, read=board.read, planned=line,
                             posture=self._posture_record(board),
+                            objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                             lethal_refuted=self._lethal_refutes)
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
         refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
@@ -686,6 +705,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read, planned=planned,
                             posture=self._posture_record(board),
+                            objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -707,7 +727,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             while len(chosen) > min_count and traces[chosen[-1]].score < 0:
                 chosen = chosen[:-1]
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
-                        posture=self._posture_record(board), lethal_lost=self._lethal_lost)
+                        posture=self._posture_record(board),
+                        objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
+                        lethal_lost=self._lethal_lost)
 
     @staticmethod
     def _posture_record(board: Board) -> dict | None:
@@ -728,6 +750,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             "cov": round(board.matchup_coverage, 3),       # posterior share behind `fav` (its reliability)
             "brief": board.brief.slug if board.brief else None,   # matched Matchup Brief (ADR-0027), or None
         }
+
+    def _objectives_trace(self, board: Board) -> dict | None:
+        """The sparse Tier-3 objectives record for this Decision (ADR-0040 trace): the live race
+        delta + both cheapest-path turns. None when neither path resolves (early boards) — the
+        telemetry line stays lean."""
+        if board.my_path_turns is None and board.their_path_turns is None:
+            return None
+        return {"race": board.race_ahead, "my": board.my_path_turns, "their": board.their_path_turns}
+
+    def _win_prob(self, board: Board) -> float | None:
+        """The Base Value Model's P(win) on this decision's board (ADR-0042), rounded for the wire;
+        None when the model is off/absent (no learned claim to emit). Legibility + calibration only
+        — the leaf blend is where it changes a decision."""
+        vm = getattr(self, "value_model", None)
+        if not vm or not vm.present:
+            return None
+        try:
+            from common.value.features import features_from_board
+            return round(vm.predict(features_from_board(board)), 4)
+        except Exception:
+            return None
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
@@ -1689,6 +1732,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp)
         target_on_path = self._target_on_path(obs, select, option, board)   # Tier-3 (ADR-0040)
         bench_shortens = self._bench_shortens_their_path(obs, select, option, stat, board)
+        promote_on_their_path = (select.get("context") in (_TO_ACTIVE, _SWITCH)
+                                 and self._promote_target_on_their_path(obs, select, option, board))
         target_rank = self._target_threat_rank(
             obs, select, option, board.read, board.posture_confidence, board.brief_target_roles,
             bool(board.opp_property("opp_is_engine_dependent", False)))
@@ -1755,6 +1800,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
                        target_on_path=target_on_path, bench_shortens_their_path=bench_shortens,
+                       promote_target_on_their_path=promote_on_their_path,
                        counter_is_best_placement=(
                            board.best_counter_slot is not None
                            and (option.get("area"), option.get("index"),
@@ -2040,7 +2086,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                       len(opp.get("prize") or []),  # ranking data only; their-side
                                       read, gamma)                  # sees the γ-gated Read overlay (T4)
         phase = self._derive_phase(base_plan, path_sig["race_ahead"], active_doomed,
-                                   len(me.get("prize") or []))   # derived ADVISORY phase (hysteretic)
+                                   len(me.get("prize") or []),   # derived ADVISORY phase (hysteretic)
+                                   favorability=fav, coverage=cov)   # + Tier-4 favorability (Lever A)
         board = Board(
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),

@@ -7,6 +7,16 @@ from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
     Hypothesis(
+        id="dont-promote-onto-their-path",
+        rationale="Tier-3 Path Denial (ADR-0040): this promote/switch candidate sits on the "
+                  "opponent's cheapest Prize Path — bringing it to the Active Spot walks it into "
+                  "exactly the KO they want next ('force 7' means the body they need stays hard to "
+                  "reach). A small brake below every positive promote driver: interpose (+50) and "
+                  "the ready-wincon promote (+40) still win when their logic applies — this only "
+                  "tips otherwise-close picks toward the off-path body.",
+        when=lambda c: c.promote_target_on_their_path,
+        weight=-8, status="testing"),
+    Hypothesis(
         id="promote-the-accelerator-for-the-ko",
         rationale="When Active is KO'd and a benched accelerator (Role `accel_source`) can itself KO the "
                   "opponent's Active this turn (`promote_target_kos`), promote it instead of the "

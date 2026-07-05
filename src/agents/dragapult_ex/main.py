@@ -17,6 +17,7 @@ from common.scouting.provider import (
 from common.scouting.scout import Scout
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs
+from common.value import ValueModel
 from strategy import STRATEGY
 
 
@@ -84,6 +85,10 @@ _pilot = Pilot(
                                                       # phases (STABILIZE/CLOSE + baseline_phases bands)
     gamble_lines=_params.get("gamble_lines", True),   # ADR-0039 kill-switch: Tier-2 Gamble rung —
                                                       # refresh-first when exact-odds EV beats the held line
+    value_model=(ValueModel.load() if _params.get("value_model", False) else None),  # ADR-0042 Tier-5:
+                                                      # learned leaf; DEFAULT OFF + absent-safe
+    escalation=_params.get("escalation", False),      # ADR-0043 Tier-6: depth-2 tree on a close attack
+                                                      # tie (needs search_budget>0); DEFAULT OFF
 )
 _TIER = 1 if _pilot.search_budget > 0 else 0
 _TELEMETRY = os.environ.get("AGENT_NO_TELEMETRY") != "1"     # always-on Decision Telemetry (ADR-0019)
