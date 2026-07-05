@@ -82,6 +82,39 @@ def test_leaf_blend_is_capped_below_a_prize_and_off_by_default():
     assert pilot._value_term({}) == 0.0                     # off → no contribution
 
 
+@pytest.mark.req("REQ-VALUE-0007")
+def test_extraction_pilot_carries_the_read_so_matchup_features_are_live():
+    """The pilot the value extractor mines through (`_build_pilot`) must wire the Read exactly as
+    main.py does — without a Scout, `favorability` and `posture_confidence` (γ) collapse to their
+    neutral defaults in EVERY training row, so the model's two matchup features are dead no matter how
+    varied the corpus. Regression guard for the 2026-07-05 fix (the extraction pilot silently dropped
+    the Read, which is why the seed's favorability weight never moved)."""
+    sys.path.insert(0, str(REPO / "tools"))
+    from train.tune import _build_pilot
+    pilot, _ = _build_pilot("mega_starmie")
+    assert pilot.scout is not None                        # the Read is present → favorability computable
+    assert pilot.posture is True                          # posture ON, mirroring main.py's default
+
+
+@pytest.mark.req("REQ-VALUE-0006")
+def test_favorability_sanity_gate_detects_a_live_matchup_weight():
+    """The cross-deck retrain's proof-of-fix (grilled 2026-07-05): favorability's fitted |weight| must
+    clear ``eps`` — it sat at ~0 in the mirror-only seed because favorability never varied, so the model
+    could not learn its matchup signal. A dead weight FAILS the gate → park T5 pointing at the T4
+    favorability feature, don't flip a model that can't use the signal the gauntlet exists to surface."""
+    from train.value.sanity import favorability_is_live
+    live = {"features": ["bias", "favorability", "prize_diff"], "weights": [0.1, 0.42, 0.3]}
+    dead = {"features": ["bias", "favorability", "prize_diff"], "weights": [0.1, 0.001, 0.3]}
+    assert favorability_is_live(live, eps=0.05) is True
+    assert favorability_is_live(dead, eps=0.05) is False
+    assert favorability_is_live({"features": ["bias"], "weights": [0.1]}, eps=0.05) is False  # absent → not live
+    # WEAK-but-real (right sign, many-SE off zero) is LIVE at the default boundary — board primitives
+    # legitimately dominate the matchup prior, so "live" must not demand a large weight.
+    weak = {"features": ["bias", "favorability"], "weights": [0.1, 0.047]}
+    assert favorability_is_live(weak) is True                    # default eps → weak-but-real is live
+    assert favorability_is_live(weak, eps=0.05) is False         # a strength bar would wrongly reject it
+
+
 @pytest.mark.req("REQ-VALUE-0005")
 def test_hypothetical_board_build_does_not_pollute_live_memory():
     """`_board_hypothetical` (used by the value leaf on SIMMED boards) must not perturb the live
