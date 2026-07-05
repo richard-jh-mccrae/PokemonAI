@@ -1,6 +1,6 @@
 {
   "deck": "mega_lucario",
-  "generated_at": "2026-07-05T03:55:17",
+  "generated_at": "2026-07-05T13:01:30",
   "open": [],
   "skipped": [],
   "reviewed": [
@@ -15,6 +15,12 @@
       "frame": 19,
       "disposition": "covered",
       "reason": "develop-a-basic-in-setup develops Riolu over the poor Boss's Orders stall (retest [4]->[5]); W-route-blind. The poor-stall blunder is gone."
+    },
+    {
+      "episode_id": 83661652,
+      "frame": 30,
+      "disposition": "covered",
+      "reason": "CRITICAL 'dont discard our main line attacker': keep-line-base-at-discard covers it — real Pilot decide() at the captured f30 discards Gravity Mountain + a spare Basic {F} (Aura Jab reloads F from discard, so it is recoverable engine fuel) and KEEPS Riolu/Makuhita/Solrock. The flagged blunder (pitching Riolu) no longer occurs; retest differs from correct=[0] only in pitching a fuel-able Energy over a redundant Lillie's. Confirms f31's covered premise (Riolu no longer discarded)."
     },
     {
       "episode_id": 83661652,
