@@ -52,8 +52,8 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 | 2 | [Chance & EV](tier-2-chance-ev.md) | **70%** | Gamble Lines BUILT 2026-07-05 (A/B 52%, CI 50–54): exact-odds refresh-first KO gambles + coin-EV ranking |
 | 3 | [Match Objectives](tier-3-match-objectives.md) | **75%** | BUILT 2026-07-05: KO Race (a21472 green), two-sided Prize Path + denial, derived phases, gate-ban migration |
 | 4 | [Opponent Model](tier-4-opponent-model.md) | **70%** | Levers + Briefs shipped (main); the γ-continuous predicted-attacker overlay into T3 BUILT 2026-07-05 |
-| 5 | [Value Model](tier-5-value-model.md) | **65%** | BUILT 2026-07-05 (ADR-0042): dependency-free logistic over T3/T4 features, seed holdout 0.60; DEFAULT OFF pending A/B |
-| 6 | [Escalation Search](tier-6-escalation-search.md) | **55%** | BUILT 2026-07-05 (ADR-0043): budgeted depth-2 tree on a close attack tie, our-policy reply proxy; DEFAULT OFF |
+| 5 | [Value Model](tier-5-value-model.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0042); cross-deck gauntlet A/B **regressed −0.55%** (CI [−1.27,+0.16], 6 matchups, 0 crashes) → **parked OFF** (features redundant with the closed-form leaf; matchup-conditioned model is the real unlock) |
+| 6 | [Escalation Search](tier-6-escalation-search.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0043); attack-tie trigger inert (0/646) + density trigger fires but A/B **regressed to 44%** (PR #39) → **parked OFF** (two-ply proxy loses to the tuned scorer) |
 
 ## Build order (recommended)
 
@@ -68,9 +68,18 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 Every step ships behind the M1 A/B pre-filter + real-ladder gate (ADR-0009/0021); every step
 degrades cleanly to the tier below it.
 
-**Build status (2026-07-05):** all seven tiers now have running implementations. T0–T4 default ON
-(A/Bs 50–52%, 0 crashes). T5 (ADR-0042) and T6 (ADR-0043) are built but **DEFAULT OFF** — a learned
-seam and a search seam each ship only after their own ladder A/B, and T5 wants a production-sized
-corpus first (the committed artifact is a 40-game seed). The learned/searched layers never override a
-sound rung: the value model is a capped sub-prize leaf term, escalation only breaks a tie the tuned
-layer already flagged as close.
+**Build status (2026-07-05):** all seven tiers have running implementations. **T0–T4 default ON**
+(A/Bs 50–52%, 0 crashes) — the shipped agent. **T5 and T6 are built but PARKED DEFAULT OFF, each on
+its own A/B evidence** (the grilled flip-**or-park** definition of done):
+- **T5** (ADR-0042): the pipeline bug that zeroed favorability in training was found + fixed
+  (`_build_pilot` dropped the Read); retrained on a 92k-state cross-deck gauntlet (favorability now
+  live); the paired-delta A/B still **regressed −0.55%** → parked. Its features are largely redundant
+  with the closed-form leaf the tuned tiers already score; the matchup-conditioned model is the real
+  unlock.
+- **T6** (ADR-0043): the close-attack-tie trigger is structurally inert for our decks (0/646
+  decisions); the added opponent-disruption-density trigger (PR #39) fires but its A/B **regressed to
+  44%** → parked. The two-ply our-policy proxy systematically loses to the tuned scorer.
+
+The learned/searched seams never override a sound rung by design, so parking them costs nothing — the
+closed-form tiers are the agent. Both stay behind their kill-switches for the deferred unlocks
+(matchup-conditioned value model; a real opponent-deck reply model + commit-margin gate for escalation).
