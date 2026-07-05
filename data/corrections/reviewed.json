@@ -545,13 +545,13 @@
   },
   "83661652-33": {
     "disposition": "covered",
-    "reason": "develop-a-basic-in-setup: real Pilot develops a basic (Solrock) before the Meowth Power Gem chip (retest [3]->[1]); _finish_turn_last tiers the tier-0 develop before the tier-4 attack. First-dev-differs; W-route-blind (chip outscores the develop).",
-    "round": "2026-07-04"
+    "reason": "CRITICAL 'dont feed Meowth ex, should have played solrock/riolu': NOW RULE-FIXED by develop-the-wincon-base-first (+6). The tier-0 develop already beat the tier-4 chip (_finish_turn_last); the new rule breaks the develop tie toward the wincon Line base, so real Pilot decide() picks Riolu (retest [3]->[2]=correct, FIXED). W-route-blind (chip outscores the develop in raw score). Gated by tests/strategy/test_blunder_20260703_develop_wincon_base.py.",
+    "round": "2026-07-05"
   },
   "83661652-44": {
     "disposition": "covered",
-    "reason": "develop-a-basic-in-setup: real Pilot develops a basic (Makuhita) before the Meowth chip (retest [3]->[0]); same first-dev-differs as f33. The 'resisting to play basics' blunder is resolved.",
-    "round": "2026-07-04"
+    "reason": "CRITICAL 'resisting to play basics, wanting to feed meowth and just attack': NOW RULE-FIXED by develop-the-wincon-base-first (+6). Same develop-tiebreak as f33 — real Pilot decide() benches Riolu over Makuhita (retest [3]->[2]=correct, FIXED). W-route-blind. Gated by the ml0703 develop_wincon replay test.",
+    "round": "2026-07-05"
   },
   "83661649-45": {
     "disposition": "deferred",
@@ -592,5 +592,10 @@
     "disposition": "covered",
     "reason": "FIXED on investigation (not a mislabel): the Pilot literally could not DECLINE an optional single-pick (decide() always took maxCount, ignoring minCount=0). Added (a) single-pick take-fewer — decline a score<0 pick at a minCount=0 select; (b) dont-pre-bench-the-supporter-tutor (-15) at _SETUP_BENCH. decide(f3)=[0]->[] (declines benching Meowth ex — saved for the Active Spot / an in-game bench to trigger Last-Ditch Catch). W-route can't measure it (correct==chosen==[0] tag can't encode select-nothing); gated by tests/strategy/test_setup_bench_decline.py on setup_bench_decline_f3.json. Human reversed the refuted call 2026-07-04.",
     "round": "2026-07-04"
+  },
+  "83661652-30": {
+    "disposition": "covered",
+    "reason": "CRITICAL 'dont discard our main line attacker': keep-line-base-at-discard covers it — real Pilot decide() at the captured f30 discards Gravity Mountain + a spare Basic {F} (Aura Jab reloads F from discard, so it is recoverable engine fuel) and KEEPS Riolu/Makuhita/Solrock. The flagged blunder (pitching Riolu) no longer occurs; retest differs from correct=[0] only in pitching a fuel-able Energy over a redundant Lillie's. Confirms f31's covered premise (Riolu no longer discarded).",
+    "round": "2026-07-05"
   }
 }
