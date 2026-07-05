@@ -560,7 +560,7 @@ class Decision:
     objectives: dict | None = None   # sparse Tier-3 trace (ADR-0040): {"race", "my", "their"} — the
                                      # live race delta + both cheapest-path turns; None off-board /
                                      # both paths unknown. Telemetry emits it for the writeup/tuner.
-    win_prob: float | None = None    # Tier-5 (ADR-0042): the Base Value Model's P(win) on THIS
+    win_prob: float | None = None    # Tier-5 (ADR-0042): the Automatic Value Model's P(win) on THIS
                                      # decision's board — emitted for calibration measurement on real
                                      # games; None when the model is off/absent (no learned claim)
     lethal_lost: bool = False    # a locked verified line DIVERGED from the live game and was dropped
@@ -644,7 +644,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
                                                         # play a Hand Refresh FIRST when the draw's
                                                         # exact-odds EV beats the held (banked) line
-        self.value_model = value_model                  # ADR-0042 Base Value Model (Tier-5): a loaded
+        self.value_model = value_model                  # ADR-0042 Automatic Value Model (Tier-5): a loaded
                                                         # ValueModel refines the planner leaf + rides
                                                         # telemetry; None / null model = off (heuristic
                                                         # leaf unchanged), so it default-OFF until an A/B
@@ -760,7 +760,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return {"race": board.race_ahead, "my": board.my_path_turns, "their": board.their_path_turns}
 
     def _win_prob(self, board: Board) -> float | None:
-        """The Base Value Model's P(win) on this decision's board (ADR-0042), rounded for the wire;
+        """The Automatic Value Model's P(win) on this decision's board (ADR-0042), rounded for the wire;
         None when the model is off/absent (no learned claim to emit). Legibility + calibration only
         — the leaf blend is where it changes a decision."""
         vm = getattr(self, "value_model", None)

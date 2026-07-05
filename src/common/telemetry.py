@@ -61,7 +61,7 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)
         rec["objectives"] = objectives            # — race delta + both cheapest-path turns
     win_prob = getattr(decision, "win_prob", None)
-    if win_prob is not None:                      # sparse: the Base Value Model's P(win) (ADR-0042) —
+    if win_prob is not None:                      # sparse: the Automatic Value Model's P(win) (ADR-0042) —
         rec["win_prob"] = win_prob                # calibration + legibility (None when the model is off)
     refuted = getattr(decision, "lethal_refuted", 0)
     if refuted:                                   # sparse: only when the engine denied a closed-form

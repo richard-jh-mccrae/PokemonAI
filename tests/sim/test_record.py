@@ -61,7 +61,7 @@ def test_recorder_film_round_trips_through_the_film_readers():
 def test_recorded_film_yields_value_feature_rows_through_the_real_extractor():
     """The recorded film is training-usable end-to-end: the SHIPPED value extractor
     (`train.value.extract.rows_from_replay`) mines a full-length feature vector per decision and labels
-    it by the eventual winner — proving the gauntlet corpus feeds the Base Value Model with no new reader."""
+    it by the eventual winner — proving the gauntlet corpus feeds the Automatic Value Model with no new reader."""
     from sim.record import MatchRecorder
     from train.value.extract import rows_from_replay
     from train.tune import _build_pilot

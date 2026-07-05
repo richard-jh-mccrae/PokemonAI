@@ -1,4 +1,4 @@
-# Tier 5 — Value Model
+# Tier 5 — Automatic Value Model
 
 **Status: ~65% complete** (built 2026-07-05, `/tdd`, ADR-0042; a 40-game seed model trains
 end-to-end, holdout logloss **0.60** vs the 0.69 coin-flip floor; DEFAULT OFF pending its ladder

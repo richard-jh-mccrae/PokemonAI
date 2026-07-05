@@ -61,7 +61,7 @@ sibling energy-tutors beyond Hilda (a card-data sweep — 22 other cards search 
 evolve-via-Supporter variant of the same line; enabling-step snipe lines that need TWO steps
 (gust-up-then-snipe); the full selective-override *margin*
 comparison (commit only when a line **clearly beats** the status-quo develop line by engine-sim value) is
-tuning-gated on the M1 A/B ladder, so v1 ships the conservative "otherwise-missed KO" gate; the develop-order fold-in / full unification; the **Base Value Model**
+tuning-gated on the M1 A/B ladder, so v1 ships the conservative "otherwise-missed KO" gate; the develop-order fold-in / full unification; the **Automatic Value Model**
 ([ADR-0007](0007-learning-is-one-offline-value-model.md)) leaf-eval upgrade; and all multi-turn planning
 (`a21472`, `b4649`). **Realizes** the designed **Tier-1 Search** / M3 of
 [ADR-0008](0008-pilot-is-a-layered-rules-pipeline.md); **generalizes**
@@ -112,7 +112,7 @@ of a resolved trade-off (see *Considered options*):
    number — the false-lethal direction stays forbidden).
 4. **Leaf-eval = hand-weighted existing signals.** prizes taken (dominant, ~`KO_SCORE`-weighted) +
    threats removed + my survival vs Incoming + development toward the win-condition. Seeded + tunable;
-   the **Base Value Model (ADR-0007) is the drop-in upgrade later** ("leaf eval = Tier-0 score
+   the **Automatic Value Model (ADR-0007) is the drop-in upgrade later** ("leaf eval = Tier-0 score
    initially" — roadmap M3).
 5. **Plan once, cache, re-plan on reveal.** Run the (expensive) engine-sim ranking **once** at turn
    start, cache the chosen Turn Line as **turn-scoped state**, execute it step by step, and **re-plan
@@ -145,7 +145,7 @@ of a resolved trade-off (see *Considered options*):
   prizes to stay safe" — the exact trade-offs in the corpus. A scalar below the win-rung can.
 - **Pure scalar, no hard rungs** — rejected: a tuning slip could let a non-winning board outscore a
   winning one — the catastrophic false-lethal direction we made a hard override.
-- **Learned Base Value Model now (ADR-0007 / M4)** — rejected for v1: heaviest, last-in-roadmap; needs
+- **Learned Automatic Value Model now (ADR-0007 / M4)** — rejected for v1: heaviest, last-in-roadmap; needs
   the replay data engine; delays the feature the human needs *now*. It is the pluggable leaf-eval
   upgrade once the Planner is proven.
 - **Re-derive every decision (no cache)** — rejected: re-running engine sims on each of a turn's many

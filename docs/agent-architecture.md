@@ -164,7 +164,7 @@ src/
                 doctrines/ (gust · fetch · shuffle_refresh — each owns a Pilot *Mixin)   [ADR-0025]
     cards.py    CardFunctions (Function Tag loader)
     scouting/   Scout / Read
-    value/      Base Value Model loader            [planned]
+    value/      Automatic Value Model loader            [planned]
   agents/<deck>/  main.py · deck.csv · strategy.py · tuned.json (machine overrides)
 tools/
   meta_tracker/  replays → meta + scouting artifact + card_functions
@@ -196,4 +196,4 @@ tools/
   Read-conditioned Hypotheses and Tier-1 search-feeding remain.
 - **Designed, not yet wired**: the richer Tactical Evaluator (Jetting-Blow bench-snipe /
   wall-disruption); the [General Strategy](general-strategy.md) roadmap (board-state rules); the
-  `tools/train` + `tools/selfplay` loop and the Base Value Model. These are the next slices.
+  `tools/train` + `tools/selfplay` loop and the Automatic Value Model. These are the next slices.

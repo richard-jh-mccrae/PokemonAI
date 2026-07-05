@@ -1,7 +1,7 @@
 # Agent Runtime (`common/`)
 
 Deck-agnostic runtime agent code, shared across deck builds. It defines the **Pilot**
-decision architecture and the **Base Value Model**, and its first capability is
+decision architecture and the **Automatic Value Model**, and its first capability is
 **Scouting** — recognize the opponent's deck from what it reveals and produce the **Read**.
 
 Shared game/meta vocabulary (`Archetype`, `Main-line` / `Sub-line` / `Engine Pokémon`,
@@ -349,7 +349,7 @@ confirmation; `manual_coin` forces coin outcomes for worst-case (sound) checks. 
 **Tier-1 Search** seam (Tier-0 = closed-form). It requires *predicted* hidden zones (my deck/prizes,
 the opponent's deck/hand/prizes/face-down Active), so its verdict is trusted only for outcomes
 **invariant** to those predictions.
-_Avoid_: rollout (implies a random playout; this is exact deterministic stepping), Base Value Model
+_Avoid_: rollout (implies a random playout; this is exact deterministic stepping), Automatic Value Model
 (the learned win-prob estimator — the Engine Search is exact rules, not learned), Scout/Read
 
 **Turn Planner**:
@@ -358,7 +358,7 @@ of my turn. It **contains the Lethal Solver as its sound top rung**: the win goa
 verified, and locked before — and immune to — every heuristic goal below it. Below the win rung it
 generates a few **Candidate Turn Lines** by working backward from a closed, prioritized set of
 **Turn Goals**, simulates each through the **Engine Search** to its end-of-turn board, ranks them by
-a leaf evaluation (the Tier-0 board heuristic now; the Base Value Model later), and commits to the
+a leaf evaluation (the Tier-0 board heuristic now; the Automatic Value Model later), and commits to the
 best — planning the whole turn *before* the first action, then executing it one step per decision.
 **Heuristic below the top rung** (only the win rung's Lethal Line is guaranteed); plans THIS turn
 only (multi-turn tempo / prize-math is a separate problem). Realises the designed **Tier-1 Search**
@@ -449,7 +449,7 @@ their path-critical attackers. The defensive half of the two-sided Prize-Path ob
 take 7 prizes, not 6."
 _Avoid_: stalling (a play-role), walling (one tactic; Denial is the objective it serves)
 
-**Base Value Model**:
+**Automatic Value Model**:
 The single deck-agnostic, replay-trained estimator of win probability from a game state; the
 project's one learned component (ADR-0007/0042). Realized as a **dependency-free logistic** whose
 FEATURES are the Tier-3/Tier-4 objective primitives (race delta, both Prize-Path turns, favorability,
@@ -466,7 +466,7 @@ _Avoid_: policy (it scores states, not moves), RL agent, neural net, card embedd
 The Tier-6 budgeted engine tree (ADR-0043) for the opponent-CHOICE residue the opponent-static
 closed-form tiers can't see. Triggered ONLY on a close attack tie (top ATTACK options within an ε),
 it sims each tied attack two-ply — my turn AND the opponent's reply (our own policy as the proxy) —
-via the Engine Search, ranks by the leaf (Base Value Model when present, else closed-form), and
+via the Engine Search, ranks by the leaf (Automatic Value Model when present, else closed-form), and
 commits only a strict improvement over the tuned tie-pick. Hard per-move step budget; the tuned pick
 is the guaranteed fallback (budget spent / engine absent → defer). Default OFF (a search seam ships
 only after its budgeted ladder A/B).

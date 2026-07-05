@@ -14,7 +14,7 @@ only zips a **Bundle**; nothing records what an agent *was* or how it *did*.
 - **Each Submission embeds a Manifest** — its machine-readable decision-steering fingerprint:
   General + deck **Hypotheses** with authored/effective/overridden weights, `status`, and trigger
   source; **Roles**; win-condition **Lines**; `params` (incl. Tier); deck-card **Function Tags**;
-  capability flags (Posture, Base Value Model, overrides); the decklist; provenance; a
+  capability flags (Posture, Automatic Value Model, overrides); the decklist; provenance; a
   `schema_version`; and per-component digests. The Manifest is **embedded** in a self-contained
   **Agent Brief** (HTML) that also renders it for a human — one file, both machine- and
   human-readable — replacing `deck.txt` + `version_control.md` in the Bundle.

@@ -41,7 +41,7 @@ def _prune_none(v):
     return v
 
 # Leaf-eval term weights (ADR-0031 decision 4). Prizes KO_SCORE-weighted + DOMINANT — positional terms
-# sum below one prize, never outrank real KO (hard-rung invariant, decision 3). Base Value Model (ADR-0007) replaces later.
+# sum below one prize, never outrank real KO (hard-rung invariant, decision 3). Automatic Value Model (ADR-0007) replaces later.
 _PLANNER_SURVIVAL_W = 50.0     # my Active survives predicted Incoming after the line (full turn)
 _PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by the KO …
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize
@@ -49,7 +49,7 @@ _PLANNER_DEV_W = 1.0           # development left on my end-of-turn board (engin
 _PLANNER_DEV_CAP = 100.0       # + attached Energy, `_board_development`) … capped below a prize
 _PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on MY cheapest Prize
                                # Path — sub-prize, ranks lines within the rung, never beats a prize
-_PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Base Value Model's P(win) on the simmed
+_PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Automatic Value Model's P(win) on the simmed
                                # end-of-turn board scales into a sub-prize band (< one KO_SCORE), so
                                # the learned leaf breaks prize-EQUAL ties, never overriding a prize
 _ESCALATE_EPS = 15.0          # Tier-6 (ADR-0043): two attacks within this many tactical points are a
@@ -1192,7 +1192,7 @@ class PlannerMixin:
         """The leaf-eval scalar over a resulting board: prizes taken (dominant, KO_SCORE-weighted) +
         the threat removed + my Active's survival vs Incoming + the development left on my board
         (engine-rank phase input, `_board_development`; 0 for closed-form candidates) + the Base
-        Value Model's re-centred P(win) (``value ∈ [-0.5, 0.5]``, Tier-5/ADR-0042; 0 when off/absent).
+        Automatic Value Model's re-centred P(win) (``value ∈ [-0.5, 0.5]``, Tier-5/ADR-0042; 0 when off/absent).
         EVERY positional term is capped, and their capped sum stays below one prize, so a bigger KO
         always ranks first — a positional score can NEVER outrank a real prize (the hard-rung
         invariant, ADR-0031 decision 3). The learned term REFINES; it never overrides a sound rung."""
@@ -1291,7 +1291,7 @@ class PlannerMixin:
             self._my_path_prev = saved_path
 
     def _value_term(self, end_obs) -> float:
-        """The Base Value Model's contribution to a simmed leaf (ADR-0042): P(win) on the end-of-turn
+        """The Automatic Value Model's contribution to a simmed leaf (ADR-0042): P(win) on the end-of-turn
         board, re-centred to ``[-0.5, 0.5]`` so a better-than-even board adds and a worse-than-even
         board subtracts. 0.0 when the model is off or absent (the null model returns 0.5 → term 0),
         so the closed-form leaf is unchanged. `_leaf_value` scales + caps it below a prize."""

@@ -43,5 +43,5 @@ roster of agents).
 
 **Consequences.** A new deck is mostly *data* (a Strategy), not code. The shared pipeline
 is the reusable asset and the writeup's backbone. Combat correctness comes from the engine;
-positional judgement from Hypotheses now and the Base Value Model later — both behind the
+positional judgement from Hypotheses now and the Automatic Value Model later — both behind the
 Score interface.
