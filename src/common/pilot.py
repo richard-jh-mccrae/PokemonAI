@@ -159,6 +159,12 @@ class Board:
     wincon_base_deployable: bool = False  # a Line pre-evolution (a base to evolve payoff from) is in
                                        # play OR in hand — evolved payoff deployable. False -> fetching
                                        # payoff strands it: prefer base (`fetch-base-before-stranded-payoff`)
+    wincon_in_hand_undeployable: bool = False  # an EVOLUTION win-condition sits in my hand with NO base
+                                       # anywhere (not in play, and its Line pre-evolution is neither in play
+                                       # nor in hand) — a DEAD card I can't deploy this turn or set up to. So
+                                       # `hold-wincon-dont-shuffle` should NOT keep it: shuffle it away and
+                                       # dig for a base (ep83966336 f44). False for a Basic-payoff wincon
+                                       # (directly benchable, so still worth holding).
     accel_recipient_missing: bool = False  # my Active is a bench-accelerator (an `accel_source`-role
                                        # Pokémon, e.g. Cinderace Turbo Flare) AND no Line member on my Bench
                                        # to receive it — accel wasted, developing a recipient is top priority
@@ -1964,6 +1970,7 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
             line_preevo_in_hand=self._line_preevo_in_hand(me),
             wincon_base_deployable=(self._line_preevo_in_play(me)
                                     or self._line_preevo_in_hand(me)),
+            wincon_in_hand_undeployable=self._wincon_in_hand_undeployable(me),
             accel_recipient_missing=self._accel_recipient_missing(me),
             support_in_play=self._support_in_play(me),
             in_play_ids=frozenset(p.get("id") for p in ((me.get("active") or []) + (me.get("bench") or []))
@@ -2038,6 +2045,18 @@ class Pilot(PlannerMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin)
         """True if the win-condition card is already in my hand — a tutor needn't dig for another."""
         wincon = self._wincon_set()
         return bool(wincon) and any(c and c.get("id") in wincon for c in (me.get("hand") or []))
+
+    def _wincon_in_hand_undeployable(self, me: dict) -> bool:
+        """True iff an EVOLUTION win-condition is in my hand but has NO base to deploy it: not already
+        in play, its Line HAS a pre-evolution (so it isn't a directly-benchable Basic wincon), and no
+        pre-evolution sits in play OR hand. Such a card is dead this turn — `hold-wincon-dont-shuffle`
+        must let it be shuffled away to dig for a base (ep83966336 f44: Mega Lucario ex held with no
+        Riolu anywhere)."""
+        if not (self._wincon_in_hand(me) and not self._wincon_in_play(me)):
+            return False
+        if not self._line_preevo_set():                    # Basic-payoff wincon — benchable, keep it
+            return False
+        return not (self._line_preevo_in_play(me) or self._line_preevo_in_hand(me))
 
     def _line_preevo_set(self) -> set:
         """Card ids that are a non-payoff member of a Line's path — a pre-evolution that builds

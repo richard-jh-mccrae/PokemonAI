@@ -266,8 +266,9 @@ def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
 
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_with_base_silent_when_no_base_is_in_play():
-    """No Line base in play -> the stronger hold stays silent; only the moderate `hold-wincon-dont-
-    shuffle` fires, so a genuinely dead hand can still refill (the base hold is NOT absolute)."""
+    """No Line base IN PLAY (but the base is in HAND, so the wincon is still deployable) -> the stronger
+    base-in-PLAY hold stays silent; only the moderate `hold-wincon-dont-shuffle` fires, so a genuinely
+    dead hand can still refill (the base hold is NOT absolute)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
@@ -275,8 +276,33 @@ def test_hold_wincon_with_base_silent_when_no_base_is_in_play():
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
     pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,                  # bench body is NOT base
-                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES, WINC]))
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,          # bench body is NOT the base;
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
+                                    hand=[LILLIES, WINC, STARYU]))            # base sits in HAND (deployable)
     fired = _fired(pilot.explain(obs).options[0])
     assert "hold-wincon-with-base-dont-shuffle" not in fired
     assert "hold-wincon-dont-shuffle" in fired
+
+
+@pytest.mark.req("REQ-GEN-0047")
+def test_hold_wincon_stands_down_when_the_held_wincon_is_undeployable():
+    """The moderate `hold-wincon-dont-shuffle` ALSO stands down when the held win-condition is an
+    UNDEPLOYABLE evolution — no base anywhere (not in play AND not in hand) to evolve it onto — so it's
+    a dead card worth shuffling away to dig for the base, not a piece to hold. ep83966336 f44 (CRITICAL,
+    blunder round 2026-07-05): Mega Lucario ex held with no Riolu in play or hand while the agent ended
+    the turn instead of refilling — `wincon_in_hand_undeployable` now frees the refresh."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
+                     lines=[Line(path=[STARYU, WINC], payoff=WINC)])
+    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,          # no Staryu in play OR hand:
+                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
+                                    hand=[LILLIES, WINC]))                    # the Mega is a dead hand card
+    dec = pilot.explain(obs)
+    fired = _fired(dec.options[0])
+    assert "hold-wincon-dont-shuffle" not in fired                           # the dead wincon is not held
+    assert "hold-wincon-with-base-dont-shuffle" not in fired
+    assert dec.chosen == [0]                                                  # Lillie's refresh, not End

@@ -266,6 +266,54 @@ def test_context_board_exposes_my_bench_count():
     assert "empty-bench" not in fired(pilot.explain(with_bench).options[0])
 
 
+@pytest.mark.req("REQ-PILOT-0016")
+def test_context_board_exposes_wincon_in_hand_undeployable():
+    """`wincon_in_hand_undeployable`: an EVOLUTION win-condition in hand with NO base anywhere is a dead
+    card (ep83966336 f44). True only when the payoff sits in hand, is not in play, its Line has a
+    pre-evolution, and no pre-evolution is in play OR hand."""
+    watch = Hypothesis(id="dead-wincon", rationale="",
+                       when=lambda c: c.board.wincon_in_hand_undeployable, weight=5)
+    stats = DictCardStatProvider({
+        MEGA_STARMIE: CardStat(MEGA_STARMIE, megaEx=True, hp=330, evolvesFrom="Staryu"),
+        STARYU: CardStat(STARYU, hp=70), 700: CardStat(700, hp=90)})
+    strat = Strategy(hypotheses=[watch], roles={MEGA_STARMIE: ["win_condition"]},
+                     lines=[Line(path=[STARYU, MEGA_STARMIE], payoff=MEGA_STARMIE)])
+    pilot = Pilot(strat, deck=[1] * 60, stats=stats)
+    fired = lambda o: {h.id for h, _ in o.fired}
+
+    # payoff in hand, NO Staryu in play or hand -> dead card
+    dead = make_select([opt()], current=state(active=poke(700), hand=[MEGA_STARMIE]))
+    assert "dead-wincon" in fired(pilot.explain(dead).options[0])
+
+    # base in PLAY -> deployable, signal silent
+    base_play = make_select([opt()], current=state(active=poke(700), bench=[poke(STARYU)],
+                                                   hand=[MEGA_STARMIE]))
+    assert "dead-wincon" not in fired(pilot.explain(base_play).options[0])
+
+    # base in HAND -> deployable next turn, signal silent
+    base_hand = make_select([opt()], current=state(active=poke(700), hand=[MEGA_STARMIE, STARYU]))
+    assert "dead-wincon" not in fired(pilot.explain(base_hand).options[0])
+
+    # payoff already IN PLAY -> not a held card, signal silent
+    in_play = make_select([opt()], current=state(active=poke(MEGA_STARMIE), hand=[MEGA_STARMIE]))
+    assert "dead-wincon" not in fired(pilot.explain(in_play).options[0])
+
+
+@pytest.mark.req("REQ-PILOT-0016")
+def test_wincon_in_hand_undeployable_is_false_for_a_basic_payoff_wincon():
+    """A Basic-payoff win-condition (no Line pre-evolution) is directly benchable, so holding it is
+    still right — the signal must NOT fire and free a refresh to shuffle it away."""
+    watch = Hypothesis(id="dead-wincon", rationale="",
+                       when=lambda c: c.board.wincon_in_hand_undeployable, weight=5)
+    stats = DictCardStatProvider({666: CardStat(666, hp=110), 700: CardStat(700, hp=90)})
+    strat = Strategy(hypotheses=[watch], roles={666: ["win_condition"]},
+                     lines=[Line(path=[666], payoff=666)])              # Basic payoff, no pre-evo
+    pilot = Pilot(strat, deck=[1] * 60, stats=stats)
+    fired = lambda o: {h.id for h, _ in o.fired}
+    basic = make_select([opt()], current=state(active=poke(700), hand=[666]))
+    assert "dead-wincon" not in fired(pilot.explain(basic).options[0])
+
+
 @pytest.mark.req("REQ-PILOT-0020")
 def test_context_exposes_attack_target_energy_and_threat():
     # At a Damage/snipe select, Context must expose per option the attached-energy count of

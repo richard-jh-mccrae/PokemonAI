@@ -46,7 +46,8 @@ CLUSTERS = {
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
                                      "honor-preferred-start"}),
-    "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit"}),
+    "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
+                                           "dont-play-damage-boost-when-cant-attack"}),
     "disruption": (DISRUPTION_HYPOTHESES, {
         "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored",
         "dont-gift-a-refresh-when-favored"}),

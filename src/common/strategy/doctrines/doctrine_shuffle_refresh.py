@@ -98,9 +98,13 @@ HYPOTHESES = [
                   "not absolute, so a genuinely dead hand still refills); stands down when the "
                   "win-condition is already in PLAY (`wincon_in_play`) — a redundant hand duplicate is "
                   "safe to shuffle (the ep82226759 Harlequin shape: Mega Starmie ex Active, second copy in "
-                  "hand).",
+                  "hand) — AND when the held payoff is an UNDEPLOYABLE evolution: no base anywhere to evolve "
+                  "it onto (`wincon_in_hand_undeployable`), so it's a dead card worth shuffling away to dig "
+                  "for the base, not a piece to hold (ep83966336 f44: Mega Lucario ex held with no Riolu in "
+                  "play or hand — refill instead).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.wincon_in_hand and not c.board.wincon_in_play,
+        and c.board.wincon_in_hand and not c.board.wincon_in_play
+        and not c.board.wincon_in_hand_undeployable,
         weight=-25, status="assumed"),
     Hypothesis(
         id="hold-line-piece-dont-shuffle",
