@@ -1,10 +1,15 @@
 # Tier 6 — Escalation Search
 
-**Status: ~55% complete** (built 2026-07-05, `/tdd`, ADR-0043; DEFAULT OFF pending its budgeted
-ladder A/B). The narrow, budgeted engine tree for the one thing closed-form provably cannot see:
-**opponent choice**. Demoted by the 2026-07-05 grilling from "the" multi-turn answer (old M3) to the
-last-resort residue handler — KO-Race arithmetic (T3) owns the dominant multi-turn case.
-**Upstream:** T3's close-attack-tie trigger; the opponent-reply proxy policy; the T5 leaf.
+**Status: ~75% built, still DEFAULT OFF** (built 2026-07-05, `/tdd`, ADR-0043; the DENSITY trigger +
+engine-backed fixture added 2026-07-05 — the trigger fires + commits but its mirror A/B **regressed**
+(ON 44 %), so it stays parked OFF; see Acceptance / ADR-0043 Amendment). The narrow, budgeted engine tree for the one thing closed-form provably
+cannot see: **opponent choice**. Demoted by the 2026-07-05 grilling from "the" multi-turn answer (old
+M3) to the last-resort residue handler — KO-Race arithmetic (T3) owns the dominant multi-turn case.
+**Two triggers now feed it:** the close-attack-tie (structurally ~unreachable for our decks — a firing
+diagnostic saw 0 commits over 646 real mega_starmie decisions, since ≥2 affordable attacks occur on
+only 0 / 0.3 / 1.5 % of MAIN menus) and the **opponent-disruption-DENSITY** trigger that replaced it as
+the real unlock (fires + commits on real boards — see *Built — density trigger*).
+**Upstream:** the two triggers; the opponent-reply proxy policy; the T5 leaf.
 **Downstream:** overrides the tuned pick only when it triggers, strictly wins, AND stays in budget.
 
 ## Final design
@@ -38,16 +43,52 @@ last-resort residue handler — KO-Race arithmetic (T3) owns the dominant multi-
   path is byte-identical when `opponent_reply=False`. Committed lines ride telemetry under
   `goal="escalation"`. Gated REQ-ESCALATE-0001..0003; DEFAULT OFF.
 
-## Gap to final (the 45%)
+## Built — density trigger (2026-07-05, the real unlock)
 
-1. **The budgeted A/B** (escalation + a measured `search_budget` vs off) → default-ON decision;
-   engine-backed trigger-fixture test (the two-ply sim is exercised via the shared `_simulate_line`).
-2. **Deeper trees** (depth 3+) + a favorability-scaled budget.
-3. **A real opponent-deck reply model** (vs the our-policy proxy) from the T4 overlay.
-4. The opponent-choice-DENSITY trigger (gust/heal/disruption boards) beside the attack-tie trigger.
+The close-attack-tie trigger is structurally near-unreachable for our decks (0 commits / 646 real
+mega_starmie decisions). `_escalate` is now a **two-trigger dispatcher**: when the attack-tie yields no
+candidates it falls through to the opponent-disruption-DENSITY trigger, which fires on board TEXTURE,
+not on 2+ affordable attacks — the deferred refinement, now built.
 
-## Acceptance — met 2026-07-05 (build)
+- **Signal is generic** (`_opp_disruption_density`; Fork A = tags+Read, authored-brief field deferred):
+  a weighted count of the opponent's `_DISRUPT_TAGS` (`gust`/`switch`/`heal`/`hand_disruption`/
+  `energy_denial`) capability from **Function Tags over the opponent's REVEALED cards** (active/bench/
+  discard, full weight — certain) **plus the Read's Representative-Build predictions** (`expected_cards`
+  at `gamma * inclusion_prob` — the Brief-gated hidden-deck signal; the matched Brief participates via
+  the gamma-gated Read, no brief-schema change). `_density_dominated` fires at `_ESCALATE_DENSITY` (2.0).
+- **Candidate set** (`_top_k_candidates`; Fork B = top-K, K=`_ESCALATE_TOPK`=3): the raw top-K options
+  by tactical — NOT a positive-score subset, because a disruption-dense board is exactly where the
+  opponent-static tactical ranking is unreliable, so the two-ply **strict-improvement commit gate** (not
+  a tactical-sign filter) is the protection. Gated to a combat board: an affordable attack must be on
+  the menu, and a KO on the menu short-circuits (a KO dominates — never escalate away from it).
+- **Same invariants**: both triggers share `_commit_escalation` — sim each candidate two-ply, commit the
+  best ONLY if it strictly beats the tuned pick's own two-ply value, budget-guarded, tuned pick the
+  guaranteed fallback. The rationale names the firing trigger (telemetry/correction legibility).
+- **Firing diagnostic** (6 mirror games/deck): density flags 66 / 33 / 66 % of MAIN decisions as dense
+  and **commits** (strict two-ply upgrade) 42 / 33 / 63 overrides per 6 games for mega_starmie /
+  dragapult_ex / mega_lucario — fires AND changes play (vs the attack-tie trigger's 0). Gated
+  REQ-ESCALATE-0006/0007/0009 (unit — signal, gating, commit gate) + 0008 (engine: density fires on real
+  boards + the seam holds). The live commit is engine-trajectory-dependent (unit-pinned + diagnostic-
+  measured, never asserted as a live count — a flaky-test trap Linux CI surfaced).
+
+## Gap to final (the 25%)
+
+1. **Deeper trees** (depth 3+) + a favorability-scaled budget.
+2. **A real opponent-deck reply model** (vs the our-policy proxy) from the T4 overlay.
+3. **An authored-brief hazard field** (Fork A option 3): let a Brief declare `opp_disruption_density`
+   directly, overriding/boosting the generic tags+Read signal per archetype (matchup-genie owns it).
+
+## Acceptance — build met 2026-07-05; A/B regressed → kept OFF
 
 Zero triggers on plain boards (REQ-ESCALATE-0001); defers when off / no budget / no search input
 (REQ-ESCALATE-0002); DEFAULT OFF on the shipped Pilot (REQ-ESCALATE-0003); the Tier-1 sim path
-unchanged (full suite green). The budgeted ladder A/B remains before default-ON.
+unchanged (full suite green). The density trigger fires on real boards and its commit gate holds
+(REQ-ESCALATE-0006–0009; the live commit is unit-pinned + diagnostic-measured, not a flaky live count).
+
+**The budgeted ladder A/B ran and REGRESSED** (mega_starmie mirror, escalation ON vs OFF, 1000 games:
+**ON 44 %, 95 % CI 41-47 %, 0 crashes**), so the tier stays DEFAULT OFF — built, gated, and parked with
+evidence, not shipped. The two-ply overrides systematically lose to the tuned scorer (the closed-form
+survival/dev leaf appears to prefer board-preservation over the fast mirror's tempo). The tier's real
+unlock is its Gap items — the Tier-5 value-model leaf and a real opponent-deck reply model — not the
+trigger breadth; a commit-margin gate + higher density threshold are the cheap salvage knobs first.
+See ADR-0043 *Amendment* for the full result and root-cause read.
