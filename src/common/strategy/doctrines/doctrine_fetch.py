@@ -345,10 +345,17 @@ HYPOTHESES = [
         id="fetch-energy-when-starved",
         rationale="With the Active unpowered and no Energy in hand, take a reusable Basic Energy at a search — "
                   "you need to power an attack now, and neither a Pokémon nor a discard-at-EOT Energy (Ignition) "
-                  "does that. Also prefers a reusable Basic over a discard Energy at the same search.",
+                  "does that. Also prefers a reusable Basic over a discard Energy at the same search. Seeded "
+                  "+35 (above `fetch-the-wincon` +30, which already stands DOWN when energy-starved) so energy "
+                  "DOMINATES every Pokémon grab in the famine — not just the wincon but a redundant engine "
+                  "piece (`fetch-the-engine-first` +20 + `fetch-a-starter` +12 = 32) or a line-piece "
+                  "(`prefer-wincon-line-piece` +18 + starter = 30): an unpowered board does nothing, so a 2nd "
+                  "Solrock/Lunatone never out-ranks the Energy that turns the game on (ep83966336 f9, "
+                  "ep83967841 f14). The old +25 sat BELOW the grabs it was meant to beat — the doctrine's own "
+                  "stated priority, now weighted to match.",
         when=lambda c: c.select_context == _TO_HAND and c.board.my_active_energy == 0
         and not c.board.reusable_energy_in_hand and _is_reusable_energy(c.stat, c.tags),
-        weight=25, status="testing"),
+        weight=35, status="testing"),
     Hypothesis(
         id="prefer-bench-fill-first",
         rationale="A `bench_fill` card (Buddy-Buddy Poffin) is best played FIRST in a thin deck: develops the "
@@ -603,6 +610,41 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_fills_a_need
         and c.board.wincon_in_hand and c.board.wincon_base_deployable,
         weight=-12, status="testing"),
+    Hypothesis(
+        id="dont-costly-tutor-when-starved-and-developed",
+        rationale="Don't pay a `cost_discard` Pokémon-tutor's two-card cost (Ultra Ball) while ENERGY-STARVED "
+                  "(Active unpowered, no reusable Energy in hand) with the Bench ALREADY developed "
+                  "(>= _THIN_BENCH). The tutor fetches a Pokémon — never the Energy you actually lack — and "
+                  "you already have bodies, so what it grabs can't help THIS turn (unpowered you can't attack, "
+                  "and an early setup turn can't evolve either) while the discard bleeds two cards: save it "
+                  "(ep83967841 f17: Ultra Ball over End with Riolu + Solrock + 2 Lunatone down and 0 Energy). "
+                  "−30 nets the play below End, cancelling `search-the-confirmed-hit` (+15) + "
+                  "`fetch-when-it-fills-a-need` (+8). Tightly gated: stands down on a THIN bench (you need "
+                  "bodies then, the tutor earns its cost) and once the Active is powered (a real dig, not a "
+                  "starved durdle).",
+        when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and "tutor_pokemon" in c.tags
+        and c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand
+        and c.board.my_bench >= _THIN_BENCH,
+        weight=-30, status="assumed"),
+    Hypothesis(
+        id="demote-needless-search-supporter-in-setup",
+        rationale="During SETUP, a bare narrow `search` Supporter (Team Rocket's Petrel — search your deck for "
+                  "ONE Trainer) whose search fills no modeled need (`not fetch_fills_a_need`) is NOT an "
+                  "endorsed early play: it burns the once-per-turn Supporter slot for ~0 net cards while a "
+                  "full-hand refresh (Lillie's Determination, draw 6) develops the whole hand. −20 EXACTLY "
+                  "neutralises `dig-before-commit` (+20) so the tutor nets 0 → `_finish_turn_last` drops it "
+                  "from tier 1 (endorsed non-shuffle Supporter, sequenced AHEAD of everything) to tier 4 "
+                  "(score ≤ 0), so a tier-3 shuffle-refresh now out-sequences it and wins the mutually-"
+                  "exclusive Supporter slot (ep83966336 f27: Petrel over Lillie's with a Supporter already in "
+                  "hand). Netting to EXACTLY 0 (not below) keeps it tied with End, so it still plays as the "
+                  "ONLY dig (tie broken to the tutor). Gated to a `search` Supporter with no need-hit, so a "
+                  "genuinely useful tutor (a fetch-filter that reaches a lacked card) is untouched. NB: the "
+                  "fix is a sequencing threshold, not a ranking margin — gated by "
+                  "tests/strategy/test_setup_resource_discipline.py, not just the weight fit.",
+        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY
+        and "search" in c.tags and not c.fetch_fills_a_need
+        and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
+        weight=-20, status="assumed"),
     Hypothesis(
         id="fetch-deck-priority",
         rationale="Tier-3 escape hatch (ADR-0023): when the deck declares `Strategy.fetch_priority`, grab the "
