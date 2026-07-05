@@ -1,0 +1,132 @@
+# Handoff — completing the 7-tier Pilot implementation
+
+**Date:** 2026-07-05 · **Written for:** a fresh session finishing the tiered architecture.
+**Status of the build:** all seven tiers now have running, tested implementations. This is a
+*finish-the-remaining-gaps + flip-the-OFF-switches* job, not a from-scratch build.
+
+## 1. Where the code lives NOW (read this first)
+
+**The whole 7-tier build was merged to `main`** this session — PR #35 (`e5068fc`). Start from a fresh
+branch off `origin/main`; do **not** continue on `claude/magical-sanderson-19b713` (it's merged and
+stale). `git fetch origin main` first.
+
+The architecture, rationale, and per-tier %-complete + "Gap to final" lists are the source of truth —
+**do not duplicate them here**, read them:
+
+- Index + build status: [docs/architecture/tiers.md](../docs/architecture/tiers.md)
+- Per tier: `docs/architecture/tier-{0..6}-*.md` — each has a **"Gap to final"** section that IS the
+  remaining-work list. Trust those over any summary.
+- Decisions: [ADR-0039](../docs/adr/0039-gamble-lines-are-closed-form-expectimax-over-outcome-classes.md)
+  (gamble lines), [ADR-0040](../docs/adr/0040-match-judgment-is-per-turn-closed-form-objectives.md)
+  (prize path / KO race / derived phases),
+  [ADR-0042](../docs/adr/0042-base-value-model-is-a-dependency-free-logistic-over-objective-features.md)
+  (value model), [ADR-0043](../docs/adr/0043-escalation-search-is-a-budgeted-depth-2-tree-on-a-close-attack-tie.md)
+  (escalation).
+- Glossary (new terms Chance Node / Outcome Class / Gamble Line / KO Race / Prize Path / Path Denial /
+  Base Value Model / Escalation Search): [src/common/CONTEXT.md](../src/common/CONTEXT.md).
+- Memory `final-architecture-tiers` (auto-loaded) has the compressed build log.
+
+## 2. Current tier status (see tier docs for the authoritative gap lists)
+
+| Tier | % | Default | The remaining work in one line |
+|---|---|---|---|
+| T0 rules | 90% | ON | ongoing correction rounds (not this job) |
+| T1 planner | 88% | ON | leaf seam for T5 (done); defer-vs-commit A/B revisit |
+| T2 gamble | 70% | ON | recovery-class polish, multi-class EV, non-MAIN fallback terms |
+| T3 objectives | 75% | ON | trace-line writeup polish, deeper denial, fresh prize-race example |
+| T4 opponent | 70% | ON | Brief coverage (`/matchup-genie`), `opp_tempo` lever, favorability→phase tuning |
+| **T5 value model** | 65% | **OFF** | **production corpus + non-mirror gauntlet A/B → flip ON** |
+| **T6 escalation** | 55% | **OFF** | **budgeted ladder A/B + engine trigger-fixture test → flip ON** |
+
+**The two highest-value finish tasks are T5 and T6 (both built, both OFF pending evidence).**
+
+## 3. The critical gotchas (things that will bite you)
+
+1. **A separate branch `claude/typed-affordability` conflicts BY DESIGN.** It extends
+   `_attack_type_payable` into the shared KO-valuation (`_best_affordable_ko_value` / `_develop_wins`)
+   with a `wild_units` superset. If it hasn't merged yet, **take the typed-affordability version** on
+   any merge — this branch carries the earlier attach-hook-only version in the same `pilot.py` hunk.
+   Details in the `final-architecture-tiers` memory (bottom).
+2. **Hypothetical-board memory pollution.** `_board()` mutates turn-scoped memory (`_phase_prev`
+   hysteresis, `_my_path_prev` stickiness) as a side effect of the in-order decision sequence. Any
+   code that builds a Board on a *simmed/hypothetical* obs MUST go through
+   `planner._board_hypothetical` (snapshot/restore), never raw `_board`. Gated by REQ-VALUE-0005.
+3. **The gate-ban lint guard is permanent** (REQ-OBJ-0008, `test_objectives.py`). No strategy rule may
+   key on `c.plan`. If a rebase/blunder-round adds a `c.plan == Plan.X` rule, migrate it to the
+   readiness signal `c.board.line_ready` (True iff `choose_plan` returns RACE) — that's exactly what
+   the last commit on this branch did.
+4. **T5/T6 stay OFF until their own A/B clears** — a learned seam and a search seam never ship on a
+   green unit suite alone. Both are wired behind params (`value_model`, `escalation`+`search_budget`)
+   defaulting False in all three agents + `tune._build_pilot`.
+
+## 4. How to run the things you'll need
+
+```bash
+# full suite (Windows PowerShell or bash) — ~4 min, expect 1296 passed
+python -m pytest tests/ -q
+
+# train the value model (writes src/common/value/value_model.json)
+python tools/train/value/train.py mega_starmie          # reads data/replays/selfplay/
+
+# generate a bigger self-play corpus first (the shipped model is a 40-game SEED)
+python tools/sim/selfplay.py mega_starmie -n 400        # data/replays/selfplay/ is gitignored
+
+# A/B a config vs baseline (2000 games, ~3 min). Overlay = {"params": {"<switch>": true}}
+python tools/sim/battle.py "mega_starmie@overlay.json" mega_starmie -n 2000 -j 10 --note "..."
+```
+
+This session's A/Bs (all mirror, 0 crashes): objectives 50% (#57), gamble+coin 52% (#58),
+consumers 52% (#59), value-model-on 50% (#60). The 50%s are *safe/neutral* results in a mirror, not
+failures — see §5.
+
+## 5. The T5/T6 finish plan (the actual remaining implementation)
+
+**T5 (value model) — flip ON:**
+- The seed model trains end-to-end (holdout logloss 0.60 vs 0.69 coin-flip; legible weights). The
+  mirror A/B was 50% because favorability/matchup features **don't vary when both seats are the same
+  Pilot** — the model can't move a mirror tie. To show signal you need a **non-mirror gauntlet**
+  (handcrafted opponent agents) OR a matchup-conditioned model. Build order per ADR-0007: general →
+  matchup-conditioned → per-deck.
+- Steps: (a) generate a larger + varied corpus, (b) retrain, (c) A/B against a *non-mirror* opponent,
+  (d) if ≥ baseline + 0 crashes, set `value_model: true` in the agents' params.
+
+**T6 (escalation) — flip ON:**
+- Built + engine-smoke-tested (94-decision game, 0 crashes) but never A/B'd with a real budget. It
+  fires only on a close attack tie and commits only a strict improvement, so it's rare-by-design.
+- Steps: (a) A/B `{"escalation": true, "search_budget": 200}` vs off, measure win-rate AND
+  playability (0 crash/timeout at the chosen budget over the full run), (b) add an engine-backed
+  trigger-fixture test (mirror the `test_planner_engine.py` style — the two-ply sim shares
+  `_simulate_line`), (c) if it clears, flip `escalation` on with a tuned `search_budget`.
+
+## 6. Suggested skills (in order)
+
+1. **`/grill-with-docs`** — if you want to pressure-test the T5-gauntlet or T6-budget approach before
+   building; it updated the tier docs/ADRs inline this whole session and keeps them the source of truth.
+2. **`/tdd`** — the per-tier gaps (§2) and the T5/T6 finish steps are test-first work; mirror the
+   existing `REQ-OBJ-*` / `REQ-GAMBLE-*` / `REQ-VALUE-*` / `REQ-ESCALATE-*` gates.
+3. **`/matchup-genie`** — for T4 Brief coverage (the meta head ~8 archetypes) and to build the
+   handcrafted opponents the T5 non-mirror gauntlet needs.
+4. **`/blunder-buster`** — orthogonal; only if a fresh correction round lands. It now reads
+   `live_trace.posture` (ADR-0041, merged this cycle) to route matchup misplays.
+
+**Not** `/deck-genie` / `/deck-align` (no new deck), and **not** a from-scratch architecture grill —
+the architecture is decided and built.
+
+## 7. Definition of done for "completing implementation"
+
+The tier map is feature-complete when: T5 and T6 have each cleared a real (non-mirror for T5,
+budgeted for T6) A/B and been flipped ON — or been explicitly parked with the evidence recorded in
+their tier docs. The per-tier "Gap to final" lists are refinements, not blockers; close them as
+correction/meta data justifies. Every step ships behind its kill-switch + A/B (ADR-0009/0021),
+degrades to the tier below, and never lets a learned/searched layer override a sound rung.
+
+
+***
+It's scoped tightly to finishing the build, not re-explaining it — everything already captured in the tier docs, ADRs, glossary, and memory is referenced by path, not duplicated. Key things it front-loads for the next agent:
+
+Start from main, not this branch — the whole seven-tier build merged as PR #35 (e5068fc) while we worked, so the branch is stale.
+The two real finish tasks: T5 (value model) and T6 (escalation) are built but default-OFF, each pending its own A/B — T5 needs a non-mirror gauntlet (the 50% mirror A/B is neutral-by-construction, not a failure), T6 needs a budgeted playability A/B.
+Three gotchas that will bite: the claude/typed-affordability branch conflicts by design (take its version), the _board_hypothetical snapshot/restore rule for any simmed board, and the permanent gate-ban lint guard.
+Runnable commands for suite / train / corpus / A/B, plus this session's four A/B results with the mirror-neutrality caveat.
+Suggested skills: /grill-with-docs → /tdd → /matchup-genie (also builds the opponents T5's gauntlet needs) → /blunder-buster.
+DONE
