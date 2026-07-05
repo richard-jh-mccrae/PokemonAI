@@ -235,7 +235,8 @@ class PlannerMixin:
 
     def _legacy_win_candidates(self, obs, select, board, options, traces, opp):
         """Yield the pre-family (stage-1) closed-form candidates in their exact order — the
-        ``lethal_family=False`` path, byte-identical to ADR-0030's shipped rungs: (1) a KO already
+        ``lethal_family=False`` path, ADR-0030's shipped rungs (shared-valuation upgrades — e.g.
+        the typed-affordability guard — flow through): (1) a KO already
         on the menu that WINS now, judged by the attack's OWN prize yield (`_attack_wins`); (2) an
         Energy attach or a retreat into a READY benched attacker that unlocks the winning KO (the
         KO_SCORE-class closed-form hook traces); (3) an EVOLVE of the Active bringing a bigger
@@ -260,12 +261,13 @@ class PlannerMixin:
                                rationale="lethal (unlock): a develop enables the winning KO")
         # 3) EVOLVE of Active bringing bigger attacker online — no closed-form hook scores it, so
         # look up: evolved form inherits Active's Energy, best affordable attack must KO (same-turn
-        # legal, rules.md §evolution).
+        # legal, rules.md §evolution). Typed-affordability guarded like every shared KO valuation.
+        ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
         for i, o in enumerate(options):
             if o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 evolved_id = self._option_card_id(obs, select, o)
                 if self._best_affordable_ko_value(obs, board, opp, evolved_id, board.my_active_energy,
-                                                  bound="min") > 0:
+                                                  bound="min", body=ma) > 0:
                     yield TurnLine(next_step=[i], goal="win", kind="evolve",
                                    rationale="lethal (evolve): evolving enables the winning KO")
 
@@ -290,6 +292,8 @@ class PlannerMixin:
         if board.turn <= 1:
             return                                     # turn 1 going first: no attack this turn, so
                                                        # no develop can cash a win (rules.md §first-turn)
+        me = self._my_player(obs)
+        ma = next((p for p in (me.get("active") or []) if p), None)
         extra = 1 if (board.reusable_energy_in_hand and not board.energy_attached) else 0
         for tier_extra in (0, extra) if extra else (0,):
             for i, o in enumerate(options):
@@ -298,17 +302,21 @@ class PlannerMixin:
                 t = o.get("type")
                 if t == _ATTACH and o.get("inPlayArea") == _ACTIVE and tier_extra == 0:
                     provided = self._attach_provided(obs, select, board, o)
+                    eid = self._option_card_id(obs, select, o)
+                    estat = self.stats.get(eid) if (self.stats and eid is not None) else None
                     win = self._develop_wins(obs, board, opp, board.my_active_id,
-                                             board.my_active_energy + provided)
+                                             board.my_active_energy + provided, body=ma,
+                                             extra_type=getattr(estat, "energyType", None),
+                                             extra_units=provided)
                     kind, why = "unlock", "lethal (unlock): the attach enables the winning KO"
                 elif t == _RETREAT:
                     win = any(self._develop_wins(obs, board, opp, p.get("id"),
-                                                 len(p.get("energies") or []) + tier_extra)
-                              for p in (self._my_player(obs).get("bench") or []) if p)
+                                                 len(p.get("energies") or []) + tier_extra, body=p)
+                              for p in (me.get("bench") or []) if p)
                     kind, why = "unlock", "lethal (unlock): the retreat enables the winning KO"
                 elif t == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                     win = self._develop_wins(obs, board, opp, self._option_card_id(obs, select, o),
-                                             board.my_active_energy + tier_extra)
+                                             board.my_active_energy + tier_extra, body=ma)
                     kind, why = "evolve", "lethal (evolve): evolving enables the winning KO"
                 elif t == _PLAY and self._is_gust(obs, select, o):
                     win = self._gust_win_target(obs, board, board.my_active_energy + tier_extra)
@@ -321,17 +329,17 @@ class PlannerMixin:
         # tier 3: the energy-tutor Supporter supplies the attach the line lacks (the 4298 shape,
         # game-winning). SOUND only when the deck DEFINITELY still holds a reusable Energy (the
         # match-scoped tracker's positive certainty) — a probable fetch is never a win.
-        me = self._my_player(obs)
         retreat_on_menu = any(o.get("type") == _RETREAT for o in options)
         if (not (board.energy_attached or board.reusable_energy_in_hand)
                 and self._tutor_energy_certain(board)):
             for i, o in enumerate(options):
                 if i in seen or o.get("type") != _PLAY or not self._is_energy_tutor(obs, select, o):
                     continue
-                win = self._develop_wins(obs, board, opp, board.my_active_id, board.my_active_energy + 1)
+                win = self._develop_wins(obs, board, opp, board.my_active_id,
+                                         board.my_active_energy + 1, body=ma)
                 if not win and retreat_on_menu:
                     win = any(self._develop_wins(obs, board, opp, p.get("id"),
-                                                 len(p.get("energies") or []) + 1)
+                                                 len(p.get("energies") or []) + 1, body=p)
                               for p in (me.get("bench") or []) if p)
                 if win:
                     seen.add(i)
@@ -354,14 +362,20 @@ class PlannerMixin:
                 yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                rationale="lethal (unlock): the evolution tutor evolves the winning attacker")
 
-    def _develop_wins(self, obs, board, opp, attacker_id, energy) -> bool:
+    def _develop_wins(self, obs, board, opp, attacker_id, energy, body=None,
+                      extra_type=None, extra_units: int = 0) -> bool:
         """SOUND: this attacker, carrying ``energy``, takes a min-bound affordable KO of the
         opponent's Active AND that KO wins — it reaches my remaining prize count or their bench is
         empty (no Pokémon to promote). The family's shared develop-tier win test: worst-coin damage
-        floors via ``bound="min"``, rider snipes deliberately under-counted (conservative)."""
+        floors via ``bound="min"``, rider snipes deliberately under-counted (conservative).
+        ``body``/``extra_type``/``extra_units`` forward to the typed-affordability guard (an Energy
+        the line provides can't fund a specific-type slot it doesn't match — Ignition never pays a
+        {W}); budget beyond attached+extra stays wild (fail-open)."""
         if not (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench):
             return False
-        return self._best_affordable_ko_value(obs, board, opp, attacker_id, energy, bound="min") > 0
+        return self._best_affordable_ko_value(obs, board, opp, attacker_id, energy, bound="min",
+                                              body=body, extra_type=extra_type,
+                                              extra_units=extra_units) > 0
 
     def _attach_provided(self, obs, select, board, option) -> int:
         """Energy units this ATTACH provides the Active — 1 for a plain Energy; 3 for a
@@ -387,11 +401,12 @@ class PlannerMixin:
         lethal, generated (and locked) by the family rather than hook-scored. Dragging never empties
         their board (the old Active benches), so only the prize-out shape wins here; Tera bench
         immunity is irrelevant (the target is Active when hit)."""
+        ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
         for b in (self._opp_player(obs).get("bench") or []):
             if not b or self._prize_value(b) < board.my_prizes_remaining:
                 continue
             if self._best_affordable_ko_value(obs, board, b, board.my_active_id, energy,
-                                              bound="min") > 0:
+                                              bound="min", body=ma) > 0:
                 return True
         return False
 
@@ -626,6 +641,8 @@ class PlannerMixin:
                 continue                              # heal can't outlast the Incoming
             if self._best_affordable_ko_value(obs, board, opp, board.my_active_id, energy_total) <= 0:
                 continue                              # heal's Energy cost would forfeit the KO
+                                                      # (no `body`: a bounce rider re-attaches ANY
+                                                      # bounced type — attached counts are stale here)
             value = self._leaf_value(prizes=self._prize_value(opp), active_survives=True,
                                      threat_removed=self._threat_magnitude(opp))
             lines.append(TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
@@ -1058,7 +1075,7 @@ class PlannerMixin:
                 continue
             if not board.deck_definitely_has(cid):
                 continue
-            if self._develop_wins(obs, board, opp, cid, energy + extra):
+            if self._develop_wins(obs, board, opp, cid, energy + extra, body=body):
                 return True
         return False
 
@@ -1075,9 +1092,10 @@ class PlannerMixin:
             if not p:
                 continue
             energy = len(p.get("energies") or [])
-            if self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy) > 0:
+            if self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy, body=p) > 0:
                 continue                              # retreat alone already KOs — existing hook owns it
-            if not (extra and self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy + extra) > 0):
+            if not (extra and self._best_affordable_ko_value(obs, board, opp, p.get("id"),
+                                                             energy + extra, body=p) > 0):
                 continue
             cand = (self._prize_value(opp), self._survives_after_ko(p.get("id"), p.get("hp", 0), opp_player))
             if best is None or cand > best:           # prefer more prizes, then survival (bool > bool)
@@ -1112,7 +1130,8 @@ class PlannerMixin:
                     continue
                 if board.deck_contains_probability(cid) <= 0.5:
                     continue                          # likely whiff: never plan on a improbable fetch
-                if self._best_affordable_ko_value(obs, board, opp, cid, energy + extra) <= 0:
+                if self._best_affordable_ko_value(obs, board, opp, cid, energy + extra,
+                                                  body=body) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
@@ -1147,7 +1166,9 @@ class PlannerMixin:
         if evolved_id is None:
             return None
         energy = board.my_active_energy
-        if self._best_affordable_ko_value(obs, board, opp, evolved_id, energy + extra) <= 0:
+        ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
+        if self._best_affordable_ko_value(obs, board, opp, evolved_id, energy + extra,
+                                          body=ma) <= 0:
             return None
         estat = self.stats.get(evolved_id) if self.stats else None
         my_hp = getattr(estat, "hp", 0) or 0          # evolved max HP — P3 engine-sim resolves damage exactly
