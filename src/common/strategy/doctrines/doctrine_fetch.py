@@ -16,7 +16,7 @@ from dataclasses import replace
 from common.strategy.context import (_BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG, _PLAY,
                                       _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
                                       _TO_HAND, _WINCON_ROLES)
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.strategy import Hypothesis
 
 # Reliable-engine Supporter (draw/search/heal) = fuel, keep it at a forced discard, unlike a
 # situational `hand_disruption` one (Harlequin: symmetric shuffle refills opponent too).
@@ -641,9 +641,9 @@ HYPOTHESES = [
                   "genuinely useful tutor (a fetch-filter that reaches a lacked card) is untouched. NB: the "
                   "fix is a sequencing threshold, not a ranking margin — gated by "
                   "tests/strategy/test_setup_resource_discipline.py, not just the weight fit.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY
-        and "search" in c.tags and not c.fetch_fills_a_need
-        and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
+        when=lambda c: not c.board.line_ready and c.option_type == _PLAY   # pre-payoff (ADR-0040
+        and "search" in c.tags and not c.fetch_fills_a_need                # gate-ban migration:
+        and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),  # was plan==SETUP)
         weight=-20, status="assumed"),
     Hypothesis(
         id="fetch-deck-priority",
