@@ -1,4 +1,4 @@
-"""Tier 5 — the Base Value Model (ADR-0042): features, the pure-Python logistic, the absent-safe
+"""Tier 5 — the Automatic Value Model (ADR-0042): features, the pure-Python logistic, the absent-safe
 runtime, and the planner leaf blend.
 """
 import json

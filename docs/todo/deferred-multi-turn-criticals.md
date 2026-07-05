@@ -45,7 +45,7 @@ about *whose* KO advances *whose* win). That is the designed-but-unbuilt **M3 de
   into a future **Prize-Race Planner** (fuzzy, opponent-modelled, non-committal — the *wrong* home for a
   hard lock).
 - [roadmap-search-posture-learning.md](roadmap-search-posture-learning.md) — **M3 Tier-1 Search** (budgeted
-  escalation) + **M4 Value Model** (replay-trained leaf-eval), the capabilities these need.
+  escalation) + **M4 Automatic Value Model** (replay-trained leaf-eval), the capabilities these need.
 
 **Do not** bolt multi-turn onto the closed-form Planner; it belongs behind the engine-search escalation +
 the value-model leaf-eval, exactly where the roadmap puts it.

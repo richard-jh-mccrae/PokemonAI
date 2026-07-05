@@ -1,4 +1,4 @@
-"""Mine labelled states from replays for the Base Value Model (ADR-0042).
+"""Mine labelled states from replays for the Automatic Value Model (ADR-0042).
 
 For each of MY decision frames in a replay, build the Tier-3/Tier-4 feature vector by running the
 shipped Pilot's ``_board`` on the recorded agent ``obs`` (the same obs the tuner replays on), and

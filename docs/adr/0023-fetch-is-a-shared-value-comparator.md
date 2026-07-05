@@ -70,7 +70,7 @@ prizes keeps the signal silent) and the exact `OwnCardModel` prize/deck tracker 
 - **A strict lexicographic priority ladder** (always satisfy rung 1 before rung 2) — rejected as
   brittle: a trivial high-rung need would always beat a large low-rung need, and it can't express
   trade-offs. Additive need-gated scoring keeps the rest of the architecture's idiom and defers genuine
-  ties to the Base Value Model ([ADR-0007](0007-learning-is-one-offline-value-model.md)).
+  ties to the Automatic Value Model ([ADR-0007](0007-learning-is-one-offline-value-model.md)).
 - **An exhaustive per-card importance table per deck** — rejected: brittle, doesn't scale across decks,
   and duplicates what `Strategy.lines` / Function Tags / `CardStat` already encode. Derive-then-override
   matches [ADR-0006](0006-function-tags-single-source-of-structural-facts.md).

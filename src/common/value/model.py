@@ -1,4 +1,4 @@
-"""The Base Value Model runtime (ADR-0042): load a trained logistic once, predict ``P(win)`` from a
+"""The Automatic Value Model runtime (ADR-0042): load a trained logistic once, predict ``P(win)`` from a
 feature vector — pure Python, dependency-free, **absent-safe**.
 
 The shipped artifact (``value_model.json``, written by ``tools/train/value/train.py``) carries the

@@ -1,4 +1,4 @@
-# Roadmap — graduating the Pilot: cheap f75 → Posture → Tier-1 Search → Self-play & Value Model
+# Roadmap — graduating the Pilot: cheap f75 → Posture → Tier-1 Search → Self-play & Automatic Value Model
 
 > **SUPERSEDED as the architecture reference (2026-07-05).** The final architecture now lives in
 > [docs/architecture/tiers.md](../architecture/tiers.md) (seven tier docs with %-complete), decided
@@ -18,7 +18,7 @@ Tier-0 rules Pilot. Trigger-gated, not date-gated. Anchored to
 ## TL;DR — the dependency chain
 
 ```
-M0 cheap f75            M1 self-play PRE-FILTER     M2 Posture            M3 Tier-1 Search       M4 Value Model
+M0 cheap f75            M1 self-play PRE-FILTER     M2 Posture            M3 Tier-1 Search       M4 Automatic Value Model
 (forward evo graph)  →  (cheap A/B, NOT the gate)→  (the Read → play)  →  (escalation+budget) →  (replay-trained leaf eval)
 ship next round         foundational, build early   Read already built    Search API exists      heaviest, last
 ```
@@ -231,7 +231,7 @@ tuned scoring) is the exemplar for the **Prize-Race Planner** and needs the M4 v
 
 ---
 
-## M4 — Value Model (Job B): replay-trained leaf eval  ·  *heaviest, last; plugs into M3*
+## M4 — Automatic Value Model (Job B): replay-trained leaf eval  ·  *heaviest, last; plugs into M3*
 
 **Entry:** a replay **data engine** producing labelled states (mined replays, label = eventual winner); M3 to consume
 the leaf eval; M1 ladder to validate. Per ADR-0007 this is the **single learned seam**.

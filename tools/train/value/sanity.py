@@ -1,4 +1,4 @@
-"""Post-train sanity gate for the Base Value Model (grilled 2026-07-05, Tier-5 finish plan).
+"""Post-train sanity gate for the Automatic Value Model (grilled 2026-07-05, Tier-5 finish plan).
 
 The seed model was trained on a MIRROR-only corpus, so ``favorability`` never varied and its fitted
 weight sat at ~0 — the model literally could not use its matchup signal. Before the cross-deck A/B is

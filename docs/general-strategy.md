@@ -675,7 +675,7 @@ Posture needed for v1; engine/replaceability denial waits on the Read).
 ## Not a reflex weight — handled elsewhere
 
 - **Prize map** (the multi-turn planned KO sequence) → **planning**: Tier-1 Search + the Base
-  Value Model ([ADR-0007](adr/0007-learning-is-one-offline-value-model.md)). A single weight can't
+  Automatic Value Model ([ADR-0007](adr/0007-learning-is-one-offline-value-model.md)). A single weight can't
   sequence knockouts across turns; its *per-turn shadows* are `prize-trade-target` +
   `dont-bench-multiprize` + `keep-a-bench`. (F13)
 - **Win conditions** (take 6 prizes / opponent has no Pokémon / opponent decks out) → goal-state
