@@ -2,7 +2,8 @@
 redraw a hand you can already start; open with the piece your deck's Roles nominate. Pure data,
 no Mixin.
 """
-from common.strategy.context import _IS_FIRST, _MULLIGAN, _NO, _SETUP_ACTIVE, _YES
+from common.strategy.baseline.baseline_bench import _multi_prize
+from common.strategy.context import _IS_FIRST, _MULLIGAN, _NO, _SETUP_ACTIVE, _WINCON_ROLES, _YES
 from common.strategy.strategy import Hypothesis, Plan
 
 HYPOTHESES = [
@@ -33,4 +34,22 @@ HYPOTHESES = [
         when=lambda c: c.select_context == _SETUP_ACTIVE   # pregame pick: the line can't be ready yet
         and "accel_source" in c.roles,
         weight=40, status="assumed"),
+    Hypothesis(
+        id="dont-open-multiprize-active",
+        rationale="At the pregame Set-Up Active pick (`_SETUP_ACTIVE`), DON'T open with a non-wincon "
+                  "multi-prize ex (Meowth ex) — the Active Spot is the most-exposed slot, so a 2-prize "
+                  "(ex) / 3-prize (Mega ex) liability there hands the opponent an easy multi-prize KO, "
+                  "and Meowth ex's Last-Ditch Catch only triggers on an IN-GAME bench-from-hand "
+                  "(EN_Card_Data row 1071 / rulebook L96), so opening it ALSO forfeits the free Supporter "
+                  "fetch. The Active-pick mirror of `dont-bench-multiprize` (same −15, same `_WINCON_ROLES` "
+                  "escape so a deck that MEANS to open its Basic-ex attacker still can) and the sibling of "
+                  "`dont-pre-bench-the-supporter-tutor` (which owns the pregame BENCH decline). No explicit "
+                  "'a plain Basic is also on offer' gate is needed: SETUP_ACTIVE is a forced single pick "
+                  "(minCount 1, so decide()'s take-fewer never trims), so when the ex is the ONLY startable "
+                  "Basic it stays the max-scoring option and is still placed — the −15 only bites when a "
+                  "plain Basic (Riolu/Solrock/Lunatone at score 0) outscores it. mega_lucario opened Meowth "
+                  "ex ~4/25 self-play games (residual-blunder audit 2026-07-05).",
+        when=lambda c: c.select_context == _SETUP_ACTIVE and _multi_prize(c.stat)
+        and not (_WINCON_ROLES & set(c.roles)),
+        weight=-15, status="assumed"),
 ]

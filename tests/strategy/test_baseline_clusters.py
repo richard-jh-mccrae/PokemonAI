@@ -49,7 +49,7 @@ CLUSTERS = {
         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
-                                     "honor-preferred-start"}),
+                                     "honor-preferred-start", "dont-open-multiprize-active"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
                                            "dont-play-damage-boost-when-cant-attack"}),
     "disruption": (DISRUPTION_HYPOTHESES, {
