@@ -57,6 +57,23 @@ HYPOTHESES = [
         and c.board.my_bench < _BENCH_MAX and not _multi_prize(c.stat) and "opener" not in c.tags,
         weight=12, status="assumed"),
     Hypothesis(
+        id="develop-the-wincon-base-first",
+        rationale="Among basics to develop in SETUP, prefer the win-condition Line's pre-evolution "
+                  "(`card_is_line_preevo` — Riolu on Riolu→Mega Lucario ex, Staryu on the Starmie "
+                  "line, Dreepy on Dragapult) over an off-line support basic. `develop-a-basic-in-"
+                  "setup` (+12) is INDIFFERENT among basics, so the pick fell to the option-index "
+                  "tiebreak — benching whichever basic sat lowest in the menu (Solrock/Makuhita "
+                  "ahead of Riolu by pure array position: ep83661652 f33/f40/f44, mega_lucario "
+                  "'severely off, not benching the line'). The wincon base starts the evolve clock "
+                  "a turn earlier, so lay it before a support Basic. A faint tiebreaker (rides on "
+                  "top of the +12 develop so the wincon base leads the other basics 18-vs-12, not a "
+                  "new imperative); a real KO still dominates (KO_SCORE), and it is a NO-OP for a "
+                  "deck whose only setup Basic already IS the Line base (mega_starmie). Gated to "
+                  "SETUP + a non-full Bench, mirroring the develop rule it rides.",
+        when=lambda c: not c.board.line_ready and c.option_type == _PLAY
+        and c.card_is_line_preevo and c.board.my_bench < _BENCH_MAX and "opener" not in c.tags,
+        weight=6, status="assumed"),
+    Hypothesis(
         id="dont-bench-onto-their-path",
         rationale="Tier-3 Path Denial (ADR-0040, 'force 7 — not 6'): benching this Pokémon strictly "
                   "improves the opponent's cheapest Prize Path — completing a previously-uncompletable "

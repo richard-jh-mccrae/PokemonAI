@@ -36,6 +36,7 @@ CLUSTERS = {
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
                                  "develop-the-accel-recipient", "develop-a-basic-in-setup",
+                                 "develop-the-wincon-base-first",   # prefer the wincon Line base among develops
                                  "dont-bench-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
@@ -48,7 +49,7 @@ CLUSTERS = {
         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
-                                     "honor-preferred-start"}),
+                                     "honor-preferred-start", "dont-open-multiprize-active"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
                                            "dont-play-damage-boost-when-cant-attack"}),
     "disruption": (DISRUPTION_HYPOTHESES, {

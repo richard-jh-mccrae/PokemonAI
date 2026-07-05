@@ -228,9 +228,14 @@ class AgentServer:
 
 
 def play_match(server_a: AgentServer, server_b: AgentServer,
-               deck_a: list[int], deck_b: list[int]) -> MatchResult:
+               deck_a: list[int], deck_b: list[int], *, recorder=None) -> MatchResult:
     """Drive one Match on the native engine: seat A vs B, ask whichever seat is to move, until
-    the engine reports a `result`. A crashed/illegal seat loses the Match (and is flagged)."""
+    the engine reports a `result`. A crashed/illegal seat loses the Match (and is flagged).
+
+    Pass a `MatchRecorder` (`sim.record`) to capture the game into a training film off THIS loop —
+    the process-isolated path that lets two different decks play without the in-process two-deck
+    `sys.modules` collision (the Tier-5 gauntlet corpus, grilled 2026-07-05). `recorder=None` (the
+    A/B path) leaves behaviour byte-identical."""
     from cg.game import battle_finish, battle_start, battle_select
 
     obs, start = battle_start(deck_a, deck_b)
@@ -255,6 +260,8 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
             if choice is None:                     # seat crashed -> other seat wins
                 winner, crashed = 1 - seat, (seat,)
                 break
+            if recorder is not None:
+                recorder.step(obs, choice)         # (obs shown, choice made) — paired for the +1-offset film
             try:
                 obs = battle_select(choice)
             except Exception:                      # illegal selection is a loss, same as a crash
@@ -262,6 +269,8 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 break
     finally:
         battle_finish()
+    if recorder is not None:
+        recorder.finish(obs, winner)               # terminal obs + engine-seat winner
     return MatchResult(winner=winner, crashed=crashed)
 
 

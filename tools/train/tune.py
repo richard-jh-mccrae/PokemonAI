@@ -38,6 +38,9 @@ def _build_pilot(agent: str):
     from common.scouting.provider import (
         EngineCardStatProvider, build_attack_stats, load_attack_overrides,
         parse_attack_bench_snipe, parse_attack_ignores_active_effects, parse_attack_recoil)
+    from common.scouting.artifact import load_artifact
+    from common.scouting.briefs import load_briefs
+    from common.scouting.scout import Scout
 
     agent_dir = REPO / "src" / "agents" / agent
     spec = importlib.util.spec_from_file_location(f"{agent}_strategy", agent_dir / "strategy.py")
@@ -47,9 +50,10 @@ def _build_pilot(agent: str):
     deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
     attacks = all_attack()
     seeds = authored_seeds(GENERAL_STRATEGY, strategy)   # incl. weight_overrides (ADR-0035)
+    provider = EngineCardStatProvider()            # shared by Pilot stats + Scout, exactly as main.py
     pilot = Pilot(                                 # mirror main.py EXACTLY -- incl. recoil + bench_snipe,
         strategy, deck, general_strategy=GENERAL_STRATEGY,   # else W-route featurizes a pilot whose
-        stats=EngineCardStatProvider(), functions=CardFunctions.load(),  # snipe rider / draw-guard differ
+        stats=provider, functions=CardFunctions.load(),  # snipe rider / draw-guard differ
         attacks={a.attackId: a.damage for a in attacks},     # from runtime (snipe-for-the-ko never fires)
         attack_costs={a.attackId: len(a.energies) for a in attacks},
         recoil={a.attackId: parse_attack_recoil(a.text) for a in attacks},
@@ -72,6 +76,9 @@ def _build_pilot(agent: str):
         value_model=(ValueModel.load() if strategy.params.get("value_model", False) else None),  # ADR-0042
         escalation=strategy.params.get("escalation", False),  # ADR-0043 Tier-6 (needs search_budget>0)
         search_budget=strategy.params.get("search_budget", 0),
+        scout=Scout(load_artifact(), provider=provider),  # the Read — main.py wires it; without it
+        briefs=load_briefs(),                             # favorability/γ are dead in every retest AND in
+        posture=strategy.params.get("posture", True),     # value-feature extraction (fixed 2026-07-05)
     )
     return pilot, seeds
 
