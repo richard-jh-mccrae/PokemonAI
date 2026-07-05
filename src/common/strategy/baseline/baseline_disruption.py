@@ -3,7 +3,7 @@ before the turn-ending attack when there's something to strip. Pure data, no Mix
 disruption mechanics — hand disruption, ability lock — land.)
 """
 from common.strategy.context import _PLAY
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.strategy import Hypothesis
 
 _POSTURE_UNFAVORED = 0.45     # matchup favorability at/below which a straight race loses (lever A)
 _POSTURE_FAVORED = 0.55       # ...at/above which deny the opponent outs (the favored half's mirror
@@ -20,7 +20,7 @@ HYPOTHESES = [
                   "the opponent's Active has no Energy (ep82753102 f37 — don't burn it on a body that "
                   "isn't attacking) or when my Active can already KO theirs this turn "
                   "(`active_cheap_attack_kos`; ep82748422 f26 — just take the KO, save the Item).",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        when=lambda c: c.option_type == _PLAY
         and "energy_denial" in c.tags and c.board.opp_active_has_energy
         and not c.board.active_cheap_attack_kos,
         weight=20, status="testing"),
@@ -32,7 +32,7 @@ HYPOTHESES = [
                   "size) — shrinking their hand cuts that attacker's damage. `hold-wincon-dont-shuffle` "
                   "still suppresses it when your own win-condition is in hand, and `_finish_turn_last` "
                   "sequences the shuffle before the attack so you disrupt and still attack the same turn.",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        when=lambda c: c.option_type == _PLAY
         and "hand_disruption" in c.tags and c.board.opp_has_hand_size_attacker,
         weight=25, status="testing"),
     Hypothesis(
@@ -43,7 +43,7 @@ HYPOTHESES = [
                   "trigger) since the straight race loses. Rides on top of the base disruption rule so it "
                   "never boosts a wasteful one, stands down at even/unknown matchup, and never overrides "
                   "a KO; the favored half is `dont-gift-a-refresh-when-favored` (ADR-0026 amendment).",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        when=lambda c: c.option_type == _PLAY
         and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
         and c.board.favorability <= _POSTURE_UNFAVORED
         and (("energy_denial" in c.tags and c.board.opp_active_has_energy)
@@ -59,7 +59,7 @@ HYPOTHESES = [
                   "targeted counterplay (`play-harlequin-vs-hand-size` +25 → net +30). Coverage-gated, "
                   "structurally exclusive with `disrupt-when-unfavored` (≥0.55 vs ≤0.45); "
                   "board-dominated, never overrides a KO.",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        when=lambda c: c.option_type == _PLAY
         and "hand_disruption" in c.tags
         and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
         and c.board.favorability >= _POSTURE_FAVORED,

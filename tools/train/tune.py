@@ -64,6 +64,10 @@ def _build_pilot(agent: str):
         planner_key_threat=strategy.params.get("planner_key_threat", True),
         lethal_family=strategy.params.get("lethal_family", True),
         lethal_veto=strategy.params.get("lethal_veto", True),
+        objectives_race=strategy.params.get("objectives_race", True),  # ADR-0040 Tier-3 KO Race
+        objectives_path=strategy.params.get("objectives_path", True),  # ADR-0040 Prize-Path consumers
+        objectives_phases=strategy.params.get("objectives_phases", True),  # ADR-0040 derived phases
+        gamble_lines=strategy.params.get("gamble_lines", True),  # ADR-0039 Tier-2 Gamble rung
     )
     return pilot, seeds
 

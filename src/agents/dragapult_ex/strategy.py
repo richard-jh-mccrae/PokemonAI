@@ -68,8 +68,8 @@ HYPOTHESES = [
                   "missing beside `dont-bench-multiprize`, which correctly keeps a 2-prize ex off the early "
                   "SETUP bench. Not turn 1; a bench slot must be free.",
         when=lambda c: c.option_type == _PLAY and c.card_id == FEZANDIPITI_EX
-        and c.plan in (Plan.RACE, Plan.STABILIZE) and c.board.my_bench < 5,
-        weight=18, status="assumed"),
+        and c.board.line_ready and c.board.my_bench < 5,   # "entering the grind" (ADR-0040 migration:
+        weight=18, status="assumed"),                      # was plan in (RACE, STABILIZE) — ≡ today
     Hypothesis(
         id="hold-evolution-until-attacker-ready",
         rationale="Delay evolving Drakloak into Dragapult ex until the body carries its 2 FP energy for "

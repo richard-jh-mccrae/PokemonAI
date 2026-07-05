@@ -1,8 +1,9 @@
 # Tier 4 — Opponent Model (Read · Posture · Briefs)
 
-**Status: ~50% complete** (2026-07-05). The γ-gated overlay that lets match objectives see the
-opponent that *isn't on board yet* — "avoid the second Mega Lucario" is decided before that Lucario
-exists.
+**Status: ~70% complete** (2026-07-05 — the T3 overlay built this session; levers A/C + Brief
+consumption + the M2.1a predicted layer verified shipped on main). The γ-gated overlay that lets
+match objectives see the opponent that *isn't on board yet* — "avoid the second Mega Lucario" is
+decided before that Lucario exists.
 **Upstream:** Scout (revealed-card evidence → Read), shipped artifact (dossiers), Matchup Briefs.
 **Downstream:** T3's their-side (predicted bodies/attackers into Prize Path + KO Race), M2 levers
 (favorability → phase/weight bands; accurate-dev on forward-evo), deck Hypotheses via Board
@@ -35,16 +36,24 @@ default ON; `brief_engine` wired, arms via the first true-asserting Brief's A/B)
 (ADR-0020); IS_FIRST go-second election (`baseline_opening.py` — the old roadmap decision-log gap
 is FIXED); meta tracker + deck export feeding `/matchup-genie`.
 
-## Gap to final (the 50%)
+## Built additions (2026-07-05)
 
-1. **M2.1a** — Scout merges dossier `threats`/`targets` into the Read (predicted layer complete,
-   zero decisions change).
-2. **M2.1b levers A + C** (first behavior change; M1 A/B-gated: recognized ≥ off, unknown = no
-   regression).
-3. **The T3 overlay** (net-new): γ-weighted predicted bodies into Prize Path/KO Race their-side;
-   Brief fields (e.g. engine-removal priorities) as path-feasibility corrections.
-4. **Brief coverage** — walk the meta head (~8 core strategies) via `/matchup-genie`.
-5. Favorability → phase-derivation input (with T3).
+- **The T3 overlay** (`objectives._their_turns_to_ko` read/γ params): Read-predicted (`seen=False`)
+  attackers join the their-side turns-to-KO behind the γ-CONTINUOUS deploy lead `ceil(2/γ)` —
+  recognized opponents shorten their predicted path (denial/phases react before the second Mega is
+  benched); γ→0 is byte-identical to visible-only (REQ-OBJ-0009). Post-overlay consumer A/B **52%**
+  (CI 50–54, Battle #59, 0 crashes).
+- **M2.1a verified BUILT on main**: `scout.py` merges the dossier `threats`/`targets` into the Read
+  as `seen`-flagged Intel — no work remained.
+
+## Gap to final (the 30%)
+
+1. **Brief coverage** — walk the meta head (~8 core strategies) via `/matchup-genie`; arm
+   `brief_engine` on the first true-asserting Brief's A/B.
+2. Favorability → phase-derivation input (a STABILIZE/CLOSE modulator beside the race signals).
+3. Brief fields (engine-removal priorities) as path-feasibility corrections on the overlay.
+4. The `opp_tempo` lever (registry `consumer: "unwired"`) — reconcile with favorability + phases
+   so aggression isn't double-counted.
 
 ## Acceptance
 

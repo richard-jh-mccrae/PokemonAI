@@ -48,10 +48,10 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 | Tier | Doc | % | One line |
 |---|---|---|---|
 | 0 | [Rules & Tuned Scoring](tier-0-rules-and-scoring.md) | **90%** | Hypotheses + Tactical + compendium, corrections-tuned — the backbone and universal fallback |
-| 1 | [Turn Planner](tier-1-turn-planner.md) | **85%** | Rank reachable end-of-turn boards; sound Lethal top rung — built, ON |
-| 2 | [Chance & EV](tier-2-chance-ev.md) | **15%** | Gamble Lines: closed-form expectimax over Outcome Classes, exact hypergeometric odds |
-| 3 | [Match Objectives](tier-3-match-objectives.md) | **10%** | Two-sided Prize Path + KO Race + derived STABILIZE/CLOSE — match-scale intent per turn |
-| 4 | [Opponent Model](tier-4-opponent-model.md) | **50%** | Read/Briefs as a γ-gated overlay feeding T3's their-side |
+| 1 | [Turn Planner](tier-1-turn-planner.md) | **88%** | Rank reachable end-of-turn boards; sound Lethal top rung + the Gamble rung — built, ON |
+| 2 | [Chance & EV](tier-2-chance-ev.md) | **70%** | Gamble Lines BUILT 2026-07-05 (A/B 52%, CI 50–54): exact-odds refresh-first KO gambles + coin-EV ranking |
+| 3 | [Match Objectives](tier-3-match-objectives.md) | **75%** | BUILT 2026-07-05: KO Race (a21472 green), two-sided Prize Path + denial, derived phases, gate-ban migration |
+| 4 | [Opponent Model](tier-4-opponent-model.md) | **70%** | Levers + Briefs shipped (main); the γ-continuous predicted-attacker overlay into T3 BUILT 2026-07-05 |
 | 5 | [Value Model](tier-5-value-model.md) | **5%** | One supervised P(win) leaf over T3/T4 features — the single learned seam |
 | 6 | [Escalation Search](tier-6-escalation-search.md) | **10%** | Narrowly-triggered budgeted engine tree for opponent-choice residue |
 

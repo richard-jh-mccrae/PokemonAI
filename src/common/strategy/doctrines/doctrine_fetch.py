@@ -362,7 +362,7 @@ HYPOTHESES = [
                   "Bench, thins the deck (raises later draw/search quality), and feeds spread-Energy attacks. "
                   "Fires in SETUP and RACE (refill a KO-thinned Bench before the turn-ending attack); stands "
                   "down once the Bench is full.",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
+        when=lambda c: c.option_type == _PLAY
         and "bench_fill" in c.tags and c.board.my_bench < _BENCH_MAX,
         weight=15, status="testing"),
     Hypothesis(
@@ -453,7 +453,7 @@ HYPOTHESES = [
                   "on offer still wants board presence over an off-need card. Gap-gated (stands down once the "
                   "Bench is developed); 'starter' is structural (Basic: hp > 0, no `evolvesFrom`).",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_starter
-        and c.plan == Plan.SETUP and c.board.my_bench < _THIN_BENCH,
+        and not c.board.line_ready and c.board.my_bench < _THIN_BENCH,
         weight=12, status="testing"),
     Hypothesis(
         id="bench-fill-a-basic",
@@ -499,7 +499,7 @@ HYPOTHESES = [
                   "card the search pulls is `fetch-the-wincon`/`fetch-energy-when-starved`). Stands down once "
                   "the wincon is in hand, or its fetch-set is provably exhausted (ep83117367: a wincon-only "
                   "tutor with every copy gone burns the turn on a whiff); folded from mega_starmie `tutor-the-wincon`.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "tutor" in c.roles
+        when=lambda c: not c.board.line_ready and c.option_type == _PLAY and "tutor" in c.roles
         and not c.board.wincon_in_hand and not c.search_targets_exhausted,
         weight=25, status="assumed"),
     Hypothesis(
@@ -548,7 +548,7 @@ HYPOTHESES = [
                   "fetches a Supporter, not the wincon, so it benched the 2-prize ex for the wrong "
                   "reason (mega_lucario STRATEGY.md §3, grill 2026-07-03). Splashable: Meowth ex runs "
                   "in many decks (mega_lucario, dragapult_ex), so the model is general (tag-keyed).",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY
+        when=lambda c: not c.board.line_ready and c.option_type == _PLAY
         and "supporter_tutor" in c.tags and c.board.no_supporter_in_hand,
         weight=25, status="assumed"),
     Hypothesis(
@@ -583,7 +583,7 @@ HYPOTHESES = [
                   "CARD (`cardType`): a Pokémon carrying a `draw` ABILITY tag (Drakloak's Dig) is NOT a "
                   "draw Supporter to fetch — that mis-fire made a dead mid-line Drakloak out-grab a live "
                   "Basic (ep83686860 f33).",
-        when=lambda c: c.plan == Plan.SETUP and c.select_context == _TO_HAND and "draw" in c.tags
+        when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "draw" in c.tags
         and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
         weight=10, status="assumed"),
     Hypothesis(

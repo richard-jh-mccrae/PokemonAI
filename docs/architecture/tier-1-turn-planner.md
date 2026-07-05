@@ -1,8 +1,9 @@
 # Tier 1 — Turn Planner
 
-**Status: ~85% complete** (2026-07-05). Built and default-ON (ADR-0031 + ADR-0037 join; A/B 51%/52%,
+**Status: ~88% complete** (2026-07-05). Built and default-ON (ADR-0031 + ADR-0037 join; A/B 51%/52%,
 0 crashes). This tier already realizes the core of the "map end-of-turn board states, rank, commit"
-vision — the remaining 15% is absorbing the new rungs the other tiers add.
+vision; the T2 Gamble rung and the T3 conditioning landed 2026-07-05 (ADR-0039/0040) — the
+remainder is the leaf seam for T5 and the defer-vs-commit revisit.
 **Upstream:** T0 leaf-eval; T3 goal conditioning (future); T2 gamble family (future).
 **Downstream:** the decision itself; telemetry (`planned`/`lethal` keys) consumed by blunder triage.
 
@@ -34,10 +35,12 @@ dev leaf, closed-form fallback when the engine is absent, per-goal telemetry. Ga
 REQ-LETHAL-0015..0029 + planner CRITICAL regressions (7f48/0cbc/4298) in
 `tests/strategy/test_planner_engine.py`.
 
-## Gap to final (the 15%)
+## Gap to final (the 12%)
 
-1. Accept the **T2 gamble family** into candidate generation + EV-vs-deterministic ranking rules.
-2. Accept **T3 conditioning** (path-aware rung targeting; phase-band weights).
+1. ~~Accept the T2 gamble family~~ — **DONE 2026-07-05** (the Gamble rung below the pool,
+   ADR-0039).
+2. ~~Accept T3 conditioning~~ — **DONE 2026-07-05** (key-threat on-path bump `_PLANNER_PATH_W`,
+   ADR-0040).
 3. **Leaf seam** for T5 (value-model call with closed-form fallback).
 4. Then re-run the defer-vs-commit A/B (above).
 

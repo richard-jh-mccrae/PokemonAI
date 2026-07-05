@@ -5,7 +5,7 @@ feeds one). NO Pilot Mixin — the Tactical half of energy (readiness, will-it-d
 per ADR-0016; this file is only the tunable positional weights.
 """
 from common.strategy.context import _ACTIVE, _ATTACH, _ATTACH_FROM, _BENCH, _PLAY, _WINCON_ROLES
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
     Hypothesis(
@@ -33,8 +33,7 @@ HYPOTHESES = [
                   "draw/search by `attach-energy-last`. Fires only on a Pokémon still needing Energy for "
                   "its cheapest attack, so it spreads to a bare Bench attacker rather than over-stacking "
                   "one already online.",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _ATTACH
-        and c.attach_target_needs,
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_needs,
         weight=15, status="assumed"),
     Hypothesis(
         id="dont-waste-off-type-energy",
@@ -54,7 +53,7 @@ HYPOTHESES = [
                   "the Active can use it THIS turn, fixing the dead-heat tie that left Active Cinderace "
                   "bare while Energy went to Staryu (ep83007714 f7). Fires only when the Active needs "
                   "Energy and isn't doomed; small (+8), only breaks the Active-vs-Bench tie.",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _ATTACH
+        when=lambda c: c.option_type == _ATTACH
         and c.attach_target_area == _ACTIVE and c.attach_target_needs
         and not c.board.active_doomed,
         weight=8, status="testing"),
@@ -62,23 +61,22 @@ HYPOTHESES = [
         id="attach-energy-last",
         rationale="Attach Energy late in the turn — it's irreversible, so draw/search/development go "
                   "first to reveal the best target.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _ATTACH,
-        weight=-5, status="assumed"),
+        when=lambda c: not c.board.line_ready and c.option_type == _ATTACH,   # pre-payoff turns
+        weight=-5, status="assumed"),                    # (the ADR-0040 gate-ban migration: was plan==SETUP)
     Hypothesis(
         id="advance-the-accel-pieces",
         rationale="During SETUP, advance PLAY/ATTACH of cards Role-tagged `accel_source` (e.g. Ignition "
                   "Energy: one attach = CCC on an Evolution) — role-keyed so it's silent for decks "
                   "without any. Co-fires additively with `build-active-wincon` (+20)/`power-up-attacker` "
                   "(+15)/`attach-energy-last` (-5); folded from mega_starmie `accel-into-main`.",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type in (_PLAY, _ATTACH)
+        when=lambda c: not c.board.line_ready and c.option_type in (_PLAY, _ATTACH)
         and "accel_source" in c.roles,
         weight=30, status="assumed"),
     Hypothesis(
         id="use-acceleration",
         rationale="Energy acceleration multiplies the one manual attachment per turn — tempo-positive "
                   "for any deck, so prioritize playing it.",
-        when=lambda c: c.plan in (Plan.SETUP, Plan.RACE) and c.option_type == _PLAY
-        and "energy_accel" in c.tags,
+        when=lambda c: c.option_type == _PLAY and "energy_accel" in c.tags,
         weight=25, status="assumed"),
     Hypothesis(
         id="spread-attach-to-the-needy",

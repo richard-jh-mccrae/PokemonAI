@@ -1,8 +1,13 @@
 # ADR-0040: Match-level judgment is per-turn closed-form objectives (Prize Path × KO Race → derived phases)
 
-**Status.** Accepted (grilled 2026-07-05, `/grill-with-docs`). Design-only — build tracked in
-[docs/architecture/tier-3-match-objectives.md](../architecture/tier-3-match-objectives.md) (~10%)
-and [tier-4-opponent-model.md](../architecture/tier-4-opponent-model.md) (the γ-gated overlay).
+**Status.** Accepted (grilled 2026-07-05, `/grill-with-docs`). **Built 2026-07-05 (`/tdd`)**: KO
+Race (`objectives.py`, the `a21472` gate GREEN), two-sided Prize Path + denial consumers, derived
+hysteretic phases + the 24-site gate-ban migration (lint-guarded), and the γ-continuous predicted-
+attacker overlay; switches `objectives_race`/`objectives_path`/`objectives_phases` **default ON**
+(joint A/B 50%, CI 48–53, Battle #57; post-overlay consumer A/B 52%, CI 50–54, Battle #59; 0
+crashes throughout). Build
+record: [docs/architecture/tier-3-match-objectives.md](../architecture/tier-3-match-objectives.md)
+(~75%) and [tier-4-opponent-model.md](../architecture/tier-4-opponent-model.md) (the overlay).
 Terms added to [src/common/CONTEXT.md](../../src/common/CONTEXT.md): *Prize Path*, *Path Denial*,
 *KO Race*. **Partially reverses** the prescription in
 [deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) ("do not bolt

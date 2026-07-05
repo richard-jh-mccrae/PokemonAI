@@ -45,7 +45,7 @@ HYPOTHESES = [
                   "`play-a-tutor-for-the-unfound-wincon`'s `not wincon_in_hand` gate), and the evolution "
                   "target not provably exhausted from the deck (`search_targets_exhausted`; without this "
                   "gate the +30 would swamp `dont-search-an-empty-deck`'s -60 — ep83117367).",
-        when=lambda c: c.plan == Plan.SETUP and c.option_type == _PLAY and "rush_evolve" in c.tags
+        when=lambda c: not c.board.line_ready and c.option_type == _PLAY and "rush_evolve" in c.tags
         and c.board.line_preevo_in_play and not c.board.wincon_in_hand
         and not c.search_targets_exhausted,
         weight=30, status="testing"),

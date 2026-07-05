@@ -7,8 +7,8 @@ import pytest
 
 from common.strategy.baseline import (
     BASELINE_HYPOTHESES, BENCH_HYPOTHESES, DISRUPTION_HYPOTHESES, ENERGY_HYPOTHESES,
-    EVOLUTION_HYPOTHESES, HEAL_HYPOTHESES, OPENING_HYPOTHESES, PROMOTE_HYPOTHESES,
-    RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES, SNIPE_HYPOTHESES,
+    EVOLUTION_HYPOTHESES, HEAL_HYPOTHESES, OPENING_HYPOTHESES, PHASES_HYPOTHESES,
+    PROMOTE_HYPOTHESES, RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES, SNIPE_HYPOTHESES,
 )
 from common.strategy.doctrines import (FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRESH_HYPOTHESES,
                                        TOOL_HYPOTHESES as TOOL_DOCTRINE_HYPOTHESES)
@@ -31,10 +31,12 @@ CLUSTERS = {
         "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
+        "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)
         # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
-                                 "develop-the-accel-recipient", "develop-a-basic-in-setup"}),
+                                 "develop-the-accel-recipient", "develop-a-basic-in-setup",
+                                 "dont-bench-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
         "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach"}),
@@ -51,6 +53,8 @@ CLUSTERS = {
     "disruption": (DISRUPTION_HYPOTHESES, {
         "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored",
         "dont-gift-a-refresh-when-favored"}),
+    "phases": (PHASES_HYPOTHESES, {   # ADR-0040 advisory bands — the one c.board.phase consumer
+        "phase-stabilize-prefer-heal", "phase-close-stop-developing"}),
 }
 
 

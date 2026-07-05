@@ -30,7 +30,7 @@ HYPOTHESES = [
         rationale="At the Set-Up Active pick, prefer an `accel_source`-Role opener — it turns its "
                   "acceleration on from turn one (e.g. Cinderace: Explosiveness opens the Spot, Turbo "
                   "Flare loads the Bench). Role-keyed opt-in; folded from mega_starmie `open-cinderace`.",
-        when=lambda c: c.plan == Plan.SETUP and c.select_context == _SETUP_ACTIVE
+        when=lambda c: c.select_context == _SETUP_ACTIVE   # pregame pick: the line can't be ready yet
         and "accel_source" in c.roles,
         weight=40, status="assumed"),
 ]

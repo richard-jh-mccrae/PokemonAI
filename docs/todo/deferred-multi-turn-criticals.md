@@ -1,5 +1,12 @@
 # TODO — the two multi-turn CRITICAL corrections (`a21472`, `b4649`)
 
+> ✅ **RESOLVED 2026-07-05** (`/tdd`, ADR-0040 / Tier 3): `a21472` is a GREEN regression gate —
+> `REQ-OBJ-0001` in [tests/strategy/test_objectives.py](../../tests/strategy/test_objectives.py)
+> replays the captured state through the shipped Pilot, which now picks Jetting via the **KO Race**
+> (`objectives_race`, closed-form attack-sequence arithmetic — NOT the engine tree, per the
+> ADR-0040 correction below). `b4649` stays covered; its Prize-Race capability shipped as the
+> two-sided **Prize Path** objective. This file remains as the characterisation record.
+
 **Status:** open (2026-07-01), split out of the Turn Planner build
 ([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md)) as **out of
 this-turn scope**. The Planner fixed the three *this-turn* CRITICALs that named it (`7f48`, `0cbc`, `4298`

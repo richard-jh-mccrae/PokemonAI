@@ -47,6 +47,8 @@ _PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by 
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize
 _PLANNER_DEV_W = 1.0           # development left on my end-of-turn board (engine-rank phase: bodies
 _PLANNER_DEV_CAP = 100.0       # + attached Energy, `_board_development`) … capped below a prize
+_PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on MY cheapest Prize
+                               # Path — sub-prize, ranks lines within the rung, never beats a prize
 _PRIZE_AREA = 6                # AreaType.PRIZE — a hidden-zone pick: the sim's ids are predictions,
                                # so a recorded prize pick is policy-driven at replay (ADR-0037 stage 3)
 
@@ -117,6 +119,8 @@ class PlannerMixin:
         if line is None:
             candidates = self._closed_form_candidates(obs, select, board, options, traces)
             line = self._commit_best(obs, candidates)
+        if line is None:                              # Tier-2 Gamble rung (ADR-0039): below every
+            line = self._best_gamble_line(obs, select, board, options, traces)   # deterministic goal
         self._turn_plan = (fp, line)
         return line
 
@@ -830,10 +834,136 @@ class PlannerMixin:
                 continue
             value = self._leaf_value(prizes=prizes, active_survives=bool(cand),
                                      threat_removed=threat_mag)
+            if (getattr(self, "objectives_path", False)          # Tier-3 (ADR-0040): a key threat ON my
+                    and top.get("id") in board.path_target_ids):  # cheapest Prize Path advances the MATCH
+                value += _PLANNER_PATH_W                          # win — sub-prize bump, ranks within rung
             lines.append(TurnLine(
                 next_step=[i], goal="ko_key_threat", value=value,
                 rationale=f"plan (ko_key_threat): {kind} unlocks the snipe-KO of the benched key threat"))
         return lines
+
+    # ═══ THE GAMBLE RUNG — Tier-2 (ADR-0039): closed-form expectimax over Outcome Classes ═══
+    # Deliberately probabilistic and BELOW every deterministic goal: it runs only when the win rung
+    # and the whole heuristic pool passed. Exact probabilities (tracker-anchored hypergeometrics),
+    # closed-form branch values, NO engine sim through the chance node (a fork is ONE predicted
+    # determinization — untrusted for prediction-dependent outcomes). Depth-1 by construction.
+
+    def _best_gamble_line(self, obs, select, board, options, traces):
+        """The best **Gamble Line** on this menu, or None: play a Hand Refresh (`shuffle_hand`)
+        FIRST — before the turn's attach — because the draw probably yields the Energy that turns
+        this turn into a KO the held hand cannot reach (the Lillie's-Determination class,
+        ADR-0039/REQ-GAMBLE-0001).
+
+        EV = P(enabling Outcome Class) × the enabled KO's tactical value, exact hypergeometric over
+        the shuffle-grown pool (tracker-anchored counts + the returned hand); committed only when it
+        beats the DETERMINISTIC baseline (the best menu tactical, or the best after-attach chip the
+        held Energy reaches) — EV equality is the break-even, never a fixed threshold. Stands down:
+        switch off / mid-sim (the engine re-run stays deterministic policy) / turn 1 / attach already
+        spent / a KO already on the tuned menu / a protected hand (wincon, line piece, ACE-SPEC Tool
+        — the keep-value floors own those shuffles) / pre-anchor (no exact counts, mirroring
+        `dont-refresh-into-a-probable-miss`) / the hand already holds an enabler (just attach it)."""
+        if (not getattr(self, "gamble_lines", False) or self._planning
+                or board.turn <= 1 or board.energy_attached or board.active_can_ko):
+            return None
+        if any(t.tactical >= KO_SCORE for t in traces):
+            return None
+        if ((board.wincon_in_hand and not board.wincon_in_play) or board.line_preevo_in_hand
+                or board.irreplaceable_tool_in_hand):
+            return None
+        counts = board.deck_known_counts
+        if not counts:
+            return None
+        from common.strategy.doctrines.doctrine_shuffle_refresh import _DRAW_COUNTS
+        me = self._my_player(obs)
+        hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        opp = self._opp_active(obs)
+        hp = (opp or {}).get("hp", 0)
+        stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        if not (hp and stat and ma):
+            return None
+        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand)
+        if not classes:
+            return None
+        det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
+        pool = sum(counts.values()) + max(0, len(hand) - 1)   # the shuffle-grown draw pool
+        best = None                                           # (ev, index, rationale)
+        for i, o in enumerate(options):
+            if o.get("type") != _PLAY:
+                continue
+            cid = self._option_card_id(obs, select, o)
+            branches = _DRAW_COUNTS.get(cid)
+            if (branches is None or cid is None or not self.functions
+                    or "shuffle_hand" not in self.functions.tags(cid)):
+                continue
+            ns = branches(board)
+            for copies, ko_value, label in classes:
+                from common.deck_odds import draw_hit_probability
+                p = sum(draw_hit_probability(copies, pool, n) for n in ns) / len(ns)
+                ev = p * ko_value
+                if ev > det and (best is None or ev > best[0]):
+                    best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
+                                   f"for the KO (EV {ev:.0f} > held line {det:.0f})")
+        if best is None:
+            return None
+        return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
+
+    def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list):
+        """The KO-enabling **Outcome Classes** of a refresh draw: for each of my Active's attacks
+        exactly ONE Energy short whose damage fells the opponent's Active, the class of draws
+        containing ≥1 Basic Energy that fills the missing slot (its specific type, or any Basic for
+        a colourless slot). Returns ``[(enabler_copies_in_pool, ko_value, label), …]``; an enabler
+        already in HAND voids the class (no gamble needed — attaching it is the deterministic line)."""
+        out = []
+        attached = self._attached_type_counts(ma)
+        hand_ids = [c.get("id") for c in hand]
+        for aid in (stat.attacks or ()):
+            cost = self.attack_costs.get(aid, 99)
+            if cost != board.my_active_energy + 1:            # exactly one attach short
+                continue
+            if self.predicted_damage(board.my_active_id, aid, opp) < hp:
+                continue
+            ast = self.attack_stats.get(aid) if self.attack_stats else None
+            types = getattr(ast, "energyTypes", ()) if ast else ()
+            from collections import Counter
+            need = Counter(t for t in types if t not in (0, None))
+            deficit = {t: n - attached.get(t, 0) for t, n in need.items() if n - attached.get(t, 0) > 0}
+            if sum(deficit.values()) > 1:
+                continue                                      # more than one specific slot short
+            want = next(iter(deficit), None)                  # None -> the short slot is colourless
+
+            def _enables(cid) -> bool:
+                est = self.stats.get(cid) if self.stats else None
+                if not est or getattr(est, "hp", 1) != 0:
+                    return False
+                if getattr(est, "cardType", None) not in (_BASIC_ENERGY,):
+                    return False                              # Basics only (a special Energy pays
+                et = getattr(est, "energyType", None)         # colourless slots — under-counted, safe)
+                return (et == want) if want is not None else True
+            if any(_enables(cid) for cid in hand_ids):
+                continue                                      # hand already holds the enabler
+            copies = sum(n for cid, n in counts.items() if n > 0 and _enables(cid))
+            if copies <= 0:
+                continue
+            label = f"a type-{want} Basic Energy" if want is not None else "any Basic Energy"
+            out.append((copies, KO_SCORE + self._prize_value(opp), label))
+        return out
+
+    def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
+        """The DETERMINISTIC baseline a gamble must beat: the best tactical already on the menu, or
+        the best after-attach chip the HELD Energy reaches (attach the best hand Energy → biggest
+        affordable non-KO damage) — the value the banked line (attach first, refresh after) keeps."""
+        det = max((t.tactical for t in traces), default=0.0)
+        hand_ids = frozenset(c.get("id") for c in hand)
+        units = self._best_hand_attach_units(hand_ids, stat)
+        energy_after = board.my_active_energy + units
+        for aid in (stat.attacks or ()):
+            if (self.attack_costs.get(aid, 99) <= energy_after
+                    and self._attack_type_payable(aid, ma, extra_type=0, extra_units=units)):
+                det = max(det, self.predicted_damage(board.my_active_id, aid, opp))
+                # extra_type=0: the held attach is priced as colourless — funds {C} slots only, the
+                # conservative read (a held TYPED enabler voids the gamble class upstream anyway)
+        return det
 
     def _retreat_snipe_candidate(self, me, others, target_hp: int, extra: int):
         """``active_survives`` (bool) for the best benched body that, once retreated INTO (its Energy

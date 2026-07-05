@@ -86,7 +86,7 @@ HYPOTHESES = [
                   "the engine edges the line piece early, per the fetch-priority ruling. The payoff "
                   "(Mega Lucario ex) still wins via the general `fetch-the-wincon` (+30) at Ultra "
                   "Ball, the only tutor that reaches it.",
-        when=lambda c: c.plan == Plan.SETUP and c.select_context == _TO_HAND and "engine" in c.roles,
+        when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "engine" in c.roles,
         weight=20, status="assumed"),
     Hypothesis(
         id="spring-heave-ho-when-it-pays",
