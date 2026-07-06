@@ -72,7 +72,7 @@ Before we touch a single weight, the margin tells us *what kind of fix a correct
 the $Delta_i$ values:
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   - #text(weight: "bold")[Some $Delta_i eq.not 0$ — route W ("weight").] The two options already
     *look different* to the existing rules. They are distinguished; we merely have the relative
     weights wrong. A change to $bold(w)$ *can* re-order them. This is a #text(style: "italic")[linear

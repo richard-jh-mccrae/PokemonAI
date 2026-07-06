@@ -6,11 +6,13 @@
 #let argmax = math.op("arg max", limits: true)
 #let argmin = math.op("arg min", limits: true)
 
-#let accent   = rgb("#1f4e79")   // deep blue  — structure / key ideas
-#let poke      = rgb("#0a7d5a")   // green      — Pokémon worked examples
-#let contrastc = rgb("#9a5b00")   // amber      — road-not-taken / compare
-#let toolc     = rgb("#5a3a91")   // purple     — toolbox tidbits
-#let probc     = rgb("#333333")   // near-black — problems
+// Bright, saturated palette — legible on muted colour e-ink (ReMarkable Paper Pro).
+// No greys anywhere: body text is pure black; category accents are vivid primaries.
+#let accent   = rgb("#1657d0")   // vivid blue   — structure / key ideas
+#let poke      = rgb("#0f9d58")   // vivid green  — Pokémon worked examples
+#let contrastc = rgb("#e0570b")   // vivid orange — road-not-taken / compare
+#let toolc     = rgb("#7c3aed")   // vivid violet — toolbox tidbits
+#let probc     = black            // pure black   — problems (never grey)
 #let paper     = rgb("#fbfbf9")
 
 // ---- page + text defaults -------------------------------------------------
@@ -21,29 +23,29 @@
     numbering: "1",
     fill: paper,
   )
-  set text(font: "New Computer Modern", size: 10.5pt, lang: "en")
-  set par(justify: true, leading: 0.7em, first-line-indent: 1.2em)
+  set text(font: "New Computer Modern", size: 12pt, fill: black, lang: "en")
+  set par(justify: true, leading: 0.72em, first-line-indent: 1.2em)
   show par: set block(spacing: 0.9em)
   set heading(numbering: "1.1")
 
   // Chapter headings (level 1): big, start a new page, accent colour.
   show heading.where(level: 1): it => {
     pagebreak(weak: true)
-    set text(font: "New Computer Modern Sans", size: 20pt, fill: accent, weight: "bold")
+    set text(font: "New Computer Modern Sans", size: 21pt, fill: accent, weight: "bold")
     block(above: 1.2em, below: 0.9em)[
       #if it.numbering != none [
-        #text(size: 12pt, fill: accent.lighten(20%))[Chapter #counter(heading).display("1")]
+        #text(size: 13pt, fill: accent)[Chapter #counter(heading).display("1")]
         #linebreak()
       ]
       #it.body
     ]
   }
   show heading.where(level: 2): it => {
-    set text(font: "New Computer Modern Sans", size: 13pt, fill: accent, weight: "bold")
+    set text(font: "New Computer Modern Sans", size: 15pt, fill: accent, weight: "bold")
     block(above: 1.1em, below: 0.5em)[#counter(heading).display() #h(0.4em) #it.body]
   }
   show heading.where(level: 3): it => {
-    set text(font: "New Computer Modern Sans", size: 11pt, fill: accent.darken(10%), weight: "bold")
+    set text(font: "New Computer Modern Sans", size: 13pt, fill: accent.darken(10%), weight: "bold")
     block(above: 0.9em, below: 0.3em)[#it.body]
   }
 
@@ -56,11 +58,11 @@
 // ---- callout environments -------------------------------------------------
 #let callout(col, tag, title, body) = block(
   width: 100%, above: 1.0em, below: 1.0em, breakable: true,
-  fill: col.lighten(90%), stroke: (left: 3pt + col), radius: 2pt,
+  fill: col.lighten(85%), stroke: (left: 4pt + col), radius: 2pt,
   inset: (left: 10pt, rest: 9pt),
 )[
-  #text(font: "New Computer Modern Sans", size: 8pt, fill: col, weight: "bold", tracking: 0.6pt)[#upper(tag)]
-  #if title != none [ #h(0.5em) #text(font: "New Computer Modern Sans", size: 9.5pt, fill: col.darken(15%), weight: "bold")[#title] ]
+  #text(font: "New Computer Modern Sans", size: 12pt, fill: col, weight: "bold", tracking: 0.6pt)[#upper(tag)]
+  #if title != none [ #h(0.5em) #text(font: "New Computer Modern Sans", size: 13pt, fill: col.darken(15%), weight: "bold")[#title] ]
   #linebreak()
   #body
 ]
@@ -71,9 +73,9 @@
 
 #let keyidea(body) = block(
   width: 100%, above: 1.0em, below: 1.0em, breakable: true,
-  fill: accent.lighten(93%), stroke: 0.6pt + accent.lighten(40%), radius: 3pt, inset: 10pt,
+  fill: accent.lighten(88%), stroke: 0.8pt + accent.lighten(25%), radius: 3pt, inset: 10pt,
 )[
-  #text(font: "New Computer Modern Sans", size: 8pt, fill: accent, weight: "bold", tracking: 0.6pt)[KEY IDEA] #linebreak()
+  #text(font: "New Computer Modern Sans", size: 12pt, fill: accent, weight: "bold", tracking: 0.6pt)[KEY IDEA] #linebreak()
   #body
 ]
 

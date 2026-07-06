@@ -12,10 +12,10 @@ a reflex. First the map, then the compass that reads it.
 == The map: techniques we considered and set aside
 
 #block(inset: 0pt, [
-  #set text(size: 9pt)
+  #set text(size: 12pt)
   #table(
     columns: (auto, 1fr, 1fr),
-    stroke: 0.4pt + gray,
+    stroke: 0.5pt + black,
     inset: 5pt,
     align: (left + top, left + top, left + top),
     table.header(
@@ -64,7 +64,7 @@ these and you can reason about a new problem the way a senior practitioner does 
 best model?" but "what do my *constraints* permit and *require*?"
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   + #text(weight: "bold")[How much data do I have?] Millions of labelled examples unlock deep models;
     a trickle demands hand-features and simple models with strong priors. *(We had a trickle.)*
   + #text(weight: "bold")[What is my compute and runtime budget?] A frozen, CPU-only, ten-minute

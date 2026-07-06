@@ -36,7 +36,7 @@ reason about, to author, and — as we will see — to *learn weights for*.
   Take three rules in play: $phi_1 =$ "develop the win condition", $phi_2 =$ "use acceleration",
   $phi_3 =$ "keep position in setup". Two options:
   #block(inset: (left: 8pt), [
-    #set text(size: 10pt)
+    #set text(size: 12pt)
     - Option A — *attach energy to the attacker*: develops ($1$), accelerates ($1$), not a
       position-hold ($0$). So $bold(phi)(A) = (1, 1, 0)$.
     - Option B — *retreat the attacker*: develops nothing ($0$), no acceleration ($0$), but it *does*
@@ -73,7 +73,7 @@ Binary is the workhorse here, but you will meet three feature types everywhere i
 know how to build each:
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   - #text(weight: "bold")[Indicator (binary):] a yes/no fact, $0$ or $1$. "A knockout is available."
   - #text(weight: "bold")[Numeric (continuous):] a count or magnitude. "Prizes remaining $= 3$",
     "damage $= 210$". Our combat term and the value model's inputs use these.

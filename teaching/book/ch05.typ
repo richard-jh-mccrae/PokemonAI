@@ -76,10 +76,10 @@ past the boundary. Those boundary-defining examples have a name.
 Different jobs want different losses. Knowing the menu lets you pick correctly in your next project:
 
 #block(inset: (left: 4pt))[
-  #set text(size: 9.5pt)
+  #set text(size: 12pt)
   #table(
     columns: (auto, 1fr, 1fr),
-    stroke: 0.4pt + gray,
+    stroke: 0.5pt + black,
     inset: 5pt,
     align: (left, left, left),
     table.header(

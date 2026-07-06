@@ -16,7 +16,7 @@ Each of these is a real, documented opportunity in the system. Notice that every
 — a place where a technique from this book would earn its keep.
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   + #text(weight: "bold")[A matchup-conditioned value model.] The general value model was parked
     because its features were redundant with the closed-form judgement (Chapter 7). The unlock is to
     make it *conditional on the matchup* — separate weights, or a matchup feature, so it can learn
@@ -49,7 +49,7 @@ Reading builds *fluency* — the comfortable sense that you follow the argument.
 the abstract concrete with your own hands. A suggested progression, each a weekend-sized project:
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   + Implement logistic regression from scratch in C or Python — sigmoid, log-loss, gradient descent —
     and watch it separate two clouds of points. You will *feel* Chapters 6–7.
   + Code the structured-perceptron weight update from Chapter 6 and run it on a handful of invented
@@ -67,7 +67,7 @@ These are the high-trust resources behind this book, ordered as a climbing route
 the workspace's `RESOURCES.md`.)
 
 #block(inset: (left: 6pt))[
-  #set text(size: 9.8pt)
+  #set text(size: 12pt)
   - #text(weight: "bold")[Start here — _An Introduction to Statistical Learning_] (James, Witten,
     Hastie, Tibshirani; free PDF). The best first ML book for a numerate engineer. Chapters on the
     bias–variance trade-off, logistic regression, and regularisation map directly onto Chapters 3–7
