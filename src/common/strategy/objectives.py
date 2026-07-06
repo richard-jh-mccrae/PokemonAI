@@ -249,6 +249,10 @@ class ObjectivesMixin:
                            if my_turns is not None and their_turns is not None else None),
             "path_target_ids": frozenset(cid for k, _pv, _t, cid in mine
                                          if k in my_keys and cid is not None),
+            "path_target_keys": frozenset(my_keys),   # ADR-0044: on-path body IDENTITIES (id(body)),
+                                                       # so a duplicate-species copy off my path is
+                                                       # distinguished from the on-path one (card-id
+                                                       # keying leaks between them)
             "their_path_my_ids": frozenset(cid for k, _pv, _t, cid in theirs
                                            if k in their_keys and cid is not None),
         }
@@ -313,9 +317,13 @@ class ObjectivesMixin:
         """This snipe/damage target sits on MY cheapest Prize Path (``board.path_target_ids``) —
         its KO advances the match win, not just the board (REQ-OBJ-0005). Gated by
         ``objectives_path``; False when the path is unknown (consumers stay silent)."""
-        if not getattr(self, "objectives_path", False) or not board.path_target_ids:
+        if not getattr(self, "objectives_path", False):
             return False
         poke = self._option_pokemon(obs, select, option)
+        if getattr(self, "snipe_prize_redundant", False):   # ADR-0044: exact body-identity keying —
+            return poke is not None and id(poke) in board.path_target_keys   # duplicate-safe
+        if not board.path_target_ids:
+            return False
         cid = (poke or {}).get("id")
         return cid is not None and cid in board.path_target_ids
 

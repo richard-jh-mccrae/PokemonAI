@@ -343,6 +343,30 @@ def test_promote_onto_their_path_is_flagged_and_switched():
     pilot.objectives_path = True
 
 
+@pytest.mark.req("REQ-OBJ-0014")
+def test_soft_83661649_30_ko_race_prices_jetting_over_nebula_on_its_real_state():
+    """SOFT 83661649-30 (ADR-0044, same shape as a21472): on the ACTUAL captured state the wall
+    can't be one-shot, so Nebula's raw 210 is fake value — the KO Race re-prices the attack by its
+    best min-turn SEQUENCE, banking Jetting Blow's on-tempo bench chip. This state has an EMPTY
+    Prize Path (`path_target_ids` frozen empty), so it exercises the no-path race-credit branch that
+    a21472/REQ-OBJ-0001 (which has a live path) does not. The gate is the ORDERING invariant, not
+    the raw `chosen` — the Pilot correctly DEVELOPS first (attack-is-turn-ender), so `chosen != [2]`
+    even though Jetting is the better attack; toggling `objectives_race` off restores the blunder."""
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_83661649_30.json")
+                    .read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    obs = fx["obs"]
+    opts = obs["select"]["option"]
+    jetting = next(i for i, o in enumerate(opts) if o.get("attackId") == 1487)   # Jetting Blow (correct)
+    nebula = next(i for i, o in enumerate(opts) if o.get("attackId") == 1488)    # Nebula Beam (blunder)
+    d = pilot.explain(obs)
+    assert d.options[jetting].tactical > d.options[nebula].tactical    # KO Race ranks the sequence
+    pilot.objectives_race = False                                      # kill-switch: greedy biggest-hit
+    d_off = pilot.explain(obs)
+    pilot.objectives_race = True
+    assert d_off.options[nebula].tactical > d_off.options[jetting].tactical   # the old Nebula blunder
+
+
 @pytest.mark.req("REQ-OBJ-0013")
 def test_objectives_trace_rides_the_decision_and_telemetry():
     """The Tier-3 objectives trace (race delta + both paths) rides the Decision and the telemetry

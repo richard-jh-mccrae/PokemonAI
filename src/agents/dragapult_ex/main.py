@@ -85,6 +85,8 @@ _pilot = Pilot(
                                                       # phases (STABILIZE/CLOSE + baseline_phases bands)
     gamble_lines=_params.get("gamble_lines", True),   # ADR-0039 kill-switch: Tier-2 Gamble rung —
                                                       # refresh-first when exact-odds EV beats the held line
+    snipe_prize_redundant=_params.get("snipe_prize_redundant", True),  # ADR-0044 kill-switch (DEFAULT ON 2026-07-06)
+    forced_promotion=_params.get("forced_promotion", True),  # ADR-0044 kill-switch (DEFAULT ON 2026-07-06)
     value_model=(ValueModel.load() if _params.get("value_model", False) else None),  # ADR-0042 Tier-5:
                                                       # learned leaf; DEFAULT OFF + absent-safe
     escalation=_params.get("escalation", False),      # ADR-0043 Tier-6: depth-2 tree on a close attack

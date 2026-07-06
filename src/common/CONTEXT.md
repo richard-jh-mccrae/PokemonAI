@@ -449,6 +449,28 @@ their path-critical attackers. The defensive half of the two-sided Prize-Path ob
 take 7 prizes, not 6."
 _Avoid_: stalling (a play-role), walling (one tactic; Denial is the objective it serves)
 
+**Prize-Redundant Target**:
+An opponent body whose Knock-Out would NOT advance my remaining prize count — its prize value
+overshoots what my cheapest **Prize Path** already secures (the *second* Mega ex when one Mega + a
+small already reaches my count). Chip or snipe spent on it is wasted: I take my prizes elsewhere and
+gust *around* it. The OFFENSIVE twin of **Path Denial** — Denial lengthens *their* path, this refuses
+to shorten a target off *mine* — realized (ADR-0044) as a suppression of the snipe threat-rank boost
+on an off-Path, prize-redundant, non-imminent body (γ / `objectives_path`-gated).
+_Avoid_: off-path (bare — a low-prize off-path body can still be the right `+1`; the point is prize-
+*redundant*), Path Denial (the defensive their-side twin), Threat (magnitude, prize-blind)
+
+**Forced-Promotion Read**:
+The 1-ply prediction of WHICH benched body the opponent brings to the Active Spot when a promotion is
+**forced** — their Active is doomed (I KO it this turn, or it is already at 0 HP). Corrects
+**Incoming**'s affordability guess ("the hardest-hitting *affordable* body is the predicted next
+promotion"): under a forced promote the opponent brings up their highest-VALUE ready body — the
+win-condition by eventual attack power, **energy-independent** (they have acceleration to power it) —
+not the energized bench-sitter that merely happens to be affordable now. Scoped (ADR-0044) to the
+OFFENSIVE pre-chip: it redirects the snipe target, a soft non-committal chip, and does NOT relax
+Incoming's worst-case *defensive* read. γ-sharpenable via the Read.
+_Avoid_: Incoming (the defensive worst-case; this is the offensive promote-target guess), interpose
+promote (that is MY promote choice — this predicts THEIRS), Threat (the objective Read description)
+
 **Automatic Value Model**:
 The single deck-agnostic, replay-trained estimator of win probability from a game state; the
 project's one learned component (ADR-0007/0042). Realized as a **dependency-free logistic** whose

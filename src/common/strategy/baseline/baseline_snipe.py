@@ -31,7 +31,9 @@ HYPOTHESES = [
                   "printed damage, prefers the more-developed body on a shared line, and boosts lines "
                   "that certainly reach a hand-size attacker, so it never pokes a low-HP support mon. "
                   "Stands down on a KO target (that's snipe-for-the-ko).",
-        when=lambda c: c.select_context == _DAMAGE and c.target_is_top_threat and not c.target_kos,
+        when=lambda c: (c.select_context == _DAMAGE and c.target_is_top_threat and not c.target_kos
+                        and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
+                        and not c.target_promotion_mirage),    # ADR-0044: nor a non-promotion imminence mirage
         weight=30, status="testing"),
     Hypothesis(
         id="snipe-the-threat",
@@ -39,7 +41,9 @@ HYPOTHESES = [
                   "denies the opponent their next attacker rather than poking a bare benchsitter. "
                   "Co-fires with `snipe-the-top-threat` (`_target_threat_rank` already tiers energized "
                   "targets above bare ones) as the legible imminence signal on top of it.",
-        when=lambda c: c.select_context == _DAMAGE and c.target_is_threat,
+        when=lambda c: (c.select_context == _DAMAGE and c.target_is_threat
+                        and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
+                        and not c.target_promotion_mirage),    # ADR-0044: nor a non-promotion imminence mirage
         weight=20, status="testing"),
     Hypothesis(
         id="snipe-on-the-path",
@@ -50,6 +54,16 @@ HYPOTHESES = [
                   "(runs through bodies not yet in play) or the `objectives_path` switch is off.",
         when=lambda c: c.select_context == _DAMAGE and c.target_on_path,
         weight=12, status="testing"),
+    Hypothesis(
+        id="snipe-the-forced-promotion",
+        rationale="ADR-0044 Forced-Promotion Read: the opponent's Active is dead, so a promotion is "
+                  "FORCED next turn — they bring up their highest-value READY attacker (the "
+                  "win-condition, energy-independent), not the energized bench-sitter that merely "
+                  "carries Energy now. Pre-chip that body this turn. Overrides the energized-imminence "
+                  "tier for this pick (its mirages are suppressed); silent while their Active is alive.",
+        when=lambda c: (c.select_context == _DAMAGE and c.target_is_forced_promotion
+                        and not c.target_kos),
+        weight=40, status="testing"),
     # NOTE: flat `snipe-the-weakest`/`snipe-the-evolving-threat`/`snipe-the-strongest-evolving-threat`
     # RETIRED — `snipe-the-top-threat` subsumes all 3 (round-b7e483a bad-target blunders). `EVOLVING_THREAT_DMG` floor stays (Read consumer may still ref it).
 

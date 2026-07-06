@@ -318,6 +318,12 @@ class Board:
                                           # race; None when either side's path is unknown. Feeds phases.
     path_target_ids: frozenset = field(default_factory=frozenset)  # opp card ids on MY cheapest Prize
                                           # Path — the on-path KO/snipe preference (`target_on_path`)
+    path_target_keys: frozenset = field(default_factory=frozenset)  # ADR-0044: on-path body IDENTITIES
+                                          # (id(body)) — duplicate-species-safe keying for `_target_on_path`
+    opp_active_doomed: bool = False       # ADR-0044: the opponent's Active is dead (hp<=0 / no live active),
+                                          # so a promotion is FORCED next turn — the Forced-Promotion Read trigger
+    forced_promotion_key: int | None = None  # ADR-0044: id(body) of the bench Pokémon they will promote when
+                                          # doomed = the highest OWN-damage ready attacker (energy-independent)
     their_path_my_ids: frozenset = field(default_factory=frozenset)  # MY card ids on THEIR cheapest path —
                                           # the bodies whose exposure/denial matters ("force 7, not 6")
     line_ready: bool = False              # a win-condition Line payoff is in play with enough Energy to
@@ -480,6 +486,14 @@ class Context:
     target_on_path: bool = False        # Tier-3 (ADR-0040): this damage/snipe target sits on MY
                                         # cheapest Prize Path — its KO advances the MATCH win
                                         # (`snipe-on-the-path`); False when the path is unknown
+    target_prize_redundant: bool = False  # ADR-0044: a snipe target OFF my committed cheapest Prize Path
+                                        # — chip here doesn't advance it ("deny the 2nd Mega"). A high-prize
+                                        # body I never need is flagged ALWAYS; a low-prize one only when I'm
+                                        # not under pressure (else deny the threat). Suppresses the threat snipe
+    target_is_forced_promotion: bool = False  # ADR-0044: their Active is dead and THIS bench body is the
+                                        # ready wincon they'll promote — pre-chip it (`snipe-the-forced-promotion`)
+    target_promotion_mirage: bool = False  # ADR-0044: their Active is dead and THIS body is NOT the one
+                                        # they'll promote — its threat/imminence is a mirage, suppress it
     bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
                                         # strictly improves the opponent's cheapest Prize Path
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
@@ -580,6 +594,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
                  lethal_veto=False, brief_preevo=False, brief_engine=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
+                 snipe_prize_redundant=False, forced_promotion=False,
                  value_model=None, escalation=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
@@ -639,6 +654,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # phases (STABILIZE/CLOSE overrides + the
                                                         # baseline_phases bands); off = readiness
                                                         # SETUP→RACE exactly as before
+        self.snipe_prize_redundant = snipe_prize_redundant  # ADR-0044 kill-switch: the Prize-Redundant
+                                                        # Target snipe suppression (+ body-identity path
+                                                        # keying) — don't chip an off-path body I don't
+                                                        # need to KO ("deny the second Mega")
+        self.forced_promotion = forced_promotion        # ADR-0044 kill-switch: the Forced-Promotion Read
+                                                        # — when their Active is dead, pre-chip the ready
+                                                        # wincon they'll promote, not the energized bench-sitter
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -1800,6 +1822,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                    and (option.get("area"), option.get("index"))
                                    == board.attach_from_concentrate_slot)   # ATTACH_FROM encodes
                                    # recipient in area/index (not inPlayArea/inPlayIndex — cf _option_pokemon)
+        # ADR-0044 opponent-choice snipe reads (kill-switched; DAMAGE bench-target only)
+        snipe_ctx = (select.get("context") == _DAMAGE and option.get("type") == _CARD
+                     and option.get("area") == _BENCH)
+        snipe_poke = self._option_pokemon(obs, select, option) if snipe_ctx else None
+        target_is_forced_promotion = bool(
+            snipe_ctx and getattr(self, "forced_promotion", False) and board.opp_active_doomed
+            and board.forced_promotion_key is not None
+            and snipe_poke is not None and id(snipe_poke) == board.forced_promotion_key)
+        target_prize_redundant = bool(                 # off my committed path — chip here doesn't advance it
+            snipe_ctx and getattr(self, "snipe_prize_redundant", False)
+            and board.my_path_turns is not None and not target_on_path
+            and not target_is_forced_promotion
+            # a high-prize body I never need is avoided ALWAYS; a low-prize off-path body only when I'm
+            # not under pressure (else deny the threat) — the "not an imminent threat to me" guard
+            and (card_prize_value >= 2 or not board.active_doomed))
+        target_promotion_mirage = bool(                # their Active dead, but NOT who they promote
+            snipe_ctx and getattr(self, "forced_promotion", False) and board.opp_active_doomed
+            and board.forced_promotion_key is not None and not target_is_forced_promotion)
         return Context(plan=plan, select_context=select.get("context"),
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
@@ -1824,7 +1864,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_is_strongest_forward=target_is_strongest_forward,
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
-                       target_on_path=target_on_path, bench_shortens_their_path=bench_shortens,
+                       target_on_path=target_on_path, target_prize_redundant=target_prize_redundant,
+                       target_is_forced_promotion=target_is_forced_promotion,
+                       target_promotion_mirage=target_promotion_mirage,
+                       bench_shortens_their_path=bench_shortens,
                        promote_target_on_their_path=promote_on_their_path,
                        counter_is_best_placement=(
                            board.best_counter_slot is not None
@@ -2113,7 +2156,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         phase = self._derive_phase(base_plan, path_sig["race_ahead"], active_doomed,
                                    len(me.get("prize") or []),   # derived ADVISORY phase (hysteretic)
                                    favorability=fav, coverage=cov)   # + Tier-4 favorability (Lever A)
+        opp_doomed = oa is None or (oa or {}).get("hp", 1) <= 0    # ADR-0044: forced promote next turn
         board = Board(
+            opp_active_doomed=opp_doomed,
+            forced_promotion_key=self._forced_promotion_key(opp, opp_doomed),
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
             my_active_id=(ma or {}).get("id"),
             my_active_energy=len((ma or {}).get("energies") or []),
@@ -2589,6 +2635,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 if r is not None and r > best:
                     best = r
         return best
+
+    def _forced_promotion_key(self, opp: dict, doomed: bool) -> int | None:
+        """ADR-0044 Forced-Promotion Read: when the opponent's Active is doomed (a promotion is
+        forced next turn), the body they bring up = their highest OWN-damage READY attacker on the
+        Bench (printed max damage, energy-INDEPENDENT — they promote the win-condition and accelerate
+        it, not the energized bench-sitter that merely happens to be affordable now). Returns
+        ``id(body)`` for exact, duplicate-safe matching against the snipe option; None when not doomed
+        / no benched attacker / no provider."""
+        if not doomed or not self.stats:
+            return None
+        best = None                                          # (own_damage, hp, id(body))
+        for b in (opp.get("bench") or []):
+            if not b:
+                continue
+            stat = self.stats.get(b.get("id"))
+            own = stat.maxDamage if stat else 0
+            if own <= 0:
+                continue
+            cand = (own, b.get("hp", 0), id(b))
+            if best is None or cand[:2] > best[:2]:
+                best = cand
+        return best[2] if best else None
 
     def _wincon_in_play(self, me: dict) -> bool:
         """True if my win-condition is already in play — a Strategy Line payoff or a card carrying the
