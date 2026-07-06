@@ -344,6 +344,9 @@ function show(n){
       (L.lethal?`<div class="verd">&#127919; LETHAL ${esc(L.lethal.kind||'')} &rarr; ${arr(L.lethal.step)} — ${esc(L.lethal.why||'')}</div>`:'')+
       (L.planned?`<div class="verd">&#129517; PLANNED ${esc(L.planned.goal||'')} &rarr; ${arr(L.planned.step)} — ${esc(L.planned.why||'')}</div>`:'')+
       ((L.lethal||L.planned)?`<div class="warn">solver/planner drove this pick — scores didn't; fix = planner.py (win rung vs heuristic rungs), not weights</div>`:'')+
+      // Decide()-only reorder (ADR-0019): `chosen` is NOT argmax(score) by design, so a held-back
+      // turn-ender or a greedy grab isn't a scoring bug — flag it so a blunder tag targets sequencing.
+      ((L.reordered||L.grabbed)?`<div class="warn">${L.grabbed?'greedy multi-pick — chosen SET came from dynamic gap-scoring, not top-N static score':'attack-last resequenced the menu — a higher-score turn-ender was held (see ·deferred·); chosen is NOT argmax(score)'}</div>`:'')+
       `</div>`;
   }
   if(f.live&&f.live.posture){

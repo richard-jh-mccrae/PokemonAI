@@ -188,6 +188,24 @@ style; skip only the ones that don't apply to serial mode):
    `python tools/train/backfill_obs.py` once the game's `episode-<id>-agent-<seat>-logs.json` is
    collected, or rely on the obs re-derivation.)
 
+   **Don't misread a reorder as a scoring bug — check the sparse reorder markers FIRST when
+   `chosen` isn't the top-`score` opt.** Three decide()-only selection steps make the pick diverge
+   from argmax(`score`) *by design*, and each stamps a sparse marker so you don't author a bogus
+   `when()` to "fix" a scoring gap that isn't there:
+   - **`reordered: true`** (top-level) → the attack-last resequencer (`_finish_turn_last`) held a
+     turn-ending action behind free development. The held option carries **`opts[].deferred: true`**.
+     So a high-`tac` attack that wasn't chosen, with `deferred` set and `reordered` true, is a
+     *sequencing* decision (develop-first, attack same turn) — **not** an under-weighted attack. Only
+     a genuinely *wrong* sequence (the develop was pointless) is a real blunder, and it's a
+     `_finish_turn_last` code fix, not a weight/`when()`.
+   - **`opts[].needy: true`** → among EQUAL-`score` attaches the win-condition-Line base was fed
+     first (`attach_to_needy_line`). An "arbitrary-looking" tie pick is this tie-break, not noise.
+   - **`grabbed: true`** (top-level) → a multi-pick `_greedy_grab` chose the SET by dynamic
+     gap-scoring, so the chosen set is **not** the top-N static `score`s; don't reconcile it against
+     static order.
+   When none of these is set and `lethal`/`planned` are null, the pick *is* argmax(`score`) and the
+   `opts[].fired` weights are the whole story.
+
    **Read `live_trace.lethal` FIRST — it can pre-empt the whole analysis (ADR-0030).** It is the
    **Lethal Solver**'s verdict: `null` when no guaranteed this-turn win was locked, else
    `{step, kind, why}` (`kind` ∈ `direct` / `unlock` / `evolve`). The Solver runs **before** Hypothesis
