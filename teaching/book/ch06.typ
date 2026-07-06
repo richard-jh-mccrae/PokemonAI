@@ -73,7 +73,7 @@ For the L2 term, the derivative with respect to $w_i$ is $lambda(w_i - w_i^"seed
 *subtracts* $eta lambda (w_i - w_i^"seed")$. Put together, one sweep of the optimiser is:
 
 #block(inset: (left: 8pt), [
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   #enum(
     [for every correction still violated, and every rule $i$: $quad w_i arrow.l w_i + eta Delta_i$
       #h(1em) _(push toward satisfying it)_],

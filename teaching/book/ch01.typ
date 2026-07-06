@@ -111,7 +111,7 @@ The agent is organised as a stack of *tiers*, each falling back to the one below
 to say. You do not need the details yet, but the shape previews the book:
 
 #block(inset: (left: 6pt))[
-  #set text(size: 9.8pt)
+  #set text(size: 12pt)
   - #text(weight: "bold")[Tier 0 — Rules & tuned scoring.] The linear model of §1.2 and its learned
     weights. *Chapters 2–6.*
   - #text(weight: "bold")[Tiers 1–2 — Planning & chance.] Looking ahead a turn, and pricing risky

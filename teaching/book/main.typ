@@ -9,17 +9,17 @@
 #counter(page).update(1)
 
 #let fmtitle(s) = block(above: 1.4em, below: 0.8em)[
-  #text(font: "New Computer Modern Sans", size: 17pt, fill: accent, weight: "bold")[#s]
+  #text(font: sansfont, size: 17pt, fill: accent, weight: "bold")[#s]
 ]
 
 // ---- TITLE PAGE -----------------------------------------------------------
 #v(3.5cm)
 #align(center)[
-  #text(font: "New Computer Modern Sans", size: 13pt, fill: accent.lighten(15%), tracking: 2pt)[
+  #text(font: sansfont, size: 13pt, fill: accent, tracking: 2pt)[
     A SYSTEMS ENGINEER'S INTRODUCTION TO
   ]
   #v(0.4cm)
-  #text(font: "New Computer Modern Sans", size: 40pt, fill: accent, weight: "bold")[
+  #text(font: sansfont, size: 40pt, fill: accent, weight: "bold")[
     Machine Learning
   ]
   #v(0.5cm)
@@ -27,7 +27,7 @@
     taught through the machinery of a Pokémon TCG battle agent
   ]
   #v(2.2cm)
-  #line(length: 45%, stroke: 0.6pt + accent.lighten(30%))
+  #line(length: 45%, stroke: 0.8pt + accent)
   #v(0.6cm)
   #text(size: 12pt)[
     A ground-up course in the linear models, probability, and search \
@@ -35,9 +35,9 @@
     with worked problems, a final examination, and answers in the back.
   ]
   #v(3.5cm)
-  #text(size: 11pt, fill: probc)[Written for an embedded software engineer meeting ML for the first time.]
+  #text(size: 12pt, fill: black)[Written for an embedded software engineer meeting ML for the first time.]
   #v(0.2cm)
-  #text(size: 10pt, fill: probc.lighten(20%))[Edition 1 · Session 1 of an ongoing course]
+  #text(size: 12pt, fill: accent)[Edition 1 · Session 1 of an ongoing course]
 ]
 #pagebreak()
 

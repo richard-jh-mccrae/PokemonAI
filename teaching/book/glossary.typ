@@ -85,14 +85,14 @@ override on top of the learned positional score. (Ch 1, 3)]
 #pagebreak()
 
 #let sech(s) = block(above: 0.4em, below: 0.5em)[
-  #text(font: "New Computer Modern Sans", size: 12pt, fill: accent, weight: "bold")[#s]]
+  #text(font: sansfont, size: 12pt, fill: accent, weight: "bold")[#s]]
 #sech("Symbols")
 
 #block(inset: 0pt, [
-  #set text(size: 9.5pt)
+  #set text(size: 12pt)
   #table(
     columns: (auto, 1fr),
-    stroke: 0.4pt + gray, inset: 5pt, align: (left, left),
+    stroke: 0.5pt + black, inset: 5pt, align: (left, left),
     table.header(text(weight: "bold")[Symbol], text(weight: "bold")[Meaning]),
     [$bold(w)$], [the weight vector — the learned parameters of the model],
     [$bold(phi)(o)$], [the feature vector of option $o$],

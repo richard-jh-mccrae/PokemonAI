@@ -70,7 +70,7 @@ The same linear machine does three different jobs depending on what you attach t
 worth knowing all three, because you will choose between them in future projects:
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   - #text(weight: "bold")[Regression] — use the score *as* the prediction of a real number.
     "Predicted damage $= bold(w) dot bold(phi)$." (Ordinary linear regression.)
   - #text(weight: "bold")[Classification] — threshold or squash the score into a class. "If
@@ -90,7 +90,7 @@ Linear models are, in a sense, the fixed-point arithmetic of ML: not the fancies
 fast, predictable, and correct far more often than newcomers expect. Four reasons we chose one:
 
 #block(inset: (left: 6pt))[
-  #set text(size: 10pt)
+  #set text(size: 12pt)
   - #text(weight: "bold")[Legible.] Every weight is a readable stance (the example above).
   - #text(weight: "bold")[Cheap to run.] One dot product per option — trivially inside the grader's
     budget, no dependencies.

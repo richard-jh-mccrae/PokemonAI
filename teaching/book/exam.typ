@@ -2,8 +2,8 @@
 
 #heading(level: 1, numbering: none)[Final Examination]
 
-#block(fill: accent.lighten(93%), stroke: 0.6pt + accent.lighten(40%), radius: 3pt, inset: 10pt)[
-  #set text(size: 9.5pt)
+#block(fill: accent.lighten(88%), stroke: 0.8pt + accent.lighten(25%), radius: 3pt, inset: 10pt)[
+  #set text(size: 12pt)
   Twenty questions covering the whole book, deliberately *interleaved* — consecutive questions jump
   between topics, because real understanding means recognising which idea a problem needs without
   being told. Work them by hand; a calculator is fine. Aim for the *reasoning*, not just the number.
