@@ -32,6 +32,7 @@ CLUSTERS = {
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)
+        "snipe-the-forced-promotion",           # ADR-0044 Forced-Promotion Read
         # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",

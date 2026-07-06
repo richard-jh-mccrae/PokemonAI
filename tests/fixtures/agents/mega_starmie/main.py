@@ -88,6 +88,12 @@ _pilot = Pilot(
                                                       # phases (STABILIZE/CLOSE + baseline_phases bands)
     gamble_lines=_params.get("gamble_lines", True),   # ADR-0039 kill-switch: Tier-2 Gamble rung —
                                                       # refresh-first when exact-odds EV beats the held line
+    snipe_prize_redundant=_params.get("snipe_prize_redundant", True),  # ADR-0044 kill-switch: Prize-Redundant
+                                                      # Target snipe suppression (deny the 2nd Mega). DEFAULT ON
+                                                      # 2026-07-06 (user decision — verified via ladder-match
+                                                      # corrections, not an A/B: mega_lucario too weak for the leg)
+    forced_promotion=_params.get("forced_promotion", True),  # ADR-0044 kill-switch: Forced-Promotion Read
+                                                      # (pre-chip the ready wincon they'll promote). DEFAULT ON 2026-07-06
     value_model=(ValueModel.load() if _params.get("value_model", False) else None),  # ADR-0042 Tier-5:
                                                       # learned leaf; DEFAULT OFF (a learned seam ships
                                                       # only after its own ladder A/B) + absent-safe

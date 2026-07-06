@@ -175,3 +175,31 @@ so no separate fixture is minted until the layer is built.
 closed-form this-turn Planner and 1-ply threat read deliberately lack it, so **not** hacked in. The
 single-turn heuristics they "lose" to (max-damage attack, snipe-the-top-threat by threat rank) are the
 correct closed-form picks; the human's lines span turns / model the opponent's choices.
+
+> ✅ **RESOLVED 2026-07-06** (`/grill-with-docs`,
+> [ADR-0044](../adr/0044-opponent-choice-residue-is-narrow-closed-form-reads.md)). Re-measured through
+> the shipped T0–T4-ON Pilot: the earlier "needs M3/M4 search" framing was over-deferral — none needs
+> the (built-and-parked) T6 escalation. All three resolve **closed-form**:
+> - **`83661649-30`** — **already covered** by the KO Race (Jetting 189.9 > Nebula 184.7; toggling
+>   `objectives_race` off restores the Nebula blunder — proven causal). Lock with a `REQ-OBJ`
+>   **ordering-invariant** gate (Jetting-family tactical > Nebula-family), robust to the correct
+>   develop-first sequencing (`decide()` returns the develop, not `[2]`) and exercising the *no-path*
+>   race-credit branch `a21472`/`REQ-OBJ-0001` skips. The "anticipate the Wally heal" note is
+>   opponent-choice residue that only *strengthens* Jetting (banked bench chip survives a heal) — T6-class,
+>   out of scope.
+> - **`83667237-107`** — build the **Prize-Redundant Target** suppression (+ body-identity keying that
+>   plugs the duplicate-species `path_target_ids` card-id leak). DoD is intent-based: snipe an on-path
+>   1-prize small, never the redundant 2nd Mega.
+> - **`83661649-45`** — build the **Forced-Promotion Read** (doomed Active ⇒ predict the value-based
+>   promotion, redirect the snipe), scoped to the offensive pre-chip only (Incoming's defensive read
+>   untouched).
+>
+> All behind kill-switches, γ-gated, A/B before default-ON. Glossary: *Prize-Redundant Target*,
+> *Forced-Promotion Read* ([src/common/CONTEXT.md](../../src/common/CONTEXT.md)).
+>
+> ✅ **BUILT + SHIPPED 2026-07-06** (`/tdd`): #30 gated `REQ-OBJ-0014` (KO-Race ordering, GREEN); #107 +
+> #45 built behind `snipe_prize_redundant` / `forced_promotion` and gated `REQ-READ-0001..0006` in
+> [test_opponent_choice_reads.py](../../tests/strategy/test_opponent_choice_reads.py); fixtures
+> `planner_83661649_30/107/45.json`; full suite green. Both switches **flipped DEFAULT ON 2026-07-06**
+> (user decision — verification via ladder-match corrections, not an A/B; mega_lucario too weak for the
+> non-mirror leg — see ADR-0044 *Amendment*). Kill-switches retained for a one-line revert.

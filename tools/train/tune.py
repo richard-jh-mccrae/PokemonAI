@@ -73,6 +73,8 @@ def _build_pilot(agent: str):
         objectives_path=strategy.params.get("objectives_path", True),  # ADR-0040 Prize-Path consumers
         objectives_phases=strategy.params.get("objectives_phases", True),  # ADR-0040 derived phases
         gamble_lines=strategy.params.get("gamble_lines", True),  # ADR-0039 Tier-2 Gamble rung
+        snipe_prize_redundant=strategy.params.get("snipe_prize_redundant", True),  # ADR-0044 (DEFAULT ON 2026-07-06)
+        forced_promotion=strategy.params.get("forced_promotion", True),  # ADR-0044 (DEFAULT ON 2026-07-06)
         value_model=(ValueModel.load() if strategy.params.get("value_model", False) else None),  # ADR-0042
         escalation=strategy.params.get("escalation", False),  # ADR-0043 Tier-6 (needs search_budget>0)
         search_budget=strategy.params.get("search_budget", 0),

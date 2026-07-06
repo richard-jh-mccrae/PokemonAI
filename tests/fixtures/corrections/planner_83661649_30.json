@@ -1,0 +1,291 @@
+{
+ "id": "29cd27e59125",
+ "ledger_id": "83661649-30",
+ "obs": {
+  "current": {
+   "energyAttached": true,
+   "firstPlayer": 1,
+   "looking": null,
+   "players": [
+    {
+     "active": [
+      {
+       "appearThisTurn": true,
+       "energies": [
+        3,
+        3,
+        3
+       ],
+       "energyCards": [
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 4
+        },
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 5
+        },
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 7
+        }
+       ],
+       "hp": 280,
+       "id": 1031,
+       "maxHp": 330,
+       "playerIndex": 0,
+       "preEvolution": [
+        {
+         "id": 1030,
+         "playerIndex": 0,
+         "serial": 20
+        }
+       ],
+       "serial": 23,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": true,
+       "energies": [
+        3
+       ],
+       "energyCards": [
+        {
+         "id": 3,
+         "playerIndex": 0,
+         "serial": 8
+        }
+       ],
+       "hp": 330,
+       "id": 1031,
+       "maxHp": 330,
+       "playerIndex": 0,
+       "preEvolution": [
+        {
+         "id": 1030,
+         "playerIndex": 0,
+         "serial": 21
+        }
+       ],
+       "serial": 25,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 38,
+     "discard": [
+      {
+       "id": 1086,
+       "playerIndex": 0,
+       "serial": 26
+      },
+      {
+       "id": 1225,
+       "playerIndex": 0,
+       "serial": 54
+      },
+      {
+       "id": 666,
+       "playerIndex": 0,
+       "serial": 18
+      },
+      {
+       "id": 3,
+       "playerIndex": 0,
+       "serial": 6
+      }
+     ],
+     "hand": [
+      {
+       "id": 17,
+       "playerIndex": 0,
+       "serial": 14
+      },
+      {
+       "id": 1223,
+       "playerIndex": 0,
+       "serial": 52
+      },
+      {
+       "id": 3,
+       "playerIndex": 0,
+       "serial": 3
+      },
+      {
+       "id": 1229,
+       "playerIndex": 0,
+       "serial": 59
+      }
+     ],
+     "handCount": 4,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    {
+     "active": [
+      {
+       "appearThisTurn": false,
+       "energies": [
+        3
+       ],
+       "energyCards": [
+        {
+         "id": 3,
+         "playerIndex": 1,
+         "serial": 69
+        }
+       ],
+       "hp": 280,
+       "id": 1031,
+       "maxHp": 330,
+       "playerIndex": 1,
+       "preEvolution": [
+        {
+         "id": 1030,
+         "playerIndex": 1,
+         "serial": 81
+        }
+       ],
+       "serial": 83,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 1030,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 80,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 1030,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 82,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 42,
+     "discard": [
+      {
+       "id": 1086,
+       "playerIndex": 1,
+       "serial": 87
+      },
+      {
+       "id": 1189,
+       "playerIndex": 1,
+       "serial": 108
+      }
+     ],
+     "hand": null,
+     "handCount": 6,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    }
+   ],
+   "result": -1,
+   "retreated": false,
+   "stadium": [],
+   "stadiumPlayed": false,
+   "supporterPlayed": false,
+   "turn": 4,
+   "turnActionCount": 4,
+   "yourIndex": 0
+  },
+  "logs": [
+   {
+    "cardId": 3,
+    "cardIdTarget": 1031,
+    "playerIndex": 0,
+    "serial": 8,
+    "serialTarget": 25,
+    "type": 11
+   }
+  ],
+  "remainingOverageTime": 598.7740440000001,
+  "select": {
+   "context": 0,
+   "contextCard": null,
+   "deck": null,
+   "effect": null,
+   "maxCount": 1,
+   "minCount": 1,
+   "option": [
+    {
+     "index": 1,
+     "type": 7
+    },
+    {
+     "index": 3,
+     "type": 7
+    },
+    {
+     "attackId": 1487,
+     "type": 13
+    },
+    {
+     "attackId": 1488,
+     "type": 13
+    },
+    {
+     "type": 12
+    },
+    {
+     "type": 14
+    }
+   ],
+   "remainDamageCounter": 0,
+   "remainEnergyCost": 0,
+   "type": 0
+  },
+  "step": 31
+ },
+ "chosen": [
+  3
+ ],
+ "correct": [
+  2
+ ],
+ "chosen_label": "Attack with Nebula Beam",
+ "correct_label": "Attack with Jetting Blow",
+ "rationale": "Jetting Blow is better here to do some bench sniping because Nebula Beam will not KO them anyway. and one jetting blow + one nebula beam will KO them. also, worth anticipating that they will use wally compassion to fully heal."
+}

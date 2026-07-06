@@ -554,8 +554,8 @@
     "round": "2026-07-05"
   },
   "83661649-45": {
-    "disposition": "deferred",
-    "reason": "capability-gap (forward-promotion opponent model): snipe-the-top-threat correctly picks the energized 70HP Staryu by the 1-ply threat read; 'chip the Mega Starmie ex they'll promote next' needs opponent-choice modelling. docs/todo/deferred-multi-turn-criticals.md 2026-07-04.",
+    "disposition": "fixed",
+    "reason": "FIXED + SHIPPED (ADR-0044 Forced-Promotion Read, forced_promotion DEFAULT ON 2026-07-06): dead Active => pre-chip the ready wincon they promote, not the energized Staryu. Gated REQ-READ-0004..0006. Kill-switch retained; verify via ladder corrections.",
     "round": "2026-07-04"
   },
   "83662396-19": {
@@ -574,13 +574,13 @@
     "round": "2026-07-04"
   },
   "83667237-107": {
-    "disposition": "deferred",
-    "reason": "capability-gap (opponent prize-trajectory model): snipe-the-top-threat picks the top-rank Mega Lucario ex; 'need 4 prizes = one Mega Lucario + 1, avoid the 2nd via future Boss's' spans turns. Same class as b4649. docs/todo/deferred-multi-turn-criticals.md.",
+    "disposition": "fixed",
+    "reason": "FIXED + SHIPPED (ADR-0044 Prize-Redundant Target, snipe_prize_redundant DEFAULT ON 2026-07-06): off-committed-path snipe suppression + body-identity path keying -> snipe lands on the on-path small, not the 2nd Mega. Gated REQ-READ-0001..0003. Kill-switch retained; verify via ladder corrections.",
     "round": "2026-07-04"
   },
   "83661649-30": {
-    "disposition": "deferred",
-    "reason": "capability-gap (multi-turn attack-sequence): pilot develops first then the single-turn planner picks max-damage Nebula (209.7) over Jetting Blow (119.9); the Jetting-Blow-2-turn-snipe-KO line needs multi-turn search. Same as a21472. docs/todo/deferred-multi-turn-criticals.md.",
+    "disposition": "fixed",
+    "reason": "COVERED by the KO Race (ADR-0040/0044): Jetting tactical > Nebula on the captured state (default-ON objectives_race). Gated REQ-OBJ-0014 (KO-Race ordering; robust to develop-first sequencing). Built 2026-07-06.",
     "round": "2026-07-04"
   },
   "83661649-54": {
