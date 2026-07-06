@@ -6,7 +6,7 @@ Worked solutions to the chapter problems and the final examination. Where a prob
 a model answer is given — yours may differ in wording and still be right. Numerical answers are rounded.
 
 #let sech(s) = block(above: 1.0em, below: 0.3em, breakable: false)[
-  #text(font: "New Computer Modern Sans", size: 13pt, fill: accent, weight: "bold")[#s]
+  #text(font: sansfont, size: 13pt, fill: accent, weight: "bold")[#s]
 ]
 
 #sech("Chapter 1 — The system at a glance")

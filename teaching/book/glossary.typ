@@ -85,7 +85,7 @@ override on top of the learned positional score. (Ch 1, 3)]
 #pagebreak()
 
 #let sech(s) = block(above: 0.4em, below: 0.5em)[
-  #text(font: "New Computer Modern Sans", size: 12pt, fill: accent, weight: "bold")[#s]]
+  #text(font: sansfont, size: 12pt, fill: accent, weight: "bold")[#s]]
 #sech("Symbols")
 
 #block(inset: 0pt, [

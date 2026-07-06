@@ -9,17 +9,17 @@
 #counter(page).update(1)
 
 #let fmtitle(s) = block(above: 1.4em, below: 0.8em)[
-  #text(font: "New Computer Modern Sans", size: 17pt, fill: accent, weight: "bold")[#s]
+  #text(font: sansfont, size: 17pt, fill: accent, weight: "bold")[#s]
 ]
 
 // ---- TITLE PAGE -----------------------------------------------------------
 #v(3.5cm)
 #align(center)[
-  #text(font: "New Computer Modern Sans", size: 13pt, fill: accent, tracking: 2pt)[
+  #text(font: sansfont, size: 13pt, fill: accent, tracking: 2pt)[
     A SYSTEMS ENGINEER'S INTRODUCTION TO
   ]
   #v(0.4cm)
-  #text(font: "New Computer Modern Sans", size: 40pt, fill: accent, weight: "bold")[
+  #text(font: sansfont, size: 40pt, fill: accent, weight: "bold")[
     Machine Learning
   ]
   #v(0.5cm)
