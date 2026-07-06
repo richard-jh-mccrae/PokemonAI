@@ -579,6 +579,11 @@ class Decision:
                                      # games; None when the model is off/absent (no learned claim)
     lethal_lost: bool = False    # a locked verified line DIVERGED from the live game and was dropped
                                  # (`lethal_veto`, ADR-0037 stage 3) — sparse telemetry key
+    reordered: bool = False      # `chosen` came from the attack-last resequencer (`_finish_turn_last`)
+                                 # changing the score order, NOT argmax(score) — sparse telemetry key so
+                                 # a trace reader doesn't misread "top-score not chosen" as a scoring bug
+    grabbed: bool = False        # `chosen` is a `_greedy_grab` multi-pick set (dynamic gap-scoring),
+                                 # NOT the top-N static scores — sparse telemetry key, same legibility
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -732,11 +737,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
         # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
-        order = sorted(range(len(options)),
-                       key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
-        order = self._finish_turn_last(obs, board, options, traces, order, max_count,
+        by_score = sorted(range(len(options)),
+                          key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
+        order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
-        if max_count > 1 and select.get("context") in _GRAB_CONTEXTS:   # greedy gap-update + take-fewer
+        # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
+        # trace reader doesn't misread "top-score not chosen" as a scoring bug. `reordered` = attack-last
+        # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
+        reordered = order != by_score
+        grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
+        if grabbed:                                     # greedy gap-update + take-fewer
             chosen = self._greedy_grab(obs, select, board, traces, options,
                                        select.get("minCount", 0), max_count)
         else:
@@ -751,7 +761,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
                         posture=self._posture_record(board),
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
-                        lethal_lost=self._lethal_lost)
+                        lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
     def _posture_record(board: Board) -> dict | None:

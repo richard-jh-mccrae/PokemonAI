@@ -8,6 +8,14 @@ Carries the Turn Planner / Lethal Solver verdicts (`planned` / `lethal`) and the
 **posture** (ADR-0041) — what the Read believed about the opponent (archetype candidates, γ,
 matched Brief) — so every blunder Correction's `live_trace` records how the agent decided AND who
 it thought it was facing. The posture block ties a matchup misplay to a specific archetype.
+
+It also carries the **decide()-only reorder markers** — sparse flags that say when `chosen` did NOT
+come from a plain argmax over the emitted `score`s, so a trace reader (`/blunder-buster`, the
+inspector) doesn't misread "top-score not chosen" as a scoring bug: per-opt `deferred` (an attack-last
+held-back turn-ender, `_finish_turn_last`) / `needy` (the win-condition-Line attach preferred among
+EQUAL-score attaches), and top-level `reordered` (attack-last resequenced the menu) / `grabbed` (the
+multi-pick came from `_greedy_grab`'s dynamic gap-scoring). All sparse → an un-reordered record stays
+byte-identical to the pre-marker era.
 """
 from __future__ import annotations
 
@@ -15,6 +23,20 @@ import json
 import sys
 
 TAG = "@T"
+
+
+def _opt_record(o) -> dict:
+    """One option's wire record. The decide()-only markers ride only when set, so a plain-argmax
+    option stays byte-identical to the pre-marker era — they tell the reader WHY the chosen option
+    isn't the top-`score` one: `deferred` = an attack-last held-back turn-ender (`_finish_turn_last`);
+    `needy` = the win-condition-Line attach preferred among EQUAL-score attaches (`attach_to_needy_line`)."""
+    rec = {"i": o.index, "cid": o.card_id, "score": round(o.score, 3),
+           "tac": round(o.tactical, 3), "fired": [[h.id, w] for h, w in o.fired]}
+    if getattr(o, "deferred", False):
+        rec["deferred"] = True
+    if getattr(o, "attach_to_needy_line", False):
+        rec["needy"] = True
+    return rec
 
 
 def to_record(decision, *, tier: int = 0) -> dict | None:
@@ -35,11 +57,7 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         "plan": opts[0].plan.value,
         "tier": tier,
         "chosen": list(decision.chosen),
-        "opts": [
-            {"i": o.index, "cid": o.card_id, "score": round(o.score, 3),
-             "tac": round(o.tactical, 3), "fired": [[h.id, w] for h, w in o.fired]}
-            for o in opts
-        ],
+        "opts": [_opt_record(o) for o in opts],
         # Lethal Solver's verdict rides here so a blunder Correction's live_trace carries it (the
         # SAME record feeds the tuner retest) — always present: None when no guaranteed win locked.
         # `verified` = the engine backstop's verdict on the lock (True / None; `lethal_verify`).
@@ -68,6 +86,11 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         rec["lethal_refuted"] = refuted           # "win" (the lethal_verify divergence signal)
     if getattr(decision, "lethal_lost", False):   # sparse: a locked verified line diverged from the
         rec["lethal_lost"] = True                 # live game and was dropped (`lethal_veto`, ADR-0037)
+    if getattr(decision, "reordered", False):     # sparse: `chosen` came from the attack-last
+        rec["reordered"] = True                   # resequencer, not argmax(score) — so a reader doesn't
+                                                  # misread "top-score not chosen" as a scoring bug
+    if getattr(decision, "grabbed", False):       # sparse: `chosen` is a `_greedy_grab` set (dynamic
+        rec["grabbed"] = True                     # gap-scoring), not the top-N static scores
     posture = getattr(decision, "posture", None)  # the Read's belief about the opponent at this
     if posture:                                   # decision (ADR-0041): believed archetype(s), γ,
         rec["posture"] = posture                  # matched Brief. Sparse: only when a Scout was wired.

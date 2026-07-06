@@ -43,7 +43,13 @@ only zips a **Bundle**; nothing records what an agent *was* or how it *did*.
 - **The agent emits always-on, tagged Decision Telemetry to `stderr`** from `Pilot.explain()` — the
   trace `decide()` already computes — recording every legal option's score and which Hypotheses
   fired. `collect` aggregates it (e.g. tier mix, per-Hypothesis fire-frequency, decision margin) and
-  can also reconstruct traces offline by replaying `Pilot.explain()` on any match's replay.
+  can also reconstruct traces offline by replaying `Pilot.explain()` on any match's replay. The
+  record also carries **sparse reorder markers** (`deferred`/`needy` per-opt, `reordered`/`grabbed`
+  top-level) so a reader can tell when `chosen` came from a decide()-only selection step (attack-last
+  resequencing, the needy-Line attach tie-break, the greedy multi-pick grab) rather than
+  argmax(`score`) — otherwise a legitimate sequencing pick reads as an unexplained "top-score not
+  chosen" and `/blunder-buster` could misdiagnose it as a scoring bug. Sparse → an un-reordered
+  record stays byte-identical to the pre-marker era, so the tuner/retest keep reading unchanged.
 
 ## Considered options
 
