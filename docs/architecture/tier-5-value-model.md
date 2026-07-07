@@ -96,8 +96,8 @@ cross-deck A/B decided park:
   (fails both delta ≥ 0 and CI-lo ≥ −1%). The learned leaf marginally REGRESSES even where favorability
   varies, because its features are largely REDUNDANT with the closed-form leaf the tuned tiers already
   score (ADR-0042's own caveat) — over redundant inputs a general logistic adds slight miscalibration,
-  not signal. Capped + degrade-safe, so the regression is tiny, but consistently negative → park per
-  the park-**only**-if-worse rule.
+  not signal. Capped + degrade-safe, so any effect is tiny. **But this cross-deck number is not valid
+  gain evidence — the park does not rest on it; see the Rationale correction below.**
 
 **Kept for the future**: the retrained artifact (`src/common/value/value_model.json` — favorability-live,
 better-calibrated) is the better base for the deferred **matchup-conditioned** model (ADR-0007), which
@@ -105,6 +105,29 @@ is the real signal unlock (a *general* model over features redundant with the cl
 beat it). The gauntlet tooling (`sim/record.py`, `sim/gauntlet.py`, `sim/paired_ab.py`,
 `sim/gauntlet_ab.py`, `train/value/sanity.py`) + the `_build_pilot` Read fix are reusable regardless.
 Parked per the finish-plan's flip-**or-park** definition of done.
+
+## Rationale correction — the park is right, the −0.55% is not the reason (2026-07-07)
+
+Re-examined in the tier-vs-planner review. **The park's stated evidence (the −0.55% paired-delta) is not a
+valid gain measure, and the OFF disposition should not rest on it.** That A/B is a **cross-deck gauntlet over
+exactly the three decks [ADR-0045](../adr/0045-match-scale-planning-is-a-closed-form-directive-game-plan.md)
+declares "too weak to discriminate"** (mega_starmie / mega_lucario / dragapult_ex) — the instrument ADR-0045
+rejects *as a gain gate* ("Gauntlet A/B as the gain gate … the measuring instrument is invalid (weak decks)").
+Its CI **[−1.27%, +0.16%] crosses zero**, so "consistently regresses" over-reads noise on an instrument that
+structurally *cannot* measure gain (weak-opponent saturation compresses the on/off delta toward zero). The one
+valid gain signal — the **Kaggle ladder** — was never run for T5. **So T5 was never validly measured for gain.**
+
+**Why DEFAULT OFF is still correct** — on instrument-independent grounds, not the gauntlet number:
+1. the **mirror safety A/B = 50%, 0 crashes** is a *valid* no-regression floor (both seats the strong deck →
+   no saturation); the capped, absent-safe leaf is demonstrably safe;
+2. the **redundancy argument** holds regardless of any A/B — a *general* logistic over features the closed-form
+   leaf already scores cannot add signal; and
+3. OFF is the conservative default for an optional seam that can only break prize-equal ties.
+
+**The unlock is not "a better gauntlet."** A better gauntlet fixes neither the redundancy (structural) nor the
+measurement (only the ladder measures gain). The real unlock is the **matchup-conditioned model** below,
+validated on the **ladder** — tracked in
+[parked-learned-search-tiers.md](../todo/parked-learned-search-tiers.md).
 
 ## Deferred refinements (data-justified, not blockers)
 

@@ -92,3 +92,13 @@ survival/dev leaf appears to prefer board-preservation over the fast mirror's te
 unlock is its Gap items — the Tier-5 value-model leaf and a real opponent-deck reply model — not the
 trigger breadth; a commit-margin gate + higher density threshold are the cheap salvage knobs first.
 See ADR-0043 *Amendment* for the full result and root-cause read.
+
+**Note (2026-07-07, tier-vs-planner review): this park rests on VALID evidence — unlike T5's.** The 44 %
+came from a **mega_starmie MIRROR** (both seats the strong deck, only one running escalation), which is
+*immune* to the weak-opponent saturation that voids the cross-deck gauntlet as a gain gate
+([ADR-0045](../adr/0045-match-scale-planning-is-a-closed-form-directive-game-plan.md) "Gauntlet A/B as the
+gain gate … invalid (weak decks)"). A mirror cleanly isolates the feature: neutral → ~50 %, hurts → < 50 %.
+Landing at 44 % (CI 41-47, entirely sub-50) is a clear self-inflicted regression, so **as-built T6 genuinely
+loses** — the disposition needs no re-test, only the Gap items. Contrast [Tier 5](tier-5-value-model.md),
+parked on the *invalid* cross-deck gauntlet. Both unlocks are tracked in
+[parked-learned-search-tiers.md](../todo/parked-learned-search-tiers.md).
