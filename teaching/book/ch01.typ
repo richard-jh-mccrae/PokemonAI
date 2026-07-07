@@ -122,6 +122,9 @@ to say. You do not need the details yet, but the shape previews the book:
     estimator. *Chapter 7.*
   - #text(weight: "bold")[Tier 6 — Escalation search.] A narrow, bounded look-ahead for the hardest
     ties. *Chapter 9.*
+  - #text(weight: "bold")[The Match Planner.] The newest layer, sitting *on top*: it turns the Tier-3
+    objectives into a turn-by-turn *game plan* for the whole match — by pure arithmetic, not search.
+    *Chapter 9.*
 ]
 
 Everything rests on Tier 0, and Tier 0 rests on a single idea — turning a messy game state into a

@@ -161,6 +161,19 @@ you commit to a line that does not actually win, and you may lose. Soundness is 
 under-claiming is safe, over-claiming (an optimistic evaluation) can be fatal.]
 #ans("9.6")[(a) *search* — exact, provable, per-decision. (b) *learning* — a fast learned/heuristic
 evaluation of a fuzzy board. (c) *neither* — an exact closed-form (hypergeometric) computation.]
+#ans("9.7")[(a) It needs $4 - 2 = 2$ more Energy, so 2 turns to afford the attack; benched, so $+1$ to
+promote: first hit $= max(1, 0, 2) + 1 = 3$ turns. (b) $ceil(300\/160) = 2$ hits. (c) $3 + 2 - 1 = 4$ —
+the knockout lands on their 4th turn. (d) A *computation* (a max and two divisions); the
+*opponent-static* assumption — reckoning on their current board, not their best reply — is what removes
+the branching and makes it cheap.]
+#ans("9.8")[(a) *sensor* — it computes a number and, alone, changes nothing. (b) *actuator* — it changes
+the move (declines a knockout). (c) *sensor* — telemetry only, no decision touched. Building the sensor
+first and proving the agent plays *identically* makes it behaviour-neutral, so any later change in win
+rate must come from the actuator you then wired (and can A/B) — two suspects become one.]
+#ans("9.9")[(a) $c = 0.5 + 0.12(1) + 0.05(3) = 0.77 >= 0.55$ → *directs*. (b) $c = 0.5 + 0.12(-1) +
+0.05(0) = 0.38 < 0.55$ → *stays quiet*. (c) The weighted sum estimates *this route's feasibility* and is
+auditable term-by-term, whereas the value model estimates overall $P("win")$, adds no signal over the
+closed form, and is far less legible.]
 
 #sech("Chapter 10 — Evaluation")
 #ans("10.1")[(a) Interval entirely above 50% → improvement. (b) Interval straddles 50% → no

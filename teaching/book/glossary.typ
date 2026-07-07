@@ -39,6 +39,9 @@ indicator (a rule that fires, $1$, or not, $0$). The vector $bold(phi)$ is the m
 option. (Ch 2)]
 #g("Feature engineering")[Hand-designing the features. The *route-H* fix — inventing a new distinction
 the model was blind to. (Ch 2, 4)]
+#g("Game Plan")[The Match Planner's once-per-turn output: a *route* (which enemy Pokémon to knock out
+for six prizes), a *mode* (race / stall / stabilise / sacrifice / close), a *confidence*, and a
+*directed goal* handed to the turn planner. Recomputed every turn, never locked. (Ch 9)]
 #g("Gradient descent")[Minimising a function by repeatedly stepping opposite its gradient, scaled by
 the learning rate $eta$. The workhorse optimiser. (Ch 6)]
 #g("Hinge loss")[$max(0, tau - m)$ — the SVM/ranking loss; zero once the margin clears $tau$, linear
@@ -56,6 +59,9 @@ legible, convex to fit, cheap to run. (Ch 3)]
 with log-loss. The value model. (Ch 7)]
 #g("Margin ($m$)")[The score gap $sum_i w_i Delta_i + Delta"tactical"$ for a correction; positive means
 satisfied. Also, the buffer a model keeps past the boundary for robustness. (Ch 4, 5)]
+#g("Match Planner")[The match-scale planner atop the stack: it computes a *Game Plan* by pure
+opponent-static arithmetic (the *Threat Clock*, the prize race) rather than searching the opponent's
+choices, and directs the turn planner only when its *confidence* clears a threshold. (Ch 9)]
 #g("Minimax")[Propagating values up a game tree: MAX takes the largest child, MIN the smallest —
 "assume the opponent plays well." (Ch 9)]
 #g("Monte Carlo")[Estimating a quantity by random sampling. Used when no closed form exists; needless
@@ -71,6 +77,10 @@ $u = k(x)$. (Ch 1)]
 #g("Regularisation (L2 / L1)")[A penalty that keeps weights small or near a prior. *L2* (ridge) shrinks
 smoothly toward the seed (a Gaussian prior); *L1* (lasso) zeroes weak weights (sparsity). Knob:
 $lambda$. (Ch 6)]
+#g("Sensor / actuator")[The discipline of separating a component that only *computes a value* (a
+sensor — e.g. the Threat Clock) from one that *changes a move* (an actuator — e.g. a
+knockout-declining gate). Verify the sensor behaviour-neutral first, then wire each actuator behind a
+switch — so a later regression is *attributable*. (Ch 1, 9)]
 #g("Sigmoid ($sigma$)")[$sigma(z) = 1\/(1 + e^(-z))$ — squashes any real number into $(0,1)$;
 $sigma(0) = 0.5$. Turns a score into a probability. (Ch 7)]
 #g("Standardisation")[Rescaling a feature to mean $0$, spread $1$: $(phi - mu)\/s$. Stops large-scale
@@ -81,6 +91,9 @@ violated corrections, pull back toward seeds, clamp. (Ch 6)]
 determine the fit. (Ch 5)]
 #g("Tactical term")[The fixed, rule-of-the-game combat value (a knockout $approx 1000$). A hard
 override on top of the learned positional score. (Ch 1, 3)]
+#g("Threat Clock")[A computed primitive: the fewest opponent turns until one of my Pokémon can be
+knocked out, from card facts alone (Energy at ~one per turn, one evolution/promotion per turn, hits to
+knock out). Pure opponent-static arithmetic — a *sensor*, not a search. (Ch 9)]
 
 #pagebreak()
 
