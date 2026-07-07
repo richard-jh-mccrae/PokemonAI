@@ -94,6 +94,10 @@ _pilot = Pilot(
                                                       # corrections, not an A/B: mega_lucario too weak for the leg)
     forced_promotion=_params.get("forced_promotion", True),  # ADR-0044 kill-switch: Forced-Promotion Read
                                                       # (pre-chip the ready wincon they'll promote). DEFAULT ON 2026-07-06
+    match_planner_steer=_params.get("match_planner_steer", True),  # ADR-0045 S3: Game Plan directs the Turn
+                                                      # Goal (sub-prize bias). DEFAULT ON 2026-07-07 — matured via ladder
+    forgo_ko=_params.get("forgo_ko", True),           # ADR-0045 S4: forgo a non-winning KO ('don't wake the
+                                                      # giant') under the tight sound gate. DEFAULT ON 2026-07-07 (riskiest)
     value_model=(ValueModel.load() if _params.get("value_model", False) else None),  # ADR-0042 Tier-5:
                                                       # learned leaf; DEFAULT OFF (a learned seam ships
                                                       # only after its own ladder A/B) + absent-safe

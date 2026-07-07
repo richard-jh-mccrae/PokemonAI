@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _COIN_HEAD, _EVOLVE,
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _COIN_HEAD, _END, _EVOLVE,
                                      _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, KO_SCORE)
 
 
@@ -52,6 +52,12 @@ _PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on 
 _PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Automatic Value Model's P(win) on the simmed
                                # end-of-turn board scales into a sub-prize band (< one KO_SCORE), so
                                # the learned leaf breaks prize-EQUAL ties, never overriding a prize
+_PLANNER_GAMEPLAN_W = 20.0     # ADR-0045 (S3): a candidate line SERVING the Match Planner's directed goal
+                               # gets this × the Game Plan's confidence — sub-prize (< one KO_SCORE), ranks
+                               # WITHIN a rung, never beats a prize; kill-switch `match_planner_steer`
+_GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
+              "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
+              "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
 _ESCALATE_EPS = 15.0          # Tier-6 (ADR-0043): two attacks within this many tactical points are a
                                # "close race tie" the closed-form can't separate — the escalation
                                # trigger. Narrow, so only genuinely ambiguous attack picks pay the tree
@@ -134,6 +140,8 @@ class PlannerMixin:
         if self._turn_plan is not None and self._turn_plan[0] == fp:
             return self._turn_plan[1]                 # cache hit: re-plan only on reveal (fingerprint change)
         line = self._win_line(obs, select, board, options, traces)
+        if line is None:                              # ADR-0045 S4: the forgo-KO directive preempts the
+            line = self._forgo_ko_line(obs, select, board, options, traces)   # KO-defer under its tight gate
         if line is None:
             candidates = self._closed_form_candidates(obs, select, board, options, traces)
             line = self._commit_best(obs, candidates)
@@ -614,6 +622,82 @@ class PlannerMixin:
 
     # ═══ THE HEURISTIC RUNGS — rank-grade, never a guarantee (ADR-0031) ═══
 
+    def _gameplan_goal_bonus(self, line_goal: str, board) -> float:
+        """The Match Planner seam (ADR-0045 S3): a confidence-scaled sub-prize bump when a candidate Turn
+        Line's goal serves the Game Plan's directed Turn Goal — the Game Plan steering the Turn Planner's
+        ranking, never beating a prize. Silent unless ``match_planner_steer`` is on and the Game Plan
+        directs a goal (withheld on low confidence, so a low-confidence plan never steers)."""
+        if not getattr(self, "match_planner_steer", False):
+            return 0.0
+        gp = getattr(board, "game_plan", None)
+        if gp is None or not gp.directed_goal:
+            return 0.0
+        return (_PLANNER_GAMEPLAN_W * gp.confidence
+                if line_goal in _GOAL_LINE.get(gp.directed_goal, ()) else 0.0)
+
+    def _forgo_ko_line(self, obs, select, board, options, traces):
+        """The forgo-KO directive (ADR-0045 S4, 'don't wake the giant'): when a NON-winning KO of the opp
+        Active is on the menu but the tight sound gate holds, commit the best DEVELOP instead — or END the
+        turn when no productive develop remains — deliberately declining the KO to buy setup turns. Runs
+        BELOW the win rung, so a Lethal is never forgone (a prize is only ever traded, never the game).
+        Returns None (defer → the tuned scoring takes the KO) unless the gate holds. Kill-switch
+        ``forgo_ko``, DEFAULT OFF — the riskiest lever, ladder-matured."""
+        if not getattr(self, "forgo_ko", False):
+            return None
+        if not any(o.get("type") == _ATTACK and t.tactical >= KO_SCORE
+                   for o, t in zip(options, traces)):
+            return None                                # no KO on the menu — nothing to forgo
+        if not self._forgo_ko_gate(obs, board, self._opp_player(obs)):
+            return None
+        dev = [(t.tactical, i) for i, (o, t) in enumerate(zip(options, traces))
+               if o.get("type") in (_ATTACH, _EVOLVE, _PLAY)]
+        if dev:
+            return TurnLine(next_step=[max(dev)[1]], goal="forgo_ko",
+                            rationale="plan (forgo_ko): develop instead of the giant-waking KO")
+        end = next((i for i, o in enumerate(options) if o.get("type") == _END), None)
+        if end is not None:
+            return TurnLine(next_step=[end], goal="forgo_ko",
+                            rationale="plan (forgo_ko): end the turn, decline the giant-waking KO")
+        return None
+
+    def _forgo_ko_gate(self, obs, board, opp) -> bool:
+        """The tight SOUND gate for forgoing a non-winning Active KO (ADR-0045 S4): ALL must hold — the
+        Game Plan is a BUILD mode (SETUP/STALL) with a directed goal (which is set only at high
+        confidence); the opp Active is OFF my committed Prize Path (KOing it doesn't advance my route);
+        and KOing it promotes a body that threatens my Active SOONER than the current board does (the
+        Threat Clock — it wakes a scarier attacker). Any condition unsure → False (take the KO)."""
+        from common.strategy.strategy import Plan
+        gp = getattr(board, "game_plan", None)
+        if gp is None or not gp.directed_goal or gp.mode not in (Plan.SETUP, Plan.STALL):
+            return False
+        oa = next((p for p in (opp.get("active") or []) if p), None)
+        if oa is None or oa.get("id") in board.path_target_ids:
+            return False                               # on my path → the KO advances my route
+        ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
+        after = self._opp_after_forced_promote(opp)
+        if ma is None or after is None:
+            return False
+        current = self._threat_clock(ma, opp)
+        promoted = self._threat_clock(ma, after)
+        return promoted is not None and current is not None and promoted < current
+
+    def _opp_after_forced_promote(self, opp):
+        """The opponent's board AFTER I KO their Active and they promote their best ready bench attacker
+        (highest OWN max damage, energy-independent — the win-condition they accelerate), rest on bench.
+        None when they have no bench body that attacks. The hypothetical the forgo-KO gate reads."""
+        bench = [b for b in (opp.get("bench") or []) if b]
+        if not bench:
+            return None
+
+        def own(b):
+            st = self.stats.get(b.get("id")) if self.stats else None
+            return getattr(st, "maxDamage", 0) if st else 0
+        promoted = max(bench, key=own)
+        if own(promoted) <= 0:
+            return None
+        return {"active": [promoted], "bench": [b for b in bench if b is not promoted],
+                "discard": opp.get("discard") or [], "handCount": opp.get("handCount", 0)}
+
     def _stabilize_then_ko_lines(self, obs, select, board, options, traces) -> list:
         """The **stabilize-then-KO** goal (ADR-0031): when my Active is DOOMED yet can also KO this turn,
         a clutch-heal (Wally's Compassion — heal a Mega ex to FULL, then bounce all its Energy to hand)
@@ -657,6 +741,7 @@ class PlannerMixin:
                                                       # bounced type — attached counts are stale here)
             value = self._leaf_value(prizes=self._prize_value(opp), active_survives=True,
                                      threat_removed=self._threat_magnitude(opp))
+            value += self._gameplan_goal_bonus("stabilize_then_ko", board)   # ADR-0045 seam (S3)
             lines.append(TurnLine(next_step=[i], goal="stabilize_then_ko", value=value,
                                   rationale="plan (stabilize_then_ko): heal, re-power, still KO for the prize"))
         return lines
@@ -805,6 +890,7 @@ class PlannerMixin:
                 continue
             prizes, survives = cand
             value = self._leaf_value(prizes=prizes, active_survives=survives, threat_removed=threat)
+            value += self._gameplan_goal_bonus("ko_for_prizes", board)       # ADR-0045 seam (S3)
             lines.append(TurnLine(next_step=[i], goal="ko_for_prizes", value=value,
                                   rationale=f"plan (ko_for_prizes): {kind} unlocks a {int(prizes)}-prize KO"))
         return lines
@@ -874,6 +960,7 @@ class PlannerMixin:
             if (getattr(self, "objectives_path", False)          # Tier-3 (ADR-0040): a key threat ON my
                     and top.get("id") in board.path_target_ids):  # cheapest Prize Path advances the MATCH
                 value += _PLANNER_PATH_W                          # win — sub-prize bump, ranks within rung
+            value += self._gameplan_goal_bonus("ko_key_threat", board)       # ADR-0045 seam (S3)
             lines.append(TurnLine(
                 next_step=[i], goal="ko_key_threat", value=value,
                 rationale=f"plan (ko_key_threat): {kind} unlocks the snipe-KO of the benched key threat"))

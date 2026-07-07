@@ -78,6 +78,9 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     objectives = getattr(decision, "objectives", None)
     if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)
         rec["objectives"] = objectives            # — race delta + both cheapest-path turns
+    game_plan = getattr(decision, "game_plan", None)
+    if game_plan is not None:                     # sparse: the Match Planner's Game Plan (ADR-0045) —
+        rec["game_plan"] = game_plan              # mode + confidence + directed goal, blunder-buster-parseable
     win_prob = getattr(decision, "win_prob", None)
     if win_prob is not None:                      # sparse: the Automatic Value Model's P(win) (ADR-0042) —
         rec["win_prob"] = win_prob                # calibration + legibility (None when the model is off)

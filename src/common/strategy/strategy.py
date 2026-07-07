@@ -11,11 +11,31 @@ from dataclasses import dataclass, field
 
 
 class Plan(enum.Enum):
-    """The Pilot's current-turn strategic mode — a closed set."""
+    """The Pilot's current-turn strategic mode — a closed set. The tempo/defensive axis of the Match
+    Planner's Game Plan (ADR-0045): SETUP→develop; RACE→take the on-path KO on tempo; STALL→develop while
+    declining giant-waking KOs to buy setup turns; STABILIZE→survive my threatened Active;
+    SACRIFICE→trade the Active, race on prize math; CLOSE→force the finishing line."""
     SETUP = "SETUP"
     RACE = "RACE"
+    STALL = "STALL"
     STABILIZE = "STABILIZE"
+    SACRIFICE = "SACRIFICE"
     CLOSE = "CLOSE"
+
+
+@dataclass
+class GamePlan:
+    """The Match Planner's output (ADR-0045): the committed route to victory + tempo/defensive **mode** +
+    **confidence**, and the **directed Turn Goal** it hands the Turn Planner. A ranking/steering object,
+    re-derived each turn, NEVER a lock; emitted to Decision telemetry so the blunder-buster can tie a
+    ladder misplay to the match-scale read. When confidence is low the directed goal is withheld and the
+    Pilot defers to the Turn Planner's own Goal Ladder plus the tuned weights (the fallback)."""
+    mode: Plan = Plan.SETUP
+    confidence: float = 0.0
+    route: frozenset = field(default_factory=frozenset)   # opp card ids on my cheapest Prize Path
+    route_turns: float | None = None                       # total feasibility turns of that route
+    directed_goal: str | None = None                       # the goal-kind to steer the Turn Planner (S3)
+    rationale: str = ""
 
 
 @dataclass
