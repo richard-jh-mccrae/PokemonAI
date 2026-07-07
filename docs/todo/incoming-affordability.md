@@ -1,7 +1,20 @@
 # TODO — make the Incoming / `active_doomed` estimate Energy-affordability-aware
 
-**Status:** open (2026-07-04), split out of the ep83661649 f54 fix. The `_wins_now` half landed (a
-bench-snipe KO is no longer mis-read as a game-winning Active KO); this is the second half.
+> ⛔ **RESOLVED as WON'T-FIX for the survival boolean (2026-07-07, ADR-0045 build).** Making
+> `active_doomed` affordability-aware was built and **reverted**: it is **unsound** because it ignores the
+> opponent's HIDDEN burst Energy. On the CRITICAL `planner_6858`/`planner_0cbc` states the opponent is a
+> Mega Starmie **mirror** at 1 Energy holding an unseen **Ignition** (3-Energy burst) that fires Nebula
+> Beam next turn — a 1-attach cap reads "not doomed" and **re-opens the blunder** (agent re-picks the
+> attach). A survival read must never under-prepare against a possible burst, so **`active_doomed` stays
+> worst-case** (Incoming reads the ceiling). The affordability-aware read instead lives in the **Threat
+> Clock** (`_threat_clock`, ADR-0045), the MULTI-TURN PREP projection (off-by-a-turn is recoverable) — NOT
+> the one-turn survival boolean. The f54 correction relied on seeing the opponent's hand (replay), which the
+> agent cannot. See [ADR-0045](../adr/0045-match-scale-planning-is-a-closed-form-directive-game-plan.md)
+> *Amendment*. The `_wins_now` half (below) already landed and stands.
+
+**Status:** ~~open (2026-07-04)~~ **won't-fix (survival boolean); superseded by the Threat Clock's prep
+read.** Split out of the ep83661649 f54 fix. The `_wins_now` half landed (a bench-snipe KO is no longer
+mis-read as a game-winning Active KO); the affordability half is resolved as above.
 
 ## The bug
 

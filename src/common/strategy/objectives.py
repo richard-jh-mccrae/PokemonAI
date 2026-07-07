@@ -72,8 +72,60 @@ def _best_rest_chip(items: tuple, need: int, turns: int) -> int:
     return go(need, turns) or 0
 
 
+def threat_turns(hp: int, forms) -> int | None:
+    """The Threat Clock arithmetic (ADR-0045): the fewest opponent turns until a body of ``hp`` HP is
+    Knocked Out by any of ``forms``.
+
+    ``forms``: iterable of ``(cost, damage, energy, evo_hops, promo)`` per candidate attacker form —
+    ``cost`` Energy the attack needs, ``damage`` per-hit damage (already Weakness/Resistance-adjusted
+    vs my body), ``energy`` on the attacker now, ``evo_hops`` evolutions to reach this form, ``promo``
+    the promotion surcharge (turns of friction to bring a benched attacker to the Active Spot; 0 for a
+    true bench-snipe or a free promotion). Energy accrues at the ~1/turn rule floor (docs/rules.md §4).
+
+    Per form: its FIRST attack lands on turn ``max(1, evo_hops, cost − energy) + promo`` — evolution and
+    Energy attach run concurrently (one of each per turn) and the turn's attach counts toward that same
+    turn's attack (docs/rules.md §4: attach precedes attack), so a 0-Energy body needing one more Energy
+    for a KO attack still fires on the opponent's very next turn (turn 1); ``promo`` adds the benched
+    body's promotion friction. Then ``ceil(hp/damage)`` hits accumulate one per turn, so it KOs on turn
+    ``first_attack + hits − 1``. Returns the min over forms."""
+    best = None
+    for cost, damage, energy, evo_hops, promo in forms:
+        if damage <= 0:
+            continue                       # a form that can't dent my body never sets the clock
+        first_attack = max(1, evo_hops, cost - energy) + promo
+        hits = math.ceil(hp / damage)
+        ko = first_attack + hits - 1
+        best = ko if best is None else min(best, ko)
+    return best
+
+
+_MATCH_CONFIDENCE_MIN = 0.55   # below this the Game Plan WITHHOLDS its directed goal — defer to the Turn
+                               # Planner's own ladder + the tuned weights (the ADR-0045 low-confidence fallback)
+_STALL_AHEAD = 2.0             # "clearly ahead" in the race: margin enough to build (STALL) rather than
+                               # over-press before the win-condition is online
+_MODE_GOAL = {"SETUP": "develop", "RACE": "ko_on_path", "STALL": "develop",
+              "STABILIZE": "survive", "SACRIFICE": "trade", "CLOSE": "close"}
+
+
+def plan_confidence(race_ahead, survival) -> float:
+    """The Match Planner's closed-form per-strategy **confidence** ∈ [0,1] (ADR-0045): neutral 0.5, raised
+    by the race margin (turns I'm ahead in the two-sided Prize Path) and by my Active's survival window
+    (the Threat Clock turns before it is in danger). A legible LINEAR feasibility score — NOT a learned
+    win-probability (the parked value model may refine it later, never be it). Weights are seeds matured
+    via ladder corrections (the gauntlet is invalid — [[gauntlet-invalid-ladder-only]])."""
+    c = 0.5
+    if race_ahead is not None:
+        c += 0.12 * race_ahead
+    if survival is not None:
+        c += 0.05 * (survival - 1)
+    return max(0.0, min(1.0, c))
+
+
 _PATH_BENCH_EXTRA = 1    # a benched body costs ~one extra turn to bring into KO range
                          # (gust / promote / wait) — the feasibility surcharge either side pays
+_PROMOTE_TAGS = frozenset({"switch"})   # a card that swaps the opponent's OWN Active for a benched body
+                                        # without paying a retreat — waives the Threat Clock promotion
+                                        # surcharge (gust drags MY Active, so it does NOT promote theirs)
 
 _STAB_ENTER = -1.0       # STABILIZE hysteresis (ADR-0040): enter when clearly BEHIND in the race …
 _STAB_EXIT = 1.0         # … leave only when clearly AHEAD — between the two, hold the previous label
@@ -219,6 +271,81 @@ class ObjectivesMixin:
             return float(predicted) if predicted is not None else None
         return float(min(visible, predicted)) if predicted is not None else visible
 
+    # ------------------------------------------------------------------ the Threat Clock (ADR-0045)
+
+    def _threat_clock(self, my_body: dict, opp: dict, read=None, gamma: float = 0.0) -> int | None:
+        """The Threat Clock (ADR-0045): the fewest opponent turns until any of their attacker forms can
+        afford AND land a KO of ``my_body`` in the Active Spot. Opponent-static, energy/evolution/
+        promotion-aware, worst-case per-attack damage (Incoming's ceiling for coins). None when nothing
+        they field or credibly evolve threatens the body. The defensive twin of the KO Race and the Match
+        Planner's MULTI-TURN prep read (how many turns until each of my bodies is in danger, so we
+        pre-snipe / pre-gust / heal ahead). Its Energy model is ~1 attach/turn (Read-γ-sharpenable for a
+        burst-Energy archetype); it deliberately does NOT feed the survival-critical one-turn
+        ``active_doomed`` boolean, which stays worst-case — a hidden Ignition-class burst must never be
+        under-counted (the planner_6858 finding, docs/todo/incoming-affordability.md)."""
+        hp = (my_body or {}).get("hp", 0)
+        if not (hp and self.stats):
+            return None
+        return threat_turns(hp, self._threat_forms(my_body, opp))
+
+    def _threat_forms(self, my_body: dict, opp: dict):
+        """Yield ``(cost, damage, energy, evo_hops, promo)`` for every opponent attacker FORM vs
+        ``my_body``. Each in-play body's current form and the forms its line forward-evolves INTO
+        contribute, over the form's attacks — the **per-attack** oracle (worst-case, W/R-adjusted) when
+        the attack records resolve (real cards, affordability-exact), else the **card-level** fallback:
+        ``maxDamage`` × W/R at ``minAttackCost`` (an unknown cost reads as 0 — payable), or a
+        ``hand_size_attacker``'s ``handSizeDamage`` × the opponent's hand (a card spent to evolve). This
+        subsumes ``_predicted_max_damage``'s dual path AND ``_forward_incoming_damage``'s hand-size read.
+        A benched body carries the promotion surcharge; the Active carries none. v1 models a forward form
+        as ONE evolution hop (single-hop lines exact; multi-hop reads one turn optimistic — the
+        defensive-safe direction, Read-γ-sharpenable)."""
+        ctx = getattr(self, "_opp_attack_context", None)
+        d_stat = self.stats.get((my_body or {}).get("id")) if self.stats else None
+        hc = opp.get("handCount", 0) or 0
+        promo_bench = self._promotion_surcharge(opp)
+        bodies = ([(a, 0) for a in (opp.get("active") or []) if a]
+                  + [(b, promo_bench) for b in (opp.get("bench") or []) if b])
+        for body, promo in bodies:
+            energy = len(body.get("energies") or [])
+            bid = body.get("id")
+            for cid, evo_hops in [(bid, 0)] + [(fid, 1) for fid in self._forward_card_ids(bid)]:
+                stat = self.stats.get(cid)
+                if not stat:
+                    continue
+                aids = tuple(stat.attacks or ())
+                if aids and all(self._attack_stat(a) is not None for a in aids):
+                    for aid in aids:
+                        yield (self.attack_costs.get(aid, 99),
+                               self.predicted_damage(cid, aid, my_body, bound="max", context=ctx),
+                               energy, evo_hops, promo)
+                    continue
+                cost = getattr(stat, "minAttackCost", None) or 0    # unknown cost → 0 (assume payable)
+                if self.functions and "hand_size_attacker" in self.functions.tags(cid):
+                    hand = max(0, hc - (1 if evo_hops else 0))      # a card is spent to evolve
+                    dmg = (getattr(stat, "handSizeDamage", 0) or 0) * hand   # counters ignore W/R
+                else:
+                    dmg = self._wr_adjusted(stat, d_stat, getattr(stat, "maxDamage", 0) or 0)
+                yield (cost, dmg, energy, evo_hops, promo)
+
+    def _promotion_surcharge(self, opp: dict) -> int:
+        """The Threat Clock promotion surcharge (ADR-0045): ``_PATH_BENCH_EXTRA`` turns to bring a benched
+        attacker to the Active Spot, WAIVED (0) when the opponent holds a promotion enabler — a ``switch``
+        card revealed (active/bench/discard), or a cheap/free retreat on their current Active
+        (``retreatCost`` ≤ its attached Energy). A stuck Active with no Switch keeps the full surcharge —
+        exactly the human read that a benched threat behind a trapped Active is one turn further out."""
+        if self.functions:
+            for zone in ("active", "bench", "discard"):
+                for c in (opp.get(zone) or []):
+                    cid = c.get("id") if c else None
+                    if cid is not None and _PROMOTE_TAGS & set(self.functions.tags(cid)):
+                        return 0
+        active = next((a for a in (opp.get("active") or []) if a), None)
+        if active and self.stats:
+            st = self.stats.get(active.get("id"))
+            if st and getattr(st, "retreatCost", 99) <= len(active.get("energies") or []):
+                return 0
+        return _PATH_BENCH_EXTRA
+
     def _path_signals(self, obs, me: dict, opp: dict, ma: dict | None, oa: dict | None,
                       my_prizes: int, opp_prizes: int, read=None, gamma: float = 0.0) -> dict:
         """The per-decision two-sided Prize Path read (ADR-0040): my cheapest path over their
@@ -310,6 +437,42 @@ class ObjectivesMixin:
                 return keys2, turns2
         self._my_path_prev = current if best_turns is not None else prev
         return best_keys, best_turns
+
+    # ---------------------------------------------------------------------- the Match Planner (ADR-0045)
+
+    def plan_match(self, obs, board):
+        """The Match Planner (ADR-0045) — the Game Plan for this turn: the **mode** (the phase grown to
+        six), the closed-form **confidence**, the **route** (my cheapest Prize Path target ids), and the
+        **directed Turn Goal**. Runs first each turn (from ``_board``, after the objective signals are
+        set); COMPUTE-ONLY until the seam wires it (S3) — nothing scores off it yet. Re-derived every
+        decision, never a lock; when confidence is below ``_MATCH_CONFIDENCE_MIN`` the directed goal is
+        WITHHELD (defer to the Turn Planner's own ladder + the tuned weights — the fallback)."""
+        from common.strategy.strategy import GamePlan
+        mode = self._derive_mode(board)
+        ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
+        survival = self._threat_clock(ma, self._opp_player(obs)) if ma else None
+        confidence = plan_confidence(board.race_ahead, survival)
+        goal = _MODE_GOAL.get(mode.name) if confidence >= _MATCH_CONFIDENCE_MIN else None
+        return GamePlan(mode=mode, confidence=confidence, route=board.path_target_ids,
+                        route_turns=board.my_path_turns, directed_goal=goal,
+                        rationale=(f"{mode.name.lower()} @ {confidence:.2f}"
+                                   + (f" -> {goal}" if goal else " (low-confidence: defer)")))
+
+    def _derive_mode(self, board):
+        """Grow the four-phase base (``board.phase``) to the six-mode Game-Plan axis (ADR-0045):
+        STABILIZE becomes **SACRIFICE** when my Active is doomed but a ready bench backup lets me trade it
+        and race on prize math (the b4649 delay-wall); SETUP/RACE become **STALL** when I am clearly ahead
+        in the race yet my win-condition is not online — build rather than over-press. Reuses the shipped
+        phase derivation as the spine, so the advisory/gate-ban contract is inherited (no rule keys it)."""
+        from common.strategy.strategy import Plan
+        mode = board.phase
+        if (mode == Plan.STABILIZE and board.bench_wincon_ready
+                and board.race_ahead is not None and board.race_ahead >= 0):
+            return Plan.SACRIFICE
+        if (mode in (Plan.SETUP, Plan.RACE) and not board.line_ready
+                and board.race_ahead is not None and board.race_ahead >= _STALL_AHEAD):
+            return Plan.STALL
+        return mode
 
     # ------------------------------------------------------------- per-option Path consumers (Context)
 

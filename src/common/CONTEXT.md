@@ -244,7 +244,11 @@ KO Race, both Prize Paths), memoryless (transitions run backwards as freely as f
 hysteretic label (anti-oscillation). **Advisory by contract**: a legibility label plus small
 confidence-scaled weight bands — never an eligibility gate (no rule keys `plan == X`); a wrong
 phase read biases a few points for a turn, it cannot silence a rule family. Ablation must land
-within noise.
+within noise. _(Accepted design 2026-07-06: the closed set grows to six — +`STALL` (build while
+declining giant-waking KOs) / +`SACRIFICE` (trade the Active, race on prize math) — as the tempo/
+defensive **mode** axis of the Match Planner's **Game Plan**, which DIRECTS the Turn Goal. The
+advisory/gate-ban contract STANDS — the mode still never gates a rule; it steers only via the
+directed Turn Goal seam.)_
 _Avoid_: Strategy, Posture, AttackPlan (that's the Score-layer attack choice), phase gate (banned
 — the label never gates rule eligibility), state machine (it is derived, not authored/transitioned)
 
@@ -352,6 +356,33 @@ the opponent's deck/hand/prizes/face-down Active), so its verdict is trusted onl
 _Avoid_: rollout (implies a random playout; this is exact deterministic stepping), Automatic Value Model
 (the learned win-prob estimator — the Engine Search is exact rules, not learned), Scout/Read
 
+**Match Planner**:
+The Pilot's match-scale planner and the top of the decision hierarchy — it runs first each turn, above
+the **Turn Planner**. It ranks candidate routes to victory over the whole board and both prize counts
+(which Knock-Outs bank my six prizes, a board-out, stall-to-set-up-then-sprint, stabilize-to-survive),
+scores each route's feasibility as a **confidence**, and commits a **Game Plan** that directs this
+turn's **Turn Goal** (and projects the next one or two). **Grown from the Tier-3 Match Objectives** —
+the two-sided **Prize Path**, the **KO Race**, and the forward **Threat Clock** are its primitives, not
+separate layers. Re-derived every turn (memoryless; it adapts as the opponent counters). It DIRECTS the
+Turn Planner's goal but never gates a rule (ADR-0040's gate-ban stands) and never LOCKS — low confidence
+defers to the Turn Planner's own goal and the tuned scoring. Parallel to the Turn Planner one scope up
+(`plan_match` : match :: `plan_turn` : turn). _(Accepted design 2026-07-06, `/grill-with-docs`; build in
+progress.)_
+_Avoid_: Turn Planner (one scope down — the this-turn action optimizer that executes the goal), Plan
+(the coarse turn-MODE label the Game Plan derives), Strategy (the deck's static declared doctrine),
+Posture (the opponent-Read levers), Escalation Search (the opponent-choice engine tree — the Match
+Planner is opponent-static closed-form).
+
+**Game Plan**:
+The Match Planner's output — the chosen route to victory (or a ranked few) with a **confidence**, and
+the **directed Turn Goal** it hands the Turn Planner for the current turn. A ranking/steering object
+re-derived each turn, never a lock (the phantom-lethal-at-match-scale mistake): when confidence is low
+the Pilot falls back to the Turn Planner's own goal and the tuned weights. The concrete, confidence-
+scored match intent that today's advisory **Plan** label only gestured at.
+_Avoid_: Plan (the coarse SETUP/RACE/STABILIZE/CLOSE label — a Game Plan is the full routed strategy +
+confidence a Plan is *derived from*), Prize Path (one primitive it consumes), Turn Line (the concrete
+action sequence the Turn Planner builds to execute the goal), lock/commitment (a Game Plan never locks).
+
 **Turn Planner**:
 The eager whole-turn optimizer and the Pilot's ONE planning entry point, running FIRST at the start
 of my turn. It **contains the Lethal Solver as its sound top rung**: the win goal is generated,
@@ -419,6 +450,31 @@ full turn ("survives 2 turns instead of 1"); on a body that dies anyway even wit
 nothing. Drives both *whether* to deploy a +HP Tool and *which* body gets it.
 _Avoid_: breakpoint (one threshold; the Window is the turn count across repeated hits), heal value
 (restoring HP, not extending the count against future Incoming)
+
+**Threat Clock**:
+The **Match Planner**'s defensive primitive — a closed-form, opponent-static projection of *when* each
+opponent body could Knock Out one of my bodies. For every opponent attacker (a visible current form, a
+form its line forward-evolves INTO, or a Read-predicted not-yet-benched attacker) it computes the
+earliest future turn it can afford a KO of a given body of mine: Energy modeled at the ~1-attach/turn
+rule floor plus known acceleration (`energy_accel`), evolution at one turn per hop, gated by the form's
+real attack cost and its Weakness/Resistance-adjusted damage, accumulating over turns when one hit
+doesn't KO (the **Survival Window** generalized). A benched attacker carries a promotion surcharge
+(bringing it Active), reduced when the opponent holds a promotion enabler (a `switch`/`gust` card, or a
+cheap/free retreat vs a stuck Active) and waived for a true bench-snipe. The Read γ-sharpens the attach
+rate and which line the opponent actually runs; with no Read it is pure card fact (the base fallback).
+Feeds the Match Planner's confidence (defensive survival) and the proactive prep it directs (pre-snipe /
+pre-gust / heal-a-turn-early). Same worst-case-but-accurate epistemic as Incoming/Survival Window/KO
+Race — never a claim about opponent CHOICE (that stays the parked Escalation Search). Its Energy model
+is ~1 attach/turn (Read-γ-sharpenable for a burst-Energy archetype), so it does NOT feed the
+survival-critical one-turn `active_doomed` boolean, which stays **worst-case** — a hidden Ignition-class
+burst must never be under-counted (the planner_6858 finding: a mirror opponent at 1 Energy still bursts
+to its nuke next turn). A survival read must never under-prepare; a prep read off by a turn is
+recoverable. _(Built 2026-07-07, `/tdd`; complements — does not replace — the worst-case reads.)_
+_Avoid_: Incoming (the single-turn magnitude against one body — the Threat Clock is the multi-turn
+energy/evolution-aware turns-to-KO that subsumes it), Survival Window (the single-body case this
+generalizes across bodies, forward forms, and the energy timeline), Escalation Search (opponent-choice
+engine tree — the Threat Clock is opponent-static closed-form), Evolving Threat (the offensive snipe
+signal — the Threat Clock is the defensive projection that consumes the same forward-evo index).
 
 **KO Race**:
 The closed-form turns-to-KO computation, both directions: the fewest of MY turns to fell a standing

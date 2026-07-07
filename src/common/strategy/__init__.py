@@ -8,6 +8,6 @@ inherits) — so a doctrine is one file, end to end (ADR-0008/0022/0023/0024).
 Re-exports the declarative data API so the historical `from common.strategy import Strategy, ...`
 imports keep working after `strategy.py` moved into this package.
 """
-from common.strategy.strategy import Hypothesis, Line, Plan, Ready, Strategy
+from common.strategy.strategy import GamePlan, Hypothesis, Line, Plan, Ready, Strategy
 
-__all__ = ["Hypothesis", "Line", "Plan", "Ready", "Strategy"]
+__all__ = ["GamePlan", "Hypothesis", "Line", "Plan", "Ready", "Strategy"]

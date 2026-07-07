@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
-from common.strategy import Plan, Strategy
+from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
@@ -333,6 +333,10 @@ class Board:
                                           # objective overrides (behind+doomed→STABILIZE, ≤2-prizes+ready→
                                           # CLOSE), hysteretic, memoryless backwards. ADVISORY ONLY — small
                                           # band weights (baseline_phases) + trace; never an eligibility gate
+    game_plan: GamePlan | None = None     # the Match Planner's Game Plan for this turn (ADR-0045): route +
+                                          # mode + confidence + directed Turn Goal. Set by `_board` after the
+                                          # objective signals resolve; COMPUTE-ONLY (S2) — nothing scores off
+                                          # it yet (the seam S3 wires the directed goal into the Turn Planner)
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -584,6 +588,9 @@ class Decision:
                                  # a trace reader doesn't misread "top-score not chosen" as a scoring bug
     grabbed: bool = False        # `chosen` is a `_greedy_grab` multi-pick set (dynamic gap-scoring),
                                  # NOT the top-N static scores — sparse telemetry key, same legibility
+    game_plan: dict | None = None    # the Match Planner's Game Plan (ADR-0045), compact for telemetry:
+                                     # mode + confidence + route + directed goal. Sparse; `/blunder-buster`
+                                     # ties a ladder misplay to this match-scale read
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -600,7 +607,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  lethal_veto=False, brief_preevo=False, brief_engine=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, forced_promotion=False,
-                 value_model=None, escalation=False):
+                 value_model=None, escalation=False,
+                 match_planner_steer=False, forgo_ko=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -666,6 +674,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.forced_promotion = forced_promotion        # ADR-0044 kill-switch: the Forced-Promotion Read
                                                         # — when their Active is dead, pre-chip the ready
                                                         # wincon they'll promote, not the energized bench-sitter
+        self.match_planner_steer = match_planner_steer  # ADR-0045 kill-switch (S3): the Match Planner's
+                                                        # Game Plan directed goal biases the Turn Planner's
+                                                        # candidate ranking (sub-prize, confidence-scaled).
+                                                        # Default OFF — byte-identical; matured via ladder
+        self.forgo_ko = forgo_ko                        # ADR-0045 kill-switch (S4): forgo a NON-winning KO
+                                                        # under the tight sound gate ("don't wake the giant").
+                                                        # Default OFF — the riskiest lever, ladder-gated
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -725,6 +740,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return Decision(chosen=chosen, options=traces, read=board.read, planned=line,
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
+                        game_plan=self._game_plan_record(board),
                             lethal_refuted=self._lethal_refutes)
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
         refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
@@ -733,6 +749,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             options=traces, read=board.read, planned=planned,
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
+                        game_plan=self._game_plan_record(board),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -761,6 +778,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
                         posture=self._posture_record(board),
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
+                        game_plan=self._game_plan_record(board),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -803,6 +821,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return round(vm.predict(features_from_board(board)), 4)
         except Exception:
             return None
+
+    def _game_plan_record(self, board: Board) -> dict | None:
+        """Compact Game Plan for Decision Telemetry (ADR-0045): the Match Planner's mode, confidence,
+        directed goal, and route size — so the blunder inspector shows the match-scale intent and
+        `/blunder-buster` ties a ladder misplay to it. None when no plan was computed (early/empty board).
+        Pure, total, never raises — a belief snapshot, not decision input."""
+        gp = board.game_plan
+        if gp is None:
+            return None
+        return {"mode": gp.mode.name, "conf": round(gp.confidence, 3), "goal": gp.directed_goal,
+                "route": len(gp.route), "route_turns": gp.route_turns}
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
@@ -2262,7 +2291,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             board = replace(board,                      # Tool is in hand (common case pays nothing)
                             tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
-        return board
+        board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
+        return board                                    # COMPUTE-ONLY here — nothing scores off it yet (S2)
 
     # Shuffle-Refresh doctrine's signals live in doctrine_shuffle_refresh (ShuffleRefreshMixin); `_board` calls them.
 
@@ -2755,7 +2785,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Posture, the attack its Active reaches by EVOLVING (play as if it will), >= my Active's HP. A
         closed-form threat estimate off engine stats. The forward term catches a hand_size_attacker
         (Alakazam) whose printed damage is 0 but whose Powerful Hand KOs through the evolution
-        (ep82754875 f52); ``opp`` omitted → current-board only (the forward term needs the hand size)."""
+        (ep82754875 f52); ``opp`` omitted → current-board only (the forward term needs the hand size).
+
+        **WORST-CASE by design** (Incoming reads the ceiling): Energy affordability is deliberately NOT
+        charged, because the opponent's HIDDEN hand may hold burst Energy (Ignition-class) that reaches a
+        costly nuke in a single turn — the planner_6858 lesson (a mirror opponent at 1 Energy still
+        Nebula-bursts next turn), where a naive 1-attach affordability cap UNDER-prepares and re-opens the
+        blunder (docs/todo/incoming-affordability.md). The **Threat Clock** (`_threat_clock`, ADR-0045) is
+        the affordability-aware MULTI-TURN prep read; it does NOT replace this sound one-turn boolean —
+        a survival read must never under-prepare, a prep read off by a turn is recoverable."""
         my_hp = (ma or {}).get("hp", 0)
         if not my_hp:
             return False
