@@ -27,7 +27,7 @@ feeds a decision** (it is legibility, like `Decision.read` already was):
   `rationale`, which still carries the intended line ("vs Mega Lucario ex I should snipe Riolu").
 - **The routing surfaces the way the layer verdicts do.** `tune.py` tags each flagged
   `PROPOSE` / `UNSATISFIED` / `SKIP` line `[POSTURE≠ <archetype>]` + a summary banner;
-  `data/proposals/<deck>.json` `open[]` / `skipped[]` entries carry `posture_mismatch` +
+  `data/corrections/tuner/<deck>.json` `open[]` / `skipped[]` entries carry `posture_mismatch` +
   `believed_archetype`. `/blunder-buster` reads `live_trace.posture` on **every** cluster member and
   routes a matchup misplay to the believed archetype's **Matchup Brief / posture lever / recognition**
   (or hands full Brief authoring to `/matchup-genie`) — **never a deck-agnostic weight or `when()`**.

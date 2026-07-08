@@ -39,7 +39,7 @@ three gates) and its Phase-4 disposition vocabulary (`covers-as-is` / `override-
    `{"common_commit", "aligned_at", "summary"}`. Missing ⇒ first pass ⇒ `--full` behavior.
 2. **Scope the drift**: `git diff <ledger-commit>..HEAD -- src/common src/agents/<deck>
    docs/general-strategy.md docs/adr` (on `--full`: treat everything as changed). Also read
-   `data/proposals/<deck>.json` + `data/corrections/reviewed.json` — blunder-buster may have
+   `data/corrections/tuner/<deck>.json` + `data/corrections/reviewed.json` — blunder-buster may have
    authored deck rules since (each is "a standing folding candidate", ADR-0034).
 3. **Read the deck**: strategy.py (hypotheses, roles, lines, params, weight_overrides),
    STRATEGY.md (dispositions, fold table, progress), tuned.json (learned keys).

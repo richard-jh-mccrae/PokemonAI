@@ -44,7 +44,7 @@ for its Decision — int-enum, the Pilot's exact input. For each Correction:
      documented experiment trail the Strategy Category scores.
 
 Output: `tuned.json` (machine, automatic) + proposed Hypothesis edits (assisted, human-committed) +
-status updates. `tune.py` also writes a durable, committed **`data/proposals/<deck>.json`** snapshot
+status updates. `tune.py` also writes a durable, committed **`data/corrections/tuner/<deck>.json`** snapshot
 (`open[]` proposals + `skipped[]` + `reviewed[]`, each stamped with source `agent_build`/`built_at`) —
 the `/blunder-buster` cluster source, and a git-tracked timeline of how open blunders shrink per build.
 **The ladder A/B (Job C) is the only ship gate** — the Tuner never self-validates.
@@ -64,7 +64,7 @@ of the active corpus before routing (so they leave `open[]` / `UNSATISFIED`) and
 marker is case-sensitive, word-boundary — lowercase "critical" prose is not a flag;
 `train.blunder.correction.is_critical`). The pipeline surfaces it so the skill never hand-greps: a
 `missing_hypothesis` proposal carries `critical` (`tuner.propose`), the durable
-`data/proposals/<deck>.json` `open[]`/`skipped[]` entries serialize `"critical": true`
+`data/corrections/tuner/<deck>.json` `open[]`/`skipped[]` entries serialize `"critical": true`
 (`tuner.io.write_proposals`), `tune.py` prints a `*** N CRITICAL … FIRST (blocking) ***` banner and
 tags each `PROPOSE`/`UNSATISFIED` line `[CRITICAL]` (with its rationale), and `blunders.html` badges
 each `⚠ CRITICAL`. The skill resolves the cohort serially, one reviewed checkpoint each, to a

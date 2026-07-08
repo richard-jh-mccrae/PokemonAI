@@ -23,7 +23,7 @@ trustworthy improvement.
   suite green; the human commits the diff. **No auto-commit of executable code.** *Accuracy comes
   from the Verifier (deterministic, derived from the Corrections), not from who authors.*
 - **Proposals are durable, not stdout-only.** `tune.py` writes a committed per-deck snapshot
-  `data/proposals/<deck>.json` (`open[]` = `missing_hypothesis` proposals, each carrying
+  `data/corrections/tuner/<deck>.json` (`open[]` = `missing_hypothesis` proposals, each carrying
   category/episode/frame + `agent_build`/`built_at`; `skipped[]` = tactical/no-obs). The
   `/blunder-buster` skill reads it instead of re-parsing console text, and its `git` history is a
   per-build timeline of how the agent's open blunders shrink as Hypotheses are authored.

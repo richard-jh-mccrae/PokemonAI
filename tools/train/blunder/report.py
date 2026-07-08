@@ -79,7 +79,7 @@ _DISP_ORDER = ("fixed", "covered", "refuted", "deferred", "open", "skipped")
 
 
 def _load_proposals(proposals_dir) -> tuple[set, set, set]:
-    """Scan ``data/proposals/*.json`` → (open_keys, skipped_keys, decks_with_proposals), keyed
+    """Scan ``data/corrections/tuner/*.json`` → (open_keys, skipped_keys, decks_with_proposals), keyed
     ``"<episode_id>-<frame>"`` like the ledger. Best-effort: a missing/unreadable dir yields empty
     sets (every blunder then falls back to ``open`` — never wrongly claimed ``fixed``)."""
     open_keys, skipped_keys, decks = set(), set(), set()
@@ -191,7 +191,7 @@ def build_report(corrections_path: Path | str, out_path: Path | str, *,
                  proposals_dir: Path | str | None = None) -> Path:
     """Render a self-contained, offline HTML trend report (no external resources).
 
-    When ``reviewed_path`` (the reviewed ledger) and/or ``proposals_dir`` (``data/proposals``) are
+    When ``reviewed_path`` (the reviewed ledger) and/or ``proposals_dir`` (``data/corrections/tuner``) are
     supplied, each own blunder is also tagged with its terminal outcome — fixed / covered / refuted /
     deferred / open / skipped — the header splits resolved vs open, and a *by resolution* section is
     added. Omit both for the plain tag-trend view (unchanged legacy output)."""

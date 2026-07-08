@@ -52,7 +52,7 @@ A structured-markdown record (one per proposed change), emitted by every produce
 - `status` — `open → applied | refuted | deferred (capability-gap)`.
 
 Records live in a **unified queue: `data/strategy/proposals/`** — one place to see everything open,
-generalising today's per-deck `data/proposals/*.json`.
+generalising the per-deck tuner ledger `data/corrections/tuner/*.json`.
 
 ### `update-strategy` (the sole applier)
 

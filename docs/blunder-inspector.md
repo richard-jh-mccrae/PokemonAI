@@ -17,7 +17,7 @@ agents get wrong over the competition. See the [Training context](../tools/train
 | `correction.py` | `Correction` + `build_correction(...)` with validation |
 | `store.py` | per-build correction tree `data/corrections/<agent_build>/corrections.jsonl` (committed); routes by `agent_build`, reads union the tree, **dedup by default** |
 | `seats.py` | `detect_seat(replay, team_name)` — which seat is ours |
-| `report.py` | `summarize(...)` + `avg_blunders_per_game(...)` (own blunders ÷ distinct tagged games, by build over time) + `build_report(log, out, *, reviewed_path, proposals_dir)` → offline HTML trends; given the reviewed ledger + the `data/proposals` snapshot it also badges each blunder **fixed / covered / refuted / deferred / open / skipped** and splits resolved vs open |
+| `report.py` | `summarize(...)` + `avg_blunders_per_game(...)` (own blunders ÷ distinct tagged games, by build over time) + `build_report(log, out, *, reviewed_path, proposals_dir)` → offline HTML trends; given the reviewed ledger + the `data/corrections/tuner` snapshot it also badges each blunder **fixed / covered / refuted / deferred / open / skipped** and splits resolved vs open |
 
 A **Decision** = one engine `select` at one frame; `chosen`/`correct` index `select.option`.
 A **Correction** embeds a self-contained snapshot, so it outlives the replay (ADR-0015).

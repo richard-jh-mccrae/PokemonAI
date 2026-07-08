@@ -10,7 +10,7 @@ The shared fodder record — a structured-markdown unit of proposed strategy cha
 skill and consumed only by `update-strategy`. Carries `source`, `target_layer`, a thin `spec` (authoring
 spec), `candidate_signal`, `verification_contract`, `provenance` (link to the rich source doc), and
 `status`. Lives in the unified queue `data/strategy/proposals/`. Generalises the correction-path
-`data/proposals/*.json` to all sources.
+tuner ledger `data/corrections/tuner/*.json` to all sources.
 _Avoid_: fodder (informal), correction (that's the specific blunder-source input), digest (a strategy-ingest source doc).
 
 **Analysis skill / Producer**:

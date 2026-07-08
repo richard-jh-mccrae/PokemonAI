@@ -24,7 +24,7 @@ def main(argv=None):
     out = Path(argv[0]) if argv else (REPO / "reports" / "blunders.html")
     out.parent.mkdir(parents=True, exist_ok=True)
     print("wrote", build_report(DEFAULT_PATH, out, reviewed_path=DEFAULT_REVIEWED,
-                                proposals_dir=REPO / "data" / "proposals"))
+                                proposals_dir=REPO / "data" / "corrections" / "tuner"))
 
 
 if __name__ == "__main__":
