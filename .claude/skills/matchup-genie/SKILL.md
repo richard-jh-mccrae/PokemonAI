@@ -2,9 +2,10 @@
 name: matchup-genie
 description: >
   Build the OBJECTIVE counterplay doctrine for ONE opponent archetype for the PokemonAI Read/Posture
-  layer, end to end, from its exported deck.csv. Produces a grilled, research-backed
-  docs/matchups/<slug>.md doctrine and then — only after you sign off — a self-describing
-  src/common/scouting/briefs/<slug>.json Brief that routes the archetype's variants via covers:.
+  layer from its exported deck.csv. Produces a grilled, research-backed docs/matchups/<slug>.md
+  doctrine and then ENDS at fodder — a matchup-brief Strategy Proposal in data/strategy/proposals/
+  (ADR-0046); it does NOT write the Brief JSON. The /update-strategy skill authors the self-describing
+  src/common/scouting/briefs/<slug>.json Brief (routing variants via covers:) from that proposal.
   Use whenever the user wants to analyze, scout, or write the game-plan AGAINST a specific opponent
   deck/archetype: "build the matchup brief for <archetype>", "how do we beat <deck>", "author the
   counterplay for this deck", "/matchup-genie <slug>", or after the meta-tracker deck export
@@ -17,10 +18,12 @@ description: >
 # matchup-genie — author one opponent's counterplay doctrine
 
 Turn ONE opponent deck (an exported `deck.csv` + `deck.txt`) into a coherent, intensely-grilled
-**objective** counterplay doctrine for the Read/Posture layer — first as a human-readable
-**`docs/matchups/<slug>.md`**, then (after sign-off) as the machine **`src/common/scouting/briefs/<slug>.json`**
-Brief the runtime consumes. This is deck-genie *flipped to the opponent*: deck-genie asks "how does OUR
-deck play?"; matchup-genie asks "how does THIS deck win, and how do we beat it?" ([ADR-0027](../../../docs/adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)).
+**objective** counterplay doctrine for the Read/Posture layer — a human-readable
+**`docs/matchups/<slug>.md`** and, from it, a **Strategy Proposal** that `/update-strategy` turns into
+the machine **`src/common/scouting/briefs/<slug>.json`** Brief. matchup-genie is a **producer**
+(ADR-0046): it analyses + grills + proposes; it never writes the Brief JSON. This is deck-genie *flipped
+to the opponent*: deck-genie asks "how does OUR deck play?"; matchup-genie asks "how does THIS deck win,
+and how do we beat it?" ([ADR-0027](../../../docs/adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)).
 
 **Invocation:** `/matchup-genie <slug>` (e.g. `/matchup-genie hop_s_trevenant_hop_s_snorlax`). The slug
 is a directory under `data/meta/decks/` produced by the meta-tracker deck export. Any extra prose is
@@ -39,14 +42,16 @@ The deliverable arrives in two phases with **your explicit sign-off** as the gat
   its **exploitable weaknesses**, the **threats** to respect and the **targets** to disrupt/snipe, and
   the objective counterplay. Cited. **No Brief JSON yet.** Grill it until locked.
 - **Gate** — present the finished doc, resolve the last contradictions, get an explicit "ship it."
-- **Phase B → `src/common/scouting/briefs/<slug>.json`** — translate the locked doctrine into the
-  machine Brief (`covers`, `opponent_properties`, `threats`, `targets`), validate with
-  `scripts/validate_brief.py`, present a diff. **The human commits.**
+- **Phase B → a Strategy Proposal in `data/strategy/proposals/`** — a `target_layer: matchup-brief`
+  record (`verification_contract: brief-validator`) whose `spec` is the locked doctrine's Brief-field
+  content (`covers`, `opponent_properties`, `threats`, `targets`) and whose `provenance` links to the
+  doctrine. **matchup-genie stops here.** `/update-strategy` writes `src/common/scouting/briefs/<slug>.json`,
+  runs `validate_brief.py`, and the human commits (ADR-0046).
 
-Why this shape: the Brief is runtime-consumed data, so it follows deck-genie's doc-before-code rule
-([ADR-0017](../../../docs/adr/0017-corrections-compile-to-hypotheses.md)) — the intense grill **is** the
-review; the validator is the deterministic gate. Writing the Brief before the doc is locked is the thing
-to avoid.
+Why this shape: the Brief is runtime-consumed data, so it follows the doc-before-code rule
+([ADR-0017](../../../docs/adr/0017-corrections-compile-to-hypotheses.md)); [ADR-0046](../../../docs/adr/0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md)
+puts the JSON authoring + validator gate in the one applier. The intense grill **is** the doctrine review.
+Writing the Brief here — before the doc is locked, and in the wrong skill — is what these ADRs forbid.
 
 ## What it is NOT
 
@@ -143,28 +148,29 @@ Present the finished `MATCHUP.md`. Hunt contradictions (a weakness with no explo
 in the deck; a claim that fights the engine facts). Get an **explicit sign-off**. Do not emit the Brief
 without it.
 
-### Phase 6 · Phase B — emit the Brief (gated; human commits)
+### Phase 6 · Phase B — emit the Strategy Proposal (the fodder hand-off; ADR-0046)
 
-Read [references/authoring.md](references/authoring.md). In short: translate the locked doctrine into
-`src/common/scouting/briefs/<slug>.json` (schema: [assets/brief.schema.json](assets/brief.schema.json)),
-carrying `covers` verbatim from `index.json`, then pass the deterministic gate:
+Write one **Strategy Proposal** record into `data/strategy/proposals/` (contract:
+[../update-strategy/references/strategy_proposal_contract.md](../update-strategy/references/strategy_proposal_contract.md)):
+`source: matchup-genie`, `target_layer: matchup-brief`, `for: opponent:<archetype>`,
+`verification_contract: brief-validator`, `provenance` → `docs/matchups/<slug>.md`. The `spec` carries
+the locked Brief content the applier needs: `covers` (verbatim from `index.json`), `opponent_properties`
+(reuse a registered key where one fits; a **new** key is flagged in the spec as an unwired forward
+contract), `threats`, `targets` — as doctrine, **not** hand-written JSON.
 
-```
-python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>
-```
-
-It checks the schema, that `covers` is non-empty (and matches `index.json`), that every `threat`/`target`
-card actually appears in the deck, that `target` roles are legal, and that every `opponent_properties`
-key is registered (unknown → flagged, not silently accepted). Present the diff (`briefs/<slug>.json`
-+ any `opponent_properties.json` additions). The human reviews and commits. **Every matchup-genie commit
-message begins with `matchup: `** (see [references/authoring.md](references/authoring.md) §5).
+**matchup-genie stops here — it does not write `briefs/<slug>.json` or run the validator.**
+`/update-strategy` authors the JSON (schema: [assets/brief.schema.json](assets/brief.schema.json)), runs
+`python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>` (schema + `covers` non-empty &
+matching `index.json` + every threat/target card in the deck + legal target roles + registered
+`opponent_properties`), presents the diff, and the human commits (its commit message begins with
+`matchup: `).
 
 ## Completion discipline — build to feature-complete (no convenient stopping points)
 
 The Phase-5 sign-off is the ONLY approval gate in this skill. Once the user grants it (or gives a
 standing "full build" / "go" authorization), Phase B runs to **complete in one continuous push**: the
-Brief emitted, the validator passing, any `opponent_properties.json` additions made, the diff
-presented. Hard rules:
+Strategy Proposal written to the queue, its `spec` carrying the full locked Brief content, its
+`provenance` linked to the doctrine. Hard rules:
 
 - **Never end a turn reporting remaining work** ("Brief drafted; remaining: validation — say go").
   If you can name the next item, do it now instead of asking.
@@ -184,7 +190,8 @@ license to stop voluntarily (see Completion discipline).
 
 ## Guardrails
 
-- **Doc before Brief.** No `briefs/<slug>.json` until `MATCHUP.md` is signed off (ADR-0017).
+- **Doc before proposal; no Brief JSON in this skill.** No proposal until `MATCHUP.md` is signed off
+  (ADR-0017); matchup-genie never writes `briefs/<slug>.json` — that's `/update-strategy` (ADR-0046).
 - **Engine is ground truth** for card facts; **the user is ground truth** for intent; the **web is a
   prior**. When they conflict, the user wins and you record why.
 - **Objective, deck-neutral.** No "our deck" reasoning in the Brief — that's each agent's relativization.
