@@ -36,7 +36,7 @@ terminal ANALYSIS outcome, with evidence:
   **A missing signal/tag/enum is NOT a capability-gap** — it's carried in the proposal's `spec` as
   infra-to-build, and `/update-strategy` builds it at apply time (authoring-gates.md).
 
-"Open" = every `missing_hypothesis` proposal in `data/proposals/<deck>.json` `open[]` **plus** every
+"Open" = every `missing_hypothesis` proposal in the tuner ledger `data/corrections/tuner/<deck>.json` `open[]` **plus** every
 `UNSATISFIED` line `tune.py` prints. Each lands in exactly one cluster → one outcome above.
 
 **No bare `deferred`, no "future run", no voluntary pauses.** The run executes start → completion gate in
@@ -66,7 +66,7 @@ they don't resurface); `tune.py` excludes them. Loop: tag → `/blunder-buster` 
 > Steps 2–3 (analysis + routing) run **per cluster**; step 4 emits the proposal or records the set-aside.
 
 1. **Enumerate & cluster EVERY open proposal.** `python tools/train/tune.py --agent <deck> [--store <path>]`,
-   then read `data/proposals/<deck>.json` (`open[]` = the `missing_hypothesis` proposals with
+   then read the tuner ledger `data/corrections/tuner/<deck>.json` (`open[]` = the `missing_hypothesis` proposals with
    category/episode/frame/`agent_build`; `skipped[]` = tactical/no-obs). Group all `open` by category +
    similar rationale into **clusters** (one blunder pattern each). Also cluster the **`UNSATISFIED`** lines
    `tune.py` prints (W-route corrections the fit couldn't honour — prime Hypothesis candidates). Build the

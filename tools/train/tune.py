@@ -196,7 +196,7 @@ def main(argv=None):
             if c.rationale:                            # show it so CRITICAL marker visible here too
                 print(f"    rationale: {c.rationale}")
         prop_out = write_proposals(
-            REPO / "data" / "proposals" / f"{agent}.json", agent, result.proposals,
+            REPO / "data" / "corrections" / "tuner" / f"{agent}.json", agent, result.proposals,
             result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"),
             reviewed=dispositioned)
         print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
