@@ -44,9 +44,11 @@ for its Decision — int-enum, the Pilot's exact input. For each Correction:
      documented experiment trail the Strategy Category scores.
 
 Output: `tuned.json` (machine, automatic) + proposed Hypothesis edits (assisted, human-committed) +
-status updates. `tune.py` also writes a durable, committed **`data/corrections/tuner/<deck>.json`** snapshot
-(`open[]` proposals + `skipped[]` + `reviewed[]`, each stamped with source `agent_build`/`built_at`) —
-the `/blunder-buster` cluster source, and a git-tracked timeline of how open blunders shrink per build.
+status updates. `tune.py` **defaults to every agent in the log** (`--agent <deck>` narrows to one), so a
+`/blunder-buster` run sweeps *all* decks' open blunders in one pass. It writes a durable, committed
+**`data/corrections/tuner/<deck>.json`** snapshot per agent (`open[]` proposals + `skipped[]` + `reviewed[]`,
+each stamped with source `agent_build`/`built_at`) — the `/blunder-buster` cluster source, and a git-tracked
+timeline of how open blunders shrink per build.
 **The ladder A/B (Job C) is the only ship gate** — the Tuner never self-validates.
 
 **The reviewed ledger (`data/corrections/reviewed.json`).** Auto-reconciliation drops a blunder once a

@@ -1,4 +1,15 @@
 {
   "build-active-wincon": 23.0,
-  "concentrate-energy-on-wincon": 22.0
+  "concentrate-energy-on-wincon": 22.0,
+  "discard-the-dead-opener": 17.0,
+  "discard-the-hand-duplicate": 15.0,
+  "fetch-a-starter": 9.0,
+  "fetch-base-before-stranded-payoff": 17.0,
+  "fetch-energy-when-starved": 38.0,
+  "keep-engine-supporter-at-discard": -5.0,
+  "prefer-wincon-line-piece": 15.0,
+  "snipe-for-the-ko": 61.5,
+  "snipe-on-the-path": 6.0,
+  "snipe-the-forced-promotion": 32.5,
+  "snipe-the-top-threat": 28.5
 }
