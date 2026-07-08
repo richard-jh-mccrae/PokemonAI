@@ -11,6 +11,15 @@
 episode-*-replay.json
 /data/probe/
 
+# Raw strategy sources (paid/copyrighted) — kept locally for re-parse, NEVER committed.
+# Only the derived Strategy Digests (*_strategy.md) are committed. See strategy-ingest.
+/data/strategy/raw/
+/data/strategy/transcripts/
+# Per-article folders: the pasted source + its full translation are copyrighted reproductions —
+# ignore them; the *_strategy.md Digest in the same folder stays committable.
+/data/strategy/articles/**/source.txt
+/data/strategy/articles/**/translate.txt
+
 # --- Python ---
 __pycache__/
 *.pyc

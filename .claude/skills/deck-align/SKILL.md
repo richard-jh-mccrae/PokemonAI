@@ -3,10 +3,11 @@ name: deck-align
 description: >
   Re-align an EXISTING agent's deck strategy with the current General Strategy and Pilot systems —
   the recurring maintenance pass (ADR-0036) that keeps every agent in top form as common/ evolves.
-  Ledger-diffed (aligned.json), score_diff-gated, fold-capable: retires/folds deck rules the
-  general layer now covers (ADR-0034), suggests deck rules that could be generalized, adopts new
-  vocabulary and opt-in surfaces (params, tags, Context/Board fields, Brief coverage), and
-  refreshes STRATEGY.md dispositions + hygiene. Use whenever the user wants to update, refresh,
+  Ledger-diffed (aligned.json), it produces a drift report and, for each approved finding, ENDS at
+  fodder — Strategy Proposals in data/strategy/proposals/ (ADR-0046): folds of deck rules the general
+  layer now covers (ADR-0034), generalization suggestions, new-vocabulary/opt-in adoptions, and
+  STRATEGY.md hygiene. It does NOT execute or commit — /update-strategy applies each proposal (score_diff-
+  gated) and advances the ledger. Use whenever the user wants to update, refresh,
   re-align, or modernize an already-built deck/agent against the system: "align <deck>",
   "/deck-align <deck>", "bring mega_starmie up to date", "are my agents aligned with common?",
   "run an alignment pass". This is deck-genie's MAINTENANCE counterpart. Do NOT use it to author a
@@ -77,41 +78,41 @@ generalization, weight change, wiring that activates new behavior) gets an expli
 reject from the user before execution. Pure hygiene (stale NOTEs, doc renames, dead tuned keys)
 may be batched under one approval.
 
-## Phase 3 · Execute + gate (approved items only)
+## Phase 3 · Emit Strategy Proposals (approved items only; ADR-0046)
 
-Author against live source (never memory), following deck-genie's authoring rules. Then gate:
+deck-align **authors no code, runs no gate, commits nothing.** For each approved drift-report item,
+write a **Strategy Proposal** into `data/strategy/proposals/` (contract:
+[../update-strategy/references/strategy_proposal_contract.md](../update-strategy/references/strategy_proposal_contract.md)):
+- **fold / generalization** → `target_layer: general-hypothesis`, `verification_contract: score-diff`;
+- **deck-local rewrite / wiring** → `target_layer: deck-strategy`, `verification_contract: score-diff`;
+- **hygiene** (stale NOTEs, doc renames, dead tuned keys) → `target_layer: deck-strategy`,
+  `verification_contract: score-diff` (trivial; applier commits it).
 
-1. **Suite** — `python -m pytest tests/ -q` green.
-2. **score_diff** — `python tools/sim/score_diff.py diff --agent <deck> --baseline
-   data/score_diff/<deck>.base.json` in the mode the item demands: `scores` for folds
-   (score-equality, the ADR-0034 bar), `choice` for vocabulary fixes. Zero divergence, or every
-   intended divergence enumerated + justified in the report. A change to a **shared general rule**
-   runs score_diff for **every** agent with a corpus.
-3. **Playability** — `python tools/sim/check_agent.py <deck>`.
-4. **A/B mirrors** — ONLY when the pass intends behavior change (weight shifts, activating
-   wiring): self-play old-vs-new via `tools/sim/battle.py`; flag a winrate outside the noise band
-   instead of shipping silently.
+Each `spec` names the exact move (rule id, source→target file/cluster, the fold bar it must meet) and
+links the Phase-0 `score_diff` baseline in `provenance` so the applier can diff against it. `/update-strategy`
+then authors the edit, runs the gates the item demands (suite → `score_diff` in `scores`/`choice` mode; a
+shared-general-rule change runs it for **every** corpus agent → Playability → A/B mirrors only when
+behavior changes), updates STRATEGY.md/`docs/general-strategy.md`, and commits. It never hand-edits
+`tuned.json` (authored deltas → `weight_overrides`, ADR-0035) and never lets a positional rule override a KO.
 
-Never hand-edit `tuned.json` (tuner-owned, ADR-0018) — authored deltas go in
-`Strategy.weight_overrides`. Never let a positional rule override a KO.
+## Phase 4 · Present + hand off
 
-## Phase 4 · Record + present
-
-1. Update STRATEGY.md (dispositions, fold table, NOTEs) and, for folds,
-   `docs/general-strategy.md`; glossary only if vocabulary moved (`src/common/CONTEXT.md`).
-2. Write the ledger `src/agents/<deck>/aligned.json`:
-   `{"common_commit": "<HEAD sha>", "aligned_at": "YYYY-MM-DD", "summary": "<one line>"}`
-   (local provenance — the Bundle whitelist never ships it).
-3. Present the full diff + the gate evidence. **The human commits** (ADR-0017).
+1. Present the **drift report** + the **queued proposal set** (one record per approved item).
+2. The ledger `src/agents/<deck>/aligned.json`
+   (`{"common_commit", "aligned_at", "summary"}`) **advances when `/update-strategy` commits** the
+   applied proposals — that skill writes it (local provenance; the Bundle whitelist never ships it),
+   so an aborted apply doesn't falsely mark the deck aligned.
+3. deck-align's own output is the proposals + report — no diff, no commit here (ADR-0046).
 
 ## Completion discipline — one continuous pass (no convenient stopping points)
 
 Phase 2's per-item verdicts are the ONLY approval stops in this skill. Once the verdicts are in,
-Phases 3–4 run to completion in **one continuous push**: every approved item executed, all gates
-run, ledger + docs written, full diff presented. Hard rules:
+Phases 3–4 run to completion in **one continuous push**: every approved item written as a Strategy
+Proposal, the report + queued set presented. (Execution/gating/commit happen in `/update-strategy`.)
+Hard rules:
 
-- **Never end a turn with approved items still pending** ("executed 3 of 7 — say go"). If you can
-  name the next approved item, execute it now.
+- **Never end a turn with approved items still un-queued** ("queued 3 of 7 — say go"). If you can
+  name the next approved item, write its proposal now.
 - **A "clean checkpoint" mid-execution is never a reason to stop.** Resumability covers involuntary
   interruption (context limits, crashes), not voluntary pauses.
 - **Legitimate stops, exhaustively:** a Phase-2 verdict still owed by the user, a gate failure that
@@ -136,5 +137,5 @@ Recommend which deck to align first. No edits in sweep mode.
 - Resumable: the drift report + per-item verdicts live in the session; the ledger only advances
   when a pass completes Phase 4. Resumability is for involuntary interruption only — never a
   license to stop voluntarily (see Completion discipline).
-- **No convenient stopping points** — after verdicts, execute ALL approved items through Phase 4 in
-  one push; never end a turn listing remaining approved work.
+- **No convenient stopping points** — after verdicts, emit a proposal for ALL approved items through
+  Phase 4 in one push; never end a turn listing remaining approved work.

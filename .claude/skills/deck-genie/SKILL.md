@@ -1,9 +1,10 @@
 ---
 name: deck-genie
 description: >
-  Build a deck's complete playing doctrine for the PokemonAI Pilot, end to end, from its
-  deck.csv + deck.txt. Produces a grilled, research-backed STRATEGY.md doctrine doc and then —
-  only after you sign off — the executable, gated src/agents/<deck>/strategy.py ready to play.
+  Build a deck's complete playing doctrine for the PokemonAI Pilot from its deck.csv + deck.txt.
+  Produces a grilled, research-backed STRATEGY.md doctrine doc and then ENDS at fodder — a set of
+  Strategy Proposals in data/strategy/proposals/ (ADR-0046); it does NOT emit strategy.py. The
+  /update-strategy skill authors the executable, gated src/agents/<deck>/strategy.py from those proposals.
   Use this whenever the user wants to author, design, plan, or deeply think through how a
   specific deck/agent should be played: "build the strategy for <deck>", "write the doctrine for
   this agent", "how should mega_starmie play", "grill me on this deck", "/deck-genie <deck>", or
@@ -13,18 +14,20 @@ description: >
   pipeline).
 ---
 
-# deck-genie — author a deck's playing doctrine
+# deck-genie — author a deck's playing doctrine (ends at fodder)
 
 Turn a deck (`deck.csv` + `deck.txt`) into a coherent, intensely-grilled playing strategy for the
-Pilot — first as a human-readable **STRATEGY.md doctrine doc**, then (after sign-off) as the
-executable **`strategy.py`** the agent actually plays. The doctrine is built on top of the existing
-[General Strategy](../../../docs/general-strategy.md): you decide which general Hypotheses already
-cover this deck, which to override, and where the deck needs a brand-new rule.
+Pilot — a human-readable **STRATEGY.md doctrine doc** and, from it, a set of **Strategy Proposals**
+that `/update-strategy` turns into the executable `strategy.py`. deck-genie is a **producer** under
+[ADR-0046](../../../docs/adr/0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md):
+it analyses + grills + proposes; it does **not** author or commit executable code. The doctrine is
+built on top of the existing [General Strategy](../../../docs/general-strategy.md): you decide which
+general Hypotheses already cover this deck, which to override, and where the deck needs a brand-new rule.
 
 **Invocation:** `/deck-genie <deck>` (e.g. `/deck-genie mega_starmie`). Any extra prose the user
 adds is deck context (intended playstyle, known matchups, pet lines) — fold it into Phase 1.
 
-## The two phases and the one gate (read first — this is the ADR-0017 contract)
+## The two phases and the one gate (read first — ADR-0017 + ADR-0046)
 
 The deliverable arrives in two phases with **your explicit sign-off** as the gate between them:
 
@@ -33,15 +36,16 @@ The deliverable arrives in two phases with **your explicit sign-off** as the gat
   disposition table. Every new rule is written as `id` + `rationale` + a *plain-English trigger
   sketch* + seed weight. **No executable lambdas yet.** We grill this until it's locked.
 - **Gate** — present the finished doc, resolve the last contradictions, get an explicit "ship it."
-- **Phase B → `src/agents/<deck>/strategy.py`** — only now translate the locked doctrine into real
-  `when()` lambdas, Roles, Lines, params; validate against the three gates below; present a diff.
-  **The human commits.**
+- **Phase B → Strategy Proposals in `data/strategy/proposals/`** — turn the locked disposition table
+  into fodder records (one per `override-candidate` / `gap`), each linking to its STRATEGY.md block.
+  **deck-genie stops here.** `/update-strategy` authors the `when()` lambdas / Roles / Lines / params
+  into `strategy.py` (or folds a general rule), runs the gates, and the human commits — see ADR-0046.
 
 Why this shape: [ADR-0017](../../../docs/adr/0017-corrections-compile-to-hypotheses.md) rejects
-*unreviewed* auto-written `when()` — not executable strategy itself. `/blunder-buster` already
-writes executable triggers; it's allowed because they're **gated and human-committed**. Here the
-intense grill **is** the review, and the gates are deterministic. Writing lambdas before the doc is
-locked is the thing the ADR forbids — don't.
+*unreviewed* auto-written `when()`; [ADR-0046](../../../docs/adr/0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md)
+puts all executable authoring behind one applier (`update-strategy`) fed by fodder. The intense grill
+**is** the doctrine review; the gates (deterministic) run at apply time. Writing lambdas here — before
+the doc is locked, and in the wrong skill — is exactly what these ADRs forbid.
 
 ## Workflow
 
@@ -217,35 +221,34 @@ Present the finished STRATEGY.md. Hunt for the last contradictions (a sequencing
 disposition; a combo with no supporting rule). Get an **explicit sign-off**. Do not proceed to
 Phase B without it.
 
-### Phase 6 · Phase B — executable strategy.py (gated; human commits)
+### Phase 6 · Phase B — emit Strategy Proposals (the fodder hand-off; ADR-0046)
 
-Read [references/authoring.md](references/authoring.md) and follow it. In short: translate the
-locked doctrine into real `when()` lambdas + Roles + Lines + params, authored against the **live**
-source (never from memory), then pass all three gates before presenting a diff:
+Turn the locked Phase-4 disposition table into **Strategy Proposal** records in
+`data/strategy/proposals/` (contract:
+[../update-strategy/references/strategy_proposal_contract.md](../update-strategy/references/strategy_proposal_contract.md)).
+One record per actionable disposition:
+- **`gap` / deck Hypothesis** → `target_layer: deck-strategy`, `verification_contract: score-diff`.
+- **`override-candidate` / "expand general"** → `target_layer: general-hypothesis`,
+  `verification_contract: score-diff` (or `seed-ladder` for a pure doctrine seed).
+- **`covers-as-is`** → no proposal (nothing to author).
 
-1. **Per-Hypothesis trigger checks** — for each authored rule, build a hand-made observation (like
-   `tests/pilot_helpers.py`) proving its `when()` **fires on the intended decision** and **doesn't
-   misfire** on an obvious counter-case. This is the from-scratch analogue of the blunder Verifier.
-2. **Suite-green** — `python -m pytest tests/ -q` must stay green (catches over-firing on existing
-   behaviour / Playability regressions).
-3. **Playability** — `python tools/sim/check_agent.py <deck>` (a full self-match + the packaged
-   Bundle): no crash, timeout, or illegal move. This is the literal "ready to be played" bar.
+Each record's `spec` is the STRATEGY.md rule (id + rationale + trigger sketch + seed weight) — thin
+fodder, **not** a written lambda; `provenance` links to the STRATEGY.md block. `roles` / `lines` /
+`params` that the deck needs are captured in the proposals too. **deck-genie authors no `when()`, runs
+no gate, commits nothing** — that is `/update-strategy`'s job (it writes `strategy.py`, runs the
+per-Hypothesis trigger checks + suite-green + Playability, presents the diff, human commits).
 
-Present the diff (strategy.py + the trigger-check test file). The human reviews and commits.
-`status` stays `assumed`/`testing`; the ladder A/B confirms or refutes later.
-
-**End state (point 7): a complete, ladder-ready agent — the ENTIRE locked scope, not a subset.**
-When the three gates pass, `src/agents/<deck>/` is a packaged agent — `strategy.py` (its own
-grilled, research-backed doctrine) + `main.py` Bundle — that loads, tests green, and survives a
-full self-match. That is the literal "ready to submit to the ladder" bar; the deliverable isn't
-done until it clears it **with every item of the locked doctrine implemented**.
+**End state: the locked doctrine + a complete proposal set queued** — every `gap`/`override` in the
+disposition table has a record in `data/strategy/proposals/`, linked to its doctrine block, ready for
+`/update-strategy`. The deliverable isn't done until STRATEGY.md is locked **and** every actionable
+disposition is queued as a proposal.
 
 ## Completion discipline — build to feature-complete (no convenient stopping points)
 
 The Phase-5 sign-off is the ONLY approval gate in this skill. Once the user grants it (or gives a
-standing "full build" / "go" authorization), the build runs to **feature-complete in one
-continuous push**: every item of the locked doctrine / agreed plan reaches a terminal state —
-built, gated, green. Hard rules:
+standing "full build" / "go" authorization), Phase B runs to **complete in one continuous push**:
+every item of the locked doctrine reaches a terminal state — **queued as a Strategy Proposal** (or
+`covers-as-is`, needing none). Hard rules:
 
 - **Never end a turn reporting remaining work.** "Shipped A1–A2; remaining: A3, B, C — say go and
   I'll keep rolling" is the exact banned failure mode. If you can name the next item, build it now
@@ -271,7 +274,8 @@ Completion discipline).
 
 ## Guardrails
 
-- **Doc before code.** No executable `when()` until the doc is signed off (ADR-0017).
+- **Doc before proposals; no code in this skill.** No proposals until the doc is signed off (ADR-0017);
+  and deck-genie writes **no executable `when()`/`strategy.py` at all** — that's `/update-strategy` (ADR-0046).
 - **Engine is ground truth** for card facts; **the user is ground truth** for intent; the **web is
   a prior**, not an authority. When they conflict, the user wins and you record the reasoning.
 - **Prefer universal features** (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s in
