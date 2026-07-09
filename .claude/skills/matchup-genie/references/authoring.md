@@ -27,11 +27,13 @@ a deterministic validator, not per-Hypothesis trigger checks.
 | index.json | `slug`, `label`, `covers` (verbatim) |
 | §2 sources | `sources: [ "name — url" ]` |
 
-**Minting a new `opponent_properties` key** is a real event: add it to
-`src/common/scouting/opponent_properties.json` with `consumer: "unwired"` and a `note` describing the lever it *will*
-drive, and **call it out in the diff** — the consumer must wire it before it does anything. Until then
-the key is an inert forward contract. Prefer reusing an existing key; the vocabulary stays small on
-purpose. **Asserting a WIRED key is a high-bar call** — check the registry's `consumer` field: e.g.
+**Minting a new `opponent_properties` key** when no existing key fits is a **default action, not a user
+question** — mint it: add it to `src/common/scouting/opponent_properties.json` with `consumer: "unwired"` and a `note`
+describing the lever it *will* drive, and **call it out in the diff**. A minted key is cheap, inert data
+(a forward contract) — the consumer must wire it before it does anything, so until then it changes no
+play. Prefer reusing an existing key first; the vocabulary stays small on purpose (reuse-first, not
+mint-rarely). Do **not** build the consumer here — that's evidence-gated downstream (ADR-0026).
+**Asserting a WIRED key is a high-bar call** — check the registry's `consumer` field: e.g.
 `opp_is_engine_dependent` drives the ADR-0038 engine lever, and the stress A/B priced a wrong assertion
 at ~4% win-rate. Assert only what the weakness grill actually established.
 

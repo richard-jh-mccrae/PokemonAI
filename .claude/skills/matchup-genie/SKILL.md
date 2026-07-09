@@ -136,10 +136,17 @@ go in `threats`).
 
 As each seam locks, map it to the machine Brief:
 - **`opponent_properties`** — reuse an existing key from
-  [src/common/scouting/opponent_properties.json](../../../src/common/scouting/opponent_properties.json) where one fits; **mint a new key
-  only when nothing does**, add it to that registry with `consumer: "unwired"`, and **flag it** — a new
-  key is a forward contract the (separate, unbuilt) consumer must wire onto `Board`. Keys stay a small,
-  growing vocabulary (like Function Tags / Roles).
+  [src/common/scouting/opponent_properties.json](../../../src/common/scouting/opponent_properties.json) where one fits; **when nothing does,
+  MINT the new key BY DEFAULT — do NOT ask the user whether to mint.** A minted key is cheap, inert data:
+  add it to that registry with `consumer: "unwired"` + a `note` describing the lever it *will* drive, and
+  **flag it in the doc/proposal for visibility** (a new key is a forward contract the separate, unbuilt
+  consumer must later wire onto `Board`). "Flag" means *surface it in the write-up*, not *ask permission* —
+  minting-when-nothing-fits is a default action, not a user decision. The only real judgment is
+  **reuse-vs-mint** (does an existing key already cover the seam?), which you resolve yourself. Keys stay a
+  small, growing vocabulary (like Function Tags / Roles); the discipline is "reuse first," not "mint rarely."
+  Two hard limits keep this safe: (a) never *build the consumer* speculatively — that's evidence-gated
+  (ADR-0026); the key is a bookmark, and (b) asserting a **wired** key (check the registry `consumer`
+  field, e.g. `opp_is_engine_dependent`) stays a high-bar, evidence-backed call.
 - **`threats` / `targets`** — objective card-level intel, each with a one-line `why`.
 
 ### Phase 5 · Lock & sign-off (the gate)
