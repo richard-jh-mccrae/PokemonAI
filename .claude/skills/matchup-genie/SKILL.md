@@ -81,7 +81,7 @@ banks + grill discipline live in [references/counterplay-playbook.md](references
    + [ADR-0003](../../../docs/adr/0003-scouting-knowledge-is-a-shipped-artifact.md) (the auto-Dossier —
    the Brief adds the *gameplan* the Dossier can't derive); the threats/targets role vocab in
    [CONTEXT.md](../../../CONTEXT.md) and `tools/meta_tracker/compile_scouting.py` (`_dossier_intel`); the
-   opponent-property vocab in [assets/opponent_properties.json](assets/opponent_properties.json); any
+   opponent-property vocab in [src/common/scouting/opponent_properties.json](../../../src/common/scouting/opponent_properties.json); any
    sibling Brief in `src/common/scouting/briefs/`. **If `docs/matchups/<slug>.md` exists, you're
    resuming** — read its progress checklist and pick up; don't restart.
 4. Start (or reopen) the doc from [assets/MATCHUP.template.md](assets/MATCHUP.template.md).
@@ -136,7 +136,7 @@ go in `threats`).
 
 As each seam locks, map it to the machine Brief:
 - **`opponent_properties`** — reuse an existing key from
-  [assets/opponent_properties.json](assets/opponent_properties.json) where one fits; **mint a new key
+  [src/common/scouting/opponent_properties.json](../../../src/common/scouting/opponent_properties.json) where one fits; **mint a new key
   only when nothing does**, add it to that registry with `consumer: "unwired"`, and **flag it** — a new
   key is a forward contract the (separate, unbuilt) consumer must wire onto `Board`. Keys stay a small,
   growing vocabulary (like Function Tags / Roles).
@@ -159,7 +159,7 @@ the locked Brief content the applier needs: `covers` (verbatim from `index.json`
 contract), `threats`, `targets` — as doctrine, **not** hand-written JSON.
 
 **matchup-genie stops here — it does not write `briefs/<slug>.json` or run the validator.**
-`/update-strategy` authors the JSON (schema: [assets/brief.schema.json](assets/brief.schema.json)), runs
+`/update-strategy` authors the JSON (schema: [src/common/scouting/brief.schema.json](../../../src/common/scouting/brief.schema.json)), runs
 `python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>` (schema + `covers` non-empty &
 matching `index.json` + every threat/target card in the deck + legal target roles + registered
 `opponent_properties`), presents the diff, and the human commits (its commit message begins with

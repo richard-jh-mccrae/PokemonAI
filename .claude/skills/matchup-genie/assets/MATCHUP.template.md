@@ -65,7 +65,7 @@ disrupt its engine / deny the donk. This is what each of our agents relativizes 
 ## 6 · Brief preview (pre-JSON — filled in Phase 4, emitted in Phase 6)
 
 ```
-opponent_properties = { "<key>": <value>, ... }   # each from assets/opponent_properties.json (flag new keys)
+opponent_properties = { "<key>": <value>, ... }   # each from src/common/scouting/opponent_properties.json (flag new keys)
 threats             = [ { "card": "<name>", "why": "<…>" }, ... ]
 targets             = [ { "card": "<name>", "role": "<fragile_preevo|prize_liability|engine>", "why": "<…>" }, ... ]
 ```

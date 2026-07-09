@@ -3,7 +3,7 @@
 Checks the Brief shape, that `covers` is non-empty (and matches the deck export's index.json), that
 every `threat`/`target` card actually appears in the opponent deck (the analogue of deck-genie's
 per-Hypothesis trigger checks — catches typos / hallucinated cards), that `target` roles are legal, and
-that every `opponent_properties` key is registered in assets/opponent_properties.json.
+that every `opponent_properties` key is registered in src/common/scouting/opponent_properties.json.
 
 Hard failures exit 1; warnings are printed but pass. Usage (from anywhere in the repo):
     python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>
@@ -16,7 +16,6 @@ import json
 import sys
 from pathlib import Path
 
-ASSETS = Path(__file__).resolve().parent.parent / "assets"
 _TARGET_ROLES = {"fragile_preevo", "prize_liability", "engine"}
 _REQUIRED = ("slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets")
 
@@ -125,7 +124,7 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
             problems.append(f"target card not in the deck: {t['card']!r}")
 
     # --- opponent_properties keys registered + typed ---
-    reg = json.loads((ASSETS / "opponent_properties.json").read_text(encoding="utf-8")).get("properties", {})
+    reg = json.loads((repo / "src" / "common" / "scouting" / "opponent_properties.json").read_text(encoding="utf-8")).get("properties", {})
     props = brief.get("opponent_properties", {})
     if not isinstance(props, dict):
         problems.append("opponent_properties must be an object")
@@ -134,7 +133,7 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
             spec = reg.get(key)
             if spec is None:
                 warnings.append(f"opponent_properties key {key!r} not registered — add it to "
-                                f"assets/opponent_properties.json (consumer:'unwired') and flag it")
+                                f"src/common/scouting/opponent_properties.json (consumer:'unwired') and flag it")
                 continue
             typ = spec.get("type")
             if typ == "bool" and not isinstance(val, bool):

@@ -80,5 +80,5 @@ Walk these seams. Each resolved seam → a §3 block in `MATCHUP.md` + a Brief f
 
 Each resolved seam → a §3 block (weakness + exploit + "maps to") and the §4 threat/target lists. Each
 `opponent_properties` decision → reuse a registered key or mint one in
-[assets/opponent_properties.json](../assets/opponent_properties.json) (`consumer: "unwired"`, flagged).
+[src/common/scouting/opponent_properties.json](../../../../src/common/scouting/opponent_properties.json) (`consumer: "unwired"`, flagged).
 Keep the **progress checklist** current so the session is resumable. Phase 6 then emits the JSON.

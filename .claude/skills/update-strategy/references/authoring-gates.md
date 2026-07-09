@@ -35,7 +35,7 @@ A layer-driven blunder (proposal from a `live_trace.lethal`/`planned` routing) i
 ## `brief-validator` — matchup-brief (ADR-0027)
 
 Author `src/common/scouting/briefs/<slug>.json` from the doctrine `spec` (schema:
-`../../matchup-genie/assets/brief.schema.json`), `covers` verbatim from `index.json`; register any new
+`../../../../src/common/scouting/brief.schema.json`), `covers` verbatim from `index.json`; register any new
 `opponent_properties` key. Gate: `python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>`.
 Commit prefix `matchup:`.
 

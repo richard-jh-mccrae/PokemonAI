@@ -12,9 +12,9 @@ a deterministic validator, not per-Hypothesis trigger checks.
 - **`data/meta/decks/index.json`** — the `label` and **`covers`** for this slug. Copy `covers`
   **verbatim**; it's what routes every variant to this one Brief (the Read matches `read.candidates[0]`
   against it). Don't hand-edit it.
-- **[assets/opponent_properties.json](../assets/opponent_properties.json)** — the registered lever keys.
+- **[src/common/scouting/opponent_properties.json](../../../../src/common/scouting/opponent_properties.json)** — the registered lever keys.
   Reuse one where it fits; mint a new key only when nothing does.
-- **[assets/brief.schema.json](../assets/brief.schema.json)** — the Brief shape.
+- **[src/common/scouting/brief.schema.json](../../../../src/common/scouting/brief.schema.json)** — the Brief shape.
 
 ## 2 · Map the locked doctrine to the Brief
 
@@ -28,7 +28,7 @@ a deterministic validator, not per-Hypothesis trigger checks.
 | §2 sources | `sources: [ "name — url" ]` |
 
 **Minting a new `opponent_properties` key** is a real event: add it to
-`assets/opponent_properties.json` with `consumer: "unwired"` and a `note` describing the lever it *will*
+`src/common/scouting/opponent_properties.json` with `consumer: "unwired"` and a `note` describing the lever it *will*
 drive, and **call it out in the diff** — the consumer must wire it before it does anything. Until then
 the key is an inert forward contract. Prefer reusing an existing key; the vocabulary stays small on
 purpose. **Asserting a WIRED key is a high-bar call** — check the registry's `consumer` field: e.g.
@@ -58,7 +58,7 @@ dir's covers-collision freedom, so run it, don't assume.
 
 ## 5 · Present the diff — the human commits
 
-Show `src/common/scouting/briefs/<slug>.json` (+ any `assets/opponent_properties.json` additions) as a
+Show `src/common/scouting/briefs/<slug>.json` (+ any `src/common/scouting/opponent_properties.json` additions) as a
 diff, with a one-line note: the archetype, its `covers` count, the seams it encodes (`opponent_properties`
 keys), and the validator result. Note any newly-minted key as "needs consumer wiring." The human reviews
 and commits. The Brief's effect on play is confirmed later by A/B (ADR-0038's evidence gate) — the wired
