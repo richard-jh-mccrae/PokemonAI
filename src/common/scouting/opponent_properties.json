@@ -61,6 +61,16 @@
       "type": "bool",
       "consumer": "unwired (forward contract). Like opp_ex_damage_immune, the OVERRIDE is ALREADY resolved at concrete-attack scoring by compute_active_damage (ADR-0032) via CardStat.preventsDamageAtLeast: a single hit >= threshold returns 0 UNLESS the attack has AttackStat.ignoresEffects (Nebula Beam class), which pierces the cap. Read/Posture lever a future consumer must wire: recognise the cap -> prefer sub-threshold repeatable / multi-hit damage over a single overkill nuke, OR route an ignoresEffects attack. Consumer reconciles with opp_is_heal_wall's opposite 'burst it' advice: burst is right EXCEPT a single hit at/over the cap is fully wasted.",
       "note": "the deck fields a wall that prevents any single attack of N-or-more damage (Drednaw SCR44 Impervious Shell, N=200; engine CardStat.preventsDamageAtLeast=200), so a single big OHKO nuke is wasted while sub-threshold repeatable damage and effect-ignoring attacks (AttackStat.ignoresEffects) get through. Variant-only for crustle (the Drednaw line). First minted for crustle. Reusable for any burst-cap wall (mirrors CardStat.preventsDamageAtLeast)."
+    },
+    "opp_no_pivot": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck runs NO gust/switch/pivot card anywhere and high retreat costs, so a Pokemon dragged/forced into the Active seat is stranded there for multiple turns (it cannot cheaply retreat or be switched, and the deck cannot reposition it). Lever (future): raise the value of OUR gust/switch/trap lines vs this opp — force an un-energized or low-value body Active and farm free setup/KO turns; a gust-and-strand outvalues a benched snipe here. Distinct from opp_is_engine_dependent (draw/search) and opp_accel_dependent (ramp) — this is about MOBILITY. First minted for kyogre_mega_abomasnow_ex (zero gust/switch in 60; retreat Snover 3 / Kyogre 3 / Mega Abomasnow ex 4). Reusable for any disruption-less high-retreat archetype."
+    },
+    "opp_deckout_vulnerable": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck self-mills its own library with no (or negligible) Pokemon/Trainer recovery, so a long game drifts it toward deck-out and an attacker/resource drought — its own damage engine becomes a liability over time. Lever (future): in a non-losing board state, prefer to GRIND / trade evenly and deny fast KOs rather than race, converting the opp's self-mill into a resource/deck-out loss; deprioritise plans that end the game before the mill bites. First minted for kyogre_mega_abomasnow_ex (Mega Abomasnow ex Hammer-lanche discards the top 6 every use; Kyogre recycles ONLY Basic Water Energy, so milled Pokemon/Trainers are gone for good). Reusable for any self-mill deck lacking recovery."
     }
   }
 }
