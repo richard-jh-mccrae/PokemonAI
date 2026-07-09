@@ -3,9 +3,14 @@ Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.m
 Routing evidence: real-Pilot retests (tune._build_pilot('mega_lucario').decide) + threat/board probes, this
 session. All 14 open mega_lucario corrections routed to terminal ANALYSIS outcomes:
   - covered: 84071010-30 (attack-last + dig-before-commit; reviewed.json).
-  - proposal-routed: the 4 clusters below + the cross-agent planner-code merge into
+  - proposal-routed: the 3 clusters below (switch / general fetch / solrock-lunatone) + the planner-code
+    `lethal-retreat-enabler` below + the cross-agent planner-code merge into
     blunder-20260709-mega_starmie.md#lethal-recover-the-energy-that-wins (ml frames 84889011-24 /
     84890060-26 / 84890060-48).
+  - refuted→reframed: 84071010-15 `revive-the-dead-hand-full-refresh` — re-examined (2026-07-09, per
+    data/handoffs/ownside.md §3): f15 is NOT a dead hand but a missed **turn-3 lethal**, so the dead-hand
+    detector is refuted for its only fixture and the real gap is reframed into the `lethal-retreat-enabler`
+    planner-code record below.
 CRITICAL cohort (9, all mega_lucario): 84890060-1, 84889539-87, 84889011-12, 84889539-26 (deck cluster
 below), 84071010-53 (general cluster below), 84889539-30 (switch cluster below), 84889011-24 / 84890060-26
 (planner-code, merged into the ms lethal-recover proposal), and 84071010-30 (covered). None refuted/gap. -->
@@ -144,19 +149,78 @@ co-dependency stays deck-specific.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
-Turn 3. Hand is "rather dead" (human) with **6 prizes remaining → Lillie's Determination draws 8**. The
-agent played **Team Rocket's Petrel** [0] (a Trainer tutor, `dig-before-commit` +20) over **Lillie's**
-[1] (`dig-before-commit` +20 **−60** `attach-before-hand-shuffle` = −40). The 2026-07-03 retirement of
-`refresh-when-hand-is-dead` + its `_hand_is_dead` full-menu scan assumed the +20 `dig-before-commit`
-alone carries a dead-hand refresh "when nothing else is endorsed" — but here **something else IS
-endorsed** (Petrel, another +20 dig) AND `attach-before-hand-shuffle` (−60, a reusable {F} with a
-placeable home) sinks the refresh below it. So the refresh loses to a marginal one-card tutor and a
-stranded attach. Revive a dead-hand detector: when the full real-menu play-scan finds **no useful line
-to build this turn** (the hand is genuinely dead) AND the shuffle draws a large fresh hand, the full
-`shuffle_hand` refresh should out-rank a marginal alternative dig and OVERRIDE `attach-before-hand-
-shuffle` (8 fresh cards beats attaching one {F} and tutoring one Trainer). Keep it narrow (a real
-dead-hand scan, not a blanket refresh preference) so it never fights `hold-wincon-dont-shuffle` /
-`hold-line-piece-dont-shuffle` / `dont-refresh-into-a-probable-miss` on a live hand. `update-strategy`
-verifies decide() flips [0]→[1] on the fixture and that the shuffle-refresh suite (the hold/miss cases)
-is unregressed. (Sibling 84071010-30 — the same episode's 1-card-hand case — is already COVERED by
-attack-last + dig-before-commit; this is the harder case where a competing dig defeats the bare +20.)
+**REFUTED + REFRAMED (2026-07-09, per `data/handoffs/ownside.md` §3).** The user re-examined f15's exact
+state and found the hand is **NOT dead** — f15 is a **missed lethal on turn 3**. There is an
+engine-verified this-turn WIN line (a retreat-tool play into a ready benched attacker — see the sibling
+record **`lethal-retreat-enabler` below**), so the shuffle-for-8 tag was suboptimal and the dead-hand
+detector is refuted for its **only** fixture. **Do not build the dead-hand detector.** The real gap is
+the **Lethal Solver going one composition deeper** (the retreat-enabler class), routed to the
+planner-code sibling below — `update-strategy` should set THIS record aside (refuted) and work that one.
+
+_Superseded rationale (kept for provenance — the original dead-hand argument, now refuted by the missed
+lethal)._ Turn 3, hand read "rather dead" (human), 6 prizes → Lillie's Determination draws 8. Agent
+played **Team Rocket's Petrel** [0] (`dig-before-commit` +20) over **Lillie's** [1] (`dig-before-commit`
++20 **−60** `attach-before-hand-shuffle` = −40). The original proposal argued for reviving a dead-hand
+detector (the retired `_hand_is_dead` full-menu scan) so a full `shuffle_hand` refresh could out-rank the
+marginal Petrel dig and override the stranded attach. That premise is wrong: the hand was never dead — a
+WIN was on the table — so no refresh heuristic is the fix; the fix is the solver composing the lethal.
+(Sibling 84071010-30 — the same episode's 1-card-hand case — is already COVERED by attack-last +
+dig-before-commit.)
+
+---
+
+## lethal-retreat-enabler
+- id: lethal-retreat-enabler
+- source: blunder-buster
+- target_layer: planner-code
+- candidate_signal: Lethal Solver generator (`_family_win_candidates`, src/common/strategy/planner.py:294;
+  surfaced via `_grab_lethal_tactical`, src/common/pilot.py:1204 — ADR-0030/0037) — a NEW enabler step:
+  make the Active's retreat **affordable** via an enabling card play (attach an in-hand retreat **Tool**,
+  or first play a Supporter that **tutors** one) → retreat → **promote a ready benched attacker** → attack
+  → KO/win. Extends the retreat-to-a-benched-attacker step of
+  blunder-20260709-mega_starmie.md#lethal-recover-the-energy-that-wins (which composes the **free/natural-
+  retreat + energy-recover** case) to the **retreat-Tool-enabled / tutored-retreat** case one step deeper.
+  `live_trace.lethal` was null while a WIN existed.
+- verification_contract: verifier
+- provenance: correction 84071010:f15 (re-examined 2026-07-09 → missed T3 lethal, per
+  data/handoffs/ownside.md §3) | fixture tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json
+  (state re-verify at source on build; the fixture is named for the retired dead-hand framing) |
+  reframes the refuted `revive-the-dead-hand-full-refresh` above | see [[lethal-solver-plan]]
+- status: open
+- for: general
+
+**Spec (authoring spec — thin fodder):**
+Turn 3, f15. An engine-verified this-turn **WIN** existed that the solver never composed, so
+`live_trace.lethal` was null and the agent shuffled instead. Line (engine-verified per the correction;
+**re-verify at source on build** — the simulator deltas + CardStat are ground truth, not this record):
+
+> Team Rocket's Petrel → tutor **Air Balloon** → attach to Active **Makuhita** → free-retreat (Air Balloon
+> −2 == Makuhita retreat 2) → promote benched **Mega Lucario ex** → **Aura Jab {F} 130 ≥ Riolu 80**,
+> opponent bench empty → **WIN.**
+
+The enabling first step is neither an energy recover nor a body that already free-retreats — it is
+**playing a retreat Tool** (here Air Balloon, −2 retreat) that zeroes the Active's retreat cost, optionally
+**tutored first** by a Supporter (Petrel), after which a ready benched attacker is promoted for the KO.
+This is exactly one composition deeper than what ships today:
+- `_grab_lethal_tactical` (ADR-0030) handles the **grab-enables-lethal / energy-recover** case.
+- `lethal-recover-the-energy-that-wins` (applied) handles retreat-into-a-benched-attacker **when the
+  retreat is already affordable** (free-retreat Lunatone / paid) plus the energy fetch.
+- **This case adds the retreat-*affordability* enabler**: attach (or tutor-then-attach) a retreat Tool so
+  an otherwise-unaffordable retreat becomes free, then promote the attacker.
+
+**Home:** extend the min-bound generator `_family_win_candidates` (planner.py) with a retreat-Tool-enabler
+candidate family (surface it via `_grab_lethal_tactical` at the tutor/attach select), cascade-verified like
+tiers 3/4 — a refute drops the line, a None verdict keeps the sound coin-floor lock (sound-or-silent;
+never lock a phantom).
+
+**NOTE for `update-strategy` (coverage check FIRST).** Before building, confirm whether
+`lethal-recover-the-energy-that-wins` (applied) — whose candidate_signal already says "extend the
+ko_for_prizes retreat line into the win/KO generator" — **already** composes a Tool-enabled retreat. Its
+worked cases are all free/paid-retreat, so this Tool-affordability step is almost certainly NOT yet
+composed; if it turns out it is, mark this **covered** rather than building. Then verify decide() takes the
+tutor/attach-enabling step and the solver locks the KO on the f15 state.
+
+WHY it wins: an **outright thrown WIN on turn 3** — the highest-value blunder class — and the enabling
+primitives (retreat-Tool cost model, promote-a-benched-attacker, the KO oracle) already exist; only the
+solver's line-generator is missing the retreat-affordability compose. Single-turn boundary (ADR-0031): the
+whole line is one of MY turns; nothing here needs the deferred multi-turn layer.
