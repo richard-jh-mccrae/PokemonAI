@@ -597,5 +597,30 @@
     "disposition": "covered",
     "reason": "CRITICAL 'dont discard our main line attacker': keep-line-base-at-discard covers it — real Pilot decide() at the captured f30 discards Gravity Mountain + a spare Basic {F} (Aura Jab reloads F from discard, so it is recoverable engine fuel) and KEEPS Riolu/Makuhita/Solrock. The flagged blunder (pitching Riolu) no longer occurs; retest differs from correct=[0] only in pitching a fuel-able Energy over a redundant Lillie's. Confirms f31's covered premise (Riolu no longer discarded).",
     "round": "2026-07-05"
+  },
+  "83667237-120": {
+    "disposition": "covered",
+    "reason": "recover-to-refill-bench (doctrine_fetch.py) endorses Night Stretcher +22 -> real Pilot chosen_after=[3] Night Stretcher, FIXED=True; live_trace was pre-fix build",
+    "round": "2026-07-09"
+  },
+  "83966968-78": {
+    "disposition": "refuted",
+    "reason": "CRITICAL refuted (human ack 2026-07-09): Boss's->gust Cinderace is the only KO; Harlequin forgoes it. test_blunder_20260709::f78",
+    "round": "2026-07-09"
+  },
+  "83966968-79": {
+    "disposition": "refuted",
+    "reason": "CRITICAL refuted (human ack 2026-07-09): benched Mega Starmie ex 230/330 un-KO-able (max 210<230, Nebula unaffordable); Cinderace only KO. test_blunder_20260709::f79",
+    "round": "2026-07-09"
+  },
+  "83966968-45": {
+    "disposition": "covered",
+    "reason": "attack-last defers the non-lethal Nebula Beam (238<KO); real Pilot plays Harlequin (dig-before-commit +20) first = human's disrupt intent. retest chosen [6]->[2]=Harlequin, FIXED=True",
+    "round": "2026-07-09"
+  },
+  "84897262-100": {
+    "disposition": "covered",
+    "reason": "attack-last defers the non-lethal Nebula Beam (154.7<KO); real Pilot plays Harlequin (dig-before-commit +20) first. retest chosen [5]->[0]=Harlequin, FIXED=True",
+    "round": "2026-07-09"
   }
 }
