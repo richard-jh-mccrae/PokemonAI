@@ -50,25 +50,57 @@ authoring-time concern for update-strategy's grill.
 - id: lethal-recover-the-energy-that-wins
 - source: blunder-buster
 - target_layer: planner-code
-- candidate_signal: Lethal Solver generator (ADR-0030/0037, planner.py) — a search/recover step that pulls a Basic Energy enabling a this-turn KO; `live_trace.lethal` was null while a win existed
+- candidate_signal: Lethal Solver generator (ADR-0030/0037, planner.py) — the missing lethal-line steps:
+  (a) a search/recover step that pulls a Basic Energy enabling a this-turn KO; (b) a **retreat-to-a-
+  benched-attacker** promote step (the ko_for_prizes retreat line already exists — extend it into the
+  win/KO generator); (c) **stacking damage-boost Items** (Premium Power Pro +30 / Black Belt's Training
+  +40, already in the CardStat boost model) to reach a KO threshold. `live_trace.lethal` was null while a
+  KO/win existed in all four states.
 - verification_contract: verifier
-- provenance: correction 84897262:f110 | fixture tests/fixtures/corrections/ms_lethal_recover_energy_to_win_f110.json | see [[lethal-solver-plan]]
+- provenance: correction 84897262:f110 (mega_starmie) | correction 84889011:f24 (mega_lucario, CRITICAL) |
+  correction 84890060:f26 (mega_lucario, CRITICAL) | correction 84890060:f48 (mega_lucario) | fixtures
+  tests/fixtures/corrections/ms_lethal_recover_energy_to_win_f110.json,
+  ml_lethal_retreat_boost_to_ko_f24.json, ml_lethal_recover_energy_retreat_ko_f26.json,
+  ml_lethal_recover_energy_via_gong_f48.json | see [[lethal-solver-plan]]
 - status: open
 - for: general
 
 **Spec (authoring spec — thin fodder):**
-A **won game was thrown at a grab select.** Turn 14: my Active Mega Starmie ex has **0 Energy**, bench
-empty; opp Active is **Mega Lucario ex at 10 HP** (prize_value 3); I have **2 prizes left**. The agent
-played Night Stretcher (correctly — `recover-to-refill-bench`) and, at its ToHand recover select, grabbed
-a **Staryu** (`fetch-base-before-stranded-payoff`+`prefer-wincon-line-piece`+`fetch-a-starter` = 50) over
-the **Basic {W} Energy** (`fetch-energy-when-starved` = 35) sitting in the discard. But recovering the W
-Energy → attach → **Jetting Blow (120 ≥ 10) → KO the 10-HP Mega Lucario ex → take my last 2 prizes → WIN.**
-`live_trace.lethal` is null → **the Lethal Solver's generator missed this win-shape** (a discard-recover /
-search that supplies the one Energy a this-turn KO needs). Per ADR-0030 routing this is planner-code, never
-a weight: extend the solver (or make the grab/recover select honor a solver-locked lethal) so a
-recover/search step that completes a this-turn winning KO is generated and forces the winning grab. The
-KO-oracle + attach affordability primitives already exist (`_can_ko`, `predicted_damage`, best-hand-attach)
-— the gap is the generator that considers *recovering the missing Energy* as a lethal step.
+CROSS-AGENT planner-code cluster (mega_starmie + mega_lucario, 2 CRITICAL): across four states a this-turn
+**KO or outright WIN** existed whose enabling first step was a resource/positional move the Lethal Solver's
+generator does not compose, so `live_trace.lethal` was null and the agent developed instead at the
+fetch/attach select. Per ADR-0030 routing this is planner-code, never a weight. The KO-oracle + attach
+affordability primitives already exist (`_can_ko`, `predicted_damage`, best-hand-attach, the ko_for_prizes
+retreat line, the CardStat damage-boost model); the gap is the **generator** that considers these enabling
+steps as part of a lethal line. Four instances, three enabler shapes:
+
+1. **Recover/search the missing Energy (ms 84897262:f110).** Turn 14, my Active Mega Starmie ex 0 Energy,
+   bench empty; opp Active Mega Lucario ex at **10 HP**; 2 prizes left. Agent played Night Stretcher
+   (correct) but at the recover select grabbed **Staryu** (fetch/develop = 50) over the **Basic {W}
+   Energy** (`fetch-energy-when-starved` 35). Recover W → attach → Jetting Blow (120 ≥ 10) → KO → last 2
+   prizes → **WIN.**
+2. **Search the missing Energy + retreat into a benched attacker (ml 84890060:f26, CRITICAL).** Turn 3,
+   my Active Lunatone (1 {F}); benched **Mega Lucario ex 340/340, 0 Energy**; opp Active **80 HP**. Fetch
+   a {F} ([1], scored 0) instead of a Riolu ([2], `fetch-base-before-stranded-payoff`+`prefer-wincon-line-
+   piece` = 38) → attach to Mega Lucario → free-retreat Lunatone → promote Mega Lucario → **Aura Jab 130 ≥
+   80 KO** (and its rider recycles 2 discard {F} to the bench). Same energy-fetch gap as #1 **plus** the
+   retreat-to-a-benched-attacker promote step.
+3. **Same shape via an Energy tutor (ml 84890060:f48).** Turn 7 ToHand: agent grabbed **Lillie's
+   Determination** [0] (`grab-a-draw-supporter-in-setup` 10) over **Fighting Gong** [9] (scored 0) —
+   Fighting Gong tutors the {F} that, attached + free-retreat into the ready attacker, delivers the KO.
+4. **Stack damage-boost Items + retreat to promote the attacker (ml 84889011:f24, CRITICAL).** Turn 3,
+   opp Active **130/130 with an EMPTY bench** (KO = win); I hold **2× Premium Power Pro** + a {F} Energy,
+   benched Solrock, benched Lunatone. Line: attach {F} → Solrock ([5]), retreat Lunatone → promote Solrock,
+   play **2× Premium Power Pro (+30 each)** → **Cosmic Beam 70+30+30 = 130 = OHKO → WIN** (Lunatone stays
+   benched so Cosmic Beam is live; Cosmic Beam ignores W/R). Agent attached to Riolu [6] instead. The
+   generator must compose retreat-to-a-benched-attacker **and** stacking the boost Items to reach the KO
+   threshold — both already-modeled primitives, never composed into a lethal line.
+
+WHY it wins: two outright thrown WINS (f110, f24) + a missed KO with prize+recycle (f26) — the highest-
+value blunder class. All enabling primitives exist; only the solver's line-generator is missing the
+compose. `update-strategy` verifies each fixture: decide() takes the lethal-enabling step (the winning grab
+/ attach) and `find_lethal_line` locks the KO. NOTE the single-turn boundary — every instance is one of MY
+turns (ADR-0031); nothing here needs the deferred multi-turn layer.
 
 ---
 

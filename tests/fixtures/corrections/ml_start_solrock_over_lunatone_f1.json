@@ -1,0 +1,205 @@
+{
+  "episode": "84890060",
+  "frame": 1,
+  "category": "misattachment",
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [],
+          "asleep": false,
+          "bench": [],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 53,
+          "discard": [],
+          "hand": null,
+          "handCount": 7,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": []
+        },
+        {
+          "active": [],
+          "asleep": false,
+          "bench": [],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 53,
+          "discard": [],
+          "hand": [
+            {
+              "id": 675,
+              "playerIndex": 1,
+              "serial": 78
+            },
+            {
+              "id": 1174,
+              "playerIndex": 1,
+              "serial": 108
+            },
+            {
+              "id": 1213,
+              "playerIndex": 1,
+              "serial": 114
+            },
+            {
+              "id": 6,
+              "playerIndex": 1,
+              "serial": 64
+            },
+            {
+              "id": 6,
+              "playerIndex": 1,
+              "serial": 69
+            },
+            {
+              "id": 676,
+              "playerIndex": 1,
+              "serial": 81
+            },
+            {
+              "id": 1142,
+              "playerIndex": 1,
+              "serial": 100
+            }
+          ],
+          "handCount": 7,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": []
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 0,
+      "turnActionCount": 2,
+      "yourIndex": 1
+    },
+    "logs": [
+      {
+        "cardId": 675,
+        "playerIndex": 1,
+        "serial": 78,
+        "type": 4
+      },
+      {
+        "cardId": 1174,
+        "playerIndex": 1,
+        "serial": 108,
+        "type": 4
+      },
+      {
+        "cardId": 1213,
+        "playerIndex": 1,
+        "serial": 114,
+        "type": 4
+      },
+      {
+        "cardId": 6,
+        "playerIndex": 1,
+        "serial": 64,
+        "type": 4
+      },
+      {
+        "cardId": 6,
+        "playerIndex": 1,
+        "serial": 69,
+        "type": 4
+      },
+      {
+        "cardId": 676,
+        "playerIndex": 1,
+        "serial": 81,
+        "type": 4
+      },
+      {
+        "cardId": 1142,
+        "playerIndex": 1,
+        "serial": 100,
+        "type": 4
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "playerIndex": 0,
+        "type": 5
+      },
+      {
+        "hasBasicPokemon": true,
+        "playerIndex": 1,
+        "type": 1
+      },
+      {
+        "hasBasicPokemon": true,
+        "playerIndex": 0,
+        "type": 1
+      }
+    ],
+    "remainingOverageTime": 599.407752,
+    "select": {
+      "context": 1,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "area": 2,
+          "index": 0,
+          "playerIndex": 1,
+          "type": 3
+        },
+        {
+          "area": 2,
+          "index": 5,
+          "playerIndex": 1,
+          "type": 3
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 1
+    }
+  },
+  "chosen": [
+    0
+  ],
+  "chosen_label": "Lunatone",
+  "correct": [
+    1
+  ],
+  "correct_label": "Solrock",
+  "rationale": "CRITICAL: Lunatone is typically never an attacker while Solrock is our badass starter, swinging for 70 dmg for only a single energy. we almost always wanna start Solrock when we have a Lunatone as well."
+}
