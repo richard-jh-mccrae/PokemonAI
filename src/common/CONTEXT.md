@@ -515,6 +515,32 @@ on an off-Path, prize-redundant, non-imminent body (γ / `objectives_path`-gated
 _Avoid_: off-path (bare — a low-prize off-path body can still be the right `+1`; the point is prize-
 *redundant*), Path Denial (the defensive their-side twin), Threat (magnitude, prize-blind)
 
+**Prize-Economy Fetch**:
+The FETCH-seam realization of **Path Denial** (ADR-0048): once my multi-prize win-condition is in
+play, a grab prefers developing a cheap (1-prize-forward) **attacker** line over a redundant
+high-prize line, so the opponent must Knock Out MORE, SMALLER bodies to reach six ("force eight
+prizes of work for a six-prize game"). Scored by the grab's **forward-payoff prize value** (the
+prize value of what the pre-evolution evolves INTO — Riolu→Mega = 3, Makuhita→Hariyama = 1 — not the
+card's own), gated on `wincon_in_play`, **attacker-lines only**, a small **positive** tie-break
+dominated by every real need and deck-overridable (`fetch_priority` / `weight_overrides`). The
+FETCH-seam sibling of the promote-seam Interpose trio and the bench-seam `_bench_shortens_their_path`.
+_Avoid_: Prize-Redundant Target (the OFFENSIVE snipe twin — this is the fetch/development side), Path
+Denial (the umbrella objective; this is one seam of it), `card_prize_value` (the grabbed card's own
+prizes — this term reads the forward *payoff's* prizes)
+
+**Secondary Line**:
+A declared **non-win-condition** evolution `Line` (a `Line` whose `role` is not a win-condition role,
+e.g. `secondary_attacker` — Makuhita → Hariyama) — a deck's cheap-attacker line recognized as
+first-class so its pre-evolutions earn line-piece development credit, **without** its payoff being
+mislabeled a win-condition. Its pre-evos join the **recognized-line** set (`card_is_recognized_line_preevo`,
+which the preference rungs and **Prize-Economy Fetch** read) but NOT the narrow **win-condition
+pre-evo** set (`_line_preevo_set`, which feeds `wincon_base_deployable` and the deploy/hold machinery —
+kept separate on purpose, ADR-0048). Distinguished from the win-condition Line by the role-gated
+`_wincon_set()`.
+_Avoid_: win-condition Line (the primary payoff line), Sub-line Pokémon (the Meta-Tracker
+deck-composition term — a Secondary Line is a runtime Strategy structure), Role (a per-card label; a
+Secondary Line is a whole path)
+
 **Forced-Promotion Read**:
 The 1-ply prediction of WHICH benched body the opponent brings to the Active Spot when a promotion is
 **forced** — their Active is doomed (I KO it this turn, or it is already at 0 HP). Corrects
