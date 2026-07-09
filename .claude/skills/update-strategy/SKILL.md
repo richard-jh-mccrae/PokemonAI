@@ -36,6 +36,8 @@ Read open Strategy Proposals from `data/strategy/proposals/` (status `open`). Fo
 `provenance` to its rich source doc (Digest / STRATEGY.md / matchup doctrine / correction) for full
 context. Group by `target_layer`. Surface any `spec` too thin to author from → bounce to the producer.
 
+Print the queue summary (count per target layer, count per producer, count per gate) and source doc links.
+
 ### Phase 1 · Grill each proposal (per record, one at a time)
 With the user, sharpen the proposal into a concrete authored change: resolve the exact trigger/board
 condition, the starter weight (on the [weight scale](../../../docs/weights.md)), the id, and confirm the
