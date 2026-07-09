@@ -19,7 +19,7 @@ below), 84071010-53 (general cluster below), 84889539-30 (switch cluster below),
   no retreat-lock escape). Needs a "switch yields no board benefit" predicate (infra-to-build on Board).
 - verification_contract: verifier
 - provenance: correction 84889539:f30 | fixture tests/fixtures/corrections/ml_dont_switch_for_no_gain_f30.json
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -46,7 +46,7 @@ the beneficial-switch fixtures in the retreat suite are unregressed.
   reachable in the deck, so it cannot be put into play." A fetch/ToHand suppressor keyed on that.
 - verification_contract: verifier
 - provenance: correction 84071010:f53 | fixture tests/fixtures/corrections/ml_dont_fetch_unplayable_mega_no_riolu_f53.json
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -81,7 +81,7 @@ prize-exact tracker and the `deck_odds` fallback).
   ml_attach_solrock_not_lunatone_f11.json, ml_attach_makuhita_not_lunatone_f64.json,
   ml_aurajab_skip_partnerless_solrock_f87.json, ml_fetch_solrock_for_lone_lunatone_f41.json,
   ml_dont_fetch_redundant_solrock_f12.json, ml_dont_fetch_inert_solrock_prized_lunatone_f26.json
-- status: open
+- status: applied
 - for: deck:mega_lucario
 
 **Spec (authoring spec — thin fodder):**
@@ -140,7 +140,7 @@ co-dependency stays deck-specific.
   when the hand is genuinely dead.
 - verification_contract: verifier
 - provenance: correction 84071010:f15 | fixture tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json
-- status: open
+- status: refuted
 - for: general
 
 **Spec (authoring spec — thin fodder):**

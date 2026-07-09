@@ -11,7 +11,7 @@ runs validate_brief.py, presents the diff; the human commits (commit msg begins 
 - candidate_signal: `fragile_preevo` target → brief_preevo lever (WIRED, default ON) — the one behavioral output; `opp_tempo` (registered, unwired); `opp_no_pivot` + `opp_deckout_vulnerable` (NEW keys minted in src/common/scouting/opponent_properties.json, consumer:"unwired" — inert forward contracts)
 - verification_contract: brief-validator
 - provenance: docs/matchups/kyogre_mega_abomasnow_ex.md (locked + signed off 2026-07-09; grill forks in §7)
-- status: open
+- status: applied
 
 **Spec (authoring spec — the locked Brief content; author the JSON from this, don't re-litigate):**
 

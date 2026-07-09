@@ -10,7 +10,7 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
 - candidate_signal: CardStat/provider `forward_max_damage` (EXISTS — Riolu→Mega Lucario ex = 270) + benched-Pokémon attached-energy (`target_is_threat`/imminence) + attacker-vs-support role; reconcile against `snipe-the-forced-promotion` (+40) and `snipe-the-top-threat` (+30) in baseline_snipe.py
 - verification_contract: verifier
 - provenance: corrections 82224509:f47, 82523811:f41, 82523811:f61, 82753102:f85, 81785223:f39, 81785223:f45, 81905522:f75 | fixtures tests/fixtures/corrections/ms_snipe_evolving_wincon_preevo_f75.json, ms_snipe_riolu_over_lunatone_f47.json, ms_snipe_energized_bench_f39.json, ms_snipe_attacker_line_over_support_f85.json | see [[snipe-threat-two-signals]] (the deferred "evolves-into-attacker" signal, frame 75)
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -62,7 +62,7 @@ authoring-time concern for update-strategy's grill.
   tests/fixtures/corrections/ms_lethal_recover_energy_to_win_f110.json,
   ml_lethal_retreat_boost_to_ko_f24.json, ml_lethal_recover_energy_retreat_ko_f26.json,
   ml_lethal_recover_energy_via_gong_f48.json | see [[lethal-solver-plan]]
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -111,7 +111,7 @@ turns (ADR-0031); nothing here needs the deferred multi-turn layer.
 - candidate_signal: CardStat `cardType`==Supporter + Function Tags (`draw` vs `rush_evolve`/`tutor_mega`) + `card_is_hand_duplicate` — all EXIST; a discard-priority tie-break rung in doctrine_fetch.py's discard side
 - verification_contract: verifier
 - provenance: correction 83967840:f54 | fixture tests/fixtures/corrections/ms_discard_draw_dupe_before_tutor_f54.json
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**

@@ -15,7 +15,7 @@ ship silent for decks without the trigger. The dragapult deck opts in only by ru
 - candidate_signal: `option_type == _ABILITY` (10, EXISTS, resolves `card_id`+tags on the option — probe-verified) + the ability card's `draw`/`dig` Function Tag + `not cost_discard`; sibling of `dig-before-commit` (baseline_sequencing.py, keyed on `_PLAY`)
 - verification_contract: seed-ladder
 - provenance: src/agents/dragapult_ex/STRATEGY.md §6 `use-the-draw-engine-ability` + §8 verify-1 | probe scratchpad/probe_ability.py (Recon+Run Away Draw both score 0, Pilot took the attack) | workflow wjzvrtwbk synthesis "DRAW-ABILITY ACTIVATION GAP"
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -52,7 +52,7 @@ a **deferred** refinement, noted separately, not this rule.
 - candidate_signal: `select_context == _SETUP_ACTIVE` + a new `item_lock` Function Tag on the candidate; twin of `open-the-accelerator` (baseline_opening.py, keyed on the `accel_source` Role). DEPENDENCY: add tag `item_lock` to Budew (card id 235) in card_functions.json — currently untagged.
 - verification_contract: seed-ladder
 - provenance: src/agents/dragapult_ex/STRATEGY.md §6 `open-the-item-lock-starter` + §3 Budew | probe wjzvrtwbk "BUDEW ITEM-LOCK OPENER NOT PREFERRED" (Dreepy/Budew/Dunsparce all score 0, decide()=index 0)
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -84,7 +84,7 @@ Role `starter` (documentation; the rule is tag-keyed). This complements `preferr
 - candidate_signal: Function Tag `energy_accel` on Rosa's Encouragement (card id 1240 — currently ABSENT from card_functions.json); once tagged, the EXISTING `use-acceleration` (+25, baseline_energy.py) fires. No new when().
 - verification_contract: score-diff
 - provenance: src/agents/dragapult_ex/STRATEGY.md §6 `energy_accel` tag on Rosa's + §3 Rosa's | probe wjzvrtwbk "ROSA'S UNTAGGED -> use-acceleration dead"
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -112,7 +112,7 @@ targets an already-online Stage 2, so a Role would mis-boost it at setup; the ta
 - candidate_signal: `card_is_support` (EXISTS, doctrine_fetch.py) + the option card's `evolvesFrom` base NOT in play+hand; generalize the `card_is_line_preevo`-gated `fetch-base-before-stranded-payoff` / `dont-grab-a-baseless-mid-evolution` beyond the win-condition Line to non-Line engine evolutions.
 - verification_contract: score-diff
 - provenance: src/agents/dragapult_ex/STRATEGY.md §6 `dont-strand-the-evolving-engine` + §3 Dunsparce/Dudunsparce | workflow wjzvrtwbk "DUNSPARCE->DUDUNSPARCE FETCH PRIORITY INVERSION"
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**

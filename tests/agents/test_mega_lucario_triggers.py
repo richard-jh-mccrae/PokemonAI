@@ -107,18 +107,19 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-# --- deck: fetch-the-engine-first (T1, recreated) --------------------------------------------
+# --- deck: Solrock<->Lunatone pairing — fetch the MISSING engine half (replaces fetch-the-engine-first)
 
 @pytest.mark.req("REQ-ML-0001")
-def test_fetch_the_engine_first_prefers_solrock_over_riolu_at_a_setup_search():
-    """In SETUP a free tutor grabs the Solrock/Lunatone ENGINE before the Riolu line piece."""
+def test_fetch_the_missing_engine_half_prefers_solrock_when_lunatone_is_down():
+    """With a lone benched Lunatone, a search grabs the MISSING engine half (Solrock) to complete the
+    co-dependent draw engine — over the Riolu line piece (ml f41)."""
     p = _pilot()
     obs = make_select([card_opt(1, 0), card_opt(1, 1)], context=TO_HAND,
                       deck=[{"id": SOLROCK}, {"id": RIOLU}],
-                      current=state(active=poke(MAKUHITA, hp=80), hand=[]))
+                      current=state(active=poke(MAKUHITA, hp=80), bench=[poke(LUNATONE, hp=110)], hand=[]))
     opts = p.explain(obs).options
-    assert "fetch-the-engine-first" in _fired(opts[0])          # Solrock — the engine
-    assert "fetch-the-engine-first" not in _fired(opts[1])      # Riolu — the line piece, not engine
+    assert "fetch-the-missing-engine-half" in _fired(opts[0])       # Solrock — completes the engine
+    assert "fetch-the-missing-engine-half" not in _fired(opts[1])   # Riolu — a line piece, not an engine half
 
 
 # --- GENERAL: Meowth ex supporter-tutor re-model (grill 2026-07-03) ---------------------------

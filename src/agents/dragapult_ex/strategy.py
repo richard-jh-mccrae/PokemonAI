@@ -112,6 +112,12 @@ STRATEGY = Strategy(
             "search_budget": 0,           # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
             "preferred_start": "second",  # Budew item-lock fires T1 only going 2nd (1st player can't attack
                                           # OR play a Supporter T1 — rules.md L72-73); guru-unanimous. (was "first")
+            "reactivity": "opponent-filtered",  # deck-personality (learnthetcg): a spread + disruption
+                                          # deck FILTERS each decision through the opponent's next turn
+                                          # (single-prize to deny Counter Catcher, forgo a KO to deny
+                                          # draw). Forward contract (behavior-neutral) — the opponent-
+                                          # filtered seams are already default-on; deck-gating them to a
+                                          # consumer that reads the Read's believed archetype is a follow-up.
             "my_archetype": "Dragapult ex spread + disruption"},  # Read favorability key (ADR-0026)
     hypotheses=HYPOTHESES,
 )

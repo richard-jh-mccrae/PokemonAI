@@ -1,0 +1,71 @@
+{
+  "slug": "dragapult_ex",
+  "label": "Dragapult ex",
+  "covers": [
+    "Dragapult ex",
+    "Dragapult ex / Dusknoir",
+    "Dragapult ex / Dusknoir / N’s Zoroark ex"
+  ],
+  "authored": "2026-07-09",
+  "tempo": "midrange",
+  "summary": "Beat Dragapult ex by racing the roots it can't protect -- NOT by out-grinding the wall. The Active Dragapult is a 320-HP / no-weakness / Tera body you usually can't OHKO and can't even touch on the Bench (Tera ex take no attack damage while Benched -- engine-enforced), so don't spend chip on it; it's only a 2-prize ex, an even trade when you can reach 320. Instead: (1) race the fragile pre-evos -- KO Dreepy (70) / Drakloak (90) before they become the wall, clearing multiples to beat the 4-4-3; (2) gust the non-Tera support ex (Fezandipiti / Latias / Meowth) for clean 2-prize swings that also strip recovery, pivot, and toolbox; (3) starve the spread by keeping our Bench thin and high-HP -- Phantom Dive's 6 counters hit the Bench only (never the Active) and it's a flat 200 with no boost, so a >~200-HP Active dodges the OHKO; (4) tax the low energy (only 8 basic; Phantom Dive needs exactly one Fire + one Psychic) with denial/removal, and sequence our Items before Budew's one-turn lock, then delete the 30-HP Budew. Close fast to starve Fezandipiti's reactive draw-3. NOTE the Dusknoir/N's Zoroark ex variants (in covers) add damage-counter manipulation that amplifies the spread -- this base list runs neither, so card-level intel below grounds only in the base build.",
+  "opponent_properties": {
+    "opp_tempo": "midrange",
+    "opp_spreads_bench": true,
+    "opp_item_locks": true
+  },
+  "threats": [
+    {
+      "card": "Dragapult ex",
+      "why": "The wincon and turn-clock: Phantom Dive ({R}{P}, 2 energy) = flat 200 to the Active + 60 spread (6 counters) on our Bench every turn, taking prizes on two axes. 320 HP, NO weakness, Tera -> a benched copy takes no attack damage (can't be sniped/spread on the Bench), 2 prizes. Near-impossible to OHKO but only 2 prizes and a flat 200 with no innate boost -- out-HP the 200 (a >~200-HP Active survives), deny it at the pre-evo stage, and even-trade the tank only when you can actually reach 320. Do NOT waste chip on the Active or removal on a benched copy."
+    },
+    {
+      "card": "Fezandipiti ex",
+      "why": "Recovery engine + finisher: Flip the Script draws 3 once/turn after any of their Pokemon are KO'd (refuels after trades); Cruel Arrow (CCC, 0 -> 100 to ANY Pokemon, ignores Bench W/R) converts spread-softened bodies into extra prizes, but at 3 energy (deck runs only 8) it's situational, not an every-turn clock. Respect the draw-3 refuel; close fast to starve it. (Also a prize_liability target.)"
+    },
+    {
+      "card": "Latias ex",
+      "why": "Eon Blade ({P}{P}{C}, 200) is a one-off punch that OHKOs ~200-HP bodies then self-locks Latias next turn; Skyliner gives all their Basics free retreat (free pivots when energy-tight or Budew-locked). Respect the single Eon Blade window -- don't leave a <=200-HP body Active into a powered Latias. (Also a prize_liability target.)"
+    },
+    {
+      "card": "Budew",
+      "why": "Itchy Pollen (no energy, 10 dmg) locks us out of ALL Item cards next turn, kneecapping item-reliant setup while Dragapult assembles. 30 HP, retreat 0, Fire weak, re-usable if left alive. Sequence Items before the lock, lean on Supporters/Abilities the locked turn, then OHKO the 30-HP body to deny repeat locks."
+    }
+  ],
+  "targets": [
+    {
+      "card": "Dreepy",
+      "role": "fragile_preevo",
+      "why": "70-HP Basic base of the wincon line, 1 prize, NOT Tera (valid target). KO/snipe it while still a Basic before Rare Candy/evolution turns it into the 320 wall -- tempo denial, not prize value. Clear multiples to beat the 4-4-3 redundancy; 70 HP dies to most single hits and to spread."
+    },
+    {
+      "card": "Drakloak",
+      "role": "fragile_preevo",
+      "why": "90-HP Stage 1, 1 prize, NOT Tera. Also the deck's real dig engine (Recon Directive: look top 2, take 1) AND the rebuild hop for a KO'd Dragapult, so gust/snipe strips consistency + delays the wall in one shot. No weakness but low HP -- dies to a ~90 snipe or two spread hits."
+    },
+    {
+      "card": "Fezandipiti ex",
+      "role": "prize_liability",
+      "why": "Benched 2-prize ex, 210 HP, FIGHTING weak, NOT Tera. Gust it Active and KO (doubled by Fighting) to bank 2 cheap prizes AND delete the recovery draw-3 + Cruel Arrow finisher at once. Not disabled by their own Watchtower (it's Darkness, not Colorless)."
+    },
+    {
+      "card": "Latias ex",
+      "role": "prize_liability",
+      "why": "Passive 2-prize bench-sitter (Skyliner enabler), 210 HP, DARKNESS weak, NOT Tera. Gust+KO costs them nothing defensively while banking 2 prizes and stripping their pivot mobility. Skyliner is Psychic, so Colorless-only ability locks (incl. their own Watchtower) don't stop it -- you must remove the body."
+    },
+    {
+      "card": "Meowth ex",
+      "role": "prize_liability",
+      "why": "170-HP 2-prize ex, FIGHTING weak, Colorless. Last-Ditch Catch tutors a Supporter on entry but the value is banked on entry (can't be denied after it lands), so don't treat it as a strangleable engine -- punish the soft 170-HP body: gust/snipe and KO in one turn (before Tuck Tail CCC bounces it to hand to re-use). Its own ability is shut off by their Watchtower (Colorless)."
+    }
+  ],
+  "sources": [
+    "Three decks to beat Dragapult ex -- Stephane Ivanoff -- https://alexschemanske.substack.com/p/three-decks-to-beat-dragapult-ex",
+    "Dragapult: Phantom Diving to Victory -- Going Second (Spenser Gow) -- https://goingsecond.substack.com/p/dragapult-phantom-diving-to-victory",
+    "Dragapult ex Counters? -- Pokemon Forums -- https://community.pokemon.com/en-us/discussion/14286/dragapult-ex-counters",
+    "Dragapult ex deck guide -- PokeBeach -- https://www.pokebeach.com/?p=319761",
+    "Enter the Dragapult: the new format and its top decks -- PokeBeach -- https://www.pokebeach.com/2026/05/enter-the-dragapult-the-new-format-and-its-top-decks",
+    "Fezandipiti ex (SFA 38) / Latias ex (SSP 76) / Meowth ex (POR 62) -- Limitless TCG",
+    "engine ground truth -- data/EN_Card_Data.csv + dump_deck.py + docs/rules.md (Tera bench-immunity, weakness x2, damage order)"
+  ]
+}

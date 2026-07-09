@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _COIN_HEAD, _END, _EVOLVE,
-                                     _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, KO_SCORE)
+                                     _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, _TO_HAND, KO_SCORE)
 
 
 def _prune_none(v):
@@ -641,9 +641,18 @@ class PlannerMixin:
         turn when no productive develop remains — deliberately declining the KO to buy setup turns. Runs
         BELOW the win rung, so a Lethal is never forgone (a prize is only ever traded, never the game).
         Returns None (defer → the tuned scoring takes the KO) unless the gate holds. Kill-switch
-        ``forgo_ko``, DEFAULT OFF — the riskiest lever, ladder-matured."""
+        ``forgo_ko``, DEFAULT OFF — the riskiest lever, ladder-matured.
+
+        DECK-PERSONALITY (learnthetcg `deck-personality-reactivity`): forgoing a KO to play around the
+        opponent's next turn is an OPPONENT-FILTERED behavior, so a `reactivity=="solitaire"` deck skips
+        it entirely and races its own plan. Opponent-filtered / undeclared decks keep the seam.
+        NOTE: this deck-gates a lever the ladder previously matured DEFAULT-ON for the (now solitaire)
+        mega_lucario/mega_starmie — a doctrine-over-prior-result call, so re-validate on the ladder
+        (revert the reactivity param to un-gate)."""
         if not getattr(self, "forgo_ko", False):
             return None
+        if self.strategy.params.get("reactivity") == "solitaire":
+            return None                                # a solitaire deck takes the KO, doesn't over-react
         if not any(o.get("type") == _ATTACK and t.tactical >= KO_SCORE
                    for o, t in zip(options, traces)):
             return None                                # no KO on the menu — nothing to forgo

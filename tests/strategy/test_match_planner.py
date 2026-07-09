@@ -192,6 +192,8 @@ def test_forgo_ko_line_declines_the_ko_developing_or_ending():
     from common.strategy.context import _ATTACH, _ATTACK, _END, KO_SCORE
     from common.strategy.strategy import GamePlan, Plan
     pilot = _shipped_pilot()
+    pilot.strategy.params["reactivity"] = "opponent-filtered"   # test the LINE logic, not the deck-
+                                                                # personality gate (own test below)
     obs, _opp = _giant_waking_scenario(pilot)
     board = Board(game_plan=GamePlan(mode=Plan.STALL, confidence=0.8, directed_goal="develop"),
                   path_target_ids=frozenset())
@@ -210,3 +212,28 @@ def test_forgo_ko_line_declines_the_ko_developing_or_ending():
     end_only = pilot._forgo_ko_line(obs, {}, board, [{"type": _ATTACK, "attackId": 1}, {"type": _END}],
                                     [_Tr(KO_SCORE), _Tr(0.0)])
     assert end_only is not None and end_only.next_step == [1]                       # END, still decline the KO
+
+
+@pytest.mark.req("REQ-MATCH-0011")
+def test_deck_personality_reactivity_gates_the_forgo_ko_seam():
+    """deck-personality (learnthetcg): a `reactivity=="solitaire"` deck TAKES the KO (skips forgo — it
+    races its own plan); an opponent-filtered deck forgoes the giant-waking KO. Same board, same gate;
+    only the deck personality differs."""
+    from common.pilot import Board
+    from common.strategy.context import _ATTACH, _ATTACK, _END, KO_SCORE
+    from common.strategy.strategy import GamePlan, Plan
+    pilot = _shipped_pilot()
+    obs, _opp = _giant_waking_scenario(pilot)                    # forgo_ko forced True inside
+    board = Board(game_plan=GamePlan(mode=Plan.STALL, confidence=0.8, directed_goal="develop"),
+                  path_target_ids=frozenset())
+
+    class _Tr:
+        def __init__(self, tac):
+            self.tactical = tac
+
+    opts = [{"type": _ATTACK, "attackId": 1}, {"type": _ATTACH, "index": 0}, {"type": _END}]
+    traces = [_Tr(KO_SCORE), _Tr(30.0), _Tr(0.0)]
+    pilot.strategy.params["reactivity"] = "solitaire"
+    assert pilot._forgo_ko_line(obs, {}, board, opts, traces) is None            # solitaire → take the KO
+    pilot.strategy.params["reactivity"] = "opponent-filtered"
+    assert pilot._forgo_ko_line(obs, {}, board, opts, traces) is not None        # opponent-filtered → forgo

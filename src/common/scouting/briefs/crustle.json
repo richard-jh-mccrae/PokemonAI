@@ -1,0 +1,41 @@
+{
+  "slug": "crustle",
+  "label": "Crustle",
+  "covers": [
+    "Crustle",
+    "Crustle / Drednaw / Sylveon",
+    "Crustle / Sylveon"
+  ],
+  "authored": "2026-07-09",
+  "tempo": "slow",
+  "summary": "Mono-Crustle attrition wall. One near-unkillable Crustle (Stage 1 Grass, 150 HP, 1 prize) whose Mysterious Rock Inn prevents ALL damage from your Pokemon ex (Mega-ex count) so the ex-heavy meta can't touch it; it HP-stacks (Grow Grass +20, Hero's Cape +100 -> ~250-270) and out-heals chip (Cook 70, Jumbo Ice Cream 80) while grinding a flat 120/turn with Superb Scissors (ignores effects on your Active). All bodies 1-prize; wins by attrition. Its whole edge is environmental -- worthless vs non-ex damage. Beat it with a NON-ex attacker (Fire = x2 weakness, cleanest KO; 2-shot once buffed) OR an effect-ignoring attack (an ignoresEffects attack pierces the prevention). A pure-ex deck must snipe the 70-HP Dwebble before it evolves and race prizes on the bench, or route around the wall via non-attack damage (poison/burn, spread) / ability-lock. No gust, no hand disruption. Variants: Sylveon (2nd ex-immune wall, Metal-weak -- Fire won't double it) and Drednaw (walls any single hit >=200 -- stay 140-199); the non-ex + snipe-the-Basic answer holds against all three.",
+  "opponent_properties": {
+    "opp_ex_damage_immune": true,
+    "opp_caps_big_hits": true,
+    "opp_is_heal_wall": true,
+    "opp_pierces_active_effects": true,
+    "opp_single_prize": true
+  },
+  "threats": [
+    {
+      "card": "Crustle",
+      "why": "Sole attacker + wall; immune to all ex-attack damage (unless pierced by an ignoresEffects attack), ~250-270 effective HP with heals, and Superb Scissors' 120 pierces damage-reduction/protection on your Active. Respect it; never grind it with plain ex damage."
+    }
+  ],
+  "targets": [
+    {
+      "card": "Dwebble",
+      "role": "fragile_preevo",
+      "why": "The sole Basic, 70 HP, no immunity; the only window any attacker can hit the line (Fire OHKOs it, 70 HP x2). Snipe/gust before it evolves; redundant (4 + Ascension tutor + Buddy Poffin) so pair with fast prizing, not one removal."
+    }
+  ],
+  "sources": [
+    "Limitless (Crustle deck 341 / DRI 12 card / JP City-League lists)",
+    "PokeBeach -- Vacancy at the Mysterious Rock Inn",
+    "Deltia's Crustle guide",
+    "Cardsrealm -- Anti-Meta Crustle (Praga RU)",
+    "Drednaw SCR44 (pokemon.com)",
+    "Sylveon ex SSP86 (Limitless)",
+    "engine ground truth -- data/EN_Card_Data.csv + docs/rules.md 5 + compute_active_damage (damage.py)"
+  ]
+}

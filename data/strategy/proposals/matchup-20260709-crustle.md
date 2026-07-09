@@ -11,7 +11,7 @@ index.json rank 4, 11.75% play, 53.4% WR). Two NEW opponent_properties keys mint
 - candidate_signal: opponent_properties — `opp_ex_damage_immune` (NEW, minted unwired), `opp_caps_big_hits` (NEW, minted unwired), `opp_is_heal_wall`, `opp_pierces_active_effects`, `opp_single_prize` (all registered); threats/targets grounded in deck.csv (Crustle, Dwebble). The pierce OVERRIDE both new keys encode is ALREADY resolved at concrete-attack scoring by `compute_active_damage` (ADR-0032: `AttackStat.ignoresEffects` skips both `_prevented` and `preventsDamageAtLeast`) — no new runtime signal needed for scoring; the two keys are unwired Read/Posture routing forward contracts.
 - verification_contract: brief-validator
 - provenance: docs/matchups/crustle.md (locked doctrine) | data/meta/decks/crustle/deck.csv + index.json rank 4 (`covers` source) | src/common/scouting/opponent_properties.json (2 new keys) | engine verify: compute_active_damage @ src/common/strategy/damage.py:110,118-126 (Nebula Beam 210 vs Rock-Inn Crustle id 345 / Sylveon Safeguard id 330 / Drednaw cap id 158; Jetting Blow 0)
-- status: open
+- status: applied
 - for: opponent:Crustle
 
 **Spec (authoring spec — the locked Brief-field content; update-strategy authors briefs/crustle.json, runs validate_brief.py, human commits):**
