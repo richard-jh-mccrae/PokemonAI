@@ -1,767 +1,585 @@
 # dragapult_ex — Playing Doctrine
 
 > Phase-A deliverable of `/deck-genie`. The human-readable strategy the deck plays; the executable
-> `strategy.py` is generated from this **after sign-off** (ADR-0017). Build on the
-> [General Strategy](../../../docs/general-strategy.md): reuse, override, or extend — don't restate.
+> `strategy.py` is authored from this by `/update-strategy` **after sign-off** (ADR-0017 / ADR-0046).
+> Build on the [General Strategy](../../../docs/general-strategy.md): reuse, override, or extend — don't restate.
 
-**Status:** `shipped` (Phase B complete — strategy.py + infra built, all gates green; human commits) ·
-**Last grilled:** 2026-07-03 · **Author:** deck-genie + Richard
+**Status:** `locked — proposals queued` (deck swapped to the standard meta list — Cinderace/Judge OUT; Budew +
+Dunsparce/Dudunsparce + Rosa's Encouragement IN) · **Signed off:** 2026-07-09 (start SECOND) · **Author:** deck-genie
++ Richard · **Supersedes** the 2026-07-03 Cinderace build (full re-author). Phase 6 done: 4 general proposals in
+`data/strategy/proposals/deck-genie-20260709-dragapult_ex.md` for `/update-strategy`; `preferred_start="second"` +
+Cinderace/Judge dead-ref cleanup applied to `strategy.py` (all gates green — 25 agent tests + check_agent 4/4).
 
 ## Progress checklist (resumability — keep current)
 
-- [x] Phase 0 facts dumped
-- [x] Phase 1 overview confirmed (spread + disruption)
-- [x] Phase 2 research synthesised (high confidence; 0 card-fact conflicts)
-- [x] Phase 3 card-by-card: 21/21 cards locked
+- [x] Phase 0 facts dumped (new list; `deck.csv` rebuilt via `deck_convert.py`, all 60 resolved)
+- [x] Phase 1 overview confirmed (spread + disruption CONTROL; Cinderace accel engine removed)
+- [x] Phase 2 research synthesised (high confidence; 46/55 claims verified; **0 card-fact conflicts**)
+- [x] Phase 3 card-by-card: 23/23 cards locked
 - [x] Phase 4 General-Strategy disposition complete
-- [x] Phase 5 signed off (`/tdd go! build`) → **Phase B COMPLETE** (strategy.py + A/B/C/D infra + 3 deck rules;
-      all gates green — see §8 "Phase B COMPLETE"). Human commits.
+- [x] Dispositions adversarially verified vs real code + engine-free probes (workflow `wjzvrtwbk` + `probe_ability.py`): 5 gaps CONFIRMED, rest covered-as-is
+- [x] Phase 5 sign-off (2026-07-09 — **start SECOND**, guru-unanimous vs the "setup-heavy → first" steelman, workflow `wh8ls1w6m`)
+- [x] Phase 6 done: **4 general proposals emitted** → `data/strategy/proposals/deck-genie-20260709-dragapult_ex.md`: (1) `use-the-draw-engine-ability`, (2) `open-the-item-lock-starter` + `item_lock` tag on Budew, (3) `energy_accel` tag on Rosa's, (4) `dont-strand-the-evolving-engine`. **Applied directly** (user-requested hygiene): `preferred_start="second"` + Cinderace/Judge dead-ref cleanup in `strategy.py` — 25 agent tests + check_agent 4/4 green.
 
-**Grill outcomes (all 7 branches resolved):**
-1. Phantom Dive spread → **matchup-switched** marginal-value placement; **online at FP `Ready(energy=2)`**.
-2. Munkidori Adrena-Brain → **value-compare finish vs heal**; {D} via Crispin's free attach (manual stays on Dragapult).
-3. Fezandipiti + Meowth → **positive plan-gated triggers** override `dont-bench-multiprize`; Fezandipiti benched entering the grind.
-4. Risky Ruins → **proactive + bench-our-Basics-first + soft net gate**.
-5. Crushing Hammer → **value-targeted before lethal** (single-attach attacker).
-6. `preferred_start="first"`; **{D} = normal energy** (no discard-protection bump).
-7. Unfair Stamp (ACE SPEC) → **hold for a max-impact post-KO turn**; staples covered-as-is.
+**What changed vs the 2026-07-03 build (the delta this re-author covers):**
 
-Resolved open questions: Tera benched-immunity handled by the Pilot (§3 Dragapult); mulligan × Explosiveness
-covered by `keep-a-startable-hand`. Carried to Phase 6: Phantom Dive select encoding + `gust_ko` remaining-HP (§8).
+| Out | In | Consequence |
+|---|---|---|
+| **4 Cinderace** (Explosiveness opener + Turbo Flare bench-accel) | — | **No acceleration engine.** Energy = manual attach (1/turn) + **Crispin** + **Rosa's** (comeback). Dragapult only needs 2 (FP), so it arms by evolving over energy pre-loaded on Dreepy/Drakloak. Leaner, standard, slightly slower first Phantom Dive. `open-the-accelerator` / `develop-the-accel-recipient` / `dont-fetch-the-setup-only-opener` all go **inert** (no accel opener). |
+| **2 Judge** | **1 Rosa's Encouragement** | Less proactive hand disruption; a comeback accel added. |
+| — | **1 Budew** | `Itchy Pollen` (FREE attack, 10 dmg): opp can't play **Items** next turn. Item-lock **opener**. It is an *attack* (turn-ender) → needs Budew Active; first player can't attack T1 → fires my T2 going first / my T1 going **second**. |
+| — | **1 Dunsparce + 1 Dudunsparce** | `Run Away Draw`: draw 3, shuffle Dudunsparce (+attached) back into deck → a **re-usable** consistency engine (fetch base → evolve → draw → self-recycle). |
+| 4F/3P/2D | **3F / 4P / 2D** | Psychic-primary now (no Turbo-Flare Fire engine to feed). |
+| Crushing Hammer 3, Night Stretcher 2 | **4 / 3** | More energy denial + more recursion (feeds Rosa's discard fuel + line rebuild). |
+| `preferred_start="first"` | **`"second"`** | Budew item-lock fires T1 only going second (first player can't attack T1). Flipped. |
 
-## 1 · Overview  (DRAFT — awaiting confirmation)
+**Carries over UNCHANGED** (still-present cards → the 2026-07-03 structural infra + deck rules still fire):
+Phantom Dive spread valuation + placement (**infra A**), Cruel Arrow any-target (**B**), Munkidori
+Adrena-Brain handler (**C**), Stadium `Board` signal (**D**), and the 3 deck Hypotheses
+(`bench-the-comeback-drawer`, `hold-evolution-until-attacker-ready`, `play-risky-ruins-when-net-positive`).
+No re-build of those; only the new-card gaps below.
 
-- **Archetype:** Dragapult ex **spread + disruption**. Phantom Dive is the damage engine (big hit to the
-  Active *plus* 6 free damage counters spread across the opponent's Bench); Munkidori + Risky Ruins +
-  Fezandipiti convert that distributed chip into prizes, while Crushing Hammer / Judge / Boss slow and
-  redirect the opponent.
-- **Win condition:** take 6 prizes by *pre-loading* KOs. Phantom Dive (200 Active + 6 bench counters) both
-  KOs the Active and softens 1-3 benched targets into range; then **Munkidori** slides counters to finish
-  a benched mon, **Fezandipiti** Cruel Arrow snipes 100 anywhere, and **Boss's Orders** drags the softened
-  target Active for the last-prize KO. Prize math: Dragapult ex / Meowth ex / Fezandipiti ex are 2-prize
-  liabilities; the rest are 1-prize. Dragapult's 320 HP + Tera bench-immunity keep our own prizes off the
-  table.
-- **Line:** **Dreepy → Drakloak → Dragapult ex** (Stage 2, single evolution family). **Online at:** FP
-  (Fire+Psychic = 2 energy) for Phantom Dive; C (1 energy) for Jet Headbutt (70) as a cheap early poke.
-- **Main attacker:** Dragapult ex (320 HP, Tera, no weakness). **Finishers/tech attackers:** Fezandipiti
-  ex (Cruel Arrow — 100 to any Pokémon, ignores bench W/R), Munkidori (Mind Bend 60 + Confuse; and its
-  *ability* is the real value).
-- **Supporting Pokémon:** **Cinderace** ×4 = opener (Explosiveness → Active during setup) + energy engine
-  (Turbo Flare → 3 Basic Energy onto the Bench); **Drakloak** = mid-line dig (Recon Directive); **Meowth
-  ex** ×1 = one-shot Supporter tutor on bench-entry; **Munkidori** ×2 = counter-mover / healer / confuse.
-- **Engine (draw/search):** Lillie's Determination (draw 6/8), Judge (draw 4 + disrupt), Drakloak Recon
-  (dig 2 pick 1), Fezandipiti Flip-the-Script (draw 3 after a KO), Poké Pad (non-rulebox Pokémon search),
-  Ultra Ball (any Pokémon, discard 2), Buddy-Buddy Poffin (≤70 HP Basics → Bench = **Dreepy only** here).
-- **Acceleration:** Cinderace Turbo Flare (3 Basic Energy to Bench), Crispin (2 Basic Energy diff types,
-  attach 1 / hand 1). **Disruption:** Crushing Hammer (coin-flip energy denial), Judge / Unfair Stamp
-  (hand disruption), Boss's Orders (gust), Risky Ruins (bench-chip stadium), Munkidori Mind Bend (Confuse).
-  **Recovery:** Night Stretcher (Pokémon or Basic Energy from discard).
-- **Energy:** 9 Basic — **4 Fire, 3 Psychic, 2 Darkness**. Fire+Psychic power Phantom Dive; Darkness feeds
-  Munkidori's Adrena-Brain ability (needs {D} attached) and Fezandipiti. Very low count — Cinderace/Crispin
-  do the heavy lifting so the deck runs lean on energy.
-- **User context:** _(none supplied yet — folding in on confirmation)._
+## 1 · Overview
+
+- **Archetype:** Dragapult ex **spread + disruption** — a **chip-then-cash CONTROL** deck, *not* a race
+  deck (research consensus). Map prizes, don't just hit big.
+- **Win condition — UNCHANGED.** Phantom Dive (`FP`) = 200 to the Active **+ 6 damage counters placed
+  anywhere on the opponent's Bench** — it **pre-loads** benched mons with softening chip you cash into
+  prizes on LATER turns via **Munkidori** (move ≤3 counters ours→theirs, needs {D}), **Fezandipiti**
+  Cruel Arrow (flat 100 to any bench mon, no W/R), and **Boss's Orders** (gust the softened body Active
+  to finish). Prize math: Dragapult / Fezandipiti / Meowth ex are 2-prize; the rest 1-prize. Dragapult's
+  320 HP + Tera bench-immunity + no weakness keep our prizes off the table.
+- **Line:** **Dreepy → Drakloak → Dragapult ex** (Stage 2, single family). **Online at:** `Ready(energy=2)`
+  = FP for Phantom Dive (NOT the engine's cheapest-attack default, `C` Jet Headbutt 70 — that's a fallback poke).
+- **Tempo shape — SLOW to arm, hard to punish once online.** No Turbo Flare: energy is **manual attach +
+  Crispin** (any board) **+ Rosa's** (comeback only). Budew's free item-lock **buys the setup turns**;
+  Crushing Hammer / Unfair Stamp / Risky Ruins tax the opponent's tempo the whole time. **Deliberately
+  falling behind on prizes is fine — it turns ON Rosa's Encouragement.**
+- **Main attacker:** Dragapult ex. **Finishers/tech attackers:** Fezandipiti ex (Cruel Arrow), Munkidori
+  (Mind Bend pinch swing; its *ability* is the real value).
+- **Openers / engines:** **Budew** (item-lock starter), **Dunsparce → Dudunsparce** (Run Away Draw),
+  **Drakloak** Recon Directive (mid-line dig), **Meowth ex** (one-shot Supporter tutor).
+- **Draw/search:** Lillie's Determination (draw 6/8), Dudunsparce Run Away Draw (draw 3, self-recycle),
+  Drakloak Recon (dig 2 pick 1), Fezandipiti Flip-the-Script (draw 3 after a KO), Poké Pad (non-Rule-Box
+  Pokémon), Ultra Ball (any Pokémon, discard 2), Buddy-Buddy Poffin (≤70 HP Basics → **Dreepy / Budew / Dunsparce**).
+- **Acceleration:** Crispin (2 basic diff types, attach 1 / hand 1) — the **un-gated** accel; Rosa's (2 basic
+  from **discard** → Stage 2 = Dragapult ex, **only when behind**). **Disruption:** Budew item-lock, Crushing
+  Hammer (coin energy denial), Unfair Stamp (KO-gated hand strip), Boss's (gust), Risky Ruins (bench chip),
+  Munkidori Mind Bend (Confuse). **Recovery:** Night Stretcher (Pokémon or Basic Energy from discard).
+- **Energy:** 9 Basic — **3 Fire, 4 Psychic, 2 Darkness.** F+P power Phantom Dive; the 2 {D} gate Munkidori
+  Adrena-Brain (+ Fezandipiti). Very low count — Crispin/Rosa's/Night Stretcher do the fixing.
+- **Validation:** the list is tournament-proven — a near-exact match to Limitless **28250** (Newdorf, 3rd NAIC
+  2026); the Prague winner **26243** (Laszkiewicz) is a leaner Dudunsparce-ex variant that cuts our
+  Fezandipiti/Meowth/Rosa's/Crushing Hammer/Unfair Stamp — **treat ours as the aggressive-control variant.**
 
 ## 2 · Research synthesis (cited)
 
-_High confidence; 7 angles · 20 sources · 18/20 claims survived adversarial verification · 4 card
-deep-dives · 10 trainers. **Web-vs-engine card-fact conflicts: NONE** — every stat/text matches the
-engine. Raw output: `tasks/wno2xxdj6.output`._
+_High confidence · 9 angles · 28 sources · **46/55 claims survived adversarial verification** · 9 card
+deep-dives · 11 trainers. **Web-vs-engine card-fact conflicts: NONE.** Raw: `tasks/wqa1xzek7.output`._
+_Caveat the whole synthesis carries: most web coverage is of DIFFERENT Dragapult shells (Arven / Lance /
+Dusknoir / Rare Candy / Iono / Counter Catcher / Neo Upper Energy / Dudunsparce **ex**) — **none of those
+cards are in this 60.** Companion combos are filtered to this exact list; treat generic archetype advice as
+directional._
 
-**Gameplan — two-phase SPREAD → CONVERT prize engine** (a comeback/tempo damage-mapper, not aggro).
-*Phase 1 (spread):* land Dreepy→Drakloak→Dragapult ex by ~T3, Phantom Dive = 200 to Active **+ 6 counters
-(60) placed anywhere on the opp Bench** — rarely KOs benched mons, *pre-loads* them. *Phase 2 (convert):*
-finish softened bench with (a) **Munkidori** Adrena-Brain (move ≤3 counters ours→theirs, needs {D}),
-(b) **Fezandipiti** Cruel Arrow (flat 100 to ANY, no W/R on bench), (c) **Boss's Orders** gust the corpse
-Active (prizes only come from KOing the Active). *Layered disruption* buys convert-tempo: Crushing Hammer,
-Judge/Unfair Stamp, Risky Ruins passive chip. **Cinderace** = energy engine off the thin 9-energy base;
-**Fezandipiti** Flip-the-Script refuels the grind.
+**Gameplan — chip-then-cash CONTROL (not a race).** Distribute board-wide chip over several turns via
+Phantom Dive's spread, then convert multiple KOs. Budew buys setup turns; the disruption package taxes tempo;
+Dragapult (320 HP, no weakness) is hard to punish once online. **Do NOT rush single KOs — set up FUTURE
+multi-KO turns.**
 
 **Key combos:**
-- Phantom Dive spread **+ Munkidori move-3** = a benched KO the opponent can't answer (Munkidori = the
-  Dusknoir substitute this list runs instead).
-- Phantom Dive **+ Cruel Arrow** (100 to any, no W/R bench) = snipe a bench target softened to ≤100.
-- Softened bench **+ Boss's Orders** = gust corpse Active → prize.
-- Risky Ruins (20/opp-bench-entry) **+ spread + finisher** = compounding chip, lethal a turn early.
-- **Munkidori REVERSE** — peel counters OFF our own damaged Dragapult/Drakloak → onto opp = ~30 HP/turn
-  heal on the win-con line; **wins the mirror** (residual Phantom Dive snipes our benched Drakloaks).
-- Cinderace Explosiveness → Turbo Flare = power Dragapult; **Crispin** assembles the missing color.
-- Meowth ex → tutor Boss's → gust same turn (ability, so the fetched Supporter still plays).
-- Opp KO → Unfair Stamp (draw 5 / opp to 2) **+** Fezandipiti Flip-the-Script (draw 3) — shared trigger.
+- **Phantom Dive → Munkidori (needs {D}) → Boss's Orders** — the central prize-cashing engine: spread 6
+  counters, move ≤3 more onto ONE softened target to push it into KO range, gust it Active to take the prize.
+- **Risky Ruins → Munkidori self-launder** — Risky Ruins chips OUR own non-{D} Basics on bench-entry;
+  Munkidori relays that self-chip onto the opponent (Munkidori is {D} → exempt). Turns our tax into KO pressure.
+- **Fezandipiti Cruel Arrow** (100 to any, ignores bench W/R) stacked on prior spread = a bench KO Boss's can't drag.
+- **Unfair Stamp + Fezandipiti Flip the Script** — SAME KO trigger (a KO of *our* Pokémon last turn): strip
+  their hand to 2 (Item, no Supporter cost) AND draw 3, the turn our body dies.
+- **Budew item-lock + manual-attach runway** — each locked turn you hand-attach toward FP; Dragapult arms
+  before the opponent recovers.
+- **Lillie's + Dudunsparce Run Away Draw** — draw off a Supporter AND an Ability the same turn; Dudunsparce
+  then self-shuffles to free its bench slot and be re-fetched.
+- **Rosa's re-arm** — after a Dragapult is KO'd (you now trail → gate live), evolve a fresh Dragapult and pull
+  2 basics (F+P) from discard in ONE Supporter = full Phantom Dive cost re-assembled, skipping two attach turns.
+- **Meowth ex → the exact Supporter** — bench Meowth to tutor Boss's (gust KO) or Rosa's (the turn its gate flips).
 
-**Sequencing ladder (confirmed):** free draw/dig first (Recon, Cinderace/Meowth abilities) → Items
-(Poké Pad → Poffin → Ultra Ball → Night Stretcher/Hammer) → the one Supporter → evolve/attach → **attack
-last.** Carve-outs: **use Drakloak Recon BEFORE evolving it** (ability gone after); **Poké Pad before Ultra
-Ball** (reserve the discard-2 for Rule-Box grabs); **fire Munkidori BEFORE attacking & BEFORE Boss's**
-(read board, then drag the dead-on-arrival target); **soften BEFORE snipe** (never Cruel Arrow a >100 mon);
-**bench Meowth, resolve fetch, THEN play the Supporter**; **Lillie's after free draw**, prefer at exactly 6
-prizes (8-card dig).
+**Sequencing ladder (developing turn):** free draw/dig FIRST (**Drakloak Recon** + **Dudunsparce Run Away
+Draw** — *before* committing, so the drawn cards inform attaches / Ultra Ball pitches / which Supporter) →
+Items (**Poffin → Poké Pad → Ultra Ball** → Night Stretcher / Crushing Hammer) → the one **Supporter** →
+evolve/attach → **attack LAST** (Phantom Dive / Itchy Pollen). Carve-outs: **Recon before evolving Drakloak**
+(ability gone after); **hold the Drakloak→Dragapult evolve until the body has 2 FP** (keep Recon-digging;
+evolve early only if the Drakloak is in KO range); **never attach Energy/Tool to Dudunsparce before drawing**
+(Run Away Draw shuffles attachments away); **Munkidori Adrena-Brain BEFORE the attack and BEFORE Boss's**
+(read the board, then place spread / drag the corpse); **bench our vulnerable Basics BEFORE Risky Ruins**;
+**bench Meowth BEFORE the tutored Supporter**; **soften BEFORE the snipe**; **Crushing Hammer after draw/dig,
+before Boss's**; **Unfair Stamp near-last** (it shuffles your own hand).
 
-**Confusing-card purposes** (per-card deep dives):
-- **Munkidori:** Phase-2 finisher/consolidator + mirror self-healer. Each turn pick ONE direction; misreading
-  which side needs it wastes the activation. Hard-gated by 2 {D} — route deliberately. Ability MOVES counters
-  (bypasses damage-prevention) — does NOT un-KO or clear conditions. Sits benched, never goes Active.
-- **Fezandipiti ex:** PRIMARY = comeback draw (Flip the Script, benched 210-HP body); SECONDARY = Cruel Arrow
-  situational late finisher (going Active exposes a 2-prizer; CCC steep on 9 energy). Immune to our Risky Ruins
-  ({D}). Fetch with Ultra Ball, not Poké Pad.
-- **Meowth ex:** one-of Supporter valve — Last-Ditch Catch tutors ANY Supporter on bench-play (usually Boss's
-  on the lethal turn). Tuck Tail (CCC) bounces it to re-tutor / dodge a KO. 170 HP/2 prize, Fighting-weak, takes
-  20 from our Risky Ruins. Cannot tutor Unfair Stamp (Item).
-- **Risky Ruins:** redundancy tech — our real attackers (Stage 1/2) are immune; only taxes opp Basic non-{D}
-  bench-entries. Run 2 to re-slam after an opposing stadium bump. Proactive (T1 if possible).
+**Opening lines (prefer going SECOND):**
+- **Ideal (second):** Budew Active (retreat 0) → Poffin 2 Dreepy → Poké Pad/Ultra Ball for pieces → **Itchy
+  Pollen** locks the opponent's T2 Items. Free-retreat Budew into the line later.
+- **Going first:** you can't lock T1 (no attack) — bench Budew, just develop; the lock is delayed to T2.
+- **Draw engine:** bench Dunsparce (Poffin/Poké-Pad target) when bench room allows → evolve → Run Away Draw.
+- **Lillie's rocket:** at exactly 6 prizes Lillie's draws **8** — heaviest use T1–T2 to assemble the line.
 
-**Trainer purposes** (each with its priority/sequencing):
-- **Boss's Orders ×3** — prize-converter; TOP Supporter priority on a convert/lethal turn (beats draw/disruption
-  which can't cash a prize); yields to Lillie's/Crispin on pure development turns.
-- **Crispin ×3** — the only card that fetches AND attaches a color; brings Phantom Dive online (missing Fire/Psy)
-  or arms Munkidori ({D}). Above draw when the second color is all that gates Phantom Dive; below Boss's on a drag turn.
-- **Judge ×2** — proactive OPPONENT disruption (leave them at 4), not our refill. Play vs a big/fresh opp hand,
-  esp. right after a KO. Low default priority.
-- **Lillie's Determination ×4** — primary draw-refuel; default develop-turn Supporter. After free draw; 8-card dig at 6 prizes.
-- **Unfair Stamp ×1 (ACE SPEC)** — reactive post-KO refill+strip (draw 5/opp 2); Item, so STACKS with a Supporter;
-  double-dips Fezandipiti's trigger. Sequence near-last.
-- **Buddy-Buddy Poffin ×4** — T1 Dreepy multiplier (Dreepy is its ONLY legal target here); earliest dev rung.
-- **Night Stretcher ×2** — recursion insurance for 9-energy: recover the exact Fire/Psychic (Phantom Dive gate)
-  or the 2 {D} (Munkidori gate), or a stranded Stage-2 piece.
-- **Crushing Hammer ×3** — coin-flip energy denial; buys convert-tempo. Best on a single-attach/re-powered
-  attacker the turn before lethal. Low vs energy-flood. Item (stacks with Supporter).
-- **Ultra Ball ×4** — the ONLY Rule-Box tutor (Dragapult/Fezandipiti/Meowth ex); discard-2 fuels Night
-  Stretcher/Crispin recursion. Poké Pad first to reserve it.
-- **Poké Pad ×4** — free non-Rule-Box tutor (Dreepy/Drakloak/Cinderace/Munkidori only); stretches search without
-  draining the hand. Play first among searches.
+**Matchups (competitive-reasoning level, ladder-validate):**
+- **Item-reliant / turbo / search-heavy = FAVORABLE** — Budew disproportionately hurts them; you trade nothing.
+- **Gardevoir = hard** — out-tempos the slow manual-attach setup; protect the fragile 70-HP Dreepy; note the
+  ENEMY counter-mover (Munkidori/Cresselia) can relay our own Phantom Dive damage BACK onto our line.
+- **Roaring Moon / aggro = hard** — races the Stage-2 line; lean on Budew + Crushing Hammer + Boss's to buy time.
+  **Budew is weak to Fire** → Fire aggro is the counter to the Budew plan.
+- **Mirror** — **Munkidori is the best card**: HEALS our line (peel counters off 90-HP Drakloaks) AND finishes theirs.
+- **Item-lock is ITEMS ONLY** — does not stop Supporter draw/search, Energy, Tools, or Stadiums. Don't over-value Budew vs Supporter-driven setup.
 
-**Opening lines:** ideal = 2 Dreepy T1 via Poffin → Drakloaks T2 → Dragapult ex T3; Cinderace Explosiveness
-open + Turbo Flare seed; slam Risky Ruins T1 (proactive); Lillie's-for-8 at 6 prizes; bench Munkidori early +
-route {D} via Crispin; bench Fezandipiti early/mid; vs Item-lock (Gholdengo) front-load Items T1.
+**Tech reasoning (why these counts):** Crushing Hammer ×4 = an aggressive-disruption commitment (a split tech,
+~62% of lists; lower its priority once behind on the KO race). 1-1 Dunsparce/Dudunsparce is CORRECT (Run Away
+Draw self-recycles → one copy services many turns). **NON-ex Dudunsparce only** — no attacker role, no
+Enriching-Energy combo (those are the Dudunsparce-**ex** shell, not ours). Unfair Stamp is the ACE SPEC (vs Neo
+Upper Energy in energy-accel builds) — this manual-attach build chose the disruption ACE SPEC. Crispin ×3
+solves the FP two-type requirement out of 9 energy.
 
-**Matchups:** Charizard ex (favorable — snipe benched Charmander pre-evolve); Gholdengo ex (unfavorable — Item
-lock; front-load Items T1); Gardevoir (grind, Boss's+Munkidori); Roaring Moon (spread broad); **mirror** (fire
-Munkidori reactively to peel damage off our benched line — the defensive half wins it).
-
-**Research-flagged gaps** (align with the §8 infra gaps): confirm the engine's Phantom Dive counter-placement
-encoding; energy contention (Fire/Psy for Dragapult vs the 2 {D} for Munkidori) needs in-sim tuning; KO
-thresholds are illustrative (compute from live board); mulligan/prize-mapping under-developed; bleeding-edge
-web coverage references stock partners (Dusknoir/Iono/Froslass) NOT in this 60 — nuance is deck-adapted.
-
-**Sources:** Monster Card Corner; TheGamer (Dragapult 2025); Going Second (Spenser Gow); Deltia's Gaming;
-TCGplayer (×3); Heroes Hideout; Limitless (Munkidori TWM95, Fezandipiti SFA38, Meowth POR62, Risky Ruins MEG127,
-deck 284); PokéGym Compendium (Adrena-Brain ruling); PokeBeach; Bulbapedia.
+**Sources:** Going Second (Spenser Gow); PokeBeach (Budew's World 2025/04; Dragapult rotation 2025/02; BDIF
+318766; 319761); Cardsrealm (Dragapult/Dudunsparce deck tech); JustInBasil (Draw / Consistency); Limitless
+(decklists 26243 / 28250; cards POR/84 Rosa's, SFA/38 Fezandipiti, TEF/129 Dudunsparce, MEG/127 Risky Ruins);
+PokemonCard.io (tier list); Pokemon.com (Budew / Dragapult strategy); Ultimate Guard (Budew; Dragapult meta);
+TCGplayer (June 2025 guide); Wargamer (Meowth ex); Bulbapedia / SNKRDUNK (Unfair Stamp).
 
 ## 3 · Card-by-card
 
-### 3× Dragapult ex — Role: `win_condition`, `primary_attacker` · tags: `spread` · LOCKED
-- **Mechanics:** Stage 2 (Dreepy→Drakloak→Dragapult ex), 320 HP, 2-prize, **Tera**, **no weakness**,
-  retreat 1. `C` Jet Headbutt (70). `FP` Phantom Dive (200 to Active **+ 6 damage counters on opp Bench,
-  any way you like**).
-- **Online / readiness:** **`Ready(energy=2)`** — the RACE flip is Phantom Dive (FP), NOT the engine's
-  cheapest-attack default (Jet Headbutt at C). Jet Headbutt is a fallback chip only, so we stay in SETUP
-  (digging) until the real payoff is affordable. *(Confirmed 2026-07-03.)*
-- **Phantom Dive placement doctrine (the deck's core decision):**
-  0. **Cross-turn truth:** Phantom Dive is the **turn-ender**, so Munkidori (ability), Boss's (Supporter),
-     and Cruel Arrow (a *separate* attack) all resolve BEFORE it — they convert **prior-turn** chip, they
-     are NOT same-turn combos with this placement. This turn's spread pays off THIS turn only by a DIRECT KO.
-  1. **Imperative — take every DIRECT bench KO first:** if a benched mon's remaining HP ≤ K×10, spend K
-     counters to KO it outright (a prize now); greedily KO as MANY benched mons as the 6 counters allow
-     (prior Phantom Dive / Risky-Ruins chip makes this common — e.g. a 20-left + a 40-left mon = both, 2+4).
-  2. **Default — MATCHUP-SWITCHED** *(confirmed)*: with the rest, **concentrate** on the single most-
-     *convertible* threat (biggest energized threat / a key pre-evo we must deny, e.g. Charmander /
-     a gust target) to set up ONE clean next-turn KO; **spread broad** vs bench-reliant boards + the
-     mirror, so Munkidori's move-3 can finish whichever develops.
-  3. **Grounding mechanism** (how a policy reads "matchup-switched"): greedy **marginal-value** placement
-     — each counter goes where it most advances a prize (completing a this/next-turn KO on a target ×
-     its prize value × threat). Concentrate/spread then EMERGE (one dominant target → concentrate; a
-     flat field of near-dead threats → spread). The explicit concentrate↔spread bias comes from **(a)
-     the Read** (matchup identity: mirror/bench-reliant) — **DEFERRED until the Read is wired** ([[scouting-feature]])
-     — with a **board proxy usable now:** spread when the opp has ≥2 benched threats, concentrate on one
-     dominant convertible target.
-- **Sequencing:** attack LAST; fire Munkidori Adrena-Brain + read the board BEFORE choosing Phantom Dive
-  placement and before Boss's. Prefer Phantom Dive over Jet Headbutt whenever FP is affordable (strictly
-  more Active damage + the spread); Jet Headbutt only when just `C` is available.
-- **Bench safety (Tera):** a benched Dragapult ex takes NO attack damage (rules §11) — the Pilot already
-  treats a benched Tera as bench-snipe/spread-immune ([pilot.py](../../common/pilot.py):713), resolving the
-  §8 Tera question in our favour both ways (opp can't snipe our benched copy; we don't waste spread onto
-  their benched Tera). `dont-bench-multiprize` exempts the `win_condition` Role, so benching a 2nd Dragapult
-  behind Tera is fine.
-- **Anti-patterns:** don't Jet-Headbutt-chip when FP Phantom Dive is affordable; don't place spread on a
-  target we have no line to convert (bench chip only pays via a later gust / Cruel Arrow / Munkidori /
-  re-Phantom-Dive — never a prize by itself).
-- **General-Strategy disposition:** snipe cluster (`snipe-for-the-ko` @ remaining-HP, `snipe-the-top-threat`)
-  covers per-select targeting IF the engine presents placement as DAMAGE select(s); the **spread-rider
-  valuation + the marginal-value multi-counter policy are a GAP** (infra gap A → Phase 6). Readiness =
-  `Line.ready` override. `dont-bench-multiprize` covers-as-is (win_condition exempt).
+Every block opens with the **engine profile** (dump = ground truth) then the researched usage. **NEW / changed
+cards are grilled in full;** unchanged cards carry the 2026-07-03 lock (condensed) since their code coverage is
+intact.
 
-### 2× Munkidori — Role: tech counter-mover (residence TBD Phase 4) · tags: `confuse`, `heal`, `spread` · LOCKED
+### NEW — 1× Budew (235) — Role: `starter` (item-lock opener) · tags: **none → needs `item_lock`** · LOCKED
+- **Mechanics:** Basic **Grass**, 30 HP, 1-prize, **weakness Fire**, retreat **0**. `—` **Itchy Pollen** (10,
+  **no energy cost**): "During your opponent's next turn, they can't play any **Item** cards from their hand."
+  It is an **attack** (turn-ender), NOT an ability.
+- **Use:** the turn-1 free **item-lock opener**. Open Budew Active (prefer going **second** so Itchy Pollen fires
+  your first turn, locking the opponent's turn-2 Items — Poffin / Ball / accel / Switch). Off-type Grass purely
+  because it's the format's best free item-lock body. Retreat 0 → pivot into the Dragapult line once the lock has
+  bought tempo. Blocks **Items only** (not Supporters/Tools/Energy/Stadiums).
+- **Sequencing:** as the Active, develop the whole board first (Poffin/Poké-Pad/attach) then Itchy Pollen LAST
+  (attack-last). The lock recurs each turn Budew survives + stays Active.
+- **Anti-patterns:** don't expect a T1 lock going **first** (can't attack — bench Budew, develop). Don't over-value
+  it vs Supporter-driven decks. Beware **Fire** (30 HP dies to any Fire hit) — Fire aggro counters the plan.
+- **General-Strategy disposition:** **GAP.** At `SETUP_ACTIVE`, nothing prefers an item-lock Basic
+  (`open-the-accelerator` keys on the `accel_source` Role — Budew has none; among Dreepy/Budew/Dunsparce, all
+  1-prize Basics score ~0, so the pick is arbitrary/index-order — Budew may never take the Active and Itchy Pollen
+  never fires). → **new GENERAL rule `open-the-item-lock-starter`** (§6) + a new **`item_lock` Function Tag** on
+  Budew. `keep-a-startable-hand` already keeps it (a Basic). `dont-open-multiprize-active` N/A (1-prize).
+
+### NEW — 1× Dunsparce (305) — Role: draw-engine base · tags: **none** · LOCKED
+- **Mechanics:** Basic **Colorless**, 70 HP, 1-prize, weakness Fighting, retreat 1. `C` **Trading Places** (0):
+  switch this with 1 of your Benched Pokémon (free pivot). `CC` **Ram** (20). Evolves into **Dudunsparce**.
+  Poffin / Poké Pad target (≤70, non-Rule-Box).
+- **Use:** its job is to **become Dudunsparce** (the Run Away Draw engine). Bench it when bench room allows, evolve
+  next turn. Trading Places is a niche free pivot (rarely relevant). Do NOT evolve it just to attack with Land Crush.
+- **Anti-patterns:** don't strand it Active as a chump when the line needs the slot; don't spend Ram as a plan.
+- **General-Strategy disposition:** **mostly covers-as-is** (fetchable as a ≤70 Basic via Poffin / as any Basic
+  via `fetch-a-starter`; a benched Basic). **Minor gap flagged (§6):** Dunsparce is *not* `card_is_support` (no
+  engine ability), so the fetch doctrine doesn't prioritise it as the **engine precursor**; and its evolution
+  Dudunsparce **is** `card_is_support` but is Stage-1-unplayable → a mild stranded-in-hand risk (Ultra-Ball a
+  Dudunsparce you can't yet play). Low priority — see §6 · `dont-strand-the-evolving-engine`.
+
+### NEW — 1× Dudunsparce (66) — Role: draw engine (ability) · tags: `draw`, `stall` · LOCKED
+- **Mechanics:** **Stage 1** Colorless, 140 HP, 1-prize, weakness Fighting, retreat **3**, evolves from Dunsparce.
+  Ability **Run Away Draw** (once/turn): "draw 3 cards. If you drew any cards in this way, **shuffle this Pokémon
+  and all attached cards into your deck.**" `CCC` **Land Crush** (90).
+- **Use:** a **recurring, penalty-free draw-3 engine** — the ability, never the body. Fire it **early in the turn,
+  BEFORE committing** other resources so the 3 cards inform the turn. It **self-recycles** (shuffles itself + all
+  attached back), so one copy services many turns and it clears its own bench slot; re-fetch (Poffin the Dunsparce)
+  when you want it again. **NEVER attach Energy/Tool to it before drawing** (attachments shuffle into the deck,
+  wasted). **Never pay its retreat 3** — it works from the bench.
+- **Anti-patterns:** don't evolve/hold it as an attacker (Land Crush is not a plan); don't fire it when the shuffle
+  would bury a card you need next turn (rare — it shuffles only itself + its own attachments).
+- **General-Strategy disposition:** the **fetch** side is covered (`fetch-the-support` sees Dudunsparce as a `draw`
+  engine; Drakloak also fills `support_in_play`). The **activation** side is the open question — a pure `draw`
+  `_ABILITY` (option-type 10) has **no combat value** and `dig-before-commit` keys on `_PLAY` (7), so it may score
+  0 → drop to `_finish_turn_last` tier 4 and be **skipped before the turn-ending attack**. **This is load-bearing
+  (Run Away Draw AND Drakloak Recon share the mechanism) → being verified empirically** (workflow `wjzvrtwbk`);
+  if confirmed, a new GENERAL `use-the-draw-engine-ability` rule (§6) fixes both. *(Munkidori's Adrena-Brain
+  auto-activates only because its counter-move earns tactical value — pure draw/dig abilities don't.)*
+
+### NEW — 1× Rosa's Encouragement (1240) — Role: comeback accel (tech) · tags: **none → needs `energy_accel`** · LOCKED
+- **Mechanics:** **Supporter.** "You can use this card only if you have **more Prize cards remaining than your
+  opponent** [= you are BEHIND]. Attach up to 2 Basic Energy cards from your **discard pile** to 1 of your **Stage
+  2** Pokémon." (The only Stage 2 here = **Dragapult ex**.)
+- **Use:** the **comeback-only** discard-recursion accel — the fast way to **re-arm a KO'd Dragapult**: evolve a
+  fresh one, pull 2 basics (F+P) from discard in one Supporter, skip two manual-attach turns. Needs basics already
+  in discard (Ultra Ball's discard-2 and normal trades feed it). **Dead when even/ahead** — insurance, not the
+  primary energy plan. Meowth ex tutors it exactly the turn the prize gate flips on. Lowest Supporter priority
+  (below Boss's / Crispin / Lillie's).
+- **Anti-patterns:** don't plan around it while even/ahead (engine won't even offer it); don't pitch ALL your
+  Fire/Psychic to "fuel" it (Phantom Dive gate — keep a working F+P base; Night Stretcher recovers).
+- **General-Strategy disposition:** **covers-as-is ONCE TAGGED.** Untagged today → `use-acceleration`
+  (`energy_accel` tag) can't fire. → propose the **`energy_accel` tag** on Rosa's (§6); then `use-acceleration`
+  (+25) endorses playing it, engine-gated to "behind", target-gated to Stage 2 — no deck rule needed. Do **NOT**
+  give it the `accel_source` **Role** (that would wrongly boost it at SETUP via `advance-the-accel-pieces`; Rosa's
+  is comeback-only, not a setup accel). The discard-as-fuel nuance is left to the general discard keep-value.
+
+### 3× Dragapult ex (121) — Role: `win_condition`, `primary_attacker` · tags: `spread` · LOCKED (unchanged)
+- **Mechanics:** Stage 2 Dragon, 320 HP, 2-prize, **Tera**, **no weakness**, retreat 1. `C` Jet Headbutt (70).
+  `FP` **Phantom Dive** (200 + **6 damage counters on the opp Bench, any way you like**).
+- **Readiness:** `Ready(energy=2)` (FP) — stay in SETUP digging until FP is affordable; Jet Headbutt is a fallback poke only.
+- **Phantom Dive placement (the deck's core decision):** cross-turn truth — Phantom Dive is the **turn-ender**, so
+  Munkidori/Boss's/Cruel Arrow resolve BEFORE it and convert **prior-turn** chip. This turn's spread pays off THIS
+  turn only by a DIRECT bench KO. **(1) take every direct bench KO first** (greedy knapsack within the 6 counters);
+  **(2) else marginal-value** — concentrate on the single most-convertible threat (a board proxy: spread when the
+  opp has ≥2 benched threats, else concentrate). **Bench safety (Tera):** a benched Dragapult takes no attack
+  damage; the Pilot treats it bench-immune both ways. `dont-bench-multiprize` exempts `win_condition`.
+- **Disposition:** **infra A** (benchSpread valuation + `place-counter-to-convert` placement, ctx-14) covers it —
+  **built + general, unchanged.** Readiness = `Line.ready` override.
+
+### 2× Munkidori (112) — Role: `counter_mover` (tech) · tags: `confuse`, `heal`, `spread` · LOCKED (unchanged)
 - **Mechanics:** Basic Psychic, 110 HP, 1-prize, weakness Darkness, resist Fighting, retreat 1. Ability
-  **Adrena-Brain** (once/turn, **needs {D} attached**): move ≤3 counters (30) from 1 of YOUR Pokémon → 1
-  of the OPPONENT's. `PC` Mind Bend (60, opp Active Confused) — a permitted **pinch swing**, not the plan.
-- **Use:** the Phase-2 finisher/consolidator + mirror self-healer. Benched ability-mon — **~90% here for
-  Adrena-Brain, not an attacker** — but MAY swing Mind Bend in a pinch (no hard veto; the Tactical layer
-  scores the attack normally). Moves counters (bypasses damage-prevention); does NOT un-KO or clear conditions.
-- **Adrena-Brain direction — VALUE-COMPARE each turn** *(confirmed)*:
-  - `finish_value` = prize value of a benched opp mon a move-≤3 KOs OUTRIGHT (remaining HP ≤ prior chip + 30)
-    — Munkidori acts BEFORE the attack, so it converts PRIOR-turn Phantom Dive / Risky-Ruins damage, not this turn's spread.
-  - `heal_value` = prize value of OUR own body a move-≤3 lifts OUT of next-turn-KO range — counted only
-    when that body is actually doomed (`active_doomed` / incoming ≥ remaining HP) AND the move genuinely saves it.
-  - Take **max(finish, heal)**; if neither fires, **offensive-chip** the top convertible threat (advance a
-    next-turn KO). Wins the mirror when heal_value (save the 2-prize Dragapult) > a small finish.
-  - **Source pick:** the own body that most needs counters removed (when healing); any own body carrying
-    counters (pure offense). **Target pick:** reuse the marginal-value / snipe logic (finish > soften the top threat).
-- **Sequencing:** activate BEFORE the attack and BEFORE Boss's (read the resulting board, then place
-  Phantom Dive spread / drag the dead-on-arrival target).
-- **{D} routing** *(confirmed)*: {D} has no other home (Dragapult uses F+P), so proactively arm Munkidori —
-  but via **Crispin's free attach** or Night Stretcher recovery, reserving the 1/turn manual attach for
-  Dragapult's F+P. Arm once the Dragapult line is online. Only 2 {D} exist — Night Stretcher recovers a
-  discarded/prized one (a Munkidori gate).
-- **Anti-patterns:** don't promote Munkidori as an attacker (Mind Bend is a fallback); don't spend the
-  activation on a direction that neither finishes nor saves a doomed body; don't strand the scarce {D} elsewhere.
-- **General-Strategy disposition:** **GAP** — no general handler for a counter-mover ability (infra gap C
-  → Phase 6: an ability-activation decision + source/target selects; reuse the snipe marginal-value terms
-  for the target, `active_doomed` for the heal gate). Residence (deck Hypothesis vs a general
-  `heal`+`spread`-ability doctrine, keyable on the existing tags) decided in Phase 4. `dont-bench-multiprize`
-  N/A (1-prize). Promote priority covers "never promote the utility mon".
+  **Adrena-Brain** (once/turn, **needs {D} attached**): move ≤3 counters (30) from 1 of YOUR Pokémon → 1 of the
+  OPPONENT's. `PC` Mind Bend (60 + Confuse) — a pinch swing, not the plan.
+- **Use:** the Phase-2 finisher/consolidator + mirror self-healer. Two-sided: OFFENSE (top a softened bench mon
+  into KO range for Boss's) or DEFENSE (peel counters off our own 90-HP Drakloaks / Dragapult). **#1 misplay:
+  forgetting it is DEAD without {D} attached** (only 2 {D} in the deck — route via Crispin's free attach / Night
+  Stretcher). It MOVES counters (bypasses damage-prevention); a move with no follow-up finisher is pure tempo loss.
+- **Sequencing:** activate BEFORE the attack and BEFORE Boss's. Benched ability-mon; MAY Mind-Bend in a pinch (no veto).
+- **Disposition:** **infra C** (Adrena-Brain source/amount/target handler, ctx 16/40/13) covers it — **built +
+  general, unchanged.** `{D}` routing via Crispin (branch-2). *Deferred refinement:* explicit finish-vs-heal
+  value-compare (v1 = most-damaged source body + convert target).
 
-### 1× Fezandipiti ex — Role: comeback_engine (tech; residence TBD Phase 4) · LOCKED
-- **Mechanics:** Basic Darkness, 210 HP, 2-prize, weakness Fighting, retreat 1. Ability Flip the Script
-  (once/turn, if any of your Pokémon were KO'd during opponent's LAST turn: draw 3). `CCC` Cruel Arrow
-  (100 to ANY opp Pokémon, no W/R on Bench). Darkness → **immune to our Risky Ruins**.
-- **Use:** PRIMARY = comeback draw engine — draw 3 every turn after the opponent takes a KO; refuels the
-  grind after our Judge/Lillie's/Unfair Stamp hand-thinning. SECONDARY = Cruel Arrow, a situational late
-  finisher on a bench target softened to ≤100 remaining — a valid **pinch swing** when it's the best available
-  line, but rarely mainline (going Active exposes a 2-prizer, CCC steep on 9 energy).
-- **Bench timing** *(confirmed)*: bench it **entering the grind / after the first trade** (a KO has
-  happened or is imminent) so Flip the Script is online — NOT turn 1. A positive `bench-the-comeback-drawer`
-  trigger overrides `dont-bench-multiprize` in RACE/STABILIZE; the −15 correctly keeps it off the early bench.
-- **Fetch:** Ultra Ball only (Rule Box — not Poké Pad).
-- **Anti-patterns:** don't bench T1; don't go Active with Cruel Arrow while a cheaper benched finish
-  (Munkidori) exists; don't Cruel-Arrow a target still >100 remaining that could be chipped first.
-- **General-Strategy disposition:** `dont-bench-multiprize` **override** in RACE/STABILIZE (positive bench
-  trigger). "Play the on-KO drawer" = **GAP** (positive play-the-engine-ability rule; residence Phase 4,
-  likely general). Cruel Arrow bench-targeting = infra gap B (Phase 6). Ultra-Ball tutor covered by fetch.
+### 1× Fezandipiti ex (140) — Role: `comeback_engine` (tech) · tags: **none** · LOCKED (unchanged)
+- **Mechanics:** Basic Darkness, 210 HP, 2-prize, weakness Fighting, retreat 1. Ability **Flip the Script**
+  (once/turn, if any of your Pokémon were KO'd during opp's LAST turn: draw 3). `CCC` **Cruel Arrow** (100 to ANY
+  opp Pokémon, no W/R on Bench). {D} → immune to our Risky Ruins.
+- **Use:** PRIMARY = comeback draw (fires almost every turn in this trade-heavy deck; **bench it BEFORE the KO** to
+  trigger — entering the grind, not T1). SECONDARY = Cruel Arrow, a situational benched finisher (don't steal
+  Dragapult's FP for it). Fetch = **Ultra Ball only** (Rule Box). 2-prize liability — don't bench too early.
+- **Disposition:** `bench-the-comeback-drawer` (deck rule, retained) overrides `dont-bench-multiprize` in
+  RACE/STABILIZE. Cruel Arrow valuation = **infra B** (built, general). Flip-the-Script draw = auto (the on-KO
+  draw ability; benched engine).
 
-### 1× Meowth ex — Role: supporter_tutor (tech; residence TBD Phase 4) · tags: `search`, `stall` · LOCKED
-- **Mechanics:** Basic Colorless, 170 HP, 2-prize, weakness Fighting, retreat 1. Ability Last-Ditch Catch
-  (on-play from hand → Bench: tutor ANY Supporter to hand, once/turn). `CCC` Tuck Tail (60, put this +
-  attached into hand). Takes 20 from our Risky Ruins (Basic non-{D}).
-- **Use:** a one-of Supporter valve — play it to bench to tutor the Supporter the turn needs, most often
-  **Boss's Orders** on a convert/lethal turn (ability → the tutored Supporter still plays that turn; bench
-  Meowth FIRST). Tutor priority: **Boss's-first**, else the acute need (Lillie's hand-starved / Crispin
-  color-starved / Judge disruption) via the fetch comparator. Cannot tutor Unfair Stamp (Item).
-- **When to play** *(confirmed — positive trigger)*: when a needed Supporter (esp. Boss's) is unreachable
-  and the tutor enables a convert/lethal/critical-draw — overriding `dont-bench-multiprize` at the point of
-  need. Not proactively early.
-- **Tuck Tail:** niche — a permitted **pinch swing** (60 + self-bounce) to re-tutor or dodge a KO (removes
-  the 2-prize liability); CCC steep on 9 energy so rare. Not mainline.
-- **Fetch:** Ultra Ball only (Rule Box).
-- **Anti-patterns:** don't bench early with no tutor need; don't play the tutored Supporter before benching
-  Meowth (lose the card); don't leave it exposed as a free 2-prize KO.
-- **General-Strategy disposition:** the on-play Supporter-tutor = **GAP** (same positive play-the-engine-
-  ability rule as Fezandipiti; the tutor TARGET at the resulting select is covered by fetch —
-  `play-a-tutor-for-the-unfound-wincon` / Boss's-first). `dont-bench-multiprize` override at point of need.
+### 1× Meowth ex (1071) — Role: none (tag-driven) · tags: `search`, `supporter_tutor` · LOCKED (unchanged)
+- **Mechanics:** Basic Colorless, 170 HP, 2-prize, weakness Fighting, retreat 1. Ability **Last-Ditch Catch**
+  (on-play from hand → Bench: tutor ANY Supporter to hand). `CCC` Tuck Tail (60, self-bounce).
+- **Use:** one-of Supporter valve — bench to tutor the exact situational Supporter (Boss's for a gust KO; Rosa's
+  when the gate flips). Needs an open bench slot AND your Supporter play still available (the tutored card must
+  still be PLAYED). Cannot tutor Unfair Stamp (Item). Don't dangle as free prizes.
+- **Disposition:** **covers-as-is** — general `bench-the-supporter-tutor` + `grab-a-gust-supporter-for-the-ko`
+  (doctrine_fetch, `supporter_tutor` tag) + `dont-open-multiprize-active` / `dont-pre-bench-the-supporter-tutor`.
+  **NO Role, NO deck rule** (mega_lucario model).
 
-> **Ability-first mons (Munkidori · Fezandipiti · Meowth) — ~90% for their abilities, benched by plan, but NO
-> hard attack-veto** *(confirmed 2026-07-03)*. All three earn their slot on Adrena-Brain / Flip the Script /
-> Last-Ditch Catch, not their attacks — but each **MAY swing in a pinch** (Mind Bend / Cruel Arrow / Tuck Tail)
-> when it's the best available line. **Phase B must NOT author a rule that suppresses their attacks;** the
-> Tactical layer scores those normally, and the ability-first bias comes from `dont-bench-multiprize` + not
-> Roling them as attackers — never a veto.
+### 4× Dreepy (119) — Role: `win_condition_base` · tags: none · LOCKED (unchanged)
+Basic Dragon 70 HP, 1-prize, no weakness, retreat 1; chip attacks only. Poffin target. Covered: `keep-a-bench`,
+`fetch-a-starter`, `prefer-bench-fill-first`, `fetch-base-before-stranded-payoff`, the Line.
 
-### 2× Risky Ruins (Stadium) — Role: `disruption` (tech) · LOCKED
-- **Mechanics:** Stadium. When any player puts a Basic **non-{D}** Pokémon onto their Bench during their
-  turn, place 2 counters (20) on it. Both players. Triggers on bench-ENTRY only (not retroactive). Our
-  Stage-1/2 attackers immune; our vulnerable Basics = Dreepy/Munkidori/Meowth; Fezandipiti ({D}) immune.
-- **Play policy** *(confirmed — proactive + bench-first + soft net gate)*: play early to chip the opponent
-  across the most turns; on the play-turn **bench our own vulnerable Basics FIRST** so they enter before
-  Ruins and dodge the 20. Softly **hold** when we still have more non-{D} benching ahead than the opponent
-  (v1 board proxy: count of our un-benched core Basics; the Read later refines to skip {D}-Basic decks
-  where it only taxes us). Re-slam the 2nd copy after an opponent bumps ours.
-- **Stadium denial** *(added — your review)*: playing Risky Ruins ALSO **knocks out an opponent's Stadium** —
-  a second, independent reason to play it (disruption), even when the chip net-value is only neutral. v1
-  heuristic: replace ANY non-ours Stadium in play (safe — we want Ruins out anyway); the "does it specifically
-  HELP them" refinement needs stadium-effect labels (see disposition + §8 infra).
-- **Combo:** 20/opp-bench-entry compounds with Phantom Dive counters + Munkidori/Cruel Arrow — pushes
-  benched targets into finisher range a turn early.
-- **Anti-patterns:** don't play it before benching our own Dreepy/Munkidori/Meowth this turn; don't play it
-  vs a Darkness-Basic opponent (pure self-tax); don't overwrite our own useful Ruins.
-- **General-Strategy disposition:** **GAP** — no general stadium-play doctrine (mega_lucario also runs
-  stadiums → a fold candidate). v1 = deck rule `play-risky-ruins-when-net-positive` (bench-first sequencing +
-  soft net gate + stadium-denial). Engine enforces "different from the stadium in play" (rules §3).
-  **INFRA GAP (verified 2026-07-03):** stadiums are identifiable (`CardType.STADIUM`) but **effect-unlabelled**
-  — 26 in the pool, function tags empty (only Levincia/Battle Cage tagged) — and `common/` reads NO stadium
-  state (`AreaType.STADIUM`=7 exists, but no `Board.stadium_in_play`). The stadium-denial trigger needs net-new
-  infra: (1) a Board signal for the in-play Stadium (id + whose), (2) a stadium-effect labelling pass to judge
-  "helps the opponent" (else the v1 replace-any-non-ours heuristic). → §8 Phase-6.
+### 4× Drakloak (120) — Role: line mid + `dig`/`draw` engine · tags: `dig`, `draw` · LOCKED (unchanged)
+Stage 1, 90 HP, evolves from Dreepy. **Recon Directive** (top-2 → 1). **Use Recon BEFORE evolving** (ability lost
+on evolve). **Hold the Drakloak→Dragapult evolve until the body carries 2 FP** (keep Recon-digging; carve-out:
+evolve now if the Drakloak is in KO range). Keep a spare Drakloak as a standing Recon engine. Disposition: line +
+`dig`; the two timing gates are the deck rule `hold-evolution-until-attacker-ready` + §4 carve-outs. **Note:** its
+Recon activation shares the pure-draw-ability question with Dudunsparce (§6 verify).
 
-### 3× Crushing Hammer (Item) — Role: `disruption` · tags: `energy_denial` · LOCKED
-- **Mechanics:** Item. Flip a coin; heads → discard 1 Energy from 1 opponent Pokémon. Stacks with a Supporter.
-- **Use** *(confirmed — value-targeted before lethal)*: play on a freshly-powered / single-attach opponent
-  attacker the turn before our planned KO — a heads denies their counter-swing, a whiff costs little. Skip
-  vs energy-flood/accel decks. Don't spam randomly.
-- **Sequencing:** early in the turn (plan around a heads); before a planned KO. Item → stacks with the Supporter.
-- **Anti-patterns:** don't fire into an energy-flooded board; don't waste all 3 early with no target value.
-- **General-Strategy disposition:** **GAP** — no general energy-denial rule. v1 = deck rule
-  `crush-the-key-energy` (single-attach/re-powered attacker pre-lethal). Coin-flip = 0.5× expected; modest seed.
+### 2× Risky Ruins (1260) — Role: `disruption` (tech) · tags: none (deck-rule + stadium infra) · LOCKED (unchanged)
+Stadium. Any player benches a Basic **non-{D}** → 2 counters on it. Our Stage-1/2 attackers immune; our vulnerable
+Basics = Dreepy/Budew/Dunsparce/Meowth; Fezandipiti/Munkidori ({D}) immune. **Double-edged** (symmetric) — accept
+the self-chip because **Munkidori relays it back** onto the opponent. Play proactively; bench our vulnerable Basics
+FIRST that turn; re-slam the 2nd copy after an opponent stadium bump. Disposition: deck rule
+`play-risky-ruins-when-net-positive` (retained) + **infra D** stadium signal. *(bench-first sequencing +
+skip-vs-{D}-decks refinement deferred to the Read.)*
 
-### Covered-as-is cards (line pieces, Cinderace, staple trainers, energy) — compact blocks
+### 4× Crushing Hammer (1120) — Role: `disruption` · tags: `energy_denial` · LOCKED (unchanged)
+Item, coin-flip discard 1 opp Energy. **covers-as-is** by general `play-energy-denial` (stands down on no-energy
+Active / when we already KO). Now ×4 (aggressive commitment) — flip all copies in one turn for a key energy; lower
+priority once behind on the KO race. Count change needs no doctrine change.
 
-**4× Dreepy** — `starter`, line base. Basic Dragon 70 HP, 1-prize, no weakness, retreat 1; attacks are chip
-only. Poffin's ONLY legal target (≤70). Covered: `keep-a-bench`, `fetch-a-starter`, `prefer-bench-fill-first`,
-`fetch-base-before-stranded-payoff`, the Line.
+### 3× Boss's Orders (1182) — Role: `gust` · tags: `gust` · LOCKED (unchanged)
+The prize-converter. **covers-as-is** by the Gust doctrine (ADR-0022, id 1182): whether-to-play + target. TOP
+Supporter on a convert/lethal turn; resolve the gust BEFORE attacking.
 
-**4× Drakloak** — line mid + `dig` engine. Stage 1, 90 HP, evolves from Dreepy. Recon Directive (top-2 → 1).
-**Use Recon BEFORE evolving** (ability lost on evolve; Recon then evolve same turn). **Delay evolving Drakloak →
-Dragapult ex until the (future-Dragapult) body already carries its 2 FP energy** — keep Recon-digging each turn
-meanwhile — so it Phantom Dives the turn it evolves (don't strand an energyless Dragapult and waste the Recon
-turns). **Carve-out: evolve NOW if the Drakloak is in KO range** (secure the 320-HP body / don't lose the line
-piece). **Keep a spare Drakloak as a standing Recon engine** rather than reflexively fielding a 2nd Dragapult.
-Covered: line + `dig`; both timing gates = §4 carve-outs.
+### 3× Crispin (1198) — Role: `accel_source` · tags: `energy_accel`, `search`, `tutor_energy` · LOCKED (unchanged)
+The **primary, un-gated** accel now (Cinderace gone). Search 2 basic diff types → attach the missing Phantom Dive
+color (F/P) or arm Munkidori ({D}). **covers-as-is** by `use-acceleration` + `advance-the-accel-pieces`
+(`accel_source` Role); branch-2 {D}-routing.
 
-**4× Cinderace** — `accel_source`, `starter`. Stage 2 Fire 160 HP, retreat 0. Explosiveness (setup-open) +
-Turbo Flare (≤3 Basic Energy → **Bench only**). Stranded (no Raboot). **Fully covered by the mega_starmie
-folds:** `open-the-accelerator`, `advance-the-accel-pieces`, `develop-the-accel-recipient`,
-`dont-fetch-the-setup-only-opener`, `keep-a-startable-hand`.
+### 4× Lillie's Determination (1227) — `draw`, `shuffle_hand` · LOCKED (unchanged)
+Primary hand-refresh (draw 6; **8 at exactly 6 prizes**). Shuffle-Refresh doctrine (ADR-0024): endorsed by
+`dig-before-commit`, floored by the keep-value guards, tier-3 sequenced. Heaviest T1–T2. **(Judge removed — Lillie's
+is the sole `shuffle_hand` refill now.)**
 
-**3× Boss's Orders** — `gust`. The prize-converter (drag a softened bench mon Active). Gust doctrine
-(ADR-0022, id 1182) covers whether-to-play + target. TOP Supporter on a convert/lethal turn.
+### Fetch suite — 4× Buddy-Buddy Poffin (1086) / 4× Poké Pad (1152) / 4× Ultra Ball (1121) / 3× Night Stretcher (1097) · LOCKED (unchanged)
+Fetch doctrine (ADR-0023): **Poffin** → ≤70 Basics (**now Dreepy / Budew / Dunsparce**; play FIRST, earliest dev
+rung); **Poké Pad** → free non-Rule-Box tutor (Dreepy/Drakloak/Dunsparce/Dudunsparce/Munkidori/Budew; play before
+Ultra Ball); **Ultra Ball** → the only Rule-Box tutor (Dragapult/Fezandipiti/Meowth ex), discard-2 **feeds Rosa's
++ Night Stretcher**; **Night Stretcher** → recover a Pokémon or the exact F/P/{D} (a Phantom-Dive / Munkidori
+gate), or refuel the discard for Rosa's. Covered: `prefer-bench-fill-first`, `fetch-a-starter`, `fetch-the-wincon`,
+`fetch-base-before-stranded-payoff`, discard keep-value.
 
-**3× Crispin** — `accel_source`. Color-fixer: attach the missing Phantom Dive color (F/P) to Dragapult, or
-free-attach {D} to Munkidori. Covered: `use-acceleration` + branch-2 {D}-routing.
+### 1× Unfair Stamp (1080) [ACE SPEC] — `draw`, `hand_disruption`, `shuffle_hand` · LOCKED (unchanged)
+KO-gated (only the turn after our Pokémon was KO'd): both shuffle hands, you draw 5 / opp 2. Item → **stacks with a
+Supporter**; shares Fezandipiti's trigger. Play near-**last** with a thin hand. **covers-as-is** by the
+Shuffle-Refresh doctrine (`shuffle_hand`) + the aceSpec discard/keep guard (the max-impact strip nuance stays the
+deferred general `hand_disruption` seam).
 
-**2× Judge + 4× Lillie's Determination** — Shuffle-Refresh doctrine (ADR-0024): `refresh-when-hand-is-dead`
-+ hold floors + Lillie's-at-6-prizes. Lillie's = primary refuel (after free draw); Judge = proactive opp
-strip (both to 4, vs a fresh opp hand). Judge's offensive-strip axis = DEFERRED general seam (§6).
-
-**4× Buddy-Buddy Poffin / 4× Poké Pad / 4× Ultra Ball / 2× Night Stretcher** — Fetch doctrine (ADR-0023):
-Poffin→2 Dreepy (earliest rung); Poké Pad = free non-Rule-Box tutor (play FIRST); Ultra Ball = Rule-Box
-tutor (the exes), discard-2 fuels recursion (after Poké Pad); Night Stretcher recovers a Pokémon or the exact
-F/P/{D} (a Phantom-Dive/Munkidori gate). Covered: `prefer-bench-fill-first`, `fetch-a-starter`,
-`fetch-the-wincon`, `fetch-base-before-stranded-payoff`, `dont-fetch-the-setup-only-opener`, discard keep-value.
-
-**Energy — 4 F / 3 P / 2 D (9 Basic)** — F+P gate Phantom Dive; the 2 {D} gate Munkidori. F/P → the Dragapult
-line (manual + Turbo Flare seed + Crispin); {D} → Munkidori via Crispin's free attach (branch 2). **{D} =
-normal energy for the Ultra Ball discard** — no keep-value bump; Night Stretcher recovers it, the discard-2 is
-engine fuel *(confirmed branch 6)*. Covered: energy-attachment procedure (ADR-0016) + `develop-the-accel-recipient`.
+### Energy — 3 F / 4 P / 2 D (9 Basic) · LOCKED (unchanged)
+F+P gate Phantom Dive (Psychic-primary now); the 2 {D} gate Munkidori (+ Fezandipiti). F/P → the Dragapult line
+(manual + Crispin + Rosa's-from-discard); {D} → Munkidori via Crispin's free attach. Covered:
+energy-attachment procedure (ADR-0016) + `develop-the-accel-recipient` (now inert without an accel Active — fine).
 
 ## 4 · Combos, sequencing & opening hands
 
-**Combos** (min pieces → payoff):
-- **Spread → convert (CROSS-TURN):** Phantom Dive (turn N) pre-loads the bench → (turn N+1, before the
-  attack) Munkidori move-3 / a Cruel-Arrow turn / gust+the 200 converts the prior chip. Same-turn, the
-  spread converts only by KOing an already-≤60-remaining benched mon outright. Min: Dragapult online (FP)
-  + a softened target + one finisher.
-- **Munkidori-reverse (mirror):** peel counters off our damaged Dragapult/Drakloak → onto opp = ~30 HP/turn
-  heal on the win-con line. Needs {D} on Munkidori.
-- **Cinderace → Turbo Flare:** open Cinderace, seed 3 Basic Energy onto the bench line; **Crispin** cashes a
-  missing color on the Active.
-- **Meowth → Boss's:** bench Meowth (tutor Boss's) → gust a softened mon Active, same turn.
-- **Comeback:** opp KO → Unfair Stamp (draw 5 / opp to 2, Item) + Fezandipiti Flip-the-Script (draw 3) — shared trigger.
-- **Risky Ruins compounding:** 20/opp-bench-entry + a Phantom Dive counter puts a benched mon in
-  Munkidori/Cruel-Arrow range a turn early.
+**Combos (min pieces → payoff):** as §2 — Phantom-Dive→Munkidori→Boss's (cross-turn convert); Risky-Ruins→Munkidori
+launder; Cruel Arrow stack; Unfair-Stamp+Flip-the-Script; Budew lock + attach runway; Lillie's+Run-Away-Draw double
+draw; Rosa's re-arm; Meowth→exact Supporter.
 
-**Sequencing ladder (developing turn):** free draw/dig first (**Drakloak Recon — before evolving it**,
-Cinderace/Meowth abilities) → Items (**Poké Pad → Poffin → Ultra Ball** → Night Stretcher/Crushing Hammer) →
-the one **Supporter** (Boss's on a convert turn, else Lillie's/Crispin/Judge) → **evolve/attach** → **attack
-LAST**. Carve-outs: **hold the Drakloak → Dragapult ex evolution until the body has its 2 FP energy** (keep
-Recon-digging each turn; evolve early ONLY if the Drakloak is in KO range); **Munkidori Adrena-Brain BEFORE the
-attack and BEFORE Boss's** (read the board, then place spread / drag the corpse); **bench our own
-Dreepy/Munkidori/Meowth BEFORE Risky Ruins**; **bench Meowth BEFORE the tutored Supporter**; **soften BEFORE the
-snipe** (never Cruel-Arrow a >100-remaining mon).
+**Sequencing ladder (developing turn):** free draw/dig (**Recon + Run Away Draw** — before committing) → Items
+(**Poffin → Poké Pad → Ultra Ball** → Night Stretcher/Crushing Hammer) → the one **Supporter** (Boss's on a convert
+turn, else Crispin/Lillie's/Rosa's) → **evolve/attach** → **attack LAST**. Carve-outs listed in §2.
 
-**Opening hands — going FIRST** *(confirmed branch 6)* (T1: no Supporter / no evolve / no attack):
-- **Dream:** Cinderace (Explosiveness open) + 2 Dreepy via Poffin + energy → T1 open Cinderace, bench 2
-  Dreepy, attach, Turbo Flare seed; slam Risky Ruins T1. Drakloaks T2, Dragapult ex online T3.
-- **Median:** a Basic/Cinderace + a tutor + energy → T1 fetch the line + develop.
-- **Survivable:** a lone Dreepy + an Item → keep (going first = a full setup turn); T1 dig.
-- **Mulligan keeps:** any hand with a Basic (Dreepy/Munkidori/Meowth/Fezandipiti) OR a Cinderace (`opener` →
-  `keep-a-startable-hand`). 8 real Basics + 4 Cinderace → mulligans rare.
+**Opening hands — prefer going SECOND** (Budew item-lock T1):
+- **Dream (second):** Budew + 2 Dreepy (Poffin) + energy → Budew Active, seed Dreepy, attach, **Itchy Pollen T1**.
+- **Median:** a Basic + a tutor + energy → develop the line; Budew Active if held.
+- **Survivable:** a lone Dreepy/Dunsparce + an Item → keep; dig.
+- **Mulligan keeps:** any hand with a Basic (Dreepy/Budew/Dunsparce/Munkidori/Fezandipiti/Meowth) →
+  `keep-a-startable-hand`. 10 Basics → mulligans rare.
 
 **Plan mapping:**
-- **SETUP** = assemble the Dreepy→Drakloak→Dragapult line + seed F/P; slam Risky Ruins; don't bench the 2-prize exes yet.
-- **RACE** (flips at **`Ready(energy=2)` — FP**) = Phantom Dive every turn, place spread by the matchup-switched
-  policy, convert with Munkidori/Boss's.
-- **STABILIZE** (behind) = Munkidori-reverse heals the line; Fezandipiti draws; Judge/Crushing Hammer/Unfair
-  Stamp disrupt to buy convert-tempo.
+- **SETUP** = Budew lock (going second) + assemble Dreepy→Drakloak→Dragapult + seed F/P; slam Risky Ruins; don't bench the 2-prize exes yet.
+- **RACE** (flips at `Ready(energy=2)` — FP) = Phantom Dive every turn; place spread by the matchup-switched policy; convert with Munkidori/Boss's.
+- **STABILIZE** (behind — desirable, arms Rosa's) = Munkidori-reverse heals the line; Fezandipiti/Unfair Stamp refuel+strip; **Rosa's re-arms a KO'd Dragapult**; Crushing Hammer buys tempo.
 - **CLOSE** (ahead) = gust + finisher sequencing to cash the last prizes.
 
 ## 5 · General-Strategy disposition table
 
 | General Hypothesis / doctrine | Disposition | Why (deck-specific) |
 |---|---|---|
-| `keep-a-startable-hand` | covers-as-is | Cinderace `opener` + 8 real Basics keep hands |
-| `open-the-accelerator` | covers-as-is | Cinderace `accel_source` at SETUP_ACTIVE |
-| `honor-preferred-start` | **param** | `preferred_start="first"` (setup-heavy → first; −30 on SECOND) |
-| `dig-before-commit` | covers-as-is | draw/search-heavy deck |
-| `attach-energy-last`/`power-up-attacker`/`use-acceleration`/`advance-the-accel-pieces` | covers-as-is | Cinderace + Crispin accel; F/P → line |
-| `develop-the-accel-recipient` | covers-as-is | Cinderace Active + bench a Dreepy recipient |
-| `keep-a-bench`/`pre-position-attacker`/`dont-feed-the-doomed` | covers-as-is | standard board upkeep; multi-line development |
-| `dont-bench-multiprize` | **override** | Fezandipiti/Meowth ex benched for abilities in RACE/STABILIZE (positive triggers §6); −15 stays right in SETUP |
-| Snipe cluster (`snipe-for-the-ko`@remaining-HP / `snipe-the-top-threat`) | covers-as-is (targeting) **+ GAP** | per-DAMAGE-select targeting covered; the 6-counter **spread valuation + placement** is infra gap A (§6) |
-| Gust doctrine (`gust-for-the-ko`/`gust-target`/`gust-for-the-stall`) | covers-as-is | Boss's id 1182; convert-the-softened-mon IS `gust-for-the-ko` — **verify `gust_ko` uses REMAINING HP** so it sees the chip (§8) |
-| Fetch doctrine (all rungs) | covers-as-is | Poffin→Dreepy, Poké-Pad-first, Ultra-Ball-Rule-Box, `fetch-base-before-stranded-payoff`, `dont-fetch-the-setup-only-opener` (Cinderace) |
-| Shuffle-Refresh (`refresh-when-hand-is-dead` + hold floors) | covers-as-is | Lillie's/Judge; Judge's **offensive-strip axis DEFERRED** (general seam, §6) |
+| `keep-a-startable-hand` | covers-as-is | 10 real Basics keep hands (Budew/Dunsparce added) |
+| `honor-preferred-start` | **param (CHANGED)** | `preferred_start="second"` (Budew item-lock fires T1 only going second; was "first") |
+| `open-the-accelerator` / `develop-the-accel-recipient` / `dont-fetch-the-setup-only-opener` | **inert** | Cinderace removed → no `accel_source` opener / no accel Active. Harmless. |
+| `dig-before-commit` | covers-as-is (PLAY only) **+ GAP** | covers `draw`/`search` **card PLAYs**; **does NOT reach the ABILITY draws** (Recon / Run Away Draw) — `_ABILITY` option, confirmed skipped → new `use-the-draw-engine-ability` (§6) |
+| `attach-energy-last`/`power-up-attacker`/`use-acceleration`/`advance-the-accel-pieces` | covers-as-is | Crispin the primary accel; F/P → line. Rosa's covered **once `energy_accel`-tagged** (§6) |
+| `dont-bench-multiprize` | **override** | Fezandipiti/Meowth ex benched for abilities in RACE/STABILIZE (`bench-the-comeback-drawer` + tutor rules); −15 stays right in SETUP |
+| Snipe cluster + **infra A** (Phantom Dive spread valuation/placement) | covers-as-is (built) | Dragapult unchanged → benchSpread + `place-counter-to-convert` still fire |
+| **infra B** (Cruel Arrow any-target) / **infra C** (Munkidori Adrena-Brain) / **infra D** (Stadium signal) | covers-as-is (built) | Fezandipiti / Munkidori / Risky Ruins unchanged |
+| Gust doctrine (`gust-for-the-ko`/`gust-target`/`gust-for-the-stall`) | covers-as-is | Boss's id 1182; convert-the-softened-mon IS `gust-for-the-ko` (`gust_ko` uses REMAINING HP) |
+| Fetch doctrine (all rungs) | covers-as-is | Poffin→Dreepy/Budew/Dunsparce, Poké-Pad-first, Ultra-Ball-Rule-Box, `fetch-base-before-stranded-payoff` |
+| `fetch-the-support` | covers-as-is (+ minor gap) | grabs Dudunsparce (`draw` engine) / Drakloak; **minor gap §6**: Dunsparce base under-prioritised + Dudunsparce stranded-in-hand risk |
+| Shuffle-Refresh (Lillie's / Unfair Stamp) | covers-as-is | `shuffle_hand` + keep-value floors + aceSpec guard (Judge removed) |
+| `play-energy-denial` (Crushing Hammer ×4) | covers-as-is | `energy_denial` tag; count change needs nothing |
 | Tool doctrine | **N/A** | no Tools |
-| Tactical: Weakness×2 / `prize-trade-target` | covers-as-is | Dragapult has no weakness; prize preference applies |
-| `conserve-discard-energy-prefer-basic` | **N/A** | no `discard_eot` special energy |
+| Tactical: Weakness×2 / `prize-trade-target` | covers-as-is | Dragapult no weakness; prize preference applies |
+| `conserve-discard-energy-prefer-basic` | **N/A** | no `discard_eot` special energy (all Basic) |
 
-**Net-new (gaps) — §6:** Phantom Dive spread (A, structural); Cruel Arrow targeting (B, structural); Munkidori
-Adrena-Brain (C, structural+decision); **Stadium state + labelling (D, structural — your review)**;
-`play-the-engine-ability`; `bench-the-comeback-drawer`; `hold-evolution-until-attacker-ready`;
-`play-risky-ruins-when-net-positive` (+ stadium-denial); `crush-the-key-energy`; `hold-unfair-stamp-for-impact`.
+**Existing deck Hypotheses (retained, cards all still present):** `bench-the-comeback-drawer` (Fezandipiti),
+`hold-evolution-until-attacker-ready` (Drakloak→Dragapult), `play-risky-ruins-when-net-positive` (Risky Ruins).
 
-## 6 · New Hypotheses (drafts — trigger sketches, NOT lambdas yet)
+**Net-new work (gaps, all CONFIRMED by probe/code — §6):** `use-the-draw-engine-ability` (Recon / Run Away Draw
+skipped); Budew item-lock opener (+ `item_lock` tag); Rosa's `energy_accel` tag; `dont-strand-the-evolving-engine`
+(Dunsparce/Dudunsparce fetch inversion); `preferred_start="second"`; Cinderace/Judge cleanup.
 
-**Two kinds:** **(A/B/C) are STRUCTURAL** combat-layer infra (Tactical/Lethal/oracle) — built in Phase 6 like
-the mega_lucario AttackStat mint, NOT weight-tunable; the rest are **positional Hypotheses** (`when()` + seed).
+## 6 · New rules / tags (drafts — trigger sketches, NOT lambdas yet)
 
-### A · Phantom Dive spread — valuation + placement (STRUCTURAL, infra gap A) · status: assumed
-> The deck's core mechanic. Model the distributable bench-counter rider so the oracle values it and the Pilot
-> places the 6 counters by the matchup-switched marginal-value policy (branch 1).
+### `open-the-item-lock-starter` · GENERAL (`baseline_opening`) · seed +35 · status: assumed
+> At the pregame `SETUP_ACTIVE` pick, prefer opening an `item_lock`-tagged Basic (Budew) — leading with the free
+> item-lock body lets its Itchy Pollen-class attack fire on your first turn (esp. going **second**, where the
+> attack is legal T1), taxing the opponent's Item-based setup for a turn at no cost.
 
-**Build:** a new `AttackStat` bench-spread field parsed from "Put N damage counters on your opponent's
-**Benched** Pokémon in any way you like" (`_COUNTER_PUT_RE` misses "Benched … any way"; also skips because
-printed>0 — fix both). Oracle credits the spread (bypasses W/R) in valuation + Lethal. **Placement policy:**
-greedy marginal-value at the DAMAGE select(s); concentrate/spread emerges (board proxy: spread ≥2 threats else
-concentrate). **Lives in:** `provider.py` + damage oracle + snipe/placement path — **GENERAL** (rider-keyed).
-**Verify:** the engine's placement-select encoding (maxCount=6 vs sequential) — Phase-6 probe.
+**Trigger sketch:** `select_context == SETUP_ACTIVE` AND the candidate card carries the `item_lock` tag. **Reads:**
+SETUP_ACTIVE + the `item_lock` Function Tag. **Seed +35** (just below `open-the-accelerator` +40; both are pregame
+Active-pick boosts). **Lives in:** **GENERAL** `baseline_opening` — "lead with your free item-lock disruptor" is
+universal; a deck opts in by running an `item_lock` card (and the rule is silent for decks that don't). **Why
+general:** identical shape to `open-the-accelerator` (Role/tag-keyed opener). **KO-safe:** a pregame pick, no KO
+involved. *(No first/second gate needed: opening Budew going first is still fine — the lock just waits to T2.)*
+**Companion tag:** add **`item_lock`** to Budew (235) in `card_functions.json` (behavioral: an attack that blocks
+the opponent's Items next turn) — the card-functions pipeline; the proposal notes it.
 
-### B · Cruel Arrow bench-targeting (STRUCTURAL, infra gap B) · status: assumed
-> Value Fezandipiti's "100 to ANY Pokémon (no W/R on Bench)" as a benched finisher, not 100-to-Active.
+### `energy_accel` tag on Rosa's Encouragement (1240) · card-functions · then covers-as-is
+> Rosa's is energy acceleration (attach ≤2 basic from discard to a Stage 2) but is untagged, so `use-acceleration`
+> can't see it. Tag it `energy_accel`.
 
-**Build:** model the any-target full-damage attack (benchSnipe-class or extended DAMAGE-targeting) so
-Tactical/Lethal see it can KO a benched ≤100-remaining target. Damage (100) already parsed; only targeting.
-**Lives in:** `provider.py` + oracle — **GENERAL**.
+**Effect:** `use-acceleration` (+25, `energy_accel` tag) then endorses playing Rosa's — engine-gated to "behind on
+prizes", target-gated to Stage 2 (Dragapult ex) by the engine, so no over-firing. **Do NOT** add the `accel_source`
+Role (would mis-boost at SETUP via `advance-the-accel-pieces`; Rosa's is comeback-only). **Lives in:**
+card_functions.json (tag) — no new Hypothesis. **Note:** consider a future `tutor_energy`-style secondary if the
+discard-fuel needs its own keep-value term; deferred (general discard keep-value suffices for v1).
 
-### C · Munkidori Adrena-Brain (STRUCTURAL + decision, infra gap C) · status: assumed
-> The counter-mover ability doctrine (branch 2): value-compare finish vs heal each turn.
+### `use-the-draw-engine-ability` · GENERAL (`baseline_sequencing`) · seed +18 · status: **assumed — CONFIRMED GAP (ship it)**
+> Activate a benched engine Pokémon's once-per-turn **draw/dig Ability** (`_ABILITY` option on a Pokémon whose
+> ability carries a `draw`/`dig` engine tag — Drakloak Recon Directive, Dudunsparce Run Away Draw) during SETUP/RACE,
+> sequenced early (before the turn-ending attack), because a pure card-advantage ability has no combat value and
+> `dig-before-commit` (keyed on `_PLAY`) never reaches it — so nothing currently lifts it above `_finish_turn_last`
+> tier 4, and the engine **is** skipped.
 
-**Build:** an ability handler at Adrena-Brain's activation + source/target selects applying
-`max(finish_value, heal_value)` (finish = a move-≤3 KO prize; heal = lift OUR `active_doomed` body out of KO
-range), else offensive-chip the top threat; reuse the snipe marginal-value terms. Gated on {D} attached
-(engine-enforced). **Lives in:** likely a **GENERAL** `counter_move` ability doctrine keyable on the
-`heal`+`spread` ability tags (Munkidori the only instance → may start DECK and fold, ADR-0034).
+**Trigger sketch:** `option_type == _ABILITY` AND the option's ability/card carries a `draw` or `dig` tag AND not
+`cost_discard`. **Fires:** SETUP/RACE. **Lives in:** **GENERAL** `baseline_sequencing` (the free-dig family) — a
+tag+option-type read, no card id; every ability-engine deck (Bibarel, Dudunsparce, Drakloak) inherits it. **Why
+general:** "use your free draw engine" is universal; it's the `_ABILITY` sibling of `dig-before-commit`.
 
-### `play-the-engine-ability` · seed 22 · status: assumed
-> Play a benched-engine Pokémon whose on-play / once-per-turn Ability (`draw`/`search`/`tutor`) fills a current
-> need — the positive driver missing beside `dont-bench-multiprize`. Covers Meowth ex (tutor a needed Supporter,
-> esp. Boss's) and Fezandipiti ex (comeback draw once trading starts).
+**VERIFIED (probe `scratchpad/probe_ability.py`, 2026-07-09) — CONFIRMED GAP, NOT redundant.** No hypothesis in
+the general or deck layer reads `option_type == _ABILITY`; a pure draw/dig ability scores **0** (`_tactical`=0 for
+non-attacks) → drops to `_finish_turn_last` tier 4 (`pilot.py` `score<=0 → 4`) → any positive-tactical attack
+outsorts it (`by_score` descending) → the ability is **skipped** whenever an attack is on the menu; it fires only
+incidentally on a pure-setup turn (no attack). Probe: Recon & Run Away Draw both `score=+0.0 fired={}` and the
+Pilot took the attack instead. **The `_ABILITY` option DOES resolve `card_id` (120 / 66) and its tags** — so this
+tag-keyed rule fires cleanly and lifts it to tier 0. **This is the biggest finding — a GENERAL fix the 2026-07-03
+build silently needed (its "keep Recon-digging each turn" plan was undriven).** **Related (note, not this rule's
+scope):** Munkidori **Adrena-Brain activation** shares the mechanism (its MAIN `_ABILITY` option also scores 0);
+infra C only handles the *follow-up selects* once it's active. On a lethal/KO-completing turn the planner may
+sequence it, but a non-lethal **pre-load** activation is skipped. v1 scopes this rule to `draw`/`dig` (clean,
+load-bearing); extending it to the counter-move/heal activation is a **deferred** refinement (§8) — a blanket
+"activate any ability" risks firing a counter-move with no good target.
 
-**Trigger sketch:** on a `PLAY` of a Pokémon whose Ability is `draw`/`search`/`tutor` AND the matching need is
-lacking (a needed Supporter unreachable → Meowth; in the grind / own-KO taken → Fezandipiti), overriding
-`dont-bench-multiprize`. **Reads:** the ability function tag + a per-tag need gate + plan. **Fires:**
-RACE/STABILIZE/CLOSE. **Lives in:** **GENERAL** (`baseline_bench` / fetch play-side; tag+need-keyed, no card id).
-The Meowth tutor TARGET is already the fetch doctrine (Boss's-first). **Why general:** "play your engine mon when
-its ability is needed" is universal; the deck opts in by running such a mon.
+### `dont-strand-the-evolving-engine` · GENERAL (`doctrine_fetch`) · seed −20 · status: **assumed — CONFIRMED GAP (priority inversion)**
+> Don't tutor a Stage-1 engine Pokémon (Dudunsparce — `card_is_support`, Run Away Draw) to HAND when its base
+> (Dunsparce) is not in play and not in hand — it's a stranded dead card (can't be played). The engine-precursor
+> analogue of `fetch-base-before-stranded-payoff` (which is scoped to the win-condition **Line**, so it does not
+> cover a non-Line draw engine).
 
-### `bench-the-comeback-drawer` · seed 18 · status: assumed
-> Bench a KO-gated comeback drawer (Fezandipiti) once we're entering the grind, so it's online when the opponent
-> takes KOs — a specialization of `play-the-engine-ability` with a "trading has started" gate.
+**Trigger sketch:** at a `_TO_HAND` search, penalise grabbing a Stage-1 `card_is_support` whose evolvesFrom base is
+absent from play+hand. **Lives in:** **GENERAL** `doctrine_fetch` (extends the stranded-payoff logic beyond the
+Line). **VERIFIED (workflow `wjzvrtwbk`) — a real PRIORITY INVERSION, worse than "minor":** `fetch-the-support`
+(+15) grabs the UNPLAYABLE Stage-1 Dudunsparce (id 66, `card_is_support`, base Dunsparce present so the
+`_stranded_evolution_set` guard is inert and `dont-grab-a-baseless-mid-evolution` is `card_is_line_preevo`-gated →
+both miss it), OUTSCORING `fetch-a-starter` (+12) on its own **base** Dunsparce (id 305, no tags, not a line
+pre-evo) — so at an Ultra Ball the doctrine actively **prefers tutoring the dead Stage 1 over the Basic that
+enables it.** **Fix:** extend the base-before-payoff / anti-baseless-grab guards to **non-wincon engine evolution
+lines** (a general `card_is_support` variant of `card_is_line_preevo`), OR ship this `dont-strand` penalty.
+**Companion (recommended, same fix):** a soft positive to fetch the Dunsparce **base** as the engine precursor
+(mirrors `fetch-base-before-stranded-payoff`). Priority: medium — a 1-of engine, but the inversion actively
+mis-fetches. **General** (helps any evolving-engine deck: Bibarel/Bidoof, Dudunsparce).
 
-**Trigger sketch:** on a `PLAY` of Fezandipiti (`draw`-Ability gated on "your Pokémon was KO'd"), when trading
-has started (prizes < 6 or a recent own-KO), RACE/STABILIZE. **Lives in:** **GENERAL** — likely subsumed by
-`play-the-engine-ability` (its `draw`-on-KO need-gate = "in the grind"); keep as one rule, note the Fezandipiti gate.
+### `preferred_start = "second"` · param · covers-as-is
+Flip `Strategy.params["preferred_start"]` `"first"` → `"second"`. `honor-preferred-start` then penalises choosing
+to go first. **Two simulator-verified rule facts drive it** (rules.md L72-73): the first player T1 **cannot attack**
+(Budew Itchy Pollen can't lock until your T2 — a full turn late) **AND cannot play a Supporter** (this sim is
+stricter than real SV — a Supporter-hungry line loses its first setup Supporter too). Guru-unanimous for a
+Budew/Unfair-Stamp shell (Going Second / TheGamer / TCGplayer / Pokemon.com; verified vs the "setup-heavy → first"
+steelman 2026-07-09, workflow `wh8ls1w6m`). The conventional "setup-heavy Stage-2 → first" heuristic is real but
+overridden here. Ship default; kill-switch = one-line revert to "first" (matchup-conditioned first/second is a
+later Read refinement).
 
-### `play-risky-ruins-when-net-positive` · seed 15 · status: assumed
-> Play the bench-chip Stadium when it taxes the opponent's Basic non-{D} bench-entries more than ours — and bench
-> our own vulnerable Basics FIRST that turn (branch 4).
-
-**Trigger sketch:** on a `PLAY` of a Stadium (Risky Ruins) when our vulnerable-Basic benching for the turn is done
-AND our un-benched non-{D} Basic count ≤ the opponent's expected non-{D} bench-entries (board proxy; Read later).
-**Reads:** stadium PLAY + our/opp bench composition + sequencing. **Lives in:** **DECK** initially (self-damage
-net-value is Risky-Ruins-specific) → a **general stadium-play doctrine** is a fold candidate (no general stadium
-handling exists; mega_lucario also runs stadiums). Bench-first sequencing is structural (Basic PLAYs before the stadium).
-
-### `crush-the-key-energy` · seed 12 · status: assumed
-> Play a coin-flip energy-denial Item on a single-attach / freshly-powered opponent attacker the turn before a
-> planned KO; skip energy-flood boards (branch 5).
-
-**Trigger sketch:** on a `PLAY` of an `energy_denial` Item, when an opponent attacker carries few energy (a
-removable swing) and we're near a convert/lethal; damped vs a flooded board. **Reads:** `energy_denial` tag + opp
-attacker energy count + plan. **Lives in:** **DECK** initially → general energy-denial fold candidate. Coin-flip
-(0.5× expected) → modest seed.
-
-### `hold-evolution-until-attacker-ready` · seed −18 · status: assumed *(added — your review)*
-> Delay evolving a pre-evolution that carries an ongoing-value Ability (Drakloak's Recon `dig`) into its payoff
-> until the payoff can attack THIS turn (its energy meets `Line.ready`) — keep using the pre-evo's ability each
-> turn meanwhile. Override: evolve immediately if the pre-evo is in KO range (secure the higher-HP body).
-
-**Trigger sketch:** at an `EVOLVE` option (a win-con-Line pre-evo → its payoff), penalize the evolve when the
-pre-evo has a `dig`/`draw` Ability AND the payoff couldn't attack this turn (attached energy < `ready.energy`)
-AND the pre-evo is NOT in KO range (`active_doomed` / incoming < remaining HP). **Reads:** EVOLVE option + pre-evo
-ability tag + payoff energy vs `Line.ready` + KO-range. **Lives in:** **GENERAL** (`baseline_evolution` /
-`baseline_sequencing`; tags/Line/energy/board — no card id). Any evolution deck with an ability-carrying pre-evo
-inherits it. **Why general:** "don't evolve away a useful pre-evo ability before the evolved form can act" is universal.
-
-### `hold-unfair-stamp-for-impact` · seed −20 · status: assumed
-> Don't fritter the single ACE SPEC (Unfair Stamp — engine-gated to post-KO turns, unrecoverable once played):
-> hold it for a max-impact post-KO turn (branch 7 — a dead hand needing the 5, or a Boss's lethal / big opp-hand
-> strip it enables); suppress the play on a low-value post-KO turn.
-
-**Trigger sketch:** at a `PLAY` of Unfair Stamp, penalize UNLESS (`hand_is_dead` OR it enables a lethal/convert OR
-a large opp-hand strip). **Reads:** `aceSpec` + `hand_disruption` facts + `hand_is_dead` + lethal-enable + opp
-hand size. **Lives in:** **GENERAL** — extends the Shuffle-Refresh dead-hand logic (ADR-0024) to the KO-gated Item
-+ the doctrine's deferred `hand_disruption` strip term. A keep-value floor mirroring the Supporter refresh.
+### Cinderace / Judge cleanup · strategy.py + this doc · hygiene (user-requested)
+Remove `CINDERACE = 666` const + its `ROLES` entry + all Cinderace/Judge prose from `strategy.py` (scoped to
+dragapult — id 666 is **shared with mega_starmie**, do not touch there). No `when()` referenced Cinderace/Judge, so
+no rule breaks. The trigger tests use a local `CINDERACE` filler (self-contained) — they still pass; modernising
+that filler to Dunsparce/Dreepy is a nicety for `/update-strategy`.
 
 ## 7 · Roles, Lines, params (the executable shape, pre-code)
 
-**Card ids** (dragapult_ex/deck.csv): DREEPY 119, DRAKLOAK 120, DRAGAPULT_EX 121, MUNKIDORI 112, FEZANDIPITI_EX
-140, CINDERACE 666, MEOWTH_EX 1071, UNFAIR_STAMP 1080, BUDDY_POFFIN 1086, NIGHT_STRETCHER 1097, CRUSHING_HAMMER
-1120, ULTRA_BALL 1121, POKE_PAD 1152, BOSS_ORDERS 1182, CRISPIN 1198, JUDGE 1213, LILLIES 1227, RISKY_RUINS 1260;
-FIRE 2, PSYCHIC 5, DARKNESS 7.
+**Card ids** (dragapult_ex/deck.csv, verified 2026-07-09): DUDUNSPARCE 66, MUNKIDORI 112, DREEPY 119, DRAKLOAK 120,
+DRAGAPULT_EX 121, FEZANDIPITI_EX 140, BUDEW 235, DUNSPARCE 305, MEOWTH_EX 1071, UNFAIR_STAMP 1080, BUDDY_POFFIN 1086,
+NIGHT_STRETCHER 1097, CRUSHING_HAMMER 1120, ULTRA_BALL 1121, POKE_PAD 1152, BOSS_ORDERS 1182, CRISPIN 1198,
+LILLIES 1227, ROSAS 1240, RISKY_RUINS 1260; FIRE 2, PSYCHIC 5, DARKNESS 7. **(Removed: CINDERACE 666, JUDGE 1213.)**
 
 ```
 roles = {
   DRAGAPULT_EX:    ["win_condition", "primary_attacker"],
-  CINDERACE:       ["accel_source", "starter"],     # Explosiveness + Turbo Flare (mega_starmie folds)
-  DREEPY:          ["starter"],
-  CRISPIN:         ["accel_source"],                # color-fixer / manual attach
+  DREEPY:          ["win_condition_base"],        # Line pre-evo
+  CRISPIN:         ["accel_source"],              # primary un-gated accel (color-fixer)
   BOSS_ORDERS:     ["gust"],
-  MUNKIDORI:       ["counter_mover"],               # tech — Adrena-Brain doctrine (gap C)
-  FEZANDIPITI_EX:  ["comeback_engine"],             # bench for Flip the Script (play-the-engine-ability)
-  MEOWTH_EX:       ["supporter_tutor"],             # on-play Last-Ditch Catch (play-the-engine-ability)
-  RISKY_RUINS:     ["disruption"],
-  CRUSHING_HAMMER: ["disruption"],
   NIGHT_STRETCHER: ["recovery"],
-  ULTRA_BALL:      ["tutor"], POKE_PAD: ["tutor"], BUDDY_POFFIN: ["tutor"],
-  # Judge / Lillie's ride their function tags (draw / shuffle_hand) — no extra role.
+  BUDEW:           ["starter"],                   # item-lock opener (drives open-the-item-lock-starter via the item_lock TAG)
+  # Rosa's (1240): NO Role — the energy_accel TAG drives use-acceleration (accel_source would mis-boost at SETUP).
+  # Munkidori / Fezandipiti / Risky Ruins / Crushing Hammer: deck Hypotheses / infra / tags — not a Role.
+  # Meowth ex: NO Role — supporter_tutor TAG drives it. Dunsparce/Dudunsparce: fetch/ability tags — not a Role.
+  # Tutors + Lillie's: Fetch / Shuffle-Refresh doctrines key on their tags — no Role.
+  # (CINDERACE role removed.)
 }
 
 lines = [ Line(path=[DREEPY, DRAKLOAK, DRAGAPULT_EX], payoff=DRAGAPULT_EX,
-               role="win_condition", ready=Ready(energy=2)) ]   # FP Phantom Dive, NOT the C Jet-Headbutt default
+               role="win_condition", ready=Ready(energy=2)) ]   # FP Phantom Dive
 
 params = {
-  "preferred_start":     "first",     # setup-heavy → honor-preferred-start (−30 on SECOND)
-  "setup_energy_target": 2,           # FP for Phantom Dive
-  "search_budget":       0,           # Tier-0 closed-form combat
+  "preferred_start":     "second",   # CHANGED — Budew item-lock fires T1 only going second
+  "setup_energy_target": 2,          # FP for Phantom Dive
+  "search_budget":       0,          # Tier-0 closed-form combat
   "my_archetype":        "Dragapult ex spread + disruption",  # Read favorability key (ADR-0026)
 }
 
-hypotheses = [   # deck rules that DON'T fold to general (residence per §6)
-  play-risky-ruins-when-net-positive,   # DECK (stadium net-value; general fold candidate)
-  crush-the-key-energy,                 # DECK (energy-denial; general fold candidate)
-  # play-the-engine-ability, bench-the-comeback-drawer, hold-unfair-stamp-for-impact -> GENERAL (baseline/doctrine)
-  # A/B/C (Phantom Dive spread, Cruel Arrow, Munkidori) -> STRUCTURAL infra (provider.py/oracle/ability handler)
+hypotheses = [   # deck rules that DON'T fold to general (unchanged from 2026-07-03; all cards present)
+  bench-the-comeback-drawer,            # Fezandipiti
+  hold-evolution-until-attacker-ready,  # Drakloak -> Dragapult
+  play-risky-ruins-when-net-positive,   # Risky Ruins (+ infra D)
+  # NEW general rules (open-the-item-lock-starter, [use-the-draw-engine-ability], dont-strand-the-evolving-engine)
+  #   + tags (item_lock on Budew, energy_accel on Rosa's) land in common/ + card_functions.json, NOT here.
 ]
 ```
 
-**Roles note:** `counter_mover`/`comeback_engine`/`supporter_tutor` are deck-intent labels the §6 rules key on
-(deck opts in). If those rules land general keyed on ability tags instead, the roles become documentation —
-confirm role-vs-tag keying in Phase 6. **`Ready(energy=2)`** — verify the `Line.ready`/`Ready` API against live
-source in Phase 6.
+## 8 · Open questions / deferred / verify
 
-## 8 · Open questions / deferred
+**VERIFIED (workflow `wjzvrtwbk` + probe `scratchpad/probe_ability.py`, 2026-07-09) — all RESOLVED, gaps confirmed:**
+1. **Draw-engine-ability activation — CONFIRMED GAP.** Probe: Recon + Run Away Draw score 0, no hypothesis fires,
+   the Pilot takes the attack instead (skipped whenever an attack is on the menu; fires only on a pure-setup turn).
+   → ship `use-the-draw-engine-ability` (§6). The `_ABILITY` option resolves `card_id`/tags, so the rule works.
+2. **Budew opener — CONFIRMED GAP.** Probe: Dreepy/Budew/Dunsparce all score 0, `fired={}`, `decide()` = option
+   index 0 (arbitrary). No rule prefers an item-lock starter. → ship `open-the-item-lock-starter` + `item_lock` tag.
+   (rules.md L72 confirms the second player CAN attack turn 1 → Itchy Pollen T1.)
+3. **Rosa's tag — CONFIRMED GAP.** id 1240 absent from `card_functions.json`; `use-acceleration` can't fire. →
+   add `energy_accel`; once tagged it fires correctly (engine gates legality to behind-on-prizes; no misfire) and
+   `advance-the-accel-pieces` stays correctly silent (setup-gated).
+4. **Dunsparce/Dudunsparce fetch — CONFIRMED GAP (priority inversion).** `fetch-the-support` +15 mis-fetches the
+   unplayable Dudunsparce over its +12 base. → §6 `dont-strand-the-evolving-engine` (+ base-before-payoff extension).
+5. **Cinderace/Judge removal — blast radius SAFE.** Simulated removal + `preferred_start` flip → 19 dragapult-scoped
+   + 22 mega_starmie tests pass. id 666 shared with mega_starmie → scope the removal to dragapult only.
 
-**Phase-0 open questions** (see checklist): mulligan × Explosiveness; Risky Ruins self-chip net value;
-Tera + effect-counters on a benched Dragapult.
+**Partial risks / notes (do NOT block; carry into the doctrine / `/deck-align`):**
+- **Munkidori Adrena-Brain ACTIVATION** shares the draw-ability gap (its MAIN `_ABILITY` scores 0). Infra C covers
+  the follow-up selects only. Planner may sequence it on a lethal/KO turn; a non-lethal **pre-load** activation is
+  skipped. v1 `use-the-draw-engine-ability` scopes to draw/dig; extending to counter-move/heal is a deferred refinement.
+- **Poké Pad** (`search` tag only) has NO `_FETCH_FILTERS` entry → the Fetch doctrine's play/whiff signals never
+  fire for it; it's play-endorsed only by `dig-before-commit` (+20) and has **no whiff protection.** Pre-existing
+  general imprecision — note, don't fix here.
+- **`bench_fill` filter is HP-agnostic** (doesn't encode Poffin's ≤70 cap) → over-includes Munkidori/Fezandipiti/
+  Meowth in the search set; harmless for the grab (engine offers only legal targets) but can false-suppress the
+  `dont-search-an-empty-deck` whiff guard. Pre-existing general imprecision.
+- **Unfair Stamp disruption facet** (opp draws only 2) is not rewarded generically (gated on
+  `opp_has_hand_size_attacker`) → valued purely as self-refresh. The deferred general `hand_disruption` seam.
 
-**Engine-verified infra gaps (headline — the deck's signature mechanics are unmodeled).** Confirmed
-2026-07-03 by dumping `build_attack_stats` (compendium ADR-0032). These are STRUCTURAL (Tactical /
-Lethal / damage-oracle), not weight-Hypotheses — build them in Phase 6 like the mega_lucario run minted
-its AttackStat fields:
+**Deferred (designed seams, not shipped):**
+- Munkidori explicit **finish-vs-heal** value-compare (v1 = most-damaged source + convert target).
+- Risky Ruins **bench-first sequencing** + skip-vs-{D}-decks (needs the Read).
+- Rosa's **discard-as-fuel** keep-value term (a `good-in-discard` for basic F/P when behind) — general discard suffices for v1.
+- `dont-strand-the-evolving-engine` positive companion (fetch the Dunsparce base as precursor) — hand to `/deck-align` if the ladder shows under-development.
+- Matchup spreads are competitive-reasoning-level → **ladder-validate** (gauntlet-invalid; ladder + corrections are the signal).
 
-- **A · Phantom Dive spread rider — UNMODELED.** atk 154 = `damage 200, benchSnipe 0`. "Put 6 damage
-  counters on your opponent's **Benched** Pokémon in any way you like" is caught by NEITHER parser: the
-  effect-damage parser only runs on printed-0 attacks (this is printed-200), and `parse_attack_bench_snipe`
-  doesn't match the "Benched … any way you like" spread. **The oracle sees a plain 200-to-Active** — the
-  60 distributable bench damage (the whole deck) is invisible to valuation and the Lethal Solver. Needs a
-  new spread-rider field + oracle/Lethal handling. **The central deck mechanic.**
-- **B · Cruel Arrow targeting — PARTIAL.** atk 183 damage correctly parsed to `100`, but `benchSnipe 0`
-  — the "to *any* Pokémon incl. Bench, ignore W/R on Bench" is not encoded, so Tactical/Lethal value it
-  as 100-to-Active and miss its job as a benched-mon finisher. (Targeting AT the DAMAGE select is likely
-  handled by the snipe cluster; the valuation is what's blind.)
-- **C · Munkidori Adrena-Brain — UNMODELED.** An ability (move ≤3 counters from 1 of ours → 1 of theirs,
-  gated on {D} attached). Not an attack (no AttackStat). The activation + source/target placement is a
-  Pilot ability decision with no current handler. The deck's finisher/heal lever.
-
-**Open — engine select encoding (resolve via probe in Phase 6):** does Phantom Dive present its 6-counter
-placement as ONE `maxCount=6` DAMAGE select, six sequential single-target DAMAGE selects, or a
-distribution select? Determines whether the snipe cluster (`snipe-for-the-ko` uses *remaining* HP —
-finishes softened mons) covers optimal spread, or whether a spread-placement doctrine is needed.
-
-**Verify — `gust_ko` must use REMAINING HP.** The convert plan ("drag the Phantom-Dive / Risky-Ruins-softened
-bench mon Active to KO it") depends on the Gust doctrine's `gust_ko` oracle scoring the target at its
-**remaining** HP (chip already on it), not full HP. `snipe-for-the-ko` uses remaining HP, so `gust_ko` likely
-does too — but confirm in Phase 6; if it reads full HP, that's a fix, not just a deck concern.
-
-**Phase-6 build checklist (structural infra + deck rules to author):**
-1. **Infra A** — Phantom Dive spread rider: `AttackStat` field + parser fix + oracle/Lethal credit + the
-   marginal-value placement policy (probe the select encoding first).
-2. **Infra B** — Cruel Arrow any-target valuation (benched finisher).
-3. **Infra C** — Munkidori Adrena-Brain ability handler (value-compare finish vs heal; {D}-gated).
-4. **Infra D — Stadium state + labelling** *(from your review)* — for the stadium-denial trigger: a
-   `Board.stadium_in_play` signal read from `AreaType.STADIUM` (id + whose), plus a **stadium-effect labelling
-   pass** over the 26 unlabelled stadiums (who-benefits) — or ship the v1 replace-any-non-ours heuristic and
-   defer the labelling.
-5. **Verify `gust_ko` remaining-HP** (above).
-6. **Deck Hypotheses** (`when()` + trigger tests): `play-risky-ruins-when-net-positive` (chip net-gate +
-   stadium-denial), `crush-the-key-energy`.
-7. **General rules** (fold-forward): `play-the-engine-ability` (+ `bench-the-comeback-drawer` gate),
-   `hold-evolution-until-attacker-ready`, `hold-unfair-stamp-for-impact`.
-8. **Declarations:** roles / lines (`Ready(energy=2)`) / params (`preferred_start="first"`) per §7. **Do NOT
-   author any attack-veto on Munkidori/Fezandipiti/Meowth** — ability-first is a bench-bias, not a veto (§3 note).
-9. **Gates:** per-Hypothesis trigger checks; `pytest tests/ -q` green; `check_agent.py dragapult_ex`
-   (self-match: no crash / timeout / illegal move).
+**Ladder-ship posture (gauntlet-invalid, ladder-only):** the behavioral changes (`preferred_start="second"`,
+Budew opener, draw-ability activation) ship **default-ON, kill-switched, with blunder-buster telemetry** — not
+A/B-gated (cross-deck gauntlet proves nothing about gain). Verify via ladder corrections + user feedback.
 
 ---
 
-### Phase-B GROUNDING UPDATE (2026-07-03 — authored against live source, per deck-genie mandate)
-
-Building revealed the General Strategy has **grown past what §5/§6 assumed** — three planned deck rules are
-already **covered-as-is** (fold policy: never author what the general layer covers):
-
-- **Crushing Hammer → `play-energy-denial`** (baseline_disruption.py; its rationale literally names
-  Crushing Hammer + reads `energy_denial` tag & `opp_active_has_energy`, stands down on `active_cheap_attack_kos`).
-  **DROP `crush-the-key-energy`.**
-- **Meowth ex → `bench-the-supporter-tutor` + `grab-a-gust-supporter-for-the-ko`** (doctrine_fetch.py; the
-  first's rationale explicitly names `dragapult_ex`; tag-`supporter_tutor`-driven). **DROP the Meowth half of
-  `play-the-engine-ability`; give Meowth NO Role.**
-- **Unfair Stamp → Shuffle-Refresh doctrine** (`shuffle_hand` tag, not Supporter-gated) **+ aceSpec discard
-  guard** — the same coverage mega_lucario relies on. **DROP `hold-unfair-stamp-for-impact`** (the max-impact
-  strip nuance stays the deferred general `hand_disruption` seam).
-
-**M1 DONE (tracer bullet):** `strategy.py` (declarations: roles/Line `Ready(energy=2)`/params
-`preferred_start="first"`) + `main.py` Bundle → `check_agent dragapult_ex` PASS (contents/legality/
-playability×3/deployability). The agent already rides the covered-as-is layer (energy-denial, Meowth tutor,
-Unfair Stamp, Gust, Fetch, Shuffle-Refresh, snipe cluster, Cinderace folds).
-
-**FINAL remaining build set:**
-- **Structural infra:** A · Phantom Dive spread (valuation + placement) · B · Cruel Arrow any-target · C ·
-  Munkidori Adrena-Brain handler · D · Stadium Board signal (+ labelling or v1 heuristic).
-- **Deck/general rules:** `hold-evolution-until-attacker-ready` (GENERAL — counters the +40 `evolve-into-wincon`
-  pull when the payoff can't attack + pre-evo has `dig` + not KO-range; needs a Context "evolve yields a
-  ready attacker" signal) · `bench-the-comeback-drawer` (Fezandipiti — needs a tag + a rule beside
-  `bench-the-supporter-tutor`) · `play-risky-ruins-when-net-positive` (needs Infra D).
-
-### Phase-B BUILD PROGRESS (2026-07-03, TDD)
-
-- **M1 · playable agent — DONE** (`strategy.py` + `main.py`; `check_agent` PASS).
-- **Infra A1 · Phantom Dive spread parser — DONE.** `AttackStat.benchSpread` + `parse_attack_bench_spread`
-  ("Put N counters … in any way you like" → N×10); Phantom Dive=60, Jet Headbutt/Cruel Arrow=0. Tests green.
-- **Infra A2 · spread valuation — DONE.** `_rider_spread` + `_spread_ko_prizes` (subset knapsack: max prizes
-  from KOing benched mons within the 60) + `_bench_spread_bonus` (sub-prize chip), wired into `_tactical`
-  and `_best_affordable_ko_value` parallel to the snipe rider. 4 new tactical tests + **full suite green (1202)**.
-- **A3 PROBE — RESOLVED (the §8 open question).** Self-play probe (`scratchpad/probe_phantom_dive.py`): the
-  attack is chosen at MAIN as `{type:13, attackId:154}`, then the engine asks **6 sequential single-counter
-  selects**, each `context = DAMAGE_COUNTER_ANY (14)`, `min=max=1`, options = `{type:3, area:5 (BENCH),
-  index}` — pick which benched mon gets THIS counter. **Context 14 ≠ DAMAGE(15)**, so the snipe cluster does
-  NOT fire; the placement is currently unguided. **`DAMAGE_COUNTER_ANY` is ALSO Munkidori's "onto opponent"
-  target context** — so the ctx-14 offensive-placement policy (A3) is SHARED with Infra C's target half.
-- **A3 · placement policy — DONE.** `_DAMAGE_COUNTER_ANY` constant + `Board.best_counter_slot` +
-  `Context.counter_is_best_placement` + the general rule **`place-counter-to-convert`** (baseline_snipe,
-  the adjacent bench-targeting cluster). Per counter, knapsack-optimal (`_best_ko_subset`, shared with A2's
-  valuation): finish the closest-to-dying member of the highest-prize affordable KO set (budget =
-  `remainDamageCounter`×10), else pre-load the lowest-HP opp target. Recomputed per select → correct
-  sequential greedy. **4 placement tests + full suite green (1206, deterministic order).** *(The lone
-  random-order failure is pre-existing native-engine global-state flakiness, unrelated — passes in isolation
-  and `_bench_spread_bonus` is 0 for every non-spread attack.)* **This ctx-14 policy also targets Munkidori's
-  "onto opponent" half (C).**
-- **Infra C · Munkidori Adrena-Brain — DONE (v1).** Probe corrected the assumption: the ability is a MAIN
-  `ABILITY` option (already activated by the default — the probe captured its selects), then **3 selects**:
-  `REMOVE_DAMAGE_COUNTER`(16)=SOURCE (our Pokémon, remove=heal) → `REMOVE_DAMAGE_COUNTER_COUNT`(40)=AMOUNT →
-  `DAMAGE_COUNTER`(13)=TARGET (opponent, add=finish/chip). NOT ctx-14. Built: **target** = `place-counter-to-
-  convert` extended to ctx-13 (budget→30, reuses A3's knapsack); **source** = `move-counters-off-the-damaged`
-  (our most-damaged body = biggest heal, the reverse-heal); **amount** = `move-max-counters`. 3 tests + full
-  suite green (1209). The offense+heal synergy (source heals our line WHILE the target chips theirs) subsumes
-  the finish-vs-heal comparator for v1. *Deferred refinement:* explicit finish-vs-heal value-compare +
-  win-con-preference on the source (v1 = most-damaged body).
-- **Infra B · Cruel Arrow any-target — DONE.** A free-target "does N to 1 of your opponent's Pokémon"
-  effect (Cruel Arrow) is routed in `build_attack_stats` to a full-damage **bench snipe** (`benchSnipe=100`,
-  `damage=0`, ignores W/R) instead of fixed Active damage — so the oracle values + targets it as the benched
-  finisher its doctrine role calls for. (13 pool attacks reclassified; test updated.)
-- **Infra D · Stadium — DONE.** `Board.stadium_in_play` (id) + `Board.opp_stadium_in_play` read from
-  `current.stadium` (`[{id, playerIndex}]`). Deck rule **`play-risky-ruins-when-net-positive`**: play Risky
-  Ruins when no Stadium is up OR an opponent's is (replace it). *(bench-first sequencing + skip-vs-{D}-decks
-  deferred to the Read.)*
-- **`hold-evolution-until-attacker-ready` — DONE** (deck; `Context.evolve_body_energy` — hold the
-  Drakloak→Dragapult evolve while the body has < 2 FP energy and my Active isn't doomed; counters the +40
-  `evolve-into-wincon` pull, seed −18).
-- **`bench-the-comeback-drawer` — DONE** (deck; bench Fezandipiti in RACE/STABILIZE with bench room).
-
-### ✅ Phase B COMPLETE (2026-07-03)
-
-All slices built test-first, **full suite green (1215 passed)**, and **`check_agent dragapult_ex` passes all
-four gates** (contents / legality / playability / **deployability**). Deck-rule trigger tests:
-`tests/agents/test_dragapult_ex_triggers.py` (6). Structural-infra tests: `tests/strategy/test_attack_value.py`
-(spread valuation + placement + counter-move) + `tests/scouting/test_attack_riders.py` (spread parser). Every
-shared-code change is guarded inert for non-dragapult decks (verified by the suite + the cluster
-characterization guard). The agent is packaged and ladder-ready. **The human commits.**
-
----
-
-## Appendix A · Phase-0 raw fact dump (verbatim substrate — engine ground truth)
+## Appendix A · Phase-0 raw fact dump (verbatim substrate — engine ground truth, 2026-07-09)
 
 ```
-# Deck facts — dragapult_ex (60 cards, 21 unique)
+# Deck facts — dragapult_ex (60 cards, 23 unique)
 
 ## Pokémon
-
-### 2× Munkidori — Basic Psychic · 110 HP · 1 prize
-- weakness Darkness · resist Fighting · retreat 1
-- function tags: confuse, heal, spread
-- Ability — Adrena-Brain: Once during your turn, if this Pokémon has any {D} Energy attached, you
-  may move up to 3 damage counters from 1 of your Pokémon to 1 of your opponent's Pokémon.
-- PC — Mind Bend (60): Your opponent's Active Pokémon is now Confused.
-
-### 4× Dreepy — Basic Dragon · 70 HP · 1 prize
-- weakness - · resist - · retreat 1
-- P — Petty Grudge (10)
-- FP — Bite (40)
-
-### 4× Drakloak — Stage 1 Dragon · 90 HP · 1 prize · evolves from Dreepy
-- weakness - · resist - · retreat 1
-- function tags: dig, draw
-- Ability — Recon Directive: Once during your turn, you may look at the top 2 cards of your deck and
-  put 1 of them into your hand. Put the other card on the bottom of your deck.
-- FP — Dragon Headbutt (70)
-
-### 3× Dragapult ex — Stage 2 Dragon · 320 HP · 2 prize · ex Tera · evolves from Drakloak
-- weakness - · resist - · retreat 1
-- function tags: spread
-- C — Jet Headbutt (70)
-- FP — Phantom Dive (200): Put 6 damage counters on your opponent's Benched Pokémon in any way you like.
-
-### 1× Fezandipiti ex — Basic Darkness · 210 HP · 2 prize · ex
-- weakness Fighting · resist - · retreat 1
-- Ability — Flip the Script: Once during your turn, if any of your Pokémon were Knocked Out during your
-  opponent's last turn, you may draw 3 cards. You can't use more than 1 Flip the Script Ability each turn.
-- CCC — Cruel Arrow (0): This attack does 100 damage to 1 of your opponent's Pokémon. (Don't apply
-  Weakness and Resistance for Benched Pokémon.)
-
-### 4× Cinderace — Stage 2 Fire · 160 HP · 1 prize · evolves from Raboot
-- weakness Water · resist - · retreat 0
-- function tags: opener, energy_accel
-- Ability — Explosiveness: If this Pokémon is in your hand when you are setting up to play, you may put
-  it face down in the Active Spot.
-- C — Turbo Flare (50): Search your deck for up to 3 Basic Energy cards and attach them to your Benched
-  Pokémon in any way you like. Then, shuffle your deck.
-
-### 1× Meowth ex — Basic Colorless · 170 HP · 2 prize · ex
-- weakness Fighting · resist - · retreat 1
-- function tags: search, stall
-- Ability — Last-Ditch Catch: Once during your turn, when you play this Pokémon from your hand onto your
-  Bench, you may use this Ability. Search your deck for a Supporter card, reveal it, and put it into your
-  hand. Then, shuffle your deck. You can't use more than 1 Ability that has "Last-Ditch" in its name each turn.
-- CCC — Tuck Tail (60): Put this Pokémon and all attached cards into your hand.
+- 3× Dragapult ex (121) — Stage 2 Dragon · 320 HP · 2 prize · ex Tera · ← Drakloak · weak - · retreat 1
+  · tags spread · [C] Jet Headbutt 70 · [FP] Phantom Dive 200: put 6 damage counters on opp Bench any way.
+- 4× Drakloak (120) — Stage 1 Dragon · 90 HP · 1 prize · ← Dreepy · tags dig,draw · Ability Recon Directive:
+  once/turn look at top 2, put 1 in hand, other to bottom · [FP] Dragon Headbutt 70.
+- 4× Dreepy (119) — Basic Dragon · 70 HP · 1 prize · [P] Petty Grudge 10 · [FP] Bite 40.
+- 2× Munkidori (112) — Basic Psychic · 110 HP · 1 prize · weak Darkness · resist Fighting · tags confuse,heal,spread
+  · Ability Adrena-Brain: once/turn if {D} attached, move ≤3 counters from 1 of yours to 1 of opponent's · [PC] Mind Bend 60 (Confuse).
+- 1× Fezandipiti ex (140) — Basic Darkness · 210 HP · 2 prize · ex · weak Fighting · Ability Flip the Script:
+  once/turn if any of your Pokémon KO'd during opp last turn, draw 3 · [CCC] Cruel Arrow 0: 100 to 1 opp Pokémon (no W/R on Bench).
+- 1× Budew (235) — Basic Grass · 30 HP · 1 prize · weak Fire · retreat 0 · [—] Itchy Pollen 10: opp can't play Items next turn.
+- 1× Dunsparce (305) — Basic Colorless · 70 HP · 1 prize · weak Fighting · → Dudunsparce · [C] Trading Places 0 (self↔bench switch) · [CC] Ram 20.
+- 1× Dudunsparce (66) — Stage 1 Colorless · 140 HP · 1 prize · weak Fighting · retreat 3 · ← Dunsparce · tags draw,stall
+  · Ability Run Away Draw: once/turn draw 3; if you drew, shuffle this + all attached into deck · [CCC] Land Crush 90.
+- 1× Meowth ex (1071) — Basic Colorless · 170 HP · 2 prize · ex · weak Fighting · tags search,supporter_tutor
+  · Ability Last-Ditch Catch: on-play to Bench, search deck for a Supporter to hand · [CCC] Tuck Tail 60 (self+attached to hand).
 
 ## Supporter
-- 3× Boss's Orders · gust — Switch in 1 of your opponent's Benched Pokémon to the Active Spot.
-- 3× Crispin · energy_accel, search, tutor_energy — Search your deck for up to 2 Basic Energy cards of
-  different types, reveal them, and put 1 of them into your hand. Attach the other to 1 of your Pokémon.
-- 2× Judge · draw, hand_disruption, shuffle_hand — Each player shuffles their hand into their deck and draws 4.
-- 4× Lillie's Determination · draw, shuffle_hand — Shuffle your hand into your deck. Then, draw 6 cards.
-  If you have exactly 6 Prize cards remaining, draw 8 cards instead.
+- 3× Boss's Orders (1182) · gust — switch in 1 opp Benched Pokémon to Active.
+- 3× Crispin (1198) · energy_accel,search,tutor_energy — search 2 Basic Energy diff types, 1 to hand, attach the other.
+- 4× Lillie's Determination (1227) · draw,shuffle_hand — shuffle hand into deck, draw 6 (8 if exactly 6 prizes).
+- 1× Rosa's Encouragement (1240) · (untagged) — only if MORE prizes remaining than opp; attach ≤2 Basic Energy from discard to 1 Stage 2.
 
 ## Item
-- 1× Unfair Stamp [ACE SPEC] · draw, hand_disruption — Use only if any of your Pokémon were KO'd during
-  your opponent's last turn. Each player shuffles hand into deck; you draw 5, opponent draws 2.
-- 4× Buddy-Buddy Poffin · search, bench_fill — Search deck for up to 2 Basic Pokémon with 70 HP or less
-  onto Bench. (Only Dreepy qualifies here.)
-- 2× Night Stretcher · recycle — Put a Pokémon or a Basic Energy from discard into hand.
-- 3× Crushing Hammer · energy_denial — Flip a coin; heads, discard an Energy from 1 opponent's Pokémon.
-- 4× Ultra Ball · cost_discard, search, tutor_pokemon — Discard 2 cards; search deck for any Pokémon.
-- 4× Poké Pad · search — Search deck for a Pokémon that doesn't have a Rule Box; put in hand.
+- 4× Buddy-Buddy Poffin (1086) · search,bench_fill — search ≤2 Basics ≤70 HP to Bench (Dreepy/Budew/Dunsparce).
+- 4× Poké Pad (1152) · search — search a non-Rule-Box Pokémon to hand.
+- 4× Ultra Ball (1121) · cost_discard,search,tutor_pokemon — discard 2, search any Pokémon.
+- 4× Crushing Hammer (1120) · energy_denial — flip a coin; heads discard 1 opp Energy.
+- 3× Night Stretcher (1097) · recycle — a Pokémon or Basic Energy from discard to hand.
+- 1× Unfair Stamp (1080) [ACE SPEC] · draw,hand_disruption,shuffle_hand — only if your Pokémon KO'd last turn; both shuffle hands, you draw 5 / opp 2.
 
 ## Stadium
-- 2× Risky Ruins — Whenever any player puts a Basic non-{D} Pokémon onto their Bench during their turn,
-  place 2 damage counters on that Pokémon.
+- 2× Risky Ruins (1260) — any player benches a Basic non-{D} → 2 counters on it.
 
 ## Energy
-- 4× Basic {R} (Fire) · 3× Basic {P} (Psychic) · 2× Basic {D} (Darkness)
+- 3× Basic {R} Fire (2) · 4× Basic {P} Psychic (5) · 2× Basic {D} Darkness (7).
 ```
