@@ -1,0 +1,263 @@
+{
+  "episode": "84890060",
+  "frame": 11,
+  "category": "misattachment",
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 80,
+              "id": 706,
+              "maxHp": 80,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 16,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 80,
+              "id": 706,
+              "maxHp": 80,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 17,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 47,
+          "discard": [],
+          "hand": null,
+          "handCount": 5,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 675,
+              "maxHp": 110,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 78,
+              "tools": [
+                {
+                  "id": 1174,
+                  "playerIndex": 1,
+                  "serial": 108
+                }
+              ]
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 81,
+              "tools": []
+            },
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 80,
+              "id": 677,
+              "maxHp": 80,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 84,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 42,
+          "discard": [
+            {
+              "id": 1142,
+              "playerIndex": 1,
+              "serial": 100
+            },
+            {
+              "id": 6,
+              "playerIndex": 1,
+              "serial": 64
+            }
+          ],
+          "hand": [
+            {
+              "id": 1213,
+              "playerIndex": 1,
+              "serial": 114
+            },
+            {
+              "id": 6,
+              "playerIndex": 1,
+              "serial": 69
+            },
+            {
+              "id": 1121,
+              "playerIndex": 1,
+              "serial": 91
+            },
+            {
+              "id": 6,
+              "playerIndex": 1,
+              "serial": 68
+            },
+            {
+              "id": 1229,
+              "playerIndex": 1,
+              "serial": 120
+            },
+            {
+              "id": 678,
+              "playerIndex": 1,
+              "serial": 88
+            }
+          ],
+          "handCount": 6,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 1,
+      "turnActionCount": 7,
+      "yourIndex": 1
+    },
+    "logs": [
+      {
+        "cardId": 1174,
+        "cardIdTarget": 675,
+        "playerIndex": 1,
+        "serial": 108,
+        "serialTarget": 78,
+        "type": 11
+      }
+    ],
+    "remainingOverageTime": 599.0042639999999,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "area": 2,
+          "inPlayArea": 4,
+          "inPlayIndex": 0,
+          "index": 1,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 0,
+          "index": 1,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 1,
+          "index": 1,
+          "type": 8
+        },
+        {
+          "index": 2,
+          "type": 7
+        },
+        {
+          "area": 2,
+          "inPlayArea": 4,
+          "inPlayIndex": 0,
+          "index": 3,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 0,
+          "index": 3,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 1,
+          "index": 3,
+          "type": 8
+        },
+        {
+          "type": 12
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    }
+  },
+  "chosen": [
+    0
+  ],
+  "chosen_label": "Attach Basic {F} Energy → Lunatone (active · 110/110)",
+  "correct": [
+    1
+  ],
+  "correct_label": "Attach Basic {F} Energy → Solrock (bench 1 · 110/110)",
+  "rationale": "dont attach energy nor attack for lunatone when there are other options"
+}

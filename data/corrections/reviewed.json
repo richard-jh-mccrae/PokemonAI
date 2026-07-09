@@ -622,5 +622,10 @@
     "disposition": "covered",
     "reason": "attack-last defers the non-lethal Nebula Beam (154.7<KO); real Pilot plays Harlequin (dig-before-commit +20) first. retest chosen [5]->[0]=Harlequin, FIXED=True",
     "round": "2026-07-09"
+  },
+  "84071010-30": {
+    "disposition": "covered",
+    "reason": "CRITICAL 'single card (Lillie's), use it' — COVERED on the current real Pilot: decide()=[0]=Play Lillie's Determination (=correct). attack-last (_finish_turn_last) defers the 169.9 Aura Jab (tier-2, non-KO) via reordered=True, and Lillie's now scores +20 (dig-before-commit) since the old dont-refresh-into-a-probable-miss suppressor no longer fires on this dead 1-card hand. Confirmed via tune._build_pilot('mega_lucario').decide on the captured f30 state.",
+    "round": "2026-07-09"
   }
 }
