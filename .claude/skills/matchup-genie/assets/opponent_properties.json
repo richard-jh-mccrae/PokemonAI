@@ -41,6 +41,16 @@
       "type": "bool",
       "consumer": "unwired",
       "note": "every attacker the deck fields is a 1-prize body (no ex / Mega-ex), so there is no multi-prize insurance and no 2-for-1 gust swing to farm — but the attacker line does not self-recur, so each KO is real progress toward six. Lever (future): value even-trade tempo and cheap recurring single-prize attackers over multi-prize burst; deprioritise gust-for-a-2-prize-swing plans that have no target here. First minted for alakazam (all-1-prize Alakazam/Dudunsparce toolbox). Reusable for any single-prize toolbox archetype."
+    },
+    "opp_special_energy_fragile": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck's ENTIRE energy base is Special energy AND it has no way to recover Special energy from the discard (e.g. its recycle only returns Pokémon or BASIC energy; its tutors only fetch from deck) — so an energy-discard-off-attacker or an energy-lock strangles its attackers with almost no path to rebuild. Distinct from opp_accel_dependent (which is about a single accelerator Pokémon). Lever (future): raise the value of special-energy discard / energy-denial lines vs this opponent; DECK-RELATIVE — inert unless our deck actually runs energy denial. First minted for hop_s_trevenant_hop_s_snorlax (4 Mist + 4 Telepath + 1 Legacy = 9/9 special, Night Stretcher recovers only Basic energy). Reusable for any all-special-energy deck lacking special-energy recursion."
+    },
+    "opp_effect_immune_bodies": {
+      "type": "bool",
+      "consumer": "unwired",
+      "note": "the deck slots energy/tools that make its key bodies immune to the EFFECTS of OUR attacks (status, can't-retreat, snipe-redirect, energy-discard-via-attack-effect) while DAMAGE, abilities, and spread all still land normally — so our effect-based disruption fizzles on those bodies but raw damage math does not. Distinct from opp_pierces_active_effects, which is the INVERSE direction (THEIR attack ignoring OUR Active-effect defences); this key is THEIR body ignoring OUR attack riders. Lever (future): deprioritise effect-rider attacks/tools vs this opponent and prefer raw-damage / weakness / ability / spread lines; route any riders at non-immune bodies. First minted for hop_s_trevenant_hop_s_snorlax (Mist Energy — prevents all attack effects on the holder; damage is not an effect). Reusable for any deck running Mist Energy or an equivalent effect-immunity attachment."
     }
   }
 }
