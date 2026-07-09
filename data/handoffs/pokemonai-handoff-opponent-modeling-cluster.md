@@ -49,6 +49,11 @@ by the analysis subagents:
 
 ## Two adjacent gaps that are NOT opponent-modeling (note, decide separately)
 
+> **Now carved out to their own handoff** (ADR-0047): the three items below live in
+> `pokemonai-handoff-ownside-sequencing-and-lethal-depth.md`. Build them there, not under the Opponent
+> Model. Kept here for context.
+
+
 - **`dont-spend-unneeded-supporter` (generic half)** — needs an OWN-side `turn_goal_satisfied` Board
   predicate (Turn-Planner directed goal already met + nothing still being searched + no thinning
   value). Then a hold-the-draw-supporter hypothesis gated on it (seed 10–20, must not regress the
