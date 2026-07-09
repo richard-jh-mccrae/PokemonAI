@@ -64,8 +64,29 @@ HYPOTHESES = [
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_forced_promotion
                         and not c.target_kos),
         weight=40, status="testing"),
-    # NOTE: flat `snipe-the-weakest`/`snipe-the-evolving-threat`/`snipe-the-strongest-evolving-threat`
-    # RETIRED — `snipe-the-top-threat` subsumes all 3 (round-b7e483a bad-target blunders). `EVOLVING_THREAT_DMG` floor stays (Read consumer may still ref it).
+    Hypothesis(
+        id="snipe-the-evolving-threat",
+        rationale="Chip a benched PRE-EVOLUTION whose forward evolution becomes a win-condition-class "
+                  "attacker (`target_is_strongest_forward`: `forward_max_damage` strongest on the Bench "
+                  "AND >= EVOLVING_THREAT_DMG) — damage counters CARRY THROUGH evolution (rules.md), so "
+                  "pre-chipping Riolu (→ Mega Lucario ex 270) softens the eventual wall a turn early. "
+                  "RESTORED after the round-b7e483a retirement wrongly assumed `snipe-the-top-threat` "
+                  "subsumed it: `_target_threat_rank` lands `snipe-the-top-threat` (+30) / "
+                  "`snipe-the-forced-promotion` (+40) on the CURRENT bulky body (Hariyama/Lunatone, 0 "
+                  "forward) while the developing wincon pre-evo scored 0 (ms corrections f75/f47, human "
+                  "domain-expert, 4 games). GATED by `not target_forward_form_in_play` — the ADR-0044 "
+                  "discriminator: it stands down when the opponent ALREADY has the evolved wincon on the "
+                  "board (chip the ready form directly, not the redundant pre-evo — the exact case in "
+                  "test_45/test_107 that a naive restore regressed), and fires only when the wincon is "
+                  "still developing (form absent). +45 beats the forced-promotion pick where it fires. "
+                  "Stands down on a KO target (`snipe-for-the-ko` +60 owns that). SEED; ladder-tuned.",
+        when=lambda c: (c.select_context == _DAMAGE and c.target_is_strongest_forward
+                        and not c.target_forward_form_in_play and not c.target_kos),
+        weight=45, status="assumed"),
+    # NOTE: flat `snipe-the-weakest`/`snipe-the-strongest-evolving-threat` RETIRED — `snipe-the-top-threat`
+    # subsumes them (round-b7e483a). `snipe-the-evolving-threat` RESTORED 2026-07-09 with the
+    # `target_forward_form_in_play` discriminator (it was NOT subsumed — the forward-wincon pre-evo scored
+    # 0). `EVOLVING_THREAT_DMG` floor stays.
 
     # --- DAMAGE_COUNTER_ANY: distribute a "put N counters in any way you like" spread (Phantom Dive)
     # or a counter-mover's "onto opponent" target (Munkidori). Distinct engine context (14) from the

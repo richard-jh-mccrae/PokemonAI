@@ -10,7 +10,7 @@ runs validate_brief.py, presents the diff, human commits (commit msg begins `mat
 - candidate_signal: opponent_properties Board fields (reuse `opp_single_prize`, `opp_tempo`; two NEW registered keys `opp_special_energy_fragile` + `opp_effect_immune_bodies`, both consumer:"unwired" = forward contracts) + Dossier `threats`/`targets` role fields
 - verification_contract: brief-validator
 - provenance: docs/matchups/hop_s_trevenant_hop_s_snorlax.md (locked doctrine, signed off 2026-07-09)
-- status: open
+- status: applied
 - for: opponent:Hop's Trevenant / Hop's Snorlax
 
 **Spec (authoring spec — the locked Brief-field content; `/update-strategy` authors the JSON, not this skill):**

@@ -122,5 +122,11 @@
  ],
  "330": [
   "prevent_ex_damage"
+ ],
+ "235": [
+  "item_lock"
+ ],
+ "1240": [
+  "energy_accel"
  ]
 }

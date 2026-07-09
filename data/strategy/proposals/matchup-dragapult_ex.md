@@ -10,7 +10,7 @@ Producer: matchup-genie (ADR-0046) — proposes only; /update-strategy authors s
 - candidate_signal: Brief fields — opponent_properties {opp_tempo, opp_spreads_bench (NEW), opp_item_locks (NEW)} + threats[] + targets[]. Two keys (`opp_spreads_bench`, `opp_item_locks`) are newly minted in src/common/scouting/opponent_properties.json with consumer:"unwired" — forward contracts; each needs a Board field + lever wired before it moves play. `opp_tempo` + the `fragile_preevo`/`prize_liability` target roles ride existing wiring (fragile_preevo lever acts on ship; opp_tempo is intel-only/unwired).
 - verification_contract: brief-validator
 - provenance: docs/matchups/dragapult_ex.md (locked doctrine, 2026-07-09; §3 seam map, §4 threats/targets, §7 decisions D1–D3)
-- status: open
+- status: applied
 
 **Spec (authoring spec — the locked Brief content; author the JSON from this, do NOT hand-invent fields):**
 

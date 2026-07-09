@@ -52,6 +52,32 @@ _PLAY = 7           # OptionType.PLAY — play a card from hand (the Stadium pla
 _ACTIVATE = 43      # SelectContext.ACTIVATE — "use the Ability?" (YES/NO; select.contextCard = owner)
 _YES = 1            # OptionType.YES — the affirmative at an ACTIVATE / coin-toss select
 _FIGHTING = 6       # EnergyType.FIGHTING — the deck's only Energy type
+_ATTACH = 8         # OptionType.ATTACH — the turn's manual Energy attach
+_ATTACH_FROM = 21   # SelectContext.ATTACH_FROM — Aura Jab's bench-load recipient pick
+_SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON — the pregame Active pick
+_BENCH = 5          # AreaType.BENCH — the attach target's area (inPlayArea)
+
+# The co-dependent one-of-each engine (STRATEGY.md §0): Solrock = the 70 attacker (Cosmic Beam needs a
+# benched Lunatone), Lunatone = the benched draw engine (Lunar Cycle needs Solrock in play). Neither is
+# worth investing in without its partner in play OR reachable. Drives the 7-seat pairing doctrine below.
+_ENGINE_IDS = {SOLROCK, LUNATONE}
+_ATTACKER_ROLES = {"secondary_attacker", "primary_attacker", "win_condition",
+                   "win_condition_base", "accel_source"}
+
+
+def _partner(cid):
+    """The one-of-each engine partner of a Solrock/Lunatone (None for any other card)."""
+    return LUNATONE if cid == SOLROCK else (SOLROCK if cid == LUNATONE else None)
+
+
+def _reachable(board, cid):
+    """True iff card `cid` is still gettable THIS game: in play / hand / the current search's revealed
+    pool (`search_deck_ids`, an exact within-frame test), else the sound deck oracle
+    (`not deck_definitely_empty_of`) when no search pool is revealed."""
+    if cid in board.in_play_ids or cid in board.hand_ids:
+        return True
+    sd = board.search_deck_ids
+    return (cid in sd) if sd is not None else (not board.deck_definitely_empty_of(cid))
 
 # Per-deck Role overlay on the universal Function Tags (sparse — only deck-intentional cards).
 # Roles drive deck Hypotheses + the universal role-keyed general rules (win_condition exemptions,
@@ -77,17 +103,97 @@ ROLES = {
 }
 
 HYPOTHESES = [
+    # ── Solrock ↔ Lunatone one-of-each pairing doctrine (7 corrections, 4 CRITICAL) ─────────────────
+    # The pair is a co-dependent engine (Solrock = attacker/Cosmic-Beam-needs-Lunatone; Lunatone = draw
+    # engine/needs-Solrock). Fix every seat: start the attacker, power the attacker not the engine, skip
+    # a partnerless Solrock, and fetch toward EXACTLY one of each in play. Replaces `fetch-the-engine-
+    # first` (its `not line_ready` gate + blanket-engine grab caused f41/f12/f26).
     Hypothesis(
-        id="fetch-the-engine-first",
-        rationale="In setup, a free tutor (Fighting Gong / Poké Pad) should prioritise the "
-                  "Solrock + Lunatone ENGINE — the draw + early attacker that fuels Aura Jab — over "
-                  "the rest of the line. Fetch an `engine`-Role piece first; the Riolu line / energy "
-                  "follow. Seeded just above the general `prefer-wincon-line-piece` (Riolu, +18) so "
-                  "the engine edges the line piece early, per the fetch-priority ruling. The payoff "
-                  "(Mega Lucario ex) still wins via the general `fetch-the-wincon` (+30) at Ultra "
-                  "Ball, the only tutor that reaches it.",
-        when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "engine" in c.roles,
+        id="start-solrock-over-lunatone",
+        rationale="At the pregame Set-Up Active pick, start SOLROCK (the attacker — Cosmic Beam 70 for "
+                  "one {F}) over Lunatone (the benched draw engine that rarely attacks). Both score 0, so "
+                  "the option-index tie-break opened Lunatone (ml f1: CRITICAL). Lunatone belongs on the "
+                  "Bench powering Lunar Cycle; +12 opens Solrock. If only Lunatone is startable, nothing "
+                  "fires and the forced pick stands.",
+        when=lambda c: c.select_context == _SETUP_ACTIVE and c.card_id == SOLROCK,
+        weight=12, status="assumed"),
+    Hypothesis(
+        id="dont-attach-to-the-engine",
+        rationale="At the turn's manual attach, DON'T power the pure draw engine (Lunatone, "
+                  "roles==['engine']) — Energy goes to the attacker line (Solrock / the Mega line / "
+                  "Makuhita→Hariyama), never the near-never-attacking Lunatone unless it is the only legal "
+                  "home (ml f11/f64: attached Lunatone over Solrock/Makuhita). Uniquely selects Lunatone "
+                  "(the deck's only engine-ONLY body; Solrock is also secondary_attacker). −12 beats "
+                  "`prefer-active-attach-in-setup` (+8) but stays below `power-up-attacker` (+15) so a "
+                  "lone Lunatone still nets positive and is attached over End when it is the only body.",
+        when=lambda c: c.option_type == _ATTACH and "engine" in c.attach_target_roles
+        and not (_ATTACKER_ROLES & set(c.attach_target_roles)),
+        weight=-12, status="assumed"),
+    Hypothesis(
+        id="attach-solrock-over-line-base",
+        rationale="At a benched attach, prefer powering Solrock (the bridge attacker: secondary_attacker "
+                  "+ engine) over holding a bare Riolu Line base: once `dont-attach-to-the-engine` demotes "
+                  "Lunatone, Solrock and Riolu tie and the decide()-only `attach_to_needy_line` tie-break "
+                  "(Line base first) would pick Riolu (ml f11 flips to Riolu without this). Power Solrock "
+                  "now (Cosmic Beam online), hold Riolu unevolved. +3 only breaks the benched Solrock-vs-"
+                  "base tie; negligible against a real Active target.",
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _BENCH
+        and "secondary_attacker" in c.attach_target_roles and "engine" in c.attach_target_roles,
+        weight=3, status="assumed"),
+    Hypothesis(
+        id="aurajab-skip-partnerless-solrock",
+        rationale="At Aura Jab's ATTACH_FROM bench-load, SKIP a partnerless Solrock — with no Lunatone in "
+                  "play, Cosmic Beam does NOTHING, so loading discard-{F} onto it is inert (ml f87: "
+                  "CRITICAL, all bench targets tied at `spread-attach-to-the-needy` +15 → index picked "
+                  "Solrock). Load the Riolu→Mega line instead. −20 nets the inert Solrock below the line.",
+        when=lambda c: c.select_context == _ATTACH_FROM and c.card_id == SOLROCK
+        and LUNATONE not in c.board.in_play_ids,
+        weight=-20, status="assumed"),
+    Hypothesis(
+        id="aurajab-load-the-wincon-line",
+        rationale="At Aura Jab's ATTACH_FROM, prefer loading the win-condition Line pre-evo "
+                  "(Riolu→Mega Lucario ex): `concentrate-accel-on-one-line-body` did not resolve to the "
+                  "bare 0-Energy Riolu here (ml f87), so the deck states the line preference. +10 lands "
+                  "the load on the Riolu line over an off-line body.",
+        when=lambda c: c.select_context == _ATTACH_FROM and c.card_is_line_preevo,
+        weight=10, status="assumed"),
+    Hypothesis(
+        id="fetch-the-missing-engine-half",
+        rationale="At a search, fetch the MISSING half of the Solrock↔Lunatone engine — an engine piece "
+                  "NOT already in play whose one-of-each partner is still reachable (in play / hand / this "
+                  "search's revealed pool, else the sound deck oracle). Completes the co-dependent draw "
+                  "engine (ml f41: benched lone Lunatone → fetch Solrock; all options scored 0 → index "
+                  "missed it). Fires even when `line_ready` (the Mega is online but the engine still wants "
+                  "completing) — the gap `fetch-the-engine-first` (`not line_ready`-gated) left. Replaces "
+                  "it: role/quantity-aware, not blanket-engine.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_id in _ENGINE_IDS
+        and c.card_id not in c.board.in_play_ids and _reachable(c.board, _partner(c.card_id)),
         weight=20, status="assumed"),
+    Hypothesis(
+        id="dont-fetch-the-redundant-piece",
+        rationale="Don't tutor a piece we ALREADY have in play — a redundant `engine` (a 2nd Solrock when "
+                  "one is down, ml f12: CRITICAL) or a redundant win-condition base (an in-play Riolu, "
+                  "whose `prefer-wincon-line-piece` +18 would otherwise out-grab the needed Makuhita in "
+                  "f12/f26). We only ever need one of each engine half in play. −22 cancels the engine "
+                  "+20 and the line-piece +18 so the missing piece (Makuhita) wins. NOTE: extending "
+                  "'don't-fetch-redundant' to `win_condition_base` (Riolu) implements the human's explicit "
+                  "one-of-each-in-play read; it mildly tensions with a dual-Mega 'fetch a 2nd Riolu' plan "
+                  "(flagged to the user).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_redundant
+        and bool({"engine", "win_condition", "win_condition_base"} & set(c.roles)),
+        weight=-22, status="assumed"),
+    Hypothesis(
+        id="dont-fetch-the-inert-engine-piece",
+        rationale="Don't tutor an INERT engine half — an engine piece not in play whose one-of-each "
+                  "partner is UNREACHABLE (not in play / hand / this search's pool; e.g. both Lunatone "
+                  "prized, ml f26: CRITICAL). A Solrock with no Lunatone reachable is a dead 70-attacker; "
+                  "fetch the Makuhita (its Hariyama in hand) instead. −20 nets it below the live grab. "
+                  "Requires the `search_deck_ids` reachability signal — the single-frame oracle can't see "
+                  "the prized Lunatone. Mutually exclusive with `dont-fetch-the-redundant-piece` "
+                  "(redundant = in play; inert = not in play + partner unreachable).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_id in _ENGINE_IDS
+        and c.card_id not in c.board.in_play_ids and not _reachable(c.board, _partner(c.card_id)),
+        weight=-20, status="assumed"),
     Hypothesis(
         id="spring-heave-ho-when-it-pays",
         rationale="Evolve Makuhita into Hariyama the turn its Heave-Ho Catcher gust PAYS: a benched "
@@ -185,6 +291,10 @@ STRATEGY = Strategy(
             "search_budget": 0,          # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
             "preferred_start": "first",  # setup-heavy evolution deck: take the develop turn
                                          # (general `honor-preferred-start` reads this at the coin toss)
+            "reactivity": "solitaire",   # deck-personality (learnthetcg): a linear evolution-beatdown
+                                         # prioritises its OWN setup; don't over-play-around the opponent.
+                                         # Declared forward contract (behavior-neutral) — deck-gating the
+                                         # opponent-filtered seams to a consumer is an A/B follow-up.
             "my_archetype": "Hariyama / Mega Lucario ex / Solrock"},  # Posture favorability key (ADR-0026)
     hypotheses=HYPOTHESES,
 )

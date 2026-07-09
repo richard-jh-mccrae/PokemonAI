@@ -10,7 +10,7 @@ Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.m
 - candidate_signal: Match Planner Threat Clock (turns-until-KO, ADR-0045) + prize-path/KO-race (ADR-0040)
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Ahead/behind is measured in attacks-to-win, not prize count")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 The ahead/behind decision must be driven by **attacks-to-win** (how many attacks each player still needs),
@@ -28,7 +28,7 @@ play-safe/press-risk mode below.
 - candidate_signal: score_diff / prize-lead board condition; the gamble tier (ADR-0039, "safe line loses → take variance")
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Risk scales with prize position")
-- status: open
+- status: deferred
 
 **Spec (authoring spec — thin):**
 Amount of risk taken should correlate with prize position. **Ahead:** minimise whiff — stabilise (extra
@@ -47,7 +47,7 @@ one-out posture) if the gamble tier only covers the behind side.
 - candidate_signal: needs a new signal (opponent rebuild-odds — their outs to a fresh attacker) + Deck-Content-Odds applied to the opponent + KO-Race read (blunder correction #30)
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Pick the KO that maximises the opponent's whiff odds")
-- status: open
+- status: deferred
 
 **Spec (authoring spec — thin):**
 When behind you win by making the opponent **miss** (boss / attack / KO). Choose the KO target that leaves
@@ -66,7 +66,7 @@ then, record as needs-a-new-signal; do not fake a weight.
 - candidate_signal: opponent hand-size delta + last-turn action (needs a new signal); Shuffle-Refresh hand-quality gate (ADR-0024) for the "play it unless hand complete" side
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Disrupt a tailored hand; don't hoard your own Iono")
-- status: open
+- status: deferred
 
 **Spec (authoring spec — thin):**
 Two coupled rules. (1) **Value hand-disruption (Iono) when the opponent has tailored a big hand down to a
@@ -84,7 +84,7 @@ delta + last-turn-discard** signal that may not exist → route the missing sign
 - candidate_signal: prize CardStat (prize value) + board composition; interpose-cheap-attacker-promote, promote-after-ko-priority
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Shape the board around prize values, two ways")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 Shape the board by prize *value*: (a) **odd-prizing / seven-prize game** — keep a single-prize attacker in
@@ -103,7 +103,7 @@ weight.
 - candidate_signal: Match Planner forgo-KO seam (ADR-0045, default ON) gated by score_diff
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Deny prizes/draw by taking fewer KOs")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 Flexible-damage / spread decks can win the race by taking **fewer** KOs: a single-prize turn (so the
@@ -121,7 +121,7 @@ forgo-ko-corrections-are-refuted / attack-is-turn-ender-develop-first. Verify th
 - candidate_signal: discard_eot keep-floors rule (partly built, general-gaps-authored-2026-07-04); add "rank remaining, cut lowest" tiebreak
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Discard triage = three buckets + rank-the-rest")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 Discard selection = three buckets then rank-the-rest. (a) **Easy** — cards wanted in discard, off-matchup
@@ -140,7 +140,7 @@ recovery, then add the ranking tiebreak.
 - candidate_signal: deck-thinning value term on discard-cost cards (order discards dead-in-hand > playable-from-hand); sibling to dont-waste-discard-energy
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Thin by playing dead cards, not discarding live ones")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 When a card must be discarded (Ultra Ball etc.), prefer to **play** the useful ones from hand (Poffin, Nest
@@ -157,7 +157,7 @@ next to the Ignition energy-discipline / `dont-waste-discard-energy` doctrine �
 - candidate_signal: needs a new signal — "turn-goal-already-satisfied" predicate over the Turn Planner directed goal + hand completeness
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Don't spend a draw supporter you don't need")
-- status: open
+- status: deferred
 
 **Spec (authoring spec — thin):**
 Playing a draw supporter is **not** mandatory just because it's in hand. If the hand already accomplishes the
@@ -175,7 +175,7 @@ predicate isn't exposed — route honestly.
 - candidate_signal: Turn Planner directed goal (ADR-0045 Game Plan) + Threat-Clock delta on the fallback attack; attack-is-turn-ender-develop-first
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Frame each turn as best-possible vs bare-minimum")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 Turn planning = define the **best-possible** turn and the **bare-minimum** the prize map requires, then take
@@ -194,7 +194,7 @@ and models the fallback-attack test, extending code rather than adding a weight.
 - candidate_signal: each agent's Role / deck-intent (STRATEGY.md) sets a "solitaire vs opponent-filtered" default; opponent-filtered branch consumes the believed archetype (Read)
 - verification_contract: score-diff
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (our-deck → "Match your reactivity to the deck you pilot")
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin):**
 How much a deck should react to the opponent's plan depends on the deck. **Linear/aggressive** decks play
@@ -213,7 +213,7 @@ archetype. Not a general weight — it's a deck-intent knob.
 - candidate_signal: own side — deck_tracker.py / deck_odds.py (built, sound-deck-emptiness-oracle + deck-content-odds); opponent side — needs a new signal (opponent discard/resource + prized-count model)
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Exploit known deck contents on both sides")
-- status: open
+- status: deferred
 
 **Spec (authoring spec — thin):**
 Exploit known contents both ways. **Own deck:** track cards sent to the *bottom* with Iono and the thinned

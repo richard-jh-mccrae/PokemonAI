@@ -54,6 +54,9 @@ STRATEGY = Strategy(
     params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority
             "search_budget": 0,           # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
             "my_archetype": "Cinderace / Mega Starmie ex",   # Posture favorability key (ADR-0026 lever A)
+            "reactivity": "solitaire",    # deck-personality (learnthetcg): turbo aggro plays its own
+                                          # game; don't over-react to the opponent. Forward contract
+                                          # (behavior-neutral) — consumer wiring is an A/B follow-up.
             "preferred_start": "second"},  # turbo: attack T1 -> general `honor-preferred-start` (-30 on YES)
     hypotheses=[],                        # empty by design — see fold table in the docstring
 )

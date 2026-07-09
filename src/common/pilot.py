@@ -45,6 +45,11 @@ _SELF_RETURN_ESCAPE = 50   # per-prize CREDIT for a self-return attack (Meowth e
 _ENERGIZED_SNIPE_TIER = 100000  # energized benched target is strictly higher snipe TIER than any
                            # bare one — attacks SOONER (imminence), sniped before a bigger latent
                            # threat (ADR-0020). Within a tier, threat magnitude orders the choice.
+_SNIPE_THREAT_PRIZE_FLOOR = 5   # deny an ENERGIZED off-Prize-Path attacker (don't treat it as prize-
+                           # redundant) while I still hold >= this many prizes — early game, the imminent
+                           # threat will bleed my prizes before I close; below it I race my committed path
+                           # (ms f39 snipe @6 vs 83667237-107 stand-down @4, symmetric boards). Calibrated
+                           # on 2 corrections — a ladder-tuned floor.
 _HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evolution line CERTAINLY
                            # reaches a hand-size attacker (Kadabra→Alakazam "Powerful Hand") — latent
                            # win-condition hidden by low printed damage. `hand_size_attacker` Function Tag.
@@ -296,6 +301,10 @@ class Board:
                                           # the Team Rocket's Watchtower read
     hand_ids: frozenset = field(default_factory=frozenset)  # card ids in MY hand — generic hold/
                                           # sequencing read (e.g. Watchtower waits while Meowth's in hand)
+    search_deck_ids: frozenset | None = None  # ids in the CURRENT search's revealed deck pool
+                                          # (`select.deck`) — an EXACT within-frame reachability test (a
+                                          # card absent here is unreachable this search), or None off a
+                                          # deck-revealing select; fall back to `deck_definitely_empty_of`
     hand_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in MY
                                           # hand — the last-attachable-F read (Lunar Cycle guard)
     recycle_dead_only: bool = False       # my discard's recycle pool (Pokémon/Basic Energy) is non-empty
@@ -436,6 +445,10 @@ class Context:
     card_evolution_baseless: bool = False  # this grab candidate is an EVOLUTION with NO base to evolve
                                        # it onto in my play or hand — a dead grab (a 3rd Drakloak, every
                                        # Dreepy evolved/gone). Board-sound; gates `dont-grab-a-baseless-mid-evolution`
+    card_base_unreachable: bool = False  # this grab candidate is an EVOLUTION whose pre-evolution base
+                                       # is provably UNGETTABLE this game (not in play/hand AND absent
+                                       # from the search's revealed pool / provably empty from deck) — a
+                                       # dead card (Mega ex with every Riolu gone); `dont-fetch-an-unplayable-evolution-payoff`
     card_is_wincon: bool = False       # this option's card IS the win-condition (a Line payoff /
                                        # win_condition / primary_attacker)
     card_is_starter: bool = False      # this option's card is a startable Basic Pokémon (hp > 0, no
@@ -464,6 +477,10 @@ class Context:
     target_is_strongest_forward: bool = False  # this snipe target's evolution line is the most
                                                # dangerous on the Bench (forward damage greatest, real
                                                # threat) — priority evolving snipe (Riolu→Mega Lucario over Hariyama)
+    target_forward_form_in_play: bool = False  # the snipe target is a pre-evolution whose EVOLVED
+                                               # wincon form is ALREADY on the opponent's board — so chip
+                                               # the ready form directly, not the redundant pre-evo
+                                               # (the ADR-0044 discriminator for snipe-the-evolving-threat)
     target_kos: bool = False           # the bench snipe KNOCKS OUT this target (rider >= its HP; bench
                                        # snipes ignore Weakness/Resistance) — a free PRIZE, top snipe
     promote_target_kos: bool = False   # at a TO_ACTIVE promote, benched Pokémon this option brings
@@ -933,7 +950,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._gust_stall_target_tactical(obs, select, board, option)
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
-                    + self._retreat_to_lethal_tactical(obs, board, option))
+                    + self._retreat_to_lethal_tactical(obs, board, option)
+                    + self._grab_lethal_tactical(obs, select, board, option))
         ctx = self._context(obs, select, board, option)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
@@ -1183,6 +1201,64 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return my_prize >= op                                # my self-KO gives them their last prize too
 
     # Gust doctrine's whether-to-play lethal, SWITCH target-select, and Board signals live in
+    def _grab_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for a GRAB (a `_TO_HAND` search/recover CARD option) that supplies THIS
+        turn's KO-enabling attach — the recover-the-energy-that-wins lethal (ADR-0030; ms f110, ml
+        f26/f48). Fires when the grab yields a reusable Basic Energy (direct — you grabbed it) or a
+        `tutor_energy` card the deck can CERTAINLY cash (`_tutor_energy_certain`, or a reusable Energy
+        revealed in THIS search's pool), and attaching it — onto the Active, or retreating into a benched
+        attacker — delivers a min-bound KO of the opponent's Active (`_best_affordable_ko_value`). Mirrors
+        `_attach_lethal_tactical` (any KO, not just a win, scored KO_SCORE + prize), extended to the grab
+        select because the win rung (plan_turn) is MAIN-only. Tactical-layer (never a weight), min-bound
+        SOUND like the Lethal Solver's closed-form locks. The retreat-into-a-benched-attacker branch is
+        not engine-verified (a grab select can't sim the later retreat), but its downside is small: an
+        over-claim only grabs an Energy over a body, never throws a game (the real KO still gates the MAIN
+        attack). 0 off a grab CARD, turn 1, once the manual attach is spent, or with no KO-enabling grab."""
+        if (select.get("context") != _TO_HAND or option.get("type") != _CARD
+                or board.turn <= 1 or board.energy_attached or board.my_prizes_remaining <= 0):
+            return 0.0
+        opp = self._opp_active(obs)
+        if opp is None or not (opp or {}).get("hp"):
+            return 0.0
+        cid = self._option_card_id(obs, select, option)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        direct = bool(stat and getattr(stat, "hp", 0) == 0
+                      and getattr(stat, "energyType", 0) and "discard_eot" not in tags)
+        tutor = ("tutor_energy" in tags
+                 and (self._tutor_energy_certain(board) or self._search_pool_has_reusable_energy(board)))
+        if not (direct or tutor):
+            return 0.0
+        etype = getattr(stat, "energyType", None) if direct else None      # a tutor's type is WILD
+        me = self._my_player(obs)
+        ma = next((p for p in (me.get("active") or []) if p), None)
+
+        def kos(attacker_id, energy, body):
+            return self._best_affordable_ko_value(obs, board, opp, attacker_id, energy, bound="min",
+                                                  body=body, extra_type=etype, extra_units=1) > 0
+
+        ko = kos(board.my_active_id, board.my_active_energy + 1, ma)
+        if not ko:                                        # retreat into a benched attacker, then attach
+            ko = any(kos(p.get("id"), len(p.get("energies") or []) + 1, p)
+                     for p in (me.get("bench") or []) if p)
+        return (KO_SCORE + self._prize_value(opp)) if ko else 0.0
+
+    def _search_pool_has_reusable_energy(self, board) -> bool:
+        """True iff THIS search's revealed pool (`search_deck_ids`) contains a reusable Basic Energy a
+        `tutor_energy` card could cash into this turn's attach — the single-frame complement to
+        `_tutor_energy_certain` (which needs the match-scoped tracker anchor the retest lacks). A card is
+        reusable Energy when hp 0 with a real `energyType` and not `discard_eot`. False off a search reveal."""
+        sd = board.search_deck_ids
+        if not sd or not self.stats:
+            return False
+        for eid in sd:
+            est = self.stats.get(eid)
+            etags = self.functions.tags(eid) if self.functions else []
+            if (est and getattr(est, "hp", 0) == 0 and getattr(est, "energyType", 0)
+                    and "discard_eot" not in etags):
+                return True
+        return False
+
     # doctrine_gust (GustMixin). `_attach_lethal_tactical` below is the general (non-gust) lethal-ATTACH lookahead.
     def _attach_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for an ATTACH that UNLOCKS a knockout this turn — attaching this Energy
@@ -1873,6 +1949,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             snipe_ctx and getattr(self, "snipe_prize_redundant", False)
             and board.my_path_turns is not None and not target_on_path
             and not target_is_forced_promotion
+            # PRIZE-POSITION gate (ms f39 vs 83667237-107, symmetric board shapes — the ONLY difference is
+            # remaining prizes): an ENERGIZED (imminent) bench attacker is worth DENYING while I still have
+            # MANY prizes to protect — it will take a chunk of them before I close, so I can't just race an
+            # off-path body away (f39: snipe the energized ex @ 6 prizes). Only in the RACING back-half
+            # (`my_prizes_remaining < _SNIPE_THREAT_PRIZE_FLOOR`) do I stick to my committed path and let it
+            # be (107: stand down @ 4 prizes). A NON-energized off-path body stays redundant regardless.
+            and not (target_energy and board.my_prizes_remaining >= _SNIPE_THREAT_PRIZE_FLOOR)
             # a high-prize body I never need is avoided ALWAYS; a low-prize off-path body only when I'm
             # not under pressure (else deny the threat) — the "not an imminent threat to me" guard
             and (card_prize_value >= 2 or not board.active_doomed))
@@ -1893,6 +1976,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_from_target_is_concentrate=attach_from_concentrate,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_evolution_baseless=self._evolution_baseless(obs, cid),
+                       card_base_unreachable=self._card_base_unreachable(obs, cid, board),
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
                        card_is_redundant=card_is_redundant,
@@ -1901,6 +1985,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
                        target_is_strongest_forward=target_is_strongest_forward,
+                       target_forward_form_in_play=self._target_forward_form_in_play(obs, select, option),
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
                        target_on_path=target_on_path, target_prize_redundant=target_prize_redundant,
@@ -2037,6 +2122,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return False
         return True
 
+    def _card_base_unreachable(self, obs: dict, cid: int | None, board) -> bool:
+        """True iff grab candidate `cid` is an EVOLUTION whose pre-evolution base is provably UNGETTABLE
+        this game — baseless in play/hand (`_evolution_baseless`) AND unreachable in the deck: absent
+        from the current search's revealed pool (`search_deck_ids`, an EXACT within-frame test) or, off
+        a search reveal, provably empty from the sound deck oracle. So the fetched evolution is a dead
+        card — a Mega ex only enters play by evolving its Basic (ml f53: grabbed Mega Lucario ex with
+        every Riolu gone). False for a Basic, when a base is in play/hand, or when the base is still
+        reachable. FAIL-CLOSED (False) when the base name can't be resolved to ids."""
+        if not self._evolution_baseless(obs, cid):
+            return False                                  # base in play/hand (or a Basic) -> reachable
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        base_name = getattr(st, "evolvesFrom", None) if st else None
+        ids_for_name = getattr(self.stats, "ids_for_name", None)
+        base_ids = set(ids_for_name(base_name)) if (ids_for_name and base_name) else set()
+        if not base_ids:
+            return False                                  # unresolvable base -> fail open (don't suppress)
+        sd = board.search_deck_ids
+        if sd is not None:
+            return not bool(base_ids & sd)                # base absent from the search pool -> unreachable
+        return all(board.deck_definitely_empty_of(bid) for bid in base_ids)   # sound oracle fallback
+
     def _attach_target_under_max(self, target: dict | None) -> bool:
         """True if the Pokémon an attach option targets carries fewer Energy than its HIGHEST-damage
         attack costs — it can still build toward its big attack (Mega Starmie at 1 W can Jetting Blow
@@ -2129,6 +2235,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Threat signal (ADR-0020): a fragile pre-evolution worth sniping before it comes online.
         Defined only for bench attack-target options (DAMAGE / CARD / BENCH).
 
+        Accounts for a HAND-SIZE-scaling attacker in the line (Alakazam Powerful Hand: 2 counters =
+        20 per card in the opponent's hand): its printed damage (10) hides the real threat, so it is
+        CALCULATED as `handSizeDamage x the opponent's current hand size` and max'd with the printed
+        forward (f85: opp holding 10 cards → Kadabra→Alakazam threatens 200, the strongest forward).
+
         FAIL-CLOSED by construction (``_context`` is not exception-wrapped): returns None whenever
         the provider, the method, the target Pokémon, its card id, or a forward chain is missing —
         so a gap leaves the signal silent rather than crashing the decision."""
@@ -2140,7 +2251,32 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         poke = self._option_pokemon(obs, select, option)
         cid = (poke or {}).get("id")
-        return (fwd(cid) or None) if cid is not None else None
+        if cid is None:
+            return None
+        printed = fwd(cid) or 0
+        dmg = max(printed, self._forward_hand_size_damage(obs, cid))
+        return dmg or None
+
+    def _forward_hand_size_damage(self, obs: dict, cid: int | None) -> int:
+        """Damage a HAND-SIZE-scaling attacker in `cid`'s forward evolution line does against me —
+        `handSizeDamage` (per-card, e.g. Alakazam Powerful Hand = 20) x the OPPONENT player's current
+        hand size (the attacker's own hand, `for each card in YOUR hand`). The user-directed f85 fix:
+        Alakazam's threat is dynamic, so its printed forward damage undercounts it — calculate it. 0
+        when no hand-size attacker in the line / no provider."""
+        if not self.stats or cid is None:
+            return 0
+        line = {cid} | self._forward_card_ids(cid)
+        per_card = max((getattr(self.stats.get(i), "handSizeDamage", 0) or 0 for i in line), default=0)
+        if per_card <= 0:
+            return 0
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
+        hand = opp.get("handCount")
+        if hand is None:
+            hand = len(opp.get("hand") or [])
+        return per_card * (hand or 0)
 
     def _board(self, obs: dict, select: dict | None = None) -> Board:
         """Summarise the shared board once per decision (see Board)."""
@@ -2258,6 +2394,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_has_colorless_ability=self._board_has_colorless_ability(opp),
             hand_ids=frozenset(c.get("id") for c in (me.get("hand") or [])
                                if c and c.get("id") is not None),
+            search_deck_ids=(frozenset(c.get("id") for c in (select.get("deck") or [])
+                                       if c and c.get("id") is not None)
+                             if select and select.get("deck") else None),
             hand_basic_energy=self._hand_basic_energy(me.get("hand") or []),
             no_supporter_in_hand=self._no_supporter_in_hand(me),
             opp_has_played_gust=self._opp_has_played_gust(opp),
@@ -2561,6 +2700,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     best = fwd
         return best
 
+    def _target_forward_form_in_play(self, obs: dict, select: dict, option: dict) -> bool:
+        """True iff this bench DAMAGE snipe target is a PRE-EVOLUTION whose evolved form is ALREADY on
+        the opponent's board (any of the target's `_forward_card_ids` is an opponent in-play id) — the
+        ADR-0044 discriminator that keeps `snipe-the-evolving-threat` from pre-chipping a redundant
+        pre-evo when the ready wincon it becomes is already present (chip the ready form directly). False
+        off a bench Damage option, for a non-evolving target, or when the forward form is not yet in play
+        (the developing-wincon case f75/f47). FAIL-CLOSED (returns False) on any missing fact."""
+        if (select.get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return False
+        poke = self._option_pokemon(obs, select, option)
+        cid = (poke or {}).get("id")
+        fwd_ids = self._forward_card_ids(cid) if cid is not None else frozenset()
+        if not fwd_ids:
+            return False
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
+        opp_ids = {p.get("id") for p in ((opp.get("active") or []) + (opp.get("bench") or [])) if p}
+        return bool(fwd_ids & opp_ids)
+
     def _bench_threat_present(self, obs: dict, select: dict | None) -> bool:
         """True if any benched Pokémon a DAMAGE select can snipe already carries Energy — an imminent
         attacker. When present, the evolving-threat snipe stands down (snipe-the-threat takes the
@@ -2682,7 +2843,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Bench (printed max damage, energy-INDEPENDENT — they promote the win-condition and accelerate
         it, not the energized bench-sitter that merely happens to be affordable now). Returns
         ``id(body)`` for exact, duplicate-safe matching against the snipe option; None when not doomed
-        / no benched attacker / no provider."""
+        / no benched attacker / no provider. NOTE: blind to hand-size-scaling attackers (Alakazam's
+        printed 10 hides the real threat) — the ms f85 gap, deferred to a `forward_max_damage`/provider
+        fix so `_body_threat_rank`'s hand-size boost is reflected here without over-counting pre-evos."""
         if not doomed or not self.stats:
             return None
         best = None                                          # (own_damage, hp, id(body))

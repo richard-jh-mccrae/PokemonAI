@@ -587,6 +587,44 @@ HYPOTHESES = [
         and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
         weight=10, status="assumed"),
     Hypothesis(
+        id="dont-strand-the-evolving-engine",
+        rationale="Don't tutor a Stage-1 ENGINE into hand when you hold no base to evolve it onto: a "
+                  "`card_is_support` piece (hp>0 with an `energy_accel`/`draw`/`search`/`dig` Ability) "
+                  "that is itself an Evolution with `card_evolution_baseless` (no copy of its "
+                  "pre-evolution in play or hand) is unplayable this game — a dead grab that "
+                  "`fetch-the-support` (+15) would otherwise prefer OVER the base that enables it "
+                  "(Dudunsparce id 66 over base Dunsparce id 305, workflow wjzvrtwbk). The off-Line "
+                  "complement of `dont-grab-a-baseless-mid-evolution` (which is `card_is_line_preevo`-"
+                  "gated to the win-condition Line): gated to `not card_is_line_preevo` so the two never "
+                  "double-fire. −25 nets the stranded engine below the base (Dunsparce's `fetch-a-starter` "
+                  "+12). Board-SOUND (visible zones); silent once the base is in play/hand and for "
+                  "line-only decks whose engines are Basics (Solrock/Lunatone → not baseless). Excludes "
+                  "`card_stranded_evolution` (a setup-only engine like Cinderace whose whole chain is "
+                  "out of deck) — that dead grab is `dont-fetch-the-setup-only-opener`'s (−60), so the "
+                  "two never stack; this rung owns only the engine whose base IS reachable but not yet "
+                  "in play/hand (Dudunsparce, base Dunsparce in deck → not stranded).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_support
+        and not c.card_is_line_preevo and c.card_evolution_baseless
+        and not c.card_stranded_evolution,
+        weight=-25, status="assumed"),
+    Hypothesis(
+        id="dont-fetch-an-unplayable-evolution-payoff",
+        rationale="Don't tutor an EVOLUTION into hand when its pre-evolution base is provably UNREACHABLE "
+                  "this game (`card_base_unreachable`: not in play/hand AND absent from the search's "
+                  "revealed pool / provably empty from the deck) — it can't be played from hand and has "
+                  "no base to evolve onto, so it is a dead card. A Mega ex only enters play by evolving "
+                  "its Basic; grabbing Mega Lucario ex with every Riolu gone burns the fetch (ml f53: "
+                  "CRITICAL — took the Mega over Solrock, all options scored 0 → index took the Mega). "
+                  "The FETCH-side mirror of `hold-wincon-dont-shuffle`'s `wincon_in_hand_undeployable` "
+                  "stand-down (that HOLDS an undeployable payoff; this declines tutoring one UP). Uses "
+                  "the exact `search_deck_ids` within-frame reachability, so it holds under BOTH the "
+                  "prize-exact tracker and a single-frame fetch reveal. −25 nets the dead grab below a "
+                  "live one; unlike `dont-grab-a-baseless-mid-evolution` (`card_is_line_preevo`-gated, "
+                  "play/hand only) it also catches the PAYOFF and requires the base to be gone from the "
+                  "DECK too (a base still in-deck is drawable — not yet dead).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_base_unreachable,
+        weight=-25, status="assumed"),
+    Hypothesis(
         id="dont-grab-a-baseless-mid-evolution",
         rationale="Don't take a mid-Line EVOLUTION into hand at a search when you hold no base to evolve "
                   "it onto — no copy of its pre-evolution in play or hand (`card_evolution_baseless`), so "
@@ -730,6 +768,22 @@ HYPOTHESES = [
         and "discard_eot" not in c.tags,
         weight=-12, status="assumed"),
     Hypothesis(
+        id="keep-the-evolution-tutor-at-discard",
+        rationale="At a forced discard BEFORE the win-condition line is assembled (`not wincon_in_hand`), "
+                  "floor a scarce evolution tutor (`rush_evolve`/`tutor_mega` — Salvatore, the deck's "
+                  "only way to field a 2nd Mega Starmie) below a redundant DRAW duplicate: a held-in-2 "
+                  "Salvatore and a held-in-2 Lillie's Determination both tie at `discard-the-hand-"
+                  "duplicate` (+12) + `keep-engine-supporter-at-discard` (−8) = +4, so the index tie-"
+                  "break shed the line-enabling tutor first (ep83967840 f54: kept both Salvatore, the "
+                  "human wanted a plentiful Lillie's pitched instead). −6 nets the tutor below the tied "
+                  "draw duplicate so the redundant draw Supporter is shed. Gated to `not wincon_in_hand` "
+                  "so it never fights `discard-the-redundant-tutor` (+20), which correctly sheds a tutor "
+                  "whose job is DONE once the wincon is already in hand.",
+        when=lambda c: c.select_context == _DISCARD
+        and ("rush_evolve" in c.tags or "tutor_mega" in c.tags)
+        and not c.board.wincon_in_hand,
+        weight=-6, status="assumed"),
+    Hypothesis(
         id="discard-the-redundant-tutor",
         rationale="At a forced discard, shed a `rush_evolve`/`tutor_mega` search whose job is done once the "
                   "win-condition is already in hand (`board.wincon_in_hand`) — a second dig for it is dead "
@@ -745,6 +799,23 @@ HYPOTHESES = [
                   "which never takes one. Positive weight ranks it among the discards.",
         when=lambda c: c.select_context == _DISCARD and "opener" in c.tags,
         weight=20, status="testing"),
+    Hypothesis(
+        id="keep-gust-and-recovery-at-discard",
+        rationale="At a forced discard, floor a `gust` (Boss's Orders / Counter Catcher — the deck's "
+                  "reach to close a KO or gust around a wall) or `recycle` (Super Rod / Night Stretcher — "
+                  "the deck's recovery) card below neutral filler: the existing keep-floors "
+                  "(`keep-key-cards-at-discard` −30, `keep-engine-supporter-at-discard` −8) protect the "
+                  "wincon / burst / ACE SPEC / draw-search-heal Supporters but NOT the Item-form gust and "
+                  "recovery cards (`_KEEP_ENGINE_TAGS` omits `gust`/`recycle` and the −8 rung gates on "
+                  "`cardType == SUPPORTER`), so a lone Boss's / Counter Catcher / Super Rod / Night "
+                  "Stretcher scored 0 and could fall to the option-index tie-break — pitched over filler. "
+                  "These are irreplaceable reach/recovery: the digest's 'Never-discard' bucket. −10 (just "
+                  "under the −8 engine floor: a gust/recovery is at least as irreplaceable as a draw "
+                  "Supporter) so filler is shed first; still below the −30 key floor and −15 line-base so "
+                  "a genuinely forced multi-shed can still take one. seed-ladder (ADR-0018).",
+        when=lambda c: c.select_context == _DISCARD
+        and bool({"gust", "recycle"} & set(c.tags)),
+        weight=-10, status="assumed"),
     Hypothesis(
         id="keep-engine-supporter-at-discard",
         rationale="At a forced discard, keep reliable engine Supporters (draw/search/heal) below a neutral "

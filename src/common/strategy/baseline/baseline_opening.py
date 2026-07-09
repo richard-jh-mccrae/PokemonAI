@@ -35,6 +35,17 @@ HYPOTHESES = [
         and "accel_source" in c.roles,
         weight=40, status="assumed"),
     Hypothesis(
+        id="open-the-item-lock-starter",
+        rationale="At the pregame Set-Up Active pick, prefer a candidate carrying the `item_lock` tag "
+                  "(Budew — Itchy Pollen: 0-cost attack, blocks the opponent's Item cards next turn): "
+                  "leading with a free item-lock disruptor taxes an item-heavy setup engine while our "
+                  "own wincon assembles. Tag-keyed opt-in twin of `open-the-accelerator` (which keys the "
+                  "`accel_source` Role); +35, just below it. A pregame pick, so KO-safe; no first/second "
+                  "gate needed (opening the lock going first just waits to fire T2). Silent for decks "
+                  "with no `item_lock` card.",
+        when=lambda c: c.select_context == _SETUP_ACTIVE and "item_lock" in c.tags,
+        weight=35, status="assumed"),
+    Hypothesis(
         id="dont-open-multiprize-active",
         rationale="At the pregame Set-Up Active pick (`_SETUP_ACTIVE`), DON'T open with a non-wincon "
                   "multi-prize ex (Meowth ex) — the Active Spot is the most-exposed slot, so a 2-prize "
