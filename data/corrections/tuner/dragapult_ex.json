@@ -1,7 +1,43 @@
 {
   "deck": "dragapult_ex",
-  "generated_at": "2026-07-09T02:39:39",
-  "open": [],
+  "generated_at": "2026-07-09T21:46:06",
+  "open": [
+    {
+      "id": "slow-setup-85046350-18",
+      "category": "slow_setup",
+      "episode_id": 85046350,
+      "frame": 18,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='ToHand' (turn 2) to prefer 'Basic {R} Energy' over 'Basic {D} Energy'",
+      "rationale": "save darkness energy for when we have Munkidori available",
+      "agent_build": "dragapult_ex_20260709_e2f0a07-dirty",
+      "built_at": "2026-07-09T00:00:00",
+      "critical": false,
+      "planner_committed": false,
+      "lethal_locked": false,
+      "posture_mismatch": false,
+      "believed_archetype": "Cynthia's Garchomp ex / Cynthia's Roserade"
+    }
+  ],
   "skipped": [],
-  "reviewed": []
+  "reviewed": [
+    {
+      "episode_id": 85045840,
+      "frame": 8,
+      "disposition": "covered",
+      "reason": "degenerate: chosen==correct==Play Poké Pad; real Pilot decide()=[1]=Poké Pad (dig-before-commit sequences it first, reordered). The wider T1 engine plan (Drakloak Recon + Dudunsparce Run Away Draw) is covered by use-the-draw-engine-ability; the Ultra Ball discard-discipline is the f14 cluster."
+    },
+    {
+      "episode_id": 85046350,
+      "frame": 20,
+      "disposition": "deferred",
+      "reason": "capability-gap: retreat-to-promote-a-disruptor is an unbuilt single-turn Turn Planner generator (naive attach-to-active harms without follow-through) — see docs/todo/retreat-to-item-lock-maneuver.md; fixture dragapult_retreat_to_item_lock_f20.json; decide()=[1] unchanged (not covered)."
+    },
+    {
+      "episode_id": 85046350,
+      "frame": 45,
+      "disposition": "covered",
+      "reason": "CRITICAL: real Pilot decide()=[2]=Play Poké Pad=correct, deterministic 5/5 (gamble_lines ON default). The recorded Lillie's was the e2f0a07-DIRTY gamble variant; on shipped code the gamble stands down and the dig-tie (Lillie's/Poké Pad both +20) resolves to Poké Pad. Human intent (Poké Pad before Lillie's) satisfied."
+    }
+  ]
 }
