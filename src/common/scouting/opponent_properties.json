@@ -71,6 +71,16 @@
       "type": "bool",
       "consumer": "unwired",
       "note": "the deck self-mills its own library with no (or negligible) Pokemon/Trainer recovery, so a long game drifts it toward deck-out and an attacker/resource drought — its own damage engine becomes a liability over time. Lever (future): in a non-losing board state, prefer to GRIND / trade evenly and deny fast KOs rather than race, converting the opp's self-mill into a resource/deck-out loss; deprioritise plans that end the game before the mill bites. First minted for kyogre_mega_abomasnow_ex (Mega Abomasnow ex Hammer-lanche discards the top 6 every use; Kyogre recycles ONLY Basic Water Energy, so milled Pokemon/Trainers are gone for good). Reusable for any self-mill deck lacking recovery."
+    },
+    "opp_spreads_bench": {
+      "type": "bool",
+      "consumer": "unwired (new 2026-07-09, first minted for dragapult_ex). Forward contract — needs a Board field + lever wired before it affects play. Lever (future): vs this opp, deprioritise overloading the Bench with fragile low-HP bodies and value Bench-HP / bench discipline; play around the accumulate-then-convert spread. Distinct from a single-target attacker — the threat is to the BENCH, not the Active, so Active-facing defenses do not answer it.",
+      "note": "the deck's payoff attack places free damage counters across the opponent's BENCH every turn (never the Active) and converts the accumulated chip into multi-prize turns via a follow-up spread or a free-aim snipe; presenting a wide/fragile Bench feeds it. First minted for dragapult_ex (Phantom Dive 200 + 60 Bench spread, converted by Fezandipiti ex Cruel Arrow / the next Phantom Dive). Reusable for any bench-spread archetype."
+    },
+    "opp_item_locks": {
+      "type": "bool",
+      "consumer": "unwired (new 2026-07-09, first minted for dragapult_ex). Forward contract — needs a Board field + lever wired before it affects play. Lever (future): vs this opp, sequence our own Item cards BEFORE the lock lands (front-load Ball/search/tool plays), lean on Supporters/Abilities on the locked turn, and don't build a line that depends on an Item on a turn the lock can hit; also flag the lock body as a cheap snipe to stop repeat locks.",
+      "note": "the deck runs a repeatable one-turn Item-lock (an attack/ability that denies the opponent playing Item cards during their next turn), taxing item-heavy setup engines. First minted for dragapult_ex (Budew — Itchy Pollen, 30 HP). Reusable for any Item-lock disruptor."
     }
   }
 }
