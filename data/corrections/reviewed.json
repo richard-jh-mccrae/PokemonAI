@@ -627,5 +627,20 @@
     "disposition": "covered",
     "reason": "CRITICAL 'single card (Lillie's), use it' — COVERED on the current real Pilot: decide()=[0]=Play Lillie's Determination (=correct). attack-last (_finish_turn_last) defers the 169.9 Aura Jab (tier-2, non-KO) via reordered=True, and Lillie's now scores +20 (dig-before-commit) since the old dont-refresh-into-a-probable-miss suppressor no longer fires on this dead 1-card hand. Confirmed via tune._build_pilot('mega_lucario').decide on the captured f30 state.",
     "round": "2026-07-09"
+  },
+  "85045840-8": {
+    "disposition": "covered",
+    "reason": "degenerate: chosen==correct==Play Poké Pad; real Pilot decide()=[1]=Poké Pad (dig-before-commit sequences it first, reordered). The wider T1 engine plan (Drakloak Recon + Dudunsparce Run Away Draw) is covered by use-the-draw-engine-ability; the Ultra Ball discard-discipline is the f14 cluster.",
+    "round": "2026-07-09"
+  },
+  "85046350-45": {
+    "disposition": "covered",
+    "reason": "CRITICAL: real Pilot decide()=[2]=Play Poké Pad=correct, deterministic 5/5 (gamble_lines ON default). The recorded Lillie's was the e2f0a07-DIRTY gamble variant; on shipped code the gamble stands down and the dig-tie (Lillie's/Poké Pad both +20) resolves to Poké Pad. Human intent (Poké Pad before Lillie's) satisfied.",
+    "round": "2026-07-09"
+  },
+  "85046350-20": {
+    "disposition": "deferred",
+    "reason": "capability-gap: retreat-to-promote-a-disruptor is an unbuilt single-turn Turn Planner generator (naive attach-to-active harms without follow-through) — see docs/todo/retreat-to-item-lock-maneuver.md; fixture dragapult_retreat_to_item_lock_f20.json; decide()=[1] unchanged (not covered).",
+    "round": "2026-07-09"
   }
 }

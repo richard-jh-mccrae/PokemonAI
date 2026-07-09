@@ -1,0 +1,46 @@
+# capability-gap: retreat-to-promote-a-disruptor maneuver (Turn Planner generator)
+
+**Status:** deferred (evidenced capability-gap). Ledgered `deferred` in `data/corrections/reviewed.json`.
+**Fixture:** `tests/fixtures/corrections/dragapult_retreat_to_item_lock_f20.json`
+**Correction:** 85046350:f20 (dragapult_ex, `slow_setup`).
+
+## The blunder
+
+Turn 2, AttachFrom recipient pick. Board: my Active **Dreepy (0e)**; bench Dreepy (0e), **Budew (0e)**,
+Dunsparce (0e); opp Active Cynthia's Gible. The human wants the energy on the **active Dreepy** as **step 1 of
+a maneuver**: attach → **retreat** Dreepy (paying the retreat cost with that energy) → promote **Budew** to the
+Active spot → **Itchy Pollen** item-locks the opponent for their turn. `dont-feed-the-doomed` (−30, the T2
+active reads worst-case doomed) sinks the active-Dreepy option; the agent attaches to a bench Dreepy instead.
+Real Pilot re-measure (this session, `tune._build_pilot('dragapult_ex').decide`): `decide()` = `[1]` (bench
+Dreepy), unchanged from the recorded blunder — **not** already covered.
+
+## Why it is a capability-gap, not a weight/when()
+
+The narrow decision ("attach to active vs bench Dreepy") is only sound as **step 1** of the whole maneuver. A
+naive "attach to the active" rule would be **actively harmful** in isolation — it would sink the turn's energy
+into a body about to be retreated (the energy is discarded to pay retreat), with no follow-through, because the
+Pilot has **no generator** that then retreats-and-promotes-the-disruptor and attacks with it. The sound line
+(attach → retreat → promote item-lock opener → Itchy Pollen) is a single-turn **multi-step maneuver**, and the
+closed-form Turn Planner (ADR-0031/0037) has no rung that generates *retreat-to-promote-a-disruptor*. Building
+one is a designed-but-unbuilt planner layer — hence a capability-gap, not a missing signal.
+
+Note the primary intended mechanism for this deck is upstream and **already shipped**:
+`open-the-item-lock-starter` (+35, baseline_opening.py) + `preferred_start="second"` open **Budew Active** at
+the pregame `_SETUP_ACTIVE` pick, making Itchy Pollen fire T2 with no maneuver. This maneuver only matters when
+Budew did NOT open Active (not in the opening hand), so it is a **recovery** line — lower priority.
+
+## Definition of done
+
+A Turn Planner generator (planner.py) that, when an `item_lock` (or other high-value disruptor) opener sits on
+the bench behind a retreatable, non-attacking Active, produces the line **retreat → promote the disruptor →
+attack (Itchy Pollen)** and scores it against the held line, committing it when the tempo/disruption value
+beats developing normally. Verify:
+- `decide()` on `dragapult_retreat_to_item_lock_f20.json` promotes Budew and item-locks (the maneuver
+  materialises), OR the fixture is re-scoped if the pregame opener is judged sufficient.
+- Inert for decks with no benched `item_lock`/disruptor opener; never retreats a live attacker into a worse
+  board just to lock.
+- Guard against wasting a turn: only fire when the item-lock's disruption value (opponent is item-reliant this
+  turn) exceeds the forgone development.
+
+Related: [[m2-posture-plan]] (opponent-filtered disruption), `open-the-item-lock-starter`, the ADR-0031
+single-turn planner boundary (`docs/todo/deferred-multi-turn-criticals.md`).
