@@ -27,7 +27,7 @@ class Brief:
     covers: list[str]                                       # member archetype strings → variant routing
     tempo: str = ""
     summary: str = ""
-    opponent_properties: dict = field(default_factory=dict)  # lever keys (assets/opponent_properties.json)
+    opponent_properties: dict = field(default_factory=dict)  # lever keys (opponent_properties.json, same dir)
     threats: list[dict] = field(default_factory=list)        # attackers to respect ({card, why})
     targets: list[dict] = field(default_factory=list)        # disrupt/snipe ({card, role, why})
 

@@ -17,7 +17,7 @@
     "tempo": {"type": "string", "enum": ["fast", "midrange", "slow"], "description": "the race clock — when it starts taking prizes"},
     "opponent_properties": {
       "type": "object",
-      "description": "the levers — boolean/scalar weakness keys the (future) consumer maps onto Board. Every key must be registered in assets/opponent_properties.json.",
+      "description": "the levers — boolean/scalar weakness keys the (future) consumer maps onto Board. Every key must be registered in src/common/scouting/opponent_properties.json.",
       "additionalProperties": {"type": ["boolean", "string", "number"]}
     },
     "threats": {
