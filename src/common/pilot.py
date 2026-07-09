@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
+from common.opponent_model import OpponentModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
@@ -276,6 +277,11 @@ class Board:
     read: Read | None = None              # per-decision Scouting Read (ADR-0026); None = Posture off
                                           # (no Scout wired / pregame). One Read shared by every option;
                                           # consumed γ-modulated by the snipe threat rank (lever C) — `posture=True` ships.
+    opponent: object = None               # the Opponent Model facade (ADR-0047) — all opponent KNOWLEDGE:
+                                          # Identity (=read), Resources (deck-out/copies-odds/hand-delta/
+                                          # took-KO), Dispositions (=opp_property). None = direct Board
+                                          # (tests) / no facade. Behavior-neutral: nothing scores off the
+                                          # new Resources surface yet (the deferred cluster consumes it).
     posture_confidence: float = 0.0       # γ ∈ [0,1] from the Read (ADR-0026): continuous strength the
                                           # generic-core Posture levers scale by; 0 = unrecognized / no Scout.
     favorability: float = 0.5             # compiled matchup win-rate vs Read's candidate opponents
@@ -375,7 +381,11 @@ class Board:
         """Value of opponent-property ``key`` from the matched Matchup Brief (ADR-0027,
         ``brief.opponent_properties``), or ``default`` when no Brief is matched (unrecognized
         opponent / Posture off) or the key isn't asserted. Never raises. The Brief is
-        assert-true-only, so an omitted key (e.g. ``opp_is_engine_dependent``) reads as ``default``."""
+        assert-true-only, so an omitted key (e.g. ``opp_is_engine_dependent``) reads as ``default``.
+        Routed through the Opponent Model facade's Dispositions (ADR-0047) when present — the same matched
+        Brief, so identical values — else the direct Brief read (a Board built without the facade)."""
+        if self.opponent is not None:
+            return self.opponent.disposition(key, default)
         if self.brief is None:
             return default
         return self.brief.opponent_properties.get(key, default)
@@ -651,6 +661,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.search_budget = search_budget
         self.scout = scout                              # opponent Scout (ADR-0026); None = Posture off
         self.briefs = list(briefs) if briefs else []    # hand-authored Matchup Briefs (ADR-0027), covers-routed
+        self.opponent = OpponentModel(scout=scout,      # the Opponent Model facade (ADR-0047): composes the
+                                      artifact=getattr(scout, "artifact", None))  # Scout (DI) + Resources +
+        # Dispositions. One observe() fan-out per decision, one board.opponent read surface. Behavior-neutral.
         self.posture = posture                          # ADR-0026 kill-switch: False forces γ=0 + neutral
                                                         # favorability → both levers off (the A/B baseline)
         self.lethal_verify = lethal_verify              # ADR-0030 kill-switch: engine-confirm a DIRECT
@@ -2297,7 +2310,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         deck_empty = self._deck_empty_ids(me, prizes)
         deck_known = self._deck_known_counts(me, prizes)
         deck_odds_map = self._deck_contains_prob(me, deck_known)   # probabilistic complement (ADR-0029)
-        read = self.scout.observe(obs) if self.scout else None   # the Read (M2.0); γ/favorability derive from it
+        read = self.opponent.observe(obs)            # ADR-0047 fan-out: Identity (Scout) + Resources
+        if self.scout is None:                       # preserve Posture-off semantics (facade returns Read())
+            read = None                              # the Read (M2.0); γ/favorability derive from it
         gamma = _posture_gamma(read) if self.posture else 0.0    # γ threads into snipe rank; kill-switch zeroes it
         my_arch = self.strategy.params.get("my_archetype")
         fav, cov = (matchup_favorability(self.scout.artifact, my_arch, read.candidates)
@@ -2305,6 +2320,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # covers-routed (ADR-0027), γ-gated to a RECOGNIZED opponent: on an empty early board the Read's
         # top candidate is just the prior favourite -> gate on γ>0 to keep board.brief off until recognized.
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
+        self.opponent.note_brief(brief)              # feed the γ-gated Brief to Dispositions (ADR-0047)
         # Resolve the matched Brief's name-keyed threats/targets to card ids (ADR-0027 consumer). Guarded
         # like forward_max_damage: an old/None provider -> empty, never crashes. Behavior-neutral surface.
         _ids_for_name = getattr(self.stats, "ids_for_name", None)
@@ -2415,6 +2431,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_active_condition_gift=self._opp_active_condition_gift(opp),
             active_condition_ko_prizes=self._active_condition_ko_prizes(opp, oa),
             read=read,                                              # Posture Read (ADR-0026); None = off
+            opponent=self.opponent,                                 # Opponent Model facade (ADR-0047)
             posture_confidence=gamma,                               # γ ∈ [0,1] the levers scale by
             favorability=fav, matchup_coverage=cov,                 # lever-A signal + its reliability
             brief=brief,                                            # matched Matchup Brief (ADR-0027); None = off

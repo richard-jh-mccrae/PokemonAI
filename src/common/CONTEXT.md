@@ -9,13 +9,41 @@ Shared game/meta vocabulary (`Archetype`, `Main-line` / `Sub-line` / `Engine Pok
 
 ## Language
 
+### Opponent Model
+
+**Opponent Model** (ADR-0047):
+The single match-scoped **facade** for all opponent *knowledge*, surfaced as `board.opponent`. A pure
+knowledge layer — it answers *what is true / probable about the opponent* and never decides; the
+Pilot/Planner consume it. Composes three subsystems: **Identity** (the Read), **Resources**, and
+**Dispositions**. One `observe(obs)` fan-out (one write seam), one read surface. Two epistemic tiers,
+never one confidence number: *calibrated* (Resources, Read confidence) and *asserted* (Dispositions).
+Fails OPEN, never fabricates, never downgrades a certainty into a guess (**sound-or-silent**).
+_Avoid_: "the opponent model" for the Read alone; naming any single subsystem "model"; putting Briefs
+(a prescriptive *input*) or posture-scoring (a Pilot *decision*) inside it.
+
+**Resources** (ADR-0047):
+The Opponent-Model subsystem for the opponent's *remaining outs* — `copies_left(card)`,
+`deckout_in_turns`, `hand_size_delta`, `last_turn_dumped`, `took_ko_this_turn`. Match-scoped
+(`opponent_resources.py`, like `deck_tracker.py`); the opponent-side mirror of `deck_odds`/`deck_tracker`.
+Mostly *probabilistic* (hypergeometric over unseen copies across hidden prizes) with a few *sound* anchors
+(visible board/discard, exact `deckCount`).
+_Avoid_: `opponent_model.py` (renamed to free the umbrella term); "opponent deck odds" (that's the own-side module).
+
+**Dispositions** (ADR-0047):
+The Opponent-Model subsystem of high-bar behavioral booleans about how the opponent plays
+(`opp_is_engine_dependent`, `opp_comeback_disruptor`; `scouting/opponent_properties.json`). The *asserted*
+epistemic tier — asserted only on strong evidence (a wrong claim is priced ~4%). Briefs are the *input*
+that asserts them, not part of the subsystem.
+_Avoid_: "opponent properties" as a synonym for the file only; conflating with the prescriptive Brief.
+
 ### Scouting
 
 **Read**:
 The live, per-turn assessment of the current matchup: the most-likely opponent
 Archetype(s) with confidence, predicted development, and the resulting threats and
-targets. Pure data — it describes the matchup, it does not act on it.
-_Avoid_: matchup, scout result, prediction
+targets. Pure data — it describes the matchup, it does not act on it. The **Identity** subsystem of the
+Opponent Model (ADR-0047) — *who they are*.
+_Avoid_: matchup, scout result, prediction, "the opponent model" (that is the umbrella facade)
 
 **Posture**:
 How the agent changes play in response to the Read — the Read-conditioned Levers
