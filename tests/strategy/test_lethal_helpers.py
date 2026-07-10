@@ -20,7 +20,7 @@ def _fixture(name):
                       .read_text(encoding="utf-8"))
 
 
-def _mega_starmie_pilot():
+def _pilot(agent="mega_starmie"):
     from cg.api import all_attack
     from common.cards import CardFunctions
     from common.effects import CardEffects
@@ -30,7 +30,7 @@ def _mega_starmie_pilot():
         parse_attack_bench_snipe, parse_attack_recoil)
     from common.strategy import Strategy
     from common.strategy.general_strategy import GENERAL_STRATEGY
-    deck = [int(x) for x in (REPO / "src" / "agents" / "mega_starmie" / "deck.csv")
+    deck = [int(x) for x in (REPO / "src" / "agents" / agent / "deck.csv")
             .read_text(encoding="utf-8").split("\n")[:60]]
     atk = all_attack()
     try:
@@ -61,4 +61,24 @@ def test_engine_confirms_a_shipped_lethal_wins_end_to_end():
     verdict through the cascade — the gate's positive case, independent of any new steering hook."""
     require_cg()
     fx = _fixture("ms_lethal_recover_energy_to_win_f110")
-    assert engine_confirms(fx, _mega_starmie_pilot()) is True
+    assert engine_confirms(fx, _pilot("mega_starmie")) is True
+
+
+# f24's full win line (ADR-0050 DoD#3): attach {F}->Solrock, play 2x Premium Power Pro (+30 each to
+# {F} attacks), retreat Lunatone (its {F} pays the cost), promote Solrock, Cosmic Beam 70+60=130 OHKOs
+# Duraludon 130 — opp bench empty -> a bench-empty win. Explicit per-select picks through the attack;
+# decide() then handles the trailing prize cascade. See docs/adr/0050-*, [[lethal-verification-tool-grill]].
+_F24_WIN_LINE = [[5], [1], [1], [2], [0], [0], [2]]
+
+
+@pytest.mark.req("REQ-LETHAL-SEED-0005")
+def test_engine_confirms_multi_step_line_proves_a_real_missed_win():
+    """The multi-step gate (proof-of-target for a capability-gap): ml f24 is a REAL bench-empty win when
+    the whole retreat/promote/tool line is driven explicitly, but its [correct]-only form REFUTES because
+    decide()'s follow-up steering hooks are unbuilt (it never composes the line). This pins the target the
+    `capability-gap-damage-boost-item-lethal` proposal builds toward; once its hooks ship, the [correct]
+    form goes green on its own — that is the fix's gate."""
+    require_cg()
+    fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
+    assert engine_confirms(fx, _pilot("mega_lucario"), line=_F24_WIN_LINE) is True   # target win is real
+    assert engine_confirms(fx, _pilot("mega_lucario")) is False                      # [correct]+decide() can't

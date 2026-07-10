@@ -96,16 +96,45 @@ model instead of `self.deck[:n]`:
   on the option*; tutor pick = type 3; attach = type 8 `inPlayArea` 4=active/5=bench; retreat = type
   12; promote = ctx 3; attack = type 13 `attackId`; an attack's own after-effect is a further cascade
   select.)
-- **(D) Helper.** `tests/strategy/lethal_helpers.py::engine_confirms(fixture, pilot)` — skips (not
+- **(D) Helper.** `tests/lethal_helpers.py::engine_confirms(fixture, pilot)` — skips (not
   fails) when the native lib is absent (mirrors the existing `test_*_engine.py`), else backfills the
   seed, seeds the exact deck, drives the fixture's line through `_engine_confirms_win`, and asserts the
-  engine's **win verdict**. This turns a closed-form-only retest into a true end-to-end gate.
+  engine's **win verdict**. This turns a closed-form-only retest into a true end-to-end gate. `line=`
+  accepts EITHER a single select's picks (the default `[correct]`: one explicit step, `decide()`
+  completes it — the gate for a BUILT fix) OR a full explicit multi-step line-of-lists (drive every
+  listed select, `decide()` handles only the trailing pure cascades — the proof-of-target for a lethal
+  whose follow-up hooks are still UNBUILT, since its `[correct]`-only form can't yet complete; DoD #3
+  `f24`).
 - **(DoD #3) Re-verify the applied lethals end-to-end** — their first-ever engine-cascade check.
   `f110` (low-id {W} fetch) already confirms and is the tool's hook-free proof-of-life. If any applied
   lethal is found **closed-form-only** (the cascade refutes a shipped line), that is the tool
   succeeding: **file it as a new Correction / capability-gap and do not block** (a false-refute is
   safe — it misses a win, never locks a phantom). DoD #3 reads "N re-verified: M confirm, K
   characterized closed-form-only and filed."
+
+  **DoD #3 result (2026-07-11): 4 re-verified — 1 confirm, 2 win-gate-N/A, 1 real missed win filed.**
+  Each ideal line was hand-driven to the engine's own verdict; win conditions checked at source
+  (`docs/rules.md` §6–7: megaEx=3 / ex=2 / regular=1 prize; win = last prize OR opponent has no Pokémon
+  to promote).
+  - **`f110` (mega_starmie) — CONFIRM.** A genuine this-turn win: opp Active is a 10-HP Mega Lucario ex,
+    my prizes = 2 → Jetting Blow 120 KOs it and takes my last prizes. The hook-free proof-of-life.
+  - **`f26` + `f48` (mega_lucario) — win-gate N/A, NOT closed-form-only.** Their ideal lines (grab {F} →
+    attach the benched Mega Lucario ex → retreat → promote it → Aura Jab 130 KO Tangela 80, recycling 2
+    {F} to the bench) are real **KOs, not this-turn wins**: prizes = 6, Tangela is a 1-prize regular
+    (6→5), opp bench is full (3 / 5) → control passes to the opponent (verdict `False`, a true handoff
+    refute, not a cap-`None`). They ship via `_grab_lethal_tactical`, which scores **"any KO, not just a
+    win"** and names `ml f26/f48` outright; the grab fix IS applied (`decide()` picks the correct fetch).
+    `engine_confirms` is a **win** gate, so it refutes them by category, not defect — do **not** file as
+    missed wins and do **not** gate KO-tactical fixtures on it. (Residual, tactical: `decide()`'s
+    post-grab cascade retreats and promotes **Solrock**, swinging 70 and leaving the Aura Jab KO — a
+    KO-quality steering gap, not a lethal.)
+  - **`f24` (mega_lucario) — real missed win, filed.** A bench-empty win: attach {F}→Solrock, play 2×
+    Premium Power Pro (+30 each to {F} attacks), retreat Lunatone, promote Solrock, Cosmic Beam 70+60 =
+    130 OHKOs Duraludon 130 with the opp bench empty. `engine_confirms` returns **True on the full
+    explicit line** and **False on `[correct]`-only** (`decide()` picks Meowth ex; no
+    `_family_win_candidates` tier composes a damage-boost-Item lethal). Filed as capability-gap
+    `data/strategy/proposals/capability-gap-damage-boost-item-lethal.md` (Phase-3 sibling of
+    `lethal-retreat-enabler`); pinned by `test_engine_confirms_multi_step_line_proves_a_real_missed_win`.
 - **(DoD #5) Gate.** Wire `engine_confirms` into the `planner-code` authoring gate
   (`update-strategy/references/authoring-gates.md`) — multi-step lethal proposals become
   engine-cascade-confirmed, not closed-form-only — plus a short `docs/` note.
