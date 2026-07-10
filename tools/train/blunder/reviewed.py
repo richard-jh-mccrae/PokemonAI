@@ -7,12 +7,15 @@ forgoes a Knock Out), deferred (valid but needs new infrastructure), or covered 
 an existing rule) — keeps re-surfacing as a proposal / unsatisfied constraint every run. This ledger
 records those dispositions so `tune.py` and `/blunder-buster` skip them.
 
-The file is a single hand-editable JSON map at ``data/corrections/reviewed.json``, keyed by
-``"<episode_id>-<frame>"`` (the same id the reports print). One entry per dispositioned decision::
+The file is a single hand-editable JSON map at ``data/corrections/reviewed.json``, keyed by the
+Correction's **Scope subject** (the same id the reports print, ``review_key``). One entry per
+dispositioned subject::
 
     {
       "_note": "...",
-      "81904451-37": {"disposition": "refuted", "reason": "forgoes a KO", "round": "2026-06-27"}
+      "81904451-37":     {"disposition": "refuted",  "reason": "forgoes a KO",   "round": "2026-06-27"},
+      "81904451-t12s1":  {"disposition": "covered",  "reason": "plan_turn rung", "round": "2026-07-10"},
+      "81904451-m1":     {"disposition": "deferred", "reason": "multi-turn",     "round": "2026-07-10"}
     }
 
 Keys starting with ``_`` are comments. Append entries with ``tools/train/review_correction.py``.
@@ -35,7 +38,19 @@ DISPOSITIONS = ("refuted", "deferred", "covered")
 
 
 def review_key(correction) -> str:
-    """The ledger key for a Correction — ``"<episode_id>-<frame>"`` (matches the report ids)."""
+    """The ledger key for a Correction — its Scope's subject, matching the report ids (ADR-0049):
+
+    - ``decision`` → ``"<episode_id>-<frame>"``   (unchanged; the pre-Scope key)
+    - ``turn``     → ``"<episode_id>-t<turn>s<seat>"``  (seat needed: turn 0 is the shared setup phase)
+    - ``match``    → ``"<episode_id>-m<seat>"``   (both seats can be `own` in self-play)
+
+    So disposing of a Turn Correction never retires the Decision Corrections inside that Turn.
+    """
+    scope = getattr(correction, "scope", "decision")
+    if scope == "turn":
+        return f"{correction.episode_id}-t{correction.subject}s{correction.seat}"
+    if scope == "match":
+        return f"{correction.episode_id}-m{correction.seat}"
     return f"{correction.episode_id}-{correction.decision.get('frame')}"
 
 

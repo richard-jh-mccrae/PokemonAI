@@ -49,3 +49,25 @@ def test_report_explains_when_seeds_are_kept():
     assert "kept" in md and "strictly more" in md
     assert "## Weights tuned" in md and "_None._" in md
     assert "need a rule, not a weight" in md
+
+
+def test_run_report_locates_a_scoped_proposal_by_its_subject():
+    """ADR-0049: `ep <id> f<frame>` is the wrong locator for a Turn/Match blunder — the Anchor frame
+    is context, not identity. The report must name the scope's subject so a reader can find it."""
+    from train.blunder.correction import build_correction
+    from train.blunder.decisions import Decision
+    from train.tuner.propose import propose_hypothesis
+    from train.tuner.report_md import _where
+
+    dec = Decision(episode_id=42, frame=28, seat=1, turn=12, select_context="Main",
+                   select_type="Main", options=[{"type": 7}, {"type": 13}], chosen=[0], current={})
+    turn = build_correction(dec, source="own", agent="a", correct=[], category="sequencing_error",
+                            rationale="r", scope="turn", span=[{"chosen_label": "x"}])
+    match = build_correction(dec, source="own", agent="a", correct=[], category="slow_setup",
+                             rationale="r", scope="match", span=[])
+    decision = build_correction(dec, source="own", agent="a", correct=[1], category="bad_target",
+                                rationale="r")
+
+    assert _where(propose_hypothesis(turn)) == "ep 42 turn 12 (seat 1)"
+    assert _where(propose_hypothesis(match)) == "ep 42 whole match (seat 1)"
+    assert _where(propose_hypothesis(decision)) == "ep 42 f28"

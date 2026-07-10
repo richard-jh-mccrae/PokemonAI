@@ -17,7 +17,17 @@ only (v1).
 
 Input: the **per-build correction tree** `data/corrections/<agent_build>/corrections.jsonl`
 (`store.load_corrections` unions it; ADR-0015 amendment), each Correction embedding the agent `obs`
-for its Decision — int-enum, the Pilot's exact input. For each Correction:
+for its Decision — int-enum, the Pilot's exact input.
+
+**Scoped Corrections skip the router entirely.** A `turn`- or `match`-scope Correction
+([ADR-0049](adr/0049-corrections-carry-a-scope-decision-turn-or-match.md)) names no better option at
+one state, so it is not a ranking label. `tuner/run.py` short-circuits it **before**
+`ranking_constraint()` and appends it to `proposals[]` (→ `open[]`) with `seed_weight = 0` — a
+sequencing error can never move a Tier-0 weight. Its Anchor's fired-rule diff still rides along as
+`attribution`, as *information* for routing. `tune.py` tags its worklist lines `[TURN <n>]` /
+`[MATCH]`, alongside the existing `[PLANNED]` / `[LETHAL]` / `[POSTURE≠ …]` marks.
+
+For each **decision-scope** Correction:
 
 1. **Featurize** — `Pilot.explain(obs)` ([src/common/pilot.py](../src/common/pilot.py)) returns an
    `OptionTrace` per option, whose `.fired` is the set of Hypotheses that fired (the feature vector).
@@ -53,13 +63,16 @@ timeline of how open blunders shrink per build.
 
 **The reviewed ledger (`data/corrections/reviewed.json`).** Auto-reconciliation drops a blunder once a
 rule *satisfies* it; a blunder consciously **set aside** would otherwise resurface every run. The ledger
-(hand-editable JSON keyed by `"<episode>-<frame>"`) records dispositions — `refuted` (a bad correction,
+(hand-editable JSON, keyed by the Scope's subject) records dispositions — `refuted` (a bad correction,
 e.g. it forgoes a Knock Out — *also* dropped from the weight fit so it stops pressuring weights),
 `deferred` (needs new infra), `covered` (handled by an existing rule). `tune.py` partitions these out
 of the active corpus before routing (so they leave `open[]` / `UNSATISFIED`) and lists them under
 `reviewed (excluded)` (and `reviewed[]` in the snapshot) — no silent drop. Append with
-`python tools/train/review_correction.py <episode>-<frame> <disposition> "<reason>"` (loader:
-`tools/train/blunder/reviewed.py`).
+`python tools/train/review_correction.py <key> <disposition> "<reason>"` (loader:
+`tools/train/blunder/reviewed.py`). The key is `<episode>-<frame>` for a decision Correction,
+`<episode>-t<turn>s<seat>` for a turn one, `<episode>-m<seat>` for a match one — so disposing of a
+Turn Correction never retires the Decision Corrections inside that turn. Every `open[]`/`skipped[]`
+snapshot entry carries its `key` (plus `scope`/`subject`) so the dashboard resolves it exactly.
 
 **The CRITICAL marker — must-fix-first.** Write the uppercase token `CRITICAL` into a Correction's
 `rationale` to flag a blunder that `/blunder-buster` must resolve **before any other work** (the

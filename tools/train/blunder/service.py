@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .correction import Correction, build_correction
+from .correction import Correction, build_correction, identity_key, subject_of
 from .decisions import Decision, iter_decisions
 from .decode import option_label
 from .seats import detect_seat
@@ -100,6 +100,50 @@ def frames_payload(replay: dict, our_team: str | None = None,
     }
 
 
+def _live_for(replay, live_records, *, seat, frame):
+    return record_for(replay, live_records, seat=seat, frame=frame) if live_records is not None else None
+
+
+def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict]:
+    """The Turn's Decisions, in film order, each re-drivable: the agent ``obs`` + the live ``@T``
+    record it produced. No per-Decision ``current`` — the Anchor carries the one board a human reads,
+    and a full-info snapshot per Decision would cost ~10 KB each (ADR-0049)."""
+    return [
+        {"frame": d.frame, "select_context": d.select_context, "select_type": d.select_type,
+         "chosen": list(d.chosen), "chosen_label": _labels_for(d, d.chosen), "obs": d.obs,
+         "live_trace": _live_for(replay, live_records, seat=seat, frame=d.frame)}
+        for d in iter_decisions(replay) if d.seat == seat and d.turn == turn
+    ]
+
+
+def _match_span(replay: dict, *, own_seat: int, live_records) -> list[dict]:
+    """Per-Turn headers for BOTH seats, in film order — the played line of the whole Episode, with
+    the opponent's turns legible. No ``obs``: nothing plans across turns, so a Match Correction is
+    doctrine (`seed-ladder`), never re-driven. Our own turns carry the Match Planner's ``game_plan``
+    (ADR-0045) off the live trace, which is what a wrong-plan verdict is about."""
+    groups: dict = {}
+    for d in iter_decisions(replay):
+        group = groups.setdefault((d.turn, d.seat), {
+            "turn": d.turn, "seat": d.seat, "frames": [], "contexts": [], "chosen_labels": [],
+            "game_plan": None})
+        group["frames"].append(d.frame)
+        group["contexts"].append(d.select_context)
+        group["chosen_labels"].append(_labels_for(d, d.chosen))
+        if group["game_plan"] is None and d.seat == own_seat:      # first plan we see that turn
+            group["game_plan"] = (_live_for(replay, live_records, seat=d.seat,
+                                            frame=d.frame) or {}).get("game_plan")
+    return sorted(groups.values(), key=lambda g: g["frames"][0])
+
+
+def build_span(replay: dict, decision: Decision, *, scope: str, live_records) -> list[dict] | None:
+    """The Span a Correction of ``scope`` embeds, anchored at ``decision`` (ADR-0049)."""
+    if scope == "turn":
+        return _turn_span(replay, seat=decision.seat, turn=decision.turn, live_records=live_records)
+    if scope == "match":
+        return _match_span(replay, own_seat=decision.seat, live_records=live_records)
+    return None
+
+
 def list_corrections(replay: dict, store_path: Path | str = DEFAULT_PATH) -> list[dict]:
     """The Corrections already logged for THIS replay's episode -- the review list."""
     episode_id = (replay.get("info") or {}).get("EpisodeId")
@@ -113,7 +157,9 @@ def list_corrections(replay: dict, store_path: Path | str = DEFAULT_PATH) -> lis
             "seat": c.seat, "source": c.source, "category": c.category,
             "correct": c.correct, "correct_label": c.correct_label, "rationale": c.rationale,
             "posture_mismatch": c.posture_mismatch,   # human flagged the opponent Read wrong (ADR-0041)
-        })
+            "scope": c.scope, "subject": c.subject,   # what the tag is ABOUT (ADR-0049) — a Turn
+            "span_len": len(c.span or []),            # Correction and the Decision Corrections inside
+        })                                            # it share a step, so the list must distinguish them
     return out
 
 
@@ -129,9 +175,10 @@ def record_correction(
     store_path: Path | str = DEFAULT_PATH,
     live_records: list[dict] | None = None,
     replace_id: str | None = None,
+    scope: str = "decision",
     **identity,
 ) -> Correction:
-    """Build, validate (ADR-0015) and append a Correction for the Decision at ``frame``.
+    """Build, validate (ADR-0015 / ADR-0049) and append a Correction anchored at ``frame``.
 
     ``chosen``/``correct`` are auto-labeled via the decoder. ``identity`` forwards optional keys
     (submission_id, agent_version, episode_time, tagged_at, attribution, ``posture_mismatch``).
@@ -140,22 +187,28 @@ def record_correction(
     (incl. its ``posture``: who it thought it faced, ADR-0041); ``posture_mismatch`` records the
     human's verdict that that opponent Read was wrong.
 
-    **One Correction per decision:** raises ``ValueError`` if a Correction already exists for this
-    ``(episode, seat, frame)`` -- to change it, edit/remove the existing one (the inspector's edit
-    flow passes ``replace_id`` so refining its own tag is allowed). Prevents conflicting tags on
-    one decision point.
+    ``scope`` says what the Correction is *about* (ADR-0049). The ``frame`` is always the **Anchor**
+    -- a real Decision -- but off ``decision`` scope the record is keyed by the Scope's subject and
+    embeds the ``span`` of Decisions it covers (assembled here from the replay).
+
+    **One Correction per subject:** raises ``ValueError`` if a Correction of the same Scope already
+    exists for this subject -- to change it, edit/remove the existing one (the inspector's edit flow
+    passes ``replace_id`` so refining its own tag is allowed). A Turn Correction and the Decision
+    Corrections inside that Turn are different subjects, so they coexist.
     """
     decision = next((d for d in iter_decisions(replay) if d.frame == frame), None)
     if decision is None:
         raise ValueError(f"no Decision at frame {frame}")
 
+    subject = subject_of(scope, decision.snapshot())
+    key = (decision.episode_id, decision.seat, scope, subject)
     existing = [c for c in load_corrections(store_path)
-                if c.episode_id == decision.episode_id and c.seat == decision.seat
-                and c.decision.get("frame") == frame and c.id != replace_id]
+                if identity_key(c) == key and c.id != replace_id]
     if existing:
+        where = {"decision": f"frame {frame}", "turn": f"turn {subject}"}.get(scope, "whole match")
         raise ValueError(
-            f"a correction already exists at this decision (episode {decision.episode_id}, "
-            f"seat {decision.seat}, frame {frame}) - edit or remove it first")
+            f"a correction already exists at this {scope} (episode {decision.episode_id}, "
+            f"seat {decision.seat}, {where}) - edit or remove it first")
 
     live_trace = (record_for(replay, live_records, seat=decision.seat, frame=frame)
                   if live_records is not None else None)
@@ -165,6 +218,8 @@ def record_correction(
         chosen_label=_labels_for(decision, decision.chosen),
         correct_label=_labels_for(decision, list(correct)),
         live_trace=live_trace,
+        scope=scope,
+        span=build_span(replay, decision, scope=scope, live_records=live_records),
         **identity,
     )
     append_correction(correction, store_path)

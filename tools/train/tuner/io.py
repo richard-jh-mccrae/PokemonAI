@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from train.blunder.reviewed import review_key        # scope-aware ledger/report id (ADR-0049)
 from train.tuner.propose import believed_archetype   # posture belief off a Correction (ADR-0041)
 
 
@@ -80,6 +81,11 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
     (already assessed — refuted / deferred / covered); recorded so the snapshot shows *why* they
     aren't in ``open`` (no silent drop).
 
+    Every entry carries its scope-aware ``"key"`` (``reviewed.review_key``) plus ``"scope"``/
+    ``"subject"`` (ADR-0049), so ``/blunder-buster`` and the dashboard know what each open blunder
+    is *about* — one Decision, a whole Turn, or the Match — and can ledger it without colliding with
+    the Decision Corrections inside it.
+
     Each ``open``/``skipped`` entry carries ``"critical": bool`` (the rationale's CRITICAL marker)
     so ``/blunder-buster`` can partition the must-fix-first cohort straight from the snapshot,
     plus ``"planner_committed"``/``"lethal_locked"`` (the live trace's ``planned``/``lethal``
@@ -97,7 +103,9 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
         "deck": deck,
         "generated_at": generated_at,
         "open": [
-            {"id": p.id, "category": p.category, "episode_id": p.episode_id, "frame": p.frame,
+            {"id": p.id, "key": p.key, "scope": p.scope, "subject": p.subject, "seat": p.seat,
+             "span_len": p.span_len, "attribution": p.attribution,
+             "category": p.category, "episode_id": p.episode_id, "frame": p.frame,
              "seed_weight": p.seed_weight, "trigger_sketch": p.trigger_sketch,
              "rationale": p.rationale, "agent_build": p.agent_build, "built_at": p.built_at,
              "critical": p.critical, "planner_committed": p.planner_committed,
@@ -106,7 +114,8 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
             for p in proposals
         ],
         "skipped": [
-            {"episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason,
+            {"key": review_key(c), "scope": c.scope, "subject": c.subject,
+             "episode_id": c.episode_id, "frame": c.decision.get("frame"), "reason": reason,
              "critical": c.is_critical, "planner_committed": _live(c, "planned"),
              "lethal_locked": _live(c, "lethal"),
              "posture_mismatch": bool(getattr(c, "posture_mismatch", False)),
@@ -114,7 +123,8 @@ def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generate
             for c, reason in skipped
         ],
         "reviewed": [
-            {"episode_id": c.episode_id, "frame": c.decision.get("frame"),
+            {"key": review_key(c), "scope": c.scope, "episode_id": c.episode_id,
+             "frame": c.decision.get("frame"),
              "disposition": (entry or {}).get("disposition"), "reason": (entry or {}).get("reason")}
             for c, entry in (reviewed or [])
         ],

@@ -107,6 +107,16 @@ def _posture_tag(mismatch: bool, archetype) -> str:
     return f"[POSTURE≠ {archetype or '?'}] " if mismatch else ""
 
 
+def _scope_tag(scope, subject) -> str:
+    """Line mark for a scoped Correction (ADR-0049): a Turn blunder is prima facie a Turn-Planner
+    (`plan_turn`) fix and a Match blunder a Match-Planner (`plan_match`) / doctrine one — never a
+    ranking constraint. A strong routing PRIOR for /blunder-buster, not an auto-route: a turn whose
+    `planned` is null throughout means the Planner never committed, and the gap is a Hypothesis."""
+    if scope == "turn":
+        return f"[TURN {subject}] "
+    return "[MATCH] " if scope == "match" else ""
+
+
 def _live_posture(c) -> tuple[bool, object]:
     """(posture_mismatch, believed_archetype) for a raw Correction — the human's Read verdict + who
     the agent thought it faced (live_trace.posture top, ADR-0041)."""
@@ -200,8 +210,14 @@ def main(argv=None):
             result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"),
             reviewed=dispositioned)
         print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
+        n_scoped = sum(p.scope != "decision" for p in result.proposals)
+        if n_scoped:
+            print(f"  *** {n_scoped} SCOPED correction(s) (turn/match, ADR-0049) — never a ranking "
+                  f"constraint: the fix is plan-layer code (plan_turn / plan_match), and a turn "
+                  f"blunder's gate is its Span re-drive, a match blunder's the ladder ***")
         for p in result.proposals:
-            mark = ("[CRITICAL] " if p.critical else "") + _layer_tag(p.planner_committed, p.lethal_locked) \
+            mark = ("[CRITICAL] " if p.critical else "") + _scope_tag(p.scope, p.subject) \
+                + _layer_tag(p.planner_committed, p.lethal_locked) \
                 + _posture_tag(p.posture_mismatch, p.believed_archetype)
             print(f"  {mark}PROPOSE {p.id} (seed {p.seed_weight}): {p.trigger_sketch}")
             print(f"    rationale: {p.rationale}")

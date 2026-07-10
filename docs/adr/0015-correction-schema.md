@@ -65,6 +65,16 @@ exactly which build had which corrections (the report's by-build view reads the 
 consumers are unchanged (they read the root dir by default). Migration: the single file was split by
 `agent_build` into per-build subdirs.
 
+## Amendment ([ADR-0049](0049-corrections-carry-a-scope-decision-turn-or-match.md)): Scope
+
+"Atomic granularity" above is now the **default**, not the only shape. A Correction carries a
+**Scope** (`decision` | `turn` | `match`); a legacy record with no `scope` loads as `decision`.
+Off `decision` scope, identity is the Scope's subject rather than the frame, `correct` is optional
+and — when given — must index the **Anchor** Decision (the first divergent one), and the record
+embeds the **Span** of Decisions it covers. The Tier-2 deferral above is upgraded to an invariant:
+a multi-frame counterfactual line cannot be option-indexed at all, because prescribing a different
+Anchor pick invalidates every later frame's `select.option`.
+
 ## Amendment ([ADR-0019](0019-submissions-are-traceable-and-tracked.md)): embed the live trace
 
 When the game's **Decision Telemetry** log (`episode-<id>-agent-<seat>-logs.json`) is available, the
