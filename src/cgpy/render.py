@@ -18,22 +18,18 @@ def card_dict(gs: GameState, serial: int) -> dict:
     return {"id": gs.card_id(serial), "serial": serial, "playerIndex": gs.owner(serial)}
 
 
-def energy_types_of(gs: GameState, serial: int) -> list[int]:
-    """The energy units an attached energy card provides (basic energy: its one type)."""
-    stat = gs.stat(serial)
-    return [int(stat.energyType)]
-
-
 def pokemon_dict(gs: GameState, p: PokemonInPlay) -> dict:
-    energies: list[int] = []
-    for s in p.energy:
-        energies.extend(energy_types_of(gs, s))
+    from .chain import stadium_hp_delta
+    from .options import provided_energy
+
+    energies: list[int] = list(provided_energy(gs, p))
+    delta = stadium_hp_delta(gs, p)
     return {
         "id": gs.card_id(p.top),
         "serial": p.top,
         "playerIndex": gs.owner(p.top),
-        "hp": p.hp,
-        "maxHp": p.max_hp,
+        "hp": p.hp + delta,
+        "maxHp": p.max_hp + delta,
         "appearThisTurn": p.entered_turn >= gs.turn,
         "energies": energies,
         "energyCards": [card_dict(gs, s) for s in p.energy],

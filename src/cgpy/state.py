@@ -38,6 +38,8 @@ class PokemonInPlay:
     max_hp: int = 0
     entered_turn: int = 1   # turn number it entered play / evolved (setup counts as turn 1);
                             # appearThisTurn renders as entered_turn >= current turn (pinned)
+    ability_used_turn: int = -1   # once-per-turn activated-ability gate
+    attack_locks: dict = field(default_factory=dict)  # attackId(str) -> global turn locked
 
     @property
     def top(self) -> int:
@@ -107,11 +109,17 @@ class GameState:
     result: int = -1
     result_reason: int = 0
     stadium: list[int] = field(default_factory=list)
+    turn_markers: dict = field(default_factory=dict)   # this-turn effects, cleared at begin_turn
+    ko_turn: list[int] = field(default_factory=lambda: [-1, -1])  # per-seat: turn a KO was suffered
+    attach_seq: dict[int, int] = field(default_factory=dict)  # energy serial -> attach tick
+    attach_tick: int = 0        # energy-discard selects list targets in global attach order
     looking: list[int] | None = None
     looking_owner: int = -1
     pending: PendingSelect | None = None
     frames: list = field(default_factory=list)   # EffectFrame stack (chain programs)
-    last_posed: tuple[int, int] = (0, 0)   # (seat, context) of the last posed select
+    pending_triggers: list = field(default_factory=list)  # queued bench/evolve triggers
+    last_posed: tuple[int, int, int, int] = (0, 0, 1, 1)   # (seat, context, min, max)
+                                                           # of the last posed select
     outbox: list[list[dict]] = field(default_factory=lambda: [[], []])
     phase: str = "IS_FIRST"
     phase_data: dict = field(default_factory=dict)
@@ -204,6 +212,12 @@ class GameState:
             visible = visible_to_owner if viewer == seat else visible_to_opponent
             self.outbox[viewer].append(dict(full if visible else rev))
 
+    def note_attach(self, serial: int) -> None:
+        """Record energy-attach order (Crushing Hammer-class selects list the opponent's
+        energies oldest-attach-first, pinned ml_dx_2001 f175 / ml_dx_2000 f95)."""
+        self.attach_tick += 1
+        self.attach_seq[serial] = self.attach_tick
+
     def coin_flip(self, seat: int) -> bool:
         head = self.rng.coin()
         self.emit({"type": int(LogType.COIN), "playerIndex": seat, "head": bool(head)})
@@ -216,8 +230,9 @@ class GameState:
         self.result_reason = reason
         self.emit({"type": int(LogType.RESULT), "result": int(result), "reason": int(reason)})
         # The native terminal frame carries a degenerate EMPTY select (type 0, the last
-        # posed context, min/max 1, no options) rather than select=null — pinned.
-        last_seat, last_ctx = self.last_posed
+        # posed context AND min/max, no options) rather than select=null — pinned
+        # (v2_ms_mirror_5000 f147: min/max 2 after a 2-prize pick).
+        last_seat, last_ctx, last_min, last_max = self.last_posed
         self.pending = PendingSelect(seat=last_seat, type=0, context=last_ctx,
-                                     min_count=1, max_count=1, options=[])
+                                     min_count=last_min, max_count=last_max, options=[])
         self.phase = "DONE"

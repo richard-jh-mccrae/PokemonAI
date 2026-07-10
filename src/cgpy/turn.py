@@ -66,6 +66,45 @@ def _new_in_play(gs: GameState, serial: int) -> PokemonInPlay:
                          entered_turn=max(gs.turn, 1))
 
 
+def _after_benched(gs: GameState, seat: int, p: PokemonInPlay) -> None:
+    """QUEUE stadium bench triggers (Risky Ruins: 2 damage counters on a Basic non-{D}
+    Pokémon benched during a turn) — triggers resolve at flush_triggers: one auto-runs,
+    several pose a SKILL_ORDER select first (pinned ml_dx_2000 f28 vs f30). Called from
+    turn-scoped bench entries only — setup benching predates any stadium."""
+    from .chain import def_for
+    if not gs.stadium:
+        return
+    stadium_serial = gs.stadium[0]
+    trig = (def_for(gs.card_id(stadium_serial)) or {}).get("stadium", {}).get("onBench")
+    if not trig:
+        return
+    stat = gs.stat(p.top)
+    if not stat.basic or int(stat.energyType) in trig.get("unlessEnergyType", []):
+        return
+    gs.pending_triggers.append({
+        "cardId": gs.card_id(stadium_serial), "serial": stadium_serial,
+        "source": stadium_serial,
+        "ops": [{"op": "xBenchCounterDamage", "serial": p.top,
+                 "damage": trig["damage"]}]})
+
+
+def flush_triggers(gs: GameState, seat: int) -> None:
+    """Resolve queued triggers: none -> MAIN; one -> run it; several -> the SKILL_ORDER
+    select decides execution order (pinned ml_dx_2000 f30 / ml_dx_2001 f46)."""
+    from .chain import start_program
+    trigs = gs.pending_triggers
+    gs.pending_triggers = []
+    if not trigs:
+        pose_main(gs, seat)
+        return
+    if len(trigs) == 1:
+        t = trigs[0]
+        start_program(gs, seat, t["source"], t["ops"], kind="ability")
+        return
+    start_program(gs, seat, trigs[0]["source"],
+                  [{"op": "xOrderTriggers", "triggers": trigs}], kind="ability")
+
+
 def _deal_prizes(gs: GameState, seat: int) -> None:
     b = gs.players[seat]
     serials = gs.rng.prize_bind(seat, b.deck, 6)   # facedown: identity bound by the rng/oracle
@@ -197,6 +236,14 @@ def _setup_advance(gs: GameState) -> None:
             d["stage"] = "reveal"
 
         elif stage == "reveal":
+            picks = d.get("bench_picks", {})
+            for s in order:                 # deferred bench placements, fp order (pinned)
+                b = gs.players[s]
+                for serial in picks.get(s, []):
+                    b.hand.remove(serial)
+                    b.bench.append(_new_in_play(gs, serial))
+                    gs.move_card(serial, AreaType.HAND, AreaType.BENCH, seat=s,
+                                 visible_to_owner=True, visible_to_opponent=False)
             for s in (0, 1):
                 gs.players[s].active_facedown = False
             gs.phase = "TURN"
@@ -223,7 +270,10 @@ def _setup_apply(gs: GameState, indices: list[int]) -> None:
         if opts[indices[0]]["type"] == OptionType.YES:
             d["resolved"][s] = _check(gs, s)   # logs the failing check; the cycle redraws
         else:
-            _check(gs, s)                      # keep the hand: start the Explosiveness card
+            # Keep the hand and start the Explosiveness card: the check logs TRUE even
+            # though no real Basic is held (pinned v2_ms_mirror_5000 f2).
+            gs.emit({"type": int(LogType.HAS_BASIC_POKEMON), "playerIndex": s,
+                     "hasBasicPokemon": True})
             d["resolved"][s] = True
 
     elif ctx == SelectContext.SETUP_ACTIVE_POKEMON:
@@ -248,13 +298,13 @@ def _setup_apply(gs: GameState, indices: list[int]) -> None:
         d["stage"] = "bench"
 
     elif ctx == SelectContext.SETUP_BENCH_POKEMON:
+        # Placement is DEFERRED: picks stay in hand until the reveal stage, where both
+        # players' benches land in fp order right before TURN_START (pinned
+        # v2_ms_dx_5400 f6-f8: the picked card is still in hand during the opponent's
+        # bench ask).
         b = gs.players[seat]
-        serials = [b.hand[opts[i]["index"]] for i in indices]
-        for serial in serials:
-            b.hand.remove(serial)
-            b.bench.append(_new_in_play(gs, serial))
-            gs.move_card(serial, AreaType.HAND, AreaType.BENCH, seat=seat,
-                         visible_to_owner=True, visible_to_opponent=False)
+        d.setdefault("bench_picks", {})[seat] = [b.hand[opts[i]["index"]]
+                                                 for i in indices]
 
     else:
         raise AssertionError(f"setup got answer for unexpected context {ctx}")
@@ -269,6 +319,7 @@ def begin_turn(gs: GameState, seat: int) -> None:
     gs.stadium_played = False
     gs.energy_attached = False
     gs.retreated = False
+    gs.turn_markers = {}
     # appearThisTurn derives from entered_turn vs the turn counter — nothing to clear.
     gs.emit({"type": int(LogType.TURN_START), "playerIndex": seat})
     if not gs.players[seat].deck:                  # deck-out: cannot draw at turn start
@@ -282,9 +333,25 @@ def begin_turn(gs: GameState, seat: int) -> None:
 
 def _end_turn(gs: GameState, seat: int) -> None:
     gs.emit({"type": int(LogType.TURN_END), "playerIndex": seat})
+    _eot_energy_discards(gs, seat)
     _checkup(gs, seat)
     if gs.result == -1:
         begin_turn(gs, 1 - seat)
+
+
+def _eot_energy_discards(gs: GameState, seat: int) -> None:
+    """Ignition-class self-discard at the owner's end of turn: the move lands between
+    TURN_END and the next TURN_START (pinned ms_mirror_1002 f10 log 35), full-visible to
+    both. Sweep active first then bench order; within a Pokémon, attach order."""
+    from .chain import def_for
+    b = gs.players[seat]
+    for p in gs.in_play(seat):
+        for s in list(p.energy):
+            if (def_for(gs.card_id(s)) or {}).get("eotSelfDiscard"):
+                p.energy.remove(s)
+                b.discard.append(s)
+                gs.move_card(s, AreaType.ENERGY, AreaType.DISCARD, seat=seat,
+                             visible_to_owner=True, visible_to_opponent=True)
 
 
 def _checkup(gs: GameState, ending_seat: int) -> None:
@@ -301,13 +368,18 @@ def _checkup(gs: GameState, ending_seat: int) -> None:
 
 
 def _discard_in_play(gs: GameState, seat: int, p: PokemonInPlay) -> None:
-    """KO discard order (pinned): the Pokémon stack (top first) from its zone, then the
-    attached energies in attach order, then tools."""
+    """KO discard order (pinned): the Pokémon stack (top first) from its zone — lower
+    stack cards log fromArea PRE_EVOLUTION (pinned ml_dx_2001 f65) — then the attached
+    energies in attach order, then tools."""
     b = gs.players[seat]
     from_pokemon = AreaType.ACTIVE if p is b.active else AreaType.BENCH
-    for serial in list(reversed(p.stack)):
+    if p is b.active:                   # conditions leave play with the Active (pinned
+        b.poisoned = b.burned = False   # v2_ml_dx_5501 f22: confused KO renders False)
+        b.asleep = b.paralyzed = b.confused = False
+    for k, serial in enumerate(reversed(p.stack)):
+        area = from_pokemon if k == 0 else AreaType.PRE_EVOLUTION
         b.discard.append(serial)
-        gs.move_card(serial, from_pokemon, AreaType.DISCARD, seat=seat,
+        gs.move_card(serial, area, AreaType.DISCARD, seat=seat,
                      visible_to_owner=True, visible_to_opponent=True)
     for serial in list(reversed(p.energy)):    # LIFO, like the mulligan return (pinned)
         b.discard.append(serial)
@@ -320,10 +392,15 @@ def _discard_in_play(gs: GameState, seat: int, p: PokemonInPlay) -> None:
 
 
 def _pose_prize_pick(gs: GameState, seat: int) -> None:
-    """The winner of a KO picks facedown prize slot(s): CARD options over the PRIZE row."""
+    """The winner picks prizes ONE SELECT PER KO'd Pokémon, min=max=that Pokémon's prize
+    value (pinned: a mega KO poses min 3 — ms_mirror_1001 f69 — while two 1-prize KOs
+    pose two min-1 selects — ms_mirror_1002 f26/f33)."""
     b = gs.players[seat]
+    claims = gs.phase_data["prize_claims"]
+    n = min(claims[0], len(b.prize))
     opts = [opt_card(AreaType.PRIZE, i, seat) for i in range(len(b.prize))]
-    pose(gs, seat, type=SelectType.CARD, context=SelectContext.TO_HAND, options=opts)
+    pose(gs, seat, type=SelectType.CARD, context=SelectContext.TO_HAND, options=opts,
+         min_count=n, max_count=n)
 
 
 def _prize_value(gs: GameState, p: PokemonInPlay) -> int:
@@ -336,6 +413,7 @@ def _prize_value(gs: GameState, p: PokemonInPlay) -> int:
 
 
 def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
+    from .chain import def_for, start_program
     from .damage import attack_damage
 
     b, ob = gs.players[seat], gs.players[1 - seat]
@@ -343,22 +421,50 @@ def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
     gs.emit({"type": int(LogType.ATTACK), "playerIndex": seat,
              "cardId": gs.card_id(attacker.top), "serial": attacker.top,
              "attackId": attack_id})
-    dmg = attack_damage(gs, attacker, gs.db.attacks[attack_id], defender)
+    adef_full = def_for(f"attack:{attack_id}") or {}
+    if adef_full.get("selfLockNextTurn"):   # Accelerating Stab / Mega Brave: this attack
+        attacker.attack_locks[str(attack_id)] = gs.turn + 2   # is barred next own turn
+    req = adef_full.get("requiresBenchNamed")
+    does_nothing = req is not None and not any(
+        gs.stat(p.top).name == req for p in b.bench)   # Cosmic Beam without Lunatone:
+    if does_nothing:                                   # no damage, no log (pinned
+        dmg = 0                                        # v2_ml_mirror_5100 f178)
+    else:
+        dmg = attack_damage(gs, attacker, gs.db.attacks[attack_id], defender,
+                            ignore_wr=adef_full.get("ignoreWeaknessResistance", False))
     if dmg > 0:
         defender.hp = max(0, defender.hp - dmg)
         gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": 1 - seat,
                  "cardId": gs.card_id(defender.top), "serial": defender.top,
                  "value": -dmg, "putDamageCounter": False})
 
-    if defender.hp <= 0:
-        prizes = _prize_value(gs, defender)
-        _discard_in_play(gs, 1 - seat, defender)
-        ob.active = None
-        gs.phase_data = {"seat": seat, "prizes_left": prizes, "await": "prize"}
-        _pose_prize_pick(gs, seat)
+    rider = adef_full.get("rider")
+    if rider:                       # rider runs BEFORE KO processing (pinned ms_mirror_1002
+        start_program(gs, seat, attacker.top, rider, kind="attack")  # f25-f26)
         return
+    _after_attack(gs, seat)
 
-    _end_turn(gs, seat)
+
+def _after_attack(gs: GameState, seat: int) -> None:
+    """Post-attack KO sweep (defender's side; active first, then bench), prize flow.
+    KO thresholds use the stadium-adjusted effective HP (Gravity Mountain)."""
+    from .chain import stadium_hp_delta
+    ob = gs.players[1 - seat]
+    claims: list[int] = []                        # one prize claim per KO'd Pokémon
+    if ob.active is not None and ob.active.hp + stadium_hp_delta(gs, ob.active) <= 0:
+        claims.append(_prize_value(gs, ob.active))
+        _discard_in_play(gs, 1 - seat, ob.active)
+        ob.active = None
+    for p in [x for x in ob.bench if x.hp + stadium_hp_delta(gs, x) <= 0]:
+        claims.append(_prize_value(gs, p))
+        _discard_in_play(gs, 1 - seat, p)
+        ob.bench.remove(p)
+    if not claims:
+        _end_turn(gs, seat)
+        return
+    gs.ko_turn[1 - seat] = gs.turn                # Unfair Stamp's gate looks back one turn
+    gs.phase_data = {"seat": seat, "prize_claims": claims, "await": "prize"}
+    _pose_prize_pick(gs, seat)
 
 
 def _after_prizes_taken(gs: GameState, seat: int) -> None:
@@ -367,14 +473,14 @@ def _after_prizes_taken(gs: GameState, seat: int) -> None:
     b, ob = gs.players[seat], gs.players[1 - seat]
     i_won = not b.prize
     they_cant = ob.active is None and not ob.bench
-    if i_won and they_cant:
-        gs.set_result(2, ResultReason.PRIZES)          # simultaneous win = DRAW (SIM-DELTA)
-        return
-    if they_cant:
-        gs.set_result(seat, ResultReason.NO_POKEMON)
-        return
+    if they_cant:                # NO_POKEMON outranks the prize win even when both hold
+        gs.set_result(seat, ResultReason.NO_POKEMON)   # (pinned ms_mirror_1001 f121:
+        return                                         # result=1 reason=3, NOT a draw)
     if i_won:
         gs.set_result(seat, ResultReason.PRIZES)
+        return
+    if ob.active is not None:                          # bench-only KO: nothing to promote
+        _end_turn(gs, seat)
         return
     gs.phase_data = {"seat": seat, "await": "promote"}
     opts = [opt_card(AreaType.BENCH, i, 1 - seat) for i in range(len(ob.bench))]
@@ -398,10 +504,31 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
             serial = b.hand[o["index"]]
             stat = gs.stat(serial)
             if stat.cardType == 0:                        # a Basic to the bench
+                from .chain import def_for
                 b.hand.remove(serial)
-                b.bench.append(_new_in_play(gs, serial))
+                p = _new_in_play(gs, serial)
+                b.bench.append(p)
                 gs.emit({"type": int(LogType.PLAY), "playerIndex": seat,
                          "cardId": gs.card_id(serial), "serial": serial})
+                _after_benched(gs, seat, p)
+                hook = (def_for(gs.card_id(serial)) or {}).get("onBench")
+                if hook:                                  # Meowth ex-class triggered ask
+                    gs.pending_triggers.append({
+                        "cardId": gs.card_id(serial), "serial": serial,
+                        "source": serial,
+                        "ops": [{"op": "xActivateAsk", "program": hook["program"]}]})
+                flush_triggers(gs, seat)
+            elif stat.cardType == 4:                      # a stadium: replace-and-place
+                b.hand.remove(serial)
+                gs.emit({"type": int(LogType.PLAY), "playerIndex": seat,
+                         "cardId": gs.card_id(serial), "serial": serial})
+                for old in gs.stadium:                    # old stadium -> OWNER's discard
+                    owner = gs.owner(old)                 # (pinned ml_dx_2001 f77: PLAY
+                    gs.players[owner].discard.append(old)  # log first, then the move)
+                    gs.move_card(old, AreaType.STADIUM, AreaType.DISCARD, seat=owner,
+                                 visible_to_owner=True, visible_to_opponent=True)
+                gs.stadium = [serial]                     # placement itself is unlogged
+                gs.stadium_played = True
                 pose_main(gs, seat)
             else:                                         # a trainer: run its chain program
                 from .chain import UnsupportedCard, def_for, start_program
@@ -409,7 +536,9 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
                 if cdef is None or "play" not in cdef:
                     raise UnsupportedCard(f"card {gs.card_id(serial)} has no play program")
                 b.hand.remove(serial)
-                b.discard.append(serial)                  # trainers discard on play (pinned)
+                # NOT discarded here: the card sits outside every zone during its own
+                # selects and lands in the discard at program completion (chain.py
+                # _after_program) — pinned ms_mirror_1000 f10-f12.
                 gs.emit({"type": int(LogType.PLAY), "playerIndex": seat,
                          "cardId": gs.card_id(serial), "serial": serial})
                 if stat.cardType == 3:
@@ -419,49 +548,68 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
             serial = b.hand[o["index"]]
             target = _target_of(gs, seat, o["inPlayArea"], o["inPlayIndex"])
             b.hand.remove(serial)
-            target.energy.append(serial)
-            gs.energy_attached = True
+            if gs.stat(serial).cardType == 2:             # a TOOL: no per-turn limit
+                from .chain import def_for
+                target.tools.append(serial)
+                bonus = (def_for(gs.card_id(serial)) or {}).get("tool", {}) \
+                    .get("hpBonus", 0)
+                target.max_hp += bonus                    # Hero's Cape: +100 HP
+                target.hp += bonus
+            else:
+                target.energy.append(serial)
+                gs.note_attach(serial)
+                gs.energy_attached = True
             gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
                      "cardId": gs.card_id(serial), "serial": serial,
                      "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
             pose_main(gs, seat)
         elif t == OptionType.EVOLVE:
+            from .chain import def_for
             serial = b.hand[o["index"]]
             target = _target_of(gs, seat, o["inPlayArea"], o["inPlayIndex"])
-            old_top, old_max = target.top, target.max_hp
             b.hand.remove(serial)
-            target.stack.append(serial)
-            new_max = gs.stat(serial).hp
-            target.max_hp = new_max
-            target.hp += new_max - old_max
-            target.entered_turn = gs.turn
-            if target is b.active:                  # evolving clears special conditions
-                b.poisoned = b.burned = b.asleep = b.paralyzed = b.confused = False
-            gs.emit({"type": int(LogType.EVOLVE), "playerIndex": seat,
-                     "cardId": gs.card_id(serial), "serial": serial,
-                     "cardIdTarget": gs.card_id(old_top), "serialTarget": old_top})
-            pose_main(gs, seat)
+            _apply_evolution(gs, seat, serial, target)
+            hook = (def_for(gs.card_id(serial)) or {}).get("onEvolve")
+            if hook:                                # Hariyama-class triggered ask
+                gs.pending_triggers.append({        # (pinned ml_dx_2001 f29-f30)
+                    "cardId": gs.card_id(serial), "serial": serial, "source": serial,
+                    "ops": [{"op": "xActivateAsk", "program": hook["program"]}]})
+            flush_triggers(gs, seat)
         elif t == OptionType.RETREAT:
+            from .options import effective_retreat_cost
             gs.retreated = True                 # set at choice time, not completion (pinned)
-            cost = gs.stat(b.active.top).retreatCost
+            cost = effective_retreat_cost(gs, b.active)
             if cost <= 0:
                 _pose_retreat_switch(gs, seat)
             else:
                 gs.phase_data = {"seat": seat, "retreat_cost": cost}
                 _pose_retreat_energy(gs, seat, cost)
+        elif t == OptionType.ABILITY:
+            from .chain import UnsupportedCard, def_for, start_program
+            p = _target_of(gs, seat, o["area"], o["index"])
+            cid = gs.card_id(p.top)
+            adef = (def_for(cid) or {}).get("ability")
+            if adef is None or "program" not in adef:
+                raise UnsupportedCard(f"card {cid} ability program unpinned")
+            p.ability_used_turn = gs.turn           # no log for the activation itself
+            if adef.get("oncePerTurnGlobal"):       # (pinned ml_dx_2000 f26-f27)
+                gs.turn_markers[f"ability:{cid}"] = True
+            start_program(gs, seat, p.top, adef["program"], kind="ability")
         elif t == OptionType.ATTACK:
             _resolve_attack(gs, seat, o["attackId"])
         else:
             raise AssertionError(f"MAIN option type {t} not implemented (M1 scope)")
 
     elif ctx == SelectContext.DISCARD_ENERGY:
+        from .options import provided_units_of
         o = opts[indices[0]]
         serial = b.active.energy[o["energyIndex"]]
+        units = provided_units_of(gs, b.active, serial)
         b.active.energy.remove(serial)
         b.discard.append(serial)
         gs.move_card(serial, AreaType.ENERGY, AreaType.DISCARD, seat=seat,
                      visible_to_owner=True, visible_to_opponent=True)
-        remaining = gs.phase_data.get("retreat_cost", 1) - 1
+        remaining = gs.phase_data.get("retreat_cost", 1) - units
         gs.phase_data["retreat_cost"] = remaining
         if remaining > 0:
             _pose_retreat_energy(gs, seat, remaining)
@@ -474,14 +622,14 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
         pose_main(gs, seat)
 
     elif ctx == SelectContext.TO_HAND and gs.phase_data.get("await") == "prize":
-        o = opts[indices[0]]
-        serial = b.prize[o["index"]]
-        b.prize.pop(o["index"])
-        b.hand.append(serial)
-        gs.move_card(serial, AreaType.PRIZE, AreaType.HAND, seat=seat,
-                     visible_to_owner=True, visible_to_opponent=False)
-        gs.phase_data["prizes_left"] -= 1
-        if gs.phase_data["prizes_left"] > 0 and b.prize:
+        serials = [b.prize[opts[i]["index"]] for i in indices]   # resolve pre-removal
+        for serial in serials:                                   # take in answer order
+            b.prize.remove(serial)
+            b.hand.append(serial)
+            gs.move_card(serial, AreaType.PRIZE, AreaType.HAND, seat=seat,
+                         visible_to_owner=True, visible_to_opponent=False)
+        gs.phase_data["prize_claims"].pop(0)
+        if gs.phase_data["prize_claims"] and b.prize:
             _pose_prize_pick(gs, seat)
         else:
             _after_prizes_taken(gs, seat)
@@ -507,11 +655,34 @@ def _target_of(gs: GameState, seat: int, area: int, index: int) -> PokemonInPlay
     return b.bench[index]
 
 
+def _apply_evolution(gs: GameState, seat: int, serial: int, target: PokemonInPlay) -> None:
+    """Stack `serial` onto `target` (source zone already vacated by the caller): HP delta
+    carries over, entered_turn resets, Active conditions clear; emits the EVOLVE log (the
+    only log — deck-sourced evolution emits no MOVE_CARD, pinned ms_mirror_1001 f16)."""
+    from .chain import def_for
+    b = gs.players[seat]
+    old_top, old_max = target.top, target.max_hp
+    target.stack.append(serial)
+    new_max = gs.stat(serial).hp                   # attached-tool HP bonuses carry over
+    for s in target.tools:                         # (Hero's Cape survives evolution —
+        new_max += (def_for(gs.card_id(s)) or {}).get("tool", {}).get("hpBonus", 0)
+    target.max_hp = new_max                        # pinned ms_mirror_1000 f21: 310+100)
+    target.hp += new_max - old_max
+    target.entered_turn = gs.turn
+    if target is b.active:                  # evolving clears special conditions
+        b.poisoned = b.burned = b.asleep = b.paralyzed = b.confused = False
+    gs.emit({"type": int(LogType.EVOLVE), "playerIndex": seat,
+             "cardId": gs.card_id(serial), "serial": serial,
+             "cardIdTarget": gs.card_id(old_top), "serialTarget": old_top})
+
+
 def _pose_retreat_energy(gs: GameState, seat: int, remaining: int) -> None:
+    from .options import provided_units_of
     b = gs.players[seat]
     opts = [{"type": int(OptionType.ENERGY), "area": int(AreaType.ACTIVE), "index": 0,
-             "playerIndex": seat, "energyIndex": k, "count": 1}
-            for k in range(len(b.active.energy))]
+             "playerIndex": seat, "energyIndex": k,
+             "count": provided_units_of(gs, b.active, s)}   # units, not 1 (pinned
+            for k, s in enumerate(b.active.energy)]         # v2_ms_mirror_5001 f128)
     pose(gs, seat, type=SelectType.ENERGY, context=SelectContext.DISCARD_ENERGY,
          options=opts, remain_energy_cost=remaining)
 

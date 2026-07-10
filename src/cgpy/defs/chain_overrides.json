@@ -1,80 +1,659 @@
 {
   "_comment": "Hand-authored ChainDefs (ADR-0050 M2): per-card programs over the chain-op vocabulary. Replaced piecewise by generated_chains.json in the pool-wide fan-out. Provenance: card texts in defs/card_data.json + trace divergences.",
-
   "1121": {
     "name": "Ultra Ball",
-    "legal": [{"op": "handOthers", "n": 2}, {"op": "deckNotEmpty"}],
+    "legal": [
+      {
+        "op": "handOthers",
+        "n": 2
+      },
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
     "play": [
-      {"op": "costHandTrash", "n": 2},
-      {"op": "effectDeckToHandAndShuffle", "min": 0, "max": 1, "filter": {"pokemon": true}}
+      {
+        "op": "costHandTrash",
+        "n": 2
+      },
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "pokemon": true
+        }
+      }
     ]
   },
-
   "1086": {
     "name": "Buddy-Buddy Poffin",
-    "legal": [{"op": "benchSpace"}, {"op": "deckNotEmpty"}],
+    "legal": [
+      {
+        "op": "benchSpace"
+      },
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
     "play": [
-      {"op": "effectDeckToBenchAndShuffle", "min": 0, "max": 2,
-       "filter": {"basic": true, "pokemon": true, "hpMax": 70}}
+      {
+        "op": "effectDeckToBenchAndShuffle",
+        "min": 0,
+        "max": 2,
+        "filter": {
+          "basic": true,
+          "pokemon": true,
+          "hpMax": 70
+        }
+      }
     ]
   },
-
   "1123": {
     "name": "Switch",
-    "legal": [],
+    "legal": [
+      {
+        "op": "benchExists"
+      }
+    ],
     "play": [
-      {"op": "effectSwitchMe"}
+      {
+        "op": "effectSwitchMe"
+      }
     ]
   },
-
   "1120": {
     "name": "Crushing Hammer",
-    "legal": [],
+    "legal": [
+      {
+        "op": "oppEnergyExists"
+      }
+    ],
     "play": [
-      {"op": "coin"},
-      {"op": "ifHeads", "skip": 1},
-      {"op": "trashEnergyEnemy"}
+      {
+        "op": "coin"
+      },
+      {
+        "op": "ifHeads",
+        "skip": 1
+      },
+      {
+        "op": "trashEnergyEnemy"
+      }
     ]
   },
-
   "1097": {
     "name": "Night Stretcher",
-    "legal": [{"op": "discardHas", "filter": {"pokemonOrBasicEnergy": true}}],
+    "legal": [
+      {
+        "op": "discardHas",
+        "filter": {
+          "pokemonOrBasicEnergy": true
+        }
+      }
+    ],
     "play": [
-      {"op": "effectTrashToHand", "min": 1, "max": 1,
-       "filter": {"pokemonOrBasicEnergy": true}}
+      {
+        "op": "effectTrashToHand",
+        "min": 1,
+        "max": 1,
+        "filter": {
+          "pokemonOrBasicEnergy": true
+        }
+      }
     ]
   },
-
   "1213": {
     "name": "Judge",
     "legal": [],
     "play": [
-      {"op": "xBothShuffleHandDraw", "n": 4}
+      {
+        "op": "xBothShuffleHandDraw",
+        "n": 4
+      }
     ]
   },
-
   "1227": {
     "name": "Lillie's Determination",
     "legal": [],
     "play": [
-      {"op": "xOwnShuffleHandDraw", "n": 6}
+      {
+        "op": "xOwnShuffleHandDraw",
+        "n": 6,
+        "nIfExactPrizes": {
+          "6": 8
+        }
+      }
     ]
   },
-
   "1182": {
     "name": "Boss's Orders",
-    "legal": [{"op": "oppBenchExists"}],
+    "legal": [
+      {
+        "op": "oppBenchExists"
+      }
+    ],
     "play": [
-      {"op": "effectSwitchEnemy"}
+      {
+        "op": "effectSwitchEnemy"
+      }
     ]
   },
-
   "1145": {
     "name": "Mega Signal",
-    "legal": [{"op": "deckNotEmpty"}],
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
     "play": [
-      {"op": "effectDeckToHandAndShuffle", "min": 0, "max": 1, "filter": {"megaEx": true}}
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "megaEx": true
+        }
+      }
+    ]
+  },
+  "1122": {
+    "name": "Pokégear 3.0",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xLookTopMayTakeThenShuffle",
+        "n": 7,
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "cardType": [
+            3
+          ]
+        }
+      }
+    ]
+  },
+  "1189": {
+    "name": "Salvatore",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckEvolveInPlayAndShuffle"
+      }
+    ]
+  },
+  "17": {
+    "name": "Ignition Energy",
+    "eotSelfDiscard": true,
+    "provides": [
+      0
+    ],
+    "providesOnEvolution": [
+      0,
+      0,
+      0
+    ]
+  },
+  "1159": {
+    "name": "Hero's Cape",
+    "tool": {
+      "hpBonus": 100
+    }
+  },
+  "1174": {
+    "name": "Air Balloon",
+    "tool": {
+      "retreatBonus": -2
+    }
+  },
+  "1142": {
+    "name": "Fighting Gong",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "anyOf": [
+            {
+              "cardType": [
+                5
+              ],
+              "energyType": [
+                6
+              ]
+            },
+            {
+              "pokemon": true,
+              "basic": true,
+              "energyType": [
+                6
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "1141": {
+    "name": "Premium Power Pro",
+    "legal": [],
+    "play": [
+      {
+        "op": "xTurnDamageBonus",
+        "bonus": 30,
+        "attackerEnergyType": 6
+      }
+    ]
+  },
+  "1211": {
+    "name": "Black Belt's Training",
+    "legal": [],
+    "play": [
+      {
+        "op": "xTurnDamageBonus",
+        "bonus": 40,
+        "defenderExOnly": true
+      }
+    ]
+  },
+  "1152": {
+    "name": "Poké Pad",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "pokemon": true,
+          "noRuleBox": true
+        }
+      }
+    ]
+  },
+  "1219": {
+    "name": "Team Rocket's Petrel",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "cardType": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      }
+    ]
+  },
+  "1225": {
+    "name": "Hilda",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckTakeSequenceAndShuffle",
+        "picks": [
+          {
+            "min": 0,
+            "max": 1,
+            "filter": {
+              "evolution": true
+            }
+          },
+          {
+            "min": 0,
+            "max": 1,
+            "filter": {
+              "energy": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "1198": {
+    "name": "Crispin",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckDistinctBasicEnergyTakeAttach"
+      }
+    ]
+  },
+  "1229": {
+    "name": "Wally's Compassion",
+    "legal": [
+      {
+        "op": "megaExDamagedInPlay"
+      }
+    ],
+    "play": [
+      {
+        "op": "xHealMegaBounceEnergy"
+      }
+    ]
+  },
+  "1240": {
+    "name": "Rosa's Encouragement",
+    "legal": [
+      {
+        "op": "prizesMoreThanOpp"
+      },
+      {
+        "op": "discardHas",
+        "filter": {
+          "cardType": [
+            5
+          ]
+        }
+      },
+      {
+        "op": "inPlayHas",
+        "filter": {
+          "stage2": true
+        }
+      }
+    ],
+    "play": [
+      {
+        "op": "xDiscardEnergyAttachOneTarget",
+        "min": 1,
+        "max": 2,
+        "filter": {
+          "cardType": [
+            5
+          ]
+        },
+        "targetFilter": {
+          "stage2": true
+        }
+      }
+    ]
+  },
+  "1080": {
+    "name": "Unfair Stamp",
+    "legal": [
+      {
+        "op": "koLastTurn"
+      }
+    ],
+    "play": [
+      {
+        "op": "xBothShuffleHandDraw",
+        "n": 5,
+        "nOpp": 2
+      }
+    ]
+  },
+  "1223": {
+    "name": "Harlequin",
+    "legal": [],
+    "play": [
+      {
+        "op": "xBothShuffleCoinDraw",
+        "heads": [
+          5,
+          3
+        ],
+        "tails": [
+          3,
+          5
+        ]
+      }
+    ]
+  },
+  "1260": {
+    "name": "Risky Ruins",
+    "stadium": {
+      "onBench": {
+        "damage": 20,
+        "unlessEnergyType": [
+          7
+        ]
+      }
+    }
+  },
+  "1252": {
+    "name": "Gravity Mountain",
+    "stadium": {
+      "stage2HpDelta": -30
+    }
+  },
+  "120": {
+    "name": "Drakloak",
+    "ability": {
+      "program": [
+        {
+          "op": "xLookTopTakeRestBottom",
+          "n": 2,
+          "take": 1
+        }
+      ],
+      "legal": [
+        {
+          "op": "deckNotEmpty"
+        }
+      ]
+    }
+  },
+  "674": {
+    "name": "Hariyama",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "effectSwitchEnemy"
+        }
+      ]
+    }
+  },
+  "66": {
+    "name": "Dudunsparce",
+    "ability": {
+      "program": [
+        {
+          "op": "xDrawThenShuffleSelfIn",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "112": {
+    "name": "Munkidori",
+    "ability": {
+      "legal": [
+        {
+          "op": "selfHasEnergyType",
+          "energyType": 7
+        },
+        {
+          "op": "selfDamaged"
+        }
+      ],
+      "program": [
+        {
+          "op": "xMoveDamageCounters",
+          "max": 3
+        }
+      ]
+    }
+  },
+  "140": {
+    "name": "Fezandipiti ex",
+    "ability": {
+      "oncePerTurnGlobal": true,
+      "legal": [
+        {
+          "op": "koLastTurn"
+        }
+      ],
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "675": {
+    "name": "Lunatone",
+    "ability": {
+      "oncePerTurnGlobal": true,
+      "legal": [
+        {
+          "op": "inPlayNamed",
+          "name": "Solrock"
+        },
+        {
+          "op": "handHas",
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              6
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "costHandTrash",
+          "n": 1,
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              6
+            ]
+          }
+        },
+        {
+          "op": "effectDraw",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "1071": {
+    "name": "Meowth ex",
+    "onBench": {
+      "program": [
+        {
+          "op": "effectDeckToHandAndShuffle",
+          "min": 0,
+          "max": 1,
+          "filter": {
+            "cardType": [
+              3
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "attack:1487": {
+    "name": "Jetting Blow",
+    "rider": [
+      {
+        "op": "xChooseBenchDamage",
+        "damage": 50
+      }
+    ]
+  },
+  "attack:982": {
+    "name": "Aura Jab",
+    "rider": [
+      {
+        "op": "xDiscardEnergyAttachBench",
+        "max": 3,
+        "filter": {
+          "cardType": [
+            5
+          ],
+          "energyType": [
+            6
+          ]
+        }
+      }
+    ]
+  },
+  "attack:981": {
+    "name": "Accelerating Stab",
+    "selfLockNextTurn": true
+  },
+  "attack:983": {
+    "name": "Mega Brave",
+    "selfLockNextTurn": true
+  },
+  "attack:980": {
+    "name": "Cosmic Beam",
+    "requiresBenchNamed": "Lunatone",
+    "ignoreWeaknessResistance": true
+  },
+  "attack:1488": {
+    "name": "Nebula Beam",
+    "ignoreWeaknessResistance": true
+  },
+  "attack:141": {
+    "name": "Mind Bend",
+    "rider": [
+      {
+        "op": "xInflictConditionActive",
+        "condition": 4
+      }
+    ]
+  },
+  "attack:423": {
+    "name": "Trading Places",
+    "rider": [
+      {
+        "op": "effectSwitchMe"
+      }
+    ]
+  },
+  "attack:183": {
+    "name": "Cruel Arrow",
+    "rider": [
+      {
+        "op": "xChooseAnyDamage",
+        "damage": 100
+      }
     ]
   }
 }

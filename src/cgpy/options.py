@@ -50,13 +50,52 @@ def setup_bench_options(gs: GameState, seat: int) -> list[dict]:
             if gs.db.is_basic_pokemon(gs.card_id(s))]
 
 
+def provided_energy(gs: GameState, p: PokemonInPlay) -> list[int]:
+    """The energy units the attached cards provide, in attach order. Special energies
+    with a ChainDef "provides" list use it; Ignition provides {C}{C}{C} on an Evolution
+    Pokémon ("providesOnEvolution")."""
+    from .chain import def_for
+
+    units: list[int] = []
+    holder_is_evolution = bool(gs.stat(p.top).evolvesFrom)
+    for s in p.energy:
+        cdef = def_for(gs.card_id(s)) or {}
+        if holder_is_evolution and "providesOnEvolution" in cdef:
+            units.extend(cdef["providesOnEvolution"])
+        elif "provides" in cdef:
+            units.extend(cdef["provides"])
+        else:
+            units.append(int(gs.stat(s).energyType))
+    return units
+
+
+def provided_units_of(gs: GameState, p: PokemonInPlay, serial: int) -> int:
+    """How many energy units one attached card provides on this holder."""
+    from .chain import def_for
+
+    cdef = def_for(gs.card_id(serial)) or {}
+    if bool(gs.stat(p.top).evolvesFrom) and "providesOnEvolution" in cdef:
+        return len(cdef["providesOnEvolution"])
+    if "provides" in cdef:
+        return len(cdef["provides"])
+    return 1
+
+
+def effective_retreat_cost(gs: GameState, p: PokemonInPlay) -> int:
+    """Printed retreat cost adjusted by attached-tool modifiers (Air Balloon −2)."""
+    from .chain import def_for
+
+    cost = gs.stat(p.top).retreatCost
+    for s in p.tools:
+        cost += (def_for(gs.card_id(s)) or {}).get("tool", {}).get("retreatBonus", 0)
+    return max(0, cost)
+
+
 def energy_payable(gs: GameState, p: PokemonInPlay, cost: tuple) -> bool:
     """Whether the attached energy can pay `cost` (colorless-flexible)."""
     from .schema import EnergyType
 
-    pool: list[int] = []
-    for s in p.energy:
-        pool.append(int(gs.stat(s).energyType))
+    pool: list[int] = list(provided_energy(gs, p))
     typed = [c for c in cost if c != int(EnergyType.COLORLESS)]
     remaining = list(pool)
     for need in typed:
@@ -105,19 +144,58 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
                 continue
             if check_legal(gs, seat, cdef.get("legal", [])):
                 opts.append({"type": int(OptionType.PLAY), "index": i})
-        # TOOL / STADIUM programs land with their trace divergences (M2 burn-down)
+        elif stat.cardType == CardType.TOOL:
+            from .chain import def_for
+            if def_for(cid) is None:
+                continue  # un-def'd tool: option absent -> visible trace divergence
+            for area, idx, p in _targets(gs, seat):
+                if not p.tools:                    # one tool per Pokémon
+                    opts.append({"type": int(OptionType.ATTACH),
+                                 "area": int(AreaType.HAND), "index": i,
+                                 "inPlayArea": area, "inPlayIndex": idx})
+        elif stat.cardType == CardType.STADIUM:
+            from .chain import def_for
+            if def_for(cid) is None:
+                continue
+            if gs.stadium_played:                  # one stadium play per turn
+                continue
+            if gs.stadium and gs.card_id(gs.stadium[0]) == cid:
+                continue                           # same stadium already in play
+            opts.append({"type": int(OptionType.PLAY), "index": i})
 
-    # ATTACK tail (not for the first player's first turn).
+    # ABILITY options: in-play order (active first, bench order); data-driven opt-in via
+    # a def "ability" entry, once per turn per Pokémon (+ optional global-name limit).
+    from .chain import check_legal as _check_legal
+    from .chain import def_for as _def_for
+    for area, idx, p in _targets(gs, seat):
+        cid = gs.card_id(p.top)
+        adef = (_def_for(cid) or {}).get("ability")
+        if adef is None or p.ability_used_turn >= gs.turn:
+            continue
+        if adef.get("oncePerTurnGlobal") and gs.turn_markers.get(f"ability:{cid}"):
+            continue
+        if not _check_legal(gs, seat, adef.get("legal", []), pokemon=p):
+            continue
+        opts.append({"type": int(OptionType.ABILITY), "area": area, "index": idx})
+
+    # ATTACK tail (not for the first player's first turn); self-locked attacks
+    # (Accelerating Stab / Mega Brave class) are omitted on the owner's next turn
+    # (pinned v2_ml_mirror_5100 f130 / 5101 f21).
     if b.active is not None and not going_first_t1 and not b.asleep and not b.paralyzed:
         for attack_id in gs.stat(b.active.top).attacks:
             atk = gs.db.attacks[attack_id]
+            if b.active.attack_locks.get(str(attack_id)) == gs.turn:
+                continue
             if energy_payable(gs, b.active, atk.energies):
                 opts.append({"type": int(OptionType.ATTACK), "attackId": attack_id})
 
-    # RETREAT: once per turn, needs a bench, blocked by sleep/paralysis, cost payable.
+    # RETREAT: once per turn, needs a bench, blocked by sleep/paralysis, cost payable —
+    # in provided-energy UNITS (Ignition on an evolution pays 3 with one card, pinned
+    # ms_mirror_1001 f22).
     if (b.active is not None and b.bench and not gs.retreated
             and not b.asleep and not b.paralyzed
-            and len(b.active.energy) >= gs.stat(b.active.top).retreatCost):
+            and len(provided_energy(gs, b.active))
+            >= effective_retreat_cost(gs, b.active)):
         opts.append({"type": int(OptionType.RETREAT)})
 
     opts.append({"type": int(OptionType.END)})
@@ -129,7 +207,7 @@ def pose(gs: GameState, seat: int, *, type: int, context: int, options: list[dic
          context_card=None, effect_card=None,
          remain_damage_counter: int = 0, remain_energy_cost: int = 0) -> None:
     gs.turn_action_count += 1
-    gs.last_posed = (seat, int(context))
+    gs.last_posed = (seat, int(context), min_count, max_count)
     gs.pending = PendingSelect(
         seat=seat, type=int(type), context=int(context), min_count=min_count,
         max_count=max_count, options=options, deck_listing=deck_listing,
