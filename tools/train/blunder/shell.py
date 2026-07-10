@@ -5,7 +5,12 @@ The right pane indexes frames the SAME way the colorful viewer does -- step ``X 
 (the film frame number). An "Analyze as" selector picks which seat is *us*: it flips the
 colorful viewer's perspective and auto-labels each saved blunder as own/peer (with the right
 agent) from the frame's acting seat -- so blunders for BOTH players are taggable. HEROZ is
-cross-origin so its step can't be read; the step box is the bridge. See ADR-0014 / ADR-0015.
+cross-origin so its step can't be read; the step box is the bridge.
+
+A **Scope** selector says what the tag is *about* (ADR-0049): this decision, the whole turn, or the
+whole match. You always tag from a real Decision -- the **Anchor** -- but off decision scope the
+record is keyed by the Scope's subject, ``correct`` is optional (turn) or forbidden (match), and the
+server embeds the Span of covered Decisions. See ADR-0014 / ADR-0015 / ADR-0049.
 """
 from __future__ import annotations
 
@@ -129,11 +134,13 @@ class _Handler(BaseHTTPRequestHandler):
                 replace_id=form.get("editing_id") or None,
                 attribution=form.get("attribution") or None,
                 posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)
-            )
+                scope=form.get("scope", "decision"),   # decision | turn | match (ADR-0049); the Span
+            )                                          # is assembled server-side from the Anchor
         except (KeyError, ValueError) as exc:
             return _json(self, {"error": str(exc)}, 400)
         return _json(self, {"ok": True, "id": corr.id, "category": corr.category, "seat": corr.seat,
-                            "source": corr.source, "correct_label": corr.correct_label})
+                            "source": corr.source, "correct_label": corr.correct_label,
+                            "scope": corr.scope, "subject": corr.subject})
 
 
 def init_state(replays, *, store_path, agent="", source="own", our_team=None,
@@ -179,7 +186,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  #vbar{padding:6px 8px;border-bottom:1px solid #eee;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
  #vbar .hint{color:#888;font-size:12px;margin-left:auto}
  iframe{flex:1;border:0;width:100%;background:#111}
- #right{width:400px;padding:14px;overflow:auto}
+ #right{width:400px;padding:14px;overflow:auto;font-size:12px}
  #ids{font-size:12px;color:#555;background:#f6f6f6;padding:6px 8px;border-radius:5px}
  #nav{display:flex;gap:6px;align-items:center;margin:12px 0}
  #nav input{width:64px} #pick{flex:1}
@@ -201,6 +208,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  .posture .alt{color:#777} .posture .off{color:#999}
  .pmark{display:flex;align-items:center;gap:6px;color:#4457b8;font-weight:700;margin:8px 0 0}
  .pmark input{width:auto;margin:0} .pmark .h{color:#888;font-weight:400;font-size:12px}
+ .scopehint{color:#777;margin-top:3px} .item .sc{color:#4a6}
 </style></head><body>
 <div id="left">
  <div id="vbar">
@@ -226,8 +234,10 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  </div>
  <div class="now" id="now"></div>
  <label class="pmark" title="Flags the agent's opponent Read/Posture as wrong at this decision. /blunder-buster ties it to the believed archetype's Matchup Brief / recognition, not a generic weight."><input type="checkbox" id="posture_wrong"> Opponent read was wrong<span class="h">— tie this blunder to the matchup (archetype above)</span></label>
+ <label>Scope — what this tag is about (ADR-0049)</label><select id="scope"></select>
+ <div class="scopehint" id="scopehint"></div>
  <label>Category (the blunder identifier)</label><select id="category"></select>
- <label>Correct move(s) — the better legal option</label><select id="correct" multiple></select>
+ <label id="correctlab">Correct move(s) — the better legal option</label><select id="correct" multiple></select>
  <label>Source</label><select id="source"></select>
  <label>Attribution (optional)</label><input id="attribution" placeholder="hypothesis:&lt;id&gt; / missing_hypothesis / tactical / value / scouting">
  <label class="crit" title="blunder-buster resolves CRITICAL blunders first, one at a time, and never leaves one unfixed"><input type="checkbox" id="critical"> Critical</label>
@@ -240,7 +250,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 <script>
 let FR=[],META={},i=0,replayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
 const $=id=>document.getElementById(id);
-const FORM=['category','correct','source','attribution','critical','posture_wrong','rationale','save'];
+const FORM=['scope','category','correct','source','attribution','critical','posture_wrong','rationale','save'];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 // The CRITICAL marker lives IN the rationale (case-sensitive word-boundary token, mirrors
 // train.blunder.correction.is_critical). The checkbox is a bidirectional toggle of that token,
@@ -266,6 +276,10 @@ function openColorful(target){
   const inp=document.createElement('input'); inp.type='hidden'; inp.name='json'; inp.value=JSON.stringify(vl);
   f.appendChild(inp); document.body.appendChild(f); f.submit(); f.remove();
 }
+// A scoped tag (turn/match, ADR-0049) shares its Anchor step with the Decision tags inside it, so
+// the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
+const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
+  :it.scope==='match'?`whole match (${it.span_len} turns)`:'';
 async function refreshList(){
   LIST=await (await fetch('/corrections.json')).json();
   $('count').textContent=LIST.length;
@@ -273,9 +287,10 @@ async function refreshList(){
     `<div class="item"><span class="x" onclick="removeItem(${k})">✕</span>`+
     `<span class="ed" onclick="editItem(${k})">edit</span>`+
     `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}`+
+    (it.scope!=='decision'?` · <b class="sc">${esc(scopeTag(it))}</b>`:'')+
     (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+
-    (it.posture_mismatch?' · <b style="color:#4457b8">🔮 read wrong</b>':'')+`<br>`+
-    `→ ${esc(it.correct_label||('opt '+it.correct.join(',')))}`+
+    (it.posture_mismatch?' · <b style="color:#4457b8">🔮 read wrong</b>':'')+
+    (it.correct.length?`<br>→ ${esc(it.correct_label||('opt '+it.correct.join(',')))}`:'')+
     (it.rationale?`<br><i>${esc(it.rationale)}</i>`:'')+`</div>`).join('');
 }
 async function removeItem(k){
@@ -289,9 +304,33 @@ function editItem(k){
   gotoStep(it.step);
   $('category').value=it.category; $('rationale').value=it.rationale||''; $('source').value=it.source;
   $('posture_wrong').checked=!!it.posture_mismatch;   // after gotoStep→show() reset it
+  $('scope').value=it.scope||'decision'; applyScope();
   syncCrit();
   [...$('correct').options].forEach(o=>o.selected=it.correct.includes(+o.value));
   editingId=it.id; $('msg').className=''; $('msg').textContent='editing — Save to replace'; $('right').scrollTop=0;
+}
+// The Scope selector. `correct` is mandatory at decision scope, OPTIONAL at turn scope (giving it
+// asserts THIS Anchor is the first divergent Decision), and impossible at match scope — no single
+// select carries a whole-match verdict. Identity follows the scope's subject, not the frame.
+function fillScope(f){
+  const keep=$('scope').value||'decision';             // sticky while stepping frames
+  $('scope').innerHTML='';
+  $('scope').add(new Option('this decision','decision'));
+  $('scope').add(new Option('turn '+f.turn+' (this seat)','turn'));
+  $('scope').add(new Option('whole match','match'));
+  $('scope').value=keep;
+  applyScope();
+}
+function applyScope(){
+  const s=$('scope').value, sel=$('correct');
+  if(s==='match'){ [...sel.options].forEach(o=>o.selected=false); }
+  sel.disabled=(s==='match')||!FR[i].taggable;
+  $('correctlab').innerHTML=s==='decision'?'Correct move(s) — the better legal option'
+    :s==='turn'?'Correct move(s) — <i>optional</i>: the first divergent option at this anchor'
+    :'Correct move(s) — <i>n/a</i>: a whole-match verdict names no option';
+  $('scopehint').textContent=s==='decision'?''
+    :s==='turn'?'keyed by the turn, not this frame — every decision of the turn travels with the tag'
+    :'keyed by (episode, seat) — the played line of every turn travels with the tag';
 }
 async function boot(){
   META=await (await fetch('/meta.json')).json();
@@ -299,6 +338,7 @@ async function boot(){
   META.sources.forEach(s=>$('source').add(new Option(s,s)));
   $('critical').onchange=()=>{$('rationale').value=applyCritical($('rationale').value,$('critical').checked);};
   $('rationale').oninput=syncCrit;
+  $('scope').onchange=applyScope;
   $('analyze').onchange=()=>{openColorful('viewer'); fillPick(); show(i);};
   $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
   loadGame();
@@ -366,6 +406,7 @@ function show(n){
   FORM.forEach(id=>$(id).disabled=!f.taggable);
   $('posture_wrong').checked=false;    // fresh frame -> unflagged (editItem re-checks it after)
   $('msg').className=''; $('msg').textContent=f.taggable?'':'(not a taggable frame — step to a decision)';
+  fillScope(f);                        // anchor must be a Decision, whatever the scope
   syncCrit();
 }
 function pickOption(f,k){
@@ -388,10 +429,12 @@ $('step').onchange=e=>gotoStep(+e.target.value);
 $('reload').onclick=()=>openColorful('viewer'); $('tab').onclick=()=>openColorful('_blank');
 $('plain').onclick=()=>{$('viewer').src='/viewer/';};
 $('save').onclick=async()=>{
-  const f=FR[i], correct=[...$('correct').selectedOptions].map(o=>+o.value), own=isOwn(f.seat);
-  if(!correct.length){$('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
+  const f=FR[i], scope=$('scope').value, own=isOwn(f.seat);
+  const correct=scope==='match'?[]:[...$('correct').selectedOptions].map(o=>+o.value);
+  if(scope==='decision'&&!correct.length){$('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
   const rationale=applyCritical($('rationale').value,$('critical').checked);   // checkbox owns the CRITICAL token
   const body={frame:f.frame,correct,category:$('category').value,rationale,
+    scope:$('scope').value,                        // what the tag is about (ADR-0049)
     source:$('source').value, agent: own?META.agent:pname(f.seat),
     submission_id: own?META.submission_id:null, attribution:$('attribution').value,
     posture_mismatch:$('posture_wrong').checked,   // opponent Read flagged wrong (ADR-0041)
@@ -400,7 +443,8 @@ $('save').onclick=async()=>{
   const j=await r.json(); $('msg').className=j.ok?'ok':'ko';
   if(j.ok){
     if(editingId){await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:editingId})}); editingId=null;}
-    saved++; $('msg').textContent=`saved: ${pname(f.seat)} · ${j.source} · ${j.category} → ${j.correct_label}`;
+    saved++; $('msg').textContent=`saved: ${pname(f.seat)} · ${j.source} · ${j.scope}`+
+      (j.subject!=null?` ${j.subject}`:'')+` · ${j.category}`+(j.correct_label?` → ${j.correct_label}`:'');
     $('log').textContent=`${saved} blunder(s) shipped this session`; $('rationale').value=''; syncCrit(); refreshList();
   } else $('msg').textContent='error: '+j.error;
 };

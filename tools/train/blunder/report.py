@@ -78,9 +78,15 @@ _RESOLVED = ("fixed", "covered", "refuted", "deferred")
 _DISP_ORDER = ("fixed", "covered", "refuted", "deferred", "open", "skipped")
 
 
+def _entry_key(entry: dict) -> str:
+    """A snapshot entry's ledger key. Post-ADR-0049 snapshots carry a scope-aware ``key``; older
+    ones are decision-scoped, so ``"<episode_id>-<frame>"`` reconstructs it."""
+    return entry.get("key") or f"{entry.get('episode_id')}-{entry.get('frame')}"
+
+
 def _load_proposals(proposals_dir) -> tuple[set, set, set]:
     """Scan ``data/corrections/tuner/*.json`` → (open_keys, skipped_keys, decks_with_proposals), keyed
-    ``"<episode_id>-<frame>"`` like the ledger. Best-effort: a missing/unreadable dir yields empty
+    like the ledger (``reviewed.review_key``). Best-effort: a missing/unreadable dir yields empty
     sets (every blunder then falls back to ``open`` — never wrongly claimed ``fixed``)."""
     open_keys, skipped_keys, decks = set(), set(), set()
     p = Path(proposals_dir)
@@ -92,8 +98,8 @@ def _load_proposals(proposals_dir) -> tuple[set, set, set]:
         except (json.JSONDecodeError, OSError):
             continue
         decks.add(data.get("deck") or f.stem)
-        open_keys.update(f"{e.get('episode_id')}-{e.get('frame')}" for e in data.get("open", []))
-        skipped_keys.update(f"{e.get('episode_id')}-{e.get('frame')}" for e in data.get("skipped", []))
+        open_keys.update(_entry_key(e) for e in data.get("open", []))
+        skipped_keys.update(_entry_key(e) for e in data.get("skipped", []))
     return open_keys, skipped_keys, decks
 
 
@@ -132,6 +138,18 @@ _STYLE = (
 
 def _esc(value) -> str:
     return _html.escape(str(value))
+
+
+def _subject_html(c: Correction) -> str:
+    """What the blunder is *about*, for the drill-down summary. A scoped Correction (ADR-0049) has
+    no ``correct`` option, so the ``chosen -> correct`` arrow is meaningless for it; say the Scope
+    and how much it spans instead."""
+    if c.scope == "decision":
+        return (f"<code>{_esc(c.chosen_label or c.chosen)}</code> &rarr; "
+                f"<code>{_esc(c.correct_label or c.correct)}</code>")
+    covers = "decision" if c.scope == "turn" else "turn"
+    n = len(c.span or [])
+    return f"<code>{_esc(c.scope)} scope</code> &middot; {n} {covers}{'' if n == 1 else 's'}"
 
 
 def _category_table(by_category: dict) -> str:
@@ -273,13 +291,11 @@ def build_report(corrections_path: Path | str, out_path: Path | str, *,
     for c in corrections:
         if c.source != "own":
             continue
-        chosen = _esc(c.chosen_label or c.chosen)
-        correct = _esc(c.correct_label or c.correct)
         badge = f"<span class='pill {disp[id(c)]}'>{disp[id(c)]}</span>" if enrich else ""
         crit = "<span class='pill critical'>&#9888; CRITICAL</span>" if is_critical(c.rationale) else ""
         head = (
             f"{crit}{badge}{_esc(c.category)} &middot; ep {_esc(c.episode_id)} &middot; "
-            f"turn {_esc(c.decision.get('turn'))} &middot; <code>{chosen}</code> &rarr; <code>{correct}</code>"
+            f"turn {_esc(c.decision.get('turn'))} &middot; {_subject_html(c)}"
         )
         parts.append(f"<details><summary>{head}</summary><p>{_esc(c.rationale)}</p></details>")
 

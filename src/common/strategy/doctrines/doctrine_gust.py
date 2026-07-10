@@ -290,12 +290,14 @@ HYPOTHESES = [
                   "when their Active is already neutralized (Kyogre at 0 Energy — Riptide needs discarded "
                   "{W}, Swirling Waves is unpayable), gusting a benched body up just FREES that harmless "
                   "Active to the Bench to reposition / power up — keep it pinned and develop instead "
-                  "(dragapult f10). The famine sibling `stall-gust-over-dev-when-starved` (+95) is NOT so "
-                  "gated: under a true energy famine a harmless-NOW but forward-lethal Active (Riolu → Mega "
-                  "Lucario ex) must still be stalled (ep83457493 f20). Weighted below every tutor/draw so "
-                  "it only wins the slot when nothing else helps; never fires on an Active carrying a "
-                  "special condition (`opp_active_condition_gift`), since switching it out CLEARS the "
-                  "condition (rules.md §8) and would hand a free cure (ADR-0022).",
+                  "(dragapult f10). The affordability charge is intentional HERE and does NOT contradict the "
+                  "worst-case `active_doomed` reading: the MILD stall's whole question is 'is their Active a "
+                  "threat NOW', whereas the famine sibling `stall-gust-over-dev-when-starved` (+95) governs "
+                  "the worst-case and is NOT so gated — under a true energy famine a harmless-NOW but "
+                  "forward-lethal Active (Riolu → Mega Lucario ex) must still be stalled (ep83457493 f20). "
+                  "Weighted below every tutor/draw so it only wins the slot when nothing else helps; never "
+                  "fires on an Active carrying a special condition (`opp_active_condition_gift`), since "
+                  "switching it out CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed and c.board.opp_active_can_damage_us
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0

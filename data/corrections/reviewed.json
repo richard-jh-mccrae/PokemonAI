@@ -642,5 +642,30 @@
     "disposition": "deferred",
     "reason": "capability-gap: retreat-to-promote-a-disruptor is an unbuilt single-turn Turn Planner generator (naive attach-to-active harms without follow-through) — see docs/todo/retreat-to-item-lock-maneuver.md; fixture dragapult_retreat_to_item_lock_f20.json; decide()=[1] unchanged (not covered).",
     "round": "2026-07-09"
+  },
+  "83967840-54": {
+    "disposition": "covered",
+    "reason": "Real-Pilot decide() at the captured f54 now discards ['Cinderace', \"Lillie's Determination\"] (retest fixed=True): the applied general rule discard-a-draw-duplicate-before-an-evolution-tutor (blunder-20260709-mega_starmie.md) sheds the duplicate Lillie's, exactly the human's correct=[2]. The W-route keeps reporting UNSATISFIED because a rule fix is invisible to the weight fit.",
+    "round": "2026-07-10"
+  },
+  "84890060-48": {
+    "disposition": "covered",
+    "reason": "Real-Pilot decide() at the captured f48 = [9] = Fighting Gong = correct (chosen==correct, degenerate on the shipped code). The applied lethal-recover-the-energy-that-wins grab tactical prices it 1001: Lunatone Active (1F, retreat 1 - affordable), benched Mega Lucario at 0 energy, so the grabbed F is both LEGAL and NECESSARY. Kept as the counter-fixture for no-phantom-grab-lethal (blunder-20260710-round.md) - that proposal's preconditions must not regress this frame.",
+    "round": "2026-07-10"
+  },
+  "85058574-114": {
+    "disposition": "refuted",
+    "reason": "CRITICAL, human-acknowledged 2026-07-10. Spec does not survive the board: the Bench IS full (5), but Poke Pad can still fetch a 2nd Hariyama that evolves the benched Makuhita, so 'a tutor with nothing to find' is FALSE here. Reproducing the tagged correct=[1] (the Energy attach) would additionally require suppressing a perfectly reasonable Fighting Gong, and the attach is deferred by attach-energy-last (reordered=True) by design anyway. The human's real reason -- 'Poke Pad is Ultra Ball fodder' -- is a value judgment about card economy, not a nothing-to-find test. Needs a retag, not code.",
+    "round": "2026-07-10"
+  },
+  "84071010-15": {
+    "disposition": "deferred",
+    "reason": "capability-gap: the retreat-Tool-enabled lethal. deck_definitely_has(Air Balloon)=False (P=0.9877; obs carries no own_prizes so the deck tracker never anchors) and the Lethal Solver's contract is 'a probable fetch is never a win' -- locking it would be a phantom. Fixture also stores the REFUTED dead-hand correct=[1]. See docs/todo/lethal-retreat-tool-enabler.md.",
+    "round": "2026-07-10"
+  },
+  "85046350-10": {
+    "disposition": "deferred",
+    "reason": "bounced to blunder-buster 2026-07-10: spec's 'the gust achieves no board value in setup' has no sound gate. The natural one (opp_active_attack_threatens on gust-for-the-stall) charges attack affordability, contradicting the deliberate worst-case reading of active_doomed (they can attach/burst next turn: docs/todo/incoming-affordability.md, won't-fix) and breaking REQ-GUST-0003.",
+    "round": "2026-07-10"
   }
 }

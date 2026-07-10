@@ -17,12 +17,38 @@ terms follow the enums in `src/cg/api.py`.
 **Decision**:
 One `select` the cabt engine presents at a single step — the agent picks option index(es)
 from `select.option` under a `SelectContext` (`MAIN`, `SWITCH`, `DISCARD`, attack-target, …).
-The **atomic unit a Correction targets**: `chosen` and `correct` are option choices *at one
-Decision*. A human *turn* contains many Decisions; when the better play is a multi-step line,
-the Correction marks only the **first divergent Decision** and the `rationale` prose carries
-the rest.
-_Avoid_: move / play (human-level, may span several Decisions), turn (many Decisions), step
-(the replay timeline index, not the choice itself)
+The **atomic unit** of the game: `chosen` and `correct` are option choices *at one Decision*.
+A Correction's **Scope** says how many Decisions it is *about*; `chosen`/`correct` always
+index the **Anchor** Decision's options, never a later one.
+_Avoid_: move / play (human-level, may span several Decisions), turn (a **Turn** is many
+Decisions — see below), step (the replay timeline index, not the choice itself)
+
+**Turn**:
+One *ply* — a single seat's turn, numbered by the film's `current.turn`. For `turn ≥ 1`
+exactly one seat acts, so the number identifies the actor; **`turn 0` is the shared setup
+phase** and both seats act in it, so a Turn is keyed by `(episode, seat, turn)`.
+_Avoid_: round (both players), step, frame
+
+**Scope**:
+What a Correction is *about* — `decision` (one Decision), `turn` (every Decision that seat
+made in one Turn), or `match` (the whole Episode from that seat). Orthogonal to **Category**:
+scope is the *size* of the blunder, category is its *kind*.
+_Avoid_: granularity, grain, level, tier (Tier means the Pilot's search tier)
+
+**Span**:
+The ordered Decisions a Correction's Scope covers — one for `decision` scope, a Turn's
+Decisions for `turn`, the seat's whole Episode for `match`. Embedded in the record, so a
+scoped Correction survives replay deletion like an atomic one.
+_Avoid_: line (a **planner's** committed line — `planned.next_step`, evolution line), window,
+sequence, range
+
+**Anchor**:
+The single Decision the human tagged a Correction *from* — the point they were looking at.
+It carries the record's embedded state and, when a `turn`-scoped Correction names a `correct`
+option, that option indexes the **Anchor**'s `select.option` (asserting the Anchor is the
+*first divergent Decision*). **Provenance and context, never identity**: a Correction is keyed
+by its Scope's subject, so the same Turn tagged from two frames is one Correction.
+_Avoid_: pivot, mark, point, frame (the film index, not the Decision)
 
 **Category**:
 The **human** axis of a Correction — *what kind* of mistake the blunder is, picked from a

@@ -5,7 +5,7 @@ from pilot_helpers import HAND, MAIN, card_opt, make_select, state
 
 from train.blunder.correction import build_correction
 from train.blunder.decisions import Decision
-from train.tuner.retest import retest
+from train.tuner.retest import retest, retest_span
 
 
 def _correction(obs, *, correct, live_trace):
@@ -49,3 +49,72 @@ def test_retest_surfaces_layer_verdicts():
     legacy = retest(_correction(obs, correct=[1], live_trace={"chosen": [0], "margin": 0}),
                     Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
     assert legacy["planned_before"] is None                            # pre-planner trace degrades
+
+
+def _turn_correction(*, correct, span):
+    """A Turn Correction whose Span carries per-Decision `obs` — the shape retest_span re-drives."""
+    d = Decision(episode_id="t", frame=0, seat=0, turn=4, select_context="Main",
+                 select_type="Main", options=span[0]["obs"]["select"]["option"], chosen=[0],
+                 current=span[0]["obs"]["current"], obs=span[0]["obs"])
+    return build_correction(d, source="own", agent="x", correct=correct,
+                            category="sequencing_error", rationale="develop first",
+                            scope="turn", span=span)
+
+
+def _span_obs():
+    return make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=MAIN,
+                       current=state(hand=[111, 222]))
+
+
+def _span():
+    return [{"frame": 0, "chosen": [0], "chosen_label": "Play A", "obs": _span_obs()},
+            {"frame": 1, "chosen": [0], "chosen_label": "Play B", "obs": _span_obs()}]
+
+
+def _pilot(boost_weight=None):
+    boost = Hypothesis("boost", "", when=lambda c: c.card_id == 222, weight=0)
+    overrides = {"boost": boost_weight} if boost_weight is not None else None
+    return Pilot(Strategy(hypotheses=[boost]), deck=[1] * 60, overrides=overrides)
+
+
+def test_retest_fixed_is_unknown_when_the_correction_names_no_correct_option():
+    """ADR-0049: a prose-only scoped Correction asserts nothing to check. `all([])` is True, so the
+    old expression would have reported every one of them vacuously FIXED — it must be None."""
+    prose = _turn_correction(correct=[], span=_span())
+    assert retest(prose, _pilot())["fixed"] is None
+
+    prescribed = _turn_correction(correct=[1], span=_span())     # Anchor prescription -> assertable
+    assert retest(prescribed, _pilot())["fixed"] is False
+    assert retest(prescribed, _pilot(boost_weight=50.0))["fixed"] is True
+
+
+def test_retest_span_re_drives_the_turn_and_stops_at_the_first_divergence():
+    """ADR-0049: the Span is re-driven Decision by Decision. Once the candidate Pilot diverges, every
+    later `obs` was produced by the OLD line — off-policy — so its verdict is meaningless and is
+    never computed. An agreeing Pilot walks the whole turn with no divergence."""
+    corr = _turn_correction(correct=[1], span=_span())
+
+    agrees = retest_span(corr, _pilot())
+    assert agrees["first_divergence"] is None
+    assert [s["chosen_after"] for s in agrees["steps"]] == [[0], [0]]
+    assert not any(s["off_policy"] for s in agrees["steps"])
+
+    diverges = retest_span(corr, _pilot(boost_weight=50.0))
+    assert diverges["first_divergence"] == {"frame": 0, "chosen_before": [0], "chosen_after": [1]}
+    assert diverges["steps"][0]["diverged"] is True
+    assert diverges["steps"][1] == {"frame": 1, "chosen_before": [0], "chosen_after": None,
+                                    "diverged": False, "off_policy": True}
+
+
+def test_retest_span_of_a_match_correction_is_empty_because_it_carries_no_obs():
+    """A Match Correction is doctrine (`seed-ladder`), not a re-drivable line: its per-Turn headers
+    hold no `obs`, so there is nothing to re-drive and the walker says so rather than guessing."""
+    d = Decision(episode_id="t", frame=0, seat=0, turn=4, select_context="Main",
+                 select_type="Main", options=_span_obs()["select"]["option"], chosen=[0],
+                 current={}, obs=_span_obs())
+    match = build_correction(d, source="own", agent="x", correct=[], category="slow_setup",
+                             rationale="never set up", scope="match",
+                             span=[{"turn": 1, "seat": 0, "chosen_labels": ["Play A"]}])
+    walked = retest_span(match, _pilot())
+    assert walked["steps"] == [] and walked["first_divergence"] is None
+    assert walked["scope"] == "match" and walked["span_len"] == 1

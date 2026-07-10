@@ -21,9 +21,25 @@ HYPOTHESES = [
         id="snipe-for-the-ko",
         rationale="If a damage-select's snipe rider KOs the target (remaining HP <= rider, which ignores "
                   "Weakness/Resistance), take it — a free prize beats any positional snipe. Outranks every "
-                  "other snipe priority.",
+                  "other snipe priority: each positional rung now stands down whenever ANY KO is on offer "
+                  "(`board.snipe_ko_available`). Gating each rung on its own `target_kos` was not enough — "
+                  "the bonuses fire on a DIFFERENT body and their SUM out-voted the prize (top-threat 30 + "
+                  "forced-promotion 40 + evolving-threat 45 = 115 on an un-KO-able Grookey, vs 60 on the "
+                  "KO-able Applin: ms 82754241 f45, and 97-vs-72 in 82753102 f63). A positional weight must "
+                  "never override a KO, and neither may the sum of three.",
         when=lambda c: c.select_context == _DAMAGE and c.target_kos,
         weight=60, status="testing"),
+    Hypothesis(
+        id="dont-snipe-a-benched-tera",
+        rationale="A benched Tera Pokémon takes NO damage from attacks ('prevent all damage done to this "
+                  "Pokémon by attacks', `CardStat.tera`), so a snipe rider aimed there does literally "
+                  "nothing. Card-fact, not a preference: put the counters on a body that can hold them. "
+                  "Also keeps the un-chippable body from becoming the `snipe-the-forced-promotion` key "
+                  "(ms 81785223 f45: Wellspring Mask Ogerpon ex). −60 cancels the largest positional stack "
+                  "so it is never picked while any damageable target remains; when it is the ONLY bench "
+                  "target the select is forced and the rider is wasted either way.",
+        when=lambda c: c.select_context == _DAMAGE and c.target_is_bench_tera,
+        weight=-60, status="assumed"),
     Hypothesis(
         id="snipe-the-top-threat",
         rationale="When no target can be KO'd, hit the biggest threat by `board.strongest_threat_rank` "
@@ -31,7 +47,7 @@ HYPOTHESES = [
                   "printed damage, prefers the more-developed body on a shared line, and boosts lines "
                   "that certainly reach a hand-size attacker, so it never pokes a low-HP support mon. "
                   "Stands down on a KO target (that's snipe-for-the-ko).",
-        when=lambda c: (c.select_context == _DAMAGE and c.target_is_top_threat and not c.target_kos
+        when=lambda c: (c.select_context == _DAMAGE and c.target_is_top_threat and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
                         and not c.target_promotion_mirage),    # ADR-0044: nor a non-promotion imminence mirage
         weight=30, status="testing"),
@@ -39,9 +55,11 @@ HYPOTHESES = [
         id="snipe-the-threat",
         rationale="A benched Pokémon already carrying Energy is closest to attacking, so sniping it "
                   "denies the opponent their next attacker rather than poking a bare benchsitter. "
+                  "Stands down on a KO target — every positional rung must, or their SUM out-votes the "
+                  "free prize (ms 82754241 f45 / 82753102 f63). "
                   "Co-fires with `snipe-the-top-threat` (`_target_threat_rank` already tiers energized "
                   "targets above bare ones) as the legible imminence signal on top of it.",
-        when=lambda c: (c.select_context == _DAMAGE and c.target_is_threat
+        when=lambda c: (c.select_context == _DAMAGE and c.target_is_threat and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
                         and not c.target_promotion_mirage),    # ADR-0044: nor a non-promotion imminence mirage
         weight=20, status="testing"),
@@ -50,9 +68,10 @@ HYPOTHESES = [
         rationale="Tier-3 Prize Path (ADR-0040): this target sits on my cheapest route to my remaining "
                   "prizes, so its damage/KO advances the MATCH win, not just the board. A path-economy "
                   "axis stacking with the threat rank — a low-threat 1-prize body can still be the "
-                  "right path member ('KO one Mega + snipe 3 smalls'). Silent when the path is unknown "
+                  "right path member ('KO one Mega + snipe 3 smalls'). Stands down on a KO target — the path "
+                  "axis must not stack onto the others past `snipe-for-the-ko`. Silent when the path is unknown "
                   "(runs through bodies not yet in play) or the `objectives_path` switch is off.",
-        when=lambda c: c.select_context == _DAMAGE and c.target_on_path,
+        when=lambda c: c.select_context == _DAMAGE and c.target_on_path and not c.board.snipe_ko_available,
         weight=12, status="testing"),
     Hypothesis(
         id="snipe-the-forced-promotion",
@@ -62,7 +81,7 @@ HYPOTHESES = [
                   "carries Energy now. Pre-chip that body this turn. Overrides the energized-imminence "
                   "tier for this pick (its mirages are suppressed); silent while their Active is alive.",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_forced_promotion
-                        and not c.target_kos),
+                        and not c.board.snipe_ko_available),
         weight=40, status="testing"),
     Hypothesis(
         id="snipe-the-evolving-threat",
@@ -81,7 +100,7 @@ HYPOTHESES = [
                   "still developing (form absent). +45 beats the forced-promotion pick where it fires. "
                   "Stands down on a KO target (`snipe-for-the-ko` +60 owns that). SEED; ladder-tuned.",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_strongest_forward
-                        and not c.target_forward_form_in_play and not c.target_kos),
+                        and not c.target_forward_form_in_play and not c.board.snipe_ko_available),
         weight=45, status="assumed"),
     # NOTE: flat `snipe-the-weakest`/`snipe-the-strongest-evolving-threat` RETIRED — `snipe-the-top-threat`
     # subsumes them (round-b7e483a). `snipe-the-evolving-threat` RESTORED 2026-07-09 with the

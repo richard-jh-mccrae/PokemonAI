@@ -191,3 +191,43 @@ def test_report_renders_avg_blunders_per_game_section(tmp_path):
     assert "avg blunders per game" in txt
     assert "<b>2.0</b>" in txt                                  # 2 blunders / 1 distinct game
     assert "http" not in txt
+
+
+# --- scoped corrections in the dashboard (ADR-0049) ---------------------------------------------
+
+def _c_turn(rationale="develop before attacking"):
+    return build_correction(_main(), source="own", agent="mega_starmie", submission_id=100,
+                            correct=[], category="sequencing_error", rationale=rationale,
+                            scope="turn", span=[{"frame": 5, "chosen_label": "Attack"}])
+
+
+def test_a_still_open_turn_correction_is_not_reported_fixed(tmp_path):
+    """ADR-0049: the proposals snapshot keys its open blunders by the scope-aware `key`. If the
+    report matched on `<ep>-<frame>` it would miss the Turn Correction entirely and — because the
+    deck HAS a snapshot — silently badge an unresolved blunder as `fixed`."""
+    log = tmp_path / "c.jsonl"
+    turn = _c_turn()
+    append_correction(turn, log)
+    proposals = tmp_path / "proposals"
+    proposals.mkdir()
+    (proposals / "mega_starmie.json").write_text(json.dumps({
+        "deck": "mega_starmie", "skipped": [],
+        "open": [{"key": review_key(turn), "scope": "turn", "episode_id": turn.episode_id,
+                  "frame": 5, "subject": 1}],
+    }), encoding="utf-8")
+
+    txt = build_report(log, tmp_path / "r.html", proposals_dir=proposals).read_text(encoding="utf-8")
+    assert "pill open" in txt and "1 open" in txt
+    assert "pill fixed" not in txt
+
+
+def test_report_details_label_a_scoped_blunder_by_its_scope(tmp_path):
+    """A Turn/Match Correction has no `correct` option, so the `chosen → correct` detail line is
+    meaningless for it; the drill-down says what the blunder is ABOUT instead."""
+    log = tmp_path / "c.jsonl"
+    append_correction(_c_turn(rationale="the whole turn was misordered"), log)
+    txt = build_report(log, tmp_path / "r.html").read_text(encoding="utf-8")
+    assert "turn scope" in txt and "1 decision" in txt      # what it's about + how much it spans
+    assert "&rarr;" not in txt                              # no meaningless chosen -> correct arrow
+    assert "the whole turn was misordered" in txt
+    assert "http" not in txt

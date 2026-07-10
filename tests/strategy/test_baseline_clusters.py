@@ -29,13 +29,15 @@ CLUSTERS = {
         "dont-attach-discard-energy-turn1", "concentrate-accel-on-one-line-body",
         "conserve-burst-when-no-ko", "advance-the-accel-pieces",
         "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy",
-        "dont-power-the-draw-engine"}),
+        "dont-power-the-draw-engine",           # draw-engine attach at _ATTACH (dragapult f21)
+        "dont-fund-the-non-attacking-body"}),   # broader: engine/tutor/stall at _ATTACH + _ATTACH_FROM (ml f121/f84)
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)
         "snipe-the-forced-promotion",           # ADR-0044 Forced-Promotion Read
         "snipe-the-evolving-threat",            # restored 2026-07-09 (forward-wincon pre-evo, form-absent gated)
         # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
+        "dont-snipe-a-benched-tera",             # Tera: takes no damage while Benched (card fact)
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
                                  "develop-the-accel-recipient", "develop-a-basic-in-setup",
@@ -54,6 +56,7 @@ CLUSTERS = {
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
                                      "honor-preferred-start", "dont-open-multiprize-active",
+                                     "dont-open-with-the-engine",   # opener half of the utility-body read
                                      "open-the-item-lock-starter"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
                                            "dont-play-damage-boost-when-cant-attack",

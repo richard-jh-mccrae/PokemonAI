@@ -24,6 +24,10 @@ class CardStat:
     hpBonus: int = 0                   # flat HP a Tool grants holder (e.g. Hero's Cape +100),
                                        # parsed from skill text — engine has no structured field.
                                        # Primitive behind the general +HP-tool breakpoint model.
+    retreatReduction: int = 0          # Energy a Tool shaves off its holder's Retreat Cost (Air Balloon:
+                                       # {C}{C} -> 2), parsed from skill text. The SECOND Tool class the
+                                       # ADR-0028 doctrine never modelled: worthless on a body that will
+                                       # never retreat, so it belongs on the Active (ml f87). 0 otherwise.
     recoil: int = 0                    # self-damage of card's HIGHEST-dmg attack (Hariyama Wild Press 210 -> 70),
                                        # parsed from text (no engine field). Feeds "does my nuke leave a free KO?"
     handSizeDamage: int = 0            # per-card dmg of "for each card in hand" atk (Powerful Hand: 2ctr=20);
@@ -122,6 +126,26 @@ def _parse_tool_hp_bonus(card) -> int:
         m = _HP_BONUS_RE.search(text or "")
         if m:
             return int(m.group(1))
+    return 0
+
+
+# Air Balloon: "The Retreat Cost of the Pokémon this card is attached to is {C}{C} less." The amount is
+# written as repeated Colorless symbols, so count them rather than reading a digit.
+_RETREAT_TOOL_RE = re.compile(
+    r"\bThe Retreat Cost of the Pok.mon this card is attached to is ((?:\{C\})+) less")
+
+
+def _parse_tool_retreat_reduction(card) -> int:
+    """Energy a Pokémon Tool shaves off its holder's Retreat Cost (``CardStat.retreatReduction``),
+    read from the card's skill text — the engine exposes no structured field. Unconditional phrasing
+    only; anything else parses to 0 (under-credit never over-credits a retreat the body can't pay)."""
+    for s in (getattr(card, "skills", None) or []):
+        text = getattr(s, "text", None)
+        if text is None and isinstance(s, dict):
+            text = s.get("text")
+        m = _RETREAT_TOOL_RE.search(text or "")
+        if m:
+            return m.group(1).count("{C}")
     return 0
 
 
@@ -797,6 +821,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             ex=bool(c.ex), megaEx=bool(c.megaEx), aceSpec=bool(getattr(c, "aceSpec", False)),
             hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # Pokémon w/ Ability skill
             hpBonus=_parse_tool_hp_bonus(c),
+            retreatReduction=_parse_tool_retreat_reduction(c),
             stage2=bool(getattr(c, "stage2", False)),
             damageBoost=boost, damageBoostType=boost_type, damageBoostVsEx=boost_vs_ex,
             recoil=int(recoil),

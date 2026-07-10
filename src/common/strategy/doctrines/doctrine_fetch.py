@@ -31,7 +31,10 @@ _BASE_ROLES = frozenset({"win_condition_base", "evolution_base"})
 # FETCH FILTER: cards a search can pull OUT of deck, predicate over CardStat, keyed by Function Tag.
 # Shared basis for whiff/redundancy signals (all targets gone/held = dead card). Add filter tag+predicate per new search card.
 _FETCH_FILTERS = {
-    "bench_fill": lambda st: 0 < st.hp <= 70 and not st.evolvesFrom,  # Basic Pokémon <=70 HP (Buddy-Buddy Poffin)
+    # Buddy-Buddy Poffin (the only `bench_fill` card in the pool): "up to 2 Basic Pokémon with 70 HP
+    # or less". The HP cap is the card's own text — without it the filter counted a 170-HP Meowth ex
+    # as fetchable and the whiff guard never fired on an exhausted deck (dragapult f79, CRITICAL).
+    "bench_fill": lambda st: st.hp > 0 and not st.evolvesFrom and st.hp <= 70,
     "tutor_mega": lambda st: bool(getattr(st, "megaEx", False)),  # a Mega Evolution ex (Mega Signal)
     "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
     # Rush-evolve tutor (Salvatore): only ability-LESS Evolutions (e.g. Mega Starmie ex, not Cinderace).
@@ -334,18 +337,24 @@ HYPOTHESES = [
         weight=5, status="testing"),
     Hypothesis(
         id="fetch-base-before-stranded-payoff",
-        rationale="When the payoff isn't yet deployable (`wincon_base_deployable` False — no Line pre-evolution "
-                  "in play or hand), prefer fetching the base: a payoff with nothing to evolve from strands a "
-                  "dead card (and starves a recipient like Cinderace's Turbo Flare), while the base unblocks the "
-                  "whole line. Inverse of `prefer-payoff-over-preevo`; lifts the pre-evolution above "
-                  "`fetch-the-wincon` (+30) but stays additive, so a payoff-only offer is still grabbed. Two "
-                  "BREADTH stand-downs (dragapult f14): a REDUNDANT base whose copy is already in play adds no "
-                  "line progression on a thin Bench (`card_is_redundant and my_bench < _THIN_BENCH` — grab a "
-                  "fresh body, not a 2nd of what's already down); and on an EMPTY Bench a mid-Line EVOLUTION "
-                  "(`evolvesFrom`) can only stack on the Active, leaving the Bench empty (a KO-then-lose risk) "
-                  "— develop a benchable Basic instead.",
+        rationale="When the payoff isn't yet deployable (`wincon_base_deployable` False — the payoff's IMMEDIATE "
+                  "pre-evolution is neither in play nor in hand), prefer fetching the base: a payoff with nothing "
+                  "to evolve from strands a dead card (and starves a recipient like Cinderace's Turbo Flare), "
+                  "while the base unblocks the whole line. Inverse of `prefer-payoff-over-preevo`; lifts the "
+                  "pre-evolution above `fetch-the-wincon` (+30) but stays additive, so a payoff-only offer is "
+                  "still grabbed. Stands down once the win-condition is in play AND the Bench is already "
+                  "developed (`wincon_in_play and my_bench > 0`) — nothing is stranded then and a SECOND line is "
+                  "a luxury, so the +20 must not out-grab a genuinely needed engine piece (ml f39, CRITICAL: a "
+                  "spare Riolu over the Solrock that turns Lunatone's draw-3 on, energized Mega already benched). "
+                  "Two more BREADTH stand-downs (dragapult f14): a REDUNDANT base whose copy is already in play "
+                  "adds no line progression on a thin Bench (`card_is_redundant and my_bench < _THIN_BENCH` — grab "
+                  "a fresh body, not a 2nd of what's already down); and on an EMPTY Bench a mid-Line EVOLUTION "
+                  "(`evolvesFrom`) can only stack on the Active, leaving the Bench empty (a KO-then-lose risk) — "
+                  "develop a benchable Basic instead. (A Basic base on an empty Bench still fires — building the "
+                  "first developed body is a real need, the ADR-0048 2nd-line case.)",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_line_preevo
         and not c.board.wincon_base_deployable
+        and not (c.board.wincon_in_play and c.board.my_bench > 0)
         and not (c.card_is_redundant and c.board.my_bench < _THIN_BENCH)
         and not (c.board.my_bench == 0 and bool(c.stat and c.stat.evolvesFrom)),
         weight=20, status="testing"),
@@ -653,6 +662,32 @@ HYPOTHESES = [
         when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "draw" in c.tags
         and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
         weight=10, status="assumed"),
+    Hypothesis(
+        id="dont-grab-a-card-already-in-hand",
+        rationale="Don't tutor a card an identical copy of which is ALREADY in my hand — the second copy "
+                  "does nothing the first doesn't, and the search is the scarce resource. The FETCH-side "
+                  "mirror of the shipped `discard-the-hand-duplicate`, with the same fungible-Energy "
+                  "exemption (a spare Basic Energy is always a future attach). `dont-fetch-the-redundant-"
+                  "piece` covers redundancy IN PLAY; this covers redundancy IN HAND. ml f9 (CRITICAL): "
+                  "already holding a Lillie's Determination, the agent spent Meowth ex's Last-Ditch Catch "
+                  "on another one (`grab-a-draw-supporter-in-setup` +10, three copies tied on the option "
+                  "index) instead of the Team Rocket's Petrel that opens the real chain (Petrel → Fighting "
+                  "Gong → Solrock → Lunar Cycle draws 3). −12 cancels the draw-Supporter rung without "
+                  "inverting the fetch order — a genuinely needed duplicate (`fetch-the-wincon` +30, "
+                  "`fetch-energy-when-starved` +35) still wins.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_already_in_hand,
+        weight=-12, status="assumed"),
+    Hypothesis(
+        id="grab-what-i-can-play-this-turn",
+        rationale="At a search, a card that CANNOT be played this turn loses to one that can. Concretely: "
+                  "once the one-per-turn Supporter is spent — often by the very tutor now resolving — a "
+                  "fetched Supporter is next-turn fuel, while an Item plays immediately. ml f71: Team "
+                  "Rocket's Petrel resolved with a DEAD hand (0 cards) and took a Lillie's Determination "
+                  "(+10) that could not be played, over the Fighting Gong that fetches a Basic {F} to "
+                  "discard to Lunar Cycle for 3 cards THIS turn. −12 cancels the draw-Supporter rung; a "
+                  "Supporter worth more than any playable Item still wins on its own merits.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_unplayable_this_turn,
+        weight=-12, status="assumed"),
     Hypothesis(
         id="dont-strand-the-evolving-engine",
         rationale="Don't tutor a Stage-1 ENGINE into hand when you hold no base to evolve it onto: a "

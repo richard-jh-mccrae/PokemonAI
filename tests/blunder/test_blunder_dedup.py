@@ -5,11 +5,12 @@ from train.blunder.store import (append_correction, dedup_corrections, find_conf
                                  load_corrections)
 
 
-def _c(*, frame=9, category="bad_retreat", correct=(1,), rationale="r", episode=100, seat=0):
-    d = Decision(episode_id=episode, frame=frame, seat=seat, turn=1, select_context="Main",
+def _c(*, frame=9, category="bad_retreat", correct=(1,), rationale="r", episode=100, seat=0,
+       turn=1, scope="decision"):
+    d = Decision(episode_id=episode, frame=frame, seat=seat, turn=turn, select_context="Main",
                  select_type="Main", options=[{"type": 12}, {"type": 14}], chosen=[0], current={})
     return build_correction(d, source="own", agent="mega_starmie", correct=list(correct),
-                            category=category, rationale=rationale)
+                            category=category, rationale=rationale, scope=scope)
 
 
 def test_dedup_collapses_exact_duplicates_keeping_the_latest():
@@ -37,6 +38,27 @@ def test_find_conflicts_flags_one_decision_tagged_two_ways():
     assert len(conflicts) == 1
     (_key, members), = conflicts
     assert {m.category for m in members} == {"bad_retreat", "misattachment"}
+
+
+def test_dedup_keys_a_turn_correction_by_its_turn_not_its_anchor_frame():
+    """ADR-0049: the same Turn tagged from two different Anchor frames is ONE Turn Correction —
+    identity is the Scope's subject. A Decision Correction inside that Turn is a different blunder."""
+    from_f9 = _c(scope="turn", turn=4, frame=9, rationale="first")
+    from_f14 = _c(scope="turn", turn=4, frame=14, rationale="refined")
+    assert len(dedup_corrections([from_f9, from_f14])) == 1                 # one Turn, one blunder
+    assert dedup_corrections([from_f9, from_f14])[0].rationale == "refined"
+
+    inside = _c(scope="decision", turn=4, frame=9)                          # coexists with the Turn
+    assert len(dedup_corrections([from_f9, inside])) == 2
+    assert len(dedup_corrections([_c(scope="turn", turn=4), _c(scope="turn", turn=6)])) == 2
+
+
+def test_dedup_keys_a_match_correction_by_episode_and_seat():
+    """A Match Correction has no subject: one per (episode, seat), regardless of where it was tagged."""
+    a = _c(scope="match", correct=(), frame=3, rationale="first")
+    b = _c(scope="match", correct=(), frame=40, rationale="refined")
+    assert len(dedup_corrections([a, b])) == 1
+    assert len(dedup_corrections([a, _c(scope="match", correct=(), seat=1)])) == 2   # other seat
 
 
 def test_load_corrections_dedups_by_default_with_raw_opt_out(tmp_path):

@@ -43,9 +43,10 @@ every deck in the log, reaching exactly one terminal ANALYSIS outcome, with evid
   **A missing signal/tag/enum is NOT a capability-gap** — it's carried in the proposal's `spec` as
   infra-to-build, and `/update-strategy` builds it at apply time (authoring-gates.md).
 
-"Open" = every `missing_hypothesis` proposal in **every** tuner ledger `data/corrections/tuner/*.json`
-`open[]` (one file per agent) **plus** every `UNSATISFIED` line the (no-`--agent`) `tune.py` run prints
-**for any agent**. Each lands in exactly one cluster → one outcome above.
+"Open" = every entry in **every** tuner ledger `data/corrections/tuner/*.json` `open[]` (one file per
+agent) — both the `missing_hypothesis` proposals and every **scoped** (turn/match) Correction, which
+lands there by construction (ADR-0049) — **plus** every `UNSATISFIED` line the (no-`--agent`) `tune.py`
+run prints **for any agent**. Each lands in exactly one cluster → one outcome above.
 
 **No bare `deferred`, no "future run", no voluntary pauses.** The run executes start → completion gate in
 one continuous push; never end a turn reporting remaining clusters. The only sanctioned stops are the
@@ -88,9 +89,28 @@ they don't resurface); `tune.py` excludes them. Loop: tag → `/blunder-buster` 
    (`tune.py` also rewrites each agent's `tuned.json` — the deterministic Tier-0 weight deltas auto-apply,
    ADR-0018; commit alongside via `/update-strategy`.)
 
-2. **Read the live trace to ROUTE the cluster (ADR-0019).** Each Correction embeds `live_trace` — the `@T`
+2. **Read the SCOPE, then the live trace, to ROUTE the cluster (ADR-0049 / ADR-0019).**
+
+   **Scope first.** Every open record carries `scope` (`decision` | `turn` | `match`), `subject`, and a
+   scope-aware `key`. It says what the blunder is *about*, and it is a **strong routing prior — never an
+   auto-route** (routing is this skill's value; don't let `tune.py` do it):
+   - `scope: turn` — a whole ply was misplayed. Prima facie **`target_layer: planner-code`** (the Turn
+     Planner, `plan_turn`), `verification_contract: verifier` — the gate is `retest_span`, which re-drives
+     the Span to its **first divergence**. *But check:* if the Span's `live_trace.planned` is `null`
+     throughout, the Planner never committed there, and the real gap is a **`general-hypothesis`**.
+   - `scope: match` — a whole game was misplayed. Read the Span's per-turn `game_plan` (ADR-0045). Wrong
+     mode/goal → **`planner-code`** (`plan_match`); wrong opponent read → **`matchup-brief`**; a line that
+     needs cross-turn search → **capability-gap**. `verification_contract: seed-ladder` either way: a match
+     Correction embeds no `obs` and is never re-driven.
+   - A scoped record's `seed_weight` is `0` and its `attribution` (when present) is *information only* — it
+     never reached the weight fit. **Never author a `when()`/weight for a scoped blunder.**
+   - **Cluster across scopes when the fix is one fix.** A turn Correction and the decision Corrections
+     inside that turn often describe the same planner bug; one proposal covers them, provenance lists all.
+
+   **Then the live trace.** Each Correction embeds `live_trace` — the `@T`
    telemetry the shipped agent emitted (`opts[].score/tac/fired`, `chosen`, `margin`, `lethal`, `planned`,
-   `posture`). This read **determines the proposal's `target_layer` + `verification_contract`**:
+   `posture`). For a decision-scope blunder this read **determines the proposal's `target_layer` +
+   `verification_contract`**:
    - **Check the sparse reorder markers first** when `chosen` isn't top-`score`: `reordered`+`deferred`
      (attack-last resequencer — a *sequencing* decision, `planner-code`, not an under-weighted attack),
      `needy` (equal-score attach tie-break), `grabbed` (multi-pick set). Don't author a bogus rule to
@@ -109,9 +129,9 @@ they don't resurface); `tune.py` excludes them. Loop: tag → `/blunder-buster` 
      *Read* (γ low) → a recognition gap → capability-gap.
    - Otherwise (no layer flag) → **`target_layer: general-hypothesis`**, `verification_contract: verifier`
      (the correction fixture is the re-measure gate).
-   `tune.py` tags lines `[LETHAL]`/`[PLANNED]`/`[POSTURE≠ <arch>]` and the snapshot carries
-   `lethal_locked`/`planner_committed`/`posture_mismatch`+`believed_archetype` — build the cohorts from
-   those; the `null`-but-should-have half is your rationale read.
+   `tune.py` tags lines `[TURN <n>]`/`[MATCH]`/`[LETHAL]`/`[PLANNED]`/`[POSTURE≠ <arch>]` and the snapshot
+   carries `scope`+`subject`+`key`, `lethal_locked`/`planner_committed`/`posture_mismatch`+
+   `believed_archetype` — build the cohorts from those; the `null`-but-should-have half is your rationale read.
 
 3. **Read the feature catalog to write an accurate `spec`** (author against LIVE source, never memory):
    `src/common/pilot.py` (`Context`/`Board` fields), `src/cg/api.py` (enums), `src/common/cards.py` +
@@ -128,8 +148,10 @@ they don't resurface); `tune.py` excludes them. Loop: tag → `/blunder-buster` 
      correction ids (which may span **multiple agents** for a general/planner/matchup cluster) + the
      fixtured state (`tests/fixtures/corrections/<name>.json`), `status: open`. One proposal per cluster,
      covering **all** its members — not per-correction point-fixes.
-   - For **covered/refuted**: `python tools/train/review_correction.py <ep>-<frame> <disp> "<reason>"`
-     (refuted → prove with a retest first; covered → name the Hypothesis/Brief, confirm on the real Pilot).
+   - For **covered/refuted**: `python tools/train/review_correction.py <key> <disp> "<reason>"` — the
+     `key` is the snapshot entry's own `key` field (`<ep>-<frame>` / `<ep>-t<turn>s<seat>` / `<ep>-m<seat>`),
+     never a hand-built one (refuted → prove with a retest first; covered → name the Hypothesis/Brief,
+     confirm on the real Pilot; a turn cluster's proof is `retest_span`, not `retest`).
    - For **capability-gap / matchup hand-off**: the four artifacts / the `/matchup-genie <slug>` route,
      ledgered `deferred` with the layer + todo-doc / slug.
 
@@ -164,9 +186,10 @@ it is worked serially across all agents before any SOFT cluster.)
 - **Route, don't author.** blunder-buster's product is a *routed proposal* (or a tested set-aside), never a
   committed `when()`/code. The routing (step 2) is its core value; the authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
-- **Layer routing is load-bearing:** lethal/planned → `planner-code`; posture-mismatch → `matchup-brief`
-  (or `/matchup-genie`); else → `general-hypothesis`. Never a deck-agnostic weight for a one-archetype
-  misplay, never a `when()` for a Solver/Planner-driven decision.
+- **Layer routing is load-bearing:** scope turn/match → `planner-code` (prior, verify against the trace);
+  lethal/planned → `planner-code`; posture-mismatch → `matchup-brief` (or `/matchup-genie`); else →
+  `general-hypothesis`. Never a deck-agnostic weight for a one-archetype misplay, never a `when()` for a
+  Solver/Planner-driven decision, **never a weight for a scoped blunder** (it never entered the fit).
 - **Exhaustive or not finished** — every open correction reaches a terminal ANALYSIS outcome this session;
   no bare `deferred`, no "future run".
 - **No voluntary pauses / no "say go"** — only the CRITICAL hard-stops and unresolvable blockers stop the run.

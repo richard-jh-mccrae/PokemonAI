@@ -8,13 +8,13 @@ from train.blunder.decisions import Decision
 from train.tuner.run import tune
 
 
-def _corr(hand, correct, category, *, chosen=(0,), frame=5):
+def _corr(hand, correct, category, *, chosen=(0,), frame=5, scope="decision"):
     options = [card_opt(HAND, 0), card_opt(HAND, 1)]
     current = state(hand=hand)
     dec = Decision(episode_id=1, frame=frame, seat=0, turn=2, select_context=MAIN,
                    select_type=0, options=options, chosen=list(chosen), current=current)
     return build_correction(dec, source="own", agent="mega_starmie", correct=correct,
-                            category=category, rationale="r",
+                            category=category, rationale="r", scope=scope,
                             obs=make_select(options, context=MAIN, current=current))
 
 
@@ -54,3 +54,42 @@ def test_fit_not_adopted_when_it_cannot_beat_the_seeds():
     assert not result.fit_adopted                                              # drift bought nothing
     assert result.overrides == seeds                                           # priors kept
     assert len(result.unsatisfied) == 1                                        # conflict surfaced
+
+
+def test_a_scoped_correction_never_becomes_a_ranking_constraint():
+    """ADR-0049: a turn/match blunder is a plan-layer error. Even when it names a discriminating
+    `correct` at its Anchor — the shape that WOULD tune weights at decision scope — it is routed
+    straight to the open worklist, so a sequencing error can never move a Tier-0 weight."""
+    likes_111 = Hypothesis("likes-111", "", when=lambda c: c.card_id == 111, weight=10)
+    likes_222 = Hypothesis("likes-222", "", when=lambda c: c.card_id == 222, weight=10)
+    pilot = Pilot(Strategy(hypotheses=[likes_111, likes_222]), deck=[1] * 60)
+    seeds = {"likes-111": 10.0, "likes-222": 10.0}
+
+    turn = _corr(hand=[111, 222], correct=[1], category="sequencing_error", scope="turn")
+    match = _corr(hand=[111, 111], correct=[], category="slow_setup", scope="match", frame=9)
+
+    result = tune([turn, match], pilot, seeds)
+
+    assert result.n_constraints == 0 and not result.fit_adopted
+    assert result.overrides == seeds                     # weights untouched
+    assert not result.unsatisfied and not result.skipped
+    assert {p.scope for p in result.proposals} == {"turn", "match"}
+    assert {p.subject for p in result.proposals} == {2, None}      # the Turn, and nothing
+
+
+def test_a_scoped_proposal_records_the_fired_hypothesis_diff_as_information():
+    """The Anchor's fired-Hypothesis diff is still computed and carried as `attribution` — useful
+    context for /blunder-buster's routing — but it is INFORMATION, never a fitted constraint. A
+    match-scope record has no prescription to diff, so it has no attribution."""
+    likes_111 = Hypothesis("likes-111", "", when=lambda c: c.card_id == 111, weight=10)
+    likes_222 = Hypothesis("likes-222", "", when=lambda c: c.card_id == 222, weight=10)
+    pilot = Pilot(Strategy(hypotheses=[likes_111, likes_222]), deck=[1] * 60)
+
+    turn = _corr(hand=[111, 222], correct=[1], category="sequencing_error", scope="turn")
+    match = _corr(hand=[111, 111], correct=[], category="slow_setup", scope="match", frame=9)
+    proposals = tune([turn, match], pilot, {"likes-111": 10.0, "likes-222": 10.0}).proposals
+
+    by_scope = {p.scope: p for p in proposals}
+    assert by_scope["turn"].attribution == "hypothesis:likes-111,likes-222"
+    assert by_scope["match"].attribution is None
+    assert by_scope["turn"].seed_weight == 0.0           # no weight to seed: the fix is planner code
