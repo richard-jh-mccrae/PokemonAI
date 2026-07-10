@@ -4,6 +4,18 @@
 `data/strategy/proposals/blunder-20260709-mega_lucario.md#lethal-retreat-enabler`.
 Correction: `84071010:f15`. Fixture: `tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json`.
 
+> **Update 2026-07-11 — the tool blocker is cleared (ADR-0050 merged).** The f15 fixture now carries
+> `obs["own_prizes"]` + `search_begin_input` (backfilled via `tools/train/backfill_seed.py`), so the
+> deck tracker anchors and **`deck_definitely_has(Air Balloon) == True`** (`deck_known_counts` → 1174:1;
+> the "98.8% likely / never anchors" objection below no longer holds — one of the two Air Balloons is in
+> the deck, one is prized). The engine verify also seeds the exact split now (`_seed_zones`), so Air
+> Balloon is reachable in the Petrel tutor menu (it was hidden by the old prefix). **Remaining Phase-3
+> work:** re-tag `correct` to the Petrel line `[0]` + set category to missed-lethal (DoD #1); model
+> retreat affordability (DoD #2); add the enabler family (DoD #3). **New gate (supersedes DoD #4's
+> fixtured retest):** author the follow-up hooks against `tools/sim/lethal_probe.py`, then gate on
+> `tests/lethal_helpers.py::engine_confirms(f15_fixture, pilot) is True` — real play completes the line
+> under the engine, not just recognition.
+
 ## The line
 
 Turn 3. My Active is a 50/80 Makuhita (retreat **2**, zero Energy attached). My Bench holds a Mega
