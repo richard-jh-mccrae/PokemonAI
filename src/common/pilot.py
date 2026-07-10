@@ -118,12 +118,17 @@ class Board:
     """Per-decision board summary (shared by every option) — the cross-option signals a
     Hypothesis trigger reads (bench size, my/opp Active, opponent bench, energy/turn)."""
     my_bench: int = 0
+    bench_full: bool = False       # my Bench holds the 5-slot maximum — a fetched Basic has nowhere
+                                   # to go, so a bench-filler / Pokemon tutor buys nothing (ml f114)
     my_active_id: int | None = None
     my_active_energy: int = 0
     my_active_hp: int = 0
     opp_bench: tuple = ()          # ((cardId, hp), …) of the opponent's benched Pokémon
     turn: int = 0
     energy_attached: bool = False  # already attached Energy this turn?
+    supporter_played: bool = False # the one-per-turn Supporter is already spent (`current.supporterPlayed`)
+                                   # — so a Supporter grabbed now cannot be PLAYED until next turn,
+                                   # while an Item still can (ml f71). Gates `grab-what-i-can-play-now`
     hand_startable: bool = False   # a card in hand can take Active Spot (opener tag / starter role)
     active_doomed: bool = False    # opponent can KO my Active next turn (incoming-KO estimate)
     incoming_active_damage: int = 0  # closed-form estimate of opponent's biggest attack vs my
@@ -203,6 +208,10 @@ class Board:
     bench_threat_present: bool = False  # at a DAMAGE select, some benched snipe target already carries
                                         # Energy (an imminent attacker) — evolving-threat snipe
                                         # stands down: snipe-the-threat (energized) is the priority
+    snipe_ko_available: bool = False    # at a DAMAGE select, SOME benched target is knocked out by the
+                                        # snipe rider — so every POSITIONAL snipe rung must stand down and
+                                        # let `snipe-for-the-ko` take the free prize. Three positional
+                                        # bonuses used to SUM past it (ms 82754241 f45, 82753102 f63)
     snipe_damage: int = 0              # at a DAMAGE select, bench-snipe rider my Active's attack
                                        # deals (max over my Active's attacks) — closed-form KO test for a
                                        # snipe target (rider >= target HP; ignores W/R). 0 off a Damage select
@@ -440,6 +449,15 @@ class Context:
     attach_target_roles: list = field(default_factory=list)  # deck Roles of that receiving Pokémon
     attach_target_needs: bool = False  # receiving Pokémon still needs Energy to attack (fewer
                                        # than its cheapest attack cost) — gates "attach to the needy"
+    attach_is_energy: bool = True      # this ATTACH option's CARD is an Energy, not a Pokémon Tool.
+                                       # The engine sends both as OptionType.ATTACH, so every Energy
+                                       # hypothesis must test this or it prices Air Balloon (ml f87).
+                                       # Fail-open (True when the card's stat is unknown)
+    attach_target_is_utility_body: bool = False  # the body this attach would FUND draws/tutors/stalls,
+                                       # never attacks (`Pilot._is_utility_body`) — Lunatone, Meowth ex,
+                                       # Dunsparce→Dudunsparce. Set at BOTH funding seams: the manual
+                                       # ATTACH and the accel ATTACH_FROM recipient pick (ml f121/f84,
+                                       # dragapult f21). Gates `dont-fund-the-non-attacking-body`
     attach_target_under_max: bool = False  # receiving Pokémon carries fewer Energy than its
                                            # HIGHEST-damage attack costs — can't yet fire its big attack
                                            # (1 W can Jetting Blow but not Nebula Beam CCC). Fail-CLOSED (False when unknown).
@@ -489,6 +507,9 @@ class Context:
     card_is_support: bool = False      # this option's card is an engine/support Pokémon (hp > 0 with a
                                        # draw/accel/search Ability, see _ENGINE_TAGS) —
                                        # `fetch-the-support` grab rung. Derived off CardStat + tags.
+    card_is_utility_body: bool = False  # this option's card is a body that draws/tutors/stalls and never
+                                       # attacks (`Pilot._is_utility_body`) — the card-side read of
+                                       # `attach_target_is_utility_body`. Backs `dont-open-with-the-engine`
     card_is_top_fetch_priority: bool = False  # this candidate IS deck's highest-priority fetch
                                        # target present (== board.top_fetch_priority_id) — Tier-3
                                        # explicit-list grab override (`fetch-deck-priority`)
@@ -498,6 +519,15 @@ class Context:
     card_is_hand_duplicate: bool = False  # this option's card is one I hold 2+ copies of in hand (a
                                        # redundant effect card; fungible Energy excluded) — keep-value
                                        # floor `discard-the-hand-duplicate` pitches it before a singleton
+    card_already_in_hand: bool = False  # at a TO_HAND search, an identical copy of this candidate is
+                                       # ALREADY in my hand (fungible Energy excluded) — tutoring a
+                                       # second one buys nothing (ml f9: grabbed a 3rd Lillie's over the
+                                       # Petrel that opens the tutor chain). The FETCH-side mirror of the
+                                       # shipped `discard-the-hand-duplicate`
+    card_unplayable_this_turn: bool = False  # at a TO_HAND search, this candidate is a SUPPORTER and my
+                                       # one-per-turn Supporter is already spent (`board.supporter_played`)
+                                       # — it cannot be played until next turn, while an Item can be
+                                       # played now (ml f71: took a Lillie's on the turn Petrel fetched it)
     fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
                                        # card I currently lack (best grab value > 0, same grab rungs) —
                                        # whether-to-play endorsement (`fetch-when-it-fills-a-need`). False off a non-fetch/need-less fetch
@@ -514,7 +544,11 @@ class Context:
                                                # the ready form directly, not the redundant pre-evo
                                                # (the ADR-0044 discriminator for snipe-the-evolving-threat)
     target_kos: bool = False           # the bench snipe KNOCKS OUT this target (rider >= its HP; bench
-                                       # snipes ignore Weakness/Resistance) — a free PRIZE, top snipe
+                                       # snipes ignore Weakness/Resistance) — a free PRIZE, top snipe.
+                                       # Never true for a benched Tera body (it takes no damage at all)
+    target_is_bench_tera: bool = False  # this snipe target is a BENCHED Tera Pokemon — "prevent all damage
+                                       # done to this Pokemon by attacks" while Benched (CardStat.tera), so
+                                       # the rider does literally nothing. Backs `dont-snipe-a-benched-tera`
     promote_target_kos: bool = False   # at a TO_ACTIVE promote, benched Pokémon this option brings
                                        # up can KNOCK OUT opp's Active this turn (cheapest attack reaches
                                        # HP) — promote it to take the prize from the front (esp. an accelerator that also loads the bench)
@@ -970,10 +1004,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return 4
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
                 return 4                                             # would forfeit an available KO
-            if t == _PLAY and _is_gust_card(i) and ko_available:     # a gust SWAPS the defender: never
-                return 4                                             # ahead of a menu KO it would forfeit
-                                                                     # (its own KO-unlock rides tier 0 above;
-                                                                     # ep83456015 f38: 3-prize Nebula ≻ gust)
+            if t == _PLAY and _is_gust_card(i) and board.active_can_ko:
+                return 4                                             # a gust SWAPS the defender: never ahead of
+                                                                     # a KO of the ACTIVE it would forfeit
+                                                                     # (ep83456015 f38: 3-prize Nebula ≻ gust).
+                                                                     # The old test was ANY menu KO — but a KO
+                                                                     # coming from a bench SPREAD is not
+                                                                     # forfeited by swapping the defender, and it
+                                                                     # buried Boss's Orders (+50, the top-scored
+                                                                     # option) below a setup Supporter that ate
+                                                                     # the one-per-turn slot (dragapult f81)
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
                 return 4
             if t == _PLAY and _is_shuffle_refresh(i):                # hand-nuke: AFTER the Energy attach, so
@@ -999,7 +1039,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
                     + self._retreat_to_lethal_tactical(obs, board, option)
-                    + self._grab_lethal_tactical(obs, select, board, option))
+                    + self._grab_lethal_tactical(obs, select, board, option)
+                    + self._grab_enabler_lethal_tactical(obs, select, board, option))
         ctx = self._context(obs, select, board, option)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
@@ -1261,7 +1302,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         SOUND like the Lethal Solver's closed-form locks. The retreat-into-a-benched-attacker branch is
         not engine-verified (a grab select can't sim the later retreat), but its downside is small: an
         over-claim only grabs an Energy over a body, never throws a game (the real KO still gates the MAIN
-        attack). 0 off a grab CARD, turn 1, once the manual attach is spent, or with no KO-enabling grab."""
+        attack). 0 off a grab CARD, turn 1, once the manual attach is spent, or with no KO-enabling grab.
+
+        The retreat branch carries three preconditions it once lacked (ml f39, CRITICAL — it priced a
+        useless Energy grab at 1001 and buried the Solrock the deck needed):
+          1. **the retreat must be legal** — retreating costs Energy equal to the printed cost
+             (rules.md §Retreat), and the Active there was a 0-Energy Meowth ex with retreat 1;
+          2. **the grab must be NECESSARY** — the benched Mega already carried two {F} and Aura Jab costs
+             one, so the KO existed with or without the fetched Energy (`kos(current)` was never tested);
+          3. **the grab must be the MARGINAL Energy** — two Basic {F} already sat in hand, so the grab was
+             not the source of the attach at all.
+        Any one of them refutes f39; a KO_SCORE-class claim carries all three. The counter-fixture is ml
+        84890060 f48, where all three hold (1-Energy Lunatone Active, retreat 1; benched Mega at zero)."""
         if (select.get("context") != _TO_HAND or option.get("type") != _CARD
                 or board.turn <= 1 or board.energy_attached or board.my_prizes_remaining <= 0):
             return 0.0
@@ -1281,15 +1333,101 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         me = self._my_player(obs)
         ma = next((p for p in (me.get("active") or []) if p), None)
 
-        def kos(attacker_id, energy, body):
+        def kos(attacker_id, energy, body, units=1):
             return self._best_affordable_ko_value(obs, board, opp, attacker_id, energy, bound="min",
-                                                  body=body, extra_type=etype, extra_units=1) > 0
+                                                  body=body, extra_type=etype, extra_units=units) > 0
 
         ko = kos(board.my_active_id, board.my_active_energy + 1, ma)
-        if not ko:                                        # retreat into a benched attacker, then attach
+        if not ko and self._can_retreat(ma):              # retreat into a benched attacker, then attach
             ko = any(kos(p.get("id"), len(p.get("energies") or []) + 1, p)
+                     # NECESSARY: the body doesn't already take the KO on the Energy it carries
+                     and not kos(p.get("id"), len(p.get("energies") or []), p, units=0)
                      for p in (me.get("bench") or []) if p)
+        if ko and board.reusable_energy_in_hand and direct:
+            ko = False                                    # MARGINAL: a reusable Energy is already in hand,
+                                                          # so this grab is not the source of the attach
         return (KO_SCORE + self._prize_value(opp)) if ko else 0.0
+
+    def _grab_enabler_lethal_tactical(self, obs: dict, select: dict, board: Board,
+                                      option: dict) -> float:
+        """KO_SCORE-class value for grabbing the BODY that turns my Active's conditional attack on —
+        the bench-the-enabler lethal (ml f13, CRITICAL). Solrock's Cosmic Beam "does nothing if you
+        don't have Lunatone on your Bench" (`AttackStat.requiresBench`); with one {F} already attached
+        and the opponent down to a lone 70-HP Staryu, fetching a Lunatone, benching it and attacking
+        empties their board and WINS. The Lethal Solver's generator family never puts a body on the
+        Bench, so `live_trace.lethal` was null and the grab went to a Riolu.
+
+        SOUND, same standard as the rest of the family: the candidate is a Basic revealed in this
+        search's pool (certain), the Bench has room, the attack is already affordable on ATTACHED
+        Energy alone (no attach assumed), and the KO must WIN — take my last prize or leave them
+        nothing to promote. Any missing piece → 0.0.
+
+        On the bound: `damageMin` is 0 for exactly these attacks, because the requiresBench clause IS
+        the conditional the min-bound protects against. We are establishing that condition, so the
+        floor would be vacuous. Instead we demand the attack be DETERMINISTIC once the enabler is down
+        — no coin, no scaling, no hidden rider (`damageMax == damage`) — and then read the exact
+        damage. Anything else conditional and this returns 0.0 rather than guess."""
+        if (select.get("context") != _TO_HAND or option.get("type") != _CARD
+                or board.turn <= 1 or board.bench_full or board.my_prizes_remaining <= 0):
+            return 0.0
+        opp = self._opp_active(obs)
+        if not (opp or {}).get("hp") or not self.stats or not self.attack_stats:
+            return 0.0
+        cid = self._option_card_id(obs, select, option)
+        stat = self.stats.get(cid) if cid is not None else None
+        if not stat or stat.hp <= 0 or stat.evolvesFrom:      # a benchable Basic Pokémon only
+            return 0.0
+        active = self.stats.get(board.my_active_id) if board.my_active_id is not None else None
+        if not active:
+            return 0.0
+        ctx = self._damage_context(obs)
+        have = set(ctx.get("atk_bench_names") or ())
+        would_have = have | {stat.name}
+        for aid in (getattr(active, "attacks", None) or ()):
+            ast = self.attack_stats.get(aid)
+            need = getattr(ast, "requiresBench", None)
+            if not need or set(need) <= have:                 # unconditional, or already satisfied
+                continue
+            if not set(need) <= would_have:                   # this body isn't the missing piece
+                continue
+            if self.attack_costs.get(aid, 99) > board.my_active_energy:
+                continue                                      # affordable on ATTACHED Energy alone
+            if not self._attack_is_deterministic(ast):
+                continue                                      # some OTHER clause is conditional — no lock
+            dmg = self.predicted_damage(board.my_active_id, aid, opp, bound="exact",
+                                        context={**ctx, "atk_bench_names": tuple(would_have)})
+            if not (dmg and dmg >= (opp.get("hp") or 0)):
+                continue
+            wins = (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench)
+            if wins and not self._is_simultaneous_draw(board, aid, self._prize_value(opp)):
+                return KO_SCORE + self._prize_value(opp)
+        return 0.0
+
+    @staticmethod
+    def _attack_is_deterministic(ast) -> bool:
+        """This attack's damage is fixed once its `requiresBench` condition holds — no coin flip, no
+        hand/energy scaling, no hidden rider. `damageMax == damage` with every scaling term zero. The
+        precondition for reading `bound="exact"` where `bound="min"` would be vacuously 0."""
+        if ast is None:
+            return False
+        return bool(getattr(ast, "damageMax", 0) == getattr(ast, "damage", -1)
+                    and getattr(ast, "scaleVar", None) is None
+                    and not getattr(ast, "scalePerUnit", 0)
+                    and not getattr(ast, "hiddenPerUnit", 0))
+
+    def _can_retreat(self, ma: dict | None) -> bool:
+        """My Active can pay its Retreat Cost this turn — attached Energy >= printed retreat cost
+        (rules.md §Retreat: "pay the Retreat cost in Energy"). Fail-CLOSED on an unknown stat: a
+        KO_SCORE-class claim must never assume a retreat it cannot prove (ml f39: a 0-Energy Meowth ex
+        with retreat 1 "retreated" into a benched Mega and the grab scored 1001)."""
+        if not ma or not self.stats:
+            return False
+        stat = self.stats.get(ma.get("id"))
+        if stat is None:
+            return False
+        if getattr(stat, "retreatCost", 0) == 0:
+            return True                                   # free retreat
+        return len(ma.get("energies") or []) >= stat.retreatCost
 
     def _search_pool_has_reusable_energy(self, board) -> bool:
         """True iff THIS search's revealed pool (`search_deck_ids`) contains a reusable Basic Energy a
@@ -1926,9 +2064,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         card_is_wincon = cid is not None and cid in self._wincon_set()
         card_is_starter = bool(stat and stat.hp > 0 and not stat.evolvesFrom)
         card_is_support = bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags)))
+        card_is_utility_body = bool(stat and stat.hp > 0 and self._is_utility_body(cid))
         card_is_top_fetch_priority = cid is not None and cid == board.top_fetch_priority_id
         card_is_redundant = cid is not None and cid in board.in_play_ids
         card_is_hand_duplicate = cid is not None and cid in board.hand_duplicate_ids
+        # a Basic/Special Energy is fungible — a second copy is always a future attach, never redundant
+        fungible = getattr(stat, "cardType", None) in (_BASIC_ENERGY, _SPECIAL_ENERGY)
+        card_already_in_hand = bool(select.get("context") == _TO_HAND and cid is not None
+                                    and not fungible and cid in board.hand_ids)
+        card_unplayable_this_turn = bool(
+            select.get("context") == _TO_HAND and board.supporter_played
+            and getattr(stat, "cardType", None) == _SUPPORTER)
         fetch_fills_a_need = (option.get("type") == _PLAY
                               and self._fetch_fills_a_need(board, tags, plan))
         target_energy = self._target_energy(obs, select, option)
@@ -1940,7 +2086,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             target_forward_damage is not None and board.strongest_forward_bench is not None
             and target_forward_damage == board.strongest_forward_bench
             and target_forward_damage >= _EVOLVING_THREAT_DMG)
-        target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp)
+        target_is_bench_tera = bool(select.get("context") == _DAMAGE and option.get("area") == _BENCH
+                                    and stat is not None and getattr(stat, "tera", False))
+        target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp
+                          and not target_is_bench_tera)   # Tera: no damage while Benched
         target_on_path = self._target_on_path(obs, select, option, board)   # Tier-3 (ADR-0040)
         bench_shortens = self._bench_shortens_their_path(obs, select, option, stat, board)
         promote_on_their_path = (select.get("context") in (_TO_ACTIVE, _SWITCH)
@@ -1962,6 +2111,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         promote_target_hits_weakness = self._promote_target_hits_weakness(obs, select, option)
         at_target = self._attach_target(obs, option)   # Pokémon an attach option puts Energy on
         at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
+        # the body an attach FUNDS, at either seam: the manual ATTACH (inPlayArea/inPlayIndex) or the
+        # accel ATTACH_FROM recipient pick (area/index — cf `_option_pokemon`).
+        fund_target = at_target
+        if fund_target is None and select.get("context") == _ATTACH_FROM:
+            fund_target = self._option_pokemon(obs, select, option)
+        attach_target_is_utility_body = bool(
+            fund_target and self._is_utility_body(fund_target.get("id")))
         at_is_line_member = bool(
             at_target and at_target.get("id") in (self._line_preevo_set() | self._wincon_set()))
         attach_target_is_priority_wincon = (
@@ -2015,6 +2171,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        option_type=option.get("type"), card_id=cid, option_area=option.get("area"),
                        attach_target_area=option.get("inPlayArea"), attach_target_roles=at_roles,
                        attach_target_needs=self._attach_target_needs(at_target),
+                       attach_is_energy=self._attach_is_energy(stat),
+                       attach_target_is_utility_body=attach_target_is_utility_body,
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_type_wasted=self._attach_type_wasted(stat, at_target),
@@ -2030,9 +2188,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        card_evolution_baseless=self._evolution_baseless(obs, cid),
                        card_base_unreachable=self._card_base_unreachable(obs, cid, board),
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
+                       card_is_utility_body=card_is_utility_body,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
                        card_is_redundant=card_is_redundant,
                        card_is_hand_duplicate=card_is_hand_duplicate,
+                       card_already_in_hand=card_already_in_hand,
+                       card_unplayable_this_turn=card_unplayable_this_turn,
                        fetch_fills_a_need=fetch_fills_a_need,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
@@ -2040,6 +2201,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_forward_form_in_play=self._target_forward_form_in_play(obs, select, option),
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
+                       target_is_bench_tera=target_is_bench_tera,
                        target_on_path=target_on_path, target_prize_redundant=target_prize_redundant,
                        target_is_forced_promotion=target_is_forced_promotion,
                        target_promotion_mirage=target_promotion_mirage,
@@ -2104,6 +2266,45 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return True
         have = len((target.get("energies") or []))
         return have < _min_attack_cost(self.stats, target.get("id"))
+
+    def _is_utility_body(self, card_id: int | None) -> bool:
+        """This body exists to DRAW / TUTOR / STALL, not to attack — Energy on it is wasted while any
+        real attacker can take it (ml f121/f84, dragapult f21). Read universally, never by card id:
+
+        - the deck's own Roles win: any `_ATTACKER_ROLES` member, or a win-condition Line body, is
+          never a utility body (Solrock is `secondary_attacker` + `engine`; Riolu is the Line base);
+        - an `engine`-ONLY Role says it outright (Lunatone: Lunar Cycle draws, Power Gem never fires);
+        - otherwise a `_UTILITY_TAGS` Function Tag on the body OR on its forward evolution
+          (Meowth ex's `supporter_tutor`; Dunsparce, untagged, evolving into a `draw` Dudunsparce).
+
+        Fail-CLOSED: an unknown card is not a utility body, so a missing tag never suppresses an attach.
+        Note `attach_target_needs` is an ANTI-signal on these bodies — a Meowth ex needing 3 Energy for
+        Tuck Tail reads "needier" than a Riolu that is already online."""
+        if card_id is None:
+            return False
+        roles = set(self.strategy.roles.get(card_id, []))
+        if roles & _ATTACKER_ROLES:
+            return False
+        if card_id in (self._line_preevo_set() | self._wincon_set()):
+            return False
+        if "engine" in roles:
+            return True
+        if not self.functions:
+            return False
+        tags = set(self.functions.tags(card_id))
+        for fwd in self._forward_card_ids(card_id):
+            tags |= set(self.functions.tags(fwd))
+        return bool(_UTILITY_TAGS & tags)
+
+    def _attach_is_energy(self, stat) -> bool:
+        """This ATTACH option's CARD is an Energy, not a Pokémon Tool. The engine reports both through
+        `OptionType.ATTACH`, so without this every Energy hypothesis (`power-up-attacker`,
+        `attach-energy-last`, `dont-waste-off-type-energy`) also priced Air Balloon — a retreat-cost
+        Tool that provides no Energy at all (ml f87/f4). Fail-OPEN (True when the stat is unknown), so
+        an unresolvable attach keeps the default attach-every-turn behavior."""
+        if stat is None:
+            return True
+        return getattr(stat, "cardType", None) not in (_TOOL_CARD,)
 
     def _attached_type_counts(self, target: dict) -> dict:
         """{EnergyType: count} of the SPECIFIC (typed Basic) Energy attached to `target`, mapping each
@@ -2260,7 +2461,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return len((poke.get("energies") or [])) < _min_attack_cost(self.stats, poke.get("id"))
 
-    def _attach_from_concentrate_slot(self, me: dict) -> tuple | None:
+    def _attach_from_concentrate_slot(self, me: dict, select: dict | None = None) -> tuple | None:
         """(AreaType, index) of the win-condition-Line body to CONCENTRATE accelerated Energy on at an
         ATTACH_FROM (Turbo Flare recipient) select — among my in-play Line members (`_line_member_set`:
         Staryu AND Mega Starmie ex) still short of the payoff's biggest-attack cost, the one ALREADY
@@ -2269,7 +2470,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         reads a 1-Energy Staryu as 'done' because it clears Staryu's OWN 1-cost attack — the wrong
         frame for a Line whose real payoff is the evolved Mega). A body at/over the payoff cost is
         skipped (don't over-stack a ready attacker). None when no buildable Line body exists (ep83116081
-        f21). Deterministic: most-Energy wins, index breaks a tie."""
+        f21). Deterministic: most-Energy wins, index breaks a tie.
+
+        RESTRICTED to the bodies THIS select actually offers. Aura Jab loads the BENCH only, so the
+        whole-board scan picked my Active Mega (1 Energy from the attack it just used) over the benched
+        one it could really load; no option matched the slot, the rule went silent, and all five bench
+        bodies tied at `spread-attach-to-the-needy` +15 → the option index loaded Lunatone (ml f121,
+        CRITICAL). Falls back to the whole board when the select is absent (unit tests / no options)."""
+        offered = None
+        if select is not None:
+            offered = {(o.get("area"), o.get("index")) for o in (select.get("option") or [])}
+            if not offered:
+                offered = None
         members = self._line_member_set()
         if not members:
             return None
@@ -2283,6 +2495,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             for i, p in enumerate(bodies):
                 if not p or p.get("id") not in members:
                     continue
+                if offered is not None and (area, i) not in offered:
+                    continue                              # this effect can't load that body (Aura Jab: Bench only)
                 e = len((p.get("energies") or []))
                 if payoff_cost and e >= payoff_cost:      # already at payoff cost — don't over-stack it
                     continue
@@ -2423,12 +2637,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_active_doomed=opp_doomed,
             forced_promotion_key=self._forced_promotion_key(opp, opp_doomed),
             my_bench=sum(1 for b in (me.get("bench") or []) if b),
+            bench_full=sum(1 for b in (me.get("bench") or []) if b) >= _BENCH_MAX,
             my_active_id=(ma or {}).get("id"),
             my_active_energy=len((ma or {}).get("energies") or []),
             my_active_hp=(ma or {}).get("hp", 0),
             opp_bench=tuple((b.get("id"), b.get("hp", 0)) for b in (opp.get("bench") or []) if b),
             turn=state.get("turn", 0),
             energy_attached=bool(state.get("energyAttached")),
+            supporter_played=bool(state.get("supporterPlayed")),
             hand_startable=self._hand_startable(me.get("hand") or []),
             active_doomed=active_doomed,
             incoming_active_damage=self._incoming_active_damage(ma, oa),
@@ -2441,7 +2657,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_prizes_remaining=len(opp.get("prize") or []),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             recycle_dead_only=self._recycle_dead_only(me),
-            active_attack_payable=self._active_attack_payable(ma, payable),
+            active_attack_payable=(self._active_attack_payable(ma, payable)
+                                   and not self._attack_impossible_on_menu(
+                                       select, me, bool(state.get("energyAttached")))),
             active_fully_powered=self._active_fully_powered(ma),
             energy_placeable=self._energy_placeable(me),
             wincon_in_play=self._wincon_in_play(me),
@@ -2462,6 +2680,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             bench_threat_present=self._bench_threat_present(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
+            snipe_ko_available=self._snipe_ko_available(
+                opp, self._snipe_damage(obs, (ma or {}).get("id"), select)),
             strongest_threat_rank=self._strongest_threat_rank(obs, select, read, gamma,
                                                               brief_target_roles, engine_dep),
             best_counter_slot=self._best_counter_slot(obs, select) if select else None,
@@ -2491,7 +2711,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             priority_wincon_slot=self._priority_wincon_slot(
                 me, active_lethal, active_doomed),
-            attach_from_concentrate_slot=self._attach_from_concentrate_slot(me),
+            attach_from_concentrate_slot=self._attach_from_concentrate_slot(me, select),
             stall_target_exists=self._stall_target_exists(opp),
             stall_target_is_keystone=self._stall_target_is_keystone(opp),
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
@@ -2619,7 +2839,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Dragapult ex) it is ONLY the Stage-1 (Drakloak), not the Stage-0 base (Dreepy). Lets the
         win-condition readiness signals tell 'the payoff is ONE evolution from deployable/ready' apart
         from 'some Line pre-evo is around somewhere' — the distinction the distance-blind signals
-        missed on the corpus's first 2-stage line (dragapult f14/f31). Pure + total."""
+        missed on the corpus's first 2-stage line (dragapult f14/f31; ml f31). Pure + total."""
         out = set()
         for line in self._wincon_lines():
             path = line.path or []
@@ -2669,7 +2889,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         pre-evolution stays bare even after that attach (no Energy on it AND none in hand) — evolving it
         would just expose a dead 0-Energy win-condition, so a staller/accelerator should be promoted
         instead (ep82753102 f120: bare Staryu, no Energy in hand -> Cinderace; ep82226116 f94: bare
-        Staryu but a Water in hand -> evolve, the Mega comes online)."""
+        Staryu but a Water in hand -> evolve, the Mega comes online).
+
+        The benched body must be the payoff's IMMEDIATE pre-evolution (one hop) — a Stage-0 Dreepy
+        cannot become a Dragapult ex this turn no matter how much Energy it carries, yet the old
+        any-pre-evo test said it could, so `promote-the-staller` stood down and the agent promoted a
+        fragile bare Dreepy into the Active Spot (dragapult f31, CRITICAL)."""
         if not self._wincon_in_hand(me):
             return False
         preevos = self._payoff_immediate_preevo_set()   # IMMEDIATE pre-evo only — a deeper Stage-0 base is
@@ -2728,11 +2953,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         successor) OR when it is `active_doomed` (it won't survive to fire the payoff, so building it
         for the future is wasted — hand the Energy to a healthy benched wincon instead; a this-turn
         attack off the doomed Active is the Tactical/Planner layer's job, not this positional rule).
-        So a powered/dying Active hands the Energy to the benched wincon. When no win-condition BODY is
-        buildable, falls to the most-energized Line PRE-EVO still short of its payoff's biggest attack
-        (Pass 2 — Energy carries through evolution; the started Dreepy toward Phantom Dive, dragapult f85);
-        None only when neither exists. Backs `concentrate-energy-on-wincon` (load one attacker, don't
-        spread; ep83116501 f89)."""
+        So a powered/dying Active hands the Energy to the benched wincon. None when no buildable wincon
+        exists (e.g. only the doomed Active is short) — concentrate then stands down. Backs
+        `concentrate-energy-on-wincon` (load one attacker, don't spread; ep83116501 f89).
+
+        EVOLUTION-DISTANCE AWARE (2026-07-10). The evolved payoff is preferred, but the slot also
+        considers a Line PRE-EVOLUTION that has ALREADY BEEN STARTED (carries Energy) and is still short
+        of the PAYOFF's cost — Energy carries through evolution (rules.md), so finishing a started pre-evo
+        IS building the wincon. Without this, a board of pre-evos found nothing and
+        `concentrate-energy-on-wincon` stood down, letting `power-up-attacker` spread: a 2nd {P} onto a
+        bare Dreepy instead of finishing the started one (dragapult f85), and a whole hand of {F} onto a
+        Meowth ex while the 1-Energy Riolu — already 'online' for its own 1-cost attack, so invisible to
+        `attach_target_needs` — stayed one Energy short of Mega Brave (ml f84).
+
+        A BARE pre-evo is deliberately NOT a slot: with nothing started there is nothing to concentrate,
+        and claiming one would hijack the attach from a genuinely better target (ml f24, where the
+        winning line attaches to Solrock and retreats into it)."""
         wincon = self._wincon_set()
         if not wincon:
             return None
@@ -2756,7 +2992,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # its payoff's biggest attack cost (Energy carries through evolution). Lets
         # `concentrate-energy-on-wincon` finish a started pre-evo instead of `power-up-attacker`
         # dribbling one Energy onto a bare body (dragapult f85). Inert where a win-condition body is in
-        # play (Pass 1 wins) — so single-hop decks are unaffected in the common case.
+        # play (Pass 1 wins) — so single-hop decks are unaffected in the common case. A BARE pre-evo
+        # (e == 0) is deliberately excluded, so with nothing started the slot stands down and the attach
+        # stays free for a genuinely better target (ml f24).
         zones = ((_ACTIVE, active if not (active_lethal or active_doomed) else []),
                  (_BENCH, me.get("bench") or []))
         best_pre = None                                    # (energy, area, index)
@@ -2920,6 +3158,26 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     return True
         return False
 
+    def _snipe_ko_available(self, opp: dict, snipe_damage: int) -> bool:
+        """Some benched opponent body is KNOCKED OUT by my Active's snipe rider — so a free prize is on
+        offer and every POSITIONAL snipe rung stands down (`snipe-for-the-ko` +60 is the only score a KO
+        target should need). Gating each rung on its OWN `target_kos` was not enough: the bonuses fire on
+        a DIFFERENT, non-KO body and their SUM (top-threat 30 + forced-promotion 40 + evolving-threat 45
+        = 115) out-voted the prize (ms 82754241 f45, 82753102 f63). A benched Tera body is never a KO
+        target — it takes no damage from attacks while Benched. 0 off a DAMAGE select, so this is False."""
+        if not snipe_damage:
+            return False
+        for b in (opp.get("bench") or []):
+            if not b:
+                continue
+            stat = self.stats.get(b.get("id")) if self.stats else None
+            if stat is not None and getattr(stat, "tera", False):
+                continue
+            hp = b.get("hp") or 0
+            if hp and snipe_damage >= hp:
+                return True
+        return False
+
     def _snipe_damage(self, obs: dict, my_active_id: int | None, select: dict | None) -> int:
         """The bench-snipe rider my Active's attack deals at a DAMAGE select — max over my Active's
         attacks (Jetting Blow 50). The DAMAGE select carries no attackId, but a snipe always comes
@@ -3031,7 +3289,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ``id(body)`` for exact, duplicate-safe matching against the snipe option; None when not doomed
         / no benched attacker / no provider. NOTE: blind to hand-size-scaling attackers (Alakazam's
         printed 10 hides the real threat) — the ms f85 gap, deferred to a `forward_max_damage`/provider
-        fix so `_body_threat_rank`'s hand-size boost is reflected here without over-counting pre-evos."""
+        fix so `_body_threat_rank`'s hand-size boost is reflected here without over-counting pre-evos.
+
+        READY means it can actually ATTACK next turn — attached Energy plus the one manual attach they
+        will make reaches some attack's cost. "Energy-INDEPENDENT" was only ever meant to say 'they
+        promote the win-condition, not whoever happens to carry Energy now'; read literally it picked a
+        0-Energy Latias ex whose only attack costs three, over the 1-Energy Lillie's Clefairy ex that
+        would be attacking immediately (ms 81785223 f45). A body that cannot attack next turn is not the
+        promotion they will make. Among genuinely ready bodies, printed damage still decides."""
         if not doomed or not self.stats:
             return None
         best = None                                          # (own_damage, hp, id(body))
@@ -3042,6 +3307,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             own = stat.maxDamage if stat else 0
             if own <= 0:
                 continue
+            if getattr(stat, "tera", False):
+                continue                                     # Tera on the Bench takes no damage —
+                                                             # a pre-chip key I can never chip
+            reach = len(b.get("energies") or []) + 1         # + the manual attach on their promote turn
+            min_cost = getattr(stat, "minAttackCost", None) if stat else None
+            if min_cost is not None and reach < min_cost:
+                continue                                     # can't attack next turn — not their promote
             cand = (own, b.get("hp", 0), id(b))
             if best is None or cand[:2] > best[:2]:
                 best = cand
@@ -3338,13 +3610,51 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return frozenset(cid for cid, n in deck_counts.items() if seen.get(cid, 0) >= n)
 
     def _active_attack_payable(self, ma: dict | None, payable: int) -> bool:
-        """My Active can PAY some attack this turn: ``payable`` (attached Energy + the best unspent
-        hand attach) covers its cheapest attack cost. True on unknown stats (fail-open — the starved
-        stall-gust must only fire on a PROVABLE famine, ep83457493 f20)."""
+        """My Active can PAY **and legally use** some attack this turn: ``payable`` (attached Energy +
+        the best unspent hand attach) covers an attack's cost AND that attack is not transient-locked.
+        True on unknown stats (fail-open — the starved stall-gust must only fire on a PROVABLE famine,
+        ep83457493 f20).
+
+        The lock half (ADR-0033) matters: a Riolu holding one {F} 'pays' Accelerating Stab, but it used
+        Accelerating Stab last turn and the card says it can't again — the engine offered no ATTACK
+        option at all. Energy math alone said payable, so `dont-play-damage-boost-when-cant-attack`
+        stood down and the agent burned a Premium Power Pro that expired having buffed nothing
+        (ml f69, CRITICAL)."""
         stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
         if stat is None:
             return True
-        return payable >= (stat.minAttackCost or 0)
+        if payable < (stat.minAttackCost or 0):
+            return False
+        grant = self._transients.grant_for_serial((ma or {}).get("serial"))
+        if not grant:
+            return True
+        if grant.get("self_lock"):                     # every attack locked (blanket)
+            return False
+        same = grant.get("same_lock")                  # exactly one attack id locked
+        if same is None:
+            return True
+        affordable = [aid for aid in (getattr(stat, "attacks", None) or ())
+                      if self.attack_costs.get(aid, 99) <= payable]
+        return any(aid != same for aid in affordable) if affordable else True
+
+    def _attack_impossible_on_menu(self, select, me: dict, energy_attached: bool) -> bool:
+        """The ENGINE says my Active cannot attack this turn: I am at the open turn menu and it lists no
+        ATTACK option. Authoritative where the closed-form energy math is not — it already accounts for
+        a transient attack-lock, a Special Condition, and turn-1-going-first, and unlike the ADR-0033
+        tracker it survives a single-frame retest (a Correction carries one `obs`, so the tracker never
+        saw last turn's attack).
+
+        NOT decisive while an attach could still turn an attack on: with the manual attach unspent and a
+        reusable Energy in hand, the ATTACK option simply hasn't appeared yet. Only once the attach is
+        gone (or there is nothing to attach) does an empty attack menu mean 'no attack this turn'."""
+        if not select or select.get("context") != _MAIN:
+            return False
+        opts = select.get("option") or []
+        if not opts or any(o.get("type") == _ATTACK for o in opts):
+            return False
+        if not energy_attached and self._has_reusable_energy(me.get("hand") or []):
+            return False
+        return True
 
     def _active_fully_powered(self, ma: dict | None) -> bool:
         """My Active already carries the Energy for its HIGHEST-damage attack (attached ≥

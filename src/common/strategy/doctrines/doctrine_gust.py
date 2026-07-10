@@ -289,6 +289,11 @@ HYPOTHESES = [
                   "tutor/draw so it only wins the slot when nothing else helps; never fires on an Active "
                   "carrying a special condition (`opp_active_condition_gift`), since switching it out "
                   "CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022).",
+        # NOTE (2026-07-10): dragapult f10 wants this to ALSO stand down when the opponent's Active
+        # can't actually hurt us. Not authored — the natural gate (`opp_active_can_damage_us`) charges
+        # attack affordability, which directly contradicts the deliberate worst-case reading of
+        # `active_doomed` (they can attach/burst next turn: docs/todo/incoming-affordability.md,
+        # won't-fix) and breaks REQ-GUST-0003. Bounced to the producer for a sharper condition.
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0

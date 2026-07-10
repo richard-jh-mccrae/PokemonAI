@@ -63,4 +63,17 @@ HYPOTHESES = [
         when=lambda c: c.select_context == _SETUP_ACTIVE and _multi_prize(c.stat)
         and not (_WINCON_ROLES & set(c.roles)),
         weight=-15, status="assumed"),
+    Hypothesis(
+        id="dont-open-with-the-engine",
+        rationale="At the pregame Set-Up Active pick, DON'T open a body that exists to draw/tutor/stall "
+                  "and never attacks (`card_is_utility_body`) while an attacker is on offer — the Active "
+                  "Spot is where the game is fought, and a pure engine there loses the opening turns. The "
+                  "opener half of `dont-fund-the-non-attacking-body`, read off the same universal "
+                  "`Pilot._is_utility_body`; the deck-agnostic form of mega_lucario's "
+                  "`start-solrock-over-lunatone`, which cannot speak when Solrock isn't in hand. ml f1: "
+                  "Lunatone and Riolu both scored 0.0 and the option index opened the Lunatone. −12 "
+                  "orders any attacker above a pure engine; like `dont-open-multiprize-active` this is a "
+                  "forced single pick, so an engine that is the ONLY startable Basic is still placed.",
+        when=lambda c: c.select_context == _SETUP_ACTIVE and c.card_is_utility_body,
+        weight=-12, status="assumed"),
 ]

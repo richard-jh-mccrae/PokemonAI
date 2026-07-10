@@ -187,6 +187,7 @@ dig-before-commit.)
   (state re-verify at source on build; the fixture is named for the retired dead-hand framing) |
   reframes the refuted `revive-the-dead-hand-full-refresh` above | see [[lethal-solver-plan]]
 - status: deferred
+- applied_note: 2026-07-10. NOT BUILT -- a sound lock is impossible on the stored state: deck_definitely_has(Air Balloon) is False (P=0.9877, own_prizes absent so the deck tracker never anchors), and the Lethal Solver's contract is 'a probable fetch is never a win'. The fixture also records the REFUTED dead-hand framing (correct=[1] Lillie's), so the proposal has no verifier gate as stored. Four artifacts + definition-of-done: docs/todo/lethal-retreat-tool-enabler.md.
 - for: general
 
 **Spec (authoring spec — thin fodder):**

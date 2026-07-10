@@ -117,6 +117,11 @@ DEVELOP-PRIORITY finding → data/strategy/proposals/advance-line-over-marginal-
 - provenance: corrections 85046350:f18, 85046350:f21 (CRITICAL) | fixtures tests/fixtures/corrections/dragapult_fetch_attack_color_f18.json, dragapult_dont_feed_draw_engine_f21.json
 - status: applied
 - for: general
+- note (blunder-buster 2026-07-10, cross-agent merge): the **f21 attach-target half** of this proposal is
+  subsumed by `dont-fund-the-non-attacking-engine-body` in `blunder-20260710-round.md`, which pools f21 with
+  mega_lucario 85058574:f121 (CRITICAL) and 85059103:f84 and generalises the suppressor across BOTH attach
+  seams (`OptionType.ATTACH` and `SelectContext.ATTACH_FROM`). Author it once, there. What remains uniquely
+  here is the **f18 energy-COLOR half** (fetch the type the win-condition attack's cost names).
 
 **Spec (authoring spec — thin fodder):**
 The energy signals are color-blind and attacker-blind, so the deck's off-color {D} (niche Munkidori fuel) is

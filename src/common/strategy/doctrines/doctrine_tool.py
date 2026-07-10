@@ -221,6 +221,32 @@ HYPOTHESES = [
         and not (_WINCON_ROLES & set(c.attach_target_roles))
         and not c.attach_is_tool_deploy_target,
         weight=-15, status="testing"),
+    # ── the SECOND Tool class (ml f87/f4): a retreat-cost reducer, which ADR-0028's +HP machinery
+    #    never modelled. `_is_hp_tool` rejects it (hpBonus == 0), so `tool_deploy_slot` stays None and
+    #    the picker never speaks — these two say where it goes and when to hold it. ──
+    Hypothesis(
+        id="equip-the-retreat-tool-on-the-active",
+        rationale="A retreat-cost Tool (`CardStat.retreatReduction` > 0 — Air Balloon −{C}{C}, Rescue "
+                  "Board −{C}) does its work on the body that RETREATS, so it belongs on the Active. "
+                  "Benched, it is inert until that body is promoted. Requires a Bench to retreat INTO "
+                  "(`my_bench > 0`), else `hold-the-retreat-tool-with-no-retreat` holds it. Small (+8): "
+                  "it only needs to beat the do-nothing bench attaches, which `save-tool-for-the-attacker` "
+                  "already sinks to −15 (ml f87, CRITICAL: Air Balloon went onto a benched Solrock "
+                  "because `power-up-attacker` priced the Tool as an Energy).",
+        when=lambda c: c.option_type == _ATTACH and c.stat is not None
+        and getattr(c.stat, "retreatReduction", 0) > 0
+        and c.attach_target_area == _ACTIVE and c.board.my_bench > 0,
+        weight=8, status="assumed"),
+    Hypothesis(
+        id="hold-the-retreat-tool-with-no-retreat",
+        rationale="Don't spend a retreat-cost Tool while no retreat is possible — with an empty Bench "
+                  "there is nothing to retreat into, so the equip buys literally nothing this turn and "
+                  "the card is better held (it is `cost_discard` fodder for an Ultra Ball). ml f4: Air "
+                  "Balloon onto a lone Active Solrock on turn 1, 'we have no plan to retreat solrock "
+                  "here, waste'. −12 nets it below the Energy attach the human wanted instead.",
+        when=lambda c: c.option_type == _ATTACH and c.stat is not None
+        and getattr(c.stat, "retreatReduction", 0) > 0 and c.board.my_bench == 0,
+        weight=-12, status="assumed"),
     Hypothesis(
         id="protect-ace-spec-tool",
         rationale="An ACE SPEC card is one-per-deck and usually irreplaceable, so be EXTRA reluctant to "
