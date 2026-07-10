@@ -526,6 +526,53 @@ class PlannerMixin:
         return (chosen, TurnLine(next_step=chosen, goal="win", kind="replay", verified=True,
                                  rationale="lethal (replay): executing the verified line"))
 
+    def _exact_own_zones(self, obs, me):
+        """(ADR-0050) The EXACT ``(your_deck, your_prize)`` predictions for ``search_begin`` — flat
+        card-id lists — from the deck tracker's anchored split: ``your_deck`` = decklist − visible −
+        prizes (``_deck_known_counts``), ``your_prize`` = ``obs['own_prizes']``. ``(None, None)`` when
+        the prizes are not yet anchored (no ``own_prizes``, or the tracker can't resolve them), so the
+        caller keeps the sound decklist-prefix fallback.
+
+        NEVER seeds the deck+prize POOL into the deck half: over-counting a prized copy into the deck
+        is exactly what could let the engine fetch a card that is really all prized and false-confirm
+        a phantom win (the one catastrophic Solver error). The split is the soundness."""
+        own = (obs or {}).get("own_prizes")
+        if not own:
+            return None, None
+        prizes = {int(k): v for k, v in own.items()}
+        known = self._deck_known_counts(me, prizes)
+        if not known:
+            return None, None
+        your_deck = [cid for cid, n in known.items() for _ in range(n)]
+        your_prize = [cid for cid, n in prizes.items() for _ in range(n)]
+        return your_deck, your_prize
+
+    def _seed_zones(self, obs, me, opp):
+        """(ADR-0050) The hidden-zone predictions for ``search_begin``:
+        ``(your_deck, your_prize, opp_deck, opp_prize, opp_hand)``.
+
+        MY deck/prize use the EXACT anchored split (``_exact_own_zones``) when ``lethal_seed_exact`` is
+        on and the tracker has anchored; else a decklist prefix — the sound fallback, because only
+        non-fetch lines (whose verdict is deck-independent) reach the search unanchored (the fetch
+        tiers gate on ``deck_definitely_has``, which needs the anchor). The prefix is what
+        false-refuted the high-id enabler band before this fix (`deck.csv` is id-sorted).
+
+        Opponent zones stay a my-deck prefix: a this-turn lethal ends before the opponent acts
+        (`_engine_confirms_win` refutes the moment control passes to them), so their hidden content
+        cannot change the verdict — only the count must satisfy ``search_begin``."""
+        deck = list(self.deck)
+
+        def take(n):
+            return deck[: max(0, n)]
+
+        your_deck = your_prize = None
+        if getattr(self, "lethal_seed_exact", True):
+            your_deck, your_prize = self._exact_own_zones(obs, me)
+        if your_deck is None:
+            your_deck, your_prize = take(me.get("deckCount", 0)), take(len(me.get("prize") or []))
+        return (your_deck, your_prize, take(opp.get("deckCount", 0)),
+                take(len(opp.get("prize") or [])), take(opp.get("handCount", 0)))
+
     def _engine_confirms_win(self, obs, line_steps, max_cascade: int = 12, record=None):
         """Tier-1 (ADR-0030): forward-simulate ``line_steps`` — a list of per-select index lists, the
         exact moves of a candidate win line — through the engine's OWN search and report whether IT
@@ -569,18 +616,13 @@ class PlannerMixin:
         players = cur.get("players") or []
         me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
-        deck = list(self.deck)
-
-        def take(n):
-            return deck[: max(0, n)]
+        yd, yp, od, op_, oh = self._seed_zones(obs, me, opp)   # ADR-0050: exact own split when anchored
 
         was_planning = self._planning
         self._planning = True                          # the cascade re-runs decide(): never nest a
         try:                                           # search, never verify inside a verify
             ob = cgapi.to_observation_class(obs)
-            st = cgapi.search_begin(ob, take(me.get("deckCount", 0)), take(len(me.get("prize") or [])),
-                                    take(opp.get("deckCount", 0)), take(len(opp.get("prize") or [])),
-                                    take(opp.get("handCount", 0)), [], manual_coin=True)
+            st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=True)
             for step in line_steps:
                 st = cgapi.search_step(st.searchId, list(step))
             verdict = None
@@ -1442,10 +1484,7 @@ class PlannerMixin:
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
         start_prizes = len(me.get("prize") or [])
-        deck = list(self.deck)
-
-        def take(n):
-            return deck[: max(0, n)]
+        yd, yp, od, op_, oh = self._seed_zones(obs, me, opp)   # ADR-0050: exact own split when anchored
 
         def budget_ok() -> bool:
             if not opponent_reply:
@@ -1456,9 +1495,7 @@ class PlannerMixin:
         self._planning = True                          # never nest a search inside the reply policy
         try:
             ob = cgapi.to_observation_class(obs)
-            st = cgapi.search_begin(ob, take(me.get("deckCount", 0)), take(start_prizes),
-                                    take(opp.get("deckCount", 0)), take(len(opp.get("prize") or [])),
-                                    take(opp.get("handCount", 0)), [], manual_coin=False)
+            st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))
             crossed_my_turn_end = False
             for _ in range(max_steps):

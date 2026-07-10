@@ -61,6 +61,9 @@ _pilot = Pilot(
     briefs=_briefs,                                   # matched Matchup Brief on Board (ADR-0027), covers-routed
     posture=_params.get("posture", True),             # ADR-0026 kill-switch (overlay can force Posture off for A/B)
     lethal_verify=_params.get("lethal_verify", True),  # ADR-0030 kill-switch: engine-confirm direct
+    lethal_seed_exact=_params.get("lethal_seed_exact", True),  # ADR-0050 kill-switch: seed the engine
+                                                      # verify from the EXACT own deck/prize split (own_prizes)
+                                                      # vs the id-sorted decklist prefix that hid the high-id band
                                                       # lethal locks (A/B-cleared 2026-07-02; overlay can force off)
     planner_engine_rank=_params.get("planner_engine_rank", True),  # ADR-0031 kill-switch: engine-sim
                                                       # ranks the Planner's candidates (A/B-cleared 2026-07-02)

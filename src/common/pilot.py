@@ -657,7 +657,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, forced_promotion=False,
                  value_model=None, escalation=False,
-                 match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True):
+                 match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
+                 lethal_seed_exact=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -690,6 +691,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # favorability → both levers off (the A/B baseline)
         self.lethal_verify = lethal_verify              # ADR-0030 kill-switch: engine-confirm a DIRECT
                                                         # lethal lock before trusting it (refute → no lock)
+        self.lethal_seed_exact = lethal_seed_exact      # ADR-0050 kill-switch: seed the engine verify's
+                                                        # hidden zones from the EXACT own deck/prize split
+                                                        # (own_prizes) vs the old id-sorted decklist prefix
+                                                        # that hid the high-id enabler band. OFF = prefix.
         self.planner_engine_rank = planner_engine_rank  # ADR-0031 kill-switch: engine-sim RANKS the
                                                         # Planner's candidate lines (off = closed-form pick,
                                                         # engine only sharpens the committed line's value)
