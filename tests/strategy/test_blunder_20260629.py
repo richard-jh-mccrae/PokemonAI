@@ -226,13 +226,15 @@ def _denial_pilot(**kw):
         PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0),
-        OPP: CardStat(OPP, name="Mega Lucario ex", hp=440, megaEx=True, maxDamage=270, energyType=7),
+        OPP: CardStat(OPP, name="Mega Lucario ex", hp=440, megaEx=True, maxDamage=270, energyType=7,
+                      attacks=(13,)),                    # Aura Jab {F} 130 — an affordable threat at 1 Energy
     })
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({CRUSH: ["energy_denial"]}),
-                 attacks={10: 210, 11: 120, 12: 20}, attack_costs={10: 3, 11: 1, 12: 1}, **kw)
+                 attacks={10: 210, 11: 120, 12: 20, 13: 130},
+                 attack_costs={10: 3, 11: 1, 12: 1, 13: 1}, **kw)
 
 
 @pytest.mark.req("REQ-GEN-0031")
@@ -297,6 +299,24 @@ def test_energy_denial_stands_down_when_you_can_already_ko_the_active():
     assert traces.options[1].tactical >= KO_SCORE         # attack is genuinely lethal
     assert "play-energy-denial" not in _fired(traces.options[0])  # strip is moot -> hold Item
     assert pilot.decide(obs) == [1]                       # take the KO, save the Crushing Hammer
+
+
+@pytest.mark.req("REQ-GEN-0031")
+def test_energy_denial_stands_down_on_a_best_affordable_ko_not_just_the_cheapest():
+    """fix (a), 2026-07-09: the KO stand-down keys on `active_can_ko` (BEST affordable attack), not only
+    `active_cheap_attack_kos` (cheapest). Opp at 150 HP, carrying Energy AND a live threat (so the Item
+    isn't held for the harmless-attacker reason): my cheapest Jetting Blow (120) does NOT KO, but my
+    affordable Nebula Beam (210, cost 3) does — so the strip is moot and the Item is held. Under the old
+    cheapest-only gate this wrongly fired (the dragapult Phantom-Dive / Mega Starmie Nebula-Beam shape)."""
+    pilot = _denial_pilot()
+    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(10), attack_opt(11), opt(END)],
+                      current=state(active=poke(WINCON, energy=3, hp=330),
+                                    opp_active=poke(OPP, energy=1, hp=150), hand=[CRUSH]))
+    board = pilot._board(obs, obs["select"])
+    assert board.opp_active_can_damage_us                 # opp CAN hurt us -> not the harmless-strip case
+    assert not board.active_cheap_attack_kos              # cheapest (120) misses the 150-HP body
+    assert board.active_can_ko                            # best affordable (210) reaches it
+    assert "play-energy-denial" not in _fired(pilot.explain(obs).options[0])   # so hold the Item (fix a)
 
 
 # --------------------- deck-knowledge (sound): dont-search-an-empty-deck + dont-tutor-the-held-wincon

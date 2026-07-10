@@ -180,9 +180,15 @@ HAMMER = 555
 def _unfavored_pilot(win_rate, funcs):
     art = tiny_artifact()
     art.dossiers["MyDeck"] = {"matchups": {"Mega Lucario ex": {"win_rate": win_rate, "n": 30.0}}}
+    # Mega Lucario ex with an affordable attack (Aura Jab {F} 130) so `opp_active_can_damage_us` sees a
+    # real threat at its 1 Energy — the energy-denial gate needs the opp to be able to hurt us, and an
+    # empty stat provider would mask that (2026-07-09).
+    stats = DictCardStatProvider({
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True, attacks=(11,)),
+    })
     return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[1] * 60,
-                 general_strategy=GENERAL_STRATEGY, stats=DictCardStatProvider({}),
-                 functions=funcs, attacks={}, scout=Scout(art))
+                 general_strategy=GENERAL_STRATEGY, stats=stats,
+                 functions=funcs, attacks={11: 130}, attack_costs={11: 1}, scout=Scout(art))
 
 
 def _obs_hammer_vs_energized_mega_lucario():

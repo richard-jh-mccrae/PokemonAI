@@ -357,6 +357,18 @@ HYPOTHESES = [
         and not c.board.reusable_energy_in_hand and _is_reusable_energy(c.stat, c.tags),
         weight=35, status="testing"),
     Hypothesis(
+        id="fetch-the-attack-color",
+        rationale="At an Energy search, break the `fetch-energy-when-starved` tie toward a color one of my "
+                  "IN-PLAY attackers actually needs (`board.in_play_attack_colors`, via AttackStat energy "
+                  "types) over an off-color utility Energy no body in play can use yet — grab the Fire for "
+                  "Phantom Dive [Fire, Psychic], and save the off-color {D} for when Munkidori is benched "
+                  "(dragapult f18). Tiny tie-break (+3) so a real need still dominates; silent for "
+                  "mono-color decks (every fetch is on-color) and when no in-play body has a typed attack.",
+        when=lambda c: c.select_context == _TO_HAND and bool(c.stat)
+        and getattr(c.stat, "hp", 1) == 0 and getattr(c.stat, "energyType", None) not in (None, 0)
+        and c.stat.energyType in c.board.in_play_attack_colors,
+        weight=3, status="testing"),
+    Hypothesis(
         id="prefer-bench-fill-first",
         rationale="A `bench_fill` card (Buddy-Buddy Poffin) is best played FIRST in a thin deck: develops the "
                   "Bench, thins the deck (raises later draw/search quality), and feeds spread-Energy attacks. "
@@ -438,14 +450,36 @@ HYPOTHESES = [
         weight=-45, status="testing"),
     Hypothesis(
         id="prefer-wincon-line-piece",
-        rationale="At a hand-search, prefer a pre-evolution on the win-condition LINE over an off-line "
-                  "opener/accelerator. At a PROMOTE, only when the payoff is in hand to evolve it THIS turn — "
-                  "otherwise a bare pre-evolution just exposes a fragile base (see `promote-the-staller`); "
+        rationale="At a hand-search, prefer a pre-evolution on a recognized ATTACKER Line over an off-line "
+                  "opener/accelerator. ADR-0048: at the FETCH seam the credit is broadened to ANY declared "
+                  "attacker Line (`card_is_recognized_line_preevo` — win-condition OR secondary-attacker), so "
+                  "a cheap secondary base (Makuhita) earns the same +18 as the wincon base (Riolu), letting "
+                  "`develop-the-cheap-prize-wall-line` tip the cheaper line on prize economy; it narrows back "
+                  "to the win-condition line when the kill-switch is off. At a PROMOTE it stays "
+                  "win-condition-only (`card_is_line_preevo`) and only when the payoff is in hand to evolve it "
+                  "THIS turn — else a bare pre-evolution just exposes a fragile base (see `promote-the-staller`); "
                   "ranks below `fetch-the-wincon` and `fetch-energy-when-starved`.",
-        when=lambda c: c.card_is_line_preevo and (
-            c.select_context == _TO_HAND
-            or (c.select_context == _TO_ACTIVE and c.board.evolve_to_ready_wincon_available)),
+        when=lambda c: (c.card_is_recognized_line_preevo and c.select_context == _TO_HAND)
+        or (c.card_is_line_preevo and c.select_context == _TO_ACTIVE
+            and c.board.evolve_to_ready_wincon_available),
         weight=18, status="testing"),
+    Hypothesis(
+        id="develop-the-cheap-prize-wall-line",
+        rationale="Once my MULTI-prize win-condition is in play (`wincon_in_play`; wincon_prize_value >= 2 "
+                  "follows from the < comparison), a fetch that develops a CHEAPER attacker Line — a "
+                  "recognized attacker pre-evo whose forward-payoff prize is LOWER than the win-condition's "
+                  "(`card_forward_payoff_prize` < `wincon_prize_value`: Makuhita→Hariyama 1 < Mega 3) — forces "
+                  "the opponent onto an eight-prizes-of-work path for a six-prize game (odd-prizing; the "
+                  "FETCH-seam mirror of the Interpose promote trio, ADR-0048). A small POSITIVE tie-break (+3) "
+                  "BELOW every real need (energy-starved +35 / fetch-wincon +30 / missing-piece +20 / engine "
+                  "+15) — the wincon Line is still developed first while offline; `prefer-wincon-line-piece`'s "
+                  "broadened credit equalizes the two line bases first, then this tips the cheaper one. Silent "
+                  "without a declared secondary attacker Line, off the FETCH seam, or with the kill-switch off "
+                  "(`card_is_recognized_line_preevo` narrows to the wincon base, which never satisfies the <).",
+        when=lambda c: c.select_context == _TO_HAND and c.board.wincon_in_play
+        and c.card_is_recognized_line_preevo
+        and 0 < c.card_forward_payoff_prize < c.board.wincon_prize_value,
+        weight=3, status="assumed"),
     Hypothesis(
         id="fetch-a-starter",
         rationale="With an underdeveloped board (< 2 benched in SETUP), take a startable Basic at a search — "

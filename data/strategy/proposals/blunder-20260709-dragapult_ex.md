@@ -28,7 +28,7 @@ the GATE below and drop those nudges. -->
 - candidate_signal: three EXISTING signals must become evolution-DISTANCE / pre-evo aware: `board.priority_wincon_slot` (pilot.py:2561 — include the win-condition-LINE pre-evo closest to the PAYOFF cost, not only the evolved wincon), `board.wincon_base_deployable` (deployable only when the IMMEDIATE pre-evo is in play/hand), `_evolve_to_ready_wincon_available` (pilot.py:2503 — the benched pre-evo must be the wincon's IMMEDIATE pre-evolution, one hop). Plus `promote-the-staller` (baseline_promote.py:78) must recognise an `item_lock` body (Budew id 235) as a disposable staller, not only `opener`.
 - verification_contract: verifier
 - provenance: corrections 85045840:f14 (CRITICAL), 85046350:f31 (CRITICAL), 85046350:f85 | fixtures tests/fixtures/corrections/dragapult_fetch_stranded_payoff_f14.json, dragapult_promote_over_fragile_base_f31.json, dragapult_concentrate_line_preevo_f85.json | [[promote-after-ko-priority]]
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -58,6 +58,15 @@ pre-evo of the payoff) feeds all three signals. NO-OP for single-hop decks (veri
 mega_lucario). Gate: fixtures flip f85 [4]→[3], f14 [6]→a developing Basic, f31 [0]→[1] Budew; all three inert
 on the single-hop decks.
 
+**update-strategy verdict (2026-07-09): APPLIED (cluster narrowed to {f31, f85}).** Authored the
+`_payoff_immediate_preevo_set` helper + threaded it through `wincon_base_deployable`,
+`_evolve_to_ready_wincon_available`, and `_priority_wincon_slot` (Pass-2 line-pre-evo fallback), plus
+`item_lock` in `promote-the-staller` (src/common/pilot.py + baseline_promote.py). f31 → [1] Budew and
+f85 → [3] flip cleanly (tests/strategy/test_blunder_20260709_line_readiness.py; full suite 1412 green).
+**f14 SPLIT OUT** (grill): the distance fix stops its CRITICAL strand (pinned by the same test), but
+landing on Budew over a *redundant* 2nd Dreepy is a distinct develop-preference finding →
+data/strategy/proposals/fetch-fresh-disruptor-over-redundant-base.md.
+
 ---
 
 ## play-energy-denial-threat-and-ko-aware
@@ -67,7 +76,7 @@ on the single-hop decks.
 - candidate_signal: gate `play-energy-denial` (baseline_disruption.py:15) on (a) `board.active_can_ko` (pilot.py:3054, best AFFORDABLE attack — EXISTS) instead of / in addition to `active_cheap_attack_kos`, so a Phantom-Dive (expensive-attack) KO stands the strip down; (b) a "the opp Active's energized attack actually damages us" read — the Effect-Compendium AttackStat/oracle (ADR-0032, [[effect-compendium-plan]]) already models conditional/zero-damage attacks (Kyogre needs energy in the opponent's discard). candidate_signal for (b) may be "needs a new board field: opp_active_attack_threatens".
 - verification_contract: verifier
 - provenance: corrections 85045840:f6, 85046350:f32 (CRITICAL) | fixtures tests/fixtures/corrections/dragapult_hammer_no_threat_f6.json, dragapult_hammer_over_develop_f32.json | [[ignition-energy-discipline]]
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -86,6 +95,17 @@ deck. NOTE: the fit's play-energy-denial 20→17 nudge (from these frames) is a 
 the nudge. Gate: fixtures flip f6 [1]→[2] and f32 [2]→[1]; verify no regression on the mega_starmie
 play-energy-denial ledger (82748422 f26 etc.).
 
+**update-strategy verdict (2026-07-09): APPLIED (cluster narrowed to {f6}).** Built `opp_active_can_damage_us`
+(affordable, oracle-resolved: opp Active's current-Energy attack deals >0 to us — Kyogre's Riptide off an
+empty discard = 0) and gated `play-energy-denial` (and the `disrupt-when-unfavored` energy branch) on it;
+also swapped the KO stand-down from `active_cheap_attack_kos` to `active_can_ko` (fix a — best affordable
+attack, catches a Phantom-Dive-class KO). f6 flips [1]→[2] Poké Pad; the existing race/setup strips still
+fire (the `_denial_pilot` stub was corrected to give the opp its real affordable attack — it only passed
+before because the stub omitted it). Tests: tests/strategy/test_blunder_20260709_energy_denial.py (f6) +
+test_blunder_20260629.py (fix-a synthetic; 25 green). **f32 SPLIT OUT** (grill): the opp there (Gabite 40)
+CAN damage us, so no damage-gate stands the strip down without breaking the race case — it is a distinct
+DEVELOP-PRIORITY finding → data/strategy/proposals/advance-line-over-marginal-energy-strip.md.
+
 ---
 
 ## energy-color-and-attach-target-discipline
@@ -95,7 +115,7 @@ play-energy-denial ledger (82748422 f26 etc.).
 - candidate_signal: (f18) `_TO_HAND` energy fetch — prefer an energy TYPE in the win-condition attack's cost over an off-color utility energy no in-play body needs (tie-break under the type-BLIND `fetch-energy-when-starved`, doctrine_fetch.py:344). (f21) `_ATTACH` — a penalty when the target is a DRAW-ENGINE utility body (own `draw`/`stall`, OR evolves into a `draw`/`stall` Pokémon: Dunsparce id 305 → Dudunsparce id 66) and NOT a win-condition/attacker body; sibling of `power-up-attacker` (baseline_energy.py:31).
 - verification_contract: verifier
 - provenance: corrections 85046350:f18, 85046350:f21 (CRITICAL) | fixtures tests/fixtures/corrections/dragapult_fetch_attack_color_f18.json, dragapult_dont_feed_draw_engine_f21.json
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -111,6 +131,15 @@ needs; don't power a Pokémon that will never attack" is universal energy discip
 Dunsparce/Dudunsparce); silent for single-color / no-draw-engine decks. Gate: fixtures flip f18 [0]→[1] and
 f21 [4]→[2]; inert on mega_starmie/mega_lucario.
 
+**update-strategy verdict (2026-07-09): APPLIED (both fixtures).** f18 → new `board.in_play_attack_colors`
+(colors my in-play attackers need, via AttackStat energy types) + rung `fetch-the-attack-color` (+3,
+doctrine_fetch) → grabs Fire over {D}. f21 → new `_is_draw_engine_body` (own `draw`/`stall` tag OR evolves
+into one, via `_forward_card_ids`) + Context `attach_target_is_draw_engine` + rung `dont-power-the-draw-engine`
+(-18, baseline_energy), gated `not attach_target_is_line_member` so the wincon line (Drakloak also carries
+`draw`) is never demoted. f18 → [1], f21 → [2]; inert on the single-hop decks (Solrock/Lunatone draw via an
+untagged Ability). Tests: tests/strategy/test_blunder_20260709_energy_color.py; cluster registry updated;
+full suite green.
+
 ---
 
 ## spend-boss-orders-on-the-ko-not-setup
@@ -120,7 +149,7 @@ f21 [4]→[2]; inert on mega_starmie/mega_lucario.
 - candidate_signal: reconcile the gust rungs by KO payoff — `gust-for-the-ko` (+50) must SEQUENCE/rank above a setup accel or bench-fill when a gust enables a this-turn KO (currently it fires but is tiered behind tier-0 develops in `_finish_turn_last`, and loses the one-Supporter-per-turn slot to `use-acceleration`); `gust-for-the-stall` (+10) must NOT spend Boss's Orders on a valueless early-setup gust. Co-signal (f79): extend the whiff guard `dont-search-an-empty-deck`/`dont-search-a-probable-whiff` (doctrine_fetch.py) to Buddy-Buddy Poffin's bench-fill fetch when no fetchable ≤70 Basic remains.
 - verification_contract: verifier
 - provenance: corrections 85046350:f10, 85046350:f79 (CRITICAL), 85046350:f81 | fixtures tests/fixtures/corrections/dragapult_gust_wasted_in_setup_f10.json, dragapult_poffin_whiff_take_gust_ko_f79.json, dragapult_gust_ko_over_accel_f81.json | [[snipe-threat-two-signals]]
-- status: open
+- status: applied
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -139,3 +168,13 @@ stands down (or nets below develop) when the gust achieves no board value in set
 covers Buddy-Buddy Poffin's exhausted bench-fill. **Why it wins:** "spend your gust on the prize, hold it in
 setup" is universal gust discipline; silent for decks without a gust Supporter. Gate: fixtures flip f81 [1]→[2],
 f79 [2]→[4], f10 [1]→[2]; verify no regression on mega_starmie's gust ledger (gust-for-the-ko / gust-snipe cases).
+
+**update-strategy verdict (2026-07-09): APPLIED (cluster narrowed to {f79, f81}).** Two-part fix: (1)
+`_finish_turn_last` now tiers a PLAY that fired `gust-for-the-ko` to **tier 0** (`_gust_enables_ko`), so a
+KO-enabling gust sequences ahead of a setup accel (Crispin, f81) / bench-fill (Poffin, f79). (2) ROOT fix
+exposed by (1): `_active_ko_prizes` (the baseline `gust-for-the-ko` must beat) used the CHEAPEST attack, so
+an EXPENSIVE menu KO (Nebula 210 vs 190 HP) read as 0 prizes and `gust-for-the-ko` fired wrongly — now it
+counts a KO via the cheapest OR the best-affordable attack (`_can_ko or _active_can_ko`), which keeps the
+gust behind a genuinely-bigger menu KO (eb98 / ep83456015 f38 stay green). f79 → [4], f81 → [2]; suite 1419
+green. **f10 (valueless setup stall-gust) and the Poffin-whiff guard SPLIT OUT** (grill): distinct mechanisms
+tangled with the famine-gust tiering / whiff-guard infra → data/strategy/proposals/gust-stall-standdown-and-poffin-whiff.md.

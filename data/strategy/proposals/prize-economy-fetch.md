@@ -10,7 +10,7 @@ Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.m
 - candidate_signal: forward-payoff prize value (`_forward_card_ids` + `_prize_value`); NEW `card_is_recognized_line_preevo` Context field + `_recognized_line_preevo_set()`; role-gated `_wincon_set()`; `board.wincon_in_play`; secondary `Line(role="secondary_attacker")` deck data
 - verification_contract: seed-ladder
 - provenance: data/handoffs/pokemonai-handoff-prize-economy-aware-fetch.md ; docs/adr/0048-prize-economy-fetch-broadens-the-line-concept.md ; data/strategy/proposals/learnthetcg-fundamentals.md#prize-value-board-shaping (its FETCH-seam gap) ; corrections ml_dont_fetch_redundant_solrock_f12 / _inert_f26 (deck-rule halves this subsumes)
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin fodder; full rationale + considered-options in ADR-0048):**
 
@@ -64,3 +64,18 @@ FOLD: lets solrock's `dont-fetch-the-redundant-piece` **Riolu-half** fold (deck-
 term now covers the redundant-wincon-base case, incl. "Mega online, no benched Riolu, 2nd Riolu vs
 Makuhita" which the deck rule's `card_is_redundant` gate misses. Its **engine-half** (one-of-each
 functional redundancy) is NOT prize economy — leave it.
+
+**update-strategy verdict (2026-07-09): APPLIED, default-on kill-switched seed.** Authored the full
+containment per ADR-0048: `_wincon_lines()` role-gates `_wincon_set` / `_line_preevo_set` / `_line_member_set`
++ (the #1 helpers) `_payoff_immediate_preevo_set` + `_priority_wincon_slot` Pass-2 to win-condition-role
+Lines only; a separate `_recognized_line_preevo_set` (all attacker Lines, kill-switch-gated) carries the
+broadened credit; new `_forward_payoff_prize_value` + Board `wincon_prize_value` + Context
+`card_is_recognized_line_preevo` / `card_forward_payoff_prize`; `prefer-wincon-line-piece` broadened at the
+FETCH seam; new tie-break `develop-the-cheap-prize-wall-line` (+3); mega_lucario declares the
+`secondary_attacker` Line MAKUHITA→HARIYAMA; kill-switch `Pilot(prize_economy_fetch=True)`. VERIFIED: role-
+gating is behavior-neutral for every existing deck (`_wincon_set`/`_line_preevo_set` unchanged, recognized ==
+narrow — mega_starmie/dragapult), full suite **1419 green** (solrock fixtures land); the term flips the
+REDUNDANT-2nd-Riolu case to Makuhita and DEFERS to `fetch-base-before-stranded-payoff` when a base is genuinely
+needed; kill-switch-off fully reverts (secondary Line inert). Tests: tests/strategy/test_prize_economy_fetch.py.
+GAIN rides the ladder (seed-ladder; the gauntlet is invalid-for-gain — [[gauntlet-invalid-ladder-only]]).
+The solrock `dont-fetch-the-redundant-piece` Riolu-half FOLD stays a deck-align follow-up (not this proposal).

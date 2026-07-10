@@ -28,7 +28,8 @@ CLUSTERS = {
         "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator",
         "dont-attach-discard-energy-turn1", "concentrate-accel-on-one-line-body",
         "conserve-burst-when-no-ko", "advance-the-accel-pieces",
-        "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy"}),
+        "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy",
+        "dont-power-the-draw-engine"}),
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)

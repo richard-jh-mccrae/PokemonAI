@@ -186,7 +186,7 @@ dig-before-commit.)
   data/handoffs/ownside.md §3) | fixture tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json
   (state re-verify at source on build; the fixture is named for the retired dead-hand framing) |
   reframes the refuted `revive-the-dead-hand-full-refresh` above | see [[lethal-solver-plan]]
-- status: open
+- status: deferred
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -224,3 +224,18 @@ WHY it wins: an **outright thrown WIN on turn 3** — the highest-value blunder 
 primitives (retreat-Tool cost model, promote-a-benched-attacker, the KO oracle) already exist; only the
 solver's line-generator is missing the retreat-affordability compose. Single-turn boundary (ADR-0031): the
 whole line is one of MY turns; nothing here needs the deferred multi-turn layer.
+
+**update-strategy verdict (2026-07-09): DEFERRED — capability-gap.** The win line is CONFIRMED at source
+(Petrel tutors a Trainer → Air Balloon −{C}{C} retreat → Makuhita retreat 2→0 → free-retreat → promote Mega
+Lucario ex → Aura Jab {F} 130 ≥ Riolu 80, opp bench empty → WIN). But a SOUND, COMPLETE build is blocked on
+unbuilt infra: (1) the follow-up steering (tutor→Air Balloon, play-Tool→Active) is absent and cannot be
+authored grounded without probing those engine selects; (2) the f15 fixture carries no `search_begin_input`,
+so `_engine_confirms_win`'s cascade is a **no-op** in the unit suite — a closed-form-only retest would prove
+RECOGNITION, not real-play COMPLETION (a false-green, [[wroute-satisfied-not-fixed]]). Authoring follow-up
+hooks blind into the Lethal Solver — where a phantom win LOSES the game — is the wrong risk (grill 2026-07-09).
+**Definition-of-done + the required tool:**
+`data/handoffs/pokemonai-handoff-lethal-multistep-verification-tool.md` — a BROAD engine-backed harness that
+seeds `search_begin` from a captured state and drives a whole retreat/tutor/fetch line to the engine's
+verdict (+ probes the follow-up selects). It also unblocks the sibling capability-gap
+`retreat-to-promote-a-disruptor`. Once the tool exists: reframe the fixture (`correct`→[0], assert `lethal`
+non-null), author the generator family + the two follow-up hooks, and gate on the tool.
