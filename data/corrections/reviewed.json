@@ -640,8 +640,8 @@
   },
   "85046350-20": {
     "disposition": "deferred",
-    "reason": "capability-gap: retreat-to-promote-a-disruptor is an unbuilt single-turn Turn Planner generator (naive attach-to-active harms without follow-through) — see docs/todo/retreat-to-item-lock-maneuver.md; fixture dragapult_retreat_to_item_lock_f20.json; decide()=[1] unchanged (not covered).",
-    "round": "2026-07-09"
+    "reason": "PARTIAL 2026-07-10 (PR #70): the maneuver's RETREAT frame is built as retreat-to-wall-the-line (verified via the SIBLING f32 fixture 85046350-32). But THIS fixture is the ATTACH-enablement frame (Dreepy @0 Energy, AttachFrom ctx 21 -- attach to the ACTIVE line-preevo to enable the later wall-retreat), which retreat-to-wall-the-line does NOT touch. Re-probed 2026-07-10: decide()=[1] bench, correct=[0] active -- STILL the blunder (dont-feed-the-doomed -30 sinks the active attach +5 below the bench +15). STILL OPEN: needs a rung that endorses feeding the fragile line-preevo Active when it enables the sacrificial-wall maneuver (can_wall_line_with_disruptor + retreat affordable next turn). See docs/todo/retreat-to-item-lock-maneuver.md.",
+    "round": "2026-07-10"
   },
   "83967840-54": {
     "disposition": "covered",
@@ -664,8 +664,8 @@
     "round": "2026-07-10"
   },
   "85046350-10": {
-    "disposition": "deferred",
-    "reason": "bounced to blunder-buster 2026-07-10: spec's 'the gust achieves no board value in setup' has no sound gate. The natural one (opp_active_attack_threatens on gust-for-the-stall) charges attack affordability, contradicting the deliberate worst-case reading of active_doomed (they can attach/burst next turn: docs/todo/incoming-affordability.md, won't-fix) and breaking REQ-GUST-0003.",
+    "disposition": "covered",
+    "reason": "BUILT 2026-07-10 via /update-strategy (PR #70): gust-for-the-stall gated on opp_active_can_damage_us (doctrine_gust.py) -- don't gust a HARMLESS Active (Kyogre @0 Energy) off to the bench. The earlier 'breaks REQ-GUST-0003' bounce was resolved by completing the DOOM_ACTIVE/KADA synthetic stubs with real attacks; the affordability charge is scoped to the MILD +10 stall ONLY (the +95 famine rung stays worst-case), so it does NOT touch the active_doomed survival boolean (incoming-affordability won't-fix intact). decide() on f10 flips to [2] attach; pinned by test_blunder_20260710_split_fixes.py::test_f10_.",
     "round": "2026-07-10"
   }
 }

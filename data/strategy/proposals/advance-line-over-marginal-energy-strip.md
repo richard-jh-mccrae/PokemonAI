@@ -38,14 +38,17 @@ if any). **Gate:** f32 flips [2]→[1] (Evolve); no regression on the play-energ
 (test_blunder_20260629 :239/:257/:273/:286) or the mega_starmie corpus. Card facts (Gabite Dragonslice
 {F} 40, Dreepy 70 HP) are engine ground truth — verify at source.
 
-**update-strategy verdict (2026-07-10): APPLIED — REFRAMED to a Turn-Planner maneuver (unifies f20).**
+**update-strategy verdict (2026-07-10): APPLIED — REFRAMED to a Turn-Planner maneuver (f32 retreat frame; f20's attach-half stays deferred — see below).**
 The grill rejected the "boost the evolve over the strip" framing: this is NOT evolve-vs-strip, it is the
 **retreat-to-promote-the-sacrificial-wall** maneuver (dragapult control identity). My fragile developing
 Dreepy (a win-condition LINE pre-evo) retreats behind a benched **Budew** item-lock wall — retreat →
 promote Budew → evolve the benched Dreepy→Drakloak (Recon dig) → Crushing Hammer → Itchy Pollen. Budew is
-sacrificial; the line assembles safely behind it. This is the SAME family as the deferred
-`retreat-to-promote-disruptor` (f20, same episode 85046350), so the two are **unified and both closed
-here**. Authored as `planner-code`: Board signal `can_wall_line_with_disruptor` (+ helper
+sacrificial; the line assembles safely behind it. This is the SAME maneuver family as the deferred
+`retreat-to-promote-disruptor` (f20, same episode 85046350), but the two fixtures capture DIFFERENT frames:
+f32 (this record) is the RETREAT frame (Dreepy already energized → retreat now) and is CLOSED here, while
+f20 is the earlier ATTACH-enablement frame (Dreepy @0e → feed the active to enable the retreat) which the
+shared rung does NOT touch and which STAYS DEFERRED (re-probed 2026-07-10: f20 decide()=[1] unchanged — see
+its record `capability-gap-retreat-to-item-lock.md`). Authored as `planner-code`: Board signal `can_wall_line_with_disruptor` (+ helper
 `_can_wall_line_with_disruptor`), NEW `retreat-to-wall-the-line` rung (+30, baseline_retreat.py),
 `hold-position-in-setup` stands down under the premise, and a **tier-0 branch in `_finish_turn_last`** so
 the retreat is sequenced as STEP 1 (the tier system otherwise pins RETREAT to tier 4). VERIFIED
