@@ -10,7 +10,17 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
 - candidate_signal: CardStat/provider `forward_max_damage` (EXISTS — Riolu→Mega Lucario ex = 270) + benched-Pokémon attached-energy (`target_is_threat`/imminence) + attacker-vs-support role; reconcile against `snipe-the-forced-promotion` (+40) and `snipe-the-top-threat` (+30) in baseline_snipe.py
 - verification_contract: verifier
 - provenance: corrections 82224509:f47, 82523811:f41, 82523811:f61, 82753102:f85, 81785223:f39, 81785223:f45, 81905522:f75 | fixtures tests/fixtures/corrections/ms_snipe_evolving_wincon_preevo_f75.json, ms_snipe_riolu_over_lunatone_f47.json, ms_snipe_energized_bench_f39.json, ms_snipe_attacker_line_over_support_f85.json | see [[snipe-threat-two-signals]] (the deferred "evolves-into-attacker" signal, frame 75)
-- status: applied
+- status: open
+- reopened (2026-07-10): the `applied` marking was FALSE for the frame-75 sub-signal — the gating fixture
+  `ms_snipe_evolving_wincon_preevo_f75` still fails on the real Pilot (decide()=[1], human correct=[3]).
+  `snipe-the-evolving-threat` (+45) was restored and fires on BOTH evolving-threat candidates, but on the
+  wanted target [3] it is the ONLY rung (45), while [1] ALSO picks up `snipe-on-the-path` (+12) → 57, so
+  the path tie-break out-votes the human's pick. Sub-signals #2 (energized-imminence, f39/f45) and #3
+  (attacker-line over bulky support, f85) may be covered by the 2026-07-10 snipe-KO-dominance +
+  forced-promotion-readiness work (`blunder-20260710-round.md#snipe-order-a-ko-dominates-the-positional-stack`)
+  — re-scope this proposal to the f75 tie-break only: `snipe-the-evolving-threat` must beat, or the
+  path axis must stand down under, a competing evolving-threat target the human declines. Verified failing
+  on origin/main (baseline_snipe.py unchanged by the intervening lethal-verification PRs).
 - for: general
 
 **Spec (authoring spec — thin fodder):**
