@@ -493,15 +493,23 @@
       "remainEnergyCost": 0,
       "type": 0
     },
-    "step": 25
+    "step": 25,
+    "search_begin_input": "ABwAEEAKQAEEAWQAEEAbEBAGEAEB-kC3wAJeAODAhQQAC3w-/ERMEFhgSFAHBg-ZBFAEOScmHQg-OBCc-ZBBAEC8sDS0-QBBAFw-UGFBAOY-ZBBQ-ZBn-aBgADB3T1RGbVE/ZQ-LBQADHY-kFB-VEQ-VBL-+BI-UBBCw-4BYADCpAEiQ-QBgC-MPBgADL8-WBgE-MPGAEo-WBDABg-LPKMCACCn-WBUC-2BCjABgACiQAOHgA+HgAFEABg-2BpABIACKg-VBBQI-LFCkABgACm-WBFABg-LFKUCACCf-WBUC-MPLwQACKM-WBgE-hcdQQACKI-WBgE-2BHUEACC-XBIB-MPgABQACJ4-WBw0-2BIABEACCm-WBMN-MFgABQACJs-WBw0-2fMsEACB/-WBIB-hSKkADC9-VBQMM-MFqQADIo-UBBBABI-LPC+AEug-UBEDD-hcCABBADrg-UBEDABg-LFGEEACC8-VBQMM-hIGEEACCw-VBQMN-M3oQQACL4-UBBABw0-LZDcBADuw-UBEDD-icIAEqwADIo-PBEIABg-2BCAEK0-UBBABwI-hcDQAEcAPcACQAMcACgAMcACwAMgACgABEACQAHgACgABEACUAHgACgABEACUACQAEgACgABEACUACgAEgACgABEACUACwAEoABBANoABBQABCAKwAP4-KBQADE8AWQABNAG==",
+    "own_prizes": {
+      "6": 2,
+      "1227": 1,
+      "678": 1,
+      "1121": 1,
+      "1211": 1
+    }
   },
   "chosen": [
     6
   ],
-  "chosen_label": "Attach Basic {F} Energy → Riolu (bench 2 · 80/80)",
+  "chosen_label": "Attach Basic {F} Energy \u2192 Riolu (bench 2 \u00b7 80/80)",
   "correct": [
     5
   ],
-  "correct_label": "Attach Basic {F} Energy → Solrock (bench 1 · 110/110)",
+  "correct_label": "Attach Basic {F} Energy \u2192 Solrock (bench 1 \u00b7 110/110)",
   "rationale": "CRITICAL: The winning line was missed. Could have attached energy to Solrock. Retreated and promoted Solrock. Played two Premium Power Pros such that Solrock would swing for 130, OHKOing opponent for the win."
 }

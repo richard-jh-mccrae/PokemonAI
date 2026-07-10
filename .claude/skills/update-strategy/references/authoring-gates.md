@@ -32,6 +32,16 @@ A layer-driven blunder (proposal from a `live_trace.lethal`/`planned` routing) i
 (`tests/fixtures/corrections/`). The Verifier does **not** gate code fixes — the fixtured retest
 (surfacing `lethal/planned before→after`) + suite-green are the gate.
 
+**Multi-step lethal proposals** (retreat/tutor/fetch/attach compositions — a first step whose win
+depends on `decide()` driving 2–5 follow-up selects) get the stronger **engine-cascade** gate, not a
+closed-form-only retest (ADR-0050). The fixture must carry a seed: backfill it with
+`tools/train/backfill_seed.py` (adds `search_begin_input` + the exact `own_prizes` split), then gate on
+`tests/lethal_helpers.py::engine_confirms(fixture, pilot) is True` — real play completes the line under
+the native engine, not just recognition at the MAIN menu. Author the follow-up encodings against
+`tools/sim/lethal_probe.py` (dumps each follow-up select's resolved options), never guessed — a phantom
+win loses the game. A closed-form-only line (recognition fires, cascade refutes) is a **false-green**;
+`engine_confirms` returns `False` on it.
+
 ## `brief-validator` — matchup-brief (ADR-0027)
 
 Author `src/common/scouting/briefs/<slug>.json` from the doctrine `spec` (schema:
