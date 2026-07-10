@@ -10,10 +10,29 @@ HYPOTHESES = [
         id="hold-position-in-setup",
         rationale="During setup, don't retreat the Active — it's still your starter/accelerator and "
                   "a setup retreat wastes the whole turn. Discourages Retreat at the open turn menu "
-                  "while Plan is SETUP.",
+                  "while Plan is SETUP. Stands down for the sacrificial-wall maneuver "
+                  "(`can_wall_line_with_disruptor`): there the setup retreat is DELIBERATE (wall the "
+                  "fragile line behind a benched item-lock disruptor), not a wasted turn.",
         when=lambda c: not c.board.line_ready and c.select_context == _MAIN
-        and c.option_type == _RETREAT,
+        and c.option_type == _RETREAT
+        and not c.board.can_wall_line_with_disruptor,
         weight=-25, status="testing"),
+    Hypothesis(
+        id="retreat-to-wall-the-line",
+        rationale="The retreat-to-promote-the-sacrificial-wall maneuver (dragapult f32/f20): when my Active "
+                  "is a fragile developing win-condition LINE pre-evo, a benched `item_lock` disruptor "
+                  "(Budew) can be promoted as a sacrificial wall, and the opponent's Active can damage the "
+                  "line NOW (`can_wall_line_with_disruptor`), RETREAT it — pull the fragile line to the "
+                  "Bench to safety, promote the item-lock wall (`promote-the-staller` picks it at the "
+                  "follow-up SWITCH), and evolve + energize the line behind cover while the opponent is "
+                  "item-locked. Step 1 of a multi-step turn: `_finish_turn_last` rides this retreat TIER-0 "
+                  "(ahead of a free evolve / Item strip) so it happens FIRST, and `hold-position-in-setup` "
+                  "stands down under the same premise. Silent for decks without a benched item-lock opener. "
+                  "Budew is sacrificial by design — the opponent KOs it next turn, having bought a locked "
+                  "tempo turn while the win-condition line assembles safely.",
+        when=lambda c: c.select_context == _MAIN and c.option_type == _RETREAT
+        and c.board.can_wall_line_with_disruptor,
+        weight=30, status="assumed"),
     Hypothesis(
         id="retreat-to-ready-attacker",
         rationale="When Active isn't the win-condition and a benched wincon is already powered to "

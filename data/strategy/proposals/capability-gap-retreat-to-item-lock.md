@@ -17,7 +17,7 @@ routed it into the queue. -->
 - candidate_signal: needs a new signal — a Turn Planner generator (planner.py) keyed on a benched `item_lock` opener behind a retreatable, non-attacking Active, gated by an opponent-item-reliance / disruption-value read. DEPENDENCY: the `item_lock` behavioral tag on Budew (card id 235) — currently untagged; also proposed by `open-the-item-lock-starter` in data/strategy/proposals/deck-genie-20260709-dragapult_ex.md.
 - verification_contract: verifier
 - provenance: docs/todo/retreat-to-item-lock-maneuver.md | correction 85046350:f20 (reviewed.json "85046350-20", deferred) | fixture tests/fixtures/corrections/dragapult_retreat_to_item_lock_f20.json | [[dragapult-ex-built]] | related [[m2-posture-plan]] (opponent-filtered disruption)
-- status: deferred
+- status: applied
 
 **Spec (authoring spec — thin fodder, not finished code):**
 The closed-form Turn Planner (ADR-0031/0037) has no rung that generates a single-turn
@@ -66,3 +66,19 @@ deferred `lethal-retreat-enabler`, and its handoff explicitly covers this case:
 retreat/tutor/fetch compositions). **Definition-of-done:** build that tool, then author the Turn-Planner
 retreat-to-promote-disruptor generator gated on an opponent-item-reliance read, verified by f20 materializing
 the maneuver (or re-scope f20 as covered-by-the-opener if the recovery line proves not worth a rung).
+
+**update-strategy UPDATE (2026-07-10): APPLIED — unified with f32; the deferral is LIFTED.** The sibling
+correction **f32** (same episode 85046350) made this maneuver's value vivid, and the grill concluded the
+multi-step-verification-tool blocker does NOT apply here: that blocker is for **lethal** lines (a phantom
+win loses the game), but this is a **TEMPO** maneuver — its first step (Retreat) is single-frame
+verifiable and a partial completion is non-catastrophic. So it was built now WITHOUT the tool (which stays
+the blocker for the LETHAL `lethal-retreat-enabler` f15 ONLY). Authored as `retreat-to-wall-the-line`
+(planner-code): Board signal `can_wall_line_with_disruptor` + `_can_wall_line_with_disruptor`, a **tier-0
+branch in `_finish_turn_last`** (so RETREAT sequences as step 1 instead of its default tier 4), and a
+`hold-position-in-setup` stand-down. Full authored change + verification in the f32 record
+`data/strategy/proposals/advance-line-over-marginal-energy-strip.md`; pinned by
+`tests/strategy/test_blunder_20260710_split_fixes.py::test_f32_...`. **f20 and f32 are both CLOSED.** The
+primary path remains the pregame opener (`open-the-item-lock-starter` + `preferred_start="second"`); this
+maneuver is the RECOVERY line for when Budew did not open Active. NOTE: the opponent-item-reliance gate in
+the original DoD was NOT added — the trigger uses `opp_active_can_damage_us` (protect the fragile line
+when threatened); an item-reliance read stays a possible refinement.

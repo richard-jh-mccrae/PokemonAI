@@ -285,12 +285,19 @@ HYPOTHESES = [
         id="gust-for-the-stall",
         rationale="Defensive stall-gust (tier 5, LAST resort): Active doomed, no gustable/direct KO "
                   "available, but the opponent has an energyless high-retreat benched Pokémon — drag it "
-                  "Active so they burn a turn retreating it, buying a setup turn. Weighted below every "
-                  "tutor/draw so it only wins the slot when nothing else helps; never fires on an Active "
-                  "carrying a special condition (`opp_active_condition_gift`), since switching it out "
-                  "CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022).",
+                  "Active so they burn a turn retreating it, buying a setup turn. GATED on the opponent's "
+                  "CURRENT Active actually being able to damage us this turn (`opp_active_can_damage_us`): "
+                  "when their Active is already neutralized (Kyogre at 0 Energy — Riptide needs discarded "
+                  "{W}, Swirling Waves is unpayable), gusting a benched body up just FREES that harmless "
+                  "Active to the Bench to reposition / power up — keep it pinned and develop instead "
+                  "(dragapult f10). The famine sibling `stall-gust-over-dev-when-starved` (+95) is NOT so "
+                  "gated: under a true energy famine a harmless-NOW but forward-lethal Active (Riolu → Mega "
+                  "Lucario ex) must still be stalled (ep83457493 f20). Weighted below every tutor/draw so "
+                  "it only wins the slot when nothing else helps; never fires on an Active carrying a "
+                  "special condition (`opp_active_condition_gift`), since switching it out CLEARS the "
+                  "condition (rules.md §8) and would hand a free cure (ADR-0022).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.active_doomed
+        and c.board.active_doomed and c.board.opp_active_can_damage_us
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
         and not c.board.opp_active_condition_gift,

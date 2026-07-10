@@ -46,7 +46,8 @@ CLUSTERS = {
         "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach",
         "dont-promote-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker",
-                                     "swap-out-the-locked-attacker", "dont-play-switch-for-no-gain"}),
+                                     "swap-out-the-locked-attacker", "dont-play-switch-for-no-gain",
+                                     "retreat-to-wall-the-line"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
         "evolve-into-wincon", "advance-the-evolution-line", "evolve-the-energized-body-first",
         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),

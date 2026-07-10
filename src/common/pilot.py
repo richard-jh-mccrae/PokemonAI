@@ -243,6 +243,11 @@ class Board:
                                        # this game — a `gust`-tagged card in their discard; can drag my
                                        # benched finisher out, so interposing a cheap body taxes that gust
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
+    can_wall_line_with_disruptor: bool = False  # dragapult f32/f20: my Active is a fragile developing
+                                       # win-condition LINE pre-evo, a benched `item_lock` disruptor
+                                       # (Budew) can be promoted as a sacrificial wall, and the opp
+                                       # Active can damage the line NOW — retreat to wall it and develop
+                                       # the line on the Bench behind cover (retreat-to-promote maneuver)
     tool_deploy_slot: tuple | None = None  # (AreaType, inPlayIndex) of body to equip my held +HP
                                        # Tool this turn — survival-turns target picker (ADR-0028);
                                        # None when no +HP Tool in hand / no body worth equipping
@@ -944,6 +949,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         def _gust_enables_ko(i: int) -> bool:                        # a gust that fired `gust-for-the-ko`
             return any(getattr(h, "id", None) == "gust-for-the-ko" for h, _w in traces[i].fired)
 
+        def _retreat_walls_the_line(i: int) -> bool:                 # the sacrificial-wall maneuver step 1
+            return any(getattr(h, "id", None) == "retreat-to-wall-the-line" for h, _w in traces[i].fired)
+
         def _is_supporter(i: int) -> bool:
             cid = traces[i].card_id
             st = self.stats.get(cid) if (self.stats and cid is not None) else None
@@ -964,6 +972,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # so take the gust-setup first, then KO the
                                                                      # dragged-up body — not tier-1 Supporter filler,
                                                                      # nor tier-4 behind the KO it out-values (f79/f81)
+            if t == _RETREAT and _retreat_walls_the_line(i):         # retreat-to-promote the sacrificial
+                return 0                                             # item-lock wall (dragapult f32/f20): the
+                                                                     # retreat is STEP 1 of the maneuver, ahead
+                                                                     # of a free evolve / Item strip; the
+                                                                     # promote + item-lock + develop follow on
+                                                                     # later frames via their own rungs
             if t == _ATTACK and _wins_now(i):                        # a game-winning KO: take the win now,
                 return 0                                             # don't dig/develop first (ep83037962 f78)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
@@ -2489,6 +2503,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             no_supporter_in_hand=self._no_supporter_in_hand(me),
             opp_has_played_gust=self._opp_has_played_gust(opp),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
+            can_wall_line_with_disruptor=self._can_wall_line_with_disruptor(me, ma, oa),
             priority_wincon_slot=self._priority_wincon_slot(
                 me, active_lethal, active_doomed),
             attach_from_concentrate_slot=self._attach_from_concentrate_slot(me),
@@ -3271,6 +3286,21 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         energy = len(oa.get("energies") or [])
         return any(self.predicted_damage(oa.get("id"), aid, ma) > 0
                    for aid in (opp_stat.attacks or ()) if self.attack_costs.get(aid, 99) <= energy)
+
+    def _can_wall_line_with_disruptor(self, me: dict, ma: dict | None, oa: dict | None) -> bool:
+        """The retreat-to-promote-the-sacrificial-wall maneuver premise (dragapult f32/f20): my Active is
+        a fragile developing win-condition LINE pre-evo (a Line pre-evolution, NOT the payoff), a benched
+        `item_lock` disruptor (Budew's Itchy Pollen) can be promoted as a sacrificial wall, and the
+        opponent's Active can damage that fragile line NOW (`_opp_active_can_damage_us`) — so retreat it to
+        safety, promote the wall, item-lock, and evolve the line on the Bench behind cover. Board-SOUND
+        (visible zones); silent for decks with no benched item-lock opener (no-op on mega_starmie /
+        mega_lucario) and once the Active is the payoff (not a pre-evo). Backs `retreat-to-wall-the-line`
+        and stands `hold-position-in-setup` down; `_finish_turn_last` rides the retreat step tier-0."""
+        if not (self.functions and ma and ma.get("id") in self._line_preevo_set()):
+            return False
+        has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))
+                       for b in (me.get("bench") or []))
+        return has_lock and self._opp_active_can_damage_us(ma, oa)
 
     def _active_maxed_kos(self, ma: dict | None, oa: dict | None) -> bool:
         """True if my Active's BIGGEST-damage attack (fully powered, IGNORING current Energy) would KO
