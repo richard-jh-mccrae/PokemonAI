@@ -67,13 +67,30 @@ invalid-for-gain — see [[gauntlet-invalid-ladder-only]]). The Verifier still c
 suite-green. A seed whose sound form needs new infra is a **capability-gap** (defer with a
 definition-of-done), same as the correction path.
 
-## Parallel apply (optional, orchestration-capable sessions)
+## The conveyor — fan-out for a multi-proposal drain
 
-When ≥2 proposals are file- AND behavior-disjoint (append-only into different `baseline_<context>.py`
-`HYPOTHESES`; NOT two touching the same `card_functions.json` card, the same `ROLES`/ctor, or any new
-`Context`/`Board` signal — those are always serial), author them in parallel worktree agents, then a
-**serial join** union-verifies the merged tree (`train.tuner` `union_verify` — injects each authored
-Hypothesis once against a seeds-only baseline; raises on duplicate ids / contaminated baseline; require
-`passed` + empty `regressed` over the corpus **including** previously-`covered` corrections), full
-`pytest`, and union-retest before any commit. A regressing pair is behavior-dependent → merge into one
-cluster, make triggers mutually exclusive, re-enter the full join. Merges are one-way (terminates).
+The time-efficient drain shape (SKILL.md Workflow): the human grills serially while authoring +
+per-proposal verification run in **background Agents**, converging at one end-join + one commit. **The grill
+never waits on authoring** — that idle time is where the wall-clock is won. Three fan-out points:
+
+1. **Enrich (Phase 0)** — one read-only Agent per proposal, in parallel: resolve `provenance`, confirm the
+   `candidate_signal` maps to a real signal, return a grill brief. No merge surface — always safe, always
+   worth it.
+2. **Author + pre-verify (Phase 2, the conveyor)** — the instant a grill locks, spawn a background Agent to
+   author the change and run *that proposal's own* gate (`verifier` verify+retest / `score-diff` /
+   `brief-validator` / the `planner-code` engine-cascade). File- AND behavior-disjoint proposals
+   (append-only into different `baseline_<context>.py` `HYPOTHESES`) run in parallel **worktree** Agents; a
+   shared **serial-only surface** — same `card_functions.json` card, same `ROLES`/ctor, or any new
+   `Context`/`Board` signal — serializes on the belt. An unbuilt-infra proposal drops off as a
+   capability-gap.
+3. **End-join (Phase 3, the one barrier)** — when the conveyor drains, a **serial join** union-verifies the
+   merged tree (`train.tuner` `union_verify` — injects each authored Hypothesis once against a seeds-only
+   baseline; raises on duplicate ids / contaminated baseline; require `passed` + empty `regressed` over the
+   corpus **including** previously-`covered` corrections) + union-retest + **one whole-suite `pytest`** (run
+   once here, not per proposal — the biggest raw saving). A regressing pair is behavior-dependent → merge
+   into one cluster, triggers mutually exclusive, re-enter the join. Merges are one-way (terminates).
+
+**When it pays:** worktree setup is ~200–500ms + disk per Agent, so a 2-append queue may not clear the
+overhead — fan out the enrich always; fan out authoring when the queue is large or the gates are heavy
+(`score-diff` sims, engine-cascade, A/B mirrors). Serial single-session apply stays correct — the conveyor
+is an accelerator, and the end-join barrier is byte-identical either way.
