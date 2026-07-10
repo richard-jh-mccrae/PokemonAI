@@ -180,6 +180,12 @@ jobs:
         if: steps.plan.outputs.audit == 'true'
         run: python tools/sim/ci_audit_gate.py
 
+      # ADR-0050 parity gate: every committed parity trace replays through the pure-Python
+      # engine (src/cgpy) divergence-free. DLL-free by construction (the trace IS the native
+      # side); also runs inside the suite — this named step pins failure attribution.
+      - name: cgpy parity gate
+        run: python -m pytest tests/parity -q
+
       - name: Upload test & coverage reports
         if: ${{ !cancelled() && steps.plan.outputs.empty != 'true' }}
         uses: actions/upload-artifact@v4

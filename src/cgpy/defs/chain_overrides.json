@@ -1,0 +1,80 @@
+{
+  "_comment": "Hand-authored ChainDefs (ADR-0050 M2): per-card programs over the chain-op vocabulary. Replaced piecewise by generated_chains.json in the pool-wide fan-out. Provenance: card texts in defs/card_data.json + trace divergences.",
+
+  "1121": {
+    "name": "Ultra Ball",
+    "legal": [{"op": "handOthers", "n": 2}, {"op": "deckNotEmpty"}],
+    "play": [
+      {"op": "costHandTrash", "n": 2},
+      {"op": "effectDeckToHandAndShuffle", "min": 0, "max": 1, "filter": {"pokemon": true}}
+    ]
+  },
+
+  "1086": {
+    "name": "Buddy-Buddy Poffin",
+    "legal": [{"op": "benchSpace"}, {"op": "deckNotEmpty"}],
+    "play": [
+      {"op": "effectDeckToBenchAndShuffle", "min": 0, "max": 2,
+       "filter": {"basic": true, "pokemon": true, "hpMax": 70}}
+    ]
+  },
+
+  "1123": {
+    "name": "Switch",
+    "legal": [],
+    "play": [
+      {"op": "effectSwitchMe"}
+    ]
+  },
+
+  "1120": {
+    "name": "Crushing Hammer",
+    "legal": [],
+    "play": [
+      {"op": "coin"},
+      {"op": "ifHeads", "skip": 1},
+      {"op": "trashEnergyEnemy"}
+    ]
+  },
+
+  "1097": {
+    "name": "Night Stretcher",
+    "legal": [{"op": "discardHas", "filter": {"pokemonOrBasicEnergy": true}}],
+    "play": [
+      {"op": "effectTrashToHand", "min": 1, "max": 1,
+       "filter": {"pokemonOrBasicEnergy": true}}
+    ]
+  },
+
+  "1213": {
+    "name": "Judge",
+    "legal": [],
+    "play": [
+      {"op": "xBothShuffleHandDraw", "n": 4}
+    ]
+  },
+
+  "1227": {
+    "name": "Lillie's Determination",
+    "legal": [],
+    "play": [
+      {"op": "xOwnShuffleHandDraw", "n": 6}
+    ]
+  },
+
+  "1182": {
+    "name": "Boss's Orders",
+    "legal": [{"op": "oppBenchExists"}],
+    "play": [
+      {"op": "effectSwitchEnemy"}
+    ]
+  },
+
+  "1145": {
+    "name": "Mega Signal",
+    "legal": [{"op": "deckNotEmpty"}],
+    "play": [
+      {"op": "effectDeckToHandAndShuffle", "min": 0, "max": 1, "filter": {"megaEx": true}}
+    ]
+  }
+}

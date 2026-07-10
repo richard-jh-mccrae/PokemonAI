@@ -1,0 +1,66 @@
+{
+ "attacks": 1556,
+ "cards": 1267,
+ "source_sha256": {
+  "cg.dll": "c7c87eb76513784b0089b02dcf9d57466a1b0b2217df4cfc9af8c74deda3969f",
+  "libcg.so": "75d7d619b56e5ad4c5caeadc698e61faecc650678dceab52ad687f08d5676beb"
+ },
+ "validation_probes": {
+  "duplicate_ace_spec": {
+   "deck": "2x the same ACE SPEC",
+   "result": {
+    "errorPlayer": 0,
+    "errorType": 4,
+    "started": false
+   }
+  },
+  "five_copies_of_a_name": {
+   "deck": "5x Hippopotas",
+   "result": {
+    "errorPlayer": 0,
+    "errorType": 2,
+    "started": false
+   }
+  },
+  "legal_control": {
+   "deck": "4x basicA + 4x basicB + 52x energy",
+   "result": {
+    "errorPlayer": -1,
+    "errorType": 0,
+    "started": true
+   }
+  },
+  "no_basic_pokemon": {
+   "deck": "60x energy",
+   "result": {
+    "errorPlayer": 0,
+    "errorType": 3,
+    "started": false
+   }
+  },
+  "only_evolution_pokemon": {
+   "deck": "4x a non-basic Pokemon + 56x energy",
+   "result": {
+    "errorPlayer": 0,
+    "errorType": 3,
+    "started": false
+   }
+  },
+  "two_ace_specs": {
+   "deck": "2 distinct ACE SPEC cards",
+   "result": {
+    "errorPlayer": 0,
+    "errorType": 4,
+    "started": false
+   }
+  },
+  "unknown_card_id": {
+   "deck": "one id 999999",
+   "result": {
+    "errorPlayer": 0,
+    "errorType": 1,
+    "started": false
+   }
+  }
+ }
+}
