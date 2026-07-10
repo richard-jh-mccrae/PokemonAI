@@ -174,17 +174,24 @@ class GustMixin:
 
     # ── Board-signal builders (called from Pilot._board to populate gust gap signals) ──
     def _active_ko_prizes(self, ma: dict | None, oa: dict | None, payable: int = 99) -> int:
-        """Prizes from Knocking Out the opponent's CURRENT Active with my cheapest attack this turn
-        (0 if I can't) — the baseline a gust must beat (gusting benches their current Active, so a gust
-        is only worth the Supporter for a strictly bigger KO). ``payable`` = the Energy my Active can
-        actually pay an attack with this turn (attached + the best unspent hand attach): a KO I cannot
-        afford is no KO (ep83457493 f31)."""
+        """Prizes from Knocking Out the opponent's CURRENT Active with the BEST attack I can afford this
+        turn (0 if I can't) — the baseline a gust must beat (gusting benches their current Active, so a
+        gust is only worth the Supporter for a strictly bigger KO). Uses the best AFFORDABLE attack, not
+        just the cheapest: an EXPENSIVE menu KO (Mega Starmie's Nebula Beam 210 vs a 190-HP Active the
+        cheap Jetting Blow can't touch) still counts — else `gust-for-the-ko` fires on a gust taking FEWER
+        prizes than the direct attack already offers (eb98 / ep83456015 f38: a 3-prize menu KO masked by
+        `active_ko_prizes=0`). ``payable`` = the Energy my Active can pay an attack with this turn (attached
+        + best unspent hand attach): a KO I cannot afford is no KO (ep83457493 f31)."""
         if not (self.stats and ma and oa):
             return 0
         my_stat = self.stats.get(ma.get("id"))
         if my_stat and (my_stat.minAttackCost or 99) > payable:
-            return 0                                     # cheapest attack unpayable this turn
-        return self._prize_value(oa) if self._can_ko(my_stat, oa) else 0
+            return 0                                     # can't afford ANY attack this turn
+        # KO via the cheapest attack (`_can_ko`, minCostDamage) OR the best AFFORDABLE attack
+        # (`_active_can_ko`, per-attack oracle) — the latter catches an EXPENSIVE menu KO the cheap
+        # summary misses (Nebula Beam 210 vs 190 HP), so a gust must beat the real best direct KO.
+        return self._prize_value(oa) if (self._can_ko(my_stat, oa)
+                                         or self._active_can_ko(ma, oa)) else 0
 
     def _opp_active_condition_gift(self, opp: dict | None) -> bool:
         """True if the opponent's Active carries ANY special condition (poison/burn/sleep/paralyze/

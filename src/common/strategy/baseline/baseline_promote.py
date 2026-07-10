@@ -78,12 +78,15 @@ HYPOTHESES = [
     Hypothesis(
         id="promote-the-staller",
         rationale="When Active is KO'd and you can neither promote a powered wincon nor evolve a benched "
-                  "pre-evolution into a ready attacker this turn, promote a disposable opener/wall "
-                  "(Function Tag `opener`) instead of a bare pre-evolution — it stalls and keeps the "
-                  "fragile pre-evolution safe. The evolve gate `evolve_to_ready_wincon_available` requires "
-                  "enough Energy to attack post-evolve; a bare pre-evo would just expose a dead 0-Energy "
-                  "wincon, so the staller wins even with payoff in hand (ep82753102 f120).",
-        when=lambda c: c.select_context == _TO_ACTIVE and "opener" in c.tags
+                  "pre-evolution into a ready attacker this turn, promote a disposable staller — an "
+                  "opener/wall (`opener`) OR a free-attacking disruptor (`item_lock`, e.g. Budew's Itchy "
+                  "Pollen) — instead of a bare pre-evolution: it stalls / locks and keeps the fragile "
+                  "pre-evolution safe. The evolve gate `evolve_to_ready_wincon_available` requires enough "
+                  "Energy to attack post-evolve AND (distance-aware) the payoff's IMMEDIATE pre-evo — a "
+                  "Stage-0 base two hops away doesn't qualify; a bare pre-evo would just expose a dead "
+                  "0-Energy wincon, so the staller wins even with payoff in hand (ep82753102 f120; "
+                  "dragapult f31 promotes item-lock Budew over a bare Stage-0 Dreepy).",
+        when=lambda c: c.select_context == _TO_ACTIVE and ("opener" in c.tags or "item_lock" in c.tags)
         and not c.board.evolve_to_ready_wincon_available and not c.board.bench_wincon_ready,
         weight=20, status="testing"),
 ]

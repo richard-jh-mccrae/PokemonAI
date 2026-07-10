@@ -153,6 +153,9 @@ class Board:
                                            # alternative to a discard-at-end-of-turn Energy
     wincon_in_play: bool = False   # my win-condition (a Line payoff / win_condition role) already
                                    # on my Active or Bench — search needn't fetch another copy
+    wincon_prize_value: int = 0    # greatest prize value among my win-condition bodies (Mega ex 3 / ex 2
+                                   # / else 1) — the multi-prize payoff a cheap secondary line makes the
+                                   # opponent take MORE, smaller KOs than (ADR-0048); 0 if no wincon
     wincon_in_hand: bool = False   # win-condition card already in my hand — tutor needn't
                                    # dig for another copy
     top_fetch_priority_id: int | None = None  # at a TO_HAND search, highest-priority candidate id
@@ -163,9 +166,10 @@ class Board:
     line_preevo_in_hand: bool = False  # a non-payoff Line member (a base/mid-line pre-evolution) is in
                                        # my HAND — a piece to deploy, so a hand-shuffle refresh would bury
                                        # it (Riolu/Drakloak); gates `hold-line-piece-dont-shuffle` (ep83686860 f13)
-    wincon_base_deployable: bool = False  # a Line pre-evolution (a base to evolve payoff from) is in
-                                       # play OR in hand — evolved payoff deployable. False -> fetching
-                                       # payoff strands it: prefer base (`fetch-base-before-stranded-payoff`)
+    wincon_base_deployable: bool = False  # the payoff's IMMEDIATE pre-evolution (one hop below it) is
+                                       # in play OR in hand — evolved payoff deployable soon. False -> fetching
+                                       # payoff strands it: prefer base (`fetch-base-before-stranded-payoff`).
+                                       # Distance-aware: on a 2-stage line a lone Stage-0 base is NOT enough
     wincon_in_hand_undeployable: bool = False  # an EVOLUTION win-condition sits in my hand with NO base
                                        # anywhere (not in play, and its Line pre-evolution is neither in play
                                        # nor in hand) — a DEAD card I can't deploy this turn or set up to. So
@@ -180,6 +184,10 @@ class Board:
                                        # `fetch-the-support` (with an engine online, no need to tutor one)
     in_play_ids: frozenset = field(default_factory=frozenset)  # card ids of my in-play Pokémon
                                        # (Active + Bench) — a hand copy of one is a redundant duplicate
+    in_play_attack_colors: frozenset = field(default_factory=frozenset)  # specific Energy-type colors my
+                                       # IN-PLAY attackers' attacks require (via AttackStat.energyTypes) — the
+                                       # colors a fetched Energy can be USED for now; an off-color one no body
+                                       # in play needs (dragapult's {D} while Munkidori is in deck) isn't in it
                                        # (need already met), keep-value floor `discard-the-redundant`
     hand_duplicate_ids: frozenset = field(default_factory=frozenset)  # card ids I hold 2+ copies of in
                                        # hand, EXCLUDING fungible Energy — lowest-keep pitch at a forced
@@ -218,9 +226,10 @@ class Board:
     best_promote_slot: tuple | None = None  # (AreaType, index) of MY benched win-condition best to bring
                                        # to Active at a promote/switch — READY (Energy >= cheapest attack)
                                        # AND most-Energy. Backs `promote-the-powered-attacker`, not a bare copy/slot-0 (ep83007714 f92/f104)
-    evolve_to_ready_wincon_available: bool = False  # win-condition in hand AND a benched
-                                       # pre-evo already carries enough Energy that evolving THIS turn yields
-                                       # a ready attacker — worth promoting to evolve. False -> bare pre-evo, promote staller/accel instead (ep82753102 f120)
+    evolve_to_ready_wincon_available: bool = False  # win-condition in hand AND the payoff's IMMEDIATE
+                                       # pre-evo on the Bench already carries enough Energy that evolving THIS turn
+                                       # yields a ready attacker — worth promoting to evolve. False -> bare/too-deep
+                                       # pre-evo, promote staller/accel instead (ep82753102 f120; dragapult f31)
     bench_wincon_prize_value: int = 0  # greatest prize value among my BENCHED win-conditions (Mega ex 3 /
                                        # ex 2 / else 1), 0 if none — prize I keep OFF the front line by
                                        # interposing a cheaper attacker at a forced promote (prize denial)
@@ -255,6 +264,11 @@ class Board:
     opp_active_has_energy: bool = False   # opponent's ACTIVE carries Energy — the imminent attacker,
                                           # the worthwhile energy-denial target. Gate for `play-energy-denial`:
                                           # stripping a benched SUPPORT's lone Energy is a wasted Item (ep82753102 f37)
+    opp_active_can_damage_us: bool = False  # opponent's ACTIVE has an AFFORDABLE attack (current Energy)
+                                          # dealing >0 to my Active — oracle-resolved, so a conditional
+                                          # 0-damage attack (Kyogre's Riptide off an empty discard) or an
+                                          # all-unaffordable set is NO threat. `play-energy-denial` stand-down:
+                                          # don't strip a body that can't actually hurt us (dragapult f6)
     opp_has_hand_size_attacker: bool = False  # opponent has a Pokémon in play (or in a committed
                                           # evolution line) that SCALES damage with hand size (a
                                           # `hand_size_attacker`, e.g. Alakazam) — `play-harlequin-vs-hand-size` gate. Card-fact, not meta guess
@@ -444,6 +458,9 @@ class Context:
     attach_target_is_line_member: bool = False  # this attach option's recipient is on a win-condition
                                            # Line (a pre-evolution or the payoff) — building it advances the
                                            # wincon. Read into `OptionTrace.attach_to_needy_line`, the decide()-only tie-break (Line base over off-line opener)
+    attach_target_is_draw_engine: bool = False  # this attach option's recipient is a DRAW-ENGINE body (a
+                                           # `draw`/`stall` tag, or evolves into one: Dunsparce → Dudunsparce) —
+                                           # its job is cards, not attacking, so don't sink the turn's Energy into it (dragapult f21)
     attach_from_target_needs: bool = False  # at an ATTACH_FROM target-select (engine's pick-a-
                                            # recipient step for a multi-attach effect, e.g. Turbo Flare),
                                            # THIS recipient still NEEDS Energy — spread to the bare body, not an online one. False off ATTACH_FROM (cf attach_target_needs)
@@ -452,6 +469,11 @@ class Context:
                                            # concentrate_slot) — build ONE body, the counterpart of attach_from_target_needs' spread
     card_is_line_preevo: bool = False  # this option's card is a non-payoff member of a Line's path (a
                                        # pre-evolution that builds toward the win-condition)
+    card_is_recognized_line_preevo: bool = False  # this option's card is a pre-evo of ANY declared attacker
+                                       # Line — win-condition OR secondary-attacker (ADR-0048); the broadened
+                                       # line-piece credit, narrows to card_is_line_preevo when kill-switched off
+    card_forward_payoff_prize: int = 0  # greatest prize value this option's card BECOMES (max over it +
+                                       # forward evolutions) — Riolu→Mega 3, Makuhita→Hariyama 1 (ADR-0048)
     card_evolution_baseless: bool = False  # this grab candidate is an EVOLUTION with NO base to evolve
                                        # it onto in my play or hand — a dead grab (a 3rd Drakloak, every
                                        # Dreepy evolved/gone). Board-sound; gates `dont-grab-a-baseless-mid-evolution`
@@ -635,7 +657,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, forced_promotion=False,
                  value_model=None, escalation=False,
-                 match_planner_steer=False, forgo_ko=False):
+                 match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -711,6 +733,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.forgo_ko = forgo_ko                        # ADR-0045 kill-switch (S4): forgo a NON-winning KO
                                                         # under the tight sound gate ("don't wake the giant").
                                                         # Default OFF — the riskiest lever, ladder-gated
+        self.prize_economy_fetch = prize_economy_fetch  # ADR-0048 kill-switch: prize-economy FETCH tie-break
+                                                        # + broadened line recognition (credit a secondary
+                                                        # attacker Line's pre-evo). Default ON; OFF reverts to
+                                                        # win-condition-only recognition — a secondary Line is inert
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -915,6 +941,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             cid = traces[i].card_id
             return bool(self.functions) and cid is not None and "gust" in self.functions.tags(cid)
 
+        def _gust_enables_ko(i: int) -> bool:                        # a gust that fired `gust-for-the-ko`
+            return any(getattr(h, "id", None) == "gust-for-the-ko" for h, _w in traces[i].fired)
+
         def _is_supporter(i: int) -> bool:
             cid = traces[i].card_id
             st = self.stats.get(cid) if (self.stats and cid is not None) else None
@@ -929,6 +958,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             t = o.get("type")
             if t in (_ATTACH, _PLAY, _RETREAT) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach
                 return 0    # unlocks a KO, or a gust/retreat-to-lethal swap — take the win, don't dig first (REQ-GUST-0001)
+            if t == _PLAY and _gust_enables_ko(i):                   # a KO-enabling gust: `gust-for-the-ko`
+                return 0                                             # fires only when the gust-KO takes MORE
+                                                                     # prizes than any menu attack (its own gate),
+                                                                     # so take the gust-setup first, then KO the
+                                                                     # dragged-up body — not tier-1 Supporter filler,
+                                                                     # nor tier-4 behind the KO it out-values (f79/f81)
             if t == _ATTACK and _wins_now(i):                        # a game-winning KO: take the win now,
                 return 0                                             # don't dig/develop first (ep83037962 f78)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
@@ -1887,6 +1922,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         card_is_line_preevo = cid is not None and cid in self._line_preevo_set()
+        card_is_recognized_line_preevo = cid is not None and cid in self._recognized_line_preevo_set()
         card_is_wincon = cid is not None and cid in self._wincon_set()
         card_is_starter = bool(stat and stat.hp > 0 and not stat.evolvesFrom)
         card_is_support = bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags)))
@@ -1985,9 +2021,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
                        attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
+                       attach_target_is_draw_engine=self._is_draw_engine_body((at_target or {}).get("id")),
                        attach_from_target_needs=attach_from_needs,
                        attach_from_target_is_concentrate=attach_from_concentrate,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
+                       card_is_recognized_line_preevo=card_is_recognized_line_preevo,
+                       card_forward_payoff_prize=self._forward_payoff_prize_value(cid),
                        card_evolution_baseless=self._evolution_baseless(obs, cid),
                        card_base_unreachable=self._card_base_unreachable(obs, cid, board),
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
@@ -2112,6 +2151,38 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if cost.get(etype, 0) - attached.get(etype, 0) > 0:   # this type fills its own unmet need
             return False
         return any(cost.get(t, 0) - attached.get(t, 0) > 0 for t in cost if t != etype)
+
+    def _in_play_attack_colors(self, me: dict) -> frozenset:
+        """The specific Energy-type colors my IN-PLAY attackers' attacks require — every non-colourless
+        `AttackStat.energyTypes` slot across my Active + Bench bodies' attacks. The set a fetched Basic
+        Energy can actually be USED for now, so an off-color Energy no in-play body needs (dragapult's
+        {D} while Munkidori is still in the deck) is absent. Backs `fetch-the-attack-color`. Empty
+        without stats/attack_stats (silent — never a false steer)."""
+        if not (self.stats and self.attack_stats):
+            return frozenset()
+        out = set()
+        for p in ((me.get("active") or []) + (me.get("bench") or [])):
+            st = self.stats.get(p.get("id")) if p else None
+            for aid in (getattr(st, "attacks", ()) or ()):
+                ast = self.attack_stats.get(aid)
+                for t in (getattr(ast, "energyTypes", ()) or ()):
+                    if t not in (0, None):
+                        out.add(t)
+        return frozenset(out)
+
+    def _is_draw_engine_body(self, cid) -> bool:
+        """True iff card `cid` is a DRAW-ENGINE body — it carries a `draw`/`stall` Function Tag, OR it
+        evolves INTO one (Dunsparce → Dudunsparce: the base is untagged but its payoff IS the engine).
+        Marks a body whose role is card advantage, not attacking, so the turn's Energy shouldn't be sunk
+        into it (dragapult f21). The consuming rung ALSO excludes a win-condition-Line member, so a wincon
+        pre-evolution whose Stage-1 happens to draw (Drakloak's Recon) is never mislabelled. Fail-open
+        (False) with no functions / id."""
+        if not (self.functions and cid is not None):
+            return False
+        draw = {"draw", "stall"}
+        if draw & set(self.functions.tags(cid)):
+            return True
+        return any(draw & set(self.functions.tags(f)) for f in self._forward_card_ids(cid))
 
     def _evolution_baseless(self, obs: dict, cid: int | None) -> bool:
         """True iff grab candidate `cid` is an EVOLUTION (has an `evolvesFrom` base) but I hold NO copy
@@ -2374,16 +2445,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_fully_powered=self._active_fully_powered(ma),
             energy_placeable=self._energy_placeable(me),
             wincon_in_play=self._wincon_in_play(me),
+            wincon_prize_value=self._wincon_prize_value(),
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
             line_preevo_in_hand=self._line_preevo_in_hand(me),
-            wincon_base_deployable=(self._line_preevo_in_play(me)
-                                    or self._line_preevo_in_hand(me)),
+            wincon_base_deployable=self._payoff_immediate_preevo_available(me),
             wincon_in_hand_undeployable=self._wincon_in_hand_undeployable(me),
             accel_recipient_missing=self._accel_recipient_missing(me),
             support_in_play=self._support_in_play(me),
             in_play_ids=frozenset(p.get("id") for p in ((me.get("active") or []) + (me.get("bench") or []))
                                   if p and p.get("id") is not None),
+            in_play_attack_colors=self._in_play_attack_colors(me),
             hand_duplicate_ids=self._hand_duplicate_ids(me),
             top_fetch_priority_id=self._top_fetch_priority_id(select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
@@ -2424,6 +2496,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             stall_target_is_keystone=self._stall_target_is_keystone(opp),
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
             opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
+            opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
             opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
             deck_empty_ids=deck_empty,
             deck_known_counts=deck_known,
@@ -2452,13 +2525,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     # Shuffle-Refresh doctrine's signals live in doctrine_shuffle_refresh (ShuffleRefreshMixin); `_board` calls them.
 
+    def _wincon_lines(self) -> list:
+        """The declared Lines whose payoff IS the win-condition (Line role 'win_condition') — never a
+        secondary-attacker Line (ADR-0048). The win-condition machinery (`_wincon_set`, `_line_preevo_set`,
+        `_line_member_set`, the immediate-pre-evo / concentrate helpers) is scoped to these, so declaring a
+        cheap secondary-attacker Line (role 'secondary_attacker') never mislabels its payoff a win-condition
+        or its base a wincon pre-evo. A no-op for every existing deck — all declare only 'win_condition'."""
+        return [l for l in self.strategy.lines if getattr(l, "role", "win_condition") == "win_condition"]
+
     def _wincon_set(self) -> set:
-        """Card ids that ARE the win-condition — a Strategy Line payoff or a card carrying the
-        `win_condition` / `primary_attacker` Role."""
-        wincon = {line.payoff for line in self.strategy.lines}
+        """Card ids that ARE the win-condition — a WIN-CONDITION Line payoff (role-gated, `_wincon_lines`)
+        or a card carrying the `win_condition` / `primary_attacker` Role."""
+        wincon = {line.payoff for line in self._wincon_lines()}
         wincon |= {cid for cid, r in self.strategy.roles.items()
                    if {"win_condition", "primary_attacker"} & set(r)}
         return wincon
+
+    def _wincon_prize_value(self) -> int:
+        """The greatest prize value among my declared win-condition bodies (Mega ex 3 / ex 2 / else 1) —
+        the multi-prize payoff a cheap secondary line makes the opponent take MORE, smaller KOs than
+        (ADR-0048). 0 if none. Backs `Board.wincon_prize_value`."""
+        wincon = self._wincon_set()
+        return max((self._prize_value({"id": c}) for c in wincon), default=0) if wincon else 0
 
     def _wincon_in_hand(self, me: dict) -> bool:
         """True if the win-condition card is already in my hand — a tutor needn't dig for another."""
@@ -2478,9 +2566,34 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return not (self._line_preevo_in_play(me) or self._line_preevo_in_hand(me))
 
     def _line_preevo_set(self) -> set:
-        """Card ids that are a non-payoff member of a Line's path — a pre-evolution that builds
-        toward the win-condition payoff (e.g. Staryu on the Staryu → Mega Starmie line)."""
+        """Card ids that are a non-payoff member of a WIN-CONDITION Line's path (role-gated,
+        `_wincon_lines`) — a pre-evolution that builds toward the win-condition payoff (Staryu on the
+        Staryu → Mega Starmie line). NARROW by design: feeds `wincon_base_deployable` /
+        `_evolve_to_ready_wincon_available` / the hold/undeployable machinery, so a secondary-attacker
+        Line's base is NOT in it (ADR-0048 — the broadened, line-piece-crediting set is
+        `_recognized_line_preevo_set`)."""
+        return {cid for line in self._wincon_lines() for cid in line.path if cid != line.payoff}
+
+    def _recognized_line_preevo_set(self) -> set:
+        """Pre-evolutions of EVERY declared attacker Line — win-condition AND secondary-attacker
+        (ADR-0048). Read ONLY by the preference rungs (`prefer-wincon-line-piece` at a fetch,
+        `develop-the-cheap-prize-wall-line`), so a secondary attacker's base (Makuhita) earns the same
+        line-piece credit as the wincon base (Riolu) without touching the narrow `_line_preevo_set` the
+        deploy/hold machinery rides. Falls back to the narrow win-condition set when the ADR-0048
+        kill-switch is OFF — so a declared secondary Line is fully inert then."""
+        if not self.prize_economy_fetch:
+            return self._line_preevo_set()
         return {cid for line in self.strategy.lines for cid in line.path if cid != line.payoff}
+
+    def _forward_payoff_prize_value(self, cid) -> int:
+        """The greatest prize value the card `cid` BECOMES — max `_prize_value` over `cid` and its forward
+        evolution descendants (`_forward_card_ids`): Riolu → Mega Lucario ex = 3, Makuhita → Hariyama = 1.
+        The prize a body's LINE ultimately presents, which the card's own prize value (Riolu and Makuhita
+        are both 1-prize Basics) cannot distinguish (ADR-0048). 0 with no stats / id."""
+        if cid is None or not self.stats:
+            return 0
+        ids = {cid} | self._forward_card_ids(cid)
+        return max((self._prize_value({"id": i}) for i in ids), default=0)
 
     def _line_preevo_in_play(self, me: dict) -> bool:
         """True if a non-payoff member of any Line's path (a pre-evolution) is on my Active/Bench —
@@ -2499,10 +2612,41 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return any(c and c.get("id") in preevos for c in (me.get("hand") or []))
 
+    def _payoff_immediate_preevo_set(self) -> set:
+        """Card ids that are a Line payoff's IMMEDIATE pre-evolution — the path member one hop below
+        the payoff (`path[index(payoff) - 1]`). For a SINGLE-HOP Line (Staryu -> Mega Starmie ex) this
+        is the Basic base and equals `_line_preevo_set`; for a MULTI-STAGE Line (Dreepy -> Drakloak ->
+        Dragapult ex) it is ONLY the Stage-1 (Drakloak), not the Stage-0 base (Dreepy). Lets the
+        win-condition readiness signals tell 'the payoff is ONE evolution from deployable/ready' apart
+        from 'some Line pre-evo is around somewhere' — the distinction the distance-blind signals
+        missed on the corpus's first 2-stage line (dragapult f14/f31). Pure + total."""
+        out = set()
+        for line in self._wincon_lines():
+            path = line.path or []
+            if line.payoff in path:
+                i = path.index(line.payoff)
+                if i > 0:
+                    out.add(path[i - 1])
+        return out
+
+    def _payoff_immediate_preevo_available(self, me: dict) -> bool:
+        """True if a payoff's IMMEDIATE pre-evolution is in play OR hand — the payoff is exactly one
+        evolution from being deployable. Identical to `_line_preevo_in_play or _line_preevo_in_hand`
+        for single-hop Lines (the immediate pre-evo IS the only pre-evo); on a multi-stage Line it is
+        False while only a deeper base is around (a lone Dreepy no longer reads the two-hop Dragapult
+        ex as base-deployable). Backs `wincon_base_deployable`."""
+        imm = self._payoff_immediate_preevo_set()
+        if not imm:
+            return False
+        zones = (me.get("active") or []) + (me.get("bench") or []) + (me.get("hand") or [])
+        return any(p and p.get("id") in imm for p in zones)
+
     def _line_member_set(self) -> set:
-        """Every card id on a Line's path — pre-evolutions AND the payoff. The Pokémon a bench
-        accelerator (e.g. Cinderace's Turbo Flare) can usefully load Energy onto."""
-        return {cid for line in self.strategy.lines for cid in line.path}
+        """Every card id on a WIN-CONDITION Line's path (role-gated, `_wincon_lines`) — pre-evolutions AND
+        the payoff. The Pokémon a bench accelerator (e.g. Cinderace's Turbo Flare) can usefully load Energy
+        onto; scoped to the win-condition line so a secondary-attacker Line never silently redirects the
+        accelerator's recipient hunt (ADR-0048)."""
+        return {cid for line in self._wincon_lines() for cid in line.path}
 
     def _accel_recipient_missing(self, me: dict) -> bool:
         """True if my Active is a bench-accelerator (an `accel_source`-Role Pokémon, e.g. Cinderace)
@@ -2528,8 +2672,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Staryu but a Water in hand -> evolve, the Mega comes online)."""
         if not self._wincon_in_hand(me):
             return False
-        preevos = self._line_preevo_set()
-        wincon = self._wincon_set()
+        preevos = self._payoff_immediate_preevo_set()   # IMMEDIATE pre-evo only — a deeper Stage-0 base is
+        wincon = self._wincon_set()                      # >1 evolution from a ready attacker (dragapult f31)
         if not (preevos and wincon):
             return False
         thresh = min((_min_attack_cost(self.stats, w) for w in wincon), default=1)
@@ -2584,9 +2728,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         successor) OR when it is `active_doomed` (it won't survive to fire the payoff, so building it
         for the future is wasted — hand the Energy to a healthy benched wincon instead; a this-turn
         attack off the doomed Active is the Tactical/Planner layer's job, not this positional rule).
-        So a powered/dying Active hands the Energy to the benched wincon. None when no buildable wincon
-        exists (e.g. only the doomed Active is short) — concentrate then stands down. Backs
-        `concentrate-energy-on-wincon` (load one attacker, don't spread; ep83116501 f89)."""
+        So a powered/dying Active hands the Energy to the benched wincon. When no win-condition BODY is
+        buildable, falls to the most-energized Line PRE-EVO still short of its payoff's biggest attack
+        (Pass 2 — Energy carries through evolution; the started Dreepy toward Phantom Dive, dragapult f85);
+        None only when neither exists. Backs `concentrate-energy-on-wincon` (load one attacker, don't
+        spread; ep83116501 f89)."""
         wincon = self._wincon_set()
         if not wincon:
             return None
@@ -2603,7 +2749,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 e = len(p.get("energies") or [])
                 if best is None or e > best[0]:
                     best = (e, _BENCH, i)
-        return (best[1], best[2]) if best else None
+        if best is not None:
+            return (best[1], best[2])
+        # Pass 2 (multi-stage lines): no win-condition BODY is buildable, so concentrate on the LINE
+        # PRE-EVO closest to firing the payoff — the one carrying the MOST Energy while still short of
+        # its payoff's biggest attack cost (Energy carries through evolution). Lets
+        # `concentrate-energy-on-wincon` finish a started pre-evo instead of `power-up-attacker`
+        # dribbling one Energy onto a bare body (dragapult f85). Inert where a win-condition body is in
+        # play (Pass 1 wins) — so single-hop decks are unaffected in the common case.
+        zones = ((_ACTIVE, active if not (active_lethal or active_doomed) else []),
+                 (_BENCH, me.get("bench") or []))
+        best_pre = None                                    # (energy, area, index)
+        for line in self._wincon_lines():
+            payoff_stat = self.stats.get(line.payoff) if self.stats else None
+            thresh = getattr(payoff_stat, "maxDamageCost", None) if payoff_stat else None
+            if not thresh:
+                continue
+            preevos = {cid for cid in line.path if cid != line.payoff}
+            for area, zone in zones:
+                for i, p in enumerate(zone):
+                    if p and p.get("id") in preevos:
+                        e = len(p.get("energies") or [])
+                        if 0 < e < thresh and (best_pre is None or e > best_pre[0]):
+                            best_pre = (e, area, i)
+        return (best_pre[1], best_pre[2]) if best_pre else None
 
     def _bench_wincon_ready(self, me: dict) -> bool:
         """True if a benched win-condition / primary attacker already carries enough Energy to attack
@@ -3085,6 +3254,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # per-attack oracle (ADR-0032): prevention is attack-scoped — an ignore-flag attack still KOs
         return any(self.predicted_damage(ma.get("id"), aid, oa) >= opp_hp
                    for aid in (stat.attacks or ()) if self.attack_costs.get(aid, 99) <= energy)
+
+    def _opp_active_can_damage_us(self, ma: dict | None, oa: dict | None) -> bool:
+        """True if the opponent's Active, with its CURRENT Energy, has an affordable attack that deals
+        >0 damage to MY Active this coming turn — the affordable, oracle-resolved mirror of
+        `_active_can_ko` pointed at us (any damage, not just a KO). A conditional attack that computes to
+        0 (Kyogre's Riptide off an empty discard) or an all-unaffordable attack set is NO threat.
+        Distinct from `_active_doomed`/`_incoming_active_damage` (WORST-case, opp powers up): this asks
+        'can they hurt me with what they hold NOW', the read that separates a worthwhile energy-strip
+        from a worthless one (dragapult f6). Fail-closed on missing stats/HP."""
+        if not (self.stats and ma and oa):
+            return False
+        opp_stat = self.stats.get(oa.get("id"))
+        if not (opp_stat and ma.get("hp")):
+            return False
+        energy = len(oa.get("energies") or [])
+        return any(self.predicted_damage(oa.get("id"), aid, ma) > 0
+                   for aid in (opp_stat.attacks or ()) if self.attack_costs.get(aid, 99) <= energy)
 
     def _active_maxed_kos(self, ma: dict | None, oa: dict | None) -> bool:
         """True if my Active's BIGGEST-damage attack (fully powered, IGNORING current Energy) would KO

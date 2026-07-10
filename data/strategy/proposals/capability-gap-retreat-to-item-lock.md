@@ -17,7 +17,7 @@ routed it into the queue. -->
 - candidate_signal: needs a new signal — a Turn Planner generator (planner.py) keyed on a benched `item_lock` opener behind a retreatable, non-attacking Active, gated by an opponent-item-reliance / disruption-value read. DEPENDENCY: the `item_lock` behavioral tag on Budew (card id 235) — currently untagged; also proposed by `open-the-item-lock-starter` in data/strategy/proposals/deck-genie-20260709-dragapult_ex.md.
 - verification_contract: verifier
 - provenance: docs/todo/retreat-to-item-lock-maneuver.md | correction 85046350:f20 (reviewed.json "85046350-20", deferred) | fixture tests/fixtures/corrections/dragapult_retreat_to_item_lock_f20.json | [[dragapult-ex-built]] | related [[m2-posture-plan]] (opponent-filtered disruption)
-- status: open
+- status: deferred
 
 **Spec (authoring spec — thin fodder, not finished code):**
 The closed-form Turn Planner (ADR-0031/0037) has no rung that generates a single-turn
@@ -52,3 +52,17 @@ This generator matters only when Budew did **not** open Active. Rank the build a
 **Verify:** `decide()` on `dragapult_retreat_to_item_lock_f20.json` promotes Budew and item-locks (the
 maneuver materializes), OR the fixture is re-scoped if the pregame opener alone is judged sufficient and the
 recovery line is not worth a planner rung.
+
+**update-strategy verdict (2026-07-09): DEFERRED — capability-gap (confirmed).** This IS a planner-code
+capability-gap as authored: a naive attach-to-Active weight is actively harmful in isolation, so the sound
+fix is a Turn-Planner generator that composes attach → retreat → promote-the-disruptor → Itchy Pollen and
+commits only when the disruption value beats the forgone development. Deferred for two reasons: (1) it is a
+low-priority RECOVERY line — its PRIMARY path is APPLIED (`open-the-item-lock-starter` +35 at baseline_opening.py
++ `preferred_start="second"`), so Budew opens Active and Itchy Pollen fires T2 with NO maneuver; this generator
+only matters when Budew did not open Active. (2) It is a retreat-to-promote MULTI-STEP composition whose
+completion the single-frame f20 fixture cannot verify (no `search_begin_input`) — the SAME blocker as the
+deferred `lethal-retreat-enabler`, and its handoff explicitly covers this case:
+**`data/handoffs/pokemonai-handoff-lethal-multistep-verification-tool.md`** (a broad engine-backed harness for
+retreat/tutor/fetch compositions). **Definition-of-done:** build that tool, then author the Turn-Planner
+retreat-to-promote-disruptor generator gated on an opponent-item-reliance read, verified by f20 materializing
+the maneuver (or re-scope f20 as covered-by-the-opener if the recovery line proves not worth a rung).

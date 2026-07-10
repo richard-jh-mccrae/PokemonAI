@@ -285,7 +285,11 @@ HYPOTHESES = [
 STRATEGY = Strategy(
     name="mega_lucario",
     # readiness engine-derived: online at 1 F (Aura Jab 130), not the FF of Mega Brave.
-    lines=[Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win_condition")],
+    lines=[Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win_condition"),
+           # Cheap prize-wall secondary attacker (ADR-0048): Hariyama = 210-for-1-prize. A NON-wincon Line
+           # (role="secondary_attacker"), so the win-condition machinery ignores it — only the broadened
+           # FETCH recognition + `develop-the-cheap-prize-wall-line` read it (kill-switched, default on).
+           Line(path=[MAKUHITA, HARIYAMA], payoff=HARIYAMA, role="secondary_attacker")],
     roles=ROLES,
     params={"setup_energy_target": 2,    # FF — toward the first Mega Brave (build-active-wincon target)
             "search_budget": 0,          # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)

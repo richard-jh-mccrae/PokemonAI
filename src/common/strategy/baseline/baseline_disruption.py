@@ -14,15 +14,18 @@ HYPOTHESES = [
     Hypothesis(
         id="play-energy-denial",
         rationale="Play a free `energy_denial` Item (e.g. Crushing Hammer) before the turn-ending attack "
-                  "whenever the opponent's Active carries Energy to strip — it costs nothing, so "
-                  "`_finish_turn_last` sequences it tier 0 and you strip AND still attack the same turn; "
-                  "a lethal attack still outranks it (KO taken after the free strip). Stands down when "
-                  "the opponent's Active has no Energy (ep82753102 f37 — don't burn it on a body that "
-                  "isn't attacking) or when my Active can already KO theirs this turn "
-                  "(`active_cheap_attack_kos`; ep82748422 f26 — just take the KO, save the Item).",
+                  "whenever the opponent's Active carries Energy to strip AND that Active can actually hurt "
+                  "us with an affordable attack (`opp_active_can_damage_us`) — it costs nothing, so "
+                  "`_finish_turn_last` sequences it tier 0 and you strip AND still attack the same turn; a "
+                  "lethal attack still outranks it (KO taken after the free strip). Stands down when the "
+                  "opponent's Active has no Energy (ep82753102 f37), when its energized attack CAN'T hurt us "
+                  "— a conditional / all-unaffordable attacker (Kyogre off an empty discard), so the strip is "
+                  "worthless (dragapult f6) — or when my Active can already KO theirs this turn with its BEST "
+                  "affordable attack (`active_can_ko`, not just the cheapest, so a Phantom-Dive-class KO is "
+                  "seen too; ep82748422 f26 — just take the KO, save the Item).",
         when=lambda c: c.option_type == _PLAY
         and "energy_denial" in c.tags and c.board.opp_active_has_energy
-        and not c.board.active_cheap_attack_kos,
+        and c.board.opp_active_can_damage_us and not c.board.active_can_ko,
         weight=20, status="testing"),
     Hypothesis(
         id="play-harlequin-vs-hand-size",
@@ -46,7 +49,8 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY
         and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
         and c.board.favorability <= _POSTURE_UNFAVORED
-        and (("energy_denial" in c.tags and c.board.opp_active_has_energy)
+        and (("energy_denial" in c.tags and c.board.opp_active_has_energy
+              and c.board.opp_active_can_damage_us)
              or ("hand_disruption" in c.tags and c.board.opp_has_hand_size_attacker)),
         weight=18, status="testing"),
     Hypothesis(

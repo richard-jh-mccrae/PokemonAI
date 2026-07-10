@@ -196,4 +196,19 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _ATTACH and "discard_eot" in c.tags
         and c.board.turn <= 1,
         weight=-60, status="testing"),
+    Hypothesis(
+        id="dont-power-the-draw-engine",
+        rationale="Don't sink the turn's Energy into a DRAW-ENGINE body — one carrying a `draw`/`stall` "
+                  "tag OR evolving into one (`attach_target_is_draw_engine`: Dunsparce → Dudunsparce) — "
+                  "when it is NOT on the win-condition Line and NOT itself a win-condition. The off-color "
+                  "{D} (Munkidori fuel) got sunk into the Dunsparce→Dudunsparce engine because Dunsparce's "
+                  "Colorless-cost attack made {D} 'payable', so `power-up-attacker` (+15) read it as an "
+                  "attacker (dragapult f21). -18 nets that spread below an on-Line body; excludes Line "
+                  "members so a wincon pre-evo whose Stage-1 happens to draw (Drakloak's Recon) is never "
+                  "demoted; silent for decks with no TAGGED draw-engine (Solrock/Lunatone draw via an "
+                  "Ability, untagged, so they never trip it).",
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_is_draw_engine
+        and not c.attach_target_is_line_member
+        and not bool(_WINCON_ROLES & set(c.attach_target_roles)),
+        weight=-18, status="testing"),
 ]
