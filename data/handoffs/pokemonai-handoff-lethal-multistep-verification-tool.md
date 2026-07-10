@@ -1,7 +1,13 @@
 # Handoff — an engine-backed verification tool for multi-step turn constructs
 
-**Status:** proposed (capability-gap infra). **Opened:** 2026-07-09 (during `/update-strategy`, deferring
-`lethal-retreat-enabler`). **Owner:** unassigned.
+**Status:** **BUILT 2026-07-11** — realized as **ADR-0050** (`docs/adr/0050-multi-step-lethal-verification-tool.md`),
+merged to `main` via PR #71 (exact seeding + backfill + `engine_confirms` gate + probe) and PR #72
+(DoD#3 audit). The grill reframed this handoff: its two stated blockers were false (the seed is a
+content-join off the step obs, not a `cg.api` re-derivation; the driver already existed as
+`_engine_confirms_win`), and the real blocker — id-sorted decklist-prefix seeding hiding the high-id
+enabler band — is what the seeding fix addressed. **Opened:** 2026-07-09 (during `/update-strategy`,
+deferring `lethal-retreat-enabler`). **Remaining consumer:** the `lethal-retreat-enabler` follow-up hooks
+(Phase 3) — see `docs/todo/lethal-retreat-tool-enabler.md`.
 
 **One line:** Build a test/probe harness that seeds the native engine's `search_begin` from a captured
 state and drives a *whole* candidate turn — a first step plus every follow-up select (tutor / play-Tool /
