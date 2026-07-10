@@ -1,6 +1,6 @@
 # capability-gap: retreat-to-promote-a-disruptor maneuver (Turn Planner generator)
 
-**Status:** deferred (evidenced capability-gap). Ledgered `deferred` in `data/corrections/reviewed.json`.
+**Status:** PARTIAL (2026-07-10, PR #70). The maneuver's RETREAT frame is BUILT as `retreat-to-wall-the-line` (see the f32 sibling `85046350:f32`). This fixture's ATTACH-enablement frame (Dreepy @0e, AttachFrom — feed the active line-preevo to enable the wall-retreat) is STILL DEFERRED: re-probed 2026-07-10, `decide()=[1]` bench unchanged (`dont-feed-the-doomed` −30 sinks the correct active attach). Ledgered `deferred` in `data/corrections/reviewed.json` (85046350-20).
 **Fixture:** `tests/fixtures/corrections/dragapult_retreat_to_item_lock_f20.json`
 **Correction:** 85046350:f20 (dragapult_ex, `slow_setup`).
 
