@@ -32,6 +32,16 @@ def _at(correction) -> str:
     return f"ep {correction.episode_id} f{correction.decision.get('frame')}"
 
 
+def _where(proposal) -> str:
+    """Where to find an open blunder. A scoped one (ADR-0049) is located by its Scope's subject —
+    the Anchor frame is only where the human happened to be looking when they tagged it."""
+    if proposal.scope == "turn":
+        return f"ep {proposal.episode_id} turn {proposal.subject} (seat {proposal.seat})"
+    if proposal.scope == "match":
+        return f"ep {proposal.episode_id} whole match (seat {proposal.seat})"
+    return f"ep {proposal.episode_id} f{proposal.frame}"
+
+
 def _driving(result, hid: str):
     """The W-route corrections whose constraint moves ``hid`` (with sign: +1 favours correct)."""
     return [(c, con.deltas[hid]) for c, con in result.w_items if hid in con.deltas]
@@ -83,8 +93,11 @@ def render_run_report(agent: str, result, seeds: dict, changed: dict, *, reg: fl
     out.append("## New rules proposed (need a human-authored `when()`)")
     if result.proposals:
         for p in result.proposals:
-            where = f"ep {p.episode_id} f{p.frame}"
-            out.append(f"- **{p.category}** ({where}, seed w={p.seed_weight}): {p.trigger_sketch}")
+            # A scoped proposal (ADR-0049) proposes planner code, not a `when()` — it carries no
+            # seed weight, and the scope says which plan layer to look in.
+            scope = "" if p.scope == "decision" else f"{p.scope}-scope, "
+            out.append(f"- **{p.category}** ({_where(p)}, {scope}seed w={p.seed_weight}): "
+                       f"{p.trigger_sketch}")
             if p.rationale:
                 out.append(f"  - “{p.rationale.strip()[:200]}”")
     else:

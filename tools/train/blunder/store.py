@@ -8,10 +8,12 @@ in the right subdir; corrections with no parseable build identity go to ``_unfil
 append-only JSONL (gold, committed). A ``.jsonl`` path addresses one file; a directory addresses the
 whole tree (``load_corrections`` unions + dedups every ``<build>/corrections.jsonl`` under it).
 
-Reads are **deduplicated** by default (``load_corrections``): the same decision tagged twice
-(same episode/seat/frame/chosen/correct/category) is one blunder, so consumers (Tuner, report,
+Reads are **deduplicated** by default (``load_corrections``): the same *subject* tagged twice
+(same episode/seat/scope/subject/chosen/correct/category) is one blunder, so consumers (Tuner, report,
 ``/blunder-buster``, the inspector list) see it once -- duplicates otherwise amplify the weight
-fit and inflate counts. A different category/correct on the same decision is a *conflict*, kept.
+fit and inflate counts. A different category/correct on the same subject is a *conflict*, kept.
+The subject is the Anchor frame for a decision Correction and the Turn / seat for a scoped one
+(ADR-0049), so a Turn Correction never collides with the Decision Corrections inside that Turn.
 The on-disk file stays append-only; ``tools/train/dedup_corrections.py`` physically compacts it.
 """
 from __future__ import annotations
@@ -19,13 +21,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .correction import Correction
+from .correction import Correction, identity_key
 
 
 def _dedup_key(c: Correction):
-    """What makes two Corrections 'identical in nature' (one blunder, not two)."""
-    return (c.episode_id, c.seat, c.decision.get("frame"),
-            tuple(c.chosen), tuple(c.correct), c.category)
+    """What makes two Corrections 'identical in nature' (one blunder, not two).
+
+    Keyed by the Scope's subject (ADR-0049), never the Anchor frame — so the same Turn tagged
+    from two frames is one blunder. For a decision-scope record the subject *is* the frame, so
+    this is byte-identical to the pre-Scope key.
+    """
+    return (*identity_key(c), tuple(c.chosen), tuple(c.correct), c.category)
 
 
 def dedup_corrections(corrections) -> list[Correction]:
@@ -39,12 +45,13 @@ def dedup_corrections(corrections) -> list[Correction]:
 
 
 def find_conflicts(corrections) -> list:
-    """Decisions (episode, seat, frame) tagged with >1 distinct judgment (category/correct) after
-    dedup -- genuine disagreements for a human to resolve, not duplicates. Returns [(key, [corr])]."""
+    """Subjects (episode, seat, scope, subject) tagged with >1 distinct judgment (category/correct)
+    after dedup -- genuine disagreements for a human to resolve, not duplicates. Returns
+    [(key, [corr])]."""
     from collections import defaultdict
     groups: dict = defaultdict(list)
     for c in dedup_corrections(corrections):
-        groups[(c.episode_id, c.seat, c.decision.get("frame"))].append(c)
+        groups[identity_key(c)].append(c)
     return [(k, v) for k, v in groups.items()
             if len({(c.category, tuple(c.correct)) for c in v}) > 1]
 

@@ -32,7 +32,8 @@ def _n_satisfied(constraints, weights) -> int:
 def tune(corrections, pilot, seeds: dict, *, reg: float = DEFAULT_REG) -> TuneResult:
     """Route each Correction by derived attribution: `hypothesis:*` → a ranking constraint
     (W, fed to the weight fit); `missing_hypothesis` → a Hypothesis proposal (H); `tactical`
-    or no-obs → skipped.
+    or no-obs → skipped. A **scoped** Correction (turn/match, ADR-0049) bypasses the router
+    entirely — it is an open plan-layer blunder, never a weight.
 
     The fit is soft-margin (regularised), so a contradictory W corpus no longer overfits silently.
     Two guards make the output trustworthy:
@@ -46,6 +47,14 @@ def tune(corrections, pilot, seeds: dict, *, reg: float = DEFAULT_REG) -> TuneRe
     seeds (won't gut a doctrine for a few extra ranks); lower lets clean corrections move them more."""
     constraints, w_corrs, proposals, skipped = [], [], [], []
     for corr in corrections:
+        if corr.scope != "decision":
+            # A turn/match blunder is a plan-layer error (ADR-0049): it short-circuits BEFORE
+            # `ranking_constraint`, so a sequencing error can never move a Tier-0 weight. The
+            # Anchor's fired-Hypothesis diff still travels along, as information for the routing.
+            info = (featurize(corr, pilot).attribution
+                    if corr.obs is not None and corr.correct else None)
+            proposals.append(propose_hypothesis(corr, attribution=info))
+            continue
         if corr.obs is None:
             skipped.append((corr, "no obs (backfill from replay)"))
             continue

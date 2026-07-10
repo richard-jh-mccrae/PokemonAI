@@ -79,6 +79,32 @@ $$\text{Score}(k) \;>\; \text{Score}(c) \qquad\text{("correct should outrank cho
 Each Correction also stores the rationale (why) and a self-contained snapshot of the state, so it
 remains usable long after the replay is gone (see [ADR-0015](../adr/0015-correction-schema.md)).
 
+### 3.1 …but only when its **Scope** is one Decision
+
+A Correction carries a **Scope** ([ADR-0049](../adr/0049-corrections-carry-a-scope-decision-turn-or-match.md)):
+`decision` (the default, and everything below in §4–§6), `turn`, or `match`. Only a decision-scope
+Correction is a pairwise ranking label, because only it names a *better option at one state*.
+
+A turn or match Correction is a **plan-layer** judgment: the individual picks may each have been
+locally defensible and the *set* — the ordering, the game plan — was wrong. There is no inequality
+$\text{Score}(k) > \text{Score}(c)$ to write down, and no weight that could satisfy one. So the
+Tuner short-circuits a scoped Correction **before** it can become a constraint (`tuner/run.py`) and
+routes it straight to the open worklist that `/blunder-buster` drains. This is load-bearing: without
+it, the fit would try to repair a sequencing error by moving a Tier-0 weight, which is exactly the
+failure §5 and the `forgo-KO` refutations exist to prevent.
+
+What a scoped Correction *does* carry:
+
+- Its **Span** — the Decisions it covers. A turn's Span keeps each Decision's `obs`, so
+  `tuner/retest.py::retest_span` can re-drive the turn under a candidate Pilot and report the
+  **first divergence**. Everything after that point is off-policy (those `obs` describe a board the
+  new Pilot would never have reached) and is reported as such rather than guessed at. A match's
+  Span keeps per-turn headers and the `game_plan`, and is never re-driven — its gate is the ladder.
+- An optional **Anchor prescription**. A turn Correction *may* still name a `correct` option, at the
+  Anchor only; giving it asserts the Anchor is the first divergent Decision. When present, the
+  fired-rule diff of §4 is still computed — but recorded as **information** for routing, never fed
+  to the fit. When absent, `retest` reports `fixed: None`: there is nothing asserted to check.
+
 ---
 
 ## 4. Where does the fix belong? — attribution (W vs H)

@@ -48,7 +48,8 @@ def test_write_proposals_snapshot_is_durable_and_traceable(tmp_path):
     assert data["open"][0]["seed_weight"] == 20.0
     assert data["open"][0]["agent_build"] == BUILD
     assert data["open"][0]["critical"] is False          # no CRITICAL marker in this rationale
-    assert data["skipped"][0] == {"episode_id": 81785223, "frame": 32, "reason": "tactical",
+    assert data["skipped"][0] == {"key": "81785223-32", "scope": "decision", "subject": 32,
+                                  "episode_id": 81785223, "frame": 32, "reason": "tactical",
                                   "critical": False,
                                   "planner_committed": False, "lethal_locked": False,
                                   "posture_mismatch": False, "believed_archetype": None}
@@ -81,3 +82,34 @@ def test_proposal_carries_posture_mismatch_and_believed_archetype(tmp_path):
     assert data["open"][0]["believed_archetype"] == "Mega Lucario ex"
     assert data["skipped"][0]["posture_mismatch"] is True
     assert data["skipped"][0]["believed_archetype"] == "Mega Lucario ex"
+
+
+def _corr_turn():
+    """A Turn Correction (ADR-0049): prose-only, spanning the turn's decisions."""
+    dec = Decision(episode_id=81785223, frame=28, seat=1, turn=12, select_context="Main",
+                   select_type="Main", options=[{"type": 7}, {"type": 13}], chosen=[0], current={})
+    return build_correction(dec, source="own", agent="mega_starmie", correct=[],
+                            category="sequencing_error", rationale="develop before attacking",
+                            chosen_label="Attack", scope="turn", agent_build=BUILD,
+                            span=[{"chosen_label": "Attack"}, {"chosen_label": "End turn"}])
+
+
+def test_scoped_proposal_carries_its_scope_subject_and_ledger_key(tmp_path):
+    """ADR-0049: the snapshot /blunder-buster reads says WHAT each open blunder is about and how to
+    ledger it. The `key` is scope-aware, so disposing of a Turn Correction can't retire the Decision
+    Corrections inside that Turn — and the sketch describes the played line, not one option."""
+    p = propose_hypothesis(_corr_turn())
+    assert p.id == "sequencing-error-81785223-t12"
+    assert p.scope == "turn" and p.subject == 12 and p.seat == 1
+    assert p.key == "81785223-t12s1"
+    assert p.span_len == 2 and p.seed_weight == 0.0
+    assert "played: Attack -> End turn" in p.trigger_sketch
+
+    out = write_proposals(tmp_path / "m.json", "mega_starmie", [p], [(_corr(frame=32), "tactical")],
+                          generated_at="2026-07-10T00:00:00")
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["open"][0]["scope"] == "turn"
+    assert data["open"][0]["subject"] == 12
+    assert data["open"][0]["key"] == "81785223-t12s1"
+    assert data["skipped"][0]["key"] == "81785223-32"        # decision scope: the report id, unchanged
+    assert data["skipped"][0]["scope"] == "decision"

@@ -13,15 +13,29 @@ from train.review_correction import main as cli
 
 
 class _Corr:
-    """Minimal Correction stub — partition only reads episode_id + decision['frame']."""
-    def __init__(self, episode_id, frame):
+    """Minimal Correction stub — partition only reads episode_id, seat, scope, subject, frame."""
+    def __init__(self, episode_id, frame, *, scope="decision", subject=None, seat=0):
         self.episode_id = episode_id
         self.decision = {"frame": frame}
+        self.scope = scope
+        self.subject = frame if scope == "decision" and subject is None else subject
+        self.seat = seat
 
 
 @pytest.mark.req("REQ-TUNE-0030")
 def test_review_key_matches_the_report_id():
     assert review_key(_Corr(81904451, 37)) == "81904451-37"
+
+
+@pytest.mark.req("REQ-TUNE-0034")
+def test_review_key_is_scope_aware():
+    """ADR-0049: a scoped Correction is ledgered by its Scope's subject, so disposing of a Turn
+    Correction never retires the Decision Corrections inside that Turn (and vice versa)."""
+    turn = _Corr(81904451, 37, scope="turn", subject=12, seat=1)
+    match = _Corr(81904451, 37, scope="match", subject=None, seat=1)
+    assert review_key(turn) == "81904451-t12s1"
+    assert review_key(match) == "81904451-m1"
+    assert len({review_key(turn), review_key(match), review_key(_Corr(81904451, 37))}) == 3
 
 
 @pytest.mark.req("REQ-TUNE-0031")

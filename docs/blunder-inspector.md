@@ -1,11 +1,12 @@
 # Blunder inspector (`tools/train/blunder/`)
 
-Offline tool to step through a replay in the **official cabt viewer**, tag a Decision as a
-blunder, and emit a **Correction** — curated training signal consumed by the
+Offline tool to step through a replay in the **official cabt viewer**, tag a Decision — or a whole
+Turn or Match — as a blunder, and emit a **Correction**: curated training signal consumed by the
 [Blunder Tuner](blunder-tuner.md) (Job A, [ADR-0009](adr/0009-training-methodology.md)). Trends across submissions surface what our
 agents get wrong over the competition. See the [Training context](../tools/train/CONTEXT.md),
-[ADR-0014](adr/0014-blunder-inspector-viewer-engine.md) (viewer), and
-[ADR-0015](adr/0015-correction-schema.md) (schema).
+[ADR-0014](adr/0014-blunder-inspector-viewer-engine.md) (viewer),
+[ADR-0015](adr/0015-correction-schema.md) (schema), and
+[ADR-0049](adr/0049-corrections-carry-a-scope-decision-turn-or-match.md) (scope).
 
 ## Data spine (Python)
 
@@ -22,16 +23,45 @@ agents get wrong over the competition. See the [Training context](../tools/train
 A **Decision** = one engine `select` at one frame; `chosen`/`correct` index `select.option`.
 A **Correction** embeds a self-contained snapshot, so it outlives the replay (ADR-0015).
 
-**One Correction per decision (enforced).** `record_correction` refuses a second tag on a decision
-already corrected — `a correction already exists at this decision … edit or remove it first` — so
-conflicting tags (two different `correct`/`category` on one `(episode, seat, frame)`) can't be created.
-To change a call, use the panel's **edit** (it passes `replace_id` so refining its own tag is allowed)
-or **✕ remove**. The same frame in a *different* episode is a distinct blunder (allowed).
+## Scope — a tag can be about a Decision, a Turn, or a Match
+
+Not every blunder is one bad pick. A turn can be lost by a *set* of individually defensible
+Decisions played in the wrong order; a match can be lost to a wrong Game Plan that no single
+`select` reveals. The panel's **Scope** selector says what the tag is about
+([ADR-0049](adr/0049-corrections-carry-a-scope-decision-turn-or-match.md)):
+
+| Scope | Subject (its identity) | `correct` | Span embedded | Verified by |
+|---|---|---|---|---|
+| `decision` (default) | the Anchor frame | mandatory | — | `retest` — the blunder is `fixed` or not |
+| `turn` | the turn number + seat | **optional** | every Decision of that turn, with its `obs` | `retest_span` — re-drive to the **first divergence** |
+| `match` | the seat | forbidden | per-turn headers for both seats, + `game_plan` | the ladder (`seed-ladder`) — nothing plans across turns |
+
+You always tag from an **Anchor**: a real Decision frame, the point you were looking at. It is
+context and provenance, *never identity* — the same turn tagged from two different frames is one
+Correction.
+
+A `turn`-scope `correct` is optional because a multi-frame counterfactual line **cannot** be
+expressed as option indices: prescribing a different pick at the Anchor invalidates every later
+frame's `select.option`, which only exists because the original pick was made. So at most one
+prescription is sound — the first divergent Decision — and giving it *is* the claim that this
+Anchor is that Decision. Leave it empty and the intended line lives in the `rationale`.
+
+Turn 0 is the shared **setup phase** — both seats act in it — which is why a turn's identity
+carries the seat and not just the number.
+
+**One Correction per subject (enforced).** `record_correction` refuses a second tag on a subject
+already corrected — `a correction already exists at this turn … edit or remove it first` — so
+conflicting tags can't be created. A Turn Correction and the Decision Corrections *inside* that
+turn are different subjects, so they coexist. To change a call, use the panel's **edit** (it passes
+`replace_id` so refining its own tag is allowed) or **✕ remove**. The same subject in a *different*
+episode is a distinct blunder (allowed).
 
 **Dedup (automatic, backstop).** `load_corrections` also collapses exact duplicates by default
-(same episode/seat/frame/chosen/correct/category, keeping the latest), so the Tuner, report and
-`/blunder-buster` never double-count a legacy/imported repeat. `python tools/train/dedup_corrections.py`
-physically compacts the file and lists any residual conflicts; `dedup=False` reads the raw history.
+(same episode/seat/**scope/subject**/chosen/correct/category, keeping the latest), so the Tuner,
+report and `/blunder-buster` never double-count a legacy/imported repeat. For a decision-scope
+record the subject *is* the Anchor frame, so this is the pre-Scope key unchanged.
+`python tools/train/dedup_corrections.py` physically compacts the file and lists any residual
+conflicts; `dedup=False` reads the raw history.
 
 ## Category vocabulary (extensible, by process)
 
@@ -39,6 +69,11 @@ physically compacts the file and lists any residual conflicts; `dedup=False` rea
 `wasted_resource`, `slow_setup`, `missed_evolution`, `overextension`, `bad_retreat`,
 `ignored_threat`, `missed_disruption`, `sequencing_error`, `other`. Add a term in
 `categories.py` when a real blunder doesn't fit.
+
+Category is **orthogonal to Scope**: it is the *kind* of mistake, Scope is its *size*.
+`slow_setup`, `overextension` and `prize_mismanagement` were always match-shaped terms being forced
+onto a single Decision — expect Scope to de-overload `sequencing_error`, which absorbed the turn
+blunders that had nowhere else to go.
 
 ## Viewer (`tools/train/blunder/viewer/`)
 
