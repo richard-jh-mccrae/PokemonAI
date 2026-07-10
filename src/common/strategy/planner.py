@@ -643,21 +643,43 @@ class PlannerMixin:
         Returns None (defer → the tuned scoring takes the KO) unless the gate holds. Kill-switch
         ``forgo_ko``, DEFAULT OFF — the riskiest lever, ladder-matured.
 
-        DECK-PERSONALITY (learnthetcg `deck-personality-reactivity`): forgoing a KO to play around the
-        opponent's next turn is an OPPONENT-FILTERED behavior, so a `reactivity=="solitaire"` deck skips
-        it entirely and races its own plan. Opponent-filtered / undeclared decks keep the seam.
-        NOTE: this deck-gates a lever the ladder previously matured DEFAULT-ON for the (now solitaire)
-        mega_lucario/mega_starmie — a doctrine-over-prior-result call, so re-validate on the ladder
-        (revert the reactivity param to un-gate)."""
+        THREE LINES, in order. (1) The **alternative attack**: when the KO is only reachable through an
+        attack that LOCKS itself next turn (`nextTurnSameAttackLock`/`nextTurnSelfLock`) or through a
+        consumable damage boost, and a lock-free attack is affordable, attack with THAT one instead. The
+        prize is deferred, not surrendered — the gate has already established that the body they would
+        promote is scarier than the one we decline to kill, and the current Active cannot escape.
+        (2) the best DEVELOP; (3) END. Runs BELOW the win rung, so a Lethal is never forgone.
+        Returns None (defer → the tuned scoring takes the KO) unless the gate holds. Kill-switch
+        ``forgo_ko``, DEFAULT OFF — the riskiest lever, ladder-matured.
+
+        DECK-PERSONALITY (learnthetcg `deck-personality-reactivity`): giving up your ATTACK to play around
+        the opponent's next turn is an OPPONENT-FILTERED tempo concession, so a `reactivity=="solitaire"`
+        deck skips lines (2) and (3) and races its own plan. Line (1) is EXEMPT: it costs no tempo — you
+        still attack, and with Aura Jab you still develop (its bench-load is the deck's energy engine).
+        Without that exemption mega_lucario, which declares `solitaire`, could never reach the rung at
+        all (ml f88 CRITICAL, ml f48).
+
+        ml f88: Mega Brave (270) is the ONLY attack that KOs a Munkidori that resists {F}, and it locks
+        itself for exactly the turn the KO force-promotes a fully-energized Dragapult ex. Aura Jab (100,
+        no KO) keeps Mega Brave loaded and pulls three {F} out of the discard onto the Bench; the
+        Munkidori — 0 Energy, retreat 1 — cannot run, so the prize waits one turn.
+        ml f48: the same shape through a boost — Aura Jab reaches the 150-HP Hariyama only with a Premium
+        Power Pro, and cashing it wakes a 440-HP Mega Lucario ex."""
         if not getattr(self, "forgo_ko", False):
+            return None
+        if not any(t.tactical >= KO_SCORE for t in traces):
+            return None                                # no KO on the menu — nothing to forgo. NOT
+                                                       # `type == _ATTACK`: a boost-lethal prices the
+                                                       # damage-boost PLAY at KO_SCORE (ml f48)
+        alt = self._lock_free_attack_line(obs, board, options, traces)
+        if alt is not None:
+            return alt                                 # attack anyway, just not with the locking one
+        if not self._forgo_ko_gate(obs, board, self._opp_player(obs)):
             return None
         if self.strategy.params.get("reactivity") == "solitaire":
             return None                                # a solitaire deck takes the KO, doesn't over-react
-        if not any(o.get("type") == _ATTACK and t.tactical >= KO_SCORE
-                   for o, t in zip(options, traces)):
-            return None                                # no KO on the menu — nothing to forgo
-        if not self._forgo_ko_gate(obs, board, self._opp_player(obs)):
-            return None
+                                                       # (the alternative-attack line above costs no tempo,
+                                                       # so it is exempt from this skip)
         dev = [(t.tactical, i) for i, (o, t) in enumerate(zip(options, traces))
                if o.get("type") in (_ATTACH, _EVOLVE, _PLAY)]
         if dev:
@@ -668,6 +690,92 @@ class PlannerMixin:
             return TurnLine(next_step=[end], goal="forgo_ko",
                             rationale="plan (forgo_ko): end the turn, decline the giant-waking KO")
         return None
+
+    def _lock_free_attack_line(self, obs, board, options, traces):
+        """The forgo-KO rung's cheapest concession: keep attacking, just not with the attack that costs
+        us the answer. ALL of these must hold — it has its own gate, not `_forgo_ko_gate` (which demands a
+        BUILD-mode Game Plan; both motivating frames are RACE, because racing is exactly when you are
+        tempted to cash the wrong prize):
+
+        1. every KO_SCORE-class option is EXPENSIVE — a self-locking attack, or a `_PLAY` that unlocks the
+           KO by spending a consumable boost. A free KO is always taken;
+        2. a lock-free attack is affordable, so we still attack;
+        3. their Active is PINNED (`_opp_active_pinned`) — it cannot retreat, so the prize is DEFERRED,
+           not surrendered;
+        4. the KO wakes a body we cannot answer (`_ko_wakes_an_unanswerable_body`) — we can KO the current
+           Active but not the one they would promote.
+
+        Returns the highest-tactical lock-free ATTACK as a `goal="forgo_ko"` line, else None. We never
+        decline a WIN (this rung runs below `_win_line`) and never pass the turn — only swap which attack
+        banks the same prize."""
+        ko_idx = [i for i, t in enumerate(traces) if t.tactical >= KO_SCORE]
+        if not ko_idx:
+            return None
+        for i in ko_idx:                                # every KO route must be "expensive" to take
+            o = options[i]
+            if o.get("type") == _ATTACK:
+                st = self._attack_stat(o.get("attackId"))
+                if not st or not (getattr(st, "nextTurnSelfLock", False)
+                                  or getattr(st, "nextTurnSameAttackLock", False)):
+                    return None                         # a free KO exists — take it
+            elif o.get("type") != _PLAY:                # a boost/attach PLAY that unlocks the KO
+                return None
+        best = None                                     # (tactical, index) of a lock-free affordable attack
+        for i, (o, t) in enumerate(zip(options, traces)):
+            if o.get("type") != _ATTACK or i in ko_idx:
+                continue
+            st = self._attack_stat(o.get("attackId"))
+            if st and (getattr(st, "nextTurnSelfLock", False)
+                       or getattr(st, "nextTurnSameAttackLock", False)):
+                continue
+            if best is None or t.tactical > best[0]:
+                best = (t.tactical, i)
+        if best is None or not self._opp_active_pinned(obs, board):
+            return None
+        if not self._ko_wakes_an_unanswerable_body(obs, board):
+            return None
+        return TurnLine(next_step=[best[1]], goal="forgo_ko",
+                        rationale="plan (forgo_ko): the lock-free attack — bank the prize next turn "
+                                  "and keep the answer to the body this KO would wake")
+
+    def _ko_wakes_an_unanswerable_body(self, obs, board) -> bool:
+        """Taking this KO promotes a body my Active cannot answer — the closed-form 'don't wake the
+        giant' test. The caller has already established that a KO of their current Active is on the menu,
+        so only the promoted body is tested: min-bound damage off my CURRENT Energy. False when they have
+        no bench attacker, or when the promoted body is one I can KO anyway (then the KO costs nothing and
+        the rung stands down).
+
+        Conservative in one direction: it does not credit the consumable boost against the promoted body,
+        so a board where the boost WOULD also kill the giant still forgoes. Acceptable — the rung also
+        requires their Active to be pinned, so the prize is merely deferred.
+
+        ml f88: I KO a 110-HP Munkidori and a 320-HP Dragapult ex steps up. ml f48: I KO a 150-HP
+        Hariyama and a 440-HP Mega Lucario ex steps up."""
+        opp = self._opp_player(obs)
+        after = self._opp_after_forced_promote(opp)
+        if after is None:
+            return False
+        promoted = next((p for p in (after.get("active") or []) if p), None)
+        ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
+        if promoted is None or ma is None:
+            return False
+        return self._best_affordable_ko_value(obs, board, promoted, board.my_active_id,
+                                              board.my_active_energy, bound="min", body=ma) <= 0
+
+    def _opp_active_pinned(self, obs, board) -> bool:
+        """Their Active cannot leave the Active Spot under its own power next turn — it carries less
+        Energy than its printed Retreat Cost (rules.md §Retreat). Then a KO we decline today is still
+        there tomorrow, so the forgo is a DEFERRAL, not a surrender. Fail-CLOSED on an unknown stat or a
+        free-retreat body: we only defer a prize we can prove is still collectable. (Blind to a Switch /
+        gust effect from their hand — conservative in the wrong direction only when they spend a card.)"""
+        oa = next((p for p in (self._opp_player(obs).get("active") or []) if p), None)
+        if oa is None or not self.stats:
+            return False
+        stat = self.stats.get(oa.get("id"))
+        cost = getattr(stat, "retreatCost", 0) if stat else 0
+        if not cost:
+            return False                                # free (or unknown) retreat — it can walk away
+        return len(oa.get("energies") or []) < cost
 
     def _forgo_ko_gate(self, obs, board, opp) -> bool:
         """The tight SOUND gate for forgoing a non-winning Active KO (ADR-0045 S4): ALL must hold — the

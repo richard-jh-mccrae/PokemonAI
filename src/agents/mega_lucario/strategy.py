@@ -117,27 +117,23 @@ HYPOTHESES = [
                   "fires and the forced pick stands.",
         when=lambda c: c.select_context == _SETUP_ACTIVE and c.card_id == SOLROCK,
         weight=12, status="assumed"),
-    Hypothesis(
-        id="dont-attach-to-the-engine",
-        rationale="At the turn's manual attach, DON'T power the pure draw engine (Lunatone, "
-                  "roles==['engine']) — Energy goes to the attacker line (Solrock / the Mega line / "
-                  "Makuhita→Hariyama), never the near-never-attacking Lunatone unless it is the only legal "
-                  "home (ml f11/f64: attached Lunatone over Solrock/Makuhita). Uniquely selects Lunatone "
-                  "(the deck's only engine-ONLY body; Solrock is also secondary_attacker). −12 beats "
-                  "`prefer-active-attach-in-setup` (+8) but stays below `power-up-attacker` (+15) so a "
-                  "lone Lunatone still nets positive and is attached over End when it is the only body.",
-        when=lambda c: c.option_type == _ATTACH and "engine" in c.attach_target_roles
-        and not (_ATTACKER_ROLES & set(c.attach_target_roles)),
-        weight=-12, status="assumed"),
+    # (dont-attach-to-the-engine RETIRED 2026-07-10 — FOLDED into the general
+    #  `dont-fund-the-non-attacking-body` (baseline_energy, −12), which reads the same engine-only Role
+    #  universally AND covers the ATTACH_FROM seam this rule was blind to (ml f121, CRITICAL: Aura Jab's
+    #  bench-load put Energy on Lunatone). Keeping both would stack to −24 and push a LONE Lunatone below
+    #  End — the exact calibration this rule's own rationale protected.)
     Hypothesis(
         id="attach-solrock-over-line-base",
         rationale="At a benched attach, prefer powering Solrock (the bridge attacker: secondary_attacker "
-                  "+ engine) over holding a bare Riolu Line base: once `dont-attach-to-the-engine` demotes "
-                  "Lunatone, Solrock and Riolu tie and the decide()-only `attach_to_needy_line` tie-break "
-                  "(Line base first) would pick Riolu (ml f11 flips to Riolu without this). Power Solrock "
-                  "now (Cosmic Beam online), hold Riolu unevolved. +3 only breaks the benched Solrock-vs-"
-                  "base tie; negligible against a real Active target.",
-        when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _BENCH
+                  "+ engine) over holding a bare Riolu Line base: once `dont-fund-the-non-attacking-body` "
+                  "demotes Lunatone, Solrock and Riolu tie and the decide()-only `attach_to_needy_line` "
+                  "tie-break (Line base first) would pick Riolu (ml f11 flips to Riolu without this). "
+                  "Power Solrock now (Cosmic Beam online), hold Riolu unevolved. +3 only breaks the "
+                  "benched Solrock-vs-base tie; negligible against a real Active target. Gated on "
+                  "`attach_is_energy` — it must not break the tie for a Pokémon Tool (ml f87, CRITICAL: "
+                  "it tipped Air Balloon onto the benched Solrock).",
+        when=lambda c: c.option_type == _ATTACH and c.attach_is_energy
+        and c.attach_target_area == _BENCH
         and "secondary_attacker" in c.attach_target_roles and "engine" in c.attach_target_roles,
         weight=3, status="assumed"),
     Hypothesis(
@@ -165,10 +161,14 @@ HYPOTHESES = [
                   "engine (ml f41: benched lone Lunatone → fetch Solrock; all options scored 0 → index "
                   "missed it). Fires even when `line_ready` (the Mega is online but the engine still wants "
                   "completing) — the gap `fetch-the-engine-first` (`not line_ready`-gated) left. Replaces "
-                  "it: role/quantity-aware, not blanket-engine.",
+                  "it: role/quantity-aware, not blanket-engine. +22 clears the general line-piece stack "
+                  "`prefer-wincon-line-piece` (+18) + `develop-the-cheap-prize-wall-line` (+3, ADR-0048) = "
+                  "21, so completing the deck's whole draw engine outranks fetching a redundant Line "
+                  "pre-evo (ml f39, CRITICAL: grab the Solrock that turns Lunar Cycle on, with an "
+                  "energized Mega already benched, over a spare Riolu).",
         when=lambda c: c.select_context == _TO_HAND and c.card_id in _ENGINE_IDS
         and c.card_id not in c.board.in_play_ids and _reachable(c.board, _partner(c.card_id)),
-        weight=20, status="assumed"),
+        weight=22, status="assumed"),
     Hypothesis(
         id="dont-fetch-the-redundant-piece",
         rationale="Don't tutor a piece we ALREADY have in play — a redundant `engine` (a 2nd Solrock when "
@@ -253,6 +253,22 @@ HYPOTHESES = [
         and not (c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
                  and not c.board.energy_attached and c.board.energy_placeable),
         weight=15, status="assumed"),
+    Hypothesis(
+        id="grab-lunar-cycle-fuel",
+        rationale="At a search, take FIGHTING GONG when the Solrock↔Lunatone engine is online but has no "
+                  "fuel — Lunar Cycle costs a Basic {F} DISCARDED FROM HAND, and with the hand empty the "
+                  "engine is inert. Gong is an Item (playable the same turn) that fetches exactly that "
+                  "Basic {F}, so it converts one search into: fetch {F} → discard it → draw 3. The "
+                  "general layer cannot see this: it has no notion that an Ability's cost is paid from "
+                  "hand. ml f71 — Team Rocket's Petrel resolved on a DEAD hand (0 cards) and the grab "
+                  "rungs offered nothing but a Lillie's it could not play (the Supporter was already "
+                  "spent, `grab-what-i-can-play-this-turn`), so the option index took a Premium Power "
+                  "Pro. +8 clears the 0-scoring Items without ever outranking a real need "
+                  "(`fetch-energy-when-starved` +35, `fetch-the-wincon` +30).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_id == FIGHTING_GONG
+        and LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
+        and not c.board.hand_basic_energy.get(_FIGHTING, 0),
+        weight=8, status="assumed"),
     Hypothesis(
         id="dont-lunar-cycle-away-the-last-attachable-f",
         rationale="The Lunar Cycle discipline (Phase-A §3 Lunatone): the turn's manual attach to the "

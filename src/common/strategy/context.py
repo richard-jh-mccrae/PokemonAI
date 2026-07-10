@@ -59,6 +59,8 @@ _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
 _SUPPORTER = 3             # CardType.SUPPORTER — gust on this card costs the one-per-turn Supporter slot
+_TOOL_CARD = 2             # CardType.TOOL — a Pokémon Tool. Arrives as OptionType.ATTACH exactly like an
+                           # Energy, so the Energy hypotheses must test `attach_is_energy` (ml f87)
 _BASIC_ENERGY = 5          # CardType.BASIC_ENERGY — fungible Energy: spare = always a future attach,
 _SPECIAL_ENERGY = 6        # CardType.SPECIAL_ENERGY — …never a redundant pitch, so excluded from
                            # hand-duplicate discard signal (cf. `discard-the-hand-duplicate`)
@@ -70,6 +72,16 @@ _WINCON_ROLES = {"win_condition", "primary_attacker"}
 _ENGINE_TAGS = frozenset({"energy_accel", "draw", "search", "dig"})  # a "support/engine" Pokémon's
                            # Ability does one of these — the `fetch-the-support` importance signal +
                            # `support_in_play` gap gate (an engine already online needs no tutor)
+_ATTACKER_ROLES = frozenset({"win_condition", "primary_attacker", "secondary_attacker",
+                             "win_condition_base", "accel_source"})  # deck Roles meaning "this body
+                           # attacks (or its attack IS the accel engine)" — the exemption half of the
+                           # utility-body read below.
+_UTILITY_TAGS = frozenset({"draw", "dig", "search", "supporter_tutor", "stall"})  # a body that exists
+                           # to DRAW / TUTOR / STALL, never to attack — read off its OWN tags or its
+                           # forward evolution's (Dunsparce→Dudunsparce). Energy on such a body is
+                           # wasted while any attacker can take it (`dont-fund-the-non-attacking-body`).
+                           # Deliberately NOT `_ENGINE_TAGS`: an `energy_accel` body accelerates BY
+                           # attacking (Cinderace's Turbo Flare), so it must keep taking Energy.
 _EVOLVING_THREAT_DMG = 100 # evolution line "becomes an attacker" at >= this dmg (ADR-0020)
 
 __all__ = [
@@ -78,6 +90,7 @@ __all__ = [
     "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE",
-    "KO_SCORE", "_SUPPORTER", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
-    "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_EVOLVING_THREAT_DMG",
+    "KO_SCORE", "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
+    "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
+    "_UTILITY_TAGS", "_EVOLVING_THREAT_DMG",
 ]

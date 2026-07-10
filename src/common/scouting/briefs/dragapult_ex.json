@@ -30,6 +30,10 @@
     {
       "card": "Budew",
       "why": "Itchy Pollen (no energy, 10 dmg) locks us out of ALL Item cards next turn, kneecapping item-reliant setup while Dragapult assembles. 30 HP, retreat 0, Fire weak, re-usable if left alive. Sequence Items before the lock, lean on Supporters/Abilities the locked turn, then OHKO the 30-HP body to deny repeat locks."
+    },
+    {
+      "card": "Munkidori",
+      "why": "The wall they park IN FRONT of Dragapult, and a damage-counter mover. 110 HP, 1 prize, Psychic, weak to Darkness -- but it RESISTS FIGHTING (-30), so a Fighting attacker needs 140 printed to KO it, not 110. That resistance is why Aura Jab (130 -> 100) whiffs where Mega Brave (270 -> 240) connects; and taking that KO force-promotes the energized Dragapult on exactly the turn Mega Brave is self-locked (ml 85058574 f88, CRITICAL). Adrena-Brain (once per turn, with a {D} attached) moves up to 3 damage counters off one of their Pokemon onto one of ours, undoing chip and finishing our softened bodies; Mind Bend ({P}{C}, 60) also Confuses. Do not trade a self-locking nuke for it while the wall behind it is untouchable -- chip it with a lock-free attack and bank the prize next turn (it carries no energy and retreats for 1, so it cannot run)."
     }
   ],
   "targets": [
@@ -41,7 +45,7 @@
     {
       "card": "Drakloak",
       "role": "fragile_preevo",
-      "why": "90-HP Stage 1, 1 prize, NOT Tera. Also the deck's real dig engine (Recon Directive: look top 2, take 1) AND the rebuild hop for a KO'd Dragapult, so gust/snipe strips consistency + delays the wall in one shot. No weakness but low HP -- dies to a ~90 snipe or two spread hits."
+      "why": "90-HP Stage 1, 1 prize, NOT Tera. Also the deck's real dig engine (Recon Directive: look top 2, take 1) AND the rebuild hop for a KO'd Dragapult, so gust/snipe strips consistency + delays the wall in one shot. No weakness but low HP -- dies to a ~90 snipe or two spread hits. PRIZE PATH: with the Dragapult wall Active and its benched copies Tera-immune, the route to six prizes runs through the Drakloaks, not the wall -- gust one up, KO it, repeat. Spending a gust Supporter on a 1-prize body is correct here: it deletes a future 320-HP wall and a draw engine in one action, and a second gust source (a Supporter tutor, or an evolve-triggered gust) buys the next one (ml 85058574 f109)."
     },
     {
       "card": "Fezandipiti ex",

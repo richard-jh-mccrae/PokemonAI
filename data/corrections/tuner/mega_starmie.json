@@ -1,72 +1,7 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-07-09T02:39:40",
-  "open": [
-    {
-      "id": "bad-target-82224509-47",
-      "category": "bad_target",
-      "episode_id": 82224509,
-      "frame": 47,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 8) to prefer 'Riolu' over 'Lunatone'",
-      "rationale": "should snipe preevolution to opponents main attacker",
-      "agent_build": "mega_starmie_20260627_93a70be",
-      "built_at": "2026-06-27T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": null
-    },
-    {
-      "id": "bad-target-82523811-41",
-      "category": "bad_target",
-      "episode_id": 82523811,
-      "frame": 41,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 4) to prefer 'Riolu' over 'Makuhita'",
-      "rationale": "Rioulu becomes Mega Lucario who needs only a single energy to deal significant damge, thus Rioulu is the snipe target.",
-      "agent_build": "mega_starmie_20260629_7accd2e-dirty",
-      "built_at": "2026-06-29T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": null
-    },
-    {
-      "id": "bad-target-82523811-61",
-      "category": "bad_target",
-      "episode_id": 82523811,
-      "frame": 61,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 6) to prefer 'Riolu' over 'Makuhita'",
-      "rationale": "Riolu > Mega Lucario = Scary",
-      "agent_build": "mega_starmie_20260629_7accd2e-dirty",
-      "built_at": "2026-06-29T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": null
-    },
-    {
-      "id": "bad-target-82753102-85",
-      "category": "bad_target",
-      "episode_id": 82753102,
-      "frame": 85,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Damage' (turn 8) to prefer 'opp Kadabra (bench 1 · 80/80)' over 'opp Dunsparce (bench 3 · 70/70)'",
-      "rationale": "another critical blunder when sniping. must snipe opponents main attackers when they are able. math must exist here. a 70HP dunsparce requires just as many Jetting Blow snipes as a 80 HP kadabra, but the dunsparce is just a support pokemon, not a treat.",
-      "agent_build": "mega_starmie_20260630_b7e483a",
-      "built_at": "2026-06-30T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": null
-    }
-  ],
+  "generated_at": "2026-07-10T10:51:06",
+  "open": [],
   "skipped": [],
   "reviewed": [
     {
@@ -764,6 +699,12 @@
       "frame": 79,
       "disposition": "refuted",
       "reason": "CRITICAL refuted (human ack 2026-07-09): benched Mega Starmie ex 230/330 un-KO-able (max 210<230, Nebula unaffordable); Cinderace only KO. test_blunder_20260709::f79"
+    },
+    {
+      "episode_id": 83967840,
+      "frame": 54,
+      "disposition": "covered",
+      "reason": "Real-Pilot decide() at the captured f54 now discards ['Cinderace', \"Lillie's Determination\"] (retest fixed=True): the applied general rule discard-a-draw-duplicate-before-an-evolution-tutor (blunder-20260709-mega_starmie.md) sheds the duplicate Lillie's, exactly the human's correct=[2]. The W-route keeps reporting UNSATISFIED because a rule fix is invisible to the weight fit."
     },
     {
       "episode_id": 84897262,

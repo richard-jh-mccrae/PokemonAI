@@ -15,7 +15,8 @@ HYPOTHESES = [
                   "instead of `power-up-attacker` spreading one Energy per bare body. Active is skipped "
                   "once it can already KO (feed the benched successor instead); above `power-up-attacker` "
                   "(+15) so concentrate beats spread.",
-        when=lambda c: c.option_type == _ATTACH and c.attach_target_is_priority_wincon,
+        when=lambda c: c.option_type == _ATTACH and c.attach_is_energy
+        and c.attach_target_is_priority_wincon,
         weight=25, status="testing"),
     Hypothesis(
         id="prefer-reusable-over-burst",
@@ -32,9 +33,36 @@ HYPOTHESES = [
         rationale="Attach an Energy every turn — the core tempo of the game — sequenced after "
                   "draw/search by `attach-energy-last`. Fires only on a Pokémon still needing Energy for "
                   "its cheapest attack, so it spreads to a bare Bench attacker rather than over-stacking "
-                  "one already online.",
-        when=lambda c: c.option_type == _ATTACH and c.attach_target_needs,
+                  "one already online. Gated on `attach_is_energy`: a Pokémon Tool arrives as the same "
+                  "OptionType.ATTACH but provides no Energy, so it must never be priced as one (ml f87: "
+                  "Air Balloon scored +15 onto a benched Solrock). The `attach_target_needs` test is an "
+                  "ANTI-signal on a non-attacking body — see `dont-fund-the-non-attacking-body`.",
+        when=lambda c: c.option_type == _ATTACH and c.attach_is_energy and c.attach_target_needs,
         weight=15, status="assumed"),
+    Hypothesis(
+        id="dont-fund-the-non-attacking-body",
+        rationale="Never put Energy on a body that exists to DRAW / TUTOR / STALL while a real attacker "
+                  "can take it — at EITHER funding seam: the turn's manual ATTACH and an accelerator's "
+                  "ATTACH_FROM recipient pick. `power-up-attacker` fires on `attach_target_needs` ('carries "
+                  "fewer Energy than its cheapest attack cost'), which RANKS THE WORST BODY HIGHEST: a "
+                  "Meowth ex needing 3 for Tuck Tail out-scores an already-online Riolu (ml f84), a "
+                  "Colorless-cost Dunsparce swallows the deck's only {D} Munkidori fuel (dragapult f21, "
+                  "CRITICAL), and at Aura Jab's bench-load every body tied at `spread-attach-to-the-needy` "
+                  "+15 so the option index picked Lunatone (ml f121, CRITICAL). `Pilot._is_utility_body` "
+                  "reads it universally — an `engine`-only Role, or a `_UTILITY_TAGS` tag on the body or "
+                  "its forward evolution — and exempts every attacker Role and Line member, so Solrock "
+                  "(secondary_attacker + engine) still takes Energy. −12 nets the utility body below the "
+                  "spread (+15 → +3) without pushing a LONE engine body below End, so it still absorbs the "
+                  "attach when it is the only legal home. Replaces mega_lucario's `dont-attach-to-the-engine`. "
+                  "MUTUALLY EXCLUSIVE with the narrower `dont-power-the-draw-engine` (which owns the _ATTACH "
+                  "draw-engine case, dragapult f21): gated `not attach_target_is_draw_engine` so a Dunsparce "
+                  "is penalised once, not twice. This rule keeps everything that rule misses — the "
+                  "`_ATTACH_FROM` seam (ml f121), and _ATTACH utility bodies that draw via an untagged "
+                  "Ability (engine-role Lunatone) or tutor (supporter_tutor Meowth ex, ml f84).",
+        when=lambda c: (c.option_type == _ATTACH or c.select_context == _ATTACH_FROM)
+        and c.attach_is_energy and c.attach_target_is_utility_body
+        and not c.attach_target_is_draw_engine,
+        weight=-12, status="assumed"),
     Hypothesis(
         id="dont-waste-off-type-energy",
         rationale="Don't attach an Energy of a TYPE the target already has enough of when its attack "
@@ -53,7 +81,7 @@ HYPOTHESES = [
                   "the Active can use it THIS turn, fixing the dead-heat tie that left Active Cinderace "
                   "bare while Energy went to Staryu (ep83007714 f7). Fires only when the Active needs "
                   "Energy and isn't doomed; small (+8), only breaks the Active-vs-Bench tie.",
-        when=lambda c: c.option_type == _ATTACH
+        when=lambda c: c.option_type == _ATTACH and c.attach_is_energy
         and c.attach_target_area == _ACTIVE and c.attach_target_needs
         and not c.board.active_doomed,
         weight=8, status="testing"),
@@ -61,7 +89,8 @@ HYPOTHESES = [
         id="attach-energy-last",
         rationale="Attach Energy late in the turn — it's irreversible, so draw/search/development go "
                   "first to reveal the best target.",
-        when=lambda c: not c.board.line_ready and c.option_type == _ATTACH,   # pre-payoff turns
+        when=lambda c: not c.board.line_ready and c.option_type == _ATTACH
+        and c.attach_is_energy,                                            # pre-payoff turns
         weight=-5, status="assumed"),                    # (the ADR-0040 gate-ban migration: was plan==SETUP)
     Hypothesis(
         id="advance-the-accel-pieces",
@@ -157,7 +186,8 @@ HYPOTHESES = [
                   "Fires while `attach_target_under_max`; stands down for a `discard_eot` attach when "
                   "the cheap attack already KOs (`active_cheap_attack_kos`), deferring to "
                   "`conserve-discard-energy-prefer-basic`.",
-        when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
+        when=lambda c: c.option_type == _ATTACH and c.attach_is_energy
+        and c.attach_target_area == _ACTIVE
         and bool(_WINCON_ROLES & set(c.attach_target_roles)) and c.attach_target_under_max
         and not ("discard_eot" in c.tags and c.board.active_cheap_attack_kos),
         weight=20, status="testing"),
