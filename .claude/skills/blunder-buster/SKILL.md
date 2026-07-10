@@ -1,196 +1,152 @@
 ---
 name: blunder-buster
-description: Turn EVERY yet-to-be-resolved blunder Correction — across ALL agents in the log, not one deck — into ROUTED Strategy Proposals, exhaustively. Reads the whole correction log, clusters EVERY still-open missing_hypothesis blunder for every agent, and analyses each cluster's live_trace to ROUTE it to a target layer: a general when() Hypothesis, a Lethal-Solver/Turn-Planner code fix (live_trace lethal/planned), or a Matchup Brief / recognition fix (live_trace.posture — a matchup misplay tied to its believed archetype). It emits one Strategy Proposal per cluster into data/strategy/proposals/ (thin spec = the correction rationale; verification_contract from the routing; provenance = correction ids + a state fixture), records covered/refuted set-asides by test, and evidences a capability-gap when the sound fix is an unbuilt roadmap layer. It does NOT author when()/code, run the Verifier, or commit — /update-strategy applies each proposal behind its gate (ADR-0046). Every open correction FOR EVERY AGENT is resolved in-session to a terminal ANALYSIS outcome (proposal-routed / covered / refuted / capability-gap); nothing is punted. CRITICAL-rationale corrections across all agents are surfaced first, one at a time, blocking the rest. Invoke as /blunder-buster (sweeps every agent) or /blunder-buster <deck> to narrow to one agent; optional --store <path>. Use after a round of manual blunder tagging (ADR-0018/0046).
+description: Route every open blunder Correction (all agents) to a Strategy Proposal — barrier Workflow fan-out, one agent per correction, uncertainty-gated CRITICAL-first human pass, join clusters. /update-strategy applies. Run after blunder tagging.
+disable-model-invocation: true
 ---
 
 # blunder-buster — corrections → routed Strategy Proposals
 
-Convert a **round** of blunder Corrections — **across every agent in the log** (all decks), not one —
-into **routed Strategy Proposals** for `/update-strategy` to apply. blunder-buster is an **analysis
-producer** ([ADR-0046](../../../docs/adr/0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md)):
-it clusters, reads the live trace, decides *which layer* each blunder's fix belongs in, and emits fodder.
-It **does not** author `when()`/code, run the Verifier, or commit — that is `/update-strategy` (mechanics:
-[../update-strategy/references/authoring-gates.md](../update-strategy/references/authoring-gates.md)). See
-`docs/blunder-tuner.md`, ADR-0017, ADR-0018.
+Convert a **round** of blunder Corrections — **across every agent in the log** (all decks) — into
+**routed Strategy Proposals** for `/update-strategy` to apply. blunder-buster is an **analysis producer**
+([ADR-0046](../../../docs/adr/0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md)): it
+reads the live trace, decides *which layer* each blunder's fix belongs in, clusters, and emits fodder. It
+**does not** author `when()`/code, run the Verifier, or commit — that is `/update-strategy`
+([../update-strategy/references/authoring-gates.md](../update-strategy/references/authoring-gates.md)).
+See `docs/blunder-tuner.md`, ADR-0017, ADR-0018.
 
-**Scope = ALL agents by default.** `/blunder-buster` sweeps every agent that has `own` corrections in the
-log (`tune.py` with no `--agent` = "every agent in the log"). `/blunder-buster <deck>` narrows to a single
-agent when you deliberately want just one. The CRITICAL cohort, the worklist, and the completion gate all
-span **every** agent unless narrowed.
+**Scope = ALL agents by default.** `/blunder-buster` sweeps every agent with `own` corrections (`tune.py`
+with no `--agent`). `/blunder-buster <deck>` narrows to one agent when you deliberately want just one;
+optional `--store <path>`. The CRITICAL cohort, the worklist, and the completion gate span **every** agent
+unless narrowed.
 
-**One run resolves the WHOLE open set — for every agent** to terminal ANALYSIS outcomes — start to finish,
-no punting.
+**One run resolves the WHOLE open set — for every agent** — to terminal outcomes, start to finish, no
+punting. "Open" = every entry in every tuner ledger `data/corrections/tuner/*.json` `open[]` (the
+`missing_hypothesis` proposals **plus** every scoped turn/match Correction, ADR-0049) **plus** every
+`UNSATISFIED` line `tune.py` prints for any agent.
 
-## Exhaustive completion mandate (read first)
+## Terminal outcomes (definition of done)
 
-A run is **finished only when the open set is empty for EVERY agent** — every still-open correction, of
-every deck in the log, reaching exactly one terminal ANALYSIS outcome, with evidence:
+Every open correction reaches **exactly one**, with evidence. The run is finished only when the open set
+is empty for **every** agent.
 
-- **proposal-routed** — a Strategy Proposal is queued for it (its cluster's routed record in
-  `data/strategy/proposals/`). This replaces the old "fixed": blunder-buster no longer authors/commits the
-  rule — it hands `/update-strategy` a proposal with the routing + rationale-spec + fixture. (The
-  *definition of done* for the blunder is that the proposal exists and is well-formed, not that code
-  shipped — that happens at apply time.)
+- **proposal-routed** — a well-formed Strategy Proposal is queued (its cluster's record in
+  `data/strategy/proposals/`). Done = the proposal *exists*, not that code shipped — `/update-strategy`
+  ships it.
 - **covered** — an existing Hypothesis/Brief already handles it; **name** it, confirmed against the real
   Pilot `decide()` (not the W-route). No proposal.
 - **refuted** — a bad correction (forgoes a KO / high-value attack), **proven with a test**; dropped from
   the fit. See [[forgo-ko-corrections-are-refuted]]. No proposal.
 - **capability-gap** — the sound fix is a designed-but-unbuilt roadmap layer (multi-turn search, opponent
-  prize-trajectory, the M4 value model). Evidenced, not punted — the four artifacts, in-session:
-  (1) re-measure through the real Pilot first (it may already be covered); (2) fixture the state
-  (`tests/fixtures/corrections/<name>.json`); (3) a `docs/todo/` entry with a definition-of-done;
-  (4) ledger it (`python tools/train/review_correction.py <ep>-<frame> deferred "capability-gap: <layer> — see docs/todo/<file>"`).
-  **A missing signal/tag/enum is NOT a capability-gap** — it's carried in the proposal's `spec` as
-  infra-to-build, and `/update-strategy` builds it at apply time (authoring-gates.md).
+  prize-trajectory, the M4 value model). **Evidenced, not punted** — four artifacts: (1) re-measure
+  through the real Pilot first (may already be covered); (2) fixture the state
+  `tests/fixtures/corrections/<name>.json`; (3) a `docs/todo/` entry with a definition-of-done; (4) ledger
+  it: `python tools/train/review_correction.py <key> deferred "capability-gap: <layer> — see docs/todo/<file>"`.
+  **A missing signal/tag/enum is NOT a capability-gap** — carry it in the proposal's `spec` as
+  infra-to-build; `/update-strategy` builds it.
 
-"Open" = every entry in **every** tuner ledger `data/corrections/tuner/*.json` `open[]` (one file per
-agent) — both the `missing_hypothesis` proposals and every **scoped** (turn/match) Correction, which
-lands there by construction (ADR-0049) — **plus** every `UNSATISFIED` line the (no-`--agent`) `tune.py`
-run prints **for any agent**. Each lands in exactly one cluster → one outcome above.
+## The pipeline — barrier fan-out
 
-**No bare `deferred`, no "future run", no voluntary pauses.** The run executes start → completion gate in
-one continuous push; never end a turn reporting remaining clusters. The only sanctioned stops are the
-CRITICAL hard-stops and an unresolvable blocker.
+**0. Enumerate.** `python tools/train/tune.py [--store <path>]` with **no `--agent`** → processes every
+agent, rewrites each `data/corrections/tuner/<deck>.json`. Read **all** `open[]` + the printed
+**`UNSATISFIED`** lines → the **worklist**, one item per correction (**no clustering yet** — clustering is
+the join). Partition the **CRITICAL cohort** (any correction whose `rationale` carries the uppercase token
+`CRITICAL`). Refresh the dashboard: `python tools/train/blunder_report.py`. (`tune.py` also rewrites each
+`tuned.json` — deterministic Tier-0 weight deltas, committed via `/update-strategy`.)
 
-## CRITICAL corrections — resolve first, block the run
+**1. Fan out — one agent per correction (Workflow; the barrier).** Spawn one leaf per worklist item.
+Each leaf reads its correction's scope + `live_trace` + fixture, follows
+[`references/routing.md`](references/routing.md), and returns the **leaf contract** (below): a
+provisional route, a drafted mini-spec, a plain-terms explanation + board state, and **one terminal
+outcome OR an `uncertain` flag**. Leaves run **headless** — no human mid-run; the Workflow **completing IS
+the barrier**. Pass the worklist as the Workflow `args` (arrives JSON-stringified — `JSON.parse` it) and
+validate each return against the leaf `schema`. The CRITICAL cohort fans out too — the human gate is
+step 2, not here.
 
-A Correction is **CRITICAL** when its `rationale` carries the uppercase token `CRITICAL` (case-sensitive;
-the pipeline surfaces it — `tune.py` banners it per agent, `open[]`/`skipped[]` carry `"critical": true`,
-`reports/blunders.html` badges it). Partition the CRITICAL cohort out first **pooled across ALL agents**
-and **list it to the human up front** (grouped by agent for legibility, but one single cohort). Work it
-**one at a time to a terminal outcome before any non-critical cluster** — regardless of which deck each
-belongs to — presenting each. **A CRITICAL that would be `refuted` or `capability-gap` is a HARD STOP** —
-present the proof (refutation test / four artifacts) and get explicit human acknowledgement before
-recording it (the human flagged it must-fix; overruling that is their call). The cohort never fans out.
+**2. Intervention pass — serial, CRITICAL-first (main loop).** After the barrier, the intervention set =
+`{leaf flagged uncertain}` ∪ `{a CRITICAL a leaf routed to refuted/capability-gap}` (the invariant below).
+Work it **CRITICAL-first, one at a time**: present the leaf's plain explanation + board/game-state + the
+specific uncertainty; **your call assigns the terminal outcome**. Sibling-uncertainty ("is this part of a
+bigger cluster?") is **not** raised here — it resolves at the join.
+
+**3. Join — cluster + finalize route (main loop).** Every correction is now routed + resolved. Cluster by
+**same target_layer + same fix**: a `general-hypothesis` / `planner-code` / `matchup-brief` pattern MAY
+pool members **across decks** into ONE cross-agent proposal (the fix is deck-agnostic); a `deck-strategy`
+pattern **stays within its deck**. Consume `sibling_hint`s (members sharing one `believed_archetype` → one
+matchup-brief cluster; a turn bug + its inner decision bugs → one cluster). Dedup.
+
+**4. Emit + gate.** Per cluster, a proposal or a recorded set-aside (mechanics below), then the completion
+gate.
+
+## Leaf return contract & uncertainty
+
+Each leaf returns:
+
+```
+{ correction_id, agent, scope, target_layer, verification_contract,
+  mini_spec, plain_explanation, board_state,
+  outcome: proposal-routed | covered | refuted | capability-gap | uncertain,
+  question,        // required when outcome == uncertain
+  sibling_hint }   // suspected cross-correction cluster key, else null
+```
+
+A leaf returns **`uncertain`** (with `question`) whenever it cannot confidently reach a terminal outcome —
+an ambiguous route, a shaky refute/covered claim, a correction whose validity it can't settle. It never
+guesses. `plain_explanation` + `board_state` must make the item resolvable **at a glance** in the serial
+pass.
+
+**CRITICAL invariant.** A leaf that routes a **CRITICAL** to **refuted or capability-gap** surfaces it in
+the intervention pass **even if certain** — the human flagged it must-fix; dropping or deferring it is
+their call. Everything else — including a confidently **proposal-routed** CRITICAL — flows straight
+through.
+
+## Emit — proposal or set-aside
+
+- **proposal-routed:** one record into `data/strategy/proposals/` (contract:
+  [../update-strategy/references/strategy_proposal_contract.md](../update-strategy/references/strategy_proposal_contract.md)):
+  `source: blunder-buster`, `target_layer` + `verification_contract` from routing,
+  `for: general | deck:<deck> | opponent:<archetype>`, `spec` = the cluster's merged mini-specs + any
+  infra-to-build, `provenance` = the correction ids (may span **multiple agents**) + the fixtured state
+  (`tests/fixtures/corrections/<name>.json`), `status: open`. **One proposal per cluster, covering all
+  members** — not per-correction point-fixes.
+- **covered / refuted:** `python tools/train/review_correction.py <key> <disp> "<reason>"` — `key` is the
+  snapshot entry's own `key` field (`<ep>-<frame>` / `<ep>-t<turn>s<seat>` / `<ep>-m<seat>`), never
+  hand-built (refuted → prove with a retest first; a turn cluster's proof is `retest_span`, not `retest`).
+- **capability-gap:** the four artifacts, ledgered `deferred` with the layer + todo-doc (or the
+  `/matchup-genie <slug>` hand-off for an uncovered matchup miss).
+
+## Completion gate
+
+Re-run `python tools/train/tune.py` (no `--agent`): for **every** agent, every open correction is now
+**proposal-routed** (a queued record links its ids), **covered**, **refuted**, or an evidenced
+**capability-gap** (`reviewed (excluded)`). Confirm no agent's block still lists an un-routed
+`open`/`UNSATISFIED`. Produce a single terminal-outcome ledger spanning all agents — one line per
+correction, its outcome + evidence (proposal id / named Hypothesis / refutation test / four artifacts),
+grouped by agent. Refresh `reports/blunders.html`. Only then report finished. Then `/update-strategy`
+drains the queue (authors + Verifier/gate + commits).
 
 ## Rounds & reconciliation
 
 One append-only log; each run re-featurizes the **whole** log against the **current** Strategy. A blunder
-whose proposal was applied (by `/update-strategy`, committed) is no longer `missing_hypothesis` and drops
-out next round. `refuted`/`covered`/capability-gap set-asides go in `data/corrections/reviewed.json` (so
-they don't resurface); `tune.py` excludes them. Loop: tag → `/blunder-buster` (route to proposals) →
-`/update-strategy` (apply + commit) → tag more → `/blunder-buster` again (applied clusters auto-drop).
-
-## Steps
-
-> Steps 2–3 (analysis + routing) run **per cluster**; step 4 emits the proposal or records the set-aside.
-
-1. **Enumerate & cluster EVERY open proposal, for EVERY agent.** `python tools/train/tune.py [--store <path>]`
-   with **no `--agent`** → it processes *every agent in the log* (add `--agent <deck>` only when narrowing
-   to one). It prints a per-agent block and rewrites each agent's tuner ledger
-   `data/corrections/tuner/<deck>.json`; read **all** of them (`open[]` = the `missing_hypothesis` proposals
-   with category/episode/frame/`agent_build`; `skipped[]` = tactical/no-obs). Group `open` + the printed
-   **`UNSATISFIED`** lines (W-route corrections the fit couldn't honour — prime Hypothesis candidates) by
-   category + similar rationale into **clusters** (one blunder pattern each). **Cluster scope follows the
-   target layer, not the deck:** a `general-hypothesis` / `planner-code` / `matchup-brief` pattern MAY pool
-   members from several decks into ONE cross-agent proposal (the fix is deck-agnostic); a `deck-strategy`
-   pattern stays within its own deck. Build the full worklist across all agents; **partition out the
-   CRITICAL cohort (pooled across agents)**. Refresh the dashboard: `python tools/train/blunder_report.py`.
-   (`tune.py` also rewrites each agent's `tuned.json` — the deterministic Tier-0 weight deltas auto-apply,
-   ADR-0018; commit alongside via `/update-strategy`.)
-
-2. **Read the SCOPE, then the live trace, to ROUTE the cluster (ADR-0049 / ADR-0019).**
-
-   **Scope first.** Every open record carries `scope` (`decision` | `turn` | `match`), `subject`, and a
-   scope-aware `key`. It says what the blunder is *about*, and it is a **strong routing prior — never an
-   auto-route** (routing is this skill's value; don't let `tune.py` do it):
-   - `scope: turn` — a whole ply was misplayed. Prima facie **`target_layer: planner-code`** (the Turn
-     Planner, `plan_turn`), `verification_contract: verifier` — the gate is `retest_span`, which re-drives
-     the Span to its **first divergence**. *But check:* if the Span's `live_trace.planned` is `null`
-     throughout, the Planner never committed there, and the real gap is a **`general-hypothesis`**.
-   - `scope: match` — a whole game was misplayed. Read the Span's per-turn `game_plan` (ADR-0045). Wrong
-     mode/goal → **`planner-code`** (`plan_match`); wrong opponent read → **`matchup-brief`**; a line that
-     needs cross-turn search → **capability-gap**. `verification_contract: seed-ladder` either way: a match
-     Correction embeds no `obs` and is never re-driven.
-   - A scoped record's `seed_weight` is `0` and its `attribution` (when present) is *information only* — it
-     never reached the weight fit. **Never author a `when()`/weight for a scoped blunder.**
-   - **Cluster across scopes when the fix is one fix.** A turn Correction and the decision Corrections
-     inside that turn often describe the same planner bug; one proposal covers them, provenance lists all.
-
-   **Then the live trace.** Each Correction embeds `live_trace` — the `@T`
-   telemetry the shipped agent emitted (`opts[].score/tac/fired`, `chosen`, `margin`, `lethal`, `planned`,
-   `posture`). For a decision-scope blunder this read **determines the proposal's `target_layer` +
-   `verification_contract`**:
-   - **Check the sparse reorder markers first** when `chosen` isn't top-`score`: `reordered`+`deferred`
-     (attack-last resequencer — a *sequencing* decision, `planner-code`, not an under-weighted attack),
-     `needy` (equal-score attach tie-break), `grabbed` (multi-pick set). Don't author a bogus rule to
-     "fix" a by-design reorder.
-   - **`live_trace.lethal` (ADR-0030)** — the Lethal Solver short-circuits scoring, so a lethal-shaped
-     blunder is **`target_layer: planner-code`**, never a weight/`when()`. `null`-but-a-win-existed → the
-     generator missed a win-shape; non-null-but-rejected → it over-fired.
-   - **`live_trace.planned` (ADR-0031)** — the Turn Planner likewise short-circuits, so a this-turn
-     multi-step-line blunder is **`planner-code`**. If the better line spans **>1 of my turns**, it's a
-     **capability-gap** (don't bolt multi-turn onto the closed-form Planner —
-     `docs/todo/deferred-multi-turn-criticals.md`).
-   - **`live_trace.posture` (ADR-0041)** — a `posture_mismatch` (or a cluster sharing one
-     `believed_archetype`) is a **matchup-doctrine** miss → **`target_layer: matchup-brief`**, never a
-     deck-agnostic `when()`. Right-read-wrong-counterplay → a Brief data/lever change (proposal for the
-     existing Brief). No Brief covers it → route to `/matchup-genie <slug>` (a named hand-off). Wrong
-     *Read* (γ low) → a recognition gap → capability-gap.
-   - Otherwise (no layer flag) → **`target_layer: general-hypothesis`**, `verification_contract: verifier`
-     (the correction fixture is the re-measure gate).
-   `tune.py` tags lines `[TURN <n>]`/`[MATCH]`/`[LETHAL]`/`[PLANNED]`/`[POSTURE≠ <arch>]` and the snapshot
-   carries `scope`+`subject`+`key`, `lethal_locked`/`planner_committed`/`posture_mismatch`+
-   `believed_archetype` — build the cohorts from those; the `null`-but-should-have half is your rationale read.
-
-3. **Read the feature catalog to write an accurate `spec`** (author against LIVE source, never memory):
-   `src/common/pilot.py` (`Context`/`Board` fields), `src/cg/api.py` (enums), `src/common/cards.py` +
-   `card_functions.json` (tags), `baseline_*.py` + `src/agents/<deck>/strategy.py` (style), and
-   `lethal.py`/`planner.py` for planner-code routes. If the sound fix needs a signal that doesn't exist,
-   **say so in the `spec`** (`candidate_signal: "needs a new signal"` + which layer) — `/update-strategy`
-   builds it at apply time; that is **not** a capability-gap.
-
-4. **Emit the routed Strategy Proposal — or record the set-aside.**
-   - For a **proposal-routed** cluster: write one record into `data/strategy/proposals/` (contract:
-     [../update-strategy/references/strategy_proposal_contract.md](../update-strategy/references/strategy_proposal_contract.md)):
-     `source: blunder-buster`, `target_layer` + `verification_contract` from step 2, `for: general|deck:<deck>|opponent:<archetype>`,
-     `spec` = the cluster's rationales (the authoring spec) + any infra-to-build, `provenance` = the
-     correction ids (which may span **multiple agents** for a general/planner/matchup cluster) + the
-     fixtured state (`tests/fixtures/corrections/<name>.json`), `status: open`. One proposal per cluster,
-     covering **all** its members — not per-correction point-fixes.
-   - For **covered/refuted**: `python tools/train/review_correction.py <key> <disp> "<reason>"` — the
-     `key` is the snapshot entry's own `key` field (`<ep>-<frame>` / `<ep>-t<turn>s<seat>` / `<ep>-m<seat>`),
-     never a hand-built one (refuted → prove with a retest first; covered → name the Hypothesis/Brief,
-     confirm on the real Pilot; a turn cluster's proof is `retest_span`, not `retest`).
-   - For **capability-gap / matchup hand-off**: the four artifacts / the `/matchup-genie <slug>` route,
-     ledgered `deferred` with the layer + todo-doc / slug.
-
-5. **Completion gate — prove the open set is empty for EVERY agent.** Re-run `python tools/train/tune.py`
-   (no `--agent` → all agents): for **every** agent, every open correction is now either **proposal-routed**
-   (a queued record links its ids), **covered**, **refuted**, or an evidenced **capability-gap**
-   (`reviewed (excluded)`). Confirm no agent's block still lists an un-routed `open`/`UNSATISFIED`. Produce
-   a single terminal-outcome ledger spanning all agents — one line per correction, its outcome + evidence
-   (proposal id / named Hypothesis / refutation test / four artifacts), grouped by agent. Refresh
-   `reports/blunders.html`. Only then report the run finished. Then `/update-strategy` drains the queued
-   proposals (authors + Verifier/gate + commits).
-
-## Parallel mode (fan-out) — analysis only
-
-Fanning out is now over **analysis** (cluster read + routing + set-aside adjudication), not authoring.
-Spawn one agent per SOFT cluster to read its `live_trace`, decide the route, and draft the proposal
-`spec`; a serial join dedups and queues the records. With the **all-agents** scope this fans out wider —
-every deck's SOFT clusters at once — and the serial join is where cross-agent clusters get MERGED (two
-decks showing the same deck-agnostic pattern collapse into one `for: general` proposal). The heavy
-apply-side concurrency (parallel authoring, `union_verify`) lives in `/update-strategy`
-(authoring-gates.md), where the writes actually happen. Use the Workflow tool with the multi-agent opt-in;
-omit `opts.effort`/`opts.model` to inherit session effort. (The CRITICAL cohort still never fans out —
-it is worked serially across all agents before any SOFT cluster.)
+whose proposal was applied + committed drops out next round (no longer `missing_hypothesis`).
+`refuted`/`covered`/capability-gap set-asides go in `data/corrections/reviewed.json` (`tune.py` excludes
+them). Loop: tag → `/blunder-buster` (route) → `/update-strategy` (apply + commit) → tag more →
+`/blunder-buster` again.
 
 ## Rules
-- **All agents by default** — a run sweeps *every* agent with `own` corrections (`tune.py` with no
-  `--agent`); the CRITICAL cohort, the worklist, and the completion gate all span every deck. `<deck>`
-  narrows to one agent only when explicitly asked. A general/planner/matchup cluster may pool members from
-  several decks into one proposal; a deck-strategy cluster stays within its deck.
-- **CRITICAL first** — resolved before any other cluster, one at a time, **pooled across all agents**; a
-  CRITICAL headed for `refuted`/`capability-gap` hard-stops for human acknowledgement. Never fans out.
-- **Route, don't author.** blunder-buster's product is a *routed proposal* (or a tested set-aside), never a
-  committed `when()`/code. The routing (step 2) is its core value; the authoring is `/update-strategy`'s.
+
+- **All agents by default** — `<deck>` narrows to one. A general/planner/matchup cluster may pool members
+  across decks into one proposal; a deck-strategy cluster stays in its deck.
+- **Route, don't author.** The product is a *routed proposal* (or a tested set-aside), never a committed
+  `when()`/code. Routing is the value; authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
-- **Layer routing is load-bearing:** scope turn/match → `planner-code` (prior, verify against the trace);
+- **Layer routing is load-bearing:** scope turn/match → `planner-code` (prior; verify against the trace);
   lethal/planned → `planner-code`; posture-mismatch → `matchup-brief` (or `/matchup-genie`); else →
   `general-hypothesis`. Never a deck-agnostic weight for a one-archetype misplay, never a `when()` for a
   Solver/Planner-driven decision, **never a weight for a scoped blunder** (it never entered the fit).
-- **Exhaustive or not finished** — every open correction reaches a terminal ANALYSIS outcome this session;
-  no bare `deferred`, no "future run".
-- **No voluntary pauses / no "say go"** — only the CRITICAL hard-stops and unresolvable blockers stop the run.
+- **CRITICAL** flows headless unless a leaf routes it to refuted/capability-gap — then it hard-stops for
+  human acknowledgement in the intervention pass (the invariant above). Resolve the CRITICAL interventions
+  before any other.
+- **Exhaustive or not finished** — every open correction reaches a terminal outcome this session; no bare
+  `deferred`, no "future run", no voluntary pauses. The only sanctioned stops are the CRITICAL
+  interventions and an unresolvable blocker.
 - **If you change how tuning/routing works, update `docs/tuning/methodology.md`** in the same change.
