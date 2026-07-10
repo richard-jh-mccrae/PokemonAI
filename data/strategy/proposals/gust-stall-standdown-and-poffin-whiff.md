@@ -10,7 +10,7 @@ these two are distinct mechanisms. Contract: .claude/skills/update-strategy/refe
 - candidate_signal: `gust-for-the-stall` (+10, doctrine_gust) fires on `active_doomed and gust_best_ko_prizes==0 and stall_target_exists`, and as a Supporter it tiers to 1 in `_finish_turn_last` — AHEAD of a develop attach (tier 2). Needs a "the stall buys no real value / a develop is the better use in setup" gate, WITHOUT demoting the famine hard-stall `stall-gust-over-dev-when-starved` (+95, gated `not active_attack_payable`) which must still beat develop.
 - verification_contract: verifier
 - provenance: correction 85046350:f10 | fixture tests/fixtures/corrections/dragapult_gust_wasted_in_setup_f10.json | split from `spend-boss-orders-on-the-ko-not-setup` (data/strategy/proposals/blunder-20260709-dragapult_ex.md, applied 2026-07-09)
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin fodder):**
 f10, early setup: the agent plays **Boss's Orders** (`gust-for-the-stall` +10) to drag a Snover Active for
@@ -27,6 +27,17 @@ a `not line_ready`-and-develop-available gate on `gust-for-the-stall` only, or b
 commitment (tier ≥2) while the famine rung re-lifts it. **Gate:** f10 flips [1]→[2] (attach); no regression
 on the famine stall (ep83457493 f20) or the mega_starmie gust ledger.
 
+**update-strategy verdict (2026-07-10): APPLIED — reframed to "don't gust a HARMLESS Active away."** The
+grill's sharper insight: gusting the benched Snover up would send opp's Kyogre (0 Energy → harmless:
+Riptide needs discarded {W}, Swirling Waves unpayable) to the Bench to reposition/power up — the gust
+ACCELERATES them. So `gust-for-the-stall` (+10) is gated on `opp_active_can_damage_us` (doctrine_gust.py):
+only stall when the opp's CURRENT Active can actually hurt us; keep a harmless Active pinned and develop.
+Scoped to the +10 mild stall ONLY — the +95 famine `stall-gust-over-dev-when-starved` is NOT gated (its
+canonical case ep83457493 f20 is a harmless-NOW but forward-lethal Riolu — exactly when famine-stall MUST
+fire; gating it breaks that test). The synthetic `DOOM_ACTIVE`/`KADA` stubs were completed with `attacks`
+(they ARE threats — stub fix, not a gate weakening). VERIFIED: f10 flips [1]→[2] attach; test_gust.py
+31/31 + full suite green; pinned by test_blunder_20260710_split_fixes.py::test_f10_...
+
 ---
 
 ## poffin-whiff-guard-covers-exhausted-bench-fill
@@ -37,7 +48,7 @@ on the famine stall (ep83457493 f20) or the mega_starmie gust ledger.
 - candidate_signal: extend the whiff guard (`dont-search-an-empty-deck` / `search_targets_exhausted`, doctrine_fetch) to a Buddy-Buddy Poffin BENCH-FILL fetch when no fetchable ≤70-HP Basic remains in the deck (the sound deck oracle / `deck_tracker`), so `prefer-bench-fill-first` (+15) stands down on a fetch that can place nothing.
 - verification_contract: verifier
 - provenance: correction 85046350:f79 (CRITICAL — the gust half is applied; this is the co-fix) | fixture tests/fixtures/corrections/dragapult_poffin_whiff_take_gust_ko_f79.json | split from `spend-boss-orders-on-the-ko-not-setup`
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin fodder):**
 At f79 the agent's Buddy-Buddy Poffin **whiffs** — the deck holds no fetchable ≤70-HP Basic to bench, so
@@ -49,3 +60,12 @@ bench-fill grab valuation) on the sound deck oracle — stand down when Poffin's
 provably exhausted, mirroring `dont-search-an-empty-deck`. **Gate:** on a synthetic exhausted-bench-fill
 state, `prefer-bench-fill-first` does not fire; inert while a fetchable Basic remains; no regression on the
 Buddy-Poffin bench-fill tests.
+
+**update-strategy verdict (2026-07-10): APPLIED — root-cause FILTER fix (chosen over gating the rung).**
+The bug lived in `_FETCH_FILTERS["bench_fill"]` (doctrine_fetch.py): it read "any Basic", but Buddy-Buddy
+Poffin only fetches Basics with **70 HP or less** — so the whiff oracle couldn't see the exhaustion.
+Tightened to `0 < st.hp <= 70` (Poffin is the ONLY `bench_fill`-tagged card — verified in
+card_functions.json — so it's safe). Now the SOUND guard `dont-search-an-empty-deck` (-60) fires on a
+provably-exhausted Poffin; no separate `prefer-bench-fill-first` gate is needed (the -60 dominates the
++15). VERIFIED: at f79 the whiffing Poffin nets **-25** (dig +20 + bench-fill +15 - 60) and the Boss's
+gust-KO (+50) stays the pick; full suite green; pinned by test_blunder_20260710_split_fixes.py::test_f79_...

@@ -11,7 +11,7 @@ DIFFERENT mechanism (develop-priority) a damage-gate can't provide. Contract:
 - candidate_signal: a NEW `opp_active_can_ko_us` (the affordable-KO mirror of `_active_can_ko` pointed at us — sibling of the just-shipped `opp_active_can_damage_us`, but with a KO threshold) + `advance-the-evolution-line` (+15, baseline_evolution) vs `play-energy-denial` (+20). Reconcile so a NON-survival strip (opp can hurt us but can't KO us) yields to advancing the win-condition line.
 - verification_contract: verifier
 - provenance: correction 85046350:f32 (CRITICAL) | fixture tests/fixtures/corrections/dragapult_hammer_over_develop_f32.json | split from `play-energy-denial-threat-and-ko-aware` (data/strategy/proposals/blunder-20260709-dragapult_ex.md, applied 2026-07-09)
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin fodder):**
 f32 (CRITICAL), turn 4: my Active **Dreepy** (70 HP, 1 {F}); opp Active **Cynthia's Gabite** (Dragonslice
@@ -37,3 +37,21 @@ Score math to beat: play-energy-denial +20 vs advance-the-evolution-line +15 (dr
 if any). **Gate:** f32 flips [2]→[1] (Evolve); no regression on the play-energy-denial ledger
 (test_blunder_20260629 :239/:257/:273/:286) or the mega_starmie corpus. Card facts (Gabite Dragonslice
 {F} 40, Dreepy 70 HP) are engine ground truth — verify at source.
+
+**update-strategy verdict (2026-07-10): APPLIED — REFRAMED to a Turn-Planner maneuver (unifies f20).**
+The grill rejected the "boost the evolve over the strip" framing: this is NOT evolve-vs-strip, it is the
+**retreat-to-promote-the-sacrificial-wall** maneuver (dragapult control identity). My fragile developing
+Dreepy (a win-condition LINE pre-evo) retreats behind a benched **Budew** item-lock wall — retreat →
+promote Budew → evolve the benched Dreepy→Drakloak (Recon dig) → Crushing Hammer → Itchy Pollen. Budew is
+sacrificial; the line assembles safely behind it. This is the SAME family as the deferred
+`retreat-to-promote-disruptor` (f20, same episode 85046350), so the two are **unified and both closed
+here**. Authored as `planner-code`: Board signal `can_wall_line_with_disruptor` (+ helper
+`_can_wall_line_with_disruptor`), NEW `retreat-to-wall-the-line` rung (+30, baseline_retreat.py),
+`hold-position-in-setup` stands down under the premise, and a **tier-0 branch in `_finish_turn_last`** so
+the retreat is sequenced as STEP 1 (the tier system otherwise pins RETREAT to tier 4). VERIFIED
+single-frame per the grill (a tempo maneuver's partial completion is non-catastrophic — unlike the lethal
+f15, which stays deferred): decide() picks **Retreat [3]** (+30) over the tier-0 evolve (+15) / Hammer
+(+20); the follow-through rides existing rungs (`promote-the-staller` on `item_lock`,
+`advance-the-evolution-line`, `play-energy-denial`). Fixture `correct` reframed [1]→[3]; full suite green;
+pinned by `test_blunder_20260710_split_fixes.py::test_f32_...`. Inert for decks without a benched item-lock
+opener (no-op on mega_starmie / mega_lucario). GAIN rides the ladder.

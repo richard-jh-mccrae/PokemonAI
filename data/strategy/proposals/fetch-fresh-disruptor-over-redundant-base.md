@@ -11,7 +11,7 @@ finding, captured here. Contract: .claude/skills/update-strategy/references/stra
 - candidate_signal: `card_is_line_preevo` + a NEW "a copy of this base is already in play" signal (`card_base_copy_in_play` — Board/Context, from visible zones); the `item_lock` tag (fresh disruptor edge) and/or a multiprize-ex penalty at `_TO_HAND` on a thin bench. Reconciles the two line-piece boosts that over-fire on a REDUNDANT base: `fetch-base-before-stranded-payoff` (+20, doctrine_fetch.py) and `prefer-wincon-line-piece` (+18).
 - verification_contract: verifier
 - provenance: correction 85045840:f14 (CRITICAL) | fixture tests/fixtures/corrections/dragapult_fetch_stranded_payoff_f14.json | split from `line-readiness-signals-model-the-multi-stage-line` (data/strategy/proposals/blunder-20260709-dragapult_ex.md, applied 2026-07-09) | [[wroute-satisfied-not-fixed]]
-- status: open
+- status: applied
 
 **Spec (authoring spec — thin fodder):**
 f14 (CRITICAL), turn 2: Active a lone **Dreepy (0e)**, bench EMPTY, its immediate pre-evo **Drakloak in
@@ -45,3 +45,19 @@ discipline; silent for decks whose grabs aren't redundant bases. **Verify:** dec
 `dragapult_fetch_stranded_payoff_f14.json` flips to `correct=[1]` Budew; inert on single-hop decks and on
 non-redundant grabs (Score-Diff / suite-green). Card facts (Budew `item_lock`, Meowth ex 2-prize) are
 engine ground truth — verify at source before shipping.
+
+**update-strategy verdict (2026-07-10): APPLIED — reframed after grounding at the live pilot.** The
+proposal's +12 three-way tie was WRONG: real `explain()` scores had Budew 4th (+12) behind **Drakloak
++53** / Dreepy +50 / Dragapult +35 / Meowth +27 — Drakloak's Recon Directive (dig) trips
+`fetch-the-support` (+15) on top of the two line-piece rungs. The user reframed it around Budew's role as
+the deck's item-lock STARTER + the empty-bench BREADTH principle. Authored in `doctrine_fetch.py`:
+(1) a REDUNDANT in-play base stands `prefer-wincon-line-piece` + `fetch-base-before-stranded-payoff` down
+on a thin Bench (`card_is_redundant and my_bench < _THIN_BENCH`); (2) an empty-Bench mid-Line EVOLUTION
+stands them down too (it only stacks on the Active — the Bench stays empty, a KO-then-lose risk);
+(3) `fetch-the-support` no longer credits a win-condition-line evolution (`not card_is_line_preevo`) as a
+standalone engine; (4) NEW `develop-the-item-lock-opener` (+30, keyed on the `item_lock` tag) wins the
+empty-Bench develop. `card_is_redundant` wired into `_grab_value_of` for the shared-oracle invariant.
+VERIFIED: decide() flips to **Budew +42** (Drakloak collapses to +0, Dragapult +35); the fetch/cluster/
+line-readiness/prize-economy suites + full suite stay green; pinned by
+`tests/strategy/test_blunder_20260710_split_fixes.py::test_f14_...`. GAIN rides the ladder (the new rung is
+an `assumed` initial weight; silent for decks without an item-lock opener).

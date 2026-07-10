@@ -40,6 +40,7 @@ SNIPER_WINCON = 907  # my Active: win-condition whose attack ALSO snipes bench (
 DWEB_HI = 720      # opp benched, KO-able, removal lets my snipe finish DWEB_LO (2-prize line)
 DWEB_LO = 721      # opp benched, KO-able, low HP — finished by 50 snipe only if DWEB_HI gusted
 A_SNIPE_G = 104    # my Active's snipe attack id (120 damage + 50 bench rider)
+DOOM_ATK, KADA_ATK = 8100, 8110   # per-attack ids: the doom Actives DO damage us now (register `opp_active_can_damage_us`)
 MY_FRAGILE = 908   # my Active: 130 HP — KO'd by opp's FORWARD hand-size evolution, not now
 KADA = 911         # opp Active: weak pre-evo (30 dmg) that EVOLVES into a hand-size attacker
 ALAK = 912         # hand_size_attacker KADA evolves into (Alakazam: 20 dmg/card via handSizeDamage)
@@ -62,7 +63,7 @@ _STATS = DictCardStatProvider({
     MEGA_WINCON: CardStat(MEGA_WINCON, energyType=WATER, weakness=LIGHTNING, megaEx=True,
                           minAttackCost=1, minCostDamage=120),
     LIVE_ATTACKER: CardStat(LIVE_ATTACKER, energyType=WATER, maxDamage=200),
-    DOOM_ACTIVE: CardStat(DOOM_ACTIVE, energyType=FIRE, hp=330, maxDamage=200),
+    DOOM_ACTIVE: CardStat(DOOM_ACTIVE, energyType=FIRE, hp=330, maxDamage=200, attacks=(DOOM_ATK,)),
     STALL_TARGET: CardStat(STALL_TARGET, hp=200, retreatCost=2),
     PREEVO_THREAT: CardStat(PREEVO_THREAT, name="Riolu", hp=60),
     EVO_FORM: CardStat(EVO_FORM, name="MegaLucario", evolvesFrom="Riolu", maxDamage=270),
@@ -76,7 +77,7 @@ _STATS = DictCardStatProvider({
     DWEB_LO: CardStat(DWEB_LO, hp=20),
     MY_FRAGILE: CardStat(MY_FRAGILE, energyType=WATER, hp=130, minAttackCost=1, minCostDamage=50),
     KADA: CardStat(KADA, name="TKadabra", hp=80, energyType=PSYCHIC, maxDamage=30,
-                   minAttackCost=1, minCostDamage=30),                  # opp Active: weak pre-evo…
+                   minAttackCost=1, minCostDamage=30, attacks=(KADA_ATK,)),  # opp Active: weak pre-evo…
     ALAK: CardStat(ALAK, name="TAlakazam", evolvesFrom="TKadabra", hp=140, minAttackCost=1,
                    handSizeDamage=20),                                  # …evolves into hand-size KO
     STALL1: CardStat(STALL1, hp=70, retreatCost=1),                     # energyless retreat-1 stall body
@@ -87,7 +88,8 @@ _TAGS = CardFunctions({BOSS: ["gust"], ITEM_GUST: ["gust"], TUTOR: ["search"],
 
 def _pilot():
     return Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
-                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
+                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS,
+                 attacks={DOOM_ATK: 200, KADA_ATK: 30}, attack_costs={DOOM_ATK: 1, KADA_ATK: 1})
 
 
 def _fired(option_trace):
@@ -246,7 +248,7 @@ def test_gust_for_the_stall_silent_when_opp_active_has_a_condition(cond):
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
         current=state(active=poke(OFF_WINCON, energy=1, hp=100),
-                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_active=poke(DOOM_ACTIVE, hp=330, energy=1),
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS], opp_conditions=(cond,)))
     p = _pilot()
@@ -262,7 +264,7 @@ def test_gust_for_the_stall_still_fires_with_no_condition():
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
         current=state(active=poke(OFF_WINCON, energy=1, hp=100),
-                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_active=poke(DOOM_ACTIVE, hp=330, energy=1),
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS]))
     p = _pilot()
@@ -506,7 +508,7 @@ def test_gust_for_the_stall_fires_when_stuck_with_an_energyless_high_retreat_tar
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
         current=state(active=poke(OFF_WINCON, energy=1, hp=100),
-                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_active=poke(DOOM_ACTIVE, hp=330, energy=1),
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS]))
     p = _pilot()
@@ -521,7 +523,7 @@ def test_gust_for_the_stall_silent_when_not_under_threat():
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
         current=state(active=poke(OFF_WINCON, energy=1, hp=300),   # 200 incoming < 300 → not doomed
-                      opp_active=poke(DOOM_ACTIVE, hp=330),
+                      opp_active=poke(DOOM_ACTIVE, hp=330, energy=1),
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS]))
     p = _pilot()

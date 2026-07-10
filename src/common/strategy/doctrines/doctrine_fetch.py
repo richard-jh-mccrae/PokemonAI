@@ -176,6 +176,7 @@ class FetchMixin:
             card_is_support=bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags))),
             card_stranded_evolution=cid in self._stranded_evolution_set(),
             card_is_top_fetch_priority=(cid == board.top_fetch_priority_id),
+            card_is_redundant=cid is not None and cid in board.in_play_ids,   # f14 breadth stand-down
             roles=roles, tags=tags, stat=stat, board=board)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
@@ -342,14 +343,20 @@ HYPOTHESES = [
                   "while the base unblocks the whole line. Inverse of `prefer-payoff-over-preevo`; lifts the "
                   "pre-evolution above `fetch-the-wincon` (+30) but stays additive, so a payoff-only offer is "
                   "still grabbed. Stands down once the win-condition is in play AND the Bench is already "
-                  "developed (`wincon_in_play and my_bench > 0`) — nothing is stranded then and a SECOND "
-                  "line is a luxury, so the +20 must not out-grab a genuinely needed engine piece (ml f39, "
-                  "CRITICAL: a spare Riolu over the Solrock that turns Lunatone's draw-3 on, with an "
-                  "energized Mega already benched). With an EMPTY Bench the rule still fires (building "
-                  "toward a first developed body is a real need — the ADR-0048 2nd-line case).",
+                  "developed (`wincon_in_play and my_bench > 0`) — nothing is stranded then and a SECOND line is "
+                  "a luxury, so the +20 must not out-grab a genuinely needed engine piece (ml f39, CRITICAL: a "
+                  "spare Riolu over the Solrock that turns Lunatone's draw-3 on, energized Mega already benched). "
+                  "Two more BREADTH stand-downs (dragapult f14): a REDUNDANT base whose copy is already in play "
+                  "adds no line progression on a thin Bench (`card_is_redundant and my_bench < _THIN_BENCH` — grab "
+                  "a fresh body, not a 2nd of what's already down); and on an EMPTY Bench a mid-Line EVOLUTION "
+                  "(`evolvesFrom`) can only stack on the Active, leaving the Bench empty (a KO-then-lose risk) — "
+                  "develop a benchable Basic instead. (A Basic base on an empty Bench still fires — building the "
+                  "first developed body is a real need, the ADR-0048 2nd-line case.)",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_line_preevo
         and not c.board.wincon_base_deployable
-        and not (c.board.wincon_in_play and c.board.my_bench > 0),
+        and not (c.board.wincon_in_play and c.board.my_bench > 0)
+        and not (c.card_is_redundant and c.board.my_bench < _THIN_BENCH)
+        and not (c.board.my_bench == 0 and bool(c.stat and c.stat.evolvesFrom)),
         weight=20, status="testing"),
     Hypothesis(
         id="fetch-energy-when-starved",
@@ -468,8 +475,13 @@ HYPOTHESES = [
                   "to the win-condition line when the kill-switch is off. At a PROMOTE it stays "
                   "win-condition-only (`card_is_line_preevo`) and only when the payoff is in hand to evolve it "
                   "THIS turn — else a bare pre-evolution just exposes a fragile base (see `promote-the-staller`); "
-                  "ranks below `fetch-the-wincon` and `fetch-energy-when-starved`.",
-        when=lambda c: (c.card_is_recognized_line_preevo and c.select_context == _TO_HAND)
+                  "ranks below `fetch-the-wincon` and `fetch-energy-when-starved`. The TO_HAND credit carries "
+                  "the same two BREADTH stand-downs as `fetch-base-before-stranded-payoff` (dragapult f14): a "
+                  "redundant in-play base on a thin Bench, and an empty-Bench mid-Line evolution, both yield to "
+                  "developing a fresh benchable body.",
+        when=lambda c: (c.card_is_recognized_line_preevo and c.select_context == _TO_HAND
+                        and not (c.card_is_redundant and c.board.my_bench < _THIN_BENCH)
+                        and not (c.board.my_bench == 0 and bool(c.stat and c.stat.evolvesFrom)))
         or (c.card_is_line_preevo and c.select_context == _TO_ACTIVE
             and c.board.evolve_to_ready_wincon_available),
         weight=18, status="testing"),
@@ -500,6 +512,21 @@ HYPOTHESES = [
         and not c.board.line_ready and c.board.my_bench < _THIN_BENCH,
         weight=12, status="testing"),
     Hypothesis(
+        id="develop-the-item-lock-opener",
+        rationale="At a hand-search with a thin Bench, prefer developing the deck's item-lock OPENER (Function "
+                  "Tag `item_lock`, e.g. Budew's Itchy Pollen — the opponent can't play Items next turn) over a "
+                  "redundant base or an evolution that only stacks on the Active. It is the sacrificial "
+                  "disruptor STARTER: it fills the empty Bench (survival), buys a tempo turn, and is the wall "
+                  "you hide the fragile win-condition line behind while it develops. The FETCH-seam sibling of "
+                  "`open-the-item-lock-starter` (the pregame Active pick); keyed on the `item_lock` tag so it is "
+                  "silent for decks without such an opener. +30 clears the (breadth-stood-down) line-piece and "
+                  "support grabs so the ideal starter wins the empty-Bench develop (dragapult f14: grab Budew, "
+                  "not a 2nd Dreepy or a Drakloak that only stacks on the Active). Gated to a startable "
+                  "`item_lock` Basic on a thin Bench; stands down once the Bench is developed.",
+        when=lambda c: c.select_context == _TO_HAND and "item_lock" in c.tags
+        and c.card_is_starter and c.board.my_bench < _THIN_BENCH,
+        weight=30, status="assumed"),
+    Hypothesis(
         id="bench-fill-a-basic",
         rationale="At a bench-PLACEMENT grab (`_TO_BENCH`/`_SETUP_BENCH`), take a startable Basic — the "
                   "bench-context mirror of `fetch-a-starter`. Needed because a CARD-target candidate is invisible "
@@ -524,8 +551,13 @@ HYPOTHESES = [
         rationale="With no engine/support Pokémon in play (Ability tagged `energy_accel`/`draw`/`search`/`dig`), "
                   "take one at a search — an online engine multiplies every later turn, second only to the "
                   "win-condition and energy-when-starved. Gap-gated off `Board.support_in_play`; never endorses "
-                  "a stranded evolution (`card_stranded_evolution`, cf `dont-fetch-the-setup-only-opener`).",
+                  "a stranded evolution (`card_stranded_evolution`, cf `dont-fetch-the-setup-only-opener`). Also "
+                  "excludes a win-condition-LINE evolution (`card_is_line_preevo`, e.g. Drakloak's Recon "
+                  "Directive): you tutor a mid-Line piece to EVOLVE it, not to bench it as a standalone engine "
+                  "— crediting it as support double-counts its line-piece value and over-ranks it above a fresh "
+                  "body on an empty Bench (dragapult f14).",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_support
+        and not c.card_is_line_preevo
         and not c.card_stranded_evolution and not c.board.support_in_play,
         weight=15, status="testing"),
     Hypothesis(

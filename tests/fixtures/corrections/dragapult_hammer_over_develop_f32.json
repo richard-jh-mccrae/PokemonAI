@@ -324,9 +324,9 @@
     2
   ],
   "correct": [
-    1
+    3
   ],
   "chosen_label": "Play Crushing Hammer",
-  "correct_label": "Evolve Drakloak → Dreepy (active · 70/70 · 1⚡)",
-  "note": "f32 Main: play-energy-denial (+20) plays Crushing Hammer (strip Cynthia's Gabite's 1 energy) over advance-the-evolution-line (+15, evolve the active Dreepy->Drakloak). Human (CRITICAL): don't spend the Hammer on a low-value strip while we should be developing/finishing the line toward the KO. play-energy-denial's KO stand-down is active_cheap_attack_kos (cheapest attack) and misses dragapult's Phantom-Dive KOs. Correct=[1] Evolve."
+  "correct_label": "Retreat Dreepy → promote Budew (sacrificial item-lock wall)",
+  "note": "f32 Main (REFRAMED 2026-07-10, /update-strategy grill): NOT evolve-vs-strip — a Turn-Planner MANEUVER. My Active is a fragile developing Dreepy (a win-condition LINE pre-evo), Budew (item_lock) is benched, and opp Active Cynthia's Gabite can damage the line (Dragonslice 40; the pilot's oracle does not model the benched Cynthia's Roserade +30 buff that would make it 70=lethal). The sound line: RETREAT Dreepy (pay the retreat with its {F}) -> promote Budew -> evolve the benched Dreepy->Drakloak (Recon dig) -> Crushing Hammer -> Itchy Pollen (item-lock). Budew is the sacrificial wall; the line assembles safely behind it. Verified single-frame: decide() picks Retreat [3] via retreat-to-wall-the-line (+30, tier-0 in _finish_turn_last), ahead of the tier-0 evolve (+15) / Hammer (+20). Follow-through rides existing rungs. Unifies f32 + the deferred f20 retreat-to-promote-disruptor. Correct=[3] Retreat."
 }
