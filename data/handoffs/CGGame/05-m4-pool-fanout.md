@@ -1,5 +1,35 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Burn-down batch 4 (2026-07-12):** attacks **1175→1238 live** (+63); three sub-batches,
+> all capture-first. **4a — the reveal-hand family ×9** (`xOppHandReveal` /
+> `xOppHandRevealChoose` / `xDamagePerRevealed`, rules R-E01/E02): the LOOKING round-trip
+> with owner-hidden in-moves, the FIFO drain through `hand_pick_expect`, discard-all-
+> Items+Tools, per-Trainer/per-Energy scalers, choose-to-discard / choose-to-deck-bottom
+> (pseudo `toArea` 14), oppHand menu gates; rode-along ability tail: **Silcoon Multiplying
+> Cocoon** (onEvolve ask) + **Luxio Fighting Roar** (evolve-immediate passive, megaEx
+> counts as {ex}). **4b — ALL 25 "Then, shuffle your deck." stragglers** (R-B17 rewrite +
+> R-E03/E05-E08): may-ask searches, unrevealed to-hand prints (min-1 "a card"), benched-
+> count caps, new nouns (Basic {X} / possessive-family / quoted-name / resistance /
+> DB-exact species+trainer names), and the attach-distribution machinery
+> (`xDeckEnergyAttachDistribute` any-way vs one-target, sequential typed buckets,
+> distinct-types caps, no-target picks stay in deck; per-bench attach/evolve loops;
+> `xDeckEvolveChooseAndShuffle`; distinct-to-hand). **Future/Ancient targets seed from the
+> official CSV Category column** — no native table carries the tag and sgc87_9300 f51
+> proves the engine filters by it. **4c — 29/30 multi-clause coins** (R-F01-F03; 528
+> Try-to-Imitate deferred: attack-copy machinery): effect-KOs (no HP log, straight stack
+> discard through the normal claims flow), the both-sides-die sweep order (CREDITED side
+> first — pinned), opponent-owned flips, per-heads riders (energy discards, mills,
+> discard-pile recoveries, heads-capped searches), pre→rider coin threading (Magical
+> Leaf), condition-choose (ctx 47), shuffle-mon-into-deck, Sand-Attack's defender
+> attack-gate transient. **Trainers:** Rare Candy (pair-gated PLAY + ctx-37 skip-evolve)
+> + Hand Trimmer (both trim to 5, opponent first, min=max=hand−5 picks, FIFO-drained) +
+> **Levincia** = the per-turn stadium-ability machinery (MAIN option area 7 + once-per-
+> player-turn marker), unblocking the cabt match-replay fixture **4/60 → 34/60 green**
+> (with god-free provisional-prize listing reconciliation in the replayer); its next
+> divergence names card 269's ability — the ability tail. Fixtures 152→**293** (26321
+> clean frames), ops **92/92 pinned**, gate **906**, cross-engine audits over all three
+> sub-batches: **0 divergent**. Pins digested in determinism.md §9d.
+
 > **Burn-down batches 2b–3 (2026-07-11, later same day):** attacks **1143→1175 live**.
 > Batch 2b built the **hand-pick rng channel** (`SeededRng.hand_pick` + replay FIFO from
 > opp-turn hand-exit MOVE_CARDs + `hand_pick_expect` alignment drain through Judge-class
@@ -101,30 +131,27 @@ digested in docs/pyeng/determinism.md §9–10.
 
 ## The remaining tail (the queue, biggest first — all workable with the built loop)
 
-- **Items/Supporters** (~93 deferred): per-card unique texts now — extend TRN rules +
-  `onboard_card.py` per card. The unparsed-sentences report is the ranked queue.
-  Notable next: Rare Candy, Hand Trimmer (both-discard-to-N — the hand-pick channel's
-  `hand_pick_expect` covers its chosen-discard side), active-heal trainers (Dragon
-  Elixir class — xHealChoose needs an activeOnly mode).
-- **Abilities** (~518 Pokémon deferred for ability text): the hard tail — author per
+- **Abilities** (~463 Pokémon deferred for ability text): the hard tail — author per
   card via `chain_overrides.json` "ability" defs over existing/new ops, plain-mode
   `capture_card.py` micro-traces pin the select shapes (Blissey ex Happy Switch is the
-  worked template: capture native FIRST, read the shapes, then author). Card-level
-  PASSIVES piggyback the same override file with data keys (`defense`, `retreat` —
-  Crustle / Melt Away are the worked examples). Board-wide passives (Archaludon 170,
-  Latias ex 184, N's Castle 1253, Rescue Board 1157) still need their machinery.
-- **Tools/Stadiums/Special energies** (60 deferred): passive/hooked machinery per card;
-  Levincia-class per-turn stadium effects need a new select-shape pin first.
-- **Attack tail** (372 deferred, no single big family left): the unparsed queue's head
-  is now composition tails. Next coherent groups: **reveal-hand family** (×5 — "Your
-  opponent reveals their hand." ± discard-items / per-trainer damage; capture-first to
-  pin the reveal shape, and any deterministic forced discards must `hand_pick_expect`),
-  **"Then, shuffle your deck." stragglers** (×8 — each blocked by an unmatched search
-  sibling sentence), **multi-clause coins** (×~17, heterogeneous: if-all-heads bonus,
-  both-tails recoil, per-heads energy discard, coin-KO effects, mon+cards shuffle-in),
-  energy-bounce-to-hand (×4), opponent-chooses-switch variants. Run the audit diff
-  over each new batch (staging-mismatch rows are expected for own-board scalers —
-  micro-trace those).
+  worked template; batch 4 added Silcoon's onEvolve and Luxio's evolve passive the
+  same way). Card-level PASSIVES piggyback the same override file with data keys
+  (`defense`, `retreat`, `evolve` — Crustle / Melt Away / Fighting Roar are the worked
+  examples). Board-wide passives (Archaludon 170, Latias ex 184, N's Castle 1253,
+  Rescue Board 1157) still need their machinery. **The cabt match-replay fixture's
+  first divergence names card 269 (Iono's Kilowattrel) — a ready-made next target.**
+- **Items/Supporters** (~84 deferred): per-card unique texts — extend TRN rules +
+  `onboard_card.py` per card; the unparsed-sentences report is the ranked queue.
+  Rare Candy / Hand Trimmer / Levincia (batch 4) are the worked select-shape
+  templates for gated plays, both-player picks, and stadium abilities.
+- **Tools/Stadiums/Special energies** (~59 deferred): passive/hooked machinery per
+  card; the Levincia stadium-ability machinery (MAIN option area 7 + per-turn marker
+  + `stadiumAbility` def key) now exists for the activated class.
+- **Attack tail** (309 deferred, all composition tails now): 528 Try-to-Imitate
+  (attack-copy machinery), energy-bounce-to-hand (×4), opponent-chooses-switch
+  variants, move-your-energy variants, and singleton texts. Run the audit diff over
+  each new batch (staging-mismatch rows are expected for own-board/opp-hand-sensitive
+  effects — micro-trace those).
 
 ## Cold-start commands
 

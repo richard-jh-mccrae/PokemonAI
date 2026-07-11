@@ -264,6 +264,92 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   stadium to its OWNER's discard, public STADIUM→DISCARD move); the discard-path
   branch is authored-but-unexercised (no stadium reached play in the pin traces).
 
+### 9d. Burn-down batch 4 pins (2026-07-12)
+
+- **Reveal-hand family** ("Your opponent reveals their hand."): the whole hand
+  round-trips through LOOKING with no net state change — per card HAND→LOOKING
+  rendered MOVE_CARD_REVERSE **to the hand's OWNER** but visible-with-ids to the
+  attacker, then LOOKING→HAND visible both ways, both directions in hand order
+  (rvl73/297/786_9000). The in-moves are opp-turn hand exits → they FEED the
+  hand-pick FIFO; every reveal op drains itself via `hand_pick_expect`. Choose
+  variants park the hand in LOOKING (victim handCount 0, looking_owner = attacker)
+  and pose a CARD select over area 12 — ctx DISCARD for "you discard" (rvl995 f13),
+  ctx TO_DECK_BOTTOM for bottom-of-deck (rvl401 f13; the exit logs pseudo
+  `toArea: 14`); the chosen exit logs FIRST, the rest return in original order.
+  Crushing Pulse returns EVERYTHING then discards Items+Tools HAND→DISCARD in hand
+  order, no HP log (rvlitems284). Scaled variants (per-Trainer / per-Energy) log
+  HP_CHANGE after the moves, even at 0 matches (rvl800 f12 value 0; rvl1230 −640);
+  flat-damage variants log HP before the reveal. The plain and discard-all scripts
+  menu-gate on a nonempty opponent hand; the choose script does NOT (rvl995_9001
+  f53 offered at oppHand 0).
+- **Search-straggler shapes**: unrevealed to-hand searches ("a card", "up to N
+  cards", benched-count caps) render MOVE_CARD_REVERSE to the opponent
+  (sg1093/sg1/sg33); "a card" prints pose min 1 (sg1093 f14); "You may search" is a
+  real ctx ACTIVATE YES_NO ask before the pick (sg33 f18). Search-attach
+  distributions: ctx ATTACH_TO multi-pick over the listing, then ctx ATTACH_FROM
+  placement — per picked card with contextCard = that energy for "in any way you
+  like" (sg965 f63; two sequential picks sgc87_9302 f12-f13), ONE cc-less select
+  for "to 1 of your …" (sg328 f15 keeps the deck listing, sg242 f16 drops it —
+  per-script quirk), Jolting Charge's two typed buckets pose SEQUENTIALLY (an
+  empty bucket auto-skips: sg208 poses max 2, never 4). Picked cards with NO legal
+  target stay in the deck silently (sg1463 empty bench; sg321 no Tera in play —
+  Terapagos itself is NOT tera-flagged). Distinct-types picks cap max at the
+  distinct type count among matches (sg321_9001 f9: max 1 over 12 same-type).
+  Per-bench loops pose one pick per benched mon in bench order with contextCard =
+  that mon (attach sg1078 f37; evolve ctx EVOLVES_TO sg740 f48-f49), one SHUFFLE
+  after the loop. Menu gates: benchExists for benched-count/benched-target/
+  per-bench scripts (sg1_9000 f9 / sg242 f7 / sg1078 f10); deckNotEmpty for
+  Kaleidowaltz (trc_9001 f223). An EMPTY deck logs no SHUFFLE (trc_9000 f279).
+- **Future/Ancient family**: no native table carries the tag — the engine provably
+  filters by it (sgc87_9300 f51: fodder excluded from Peak Acceleration's targets,
+  Miraidons kept). cgpy seeds explicit id lists from the official CSV's Category
+  column (CSV Card ID == engine cardId, verified).
+- **Fighting Roar / Multiplying Cocoon** (ability-tail rode-alongs): Luxio's
+  passive waives BOTH evolve gates while the opponent's Active is a Pokémon {ex} —
+  megaEx qualifies (rvl1371_9000 f8: Luxray ex offered onto a this-turn Luxio vs
+  Mega Latias ex); Silcoon's onEvolve ask → ctx TO_BENCH min0 max1 deck pick
+  (rvl1230_9000 f7-f9).
+- **Coin composites**: effect-KOs ("… is Knocked Out") log NO HP_CHANGE — the mon's
+  stack discards directly and the normal claims/prize flow runs (cn259 f17,
+  cn364_9001 f18); choose-and-KO poses ctx DISCARD over the matching opponent mons
+  (cn259 f16). When BOTH sides die in one attack, the CREDITED side's deaths sweep
+  and claim FIRST (cn364_9001: the recoil corpse discards before the effect-KO'd
+  defender; the opponent's 1-prize pick poses before the attacker's 3).
+  Opponent-owned flips log COIN with playerIndex = the victim (cn607: Bench
+  Manipulation; damage per TAILS still logs HP 0 on a zero). Bemusing Aroma's
+  heads inflicts POISON then PARALYZE in that log order (cn686 f14). Miraculous
+  Paint's heads poses ctx AFFECT_SPECIAL_CONDITION, type SPECIAL_CONDITION, all
+  five conditions in enum order (cn1003_9701 f15). Mystical Return's heads poses
+  ctx TO_DECK over the opponent bench and shuffles the mon + attachments into
+  their deck with one SHUFFLE (cn173_9000 f10-f11); the benched flavor menu-gates
+  on oppBenchExists (f13). Kaleidowaltz makes ONE combined pick with max =
+  2×heads (zero heads still shuffles — cn1453_9000 f19); Gormandizer's zero-heads
+  does NOTHING, not even a shuffle (cn1547_9000 f8); All-You-Can-Grab picks to
+  hand UNREVEALED with max = heads (cn1013). Magical Leaf's pre-coin outcome
+  gates its rider heal (pre→rider vars threading). Sand Attack arms a
+  defender-side attack-gate transient (the fire path — the gated mover flips,
+  tails = the attack does nothing — is authored but unexercised in the pins).
+- **Rare Candy**: PLAY is menu-gated on a legal (in-play Basic that did not enter
+  this turn, hand Stage 2 matching through the name chain) pair — never offered
+  without one (trc_9000: 0 offers all game); the play poses ctx EVOLVE, type
+  EVOLVE, options in the MAIN-menu evolve encoding (hand index + in-play target),
+  and resolves as one EVOLVE log skipping the Stage 1 (trcx_9100 f13-f14).
+- **Hand Trimmer**: both players trim to 5, opponent first, each with ONE ctx
+  DISCARD pick over their whole hand, min = max = hand−5 (trh_9000 f105: min2
+  max2; f68: min1 max1), moves public both ways; the opponent's chosen exits
+  drain the hand-pick FIFO. Menu-gated unless SOMEONE holds >5 (f75).
+- **Levincia** (the stadium-ability machinery): MAIN option {type ABILITY,
+  area 7, index 0} placed after the mon abilities, once per player-turn,
+  legal-gated on discard targets; activation poses ctx TO_HAND over the discard
+  (min 1, max = min(2, targets)), DISC→HAND moves visible both ways
+  (lev_9000-9003).
+- **God-free listing reconciliation**: a revealed deck listing that contradicts
+  provisionally-dealt prize identities swaps the differences pairwise through the
+  prize row (the `prize_take` rule applied at listing time), re-points a pending
+  select's listing snapshot and remaps + resorts its deck-indexed options
+  (match-replay fixture: 4/60 → 34/60 green; the next divergence names card 269's
+  ability).
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on
