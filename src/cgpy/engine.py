@@ -59,7 +59,7 @@ class Engine:
 
     # ------------------------------------------------------------------ views
 
-    def observation(self, viewer: int | None = None, *, sbi_token: str = "cgpy") -> dict:
+    def observation(self, viewer: int | None = None, *, sbi_token: str | None = "cgpy") -> dict:
         seat = viewer if viewer is not None else (self.select_seat or 0)
         return render.observation(self.gs, seat, sbi_token=sbi_token)
 
@@ -68,3 +68,12 @@ class Engine:
 
     def clone(self) -> "Engine":
         return Engine(self.gs.clone())
+
+    def fork(self) -> "Engine":
+        """An independent twin: cloned state AND a deep-copied rng, so stepping one never
+        advances the other's randomness — the search API's clone-per-step contract (M3)."""
+        import copy
+
+        twin = self.gs.clone()
+        twin.rng = copy.deepcopy(self.gs.rng)
+        return Engine(twin)

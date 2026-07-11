@@ -121,6 +121,7 @@ class GameState:
     last_posed: tuple[int, int, int, int] = (0, 0, 1, 1)   # (seat, context, min, max)
                                                            # of the last posed select
     outbox: list[list[dict]] = field(default_factory=lambda: [[], []])
+    outbox_god: list[dict] = field(default_factory=list)   # full-visible stream (visualize)
     phase: str = "IS_FIRST"
     phase_data: dict = field(default_factory=dict)
     manual_coin: bool = False
@@ -141,13 +142,14 @@ class GameState:
         return cls(db=db, cards=cards, players=players, rng=rng)
 
     def clone(self) -> "GameState":
-        rng = self.rng
-        self.rng = None
-        try:
+        rng, db = self.rng, self.db
+        self.rng = self.db = None      # db is an immutable table (frozen dataclasses,
+        try:                           # lru_cache-shared already) — never deep-copied
             twin = copy.deepcopy(self)
         finally:
-            self.rng = rng
+            self.rng, self.db = rng, db
         twin.rng = rng   # shared rng: forks that need independence pass their own
+        twin.db = db
         return twin
 
     # ---------------------------------------------------------------- helpers
@@ -177,6 +179,7 @@ class GameState:
                 self.outbox[seat].append(dict(reverse))
             else:
                 self.outbox[seat].append(dict(entry))
+        self.outbox_god.append(dict(entry))   # god view always sees the full entry
 
     # ---------------------------------------------------------------- zone mutations
 
@@ -211,6 +214,7 @@ class GameState:
         for viewer in (0, 1):
             visible = visible_to_owner if viewer == seat else visible_to_opponent
             self.outbox[viewer].append(dict(full if visible else rev))
+        self.outbox_god.append(dict(full))
 
     def note_attach(self, serial: int) -> None:
         """Record energy-attach order (Crushing Hammer-class selects list the opponent's

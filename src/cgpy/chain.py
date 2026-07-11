@@ -16,7 +16,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from .options import opt_card, pose
+from .options import opt_card, pose, yes_no
 from .schema import (AreaType, CardType, LogType, OptionType, SelectContext, SelectType)
 from .state import EffectFrame, GameState
 
@@ -355,8 +355,29 @@ def op_effect_switch_enemy(gs, fr, args) -> bool:
     return True
 
 
+def _flip(gs: GameState, fr: EffectFrame) -> bool | None:
+    """The frame's coin outcome — or None when a manual-coin select was posed (the frame
+    resumes with the answer). Under ``manual_coin`` (the `search_begin` contract, M3) every
+    flip is CHOSEN via a COIN_HEAD YesNo instead of consuming rng; the chosen outcome still
+    logs a COIN entry."""
+    if not gs.manual_coin:
+        return gs.coin_flip(fr.seat)
+    if "answer" not in fr.vars:
+        pose(gs, fr.seat, type=SelectType.YES_NO, context=SelectContext.COIN_HEAD,
+             options=yes_no(), effect_card=fr.source)
+        return None
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    head = o["type"] == int(OptionType.YES)
+    gs.emit({"type": int(LogType.COIN), "playerIndex": fr.seat, "head": bool(head)})
+    return head
+
+
 def op_coin(gs, fr, args) -> bool:
-    fr.vars["heads"] = gs.coin_flip(fr.seat)
+    head = _flip(gs, fr)
+    if head is None:
+        return False
+    fr.vars["heads"] = head
     return True
 
 
@@ -454,9 +475,15 @@ def op_hand_to_deck_shuffle_draw(gs, fr, args) -> bool:
 
 def op_both_shuffle_coin_draw(gs, fr, args) -> bool:
     """Harlequin: both shuffle hands in (actor first), flip a coin, then actor/opponent
-    draw [heads] or [tails] counts (actor's count first in each pair)."""
-    _both_shuffle_hands(gs, fr.seat)
-    heads = gs.coin_flip(fr.seat)
+    draw [heads] or [tails] counts (actor's count first in each pair). The shuffle-in runs
+    once even when a manual-coin select suspends the frame at the flip."""
+    if "shuffled_in" not in fr.vars:
+        _both_shuffle_hands(gs, fr.seat)
+        fr.vars["shuffled_in"] = True
+    heads = _flip(gs, fr)
+    if heads is None:
+        return False
+    fr.vars.pop("shuffled_in")
     n_actor, n_opp = args["heads"] if heads else args["tails"]
     for seat, count in ((fr.seat, n_actor), (1 - fr.seat, n_opp)):
         for _ in range(count):

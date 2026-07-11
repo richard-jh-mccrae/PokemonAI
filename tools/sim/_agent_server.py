@@ -28,6 +28,9 @@ def main() -> None:
         sys.path.insert(0, root)
     bundle = Path.cwd()
     sys.path.insert(0, str(bundle))
+    if os.environ.get("CG_ENGINE") == "py":            # ADR-0050 M3: the agent's `cg`
+        from cgpy.alias import install                 # imports resolve to the cgpy twin
+        install()
 
     # Hand real stdout to the protocol; send any agent prints to stderr instead.
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8")

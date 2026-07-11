@@ -108,7 +108,11 @@ def _strip_for_compare(obs: dict) -> dict:
     return out
 
 
-def replay(trace: Trace, *, compare_god: bool = True) -> ReplayReport:
+def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) -> ReplayReport:
+    """Replay ``trace`` through cgpy. With ``fork_check`` (the M3 clone-safety gate), every
+    recorded choice is ALSO applied to a fresh `Engine.fork()` of the live engine and the two
+    resulting states must render identical god frames, outboxes and pending selects — proving
+    a mid-cascade clone at every select of the game replays identically."""
     report = ReplayReport(frames_total=len(trace.frames))
     rnd = _TraceRandomness()
     deck0, deck1 = trace.decks
@@ -163,11 +167,29 @@ def replay(trace: Trace, *, compare_god: bool = True) -> ReplayReport:
         choice = fr.get("choice")
         if choice is None:
             break
+        twin = eng.fork() if fork_check else None
         try:
             eng.step(choice)
+            if twin is not None:
+                twin.step(choice)
         except Exception as e:  # noqa: BLE001 — any engine failure is the finding itself
             report.error = f"frame {k}: cgpy raised on recorded choice {choice}: {e!r}"
             report.kind, report.frame = "error", k
             return report
+        if twin is not None:
+            d = first_divergence(eng.god_frame(), twin.god_frame())
+            if d is None and eng.gs.outbox != twin.gs.outbox:
+                d = Divergence("$.outbox", eng.gs.outbox, twin.gs.outbox)
+            if d is None:
+                p, q = eng.gs.pending, twin.gs.pending
+                if (p is None) != (q is None) or (p is not None and
+                                                  (p.options, p.context, p.min_count,
+                                                   p.max_count) != (q.options, q.context,
+                                                                    q.min_count, q.max_count)):
+                    d = Divergence("$.pending", p, q)
+            if d is not None:
+                report.error = f"frame {k}: fork diverged from the original after one step\n  {d}"
+                report.kind, report.frame = "error", k
+                return report
 
     return report

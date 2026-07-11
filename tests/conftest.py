@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -8,6 +9,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # so shared helpers (pilot_helpers, scouting_helpers) and `from conftest import ...` resolve
 # from any subdir.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+if os.environ.get("CG_ENGINE") == "py":                # ADR-0050 M3: run the suite on the
+    from cgpy.alias import install                     # cgpy twin instead of the DLL
+    install()
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 

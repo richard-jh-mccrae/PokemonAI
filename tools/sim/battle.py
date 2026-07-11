@@ -389,6 +389,10 @@ def main(argv=None) -> int:
 
     sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]   # standalone CLI: needs submit / cg
 
+    if os.environ.get("CG_ENGINE") == "py":            # ADR-0050 M3: drive the cgpy twin
+        from cgpy.alias import install
+        install()
+
     from submit.build import DEFAULT_BUILDS, DEFAULT_OUT
     from submit.history import read_history
 

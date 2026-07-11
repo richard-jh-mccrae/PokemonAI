@@ -86,6 +86,10 @@ Pinned by `tools/parity/snapshot_tables.py` probes (see `src/cgpy/defs/tables_me
   ("MoveCard", "Number") with int areas inside log entries, and carry a `selected` field: the
   choice made in response to the **previous** frame's select (+1 offset, as in
   `tools/sim/record.py`).
+- God-log type names are CamelCase over the log enum's words — `MoveCard`, `HpChange`,
+  `HasBasicPokemon`, `TurnEnd` — and god logs always carry the FULL entry (a seat-1 `Draw`
+  keeps its cardId/serial; no `*Reverse` variants). Probed from committed trace `god_logs`
+  (ms_mirror_1000); `cgpy.game.visualize_data` renders the same.
 - Logs are per-viewing-seat (`Draw` vs `DrawReverse`, `MoveCard` vs `MoveCardReverse`); each
   observation replays events since that seat's last select.
 

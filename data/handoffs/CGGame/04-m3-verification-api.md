@@ -1,8 +1,40 @@
-# M3 — verification API + `CG_ENGINE=py` selection ⬜ TODO (after M2's union gate)
+# M3 — verification API + `CG_ENGINE=py` selection ✅ DONE (2026-07-11)
 
 **Goal:** cgpy becomes (a) a drop-in engine for the existing harness with agents unchanged,
 and (b) the fixture-seedable, clonable oracle that unblocks the deferred multi-step lethal
 verification tool.
+
+## Outcome (all gates green)
+
+- **Built:** `src/cgpy/search.py` (structured seeding: MAIN, unambiguous trainer mid-effect
+  selects — the fetch-class fixtures — and any select via the cgpy state token; native-verbatim
+  validation/errors; deterministic prediction reshuffle per pin §4; clone-per-step sessions with
+  native error strings), `src/cgpy/game.py` + `compat/` + `alias.py` (the `cg` surface;
+  `CG_ENGINE=py` at the four harness entry points, additive lines only), `Engine.fork()`,
+  manual-coin as COIN_HEAD selects in `chain.py`, `visualize_data` god frames (CamelCase log
+  names probed from trace god_logs). `GameState.clone()` stopped deep-copying the immutable
+  CardDB (~15× faster forks).
+- **Gate (a) drop-in:** `battle.py` under `CG_ENGINE=py` — 2+20 mirror + 20 ml-vs-dx games,
+  agents unchanged, **zero crashes**, ~1.5 games/s (results were appended to `data/battles.jsonl`
+  during the run and reverted — cgpy rows don't belong in the native ledger).
+- **Gate (b) verdict agreement:** `tests/strategy/test_engine_agreement_engine.py` — on every
+  draw-free seeded fixture the two engines agree (f110 **True on both** — the whole
+  fetch→attach→retreat→promote→attack→win cascade; f26/f48/f24 refute on both). f15's recorded
+  `correct` ([1] Lillie's) is draw-6-dependent (not prediction-invariant) — excluded there,
+  pinned deterministically in `test_lethal_cgpy.py` via the Petrel line instead.
+- **Gate (c) clone safety:** `tests/parity/test_clone_safety.py` — fork at EVERY select of every
+  committed trace, fork and original replay identically (29/29 traces).
+- **Item 5 (lethal tool on cgpy):** `tests/lethal_helpers.py::engine_confirms_py` (DLL-free, and
+  **no `search_begin_input` needed** — proven by stripping f110's blob → still True);
+  `lethal_probe.py --engine py`; `tests/strategy/test_lethal_cgpy.py` hand-drives the two
+  deferred retreat-to-promote WIN lines (f15 Petrel→Air Balloon→retreat→promote→Aura Jab; f24
+  attach→PPP×2→retreat→promote→Cosmic Beam) to the engine's win verdict by card identity — the
+  committed Phase-3 ground truth. Tests: `tests/parity/test_search_api.py`,
+  `test_compat_game.py`, `test_clone_safety.py`.
+
+**Deliberately out of scope (raise, never guess):** token-less seeding of ability/attack-rider
+mid-effect selects, multi-pose op programs (Hilda/Crispin sequences), LOOKING states, setup-phase
+selects with a facedown own active. The planner catches the ValueError → verdict None (sound).
 
 ## Build items
 

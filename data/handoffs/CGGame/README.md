@@ -13,8 +13,8 @@ parity — for DLL-free local play AND a clone/seed/step verification engine.
 | M0 — DSL vocabulary, table snapshots, determinism pins | [01-m0-vocabulary-and-pins.md](01-m0-vocabulary-and-pins.md) | ✅ done |
 | M1 — trace harness + vanilla game loop | [02-m1-harness-vanilla-loop.md](02-m1-harness-vanilla-loop.md) | ✅ done (12/12 vanilla traces green) |
 | M2 — chain interpreter + 50-union burn-down + CI gate | [03-m2-union-burndown.md](03-m2-union-burndown.md) | ✅ done (41/41 traces green, 29 committed fixtures, goldens in) |
-| M3 — verification API + `CG_ENGINE=py` selection | [04-m3-verification-api.md](04-m3-verification-api.md) | 🔶 next — resume here |
-| M4 — pool-wide fan-out + coverage ledger | [05-m4-pool-fanout.md](05-m4-pool-fanout.md) | ⬜ todo |
+| M3 — verification API + `CG_ENGINE=py` selection | [04-m3-verification-api.md](04-m3-verification-api.md) | ✅ done (42-game drop-in gate 0 crashes; verdict agreement 4/4 + f110 True-on-both; clone-safety all traces; DLL-free lethal harness) |
+| M4 — pool-wide fan-out + coverage ledger | [05-m4-pool-fanout.md](05-m4-pool-fanout.md) | 🔶 next — resume here |
 
 ## Cold-start resume protocol (any session, this worktree)
 

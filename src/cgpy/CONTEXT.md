@@ -43,7 +43,11 @@ parity, verified by trace replay. `src/cg/` is never modified; cgpy never import
 `render.py` (per-seat masking == `GetBattleData`; god frames) · `options.py` (ALL option
 building + ordering) · `turn.py` (setup/mulligan machine, turn loop, KO/prize/promotion) ·
 `damage.py` (base→mods→×W→−R→mods) · `chain.py` (the DSL interpreter) · `engine.py` (facade:
-start/step/observation/clone) · `verify/` (trace/differ/replayer).
+start/step/observation/clone/`fork()`) · `verify/` (trace/differ/replayer) ·
+`search.py` (M3: `state_from_obs`/`state_from_visualize` structured seeding, the state
+token, clone-per-step sessions) · `game.py` (M3: the `cg/game.py`-shaped battle singleton,
+`visualize_data`) · `compat/` + `alias.py` (M3: the `cg` package surface + `sys.modules`
+mapping, env `CG_ENGINE=py`).
 
 ## Invariants
 
@@ -55,11 +59,16 @@ start/step/observation/clone) · `verify/` (trace/differ/replayer).
 - Options are built ONLY in `options.py`; ordering is part of the parity contract.
 - Chain programs and frames are plain data — no closures in state, so `clone()` is a deepcopy.
 
-## Status (2026-07-10)
+## Status (2026-07-11)
 
-M0 (vocabulary, snapshots, determinism pins) and M1 (harness; setup + vanilla game loop —
-12/12 vanilla traces green incl. evolutions, retreats, KOs, prizes, promotions, win/draw) are
-complete. M2 in progress: chain interpreter live with the first ~10 union trainers; the 5
-agent-deck traces are the burn-down queue (each first-divergence names the next card/op).
-Then M3 (verification API + `CG_ENGINE=py` aliasing) and M4 (pool-wide fan-out + coverage
-ledger `data/engine/coverage.json`).
+M0 (vocabulary, snapshots, determinism pins), M1 (harness; setup + vanilla game loop —
+12/12 vanilla traces green), M2 (chain interpreter, 50-card union burn-down — 29 committed
+traces green, CI gate) and M3 (verification API + drop-in selection) are complete. M3
+shipped: `search.py` (structured seeding at MAIN, trainer mid-effect and token-exact
+selects; native-verbatim validation; deterministic prediction reshuffle per pin §4;
+clone-per-step sessions), `game.py`/`compat/`/`alias.py` (`CG_ENGINE=py` runs the whole
+battle harness + agents unchanged — 42-game gate, zero crashes), the clone-safety gate
+(fork at every select of every trace), the native-vs-cgpy verdict-agreement gate on the
+seeded lethal fixtures, and the DLL-free lethal harness (`engine_confirms_py`,
+`lethal_probe.py --engine py`, the f15/f24 win-line drives). Next: M4 (pool-wide fan-out +
+coverage ledger `data/engine/coverage.json`).

@@ -41,6 +41,24 @@ deck-independent, reach the search pre-anchor.
   (`update-strategy/references/authoring-gates.md`, `planner-code`): a closed-form-only line that would
   pass a seed-less unit retest returns `False` here.
 
+## The cgpy twin (Phase 2 on the standalone engine, M3)
+
+Every piece above also runs DLL-free on the cgpy engine twin
+([src/cgpy/CONTEXT.md](../src/cgpy/CONTEXT.md)):
+
+- **Gate** — `tests/lethal_helpers.py::engine_confirms_py(fixture, pilot)`: same verdict
+  contract, driven through `cgpy.alias`. Structured seeding needs **no**
+  `search_begin_input` — a bare captured frame verifies (the blob-backfill step becomes
+  optional). Verdict agreement with native is pinned per seeded fixture
+  (`tests/strategy/test_engine_agreement_engine.py`); a state cgpy cannot reconstruct
+  returns `None`, never a guess.
+- **Probe** — `tools/sim/lethal_probe.py <fixture> --engine py` probes on the twin,
+  including fixtures that carry no seed.
+- **Drives** — `tests/strategy/test_lethal_cgpy.py` hand-drives the two deferred
+  retreat-to-promote win lines (f15 Petrel→Air Balloon, f24 double-PPP) to the engine's
+  win verdict by card identity: the committed, DLL-free proof the maneuvers are real, and
+  the pins the Phase-3 steering hooks must flip.
+
 ## Worked example — correction 84071010:f15 (the deferred `lethal-retreat-enabler`)
 
 Active Makuhita (retreat 2, 0 energy) blocks a benched Mega Lucario ex; opponent Active Riolu (80 HP),
