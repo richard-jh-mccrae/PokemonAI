@@ -637,6 +637,18 @@
    "preventDamageFromEx": true
   }
  },
+ "356": {
+  "name": "Ethan's Magcargo",
+  "retreat": {
+   "freeIfNoEnergy": true
+  }
+ },
+ "788": {
+  "name": "Charmander",
+  "retreat": {
+   "freeIfNoEnergy": true
+  }
+ },
  "attack:141": {
   "name": "Mind Bend",
   "rider": [

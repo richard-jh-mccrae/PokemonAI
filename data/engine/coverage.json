@@ -6,24 +6,24 @@
  },
  "summary": {
   "cards": {
-   "verified": 94,
+   "verified": 101,
    "total": 1267
   },
   "chains": {
-   "verified": 199,
-   "deferred": 747,
-   "derived": 1292,
-   "seeded": 584,
-   "unprobed": 1
+   "verified": 218,
+   "deferred": 725,
+   "derived": 1283,
+   "seeded": 595,
+   "unprobed": 2
   },
   "cleanFrames": {
-   "clean": 14634,
-   "total": 14634,
+   "clean": 15199,
+   "total": 15199,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
-   "covered": 64,
-   "total": 64,
+   "covered": 69,
+   "total": 69,
    "nativeChainVocabulary": 71,
    "coveredOps": [
     "coin",
@@ -40,6 +40,7 @@
     "xActivateAsk",
     "xBenchCounterDamage",
     "xBonusIfHeads",
+    "xBonusPerDiscarded",
     "xBonusPerHeads",
     "xBothShuffleCoinDraw",
     "xBothShuffleHandDraw",
@@ -48,6 +49,7 @@
     "xCoinsCount",
     "xCoinsUntilTails",
     "xDamageOwnBenchEach",
+    "xDamagePerDiscarded",
     "xDamagePerHeads",
     "xDamageSelf",
     "xDeckDistinctBasicEnergyTakeAttach",
@@ -59,8 +61,11 @@
     "xDiscardEnergyAttachBench",
     "xDiscardEnergyAttachOneTarget",
     "xDiscardEnergyAttachSelf",
+    "xDiscardEnergyCountScaled",
+    "xDiscardHandCountScaled",
     "xDiscardHandDraw",
     "xDiscardOwnEnergy",
+    "xDiscardStadium",
     "xDistributeCounters",
     "xDrawThenShuffleSelfIn",
     "xEndTurnAfterPlay",
@@ -92,7 +97,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 144
+  "traces": 152
  },
  "cards": {
   "1": {
@@ -121,6 +126,8 @@
     "2": "verified"
    },
    "evidence": [
+    "micro_cnt_groundmelter_9980",
+    "micro_cnt_lavaburst_9980",
     "micro_discardall_9610",
     "micro_ember_9620",
     "micro_fakeout_9200",
@@ -148,6 +155,14 @@
    },
    "evidence": [
     "micro_bonusheads_9200",
+    "micro_cnt_bellowing_9980",
+    "micro_cnt_doubleeater_9980",
+    "micro_cnt_dragoff_9980",
+    "micro_cnt_flashspear_9980",
+    "micro_cnt_followme_9980",
+    "micro_cnt_groundmelter_9980",
+    "micro_cnt_lavaburst_9980",
+    "micro_cnt_steelburst_9980",
     "micro_coinfail_9200",
     "micro_coinscount_9700",
     "micro_collapse_9745",
@@ -282,6 +297,8 @@
     "4": "verified"
    },
    "evidence": [
+    "micro_cnt_bellowing_9980",
+    "micro_cnt_flashspear_9980",
     "micro_onboard213a286_9900",
     "micro_onboard213a286_9901"
    ],
@@ -295,6 +312,8 @@
     "5": "verified"
    },
    "evidence": [
+    "micro_cnt_doubleeater_9980",
+    "micro_cnt_followme_9980",
     "micro_discardall_9610",
     "micro_onboard753a1087_9900",
     "micro_onboard753a1087_9901",
@@ -337,6 +356,7 @@
     "6": "verified"
    },
    "evidence": [
+    "micro_cnt_bellowing_9980",
     "micro_coinfail_9200",
     "micro_earthquake_9710",
     "micro_onboard534_9900",
@@ -397,6 +417,7 @@
     "8": "verified"
    },
    "evidence": [
+    "micro_cnt_steelburst_9980",
     "micro_deckattach_9720"
    ],
    "updated": "2026-07-11"
@@ -653,13 +674,15 @@
   "31": {
    "name": "Chi-Yu",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "31": "derived",
-    "attack:19": "seeded",
-    "attack:20": "deferred"
+    "31": "verified",
+    "attack:19": "verified",
+    "attack:20": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_groundmelter_9980"
+   ],
    "updated": "2026-07-11"
   },
   "32": {
@@ -802,6 +825,7 @@
     "attack:40": "verified"
    },
    "evidence": [
+    "micro_cnt_flashspear_9980",
     "micro_onboard43a39_9900",
     "micro_onboard43a39_9901",
     "micro_psychout_9970"
@@ -1033,13 +1057,14 @@
   "63": {
    "name": "Raging Bolt ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
     "63": "verified",
     "attack:71": "verified",
-    "attack:72": "deferred"
+    "attack:72": "verified"
    },
    "evidence": [
+    "micro_cnt_bellowing_9980",
     "micro_onboard63a71_9900",
     "micro_onboard63a71_9901"
    ],
@@ -1290,11 +1315,11 @@
   "84": {
    "name": "Scizor ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "84": "derived",
     "attack:100": "seeded",
-    "attack:101": "deferred"
+    "attack:101": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -1412,7 +1437,7 @@
    "chains": {
     "94": "derived",
     "attack:116": "deferred",
-    "attack:117": "deferred"
+    "attack:117": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -1698,9 +1723,11 @@
    "status": "deferred",
    "chains": {
     "118": "deferred",
-    "attack:149": "deferred"
+    "attack:149": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_steelburst_9980"
+   ],
    "updated": "2026-07-11"
   },
   "119": {
@@ -3198,13 +3225,15 @@
   "244": {
    "name": "Jolteon ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
-    "244": "derived",
-    "attack:336": "deferred",
+    "244": "verified",
+    "attack:336": "verified",
     "attack:337": "seeded"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_flashspear_9980"
+   ],
    "updated": "2026-07-11"
   },
   "245": {
@@ -3848,6 +3877,9 @@
     "attack:413": "seeded"
    },
    "evidence": [
+    "micro_cnt_followme_9980",
+    "micro_cnt_lavaburst_9980",
+    "micro_cnt_steelburst_9980",
     "micro_coinscount_9700",
     "micro_deckattach_9720",
     "micro_ember_9620",
@@ -4582,23 +4614,27 @@
   "355": {
    "name": "Ethan's Slugma",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "355": "derived",
-    "attack:492": "derived"
+    "355": "verified",
+    "attack:492": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_lavaburst_9980"
+   ],
    "updated": "2026-07-11"
   },
   "356": {
    "name": "Ethan's Magcargo",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "356": "deferred",
-    "attack:493": "deferred"
+    "356": "verified",
+    "attack:493": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_lavaburst_9980"
+   ],
    "updated": "2026-07-11"
   },
   "357": {
@@ -4926,10 +4962,10 @@
   "385": {
    "name": "Arven's Toedscruel",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "385": "derived",
-    "attack:536": "deferred",
+    "attack:536": "seeded",
     "attack:537": "seeded"
    },
    "evidence": [],
@@ -5470,7 +5506,7 @@
    "status": "deferred",
    "chains": {
     "431": "deferred",
-    "attack:608": "deferred"
+    "attack:608": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -5546,10 +5582,10 @@
   "438": {
    "name": "Primeape",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "438": "derived",
-    "attack:617": "deferred"
+    "attack:617": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -6358,13 +6394,15 @@
   "508": {
    "name": "Cryogonal",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "508": "derived",
-    "attack:719": "deferred",
-    "attack:720": "derived"
+    "508": "verified",
+    "attack:719": "verified",
+    "attack:720": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_dragoff_9980"
+   ],
    "updated": "2026-07-11"
   },
   "509": {
@@ -6447,6 +6485,13 @@
     "attack:732": "seeded"
    },
    "evidence": [
+    "micro_cnt_bellowing_9980",
+    "micro_cnt_doubleeater_9980",
+    "micro_cnt_dragoff_9980",
+    "micro_cnt_flashspear_9980",
+    "micro_cnt_followme_9980",
+    "micro_cnt_groundmelter_9980",
+    "micro_cnt_steelburst_9980",
     "micro_coinscount_9700",
     "micro_collapse_9745",
     "micro_discardall_9610",
@@ -7357,10 +7402,10 @@
   "587": {
    "name": "Galvantula",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "587": "derived",
-    "attack:843": "deferred"
+    "attack:843": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -9342,6 +9387,12 @@
     "attack:1090": "verified"
    },
    "evidence": [
+    "micro_cnt_bellowing_9980",
+    "micro_cnt_dragoff_9980",
+    "micro_cnt_flashspear_9980",
+    "micro_cnt_followme_9980",
+    "micro_cnt_groundmelter_9980",
+    "micro_cnt_lavaburst_9980",
     "micro_coinscount_9700",
     "micro_deckattach_9720",
     "micro_discardall_9610",
@@ -9564,7 +9615,7 @@
    "status": "deferred",
    "chains": {
     "766": "deferred",
-    "attack:1110": "deferred"
+    "attack:1110": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -9823,9 +9874,9 @@
   "788": {
    "name": "Charmander",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "788": "deferred",
+    "788": "unprobed",
     "attack:1140": "derived"
    },
    "evidence": [],
@@ -9845,10 +9896,10 @@
   "790": {
    "name": "Mega Charizard X ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "790": "derived",
-    "attack:1142": "deferred"
+    "attack:1142": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -9981,10 +10032,10 @@
   "802": {
    "name": "Mamoswine",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "802": "derived",
-    "attack:1158": "deferred",
+    "attack:1158": "seeded",
     "attack:1159": "seeded"
    },
    "evidence": [],
@@ -10962,7 +11013,7 @@
    "status": "deferred",
    "chains": {
     "886": "deferred",
-    "attack:1277": "deferred"
+    "attack:1277": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -11017,10 +11068,10 @@
   "891": {
    "name": "Team Rocket's Honchkrow",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "891": "derived",
-    "attack:1285": "deferred",
+    "attack:1285": "seeded",
     "attack:1286": "derived"
    },
    "evidence": [],
@@ -12734,13 +12785,15 @@
   "1039": {
    "name": "Clefairy",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1039": "derived",
-    "attack:1499": "deferred",
-    "attack:1500": "derived"
+    "1039": "verified",
+    "attack:1499": "verified",
+    "attack:1500": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_followme_9980"
+   ],
    "updated": "2026-07-11"
   },
   "1040": {
@@ -12749,7 +12802,7 @@
    "status": "deferred",
    "chains": {
     "1040": "deferred",
-    "attack:1501": "deferred"
+    "attack:1501": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -12757,12 +12810,14 @@
   "1041": {
    "name": "Mawile",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1041": "derived",
-    "attack:1502": "deferred"
+    "1041": "verified",
+    "attack:1502": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_cnt_doubleeater_9980"
+   ],
    "updated": "2026-07-11"
   },
   "1042": {

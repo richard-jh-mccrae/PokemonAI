@@ -676,6 +676,86 @@ def _opp_hand_shuffle_in_random(sents, i):
     return None
 
 
+_DISC_SCALE_HEAD = re.compile(
+    r"^(?:You may )?[Dd]iscard (all|any amount of|any number of|up to (\d+)) "
+    r"(Basic )?(?:\{(\w)\} )?(Energy(?: cards?)?|Supporter cards that have .Team Rocket. "
+    r"in their name) from (this Pok.mon|your Pok.mon|among your Pok.mon|"
+    r"your Benched Pok.mon|your hand)(.*)$")
+_DISC_SCALE_TAIL = re.compile(
+    r"^[Tt]his attack does (\d+) (more )?damage for each card you discarded "
+    r"in this way\.$")
+
+
+@ATK.rule("R-D01")
+def _discard_count_scaled(sents, i):
+    """Steel-Burst class: discard own energy/hand cards, damage scales per card
+    discarded — two-sentence and comma-joined single-sentence prints."""
+    m = _DISC_SCALE_HEAD.match(sents[i])
+    if not m:
+        return None
+    amount, upto, basic, letter, what, scope, rest = m.groups()
+    rest = rest.strip()
+    if rest.startswith(", and "):
+        t = _DISC_SCALE_TAIL.match(rest[6:])
+        k = 1
+    elif rest in ("", ".") and i + 1 < len(sents):
+        t = _DISC_SCALE_TAIL.match(sents[i + 1])
+        k = 2
+    else:
+        return None
+    if not t:
+        return None
+    per, more = int(t.group(1)), bool(t.group(2))
+    if what.startswith("Supporter"):
+        flt: dict = {"cardType": [3], "nameContains": "Team Rocket"}   # SUPPORTER
+    elif basic:
+        flt = {"basicEnergy": True}
+    elif letter:
+        if letter not in _TYPE_LETTER:
+            return None
+        flt = {"energy": True, "energyType": [_TYPE_LETTER[letter]]}
+    else:
+        flt = {"energy": True}
+    if scope == "your hand":
+        d_op: dict = {"op": "xDiscardHandCountScaled", "filter": flt}
+        if upto:
+            d_op["max"] = int(upto)
+    else:
+        d_op = {"op": "xDiscardEnergyCountScaled", "filter": flt,
+                "scope": ("self" if scope.startswith("this") else
+                          "bench" if "Benched" in scope else "own")}
+        if amount == "all":
+            d_op["all"] = True
+        elif upto:
+            d_op["max"] = int(upto)
+    dmg_op = {"op": "xBonusPerDiscarded" if more else "xDamagePerDiscarded", "per": per}
+    return (k, Frag("", pre=[d_op, dmg_op]))
+
+
+@ATK.rule("R-D02")
+def _gust_switch_in(sents, i):
+    """Pull / Drag Off: the attacker chooses the defender's new Active; optional flat
+    damage to the new Active (pinned cnt_dragoff_9980 f8/f9)."""
+    if not _s(r"Switch in 1 of your opponent.s Benched Pok.mon to the Active "
+              r"Spot\.")(sents, i):
+        return None
+    op: dict = {"op": "effectSwitchEnemy"}
+    k = 1
+    if i + 1 < len(sents):
+        m = _s(r"This attack does (\d+) damage to the new Active Pok.mon\.")(sents, i + 1)
+        if m:
+            op["damageNew"] = int(m.group(1))
+            k = 2
+    return (k, Frag("", rider=[op]))
+
+
+@ATK.rule("R-D03")
+def _discard_stadium_rider(sents, i):
+    if _s(r"Then, discard that Stadium\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xDiscardStadium"}]))
+    return None
+
+
 @ATK.rule("R-C10")
 def _coins_until_tails_hand_shuffle_in(sents, i):
     """Horrifying Bite: until-tails flips drive per-heads random shuffle-ins (the

@@ -8298,13 +8298,22 @@
   "name": "Allure"
  },
  "attack:20": {
-  "name": "Ground Melter",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "stadium_in_play",
+   "n": 60
+  },
+  "rider": [
+   {
+    "op": "xDiscardStadium"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Then, discard that Stadium."
+   "rules": [
+    "R-A09",
+    "R-D03"
    ]
-  }
+  },
+  "name": "Ground Melter"
  },
  "attack:21": {
   "name": "Permeating Chill",
@@ -8849,14 +8858,25 @@
   "name": "Burst Roar"
  },
  "attack:72": {
-  "name": "Bellowing Thunder",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "basicEnergy": true
+    },
+    "scope": "own"
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 70
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may discard any amount of Basic Energy from your Pokémon.",
-    "This attack does 70 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Bellowing Thunder"
  },
  "attack:73": {
   "name": "Silent Wing",
@@ -9163,14 +9183,29 @@
   "name": "Steel Wing"
  },
  "attack:101": {
-  "name": "Cross Breaker",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true,
+     "energyType": [
+      8
+     ]
+    },
+    "scope": "self",
+    "max": 2
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 120
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard up to 2 {M} Energy from this Pokémon.",
-    "This attack does 120 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Cross Breaker"
  },
  "attack:102": {
   "name": "Dig Claws",
@@ -9325,14 +9360,29 @@
   }
  },
  "attack:117": {
-  "name": "Spill the Tea",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true,
+     "energyType": [
+      1
+     ]
+    },
+    "scope": "own",
+    "max": 3
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 70
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard up to 3 {G} Energy cards from your Pokémon.",
-    "This attack does 70 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Spill the Tea"
  },
  "attack:118": {
   "rider": [
@@ -9643,14 +9693,29 @@
   "name": "Demolish"
  },
  "attack:149": {
-  "name": "Steel Burst",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true,
+     "energyType": [
+      8
+     ]
+    },
+    "scope": "self",
+    "all": true
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 50
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard all {M} Energy from this Pokémon.",
-    "This attack does 50 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Steel Burst"
  },
  "attack:150": {
   "name": "Petty Grudge",
@@ -11540,14 +11605,26 @@
   }
  },
  "attack:336": {
-  "name": "Flashing Spear",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "basicEnergy": true
+    },
+    "scope": "bench",
+    "max": 2
+   },
+   {
+    "op": "xBonusPerDiscarded",
+    "per": 90
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may discard up to 2 Basic Energy from your Benched Pokémon.",
-    "This attack does 90 more damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Flashing Spear"
  },
  "attack:337": {
   "selfLockAllNextTurn": true,
@@ -13035,14 +13112,29 @@
   }
  },
  "attack:493": {
-  "name": "Lava Burst",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true,
+     "energyType": [
+      2
+     ]
+    },
+    "scope": "self",
+    "max": 5
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 70
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard up to 5 {R} Energy from this Pokémon.",
-    "This attack does 70 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Lava Burst"
  },
  "attack:494": {
   "rider": [
@@ -13526,13 +13618,17 @@
   "name": "Slight Intrusion"
  },
  "attack:536": {
-  "name": "Pull",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectSwitchEnemy"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Switch in 1 of your opponent’s Benched Pokémon to the Active Spot."
+   "rules": [
+    "R-D02"
    ]
-  }
+  },
+  "name": "Pull"
  },
  "attack:537": {
   "rider": [
@@ -14260,14 +14356,26 @@
   }
  },
  "attack:608": {
-  "name": "Erasure Ball",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true
+    },
+    "scope": "bench",
+    "max": 2
+   },
+   {
+    "op": "xBonusPerDiscarded",
+    "per": 60
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may discard up to 2 Energy from your Benched Pokémon.",
-    "This attack does 60 more damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Erasure Ball"
  },
  "attack:609": {
   "name": "Rocket Mirror",
@@ -14352,14 +14460,18 @@
   "name": "Wild Kick"
  },
  "attack:617": {
-  "name": "Drag Off",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectSwitchEnemy",
+    "damageNew": 30
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Switch in 1 of your opponent’s Benched Pokémon to the Active Spot.",
-    "This attack does 30 damage to the new Active Pokémon."
+   "rules": [
+    "R-D02"
    ]
-  }
+  },
+  "name": "Drag Off"
  },
  "attack:618": {
   "selfLockNextTurn": true,
@@ -15402,14 +15514,18 @@
   "name": "Sheer Cold"
  },
  "attack:719": {
-  "name": "Drag Off",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectSwitchEnemy",
+    "damageNew": 20
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Switch in 1 of your opponent’s Benched Pokémon to the Active Spot.",
-    "This attack does 20 damage to the new Active Pokémon."
+   "rules": [
+    "R-D02"
    ]
-  }
+  },
+  "name": "Drag Off"
  },
  "attack:720": {
   "name": "Icicle",
@@ -16727,14 +16843,29 @@
   "name": "Surprise Attack"
  },
  "attack:843": {
-  "name": "Discharge",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true,
+     "energyType": [
+      4
+     ]
+    },
+    "scope": "self",
+    "all": true
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 50
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard all {L} Energy from this Pokémon.",
-    "This attack does 50 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Discharge"
  },
  "attack:844": {
   "name": "Muddy Bolt",
@@ -19415,13 +19546,26 @@
   }
  },
  "attack:1110": {
-  "name": "Garland Ray",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true
+    },
+    "scope": "self",
+    "max": 2
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 120
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard up to 2 Energy cards from this Pokémon, and this attack does 120 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Garland Ray"
  },
  "attack:1111": {
   "rider": [
@@ -19729,13 +19873,28 @@
   }
  },
  "attack:1142": {
-  "name": "Inferno X",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardEnergyCountScaled",
+    "filter": {
+     "energy": true,
+     "energyType": [
+      2
+     ]
+    },
+    "scope": "own"
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 90
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard any amount of {R} Energy from among your Pokémon, and this attack does 90 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Inferno X"
  },
  "attack:1143": {
   "condBonus": {
@@ -19903,13 +20062,22 @@
   }
  },
  "attack:1158": {
-  "name": "Wreck",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "stadium_in_play",
+   "n": 120
+  },
+  "rider": [
+   {
+    "op": "xDiscardStadium"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Then, discard that Stadium."
+   "rules": [
+    "R-A09",
+    "R-D03"
    ]
-  }
+  },
+  "name": "Wreck"
  },
  "attack:1159": {
   "rider": [
@@ -21176,13 +21344,22 @@
   "name": "Reckless Charge"
  },
  "attack:1277": {
-  "name": "Somersault Dive",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "stadium_in_play",
+   "n": 140
+  },
+  "rider": [
+   {
+    "op": "xDiscardStadium"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Then, discard that Stadium."
+   "rules": [
+    "R-A09",
+    "R-D03"
    ]
-  }
+  },
+  "name": "Somersault Dive"
  },
  "attack:1278": {
   "name": "Mud-Slap",
@@ -21249,13 +21426,27 @@
   }
  },
  "attack:1285": {
-  "name": "Rocket Feathers",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardHandCountScaled",
+    "filter": {
+     "cardType": [
+      3
+     ],
+     "nameContains": "Team Rocket"
+    }
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 60
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may discard any number of Supporter cards that have “Team Rocket” in their name from your hand, and this attack does 60 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Rocket Feathers"
  },
  "attack:1286": {
   "name": "Hammer In",
@@ -23571,13 +23762,17 @@
   "name": "Thunder Shock"
  },
  "attack:1499": {
-  "name": "Follow Me",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectSwitchEnemy"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Switch in 1 of your opponent’s Benched Pokémon to the Active Spot."
+   "rules": [
+    "R-D02"
    ]
-  }
+  },
+  "name": "Follow Me"
  },
  "attack:1500": {
   "name": "Flop",
@@ -23586,22 +23781,46 @@
   }
  },
  "attack:1501": {
-  "name": "Shooting Moons",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardHandCountScaled",
+    "filter": {
+     "energy": true
+    },
+    "max": 4
+   },
+   {
+    "op": "xBonusPerDiscarded",
+    "per": 40
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may discard up to 4 Energy cards from your hand, and this attack does 40 more damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Shooting Moons"
  },
  "attack:1502": {
-  "name": "Double Eater",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xDiscardHandCountScaled",
+    "filter": {
+     "energy": true
+    },
+    "max": 2
+   },
+   {
+    "op": "xDamagePerDiscarded",
+    "per": 60
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard up to 2 Energy cards from your hand, and this attack does 60 damage for each card you discarded in this way."
+   "rules": [
+    "R-D01"
    ]
-  }
+  },
+  "name": "Double Eater"
  },
  "attack:1503": {
   "rider": [

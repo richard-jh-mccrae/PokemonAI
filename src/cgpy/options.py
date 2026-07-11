@@ -82,9 +82,14 @@ def provided_units_of(gs: GameState, p: PokemonInPlay, serial: int) -> int:
 
 
 def effective_retreat_cost(gs: GameState, p: PokemonInPlay) -> int:
-    """Printed retreat cost adjusted by attached-tool modifiers (Air Balloon −2)."""
+    """Printed retreat cost adjusted by attached-tool modifiers (Air Balloon −2) and
+    card passives (Melt Away: free when NO energy cards attached — pinned
+    cnt_lavaburst_9980 f32: RETREAT offered on a bare Ethan's Magcargo, cost 3)."""
     from .chain import def_for
 
+    cdef = def_for(gs.card_id(p.top)) or {}
+    if cdef.get("retreat", {}).get("freeIfNoEnergy") and not p.energy:
+        return 0
     cost = gs.stat(p.top).retreatCost
     for s in p.tools:
         cost += (def_for(gs.card_id(s)) or {}).get("tool", {}).get("retreatBonus", 0)

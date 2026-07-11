@@ -398,7 +398,11 @@ def op_effect_switch_me(gs, fr, args) -> bool:
 
 
 def op_effect_switch_enemy(gs, fr, args) -> bool:
-    """Gust: choose an opponent benched Pokémon into their Active (Boss's Orders)."""
+    """Gust: choose an opponent benched Pokémon into their Active (Boss's Orders; the
+    Pull/Drag-Off attack rider — pinned cnt_dragoff/cnt_followme_9980: ctx SWITCH over
+    the defender's bench, posed to the ATTACKER, effect=attacker). ``damageNew``: Drag
+    Off then hits the new Active flat (pinned -20 putDamageCounter=false; no W/R seen —
+    the pin target had no weakness)."""
     seat = fr.seat
     opp = 1 - seat
     ob = gs.players[opp]
@@ -413,6 +417,12 @@ def op_effect_switch_enemy(gs, fr, args) -> bool:
     fr.vars.pop("answer")
     from .turn import _do_switch
     _do_switch(gs, opp, idx, retreat=False)
+    if args.get("damageNew") and ob.active is not None:
+        target = ob.active
+        target.hp = max(0, target.hp - args["damageNew"])
+        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
+                 "cardId": gs.card_id(target.top), "serial": target.top,
+                 "value": -args["damageNew"], "putDamageCounter": False})
     return True
 
 
@@ -933,6 +943,120 @@ def op_opp_hand_shuffle_in_random(gs, fr, args) -> bool:
     # ATTEMPTED (onboard753a1087_9901 f33: 1 heads, empty hand, SHUFFLE logged).
     if moved or (args.get("perHeads") and count > 0):
         _shuffle(gs, victim)
+    return True
+
+
+def op_discard_energy_count_scaled(gs, fr, args) -> bool:
+    """Steel-Burst class pre-op: discard own attached energy, remembering how many CARDS
+    left (``discarded_count`` scales the damage op that follows). ``all``: no select,
+    every match goes, attach order forward (pinned cnt_steelburst_9980 f12: three
+    MOVE_CARDs ENERGY→DISCARD before the HP_CHANGE). Otherwise ONE multi-pick select —
+    type ATTACHED_CARD, ctx DISCARD_ENERGY_CARD, min 0, max=min(n, present), options in
+    board order with per-holder energyIndex (pinned cnt_lavaburst_9980 f16 self /
+    cnt_bellowing_9980 f17 own-wide; "You may" adds nothing — min is already 0). An
+    empty candidate list poses nothing (pinned cnt_flashspear_9980 f14: bench had no
+    Basic Energy, straight to base damage). ``scope``: self | own | bench."""
+    seat = fr.seat
+    b = gs.players[seat]
+    flt = args.get("filter", {})
+    scope = args.get("scope", "self")
+    if scope == "self":
+        holders = [(int(AreaType.ACTIVE), 0, b.active)] if b.active else []
+    elif scope == "bench":
+        holders = [(int(AreaType.BENCH), i, p) for i, p in enumerate(b.bench)]
+    else:
+        holders = ([(int(AreaType.ACTIVE), 0, b.active)] if b.active else []) + \
+            [(int(AreaType.BENCH), i, p) for i, p in enumerate(b.bench)]
+    cands = [(area, idx, p, k, s) for area, idx, p in holders
+             for k, s in enumerate(p.energy) if _card_matches(gs, s, flt)]
+
+    def _discard(p, serial):
+        p.energy.remove(serial)
+        b.discard.append(serial)
+        gs.move_card(serial, AreaType.ENERGY, AreaType.DISCARD, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+
+    if args.get("all"):
+        ordered = sorted(cands, key=lambda c: gs.attach_seq.get(c[4], 0))
+        for _area, _idx, p, _k, s in ordered:
+            _discard(p, s)
+        fr.vars["discarded_count"] = len(ordered)
+        return True
+    if not cands:
+        fr.vars["discarded_count"] = 0
+        return True
+    if "answer" not in fr.vars:
+        opts = [{"type": int(OptionType.ENERGY_CARD), "area": area, "index": idx,
+                 "playerIndex": seat, "energyIndex": k}
+                for area, idx, _p, k, _s in cands]
+        n = min(args.get("max", len(cands)), len(cands))
+        pose(gs, seat, type=SelectType.ATTACHED_CARD,
+             context=SelectContext.DISCARD_ENERGY_CARD, options=opts,
+             min_count=0, max_count=n, effect_card=fr.source)
+        return False
+    answered = fr.vars.pop("answered_options")
+    fr.vars.pop("answer")
+    picked = []
+    for o in answered:
+        p = b.active if o["area"] == int(AreaType.ACTIVE) else b.bench[o["index"]]
+        picked.append((p, p.energy[o["energyIndex"]]))
+    for p, s in picked:                    # resolve serials before any list mutates
+        _discard(p, s)
+    fr.vars["discarded_count"] = len(picked)
+    return True
+
+
+def op_discard_hand_count_scaled(gs, fr, args) -> bool:
+    """Hand flavor of the count-scaled discard (Double Eater / Shooting Moons): ONE
+    CARD select over the filtered hand, ctx DISCARD, min 0, max=n (pinned
+    cnt_doubleeater_9980 f11); ``discarded_count`` scales the damage op after."""
+    seat = fr.seat
+    b = gs.players[seat]
+    flt = args.get("filter", {})
+    if "answer" not in fr.vars:
+        opts = [opt_card(AreaType.HAND, i, seat) for i, s in enumerate(b.hand)
+                if _card_matches(gs, s, flt)]
+        if not opts:
+            fr.vars["discarded_count"] = 0
+            return True
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.DISCARD,
+             options=opts, min_count=0,
+             max_count=min(args.get("max", len(opts)), len(opts)),
+             effect_card=fr.source)
+        return False
+    serials = [b.hand[o["index"]] for o in fr.vars.pop("answered_options")]
+    fr.vars.pop("answer")
+    for s in serials:
+        b.hand.remove(s)
+        b.discard.append(s)
+        gs.move_card(s, AreaType.HAND, AreaType.DISCARD, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    fr.vars["discarded_count"] = len(serials)
+    return True
+
+
+def op_damage_per_discarded(gs, fr, args) -> bool:
+    fr.vars["damage_override"] = args["per"] * fr.vars.get("discarded_count", 0)
+    return True
+
+
+def op_bonus_per_discarded(gs, fr, args) -> bool:
+    fr.vars["damage_bonus"] = fr.vars.get("damage_bonus", 0) + \
+        args["per"] * fr.vars.get("discarded_count", 0)
+    return True
+
+
+def op_discard_stadium(gs, fr, args) -> bool:
+    """"Then, discard that Stadium." rider — same shape as the replace-and-place
+    discard (turn.py): the stadium goes to its OWNER's discard with a public
+    STADIUM→DISCARD move. No stadium in play = no-op (the condBonus above already
+    contributed nothing)."""
+    for old in gs.stadium:
+        owner = gs.owner(old)
+        gs.players[owner].discard.append(old)
+        gs.move_card(old, AreaType.STADIUM, AreaType.DISCARD, seat=owner,
+                     visible_to_owner=True, visible_to_opponent=True)
+    gs.stadium = []
     return True
 
 
@@ -1978,4 +2102,9 @@ OPS = {
     "xEndTurnAfterPlay": op_end_turn_after,
     "xOppHandDiscardRandom": op_opp_hand_discard_random,
     "xOppHandShuffleInRandom": op_opp_hand_shuffle_in_random,
+    "xDiscardEnergyCountScaled": op_discard_energy_count_scaled,
+    "xDiscardHandCountScaled": op_discard_hand_count_scaled,
+    "xDamagePerDiscarded": op_damage_per_discarded,
+    "xBonusPerDiscarded": op_bonus_per_discarded,
+    "xDiscardStadium": op_discard_stadium,
 }
