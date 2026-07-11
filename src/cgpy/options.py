@@ -135,14 +135,26 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
                     opts.append({"type": int(OptionType.ATTACH), "area": int(AreaType.HAND),
                                  "index": i, "inPlayArea": area, "inPlayIndex": idx})
         elif stat.cardType == CardType.POKEMON and stat.evolvesFrom:
-            if gs.turn > 2:  # neither player evolves on their own first turn
-                for area, idx, p in _targets(gs, seat):
-                    if p.entered_turn >= gs.turn:
-                        continue  # can't evolve the turn it entered play / evolved
-                    if gs.stat(p.top).name == stat.evolvesFrom:
-                        opts.append({"type": int(OptionType.EVOLVE),
-                                     "area": int(AreaType.HAND), "index": i,
-                                     "inPlayArea": area, "inPlayIndex": idx})
+            from .chain import def_for as _cdef_for
+            ob = gs.players[1 - seat]
+            opp_active_ex = (ob.active is not None and not ob.active_facedown
+                             and (gs.stat(ob.active.top).ex
+                                  or gs.stat(ob.active.top).megaEx))
+            for area, idx, p in _targets(gs, seat):
+                # Fighting-Roar-class passive on the TARGET: "can evolve during your
+                # first turn or the turn you play it" while the opponent's Active is
+                # a Pokémon {ex} — megaEx qualifies (pinned rvl1371_9000 f8: Luxray ex
+                # EVOLVE offered onto a this-turn Luxio vs Mega Latias ex).
+                waived = opp_active_ex and (_cdef_for(gs.card_id(p.top)) or {}).get(
+                    "evolve", {}).get("immediateIfOppActiveEx", False)
+                if not waived and gs.turn <= 2:
+                    continue  # neither player evolves on their own first turn
+                if not waived and p.entered_turn >= gs.turn:
+                    continue  # can't evolve the turn it entered play / evolved
+                if gs.stat(p.top).name == stat.evolvesFrom:
+                    opts.append({"type": int(OptionType.EVOLVE),
+                                 "area": int(AreaType.HAND), "index": i,
+                                 "inPlayArea": area, "inPlayIndex": idx})
         elif stat.cardType in (CardType.ITEM, CardType.SUPPORTER):
             from .chain import check_legal, def_for
             cdef = def_for(cid)

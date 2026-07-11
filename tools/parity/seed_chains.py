@@ -108,7 +108,15 @@ _NOUN_FILTERS: list[tuple[re.Pattern, dict]] = [
      {"pokemon": True, "basic": True, "hpMax": None}),
     (re.compile(r"^Basic (\w+.s) Pok.mon$"),
      {"pokemon": True, "basic": True, "nameContains": None}),
+    (re.compile(r"^Basic \{(\w)\} Pok.mon$"),
+     {"pokemon": True, "basic": True, "energyType": None}),
     (re.compile(r"^Basic Pok.mon$"), {"pokemon": True, "basic": True}),
+    (re.compile(r"^(\w+.s) Pok.mon$"),          # "Misty's Pokémon" (possessive family)
+     {"pokemon": True, "nameContains": None}),
+    (re.compile(r"^Pok.mon that have .(\w+). in their name$"),
+     {"pokemon": True, "nameContains": None}),
+    (re.compile(r"^Pok.mon with \{(\w)\} Resistance$"),
+     {"pokemon": True, "resistanceType": None}),
     (re.compile(r"^Stage 1 Pok.mon$"), {"pokemon": True, "stage1": True}),
     (re.compile(r"^Stage 2 Pok.mon$"), {"pokemon": True, "stage2": True}),
     (re.compile(r"^Tera Pok.mon$"), {"pokemon": True, "tera": True}),
@@ -127,6 +135,40 @@ _NOUN_FILTERS: list[tuple[re.Pattern, dict]] = [
 ]
 
 
+_CSV_CATEGORIES: dict[str, list] | None = None
+
+
+def _csv_categories() -> dict[str, list]:
+    """Card-family tags (Future / Ancient / …) from the OFFICIAL card CSV's Category
+    column — no native table carries them (sgc87_9300 f51 proves the engine filters
+    by family). CSV Card ID == engine cardId (verified: 27 Iron Leaves, 87 Miraidon)."""
+    global _CSV_CATEGORIES
+    if _CSV_CATEGORIES is None:
+        import csv as _csv
+        out: dict[str, set] = {}
+        with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8-sig",
+                  newline="") as f:
+            for row in _csv.DictReader(f):
+                out.setdefault(row["Category"], set()).add(int(row["Card ID"]))
+        _CSV_CATEGORIES = {k: sorted(v) for k, v in out.items()}
+    return _CSV_CATEGORIES
+
+
+_CARD_NAMES: dict[str, set] | None = None
+
+
+def _card_names() -> dict[str, set]:
+    """Exact card-name sets from the snapshot tables (bare-species noun validation)."""
+    global _CARD_NAMES
+    if _CARD_NAMES is None:
+        cards = json.loads((DEFS / "card_data.json").read_text(encoding="utf-8"))
+        _CARD_NAMES = {
+            "pokemon": {c["name"] for c in cards if c["cardType"] == 0},
+            "all": {c["name"] for c in cards},
+        }
+    return _CARD_NAMES
+
+
 def _noun_filter(noun: str) -> dict | None:
     for pat, proto in _NOUN_FILTERS:
         pm = pat.match(noun)
@@ -137,11 +179,23 @@ def _noun_filter(noun: str) -> dict | None:
                 if letter not in _TYPE_LETTER:
                     return None
                 flt["energyType"] = [_TYPE_LETTER[letter]]
+            if "resistanceType" in proto and proto["resistanceType"] is None:
+                letter = pm.group(1)
+                if letter not in _TYPE_LETTER:
+                    return None
+                flt["resistanceType"] = [_TYPE_LETTER[letter]]
             if "hpMax" in proto and proto["hpMax"] is None:
                 flt["hpMax"] = int(pm.group(1))
             if "nameContains" in proto and proto["nameContains"] is None:
                 flt["nameContains"] = pm.group(1)
             return flt
+    # Bare exact-name nouns, DB-validated: "Froakie" (a Pokémon species) or
+    # "Fennel cards" (copies of a named trainer). Unknown names never match.
+    m = re.match(r"^(.+?) cards?$", noun)
+    if m and m.group(1) in _card_names()["all"]:
+        return {"name": m.group(1)}
+    if noun in _card_names()["pokemon"]:
+        return {"pokemon": True, "name": noun}
     return None
 
 
@@ -676,6 +730,60 @@ def _opp_hand_shuffle_in_random(sents, i):
     return None
 
 
+@ATK.rule("R-E01")
+def _opp_reveals_hand(sents, i):
+    """Reveal-hand family (pinned rvl73/297/786/284/800): plain reveal /
+    discard-all-Items+Tools rider / per-Trainer|Energy damage scalers."""
+    if not _s(r"Your opponent reveals their hand\.")(sents, i):
+        return None
+    # The plain and discard-all scripts are menu-gated on a nonempty opponent hand
+    # (pinned rvl297_9000 f50 / rvlitems284_9102 f68: only the sibling attack offered
+    # at oppHand 0); the choose script is NOT (rvl995_9001 f53 offers 995 at 0).
+    gate = [{"op": "oppHandAbove", "n": 0}]
+    if i + 1 < len(sents):
+        if _s(r"Discard all Item cards and Pok.mon Tool cards you find "
+              r"there\.")(sents, i + 1):
+            return (2, Frag("", rider=[{"op": "xOppHandReveal",
+                                        "discardFilter": {"cardType": [
+                                            int(CardType.ITEM), int(CardType.TOOL)]}}],
+                            legal=gate))
+        m = _s(r"This attack does (\d+) damage for each (Trainer|Energy) card you "
+               r"find there\.")(sents, i + 1)
+        if m:
+            flt = ({"cardType": [int(CardType.ITEM), int(CardType.TOOL),
+                                 int(CardType.SUPPORTER), int(CardType.STADIUM)]}
+                   if m.group(2) == "Trainer" else
+                   {"cardType": [int(CardType.BASIC_ENERGY),
+                                 int(CardType.SPECIAL_ENERGY)]})
+            return (2, Frag("", pre=[{"op": "xOppHandReveal", "countFilter": flt},
+                                     {"op": "xDamagePerRevealed",
+                                      "per": int(m.group(1))}]))
+    return (1, Frag("", rider=[{"op": "xOppHandReveal"}], legal=gate))
+
+
+@ATK.rule("R-E02")
+def _opp_reveals_hand_choose(sents, i):
+    """Comma-joined reveal prints: attacker picks one revealed card (discard /
+    deck-bottom — pinned rvl995/rvl401) or a per-Energy scaler (Energy Straw)."""
+    if _s(r"Your opponent reveals their hand, and you discard a card you find "
+          r"there\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xOppHandRevealChoose", "to": "discard"}]))
+    if _s(r"Your opponent reveals their hand, and you choose a card you find there "
+          r"and put it on the bottom of their deck\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xOppHandRevealChoose",
+                                    "to": "deckBottom"}]))
+    m = _s(r"Your opponent reveals their hand, and this attack does (\d+) damage "
+           r"for each Energy card you find there\.")(sents, i)
+    if m:
+        return (1, Frag("", pre=[{"op": "xOppHandReveal",
+                                  "countFilter": {"cardType": [
+                                      int(CardType.BASIC_ENERGY),
+                                      int(CardType.SPECIAL_ENERGY)]}},
+                                 {"op": "xDamagePerRevealed",
+                                  "per": int(m.group(1))}]))
+    return None
+
+
 _DISC_SCALE_HEAD = re.compile(
     r"^(?:You may )?[Dd]iscard (all|any amount of|any number of|up to (\d+)) "
     r"(Basic )?(?:\{(\w)\} )?(Energy(?: cards?)?|Supporter cards that have .Team Rocket. "
@@ -783,19 +891,193 @@ def _may_switch_self(sents, i):
 
 @ATK.rule("R-B17")
 def _search_hand_rider(sents, i):
-    m = _s(r"Search your deck for (.+?), reveal (?:it|them), and put (?:it|them) into your "
-           r"hand\.")(sents, i)
+    """Deck→hand searches: revealed and unrevealed prints, optional "You may" (a real
+    YES_NO ask — pinned sg33_9000 f18), unfiltered counts ("a card" = min 1, pinned
+    sg1093_9000 f14; "up to N cards" = min 0) and the benched-count cap (Nab 'n'
+    Dash → maxVar, pinned sg1_9000 f34 min 0)."""
+    m = _s(r"(You may )?[Ss]earch your deck for (.+?)(, reveal (?:it|them),)? and put "
+           r"(?:it|them) into your hand\.")(sents, i)
     if not m:
         return None
-    spec = parse_search_spec(m.group(1))
+    may, spec_s, reveal = m.group(1), m.group(2), bool(m.group(3))
+    op: dict = {"op": "effectDeckToHandAndShuffle"}
+    legal: list = []
+    if spec_s == "a number of cards up to the number of your Benched Pokémon":
+        op.update(min=0, maxVar="atk_bench", filter={})
+        legal = [{"op": "benchExists"}]   # menu-gated benchless (pinned sg1_9000 f9)
+    elif spec_s == "a card":
+        op.update(min=1, max=1, filter={})
+    elif (m2 := re.match(r"^up to (\d+) cards$", spec_s)):
+        op.update(min=0, max=int(m2.group(1)), filter={})
+    else:
+        spec = parse_search_spec(spec_s)
+        if spec is None:
+            return None
+        op.update(min=0, max=spec[0], filter=spec[1])
+    if not reveal:
+        op["reveal"] = False
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    if may:
+        return (k, Frag("", rider=[{"op": "xMayAsk",
+                                    "requires": [{"op": "deckNotEmpty"}],
+                                    "program": [op]}], legal=legal))
+    return (k, Frag("", rider=[op], legal=legal))
+
+
+@ATK.rule("R-E03")
+def _search_bench_rider(sents, i):
+    """Deck→bench searches ("put them onto your Bench"): Flock / Geo Gate / Roto Call
+    class — ctx TO_BENCH min 0, bench-room clamp inside the op (pinned sg23_9000 f9);
+    "You may" wraps the same YES_NO ask as the hand flavor."""
+    m = _s(r"(You may )?[Ss]earch your deck for (.+?) and put (?:it|them) onto your "
+           r"Bench\.")(sents, i)
+    if not m:
+        return None
+    spec = parse_search_spec(m.group(2))
     if spec is None:
+        return None
+    n, flt = spec
+    if not (flt.get("pokemon") or "name" in flt):
+        return None                       # bench puts place Pokémon
+    op = {"op": "effectDeckToBenchAndShuffle", "min": 0, "max": n, "filter": flt}
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    if m.group(1):
+        return (k, Frag("", rider=[{"op": "xMayAsk",
+                                    "requires": [{"op": "deckNotEmpty"}],
+                                    "program": [op]}]))
+    return (k, Frag("", rider=[op]))
+
+
+@ATK.rule("R-E05")
+def _search_energy_attach_distribute(sents, i):
+    """The search-and-attach family (ctx ATTACH_TO pick + ATTACH_FROM placement —
+    pinned sg965/sg328/sg242/sg208/sg1463). Family-noun targets ("your Future
+    Pokémon") stay unmatched: the Future/Ancient tag exists in no extracted table
+    (sgc87_9300 f51 proves the native filters by it), so those defer loudly."""
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    # Jolting Charge: two typed buckets, any-way placement over all your mons.
+    m = _s(r"Search your deck for up to (\d+) Basic \{(\w)\} Energy cards and up to "
+           r"(\d+) Basic \{(\w)\} Energy cards and attach them to your Pok.mon in any "
+           r"way you like\.")(sents, i)
+    if m:
+        if m.group(2) not in _TYPE_LETTER or m.group(4) not in _TYPE_LETTER:
+            return None
+        buckets = [{"filter": {"basicEnergy": True,
+                               "energyType": [_TYPE_LETTER[m.group(2)]]},
+                    "max": int(m.group(1))},
+                   {"filter": {"basicEnergy": True,
+                               "energyType": [_TYPE_LETTER[m.group(4)]]},
+                    "max": int(m.group(3))}]
+        return (k, Frag("", rider=[{"op": "xDeckEnergyAttachDistribute",
+                                    "buckets": buckets, "mode": "anyWay"}]))
+    # Single bucket: "up to N Basic [{X}] Energy cards [of different types] and
+    # attach them to <target>."
+    m = _s(r"Search your deck for (an?|up to \d+) (Basic )?(?:\{(\w)\} )?Energy cards?"
+           r"( of different types)? and attach (?:it|them) to (.+?)\.")(sents, i)
+    if not m:
+        return None
+    qty, basic, letter, distinct, target = m.groups()
+    n = 1 if qty in ("a", "an") else int(qty.split()[-1])
+    flt: dict = {}
+    if basic:
+        flt["basicEnergy"] = True
+    else:
+        flt["energy"] = True
+    if letter:
+        if letter not in _TYPE_LETTER:
+            return None
+        flt["energyType"] = [_TYPE_LETTER[letter]]
+    bucket = [{"filter": flt, "max": n}]
+    if distinct:
+        # distinct-types cap on the pick (pinned sg321_9001 f9: max 1 over 12
+        # same-type candidates)
+        bucket[0]["distinctTypes"] = True
+    op: dict = {"op": "xDeckEnergyAttachDistribute", "buckets": bucket}
+    if target == "your Pokémon in any way you like":
+        op["mode"] = "anyWay"
+    elif target == "your Benched Pokémon in any way you like":
+        op.update(mode="anyWay", benchOnly=True)
+    elif target == "1 of your Pokémon":
+        if letter:
+            return None   # typed single-target prints belong to R-B18's pinned
+                          # xDeckEnergyAttach shape (contextCard = the energy)
+        op["mode"] = "oneTarget"          # Burning Charge (pinned sg328: listing kept)
+    elif target == "1 of your Benched Pokémon":
+        op.update(mode="oneTarget", benchOnly=True, targetListing=False)
+        # menu-gated benchless (pinned sg242_9000 f7: END offered, no ATTACK)
+        return (k, Frag("", rider=[op], legal=[{"op": "benchExists"}]))
+    elif target == "your Tera Pokémon in any way you like":
+        # Prism Charge: no Tera in play → the picked cards stay in the deck
+        # (pinned sg321_9001 f9-f10).
+        op.update(mode="anyWay", targets={"pokemon": True, "tera": True})
+    elif (fm := re.match(r"^your (Future|Ancient) Pok.mon in any way you like$",
+                         target)):
+        # Family targets come from the official CSV Category column (the native
+        # filters by family — pinned sgc87_9300 f51: fodder excluded, Miraidons kept).
+        ids = _csv_categories().get(fm.group(1), [])
+        if not ids:
+            return None
+        op.update(mode="anyWay", targets={"cardIdIn": ids})
+    else:
+        tm = re.match(r"^1 of your Benched \{(\w)\} Pok.mon$", target)
+        if not tm or tm.group(1) not in _TYPE_LETTER:
+            return None                     # family-noun / unknown targets defer
+        # Send Flowers: benched-{X} targets; an empty bench still poses the pick and
+        # the picked card stays in the deck (pinned sg1463_9000 f9-f10).
+        op.update(mode="anyWay", benchOnly=True,
+                  targets={"pokemon": True, "energyType": [_TYPE_LETTER[tm.group(1)]]})
+    return (k, Frag("", rider=[op]))
+
+
+@ATK.rule("R-E06")
+def _per_bench_loops(sents, i):
+    """"For each of your Benched Pokémon, search your deck for …" loops (pinned
+    sg1078_9000 f37 attach / sg740_9000 f48-f49 evolve)."""
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    gate = [{"op": "benchExists"}]   # menu-gated benchless (pinned sg1078_9000 f10)
+    m = _s(r"For each of your Benched Pok.mon, search your deck for a Basic \{(\w)\} "
+           r"Energy card and attach it to that Pok.mon\.")(sents, i)
+    if m and m.group(1) in _TYPE_LETTER:
+        return (k, Frag("", rider=[{"op": "xDeckAttachPerBench",
+                                    "filter": {"basicEnergy": True,
+                                               "energyType": [_TYPE_LETTER[m.group(1)]]}}],
+                        legal=gate))
+    if _s(r"For each of your Benched Pok.mon, search your deck for a card that evolves "
+          r"from that Pok.mon and put it onto that Pok.mon to evolve it\.")(sents, i):
+        return (k, Frag("", rider=[{"op": "xDeckEvolvePerBench"}], legal=gate))
+    return None
+
+
+@ATK.rule("R-E07")
+def _evolve_choose_from_deck(sents, i):
+    if not _s(r"Search your deck for a card that evolves from 1 of your Pok.mon and "
+              r"put it onto that Pok.mon to evolve it\.")(sents, i):
         return None
     k = 1
     if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
         k = 2
-    n, flt = spec
-    return (k, Frag("", rider=[{"op": "effectDeckToHandAndShuffle", "min": 0, "max": n,
-                                "filter": flt}]))
+    return (k, Frag("", rider=[{"op": "xDeckEvolveChooseAndShuffle"}]))
+
+
+@ATK.rule("R-E08")
+def _distinct_energy_to_hand(sents, i):
+    m = _s(r"Search your deck for up to (\d+) Basic Energy cards of different types, "
+           r"reveal them, and put them into your hand\.")(sents, i)
+    if not m:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    return (k, Frag("", rider=[{"op": "xDeckDistinctBasicEnergyToHand",
+                                "n": int(m.group(1))}]))
 
 
 @ATK.rule("R-B18")

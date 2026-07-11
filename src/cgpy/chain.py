@@ -105,6 +105,14 @@ def _card_matches(gs: GameState, serial: int, flt: dict) -> bool:
         return False
     if "nameNot" in flt and stat.name == flt["nameNot"]:
         return False
+    if "name" in flt and stat.name != flt["name"]:
+        return False   # exact-species prints ("up to 2 Froakie")
+    if "cardIdIn" in flt and gs.card_id(serial) not in flt["cardIdIn"]:
+        return False   # explicit id lists (Future/Ancient family — seeded from the
+                       # official CSV's Category column; no native table carries it)
+    if "resistanceType" in flt and (stat.cardType != CardType.POKEMON
+                                    or stat.resistance not in flt["resistanceType"]):
+        return False   # "Pokémon with {F} Resistance" (resistance = energy-type int)
     if flt.get("megaEx") and not stat.megaEx:
         return False
     if flt.get("stage1") and not stat.stage1:
@@ -296,10 +304,10 @@ def _select_from_deck(gs: GameState, fr: EffectFrame, args: dict, context: int) 
     b = gs.players[seat]
     if "answer" not in fr.vars:
         opts = _zone_options(gs, seat, b.deck, AreaType.DECK, args.get("filter", {}))
-        if not opts and args.get("min", 0) == 0:
-            gs.turn_action_count += 1     # the skipped ask still bumps tac (pinned
-            fr.vars["picked"] = []        # ms_mirror_1001 f9, same as the setup rule)
-            return True
+        if not opts:                      # zero-option search (min 1 included: an
+            gs.turn_action_count += 1     # unposable ask): the skipped ask still bumps
+            fr.vars["picked"] = []        # tac (pinned ms_mirror_1001 f9, same as the
+            return True                   # setup rule)
         pose(gs, seat, type=SelectType.CARD, context=context, options=opts,
              min_count=args.get("min", 0), max_count=min(args.get("max", 1), len(opts)),
              deck_listing=list(b.deck), effect_card=fr.source)
@@ -347,15 +355,32 @@ def op_cost_hand_trash(gs, fr, args) -> bool:
 
 
 def op_deck_to_hand_and_shuffle(gs, fr, args) -> bool:
-    if not _select_from_deck(gs, fr, args, SelectContext.TO_HAND):
-        return False
     seat = fr.seat
     b = gs.players[seat]
+    if "maxVar" in args and "answer" not in fr.vars:
+        # "a number of cards up to the number of your Benched Pokémon" (Nab 'n' Dash):
+        # the cap resolves at use time; an empty bench skips the ask like a zero-option
+        # search (unpinned edge — no trace reaches it benchless).
+        args = dict(args, max=len(b.bench))
+        if args["max"] <= 0:
+            gs.turn_action_count += 1
+            _shuffle(gs, seat)
+            return True
+        fr.vars["_resolved_max"] = args["max"]
+    elif "_resolved_max" in fr.vars:
+        args = dict(args, max=fr.vars["_resolved_max"])
+    if not _select_from_deck(gs, fr, args, SelectContext.TO_HAND):
+        return False
+    fr.vars.pop("_resolved_max", None)
+    # Un-revealed prints ("Search your deck for a card and put it into your hand.")
+    # hide the identity from the opponent — MOVE_CARD_REVERSE (pinned sg1093_9000 f15 /
+    # sg1_9000 f35 / sg33_9000 f20); reveal prints stay visible both ways.
+    vis_opp = args.get("reveal", True)
     for s in fr.vars.pop("picked"):
         b.deck.remove(s)
         b.hand.append(s)
         gs.move_card(s, AreaType.DECK, AreaType.HAND, seat=seat,
-                     visible_to_owner=True, visible_to_opponent=True)
+                     visible_to_owner=True, visible_to_opponent=vis_opp)
     _shuffle(gs, seat)
     return True
 
@@ -943,6 +968,387 @@ def op_opp_hand_shuffle_in_random(gs, fr, args) -> bool:
     # ATTEMPTED (onboard753a1087_9901 f33: 1 heads, empty hand, SHUFFLE logged).
     if moved or (args.get("perHeads") and count > 0):
         _shuffle(gs, victim)
+    return True
+
+
+# The native logs a bottom-of-deck placement with a pseudo toArea beyond the AreaType
+# enum (pinned rvl401_9000 f14 / rvlitems401_9100 f11: MOVE_CARD LOOKING->14).
+_AREA_DECK_BOTTOM = 14
+
+
+def op_opp_hand_reveal(gs, fr, args) -> bool:
+    """Reveal-hand family: "Your opponent reveals their hand." — the whole hand
+    round-trips through LOOKING with NO select and NO net state change. Pinned
+    rvl73/297/786_9000: per card HAND→LOOKING (MOVEREV to the hand's OWNER, visible
+    with ids to the attacker) then LOOKING→HAND (visible both ways), both directions
+    in hand order, order preserved. The in-moves are opp-turn hand exits, so the
+    replay hand-pick FIFO must be drained (hand_pick_expect — the M4 alignment
+    hazard). ``discardFilter``: after the return, matching cards discard
+    HAND→DISCARD in hand order, visible both ways, no HP log (Crushing Pulse —
+    pinned rvlitems284_9100 f9/f14). ``countFilter``: count the matching revealed
+    cards into ``revealed_match_count`` for a scaler tail (Wondrous Cotton /
+    Energy Straw)."""
+    victim = 1 - fr.seat
+    vb = gs.players[victim]
+    serials = list(vb.hand)
+    for s in serials:
+        gs.move_card(s, AreaType.HAND, AreaType.LOOKING, seat=victim,
+                     visible_to_owner=False, visible_to_opponent=True)
+    gs.rng.hand_pick_expect(victim, serials)
+    for s in serials:
+        gs.move_card(s, AreaType.LOOKING, AreaType.HAND, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    flt = args.get("discardFilter")
+    if flt is not None:
+        matched = [s for s in serials if _card_matches(gs, s, flt)]
+        for s in matched:
+            vb.hand.remove(s)
+            vb.discard.append(s)
+            gs.move_card(s, AreaType.HAND, AreaType.DISCARD, seat=victim,
+                         visible_to_owner=True, visible_to_opponent=True)
+        gs.rng.hand_pick_expect(victim, matched)
+    cf = args.get("countFilter")
+    if cf is not None:
+        fr.vars["revealed_match_count"] = sum(
+            1 for s in serials if _card_matches(gs, s, cf))
+    return True
+
+
+def op_opp_hand_reveal_choose(gs, fr, args) -> bool:
+    """Reveal + the attacker picks ONE revealed card. ``to: "discard"`` — "…and you
+    discard a card you find there" (Claw of Darkness / Piercing Gaze, ctx DISCARD —
+    pinned rvl995_9000 f13); ``to: "deckBottom"`` — "…put it on the bottom of their
+    deck" (Thieving Swipe, ctx TO_DECK_BOTTOM, exit toArea 14 — pinned rvl401_9000
+    f13/f14). In-moves render like the plain reveal; the hand sits in LOOKING during
+    the pick (victim handCount 0, looking_owner = attacker so only the chooser sees
+    ids), options one CARD per revealed card in hand order (playerIndex = victim),
+    min1 max1, effect = the attacker's mon. The chosen exit logs FIRST, then the
+    rest return in original order. An empty revealed hand skips the select
+    (unpinned edge: no trace reaches an empty-hand reveal — nothing to choose)."""
+    victim = 1 - fr.seat
+    vb = gs.players[victim]
+    if "answer" not in fr.vars:
+        serials = list(vb.hand)
+        if not serials:
+            return True
+        for s in serials:
+            gs.move_card(s, AreaType.HAND, AreaType.LOOKING, seat=victim,
+                         visible_to_owner=False, visible_to_opponent=True)
+        gs.rng.hand_pick_expect(victim, serials)
+        vb.hand.clear()
+        gs.looking = list(serials)
+        gs.looking_owner = fr.seat
+        ctx = (SelectContext.TO_DECK_BOTTOM if args.get("to") == "deckBottom"
+               else SelectContext.DISCARD)
+        pose(gs, fr.seat, type=SelectType.CARD, context=ctx,
+             options=[opt_card(AreaType.LOOKING, i, victim)
+                      for i in range(len(serials))],
+             effect_card=fr.source)
+        return False
+    idx = fr.vars.pop("answered_options")[0]["index"]
+    fr.vars.pop("answer")
+    serials = list(gs.looking or [])
+    chosen = serials[idx]
+    gs.looking = None
+    gs.looking_owner = -1
+    if args.get("to") == "deckBottom":
+        vb.deck.insert(0, chosen)          # deck lists bottom-first: bottom = index 0
+        gs.move_card(chosen, AreaType.LOOKING, _AREA_DECK_BOTTOM, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    else:
+        vb.discard.append(chosen)
+        gs.move_card(chosen, AreaType.LOOKING, AreaType.DISCARD, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in serials:
+        if s == chosen:
+            continue
+        vb.hand.append(s)
+        gs.move_card(s, AreaType.LOOKING, AreaType.HAND, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+
+def _attach_from_deck(gs, seat, energy, target) -> None:
+    gs.players[seat].deck.remove(energy)
+    target.energy.append(energy)
+    gs.note_attach(energy)
+    gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
+             "cardId": gs.card_id(energy), "serial": energy,
+             "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+
+
+def op_deck_energy_attach_distribute(gs, fr, args) -> bool:
+    """The search-and-attach family (Turbo Flare / Burning Charge / Delightful Kiss /
+    Jolting Charge / Send Flowers class). ``buckets``: sequential deck picks — ctx
+    ATTACH_TO, min 0, max = bucket max, listing shown, effect = the attacker (pinned
+    sg965_9000 f62 / sg328_9000 f14); a zero-option bucket skips with a tac bump
+    (Jolting Charge's {G} bucket in an all-{L} deck — sg208 poses max 2, not 4).
+    Then placement per ``mode``:
+
+    - ``anyWay``: one ctx ATTACH_FROM select PER picked card, contextCard = that
+      energy, listing kept (pinned sg965_9000 f63; two sequential — sgc87_9302
+      f12-f13);
+    - ``oneTarget``: ONE ctx ATTACH_FROM select for all picked cards, contextCard
+      absent; posed even with a single candidate (pinned sg242_9000 f16); the deck
+      listing shows for the plain print but NOT the benched-only print (pinned
+      sg328_9000 f15 listing vs sg242_9000 f16 none — per-script quirk).
+
+    ``targets``: filter on the target's top card; ``benchOnly`` restricts the row.
+    NO legal target → the picked cards STAY IN THE DECK, silently (pinned sg1463_9000
+    f9-f10: Send Flowers picked a {G} energy with an empty bench — the god deck keeps
+    it — and sg321: Prism Charge picked with no Tera in play, nothing moved). A
+    ``distinctTypes`` bucket caps its max at the number of DISTINCT energy types among
+    the matches (pinned sg321_9001 f9: max 1 posed over 12 same-type candidates).
+    ATTACH log per placement, ONE shuffle at the end."""
+    seat = fr.seat
+    b = gs.players[seat]
+    v = fr.vars
+    buckets = args["buckets"]
+    mode = args.get("mode", "anyWay")
+
+    def targets_now():
+        from .options import _targets
+        flt = args.get("targets")
+        out = []
+        for area, idx, p in _targets(gs, seat):
+            if args.get("benchOnly") and area != int(AreaType.BENCH):
+                continue
+            if flt and not _card_matches(gs, p.top, flt):
+                continue
+            out.append((area, idx, p))
+        return out
+
+    while True:
+        bi = v.setdefault("bucket_i", 0)
+        if "pending_cards" not in v:
+            if bi >= len(buckets):
+                v.pop("bucket_i", None)
+                _shuffle(gs, seat)
+                return True
+            bk = buckets[bi]
+            if "answer" not in v:
+                opts = _zone_options(gs, seat, b.deck, AreaType.DECK,
+                                     bk.get("filter", {}))
+                if not opts:
+                    gs.turn_action_count += 1    # skipped ask still bumps tac
+                    v["bucket_i"] = bi + 1
+                    continue
+                cap = min(bk.get("max", 1), len(opts))
+                if bk.get("distinctTypes"):
+                    kinds = {int(gs.stat(b.deck[o["index"]]).energyType)
+                             for o in opts}
+                    cap = min(cap, len(kinds))
+                pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+                     options=opts, min_count=0, max_count=cap,
+                     deck_listing=list(b.deck), effect_card=fr.source)
+                return False
+            v["pending_cards"] = [b.deck[o["index"]]
+                                  for o in v.pop("answered_options")]
+            v.pop("answer")
+        cards = v["pending_cards"]
+        if not cards:
+            v.pop("pending_cards")
+            v["bucket_i"] = v["bucket_i"] + 1
+            continue
+        rows = targets_now()
+        if not rows:                             # nowhere to place: cards stay in deck
+            v["pending_cards"] = []
+            continue
+        from .turn import _target_of
+        if mode == "oneTarget":
+            if "answer" not in v:
+                pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+                     options=[opt_card(a, i, seat) for a, i, _p in rows],
+                     min_count=1, max_count=1,
+                     deck_listing=(list(b.deck) if args.get("targetListing", True)
+                                   else None),
+                     effect_card=fr.source)
+                return False
+            o = v.pop("answered_options")[0]
+            v.pop("answer")
+            target = _target_of(gs, seat, o["area"], o["index"])
+            for s in list(cards):
+                _attach_from_deck(gs, seat, s, target)
+            v["pending_cards"] = []
+            continue
+        energy = cards[0]
+        if "answer" not in v:
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+                 options=[opt_card(a, i, seat) for a, i, _p in rows],
+                 min_count=1, max_count=1, deck_listing=list(b.deck),
+                 context_card=energy, effect_card=fr.source)
+            return False
+        o = v.pop("answered_options")[0]
+        v.pop("answer")
+        _attach_from_deck(gs, seat, energy, _target_of(gs, seat, o["area"], o["index"]))
+        cards.pop(0)
+
+
+def op_deck_attach_per_bench(gs, fr, args) -> bool:
+    """Overflowing Wishes: "For each of your Benched Pokémon, search your deck for a
+    Basic {P} Energy card and attach it to that Pokémon." — one ctx ATTACH_TO pick per
+    benched mon IN BENCH ORDER, contextCard = that mon, min 0 max 1, listing shown
+    (pinned sg1078_9000 f37); a pick attaches straight to that mon (ATTACH log); a mon
+    with no matching deck cards skips with a tac bump (zero-option convention); ONE
+    shuffle after the loop."""
+    seat = fr.seat
+    b = gs.players[seat]
+    v = fr.vars
+    while True:
+        k = v.setdefault("bench_i", 0)
+        if k >= len(b.bench):
+            v.pop("bench_i", None)
+            _shuffle(gs, seat)
+            return True
+        mon = b.bench[k]
+        if "answer" not in v:
+            opts = _zone_options(gs, seat, b.deck, AreaType.DECK,
+                                 args.get("filter", {}))
+            if not opts:
+                gs.turn_action_count += 1
+                v["bench_i"] = k + 1
+                continue
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+                 options=opts, min_count=0, max_count=1,
+                 deck_listing=list(b.deck), context_card=mon.top,
+                 effect_card=fr.source)
+            return False
+        picked = [b.deck[o["index"]] for o in v.pop("answered_options")]
+        v.pop("answer")
+        for s in picked:
+            _attach_from_deck(gs, seat, s, mon)
+        v["bench_i"] = k + 1
+
+
+def op_deck_evolve_per_bench(gs, fr, args) -> bool:
+    """Cellular Ascension: "For each of your Benched Pokémon, search your deck for a
+    card that evolves from that Pokémon and put it onto that Pokémon to evolve it."
+    — one ctx EVOLVES_TO pick per benched mon in bench order, contextCard = that mon,
+    min 0 max 1, listing shown (pinned sg740_9000 f48-f49: two sequential picks,
+    cc s5 then s6); a pick evolves immediately (EVOLVE log); no matching deck card →
+    skip with a tac bump; ONE shuffle after the loop (pinned f50)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    v = fr.vars
+    while True:
+        k = v.setdefault("bench_i", 0)
+        if k >= len(b.bench):
+            v.pop("bench_i", None)
+            _shuffle(gs, seat)
+            return True
+        mon = b.bench[k]
+        if "answer" not in v:
+            name = gs.stat(mon.top).name
+            opts = [opt_card(AreaType.DECK, i, seat) for i, s in enumerate(b.deck)
+                    if gs.stat(s).cardType == CardType.POKEMON
+                    and gs.stat(s).evolvesFrom == name]
+            if not opts:
+                gs.turn_action_count += 1
+                v["bench_i"] = k + 1
+                continue
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.EVOLVES_TO,
+                 options=opts, min_count=0, max_count=1,
+                 deck_listing=list(b.deck), context_card=mon.top,
+                 effect_card=fr.source)
+            return False
+        picked = [b.deck[o["index"]] for o in v.pop("answered_options")]
+        v.pop("answer")
+        if picked:
+            from .turn import _apply_evolution
+            b.deck.remove(picked[0])
+            _apply_evolution(gs, seat, picked[0], mon)
+        v["bench_i"] = k + 1
+
+
+def op_deck_evolve_choose_and_shuffle(gs, fr, args) -> bool:
+    """Cellular Evolution: "Search your deck for a card that evolves from 1 of your
+    Pokémon and put it onto that Pokémon to evolve it." — one ctx EVOLVES_TO pick over
+    deck cards evolving from ANY of your in-play mons; the evolve target = the first
+    board-order mon the picked card evolves from. Zero matches → tac bump + shuffle
+    (pinned sg738_9000 f12: SHUFFLE only, no select, Reuniclus all drawn). The posed
+    shape itself is unpinned (both micro-traces hit the zero-match path) — modeled on
+    Ascension/Cellular-Ascension's ctx EVOLVES_TO with no contextCard (no single
+    target mon exists before the pick)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    from .options import _targets
+    rows = _targets(gs, seat)
+    if "answer" not in fr.vars:
+        names = {gs.stat(p.top).name for _a, _i, p in rows}
+        opts = [opt_card(AreaType.DECK, i, seat) for i, s in enumerate(b.deck)
+                if gs.stat(s).cardType == CardType.POKEMON
+                and gs.stat(s).evolvesFrom in names]
+        if not opts:
+            gs.turn_action_count += 1
+            _shuffle(gs, seat)
+            return True
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.EVOLVES_TO,
+             options=opts, min_count=0, max_count=1,
+             deck_listing=list(b.deck), effect_card=fr.source)
+        return False
+    picked = [b.deck[o["index"]] for o in fr.vars.pop("answered_options")]
+    fr.vars.pop("answer")
+    if picked:
+        evo = picked[0]
+        base = gs.stat(evo).evolvesFrom
+        target = next((p for _a, _i, p in rows if gs.stat(p.top).name == base), None)
+        if target is not None:
+            from .turn import _apply_evolution
+            b.deck.remove(evo)
+            _apply_evolution(gs, seat, evo, target)
+    _shuffle(gs, seat)
+    return True
+
+
+def op_deck_distinct_basic_energy_to_hand(gs, fr, args) -> bool:
+    """Colorful Catch: "Search your deck for up to N Basic Energy cards of different
+    types, reveal them, and put them into your hand." — modeled on Crispin's pinned
+    sequential shape: up to N ctx TO_HAND picks, each min 0 max 1 (pinned sg189_9001
+    f9: max 1 posed, never N), later picks exclude already-taken types, a whiff stops
+    the sequence, a zero-option follow-up skips with a tac bump (Crispin pin), ONE
+    shuffle at the end. Moves are revealed (visible both ways — pinned f10/f13)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    v = fr.vars
+    while True:
+        taken = v.setdefault("taken_types", [])
+        if len(taken) >= args.get("n", 3):
+            v.pop("taken_types", None)
+            _shuffle(gs, seat)
+            return True
+        if "answer" not in v:
+            opts = [opt_card(AreaType.DECK, i, seat) for i, s in enumerate(b.deck)
+                    if gs.stat(s).cardType == CardType.BASIC_ENERGY
+                    and int(gs.stat(s).energyType) not in taken]
+            if not opts:
+                gs.turn_action_count += 1
+                v.pop("taken_types", None)
+                _shuffle(gs, seat)
+                return True
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.TO_HAND,
+                 options=opts, min_count=0, max_count=1,
+                 deck_listing=list(b.deck), effect_card=fr.source)
+            return False
+        picked = [b.deck[o["index"]] for o in v.pop("answered_options")]
+        v.pop("answer")
+        if not picked:                             # whiff ends the sequence
+            v.pop("taken_types", None)
+            _shuffle(gs, seat)
+            return True
+        s = picked[0]
+        b.deck.remove(s)
+        b.hand.append(s)
+        gs.move_card(s, AreaType.DECK, AreaType.HAND, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+        taken.append(int(gs.stat(s).energyType))
+
+
+def op_damage_per_revealed(gs, fr, args) -> bool:
+    """"…this attack does N damage for each <X> card you find there." — pre-op tail
+    after xOppHandReveal's countFilter, override semantics. The HP_CHANGE logs after
+    the reveal moves and even at 0 matches (pinned rvl800_9000 f12 value 0 /
+    rvl1230_9000 f19 −640 = 80×8)."""
+    fr.vars["damage_override"] = args["per"] * fr.vars.get("revealed_match_count", 0)
     return True
 
 
@@ -2102,6 +2508,14 @@ OPS = {
     "xEndTurnAfterPlay": op_end_turn_after,
     "xOppHandDiscardRandom": op_opp_hand_discard_random,
     "xOppHandShuffleInRandom": op_opp_hand_shuffle_in_random,
+    "xOppHandReveal": op_opp_hand_reveal,
+    "xOppHandRevealChoose": op_opp_hand_reveal_choose,
+    "xDamagePerRevealed": op_damage_per_revealed,
+    "xDeckEnergyAttachDistribute": op_deck_energy_attach_distribute,
+    "xDeckAttachPerBench": op_deck_attach_per_bench,
+    "xDeckEvolvePerBench": op_deck_evolve_per_bench,
+    "xDeckEvolveChooseAndShuffle": op_deck_evolve_choose_and_shuffle,
+    "xDeckDistinctBasicEnergyToHand": op_deck_distinct_basic_energy_to_hand,
     "xDiscardEnergyCountScaled": op_discard_energy_count_scaled,
     "xDiscardHandCountScaled": op_discard_hand_count_scaled,
     "xDamagePerDiscarded": op_damage_per_discarded,

@@ -1955,10 +1955,6 @@
    "source": "plain-pokemon"
   }
  },
- "356": {
-  "name": "Ethan's Magcargo",
-  "deferred": "ability unpinned:  Melt Away"
- },
  "357": {
   "name": "Ethan's Ho-Oh ex",
   "deferred": "ability unpinned:  Golden Flame"
@@ -4403,10 +4399,6 @@
    "source": "plain-pokemon"
   }
  },
- "788": {
-  "name": "Charmander",
-  "deferred": "ability unpinned:  Agile"
- },
  "789": {
   "name": "Charmeleon",
   "_seed": {
@@ -4758,10 +4750,6 @@
   "_seed": {
    "source": "plain-pokemon"
   }
- },
- "851": {
-  "name": "Silcoon",
-  "deferred": "ability unpinned:  Multiplying Cocoon"
  },
  "852": {
   "name": "Beautifly",
@@ -5808,10 +5796,6 @@
   "_seed": {
    "source": "plain-pokemon"
   }
- },
- "1036": {
-  "name": "Luxio",
-  "deferred": "ability unpinned:  Fighting Roar"
  },
  "1037": {
   "name": "Luxray",
@@ -7567,14 +7551,38 @@
   }
  },
  "1215": {
-  "name": "Ethan's Adventure",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true,
+       "nameContains": "Ethan’s"
+      },
+      {
+       "basicEnergy": true,
+       "energyType": [
+        2
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 in any combination of Ethan’s Pokémon and Basic {R} Energy cards, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-T01"
    ]
-  }
+  },
+  "name": "Ethan's Adventure"
  },
  "1216": {
   "name": "Team Rocket's Ariana",
@@ -8107,14 +8115,26 @@
   }
  },
  "attack:1": {
-  "name": "Nab ’n’ Dash",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "benchExists"
+   }
+  ],
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "maxVar": "atk_bench",
+    "filter": {},
+    "reveal": false
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a number of cards up to the number of your Benched Pokémon and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Nab ’n’ Dash"
  },
  "attack:2": {
   "name": "High Jump Kick",
@@ -8331,14 +8351,23 @@
   }
  },
  "attack:23": {
-  "name": "Flock",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToBenchAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "pokemon": true,
+     "name": "Froakie"
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Froakie and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E03"
    ]
-  }
+  },
+  "name": "Flock"
  },
  "attack:24": {
   "name": "Flop",
@@ -8434,14 +8463,31 @@
   }
  },
  "attack:33": {
-  "name": "Shinobi Blade",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDeckToHandAndShuffle",
+      "min": 1,
+      "max": 1,
+      "filter": {},
+      "reveal": false
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may search your deck for a card and put it into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Shinobi Blade"
  },
  "attack:34": {
   "rider": [
@@ -8879,13 +8925,23 @@
   "name": "Bellowing Thunder"
  },
  "attack:73": {
-  "name": "Silent Wing",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "oppHandAbove",
+    "n": 0
+   }
+  ],
+  "rider": [
+   {
+    "op": "xOppHandReveal"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand."
+   "rules": [
+    "R-E01"
    ]
-  }
+  },
+  "name": "Silent Wing"
  },
  "attack:74": {
   "name": "Gnaw",
@@ -9234,14 +9290,40 @@
   }
  },
  "attack:105": {
-  "name": "Peak Acceleration",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "max": 2
+     }
+    ],
+    "mode": "anyWay",
+    "targets": {
+     "cardIdIn": [
+      27,
+      37,
+      75,
+      80,
+      87,
+      192,
+      313,
+      971,
+      1089,
+      1188
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic Energy cards and attach them to your Future Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Peak Acceleration"
  },
  "attack:106": {
   "name": "Sparking Strike",
@@ -9265,7 +9347,7 @@
   "_seed": {
    "rules": [
     "R-A16",
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Quick Sign"
@@ -9438,7 +9520,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -10109,14 +10191,18 @@
   "name": "Trifrost"
  },
  "attack:189": {
-  "name": "Colorful Catch",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckDistinctBasicEnergyToHand",
+    "n": 3
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Basic Energy cards of different types, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E08"
    ]
-  }
+  },
+  "name": "Colorful Catch"
  },
  "attack:190": {
   "name": "Headbutt",
@@ -10286,14 +10372,38 @@
   "name": "Sonic Edge"
  },
  "attack:208": {
-  "name": "Jolting Charge",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true,
+       "energyType": [
+        1
+       ]
+      },
+      "max": 2
+     },
+     {
+      "filter": {
+       "basicEnergy": true,
+       "energyType": [
+        4
+       ]
+      },
+      "max": 2
+     }
+    ],
+    "mode": "anyWay"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic {G} Energy cards and up to 2 Basic {L} Energy cards and attach them to your Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Jolting Charge"
  },
  "attack:209": {
   "name": "Charged Web",
@@ -10634,14 +10744,36 @@
   }
  },
  "attack:242": {
-  "name": "Delightful Kiss",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "benchExists"
+   }
+  ],
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true,
+       "energyType": [
+        5
+       ]
+      },
+      "max": 2
+     }
+    ],
+    "mode": "oneTarget",
+    "benchOnly": true,
+    "targetListing": false
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic {P} Energy cards and attach them to 1 of your Benched Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Delightful Kiss"
  },
  "attack:243": {
   "selfLockAllNextTurn": true,
@@ -10710,7 +10842,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -10831,14 +10963,26 @@
   }
  },
  "attack:260": {
-  "name": "Humming Charge",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "max": 2
+     }
+    ],
+    "mode": "anyWay"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic Energy cards and attach them to your Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Humming Charge"
  },
  "attack:261": {
   "name": "Cotton Wings",
@@ -10921,7 +11065,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -11080,14 +11224,29 @@
   }
  },
  "attack:284": {
-  "name": "Crushing Pulse",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "oppHandAbove",
+    "n": 0
+   }
+  ],
+  "rider": [
+   {
+    "op": "xOppHandReveal",
+    "discardFilter": {
+     "cardType": [
+      1,
+      2
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand.",
-    "Discard all Item cards and Pokémon Tool cards you find there."
+   "rules": [
+    "R-E01"
    ]
-  }
+  },
+  "name": "Crushing Pulse"
  },
  "attack:285": {
   "scale": {
@@ -11205,13 +11364,23 @@
   }
  },
  "attack:297": {
-  "name": "See Through",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "oppHandAbove",
+    "n": 0
+   }
+  ],
+  "rider": [
+   {
+    "op": "xOppHandReveal"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand."
+   "rules": [
+    "R-E01"
    ]
-  }
+  },
+  "name": "See Through"
  },
  "attack:298": {
   "name": "Psyshot",
@@ -11449,14 +11618,31 @@
   "name": "Smashing Headbutt"
  },
  "attack:321": {
-  "name": "Prism Charge",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "max": 3,
+      "distinctTypes": true
+     }
+    ],
+    "mode": "anyWay",
+    "targets": {
+     "pokemon": true,
+     "tera": true
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Basic Energy cards of different types and attach them to your Tera Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Prism Charge"
  },
  "attack:322": {
   "name": "Hard Tackle",
@@ -11516,14 +11702,26 @@
   }
  },
  "attack:328": {
-  "name": "Burning Charge",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "max": 2
+     }
+    ],
+    "mode": "oneTarget"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic Energy cards and attach them to 1 of your Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Burning Charge"
  },
  "attack:329": {
   "selfLockAllNextTurn": true,
@@ -12039,14 +12237,34 @@
   }
  },
  "attack:384": {
-  "name": "Inviting Flowers",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDeckToBenchAndShuffle",
+      "min": 0,
+      "max": 60,
+      "filter": {
+       "pokemon": true,
+       "basic": true,
+       "nameContains": "Lillie’s"
+      }
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may search your deck for any number of Basic Lillie’s Pokémon and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E03"
    ]
-  }
+  },
+  "name": "Inviting Flowers"
  },
  "attack:385": {
   "rider": [
@@ -12075,7 +12293,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -12237,13 +12455,18 @@
   "name": "Cracking Stomp"
  },
  "attack:401": {
-  "name": "Thieving Swipe",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandRevealChoose",
+    "to": "deckBottom"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand, and you choose a card you find there and put it on the bottom of their deck."
+   "rules": [
+    "R-E02"
    ]
-  }
+  },
+  "name": "Thieving Swipe"
  },
  "attack:402": {
   "name": "Scratch",
@@ -13243,14 +13466,23 @@
   }
  },
  "attack:503": {
-  "name": "Swim Together",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "pokemon": true,
+     "nameContains": "Misty’s"
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Misty’s Pokémon, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Swim Together"
  },
  "attack:504": {
   "name": "Surf",
@@ -15562,7 +15794,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -15709,14 +15941,32 @@
   }
  },
  "attack:735": {
-  "name": "Dream Calling",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDeckToHandAndShuffle",
+      "min": 0,
+      "max": 60,
+      "filter": {
+       "name": "Fennel"
+      }
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may search your deck for any number of Fennel cards, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Dream Calling"
  },
  "attack:736": {
   "rider": [
@@ -15739,14 +15989,17 @@
   }
  },
  "attack:738": {
-  "name": "Cellular Evolution",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEvolveChooseAndShuffle"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card that evolves from 1 of your Pokémon and put it onto that Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E07"
    ]
-  }
+  },
+  "name": "Cellular Evolution"
  },
  "attack:739": {
   "name": "Spray Fluid",
@@ -15755,14 +16008,22 @@
   }
  },
  "attack:740": {
-  "name": "Cellular Ascension",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "benchExists"
+   }
+  ],
+  "rider": [
+   {
+    "op": "xDeckEvolvePerBench"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "For each of your Benched Pokémon, search your deck for a card that evolves from that Pokémon and put it onto that Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E06"
    ]
-  }
+  },
+  "name": "Cellular Ascension"
  },
  "attack:741": {
   "name": "Evo-Lariat",
@@ -16241,13 +16502,23 @@
   }
  },
  "attack:786": {
-  "name": "Scout",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "oppHandAbove",
+    "n": 0
+   }
+  ],
+  "rider": [
+   {
+    "op": "xOppHandReveal"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand."
+   "rules": [
+    "R-E01"
    ]
-  }
+  },
+  "name": "Scout"
  },
  "attack:787": {
   "name": "Stampede",
@@ -16410,24 +16681,51 @@
   "name": "Absorb"
  },
  "attack:799": {
-  "name": "Energy Gift",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "max": 3
+     }
+    ],
+    "mode": "anyWay"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Basic Energy cards and attach them to your Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Energy Gift"
  },
  "attack:800": {
-  "name": "Wondrous Cotton",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xOppHandReveal",
+    "countFilter": {
+     "cardType": [
+      1,
+      2,
+      3,
+      4
+     ]
+    }
+   },
+   {
+    "op": "xDamagePerRevealed",
+    "per": 50
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand.",
-    "This attack does 50 damage for each Trainer card you find there."
+   "rules": [
+    "R-E01"
    ]
-  }
+  },
+  "name": "Wondrous Cotton"
  },
  "attack:801": {
   "name": "Rear Kick",
@@ -17609,14 +17907,24 @@
   }
  },
  "attack:919": {
-  "name": "Summoning Sign",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToBenchAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "pokemon": true,
+     "basic": true,
+     "nameContains": "Steven’s"
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic Steven’s Pokémon and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E03"
    ]
-  }
+  },
+  "name": "Summoning Sign"
  },
  "attack:920": {
   "name": "Psychic Sphere",
@@ -18024,7 +18332,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -18117,14 +18425,27 @@
   "name": "Jumping Kick"
  },
  "attack:965": {
-  "name": "Turbo Flare",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "max": 3
+     }
+    ],
+    "mode": "anyWay",
+    "benchOnly": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Basic Energy cards and attach them to your Benched Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Turbo Flare"
  },
  "attack:966": {
   "name": "Vise Grip",
@@ -18357,13 +18678,18 @@
   }
  },
  "attack:995": {
-  "name": "Claw of Darkness",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandRevealChoose",
+    "to": "discard"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand, and you discard a card you find there."
+   "rules": [
+    "R-E02"
    ]
-  }
+  },
+  "name": "Claw of Darkness"
  },
  "attack:996": {
   "rider": [
@@ -18797,7 +19123,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -19224,14 +19550,28 @@
   }
  },
  "attack:1078": {
-  "name": "Overflowing Wishes",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "benchExists"
+   }
+  ],
+  "rider": [
+   {
+    "op": "xDeckAttachPerBench",
+    "filter": {
+     "basicEnergy": true,
+     "energyType": [
+      5
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "For each of your Benched Pokémon, search your deck for a Basic {P} Energy card and attach it to that Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E06"
    ]
-  }
+  },
+  "name": "Overflowing Wishes"
  },
  "attack:1079": {
   "name": "Mega Symphonia",
@@ -19280,14 +19620,26 @@
   }
  },
  "attack:1083": {
-  "name": "Geo Gate",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToBenchAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "pokemon": true,
+     "basic": true,
+     "energyType": [
+      5
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Basic {P} Pokémon and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E03"
    ]
-  }
+  },
+  "name": "Geo Gate"
  },
  "attack:1084": {
   "selfLockNextTurn": true,
@@ -19401,14 +19753,23 @@
   "name": "Rapid-Fire Combo"
  },
  "attack:1093": {
-  "name": "Quick Gift",
-  "deferred": "unparsed effect text",
+  "allowedFirstTurn": true,
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 1,
+    "max": 1,
+    "filter": {},
+    "reveal": false
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card and put it into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-A16",
+    "R-B17"
    ]
-  }
+  },
+  "name": "Quick Gift"
  },
  "attack:1094": {
   "name": "Gentle Slap",
@@ -19581,7 +19942,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -20533,7 +20894,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -20828,13 +21189,27 @@
   "name": "Stun Spore"
  },
  "attack:1230": {
-  "name": "Energy Straw",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xOppHandReveal",
+    "countFilter": {
+     "cardType": [
+      5,
+      6
+     ]
+    }
+   },
+   {
+    "op": "xDamagePerRevealed",
+    "per": 80
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand, and this attack does 80 damage for each Energy card you find there."
+   "rules": [
+    "R-E02"
    ]
-  }
+  },
+  "name": "Energy Straw"
  },
  "attack:1231": {
   "rider": [
@@ -20976,7 +21351,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -21209,14 +21584,33 @@
   }
  },
  "attack:1264": {
-  "name": "Roto Call",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDeckToBenchAndShuffle",
+      "min": 0,
+      "max": 60,
+      "filter": {
+       "pokemon": true,
+       "nameContains": "Rotom"
+      }
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may search your deck for any number of Pokémon that have “Rotom” in their name and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E03"
    ]
-  }
+  },
+  "name": "Roto Call"
  },
  "attack:1265": {
   "scale": {
@@ -22398,13 +22792,18 @@
   "name": "Thunderbolt"
  },
  "attack:1371": {
-  "name": "Piercing Gaze",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandRevealChoose",
+    "to": "discard"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent reveals their hand, and you discard a card you find there."
+   "rules": [
+    "R-E02"
    ]
-  }
+  },
+  "name": "Piercing Gaze"
  },
  "attack:1372": {
   "rider": [
@@ -22595,7 +22994,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Pleasant Aroma"
@@ -22934,7 +23333,7 @@
   ],
   "_seed": {
    "rules": [
-    "R-B11"
+    "R-E03"
    ]
   },
   "name": "Call for Family"
@@ -23389,14 +23788,33 @@
   "name": "Poison Ring"
  },
  "attack:1463": {
-  "name": "Send Flowers",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "energy": true
+      },
+      "max": 1
+     }
+    ],
+    "mode": "anyWay",
+    "benchOnly": true,
+    "targets": {
+     "pokemon": true,
+     "energyType": [
+      1
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for an Energy card and attach it to 1 of your Benched {G} Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-E05"
    ]
-  }
+  },
+  "name": "Send Flowers"
  },
  "attack:1464": {
   "name": "Leaf Step",
@@ -23556,14 +23974,21 @@
   }
  },
  "attack:1480": {
-  "name": "Nasty Plot",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {},
+    "reveal": false
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 cards and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Nasty Plot"
  },
  "attack:1481": {
   "rider": [
@@ -24336,14 +24761,25 @@
   }
  },
  "attack:1552": {
-  "name": "Chirp",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "pokemon": true,
+     "resistanceType": [
+      6
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Pokémon with {F} Resistance, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Chirp"
  },
  "attack:1553": {
   "name": "Peck",

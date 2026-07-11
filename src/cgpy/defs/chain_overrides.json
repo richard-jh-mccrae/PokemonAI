@@ -481,6 +481,38 @@
    ]
   }
  },
+ "851": {
+  "name": "Silcoon",
+  "_provenance": "Multiplying Cocoon on-evolve ask -> deck-to-bench Silcoon/Cascoon (pinned rvl1230_9000 f7-f9: ctx43 YES_NO then ctx TO_BENCH min0 max1 with listing)",
+  "onEvolve": {
+   "program": [
+    {
+     "op": "effectDeckToBenchAndShuffle",
+     "min": 0,
+     "max": 1,
+     "filter": {
+      "anyOf": [
+       {
+        "pokemon": true,
+        "nameContains": "Silcoon"
+       },
+       {
+        "pokemon": true,
+        "nameContains": "Cascoon"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "1036": {
+  "name": "Luxio",
+  "_provenance": "Fighting Roar passive: can evolve on the first turn / the turn it entered if the opponent's Active is a Pokemon {ex} — megaEx counts (pinned rvl1371_9000 f8: Luxray ex EVOLVE offered onto a this-turn Luxio vs Mega Latias ex)",
+  "evolve": {
+   "immediateIfOppActiveEx": true
+  }
+ },
  "66": {
   "name": "Dudunsparce",
   "ability": {
