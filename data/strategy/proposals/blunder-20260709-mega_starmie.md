@@ -9,7 +9,7 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
 - target_layer: general-hypothesis
 - candidate_signal: CardStat/provider `forward_max_damage` (EXISTS — Riolu→Mega Lucario ex = 270) + benched-Pokémon attached-energy (`target_is_threat`/imminence) + attacker-vs-support role; reconcile against `snipe-the-forced-promotion` (+40) and `snipe-the-top-threat` (+30) in baseline_snipe.py
 - verification_contract: verifier
-- provenance: corrections 82224509:f47, 82523811:f41, 82523811:f61, 82753102:f85, 81785223:f39, 81785223:f45, 81905522:f75 | fixtures tests/fixtures/corrections/ms_snipe_evolving_wincon_preevo_f75.json, ms_snipe_riolu_over_lunatone_f47.json, ms_snipe_energized_bench_f39.json, ms_snipe_attacker_line_over_support_f85.json | see [[snipe-threat-two-signals]] (the deferred "evolves-into-attacker" signal, frame 75)
+- provenance: corrections 82224509:f47, 82523811:f41, 82523811:f61, 82753102:f85, 81785223:f39, 81785223:f45, 81905522:f75, **85164131:f22 (CRITICAL, 2026-07-11 round)** | fixtures tests/fixtures/corrections/ms_snipe_evolving_wincon_preevo_f75.json, ms_snipe_riolu_over_lunatone_f47.json, ms_snipe_energized_bench_f39.json, ms_snipe_attacker_line_over_support_f85.json, **ms_snipe_evolving_wincon_over_promotion_stack_f22.json** | see [[snipe-threat-two-signals]] (the deferred "evolves-into-attacker" signal, frame 75)
 - status: open
 - reopened (2026-07-10): the `applied` marking was FALSE for the frame-75 sub-signal — the gating fixture
   `ms_snipe_evolving_wincon_preevo_f75` still fails on the real Pilot (decide()=[1], human correct=[3]).
@@ -21,6 +21,13 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
   — re-scope this proposal to the f75 tie-break only: `snipe-the-evolving-threat` must beat, or the
   path axis must stand down under, a competing evolving-threat target the human declines. Verified failing
   on origin/main (baseline_snipe.py unchanged by the intervening lethal-verification PRs).
+- extended (2026-07-11 round): **CRITICAL 85164131:f22** (mega_starmie mirror) is a sharper, dead-Active
+  instance of sub-signal #1 that exposes a *fourth* burying shape — see spec sub-signal **#4** below. The
+  leaf's clean, retest-verified fix generalises the whole cluster: a `board.evolving_wincon_on_bench` signal
+  + a stand-down gate on the current-attacker rungs. This subsumes the #1 "restore a rung" sketch and does
+  NOT regress the ADR-0044 forced-promotion tests (they require the forward form ALREADY in play, where the
+  new signal is False). The f75 path-axis tie-break (reopened note above) is the ONE residual the gate does
+  not touch (it gates forced-promotion/top-threat/threat, not `snipe-on-the-path` +12) — author both together.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -47,6 +54,32 @@ sub-signals, all currently unconsumed by a *firing* rung:
    over the **Kadabra → Alakazam attacker line (80hp)** the human wants. The forced-promotion target
    selection ranks by bulk/"ready", not by which line is the real attacker — reconcile its target pick so
    an attacker line beats a bulky support body.
+4. **Forced-promotion STACK buries the evolving-threat rung (85164131 f22, CRITICAL — the sharp case).**
+   Turn 2 mega_starmie mirror: Jetting Blow's 120 KO'd the opp Active Staryu → **opp Active now DEAD
+   (forced promotion)**. The 50-damage bench rider must chip the developing wincon. Opp bench: [0] Cinderace
+   (260/260 = 160 + Hero's Cape +100, 1 fire energy — a **1-prize** Stage-2 accelerator, not ex) and
+   [1] **Staryu (70/70, bare — the pre-evo of Mega Starmie ex, a 3-prize megaEx wincon)**. `retest_one`
+   shows the bug exactly: **Cinderace scores 90** = `snipe-the-top-threat`(30) + `snipe-the-threat`(20,
+   energized) + `snipe-the-forced-promotion`(40); **Staryu scores 45** = `snipe-the-evolving-threat`(45,
+   which ALREADY correctly identifies it). Once the opp Active is dead, all three current-attacker rungs
+   pile onto the *current* bulky/energized body and their **sum (90) buries** the +45 evolving-wincon rung
+   — the deck-agnostic soundness hole the human flagged CRITICAL ("stomp out the eventual win condition; our
+   Starmie OHKOs Cinderace whenever promoted"). Note the human filed it as a **Posture** miss, but the fix
+   is deck-AGNOSTIC snipe soundness (any board of this shape), NOT the cinderace_mega_starmie_ex Brief.
+
+**The unified fix (retest-verified on f22, generalises #1/#4).** Add a Board signal
+`board.evolving_wincon_on_bench: bool` (compute alongside `strongest_forward_bench` via
+`_strongest_forward_snipe`, pilot.py:205/2699): True iff some benched opp **pre-evo** has forward damage
+≥ EVOLVING_THREAT_DMG (100), its **forward form is NOT in play** (`not target_forward_form_in_play`), AND
+the forward form's prize payoff ≥ 2 (reuse `_forward_payoff_prize_value`, pilot.py:2828; Mega Starmie ex =
+megaEx = **3 prizes**, rules.md L139 — a genuine higher-prize wincon vs the current 1-prize body). Then add
+`and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)` to the `when=` of
+`snipe-the-forced-promotion`, `snipe-the-top-threat`, and `snipe-the-threat` — the current-attacker rungs
+**stand down on every body that is NOT the developing-wincon pre-evo**, mirroring the existing
+`snipe-for-the-ko` "every positional rung stands down when a KO is on offer" pattern (blunder-20260710-round
+`#snipe-order-a-ko-dominates`). Kill-switch behind an on-by-default flag (e.g. `evolving_wincon_priority`).
+On f22: Cinderace 90 → 0, Staryu stays 45 → **Staryu picked, FIXED**; no KO forgone (50 rider KOs neither).
+Verified NOT to touch the ADR-0044 test_45 / test_107 cases (forward form already in play → signal False).
 
 WHY it wins: the human (domain expert) corrected this **consistently across 4+ games**; the enabling signal
 (`forward_max_damage`) already exists, only the consuming rung / gating is missing or mis-prioritised.

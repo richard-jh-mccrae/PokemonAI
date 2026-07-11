@@ -667,5 +667,25 @@
     "disposition": "covered",
     "reason": "BUILT 2026-07-10 via /update-strategy (PR #70): gust-for-the-stall gated on opp_active_can_damage_us (doctrine_gust.py) -- don't gust a HARMLESS Active (Kyogre @0 Energy) off to the bench. The earlier 'breaks REQ-GUST-0003' bounce was resolved by completing the DOOM_ACTIVE/KADA synthetic stubs with real attacks; the affordability charge is scoped to the MILD +10 stall ONLY (the +95 famine rung stays worst-case), so it does NOT touch the active_doomed survival boolean (incoming-affordability won't-fix intact). decide() on f10 flips to [2] attach; pinned by test_blunder_20260710_split_fixes.py::test_f10_.",
     "round": "2026-07-10"
+  },
+  "85058574-109": {
+    "disposition": "covered",
+    "reason": "dragapult_ex Brief already ships this f109 doctrine (race the fragile Drakloak pre-evos; do NOT chip the un-KO-able 320HP Tera Dragapult; gust the non-Tera support ex) via the APPLIED proposal blunder-20260710-round.md#dragapult-matchup-plan-the-drakloaks-are-the-target. Read fires at gamma=1.0; decide()==correct==[9] degenerate (chosen==correct match-planner note). The residual MULTI-TURN execution (gust both Drakloaks over turns, then Meowth->Boss's finish on Fezandipiti) is the designed-but-unbuilt M3/M4 layer, already parked in docs/todo/deferred-multi-turn-criticals.md + fixture ml_dragapult_matchup_plan_note_f109.json. Single-frame doctrine covered; multi-turn line is a documented capability-gap.",
+    "round": "2026-07-11"
+  },
+  "85058574-16": {
+    "disposition": "refuted",
+    "reason": "correct=[6] Lunar Cycle (discard the deck's only {F} to draw 3) forgoes idx2 attach->active Riolu, which enables Accelerating Stab 30 THIS turn (P2, no turn-2 restriction, rules.md L75) and strands the sole energy. The deck's own dont-lunar-cycle-away-the-last-attachable-f (-30) guards exactly this; retest 85058574-16 scores correct=[6] at -30. Forgo-higher-value-attack refutation. NOTE a SEPARATE real bug (attach-solrock-over-line-base +3 tipping the last {F} onto benched Solrock over the attacking active Riolu) is flagged as its own task, not this correction.",
+    "round": "2026-07-11"
+  },
+  "82749168-38": {
+    "disposition": "refuted",
+    "reason": "correct=[0] snipes the benched Dragapult ex, a [Tera] ex that takes NO attack damage while Benched (data/EN_Card_Data.csv id121; docs/rulebook.txt Tera rule) -- the 50 Jetting Blow bench rider does literally 0 there. dont-snipe-a-benched-tera (-60) already ranks it below the real 50-dmg Hoothoot snipe; retest 82749168-38: [0]=-18 vs chosen [1]=12. The correction forgoes the attack's entire snipe effect on a damage-immune body.",
+    "round": "2026-07-11"
+  },
+  "85164605-41": {
+    "disposition": "refuted",
+    "reason": "correct=[3] Mega Signal (Item; hand-fetch a Mega ex) is NOT equivalent to chosen [0] Salvatore (Supporter that search-EVOLVES a bench Staryu into Mega Starmie ex = the KO attacker the Turn Planner commits as ko_for_prizes step[0]). Mega Starmie ex is ALREADY in hand -> Mega Signal fetches a redundant duplicate and advances nothing (both carry dont-tutor-the-held-wincon -45). The human's cheaper-equivalent premise is false; retest confirms planner's Salvatore [0] is correct.",
+    "round": "2026-07-11"
   }
 }

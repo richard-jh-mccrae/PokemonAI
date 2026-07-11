@@ -1,58 +1,12 @@
 {
   "deck": "mega_lucario",
-  "generated_at": "2026-07-10T10:51:06",
-  "open": [
-    {
-      "id": "wrong-attack-85058574-121",
-      "category": "wrong_attack",
-      "episode_id": 85058574,
-      "frame": 121,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='AttachFrom' (turn 10) to prefer 'Mega Lucario ex (bench 3 · 280/340)' over 'Lunatone (bench 1 · 110/110)'",
-      "rationale": "CRITICAL: Never attach energy to Lunatone when other pokemon are available. Here i would have attached to Mega Lucario and Hariyama.",
-      "agent_build": "mega_lucario_20260709_e2f0a07-dirty",
-      "built_at": "2026-07-09T00:00:00",
-      "critical": true,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": "Dragapult ex"
-    },
-    {
-      "id": "other-85058574-109",
-      "category": "other",
-      "episode_id": 85058574,
-      "frame": 109,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='Main' (turn 10) to prefer 'Evolve Mega Lucario ex → Riolu (bench 3 · 20/80)' over 'Evolve Mega Lucario ex → Riolu (bench 3 · 20/80)'",
-      "rationale": "This is a match planer note: Here we are facing a fully energyized Dragapult while opponent has two drakloaks on bench, one of them with a single energy. we cannot KO the Dragapult in a single turn and those Drakloaks are draw engines and will become future Dragapults. Opponent also still needs his full 6 prize cards.\n\nWe have the ability to fully heal our Lucario with Wallys Compassion, we can gust with Boss's Orders, and an Ultra Ball can fetch a Hariyama which can also gust. \n\nGiven our hand, playing around the Dragapult and KOing the Drakloaks could effictively hamstring our opponent while keeping alive just long enough to eventually KO that Dragapult in future turns.\n\nThus i would gust the single energy Drakloak, KO it, and place 3 discarded energy on our benched Rioulu and Hariyama. Next turn id gust the other Drakloak, KOing it.\n\nthen we would have only 2 prize cards remaining. \n\nWe have a Meowth ex in hand, which can fetch our decked Boss's Orders to gust the Fezandiptit, KOing that for our final 2 prize cards.",
-      "agent_build": "mega_lucario_20260709_e2f0a07-dirty",
-      "built_at": "2026-07-09T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": "Dragapult ex"
-    },
-    {
-      "id": "other-85059103-1",
-      "category": "other",
-      "episode_id": 85059103,
-      "frame": 1,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='SetupActivePokemon' (turn 0) to prefer 'Riolu' over 'Lunatone'",
-      "rationale": "This deck wants to be aggressive and fast paced, thus when given the option to start a slow and basically non-attacking pokemon like Lunatone versus Riolu, start the Riolu. That gives the option to quickely evolve into Mega Lucario to begin whomping opponent early.",
-      "agent_build": "mega_lucario_20260709_e2f0a07-dirty",
-      "built_at": "2026-07-09T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": "Alakazam"
-    }
-  ],
+  "generated_at": "2026-07-11T02:02:15",
+  "open": [],
   "skipped": [
     {
+      "key": "84889539-48",
+      "scope": "decision",
+      "subject": 48,
       "episode_id": 84889539,
       "frame": 48,
       "reason": "tactical",
@@ -63,6 +17,9 @@
       "believed_archetype": "Hariyama / Mega Lucario ex / Solrock"
     },
     {
+      "key": "85058574-88",
+      "scope": "decision",
+      "subject": 88,
       "episode_id": 85058574,
       "frame": 88,
       "reason": "tactical",
@@ -75,52 +32,100 @@
   ],
   "reviewed": [
     {
+      "key": "83661652-3",
+      "scope": "decision",
       "episode_id": 83661652,
       "frame": 3,
       "disposition": "covered",
       "reason": "FIXED on investigation (not a mislabel): the Pilot literally could not DECLINE an optional single-pick (decide() always took maxCount, ignoring minCount=0). Added (a) single-pick take-fewer — decline a score<0 pick at a minCount=0 select; (b) dont-pre-bench-the-supporter-tutor (-15) at _SETUP_BENCH. decide(f3)=[0]->[] (declines benching Meowth ex — saved for the Active Spot / an in-game bench to trigger Last-Ditch Catch). W-route can't measure it (correct==chosen==[0] tag can't encode select-nothing); gated by tests/strategy/test_setup_bench_decline.py on setup_bench_decline_f3.json. Human reversed the refuted call 2026-07-04."
     },
     {
+      "key": "83661652-19",
+      "scope": "decision",
       "episode_id": 83661652,
       "frame": 19,
       "disposition": "covered",
       "reason": "develop-a-basic-in-setup develops Riolu over the poor Boss's Orders stall (retest [4]->[5]); W-route-blind. The poor-stall blunder is gone."
     },
     {
+      "key": "83661652-30",
+      "scope": "decision",
       "episode_id": 83661652,
       "frame": 30,
       "disposition": "covered",
       "reason": "CRITICAL 'dont discard our main line attacker': keep-line-base-at-discard covers it — real Pilot decide() at the captured f30 discards Gravity Mountain + a spare Basic {F} (Aura Jab reloads F from discard, so it is recoverable engine fuel) and KEEPS Riolu/Makuhita/Solrock. The flagged blunder (pitching Riolu) no longer occurs; retest differs from correct=[0] only in pitching a fuel-able Energy over a redundant Lillie's. Confirms f31's covered premise (Riolu no longer discarded)."
     },
     {
+      "key": "83661652-31",
+      "scope": "decision",
       "episode_id": 83661652,
       "frame": 31,
       "disposition": "covered",
       "reason": "Root is the f30 discard (now prevented by keep-line-base-at-discard): with Riolu no longer pitched, the discard->refetch waste never arises. On the isolated captured state (Riolu already discarded) grabbing the base is sound fetch-base-before-stranded-payoff doctrine."
     },
     {
+      "key": "83661652-33",
+      "scope": "decision",
       "episode_id": 83661652,
       "frame": 33,
       "disposition": "covered",
       "reason": "CRITICAL 'dont feed Meowth ex, should have played solrock/riolu': NOW RULE-FIXED by develop-the-wincon-base-first (+6). The tier-0 develop already beat the tier-4 chip (_finish_turn_last); the new rule breaks the develop tie toward the wincon Line base, so real Pilot decide() picks Riolu (retest [3]->[2]=correct, FIXED). W-route-blind (chip outscores the develop in raw score). Gated by tests/strategy/test_blunder_20260703_develop_wincon_base.py."
     },
     {
+      "key": "83661652-44",
+      "scope": "decision",
       "episode_id": 83661652,
       "frame": 44,
       "disposition": "covered",
       "reason": "CRITICAL 'resisting to play basics, wanting to feed meowth and just attack': NOW RULE-FIXED by develop-the-wincon-base-first (+6). Same develop-tiebreak as f33 — real Pilot decide() benches Riolu over Makuhita (retest [3]->[2]=correct, FIXED). W-route-blind. Gated by the ml0703 develop_wincon replay test."
     },
     {
+      "key": "84071010-15",
+      "scope": "decision",
+      "episode_id": 84071010,
+      "frame": 15,
+      "disposition": "deferred",
+      "reason": "capability-gap: the retreat-Tool-enabled lethal. deck_definitely_has(Air Balloon)=False (P=0.9877; obs carries no own_prizes so the deck tracker never anchors) and the Lethal Solver's contract is 'a probable fetch is never a win' -- locking it would be a phantom. Fixture also stores the REFUTED dead-hand correct=[1]. See docs/todo/lethal-retreat-tool-enabler.md."
+    },
+    {
+      "key": "84071010-30",
+      "scope": "decision",
       "episode_id": 84071010,
       "frame": 30,
       "disposition": "covered",
       "reason": "CRITICAL 'single card (Lillie's), use it' — COVERED on the current real Pilot: decide()=[0]=Play Lillie's Determination (=correct). attack-last (_finish_turn_last) defers the 169.9 Aura Jab (tier-2, non-KO) via reordered=True, and Lillie's now scores +20 (dig-before-commit) since the old dont-refresh-into-a-probable-miss suppressor no longer fires on this dead 1-card hand. Confirmed via tune._build_pilot('mega_lucario').decide on the captured f30 state."
     },
     {
+      "key": "84890060-48",
+      "scope": "decision",
       "episode_id": 84890060,
       "frame": 48,
       "disposition": "covered",
       "reason": "Real-Pilot decide() at the captured f48 = [9] = Fighting Gong = correct (chosen==correct, degenerate on the shipped code). The applied lethal-recover-the-energy-that-wins grab tactical prices it 1001: Lunatone Active (1F, retreat 1 - affordable), benched Mega Lucario at 0 energy, so the grabbed F is both LEGAL and NECESSARY. Kept as the counter-fixture for no-phantom-grab-lethal (blunder-20260710-round.md) - that proposal's preconditions must not regress this frame."
+    },
+    {
+      "key": "85058574-16",
+      "scope": "decision",
+      "episode_id": 85058574,
+      "frame": 16,
+      "disposition": "refuted",
+      "reason": "correct=[6] Lunar Cycle (discard the deck's only {F} to draw 3) forgoes idx2 attach->active Riolu, which enables Accelerating Stab 30 THIS turn (P2, no turn-2 restriction, rules.md L75) and strands the sole energy. The deck's own dont-lunar-cycle-away-the-last-attachable-f (-30) guards exactly this; retest 85058574-16 scores correct=[6] at -30. Forgo-higher-value-attack refutation. NOTE a SEPARATE real bug (attach-solrock-over-line-base +3 tipping the last {F} onto benched Solrock over the attacking active Riolu) is flagged as its own task, not this correction."
+    },
+    {
+      "key": "85058574-114",
+      "scope": "decision",
+      "episode_id": 85058574,
+      "frame": 114,
+      "disposition": "refuted",
+      "reason": "CRITICAL, human-acknowledged 2026-07-10. Spec does not survive the board: the Bench IS full (5), but Poke Pad can still fetch a 2nd Hariyama that evolves the benched Makuhita, so 'a tutor with nothing to find' is FALSE here. Reproducing the tagged correct=[1] (the Energy attach) would additionally require suppressing a perfectly reasonable Fighting Gong, and the attach is deferred by attach-energy-last (reordered=True) by design anyway. The human's real reason -- 'Poke Pad is Ultra Ball fodder' -- is a value judgment about card economy, not a nothing-to-find test. Needs a retag, not code."
+    },
+    {
+      "key": "85058574-109",
+      "scope": "decision",
+      "episode_id": 85058574,
+      "frame": 109,
+      "disposition": "covered",
+      "reason": "dragapult_ex Brief already ships this f109 doctrine (race the fragile Drakloak pre-evos; do NOT chip the un-KO-able 320HP Tera Dragapult; gust the non-Tera support ex) via the APPLIED proposal blunder-20260710-round.md#dragapult-matchup-plan-the-drakloaks-are-the-target. Read fires at gamma=1.0; decide()==correct==[9] degenerate (chosen==correct match-planner note). The residual MULTI-TURN execution (gust both Drakloaks over turns, then Meowth->Boss's finish on Fezandipiti) is the designed-but-unbuilt M3/M4 layer, already parked in docs/todo/deferred-multi-turn-criticals.md + fixture ml_dragapult_matchup_plan_note_f109.json. Single-frame doctrine covered; multi-turn line is a documented capability-gap."
     }
   ]
 }

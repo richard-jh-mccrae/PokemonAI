@@ -1,39 +1,28 @@
 {
   "deck": "dragapult_ex",
-  "generated_at": "2026-07-10T10:51:05",
-  "open": [
-    {
-      "id": "slow-setup-85046350-18",
-      "category": "slow_setup",
-      "episode_id": 85046350,
-      "frame": 18,
-      "seed_weight": 20.0,
-      "trigger_sketch": "fire at SelectContext='ToHand' (turn 2) to prefer 'Basic {R} Energy' over 'Basic {D} Energy'",
-      "rationale": "save darkness energy for when we have Munkidori available",
-      "agent_build": "dragapult_ex_20260709_e2f0a07-dirty",
-      "built_at": "2026-07-09T00:00:00",
-      "critical": false,
-      "planner_committed": false,
-      "lethal_locked": false,
-      "posture_mismatch": false,
-      "believed_archetype": "Cynthia's Garchomp ex / Cynthia's Roserade"
-    }
-  ],
+  "generated_at": "2026-07-11T02:02:15",
+  "open": [],
   "skipped": [],
   "reviewed": [
     {
+      "key": "85045840-8",
+      "scope": "decision",
       "episode_id": 85045840,
       "frame": 8,
       "disposition": "covered",
       "reason": "degenerate: chosen==correct==Play Poké Pad; real Pilot decide()=[1]=Poké Pad (dig-before-commit sequences it first, reordered). The wider T1 engine plan (Drakloak Recon + Dudunsparce Run Away Draw) is covered by use-the-draw-engine-ability; the Ultra Ball discard-discipline is the f14 cluster."
     },
     {
+      "key": "85046350-20",
+      "scope": "decision",
       "episode_id": 85046350,
       "frame": 20,
       "disposition": "deferred",
-      "reason": "capability-gap: retreat-to-promote-a-disruptor is an unbuilt single-turn Turn Planner generator (naive attach-to-active harms without follow-through) — see docs/todo/retreat-to-item-lock-maneuver.md; fixture dragapult_retreat_to_item_lock_f20.json; decide()=[1] unchanged (not covered)."
+      "reason": "PARTIAL 2026-07-10 (PR #70): the maneuver's RETREAT frame is built as retreat-to-wall-the-line (verified via the SIBLING f32 fixture 85046350-32). But THIS fixture is the ATTACH-enablement frame (Dreepy @0 Energy, AttachFrom ctx 21 -- attach to the ACTIVE line-preevo to enable the later wall-retreat), which retreat-to-wall-the-line does NOT touch. Re-probed 2026-07-10: decide()=[1] bench, correct=[0] active -- STILL the blunder (dont-feed-the-doomed -30 sinks the active attach +5 below the bench +15). STILL OPEN: needs a rung that endorses feeding the fragile line-preevo Active when it enables the sacrificial-wall maneuver (can_wall_line_with_disruptor + retreat affordable next turn). See docs/todo/retreat-to-item-lock-maneuver.md."
     },
     {
+      "key": "85046350-45",
+      "scope": "decision",
       "episode_id": 85046350,
       "frame": 45,
       "disposition": "covered",

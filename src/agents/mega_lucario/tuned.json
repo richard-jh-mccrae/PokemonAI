@@ -1,9 +1,4 @@
 {
-  "attach-before-hand-shuffle": -57.0,
-  "discard-the-hand-duplicate": 9.46,
-  "fetch-base-before-stranded-payoff": 17.0,
-  "grab-a-draw-supporter-in-setup": 7.0,
-  "keep-engine-supporter-at-discard": -10.54,
-  "prefer-active-attach-in-setup": 5.0,
-  "prefer-wincon-line-piece": 15.0
+  "discard-the-hand-duplicate": 9.53,
+  "keep-engine-supporter-at-discard": -10.47
 }
