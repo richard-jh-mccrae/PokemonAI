@@ -64,7 +64,7 @@ def test_nebula_beam_ignores_weakness():
     assert adef.get("ignoreWeaknessResistance") is True
     gs = make_state(MEGA_STARMIE, CINDERACE)
     dmg = attack_damage(gs, gs.players[0].active, DB.attacks[NEBULA_BEAM],
-                        gs.players[1].active, ignore_wr=True)
+                        gs.players[1].active, adef=adef)
     assert dmg == 210
 
 

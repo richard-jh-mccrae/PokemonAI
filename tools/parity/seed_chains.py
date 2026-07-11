@@ -1,0 +1,1071 @@
+"""Seed ChainDefs for the FULL card pool → `src/cgpy/defs/generated_chains.json` (ADR-0050 M4).
+
+The machine layer under `chain_overrides.json` (overrides WIN per chain key). Seed sources in
+priority order:
+
+(a) structured tables — textless ("vanilla") attacks and skill-less Pokémon get empty defs
+    for free; basic energies likewise.
+(b) sentence-anchored text rules (ids ``R-…``) over the formulaic effect texts: a chain is
+    seeded ONLY when EVERY sentence of its text is consumed by a rule — one leftover
+    sentence defers the whole chain (never guess half a card).
+(c) everything unmatched → an explicit ``{"deferred": reason}`` entry plus a queue entry in
+    ``reports/parity/unparsed_sentences.json`` grouped by template hash — the hand-authoring
+    queue, ordered by meta play-rate when `data/meta` is present (count otherwise).
+
+Every generated entry carries a ``_seed`` provenance key (rule ids / table source); the
+loader ignores underscore keys. Regenerate wholesale — never hand-edit the output (that's
+what `chain_overrides.json` is for).
+
+    python tools/parity/seed_chains.py            # regenerate defs + report
+    python tools/parity/seed_chains.py --stats    # print rollup only, write nothing
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "src"))
+
+from cgpy.schema import CardType, EnergyType, SpecialConditionType  # noqa: E402
+
+DEFS = REPO / "src" / "cgpy" / "defs"
+OUT = DEFS / "generated_chains.json"
+REPORT = REPO / "reports" / "parity" / "unparsed_sentences.json"
+
+_TYPE_LETTER = {"G": int(EnergyType.GRASS), "R": int(EnergyType.FIRE),
+                "W": int(EnergyType.WATER), "L": int(EnergyType.LIGHTNING),
+                "P": int(EnergyType.PSYCHIC), "F": int(EnergyType.FIGHTING),
+                "D": int(EnergyType.DARKNESS), "M": int(EnergyType.METAL),
+                "N": int(EnergyType.DRAGON), "C": int(EnergyType.COLORLESS)}
+
+_COND = {"Poisoned": int(SpecialConditionType.POISON),
+         "Burned": int(SpecialConditionType.BURN),
+         "Asleep": int(SpecialConditionType.SLEEP),
+         "Paralyzed": int(SpecialConditionType.PARALYZE),
+         "Confused": int(SpecialConditionType.CONFUSE)}
+
+
+# ---------------------------------------------------------------------------- text prep
+
+def sentences(text: str) -> list[str]:
+    """Effect text → trimmed sentences. The tables use NBSP/em-space glue around
+    parentheticals; normalize every unicode space to ASCII before splitting."""
+    t = re.sub(r"[   　]", " ", text or "").replace("\n", " ")
+    t = re.sub(r"\s+", " ", t).strip()
+    if not t:
+        return []
+    # Split after ./!/? followed by space — but never inside a parenthetical
+    # ("(Pokémon {ex}, etc. have Rule Boxes.)" is ONE sentence).
+    out: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    for ch in t:
+        buf.append(ch)
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif ch in ".!?" and depth == 0:
+            s = "".join(buf).strip()
+            if s:
+                out.append(s)
+            buf = []
+    tail = "".join(buf).strip()
+    if tail:
+        out.append(tail)
+    # "…damage.(Don't apply …)" arrives glued — split the paren off as its own sentence.
+    final: list[str] = []
+    for s in out:
+        m = re.match(r"^(.*?\.)(\(.+\))$", s)
+        if m:
+            final += [m.group(1).strip(), m.group(2).strip()]
+        else:
+            final.append(s)
+    return final
+
+
+def template(s: str) -> str:
+    t = re.sub(r"\d+", "N", s)
+    t = re.sub(r"\{\w\}", "{X}", t)
+    return t
+
+
+# ---------------------------------------------------------------------------- search-spec grammar
+
+_QTY_RE = re.compile(r"^(?:(a|an|1) |up to (\d+) )(.*)$")
+
+# noun phrase → cgpy card filter (chain._card_matches vocabulary). Longest match wins.
+_NOUN_FILTERS: list[tuple[re.Pattern, dict]] = [
+    (re.compile(r"^Basic \{(\w)\} Energy cards?$"), {"basicEnergy": True, "energyType": None}),
+    (re.compile(r"^Basic Energy cards?$"), {"basicEnergy": True}),
+    (re.compile(r"^Basic Pok.mon with (\d+) HP or less$"),
+     {"pokemon": True, "basic": True, "hpMax": None}),
+    (re.compile(r"^Basic Pok.mon$"), {"pokemon": True, "basic": True}),
+    (re.compile(r"^Pok.mon$"), {"pokemon": True}),
+    (re.compile(r"^Mega Evolution Pok.mon$"), {"megaEx": True}),
+    (re.compile(r"^Evolution Pok.mon$"), {"evolution": True}),
+    (re.compile(r"^Item cards?$"), {"cardType": [int(CardType.ITEM)]}),
+    (re.compile(r"^Supporter cards?$"), {"cardType": [int(CardType.SUPPORTER)]}),
+    (re.compile(r"^Stadium cards?$"), {"cardType": [int(CardType.STADIUM)]}),
+    (re.compile(r"^Pok.mon Tool cards?$"), {"cardType": [int(CardType.TOOL)]}),
+    (re.compile(r"^Energy cards?$"),
+     {"cardType": [int(CardType.BASIC_ENERGY), int(CardType.SPECIAL_ENERGY)]}),
+]
+
+
+def parse_search_spec(spec: str) -> tuple[int, dict] | None:
+    """"up to 2 Basic Pokémon with 70 HP or less" → ``(max_count, filter)`` or None."""
+    m = _QTY_RE.match(spec.strip())
+    if not m:
+        return None
+    n = 1 if m.group(1) else int(m.group(2))
+    noun = m.group(3).strip().rstrip(",")
+    for pat, proto in _NOUN_FILTERS:
+        pm = pat.match(noun)
+        if pm:
+            flt = {k: v for k, v in proto.items() if v is not None}
+            if "energyType" in proto and proto["energyType"] is None:
+                letter = pm.group(1)
+                if letter not in _TYPE_LETTER:
+                    return None
+                flt["energyType"] = [_TYPE_LETTER[letter]]
+            if "hpMax" in proto and proto["hpMax"] is None:
+                flt["hpMax"] = int(pm.group(1))
+            return (n, flt)
+    return None
+
+
+# ---------------------------------------------------------------------------- rule engine
+
+class Frag:
+    """One consumed fragment: ops (by phase) and/or def fields, with rule provenance."""
+
+    def __init__(self, rule: str, *, pre: list | None = None, rider: list | None = None,
+                 play: list | None = None, fields: dict | None = None,
+                 legal: list | None = None):
+        self.rule = rule
+        self.pre = pre or []
+        self.rider = rider or []
+        self.play = play or []
+        self.fields = fields or {}
+        self.legal = legal or []
+
+
+class Rules:
+    """Ordered sentence-consuming rules. Each rule sees ``(sents, i)`` and returns
+    ``(consumed_count, Frag)`` or None. First match wins; unmatched sentence at ``i``
+    defers the whole chain."""
+
+    def __init__(self):
+        self.rules: list = []
+
+    def rule(self, rid: str):
+        def deco(fn):
+            self.rules.append((rid, fn))
+            return fn
+        return deco
+
+    def consume(self, text: str) -> tuple[list[Frag], list[str]]:
+        """→ (fragments, unparsed sentences). Unparsed non-empty ⇒ defer."""
+        sents = sentences(text)
+        frags: list[Frag] = []
+        unparsed: list[str] = []
+        i = 0
+        while i < len(sents):
+            for rid, fn in self.rules:
+                got = fn(sents, i)
+                if got:
+                    k, frag = got
+                    if frag is not None:
+                        frag.rule = rid
+                        frags.append(frag)
+                    i += k
+                    break
+            else:
+                unparsed.append(sents[i])
+                i += 1
+        return frags, unparsed
+
+
+def _s(pat: str):
+    """Anchored single-sentence matcher."""
+    rx = re.compile("^" + pat + "$")
+
+    def m(sents, i):
+        return rx.match(sents[i])
+    return m
+
+
+# ---------------------------------------------------------------------------- attack rules
+
+ATK = Rules()
+
+_NOISE = [
+    r"\(Don.t apply Weakness and Resistance for Benched Pok.mon\.\)",   # cgpy bench damage
+    r"\(Damage is not an effect\.\)",                                    # already skips W/R
+    r"\(Pok.mon \{ex\}[^)]*have Rule Boxes\.\)",     # rule-box definition parenthetical
+]
+for _k, _pat in enumerate(_NOISE):
+    @ATK.rule(f"R-N{_k:02d}")
+    def _noise(sents, i, _m=_s(_pat)):
+        return (1, Frag("")) if _m(sents, i) else None
+
+
+@ATK.rule("R-A01")
+def _ignore_wr(sents, i):
+    m = _s(r"This attack.s damage isn.t affected by ([^.]+)\.")(sents, i)
+    if not m:
+        return None
+    clause = m.group(1)
+    fields = {}
+    if "Weakness" in clause:
+        fields["ignoreWeakness"] = True
+    if "Resistance" in clause:
+        fields["ignoreResistance"] = True
+    if "effect" in clause:
+        fields["ignoreDefenderEffects"] = True   # defender-mods seam (none modeled yet)
+    if not fields:
+        return None
+    return (1, Frag("", fields=fields))
+
+
+@ATK.rule("R-A05")
+def _requires_bench(sents, i):
+    m = _s(r"If you don.t have (.{2,60}?) on your Bench, this attack does nothing\.")(sents, i)
+    if not m:
+        return None
+    names = [n.strip() for n in m.group(1).split(" and ") if n.strip()]
+    return (1, Frag("", fields={"requiresBenchNamed": names if len(names) > 1 else names[0]}))
+
+
+@ATK.rule("R-A06")
+def _self_lock(sents, i):
+    if _s(r"During your next turn, this Pok.mon can.t (?:attack|use attacks)\.")(sents, i):
+        return (1, Frag("", fields={"selfLockAllNextTurn": True}))
+    m = _s(r"During your next turn, this Pok.mon can.t use ([^.]+)\.")(sents, i)
+    if m:
+        return (1, Frag("", fields={"selfLockNextTurn": True, "_lockName": m.group(1).strip()}))
+    return None
+
+
+@ATK.rule("R-A14")
+def _lock_defender_retreat(sents, i):
+    if _s(r"During your opponent.s next turn, (?:the Defending|that) Pok.mon can.t "
+          r"retreat\.")(sents, i):
+        return (1, Frag("", fields={"lockDefenderRetreat": True}))
+    return None
+
+
+@ATK.rule("R-A15")
+def _take_less(sents, i):
+    m = _s(r"During your opponent.s next turn, this Pok.mon takes (\d+) less damage from "
+           r"attacks \(after applying Weakness and Resistance\)\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xTakeLessNextTurn", "n": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-A16")
+def _allowed_first_turn(sents, i):
+    if _s(r"If you go first, you can use this attack during your first turn\.")(sents, i):
+        return (1, Frag("", fields={"allowedFirstTurn": True}))
+    return None
+
+
+@ATK.rule("R-A17")
+def _lock_opp_items(sents, i):
+    if _s(r"During your opponent.s next turn, they can.t play any Item cards from their "
+          r"hand\.")(sents, i):
+        return (1, Frag("", fields={"lockOpponentItems": True}))
+    return None
+
+
+_SCALE_SENT: list[tuple[str, str, int]] = [
+    # (sentence pattern with one damage group, scaleVar, perUnit multiplier)
+    (r"This attack does (\d+) (?:more )?damage for each card in your opponent.s hand\.",
+     "def_hand", 1),
+    (r"This attack does (\d+) (?:more )?damage for each card in your hand\.", "atk_hand", 1),
+    (r"This attack does (\d+) (?:more )?damage for each Energy attached to your opponent.s "
+     r"Active Pok.mon\.", "def_active_energy", 1),
+    (r"This attack does (\d+) (?:more )?damage for each(?: basic)?(?: \{\w\})? Energy attached "
+     r"to this Pok.mon\.", "atk_active_energy", 1),
+    (r"This attack does (\d+) (?:more )?damage for each of your opponent.s Benched Pok.mon\.",
+     "def_bench", 1),
+    (r"This attack does (\d+) (?:more )?damage for each of your Benched Pok.mon\.",
+     "atk_bench", 1),
+    (r"This attack does (\d+) (?:more )?damage for each damage counter on this Pok.mon\.",
+     "atk_self_counters", 1),
+    (r"This attack does (\d+) (?:more )?damage for each damage counter on your opponent.s "
+     r"Active Pok.mon\.", "def_counters", 1),
+    (r"This attack does (\d+) (?:more )?damage for each Prize card you have (?:already )?taken\.",
+     "atk_prizes_taken", 1),
+    (r"This attack does (\d+) (?:more )?damage for each Prize card your opponent has "
+     r"(?:already )?taken\.", "def_prizes_taken", 1),
+]
+
+
+@ATK.rule("R-A08")
+def _scaler(sents, i):
+    for pat, var, mult in _SCALE_SENT:
+        m = _s(pat)(sents, i)
+        if m:
+            more = " more damage" in sents[i]
+            return (1, Frag("", fields={"scale": {"var": var, "per": int(m.group(1)) * mult,
+                                                  "add": more}}))
+    return None
+
+
+_COND_BONUS: list[tuple[str, str]] = [
+    (r"If your opponent.s Active Pok.mon is a Pok.mon \{ex\}, this attack does (\d+) more damage\.",
+     "def_active_ex"),
+    (r"If your opponent.s Active Pok.mon already has any damage counters on it, this attack does "
+     r"(\d+) more damage\.", "def_active_damaged"),
+    (r"If a Stadium is in play, this attack does (\d+) more damage\.", "stadium_in_play"),
+    (r"If this Pok.mon moved from your Bench to the Active Spot this turn, this attack does "
+     r"(\d+) more damage\.", "self_moved_this_turn"),
+    (r"If any of your Pok.mon were Knocked Out by damage from an attack during your opponent.s "
+     r"last turn, this attack does (\d+) more damage\.", "own_ko_last_turn"),
+]
+
+
+@ATK.rule("R-A09")
+def _cond_bonus(sents, i):
+    for pat, cond in _COND_BONUS:
+        m = _s(pat)(sents, i)
+        if m:
+            return (1, Frag("", fields={"condBonus": {"cond": cond, "n": int(m.group(1))}}))
+    return None
+
+
+@ATK.rule("R-B01")
+def _recoil(sents, i):
+    m = _s(r"This Pok.mon also does (\d+) damage to itself\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xDamageSelf", "damage": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B02")
+def _bench_snipe(sents, i):
+    m = _s(r"This attack also does (\d+) damage to (\d+) of your opponent.s Benched "
+           r"Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xChooseBenchDamage", "damage": int(m.group(1)),
+                                    "count": int(m.group(2))}]))
+    return None
+
+
+@ATK.rule("R-B03")
+def _heal_self(sents, i):
+    m = _s(r"Heal (\d+) damage from this Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xHealSelf", "amount": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B04")
+def _discard_own_energy(sents, i):
+    m = _s(r"Discard (\d+|an?) Energy from this Pok.mon\.")(sents, i)
+    if m:
+        n = 1 if m.group(1) in ("a", "an") else int(m.group(1))
+        return (1, Frag("", rider=[{"op": "xDiscardOwnEnergy", "n": n}]))
+    if _s(r"Discard all Energy from this Pok.mon\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xDiscardAllOwnEnergy"}]))
+    return None
+
+
+@ATK.rule("R-B06")
+def _inflict(sents, i):
+    m = _s(r"Your opponent.s Active Pok.mon is now (Poisoned|Burned|Asleep|Paralyzed|"
+           r"Confused)\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xInflictConditionActive",
+                                    "condition": _COND[m.group(1)]}]))
+    return None
+
+
+@ATK.rule("R-B07")
+def _draw(sents, i):
+    m = _s(r"Draw (\d+|a) cards?\.")(sents, i)
+    if m:
+        n = 1 if m.group(1) == "a" else int(m.group(1))
+        return (1, Frag("", rider=[{"op": "effectDraw", "n": n}]))
+    return None
+
+
+@ATK.rule("R-B08")
+def _switch_self(sents, i):
+    if _s(r"Switch this Pok.mon with 1 of your Benched Pok.mon\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "effectSwitchMe"}]))
+    return None
+
+
+@ATK.rule("R-B09")
+def _opp_switches(sents, i):
+    if not _s(r"Switch out your opponent.s Active Pok.mon to the Bench\.")(sents, i):
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"\(Your opponent chooses the new Active "
+                                 r"Pok.mon\.\)")(sents, i + 1):
+        k = 2
+    return (k, Frag("", rider=[{"op": "xOpponentSwitches"}]))
+
+
+# --- coin composites (order: specific pairs first, bare flip last) ------------------------
+
+@ATK.rule("R-C01")
+def _coin_fail(sents, i):
+    if (i + 1 < len(sents) and _s(r"Flip a coin\.")(sents, i)
+            and _s(r"If tails, this attack does nothing\.")(sents, i + 1)):
+        return (2, Frag("", pre=[{"op": "coin"}, {"op": "xFailUnlessHeads"}]))
+    return None
+
+
+@ATK.rule("R-C02")
+def _coin_bonus(sents, i):
+    if i + 1 >= len(sents) or not _s(r"Flip a coin\.")(sents, i):
+        return None
+    m = _s(r"If heads, this attack does (\d+) more damage\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[{"op": "coin"},
+                                 {"op": "xBonusIfHeads", "n": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-C03")
+def _coins_per_heads(sents, i):
+    m0 = _s(r"Flip (\d+) coins\.")(sents, i)
+    if not m0 or i + 1 >= len(sents):
+        return None
+    m = _s(r"This attack does (\d+) damage for each heads\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[{"op": "xCoinsCount", "n": int(m0.group(1))},
+                                 {"op": "xDamagePerHeads", "per": int(m.group(1))}]))
+    m = _s(r"This attack does (\d+) more damage for each heads\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[{"op": "xCoinsCount", "n": int(m0.group(1))},
+                                 {"op": "xBonusPerHeads", "per": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-C05")
+def _coins_until_tails(sents, i):
+    if not _s(r"Flip a coin until you get tails\.")(sents, i) or i + 1 >= len(sents):
+        return None
+    m = _s(r"This attack does (\d+) damage for each heads\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[{"op": "xCoinsUntilTails"},
+                                 {"op": "xDamagePerHeads", "per": int(m.group(1))}]))
+    m = _s(r"This attack does (\d+) more damage for each heads\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[{"op": "xCoinsUntilTails"},
+                                 {"op": "xBonusPerHeads", "per": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-C07")
+def _coins_per_energy(sents, i):
+    m0 = _s(r"Flip a coin for each(?: \{(\w)\})? Energy attached to this Pok.mon\.")(sents, i)
+    if not m0 or i + 1 >= len(sents):
+        return None
+    et = None
+    if m0.group(1):
+        if m0.group(1) not in _TYPE_LETTER:
+            return None
+        et = _TYPE_LETTER[m0.group(1)]
+    coin_op: dict = {"op": "xCoinsCount", "var": "atk_active_energy"}
+    if et is not None:
+        coin_op["energyType"] = et
+    m = _s(r"This attack does (\d+) damage for each heads\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[coin_op, {"op": "xDamagePerHeads", "per": int(m.group(1))}]))
+    m = _s(r"This attack does (\d+) more damage for each heads\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", pre=[coin_op, {"op": "xBonusPerHeads", "per": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-C06")
+def _coin_rider(sents, i):
+    """Flip a coin. If heads, <known rider clause>. — post-damage coin-gated rider."""
+    if not _s(r"Flip a coin\.")(sents, i) or i + 1 >= len(sents):
+        return None
+    m = _s(r"If heads, your opponent.s Active Pok.mon is now (Poisoned|Burned|Asleep|"
+           r"Paralyzed|Confused)\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "xInflictConditionActive",
+                                    "condition": _COND[m.group(1)]}]))
+    m = _s(r"If heads, discard an Energy from your opponent.s Active Pok.mon\.")(sents, i + 1)
+    if m:
+        return (2, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "trashEnergyEnemy", "activeOnly": True}]))
+    return None
+
+
+@ATK.rule("R-B10")
+def _discard_opp_energy(sents, i):
+    if _s(r"Discard an Energy from your opponent.s Active Pok.mon\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "trashEnergyEnemy", "activeOnly": True}]))
+    return None
+
+
+@ATK.rule("R-B12")
+def _own_bench_each(sents, i):
+    m = _s(r"This attack also does (\d+) damage to each of your Benched "
+           r"Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xDamageOwnBenchEach", "damage": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B13")
+def _free_target_snipe(sents, i):
+    m = _s(r"This attack does (\d+) damage to (\d+) of your opponent.s Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xChooseAnyDamage", "damage": int(m.group(1)),
+                                    "count": int(m.group(2))}]))
+    return None
+
+
+@ATK.rule("R-B14")
+def _self_condition(sents, i):
+    m = _s(r"This Pok.mon is now (Poisoned|Burned|Asleep|Paralyzed|Confused)\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xInflictConditionSelf",
+                                    "condition": _COND[m.group(1)]}]))
+    return None
+
+
+@ATK.rule("R-B15")
+def _mill(sents, i):
+    m = _s(r"Discard the top (\d+ )?cards? of your opponent.s deck\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xMill", "who": "opp",
+                                    "n": int(m.group(1)) if m.group(1) else 1}]))
+    m = _s(r"Discard the top (\d+ )?cards? of your deck\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xMill", "who": "self",
+                                    "n": int(m.group(1)) if m.group(1) else 1}]))
+    return None
+
+
+@ATK.rule("R-B16")
+def _may_switch_self(sents, i):
+    if _s(r"You may switch this Pok.mon with 1 of your Benched Pok.mon\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xMayAsk",
+                                    "requires": [{"op": "benchExists"}],
+                                    "program": [{"op": "effectSwitchMe"}]}]))
+    return None
+
+
+@ATK.rule("R-B17")
+def _search_hand_rider(sents, i):
+    m = _s(r"Search your deck for (.+?), reveal (?:it|them), and put (?:it|them) into your "
+           r"hand\.")(sents, i)
+    if not m:
+        return None
+    spec = parse_search_spec(m.group(1))
+    if spec is None:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    n, flt = spec
+    return (k, Frag("", rider=[{"op": "effectDeckToHandAndShuffle", "min": 0, "max": n,
+                                "filter": flt}]))
+
+
+@ATK.rule("R-B18")
+def _deck_energy_attach_self(sents, i):
+    m = _s(r"Search your deck for (a|up to \d+) Basic \{(\w)\} Energy cards? and attach "
+           r"(?:it|them) to this Pok.mon\.")(sents, i)
+    if not m:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    n = 1 if m.group(1) == "a" else int(m.group(1).split()[-1])
+    if m.group(2) not in _TYPE_LETTER:
+        return None
+    return (k, Frag("", rider=[{"op": "xDeckEnergyAttach", "max": n, "target": "self",
+                                "filter": {"basicEnergy": True,
+                                           "energyType": [_TYPE_LETTER[m.group(2)]]}}]))
+
+
+@ATK.rule("R-B19")
+def _discard_energy_attach_self(sents, i):
+    m = _s(r"Attach (?:up to (\d+) |a )Basic(?: \{(\w)\})? Energy cards? from your discard "
+           r"pile to this Pok.mon\.")(sents, i)
+    if not m:
+        return None
+    n = int(m.group(1)) if m.group(1) else 1
+    flt: dict = {"basicEnergy": True}
+    if m.group(2):
+        if m.group(2) not in _TYPE_LETTER:
+            return None
+        flt["energyType"] = [_TYPE_LETTER[m.group(2)]]
+    return (1, Frag("", rider=[{"op": "xDiscardEnergyAttachSelf", "max": n,
+                                "filter": flt}]))
+
+
+@ATK.rule("R-B20")
+def _heal_each_rider(sents, i):
+    m = _s(r"Heal (\d+) damage from each of your Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xHealEach", "amount": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B21")
+def _self_return(sents, i):
+    if _s(r"Put this Pok.mon and all attached cards (?:back )?into your hand\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xSelfReturnToHand"}]))
+    return None
+
+
+@ATK.rule("R-B22")
+def _bench_spread(sents, i):
+    m = _s(r"Put (\d+) damage counters on your opponent.s Benched Pok.mon in any way you "
+           r"like\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xDistributeCounters",
+                                    "counters": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B11")
+def _search_bench(sents, i):
+    m = _s(r"Search your deck for (up to \d+|an?|1) Basic Pok.mon and put (?:them|it) onto "
+           r"your Bench\.")(sents, i)
+    if not m:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    q = m.group(1)
+    n = 1 if q in ("a", "an", "1") else int(q.split()[-1])
+    return (k, Frag("", rider=[{"op": "effectDeckToBenchAndShuffle", "min": 0, "max": n,
+                                "filter": {"pokemon": True, "basic": True}}]))
+
+
+# ---------------------------------------------------------------------------- trainer rules
+
+TRN = Rules()
+
+
+@TRN.rule("R-T08")
+def _discard_cost(sents, i):
+    m = _s(r"You can use this card only if you discard (\d+|another) (?:other )?cards? from "
+           r"your hand\.")(sents, i)
+    if m:
+        n = 1 if m.group(1) == "another" else int(m.group(1))
+        return (1, Frag("", legal=[{"op": "handOthers", "n": n}],
+                        play=[{"op": "costHandTrash", "n": n}]))
+    return None
+
+
+@TRN.rule("R-T01")
+def _search_to_hand(sents, i):
+    m = _s(r"Search your deck for (.+?), reveal (?:it|them), and put (?:it|them) into your "
+           r"hand\.")(sents, i)
+    if not m:
+        return None
+    spec = parse_search_spec(m.group(1))
+    if spec is None:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    n, flt = spec
+    return (k, Frag("", legal=[{"op": "deckNotEmpty"}],
+                    play=[{"op": "effectDeckToHandAndShuffle", "min": 0, "max": n,
+                           "filter": flt}]))
+
+
+@TRN.rule("R-T02")
+def _search_to_bench(sents, i):
+    m = _s(r"Search your deck for (.+?) and put (?:it|them) onto your Bench\.")(sents, i)
+    if not m:
+        return None
+    spec = parse_search_spec(m.group(1))
+    if spec is None or not spec[1].get("basic"):
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    n, flt = spec
+    return (k, Frag("", legal=[{"op": "benchSpace"}, {"op": "deckNotEmpty"}],
+                    play=[{"op": "effectDeckToBenchAndShuffle", "min": 0, "max": n,
+                           "filter": flt}]))
+
+
+@TRN.rule("R-T03")
+def _tr_draw(sents, i):
+    m = _s(r"Draw (\d+|a) cards?\.")(sents, i)
+    if m:
+        n = 1 if m.group(1) == "a" else int(m.group(1))
+        return (1, Frag("", play=[{"op": "effectDraw", "n": n}]))
+    return None
+
+
+@TRN.rule("R-T04")
+def _tr_draw_until(sents, i):
+    m = _s(r"Draw cards until you have (\d+) cards in your hand\.")(sents, i)
+    if m:
+        return (1, Frag("", play=[{"op": "effectDrawUntil", "n": int(m.group(1))}]))
+    return None
+
+
+@TRN.rule("R-T05")
+def _tr_switch(sents, i):
+    if _s(r"Switch your Active Pok.mon with 1 of your Benched Pok.mon\.")(sents, i):
+        return (1, Frag("", legal=[{"op": "benchExists"}], play=[{"op": "effectSwitchMe"}]))
+    return None
+
+
+@TRN.rule("R-T06")
+def _tr_gust(sents, i):
+    if _s(r"Switch in 1 of your opponent.s Benched Pok.mon to the Active Spot\.")(sents, i):
+        return (1, Frag("", legal=[{"op": "oppBenchExists"}],
+                        play=[{"op": "effectSwitchEnemy"}]))
+    return None
+
+
+@TRN.rule("R-T07")
+def _tr_heal(sents, i):
+    m = _s(r"Heal (\d+) damage from 1 of your Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", legal=[{"op": "selfDamaged"}],
+                        play=[{"op": "xHealChoose", "amount": int(m.group(1))}]))
+    return None
+
+
+@TRN.rule("R-T09")
+def _tr_shuffle_draw(sents, i):
+    if (i + 1 < len(sents) and _s(r"Each player shuffles their hand into their deck\.")(sents, i)):
+        m = _s(r"Then, you draw (\d+) cards?, and your opponent draws (\d+) cards?\.")(sents, i + 1)
+        if m:
+            return (2, Frag("", play=[{"op": "xBothShuffleHandDraw", "n": int(m.group(1)),
+                                       "nOpp": int(m.group(2))}]))
+        m = _s(r"Then, each player draws (\d+) cards?\.")(sents, i + 1)
+        if m:
+            return (2, Frag("", play=[{"op": "xBothShuffleHandDraw", "n": int(m.group(1))}]))
+    if (i + 1 < len(sents) and _s(r"Shuffle your hand into your deck\.")(sents, i)):
+        m = _s(r"(?:Then, )?[Dd]raw (\d+) cards?\.")(sents, i + 1)
+        if m:
+            return (2, Frag("", play=[{"op": "xOwnShuffleHandDraw", "n": int(m.group(1))}]))
+    return None
+
+
+@TRN.rule("R-T12")
+def _tr_discard_hand_draw(sents, i):
+    m = _s(r"Discard your hand and draw (\d+) cards?\.")(sents, i)
+    if m:
+        return (1, Frag("", play=[{"op": "xDiscardHandDraw", "n": int(m.group(1))}]))
+    return None
+
+
+@TRN.rule("R-T13")
+def _tr_heal_each(sents, i):
+    m = _s(r"Heal (\d+) damage from each of your Pok.mon\.")(sents, i)
+    if m:
+        return (1, Frag("", legal=[{"op": "selfDamaged"}],
+                        play=[{"op": "xHealEach", "amount": int(m.group(1))}]))
+    return None
+
+
+@TRN.rule("R-T11")
+def _tr_look_top(sents, i):
+    m = _s(r"Look at the top (\d+) cards of your deck and put (?:up to )?(\d+) of them into "
+           r"your hand\.")(sents, i)
+    if not m or i + 1 >= len(sents):
+        return None
+    if _s(r"Shuffle the other cards back into your deck\.")(sents, i + 1):
+        optional = "up to" in sents[i]
+        return (2, Frag("", legal=[{"op": "deckNotEmpty"}],
+                        play=[{"op": "xLookTopMayTakeThenShuffle", "n": int(m.group(1)),
+                               "min": 0 if optional else int(m.group(2)),
+                               "max": int(m.group(2)), "filter": {}}]))
+    return None
+
+
+# ---------------------------------------------------------------------------- tools / energy
+
+TOOL = Rules()
+
+
+@TOOL.rule("R-O01")
+def _tool_hp(sents, i):
+    m = _s(r"The Pok.mon this card is attached to gets \+(\d+) HP\.")(sents, i)
+    if m:
+        return (1, Frag("", fields={"tool": {"hpBonus": int(m.group(1))}}))
+    return None
+
+
+@TOOL.rule("R-O02")
+def _tool_retreat(sents, i):
+    m = _s(r"The Retreat Cost of the Pok.mon this card is attached to is ((?:\{\w\})+) "
+           r"less\.")(sents, i)
+    if m:
+        n = len(re.findall(r"\{\w\}", m.group(1)))
+        return (1, Frag("", fields={"tool": {"retreatBonus": -n}}))
+    return None
+
+
+ENERGY_PROVIDES = re.compile(
+    r"^As long as this card is attached to a Pok.mon, it provides \{(\w)\} Energy\.$")
+
+
+# ---------------------------------------------------------------------------- assembly
+
+def assemble(frags: list[Frag], *, is_attack: bool) -> dict | None:
+    """Compose fragments into one ChainDef entry; None when they conflict."""
+    out: dict = {}
+    pre: list = []
+    rider: list = []
+    play: list = []
+    legal: list = []
+    rules: list[str] = []
+    for f in frags:
+        if not f.rule:      # noise fragments carry nothing
+            continue
+        rules.append(f.rule)
+        pre += f.pre
+        rider += f.rider
+        play += f.play
+        legal += f.legal
+        for k, v in f.fields.items():
+            if k in out and out[k] != v:
+                return None                       # conflicting fields — never guess
+            out[k] = v
+    out.pop("_lockName", None)
+    if is_attack:
+        if play:
+            return None
+        if legal:
+            out["legal"] = legal   # engine menu-gates conditional attacks (options.py)
+        if pre:
+            out["pre"] = pre
+        if rider:
+            out["rider"] = rider
+    else:
+        if pre or rider:
+            return None
+        if "tool" not in out:
+            out["play"] = play
+            out["legal"] = legal
+    if rules:
+        out["_seed"] = {"rules": sorted(set(rules))}
+    return out
+
+
+# ---------------------------------------------------------------------------- seeding
+
+def seed_pool(cards: list[dict], attacks: list[dict], overrides: dict) -> tuple[dict, list]:
+    """→ (generated defs keyed like chain_overrides, unparsed queue entries)."""
+    gen: dict = {}
+    queue: list[dict] = []
+
+    # Sentence templates the engine MENU-GATES (the attack is unoffered until its board
+    # condition holds — pinned mill_9200 f33, Terminal Period). Deferred attacks matching
+    # one get menuOffer=false; every other deferred attack stays offered (Phantom-Dive
+    # class pin) and raises UnsupportedCard on use.
+    menu_gated = [re.compile(r"^If your opponent.s Active Pok.mon has exactly \d+ damage "
+                             r"counters on it, that Pok.mon is Knocked Out\.$")]
+
+    def defer(key: str, name: str, kind: str, reason: str, unparsed: list[str]):
+        entry: dict = {"name": name, "deferred": reason}
+        if kind == "attack" and any(g.match(s) for s in unparsed for g in menu_gated):
+            entry["menuOffer"] = False
+        if unparsed:
+            entry["_seed"] = {"unparsed": unparsed[:6]}
+        gen[key] = entry
+        for s in unparsed:
+            queue.append({"kind": kind, "key": key, "name": name, "sentence": s})
+
+    # --- attacks -------------------------------------------------------------------------
+    for a in attacks:
+        key = f"attack:{a['attackId']}"
+        if key in overrides:
+            continue                              # hand-authored chain wins; nothing to seed
+        name = a.get("name", "")
+        text = a.get("text") or ""
+        if not text.strip():
+            gen[key] = {"name": name, "_seed": {"source": "vanilla"}}
+            continue
+        frags, unparsed = ATK.consume(text)
+        if unparsed:
+            defer(key, name, "attack", "unparsed effect text", unparsed)
+            continue
+        entry = assemble(frags, is_attack=True)
+        if entry is None:
+            defer(key, name, "attack", "fragments would not compose", sentences(text))
+            continue
+        # A 0-damage attack whose whole effect needs a resource is MENU-GATED by the
+        # engine on that resource (pinned earthquake_9710 f6: Abundant Harvest unoffered
+        # with an empty discard; same class as the Terminal-Period gate).
+        if not a.get("damage"):
+            for op in entry.get("rider") or []:
+                if op["op"] == "xDiscardEnergyAttachSelf":
+                    entry["legal"] = [{"op": "discardHas", "filter": op.get("filter", {})}]
+        entry["name"] = name
+        gen[key] = entry
+
+    # --- cards ---------------------------------------------------------------------------
+    for c in cards:
+        key = str(c["cardId"])
+        if key in overrides:
+            continue
+        name = c.get("name", "")
+        ct = c["cardType"]
+        skills = [s for s in (c.get("skills") or [])]
+        text = " ".join(s.get("text", "") for s in skills).strip()
+
+        if ct == int(CardType.POKEMON):
+            if not skills:
+                gen[key] = {"name": name, "_seed": {"source": "plain-pokemon"}}
+            else:
+                defer(key, name, "ability",
+                      f"ability unpinned: {skills[0].get('name', '?')}", [])
+            continue
+
+        if ct == int(CardType.BASIC_ENERGY):
+            gen[key] = {"name": name, "_seed": {"source": "basic-energy"}}
+            continue
+
+        if ct == int(CardType.SPECIAL_ENERGY):
+            sents = sentences(text)
+            if len(sents) == 1:
+                m = ENERGY_PROVIDES.match(sents[0])
+                if m and m.group(1) in _TYPE_LETTER:
+                    gen[key] = {"name": name, "provides": [_TYPE_LETTER[m.group(1)]],
+                                "_seed": {"rules": ["R-E01"]}}
+                    continue
+            defer(key, name, "special-energy", "special energy unpinned", sents)
+            continue
+
+        if ct == int(CardType.TOOL):
+            frags, unparsed = TOOL.consume(text)
+            entry = assemble(frags, is_attack=False) if not unparsed else None
+            if entry and "tool" in entry:
+                entry["name"] = name
+                gen[key] = entry
+            else:
+                defer(key, name, "tool", "tool passive unpinned", unparsed or sentences(text))
+            continue
+
+        if ct == int(CardType.STADIUM):
+            defer(key, name, "stadium", "stadium passive unpinned", sentences(text))
+            continue
+
+        # ITEM / SUPPORTER
+        frags, unparsed = TRN.consume(text)
+        if unparsed:
+            defer(key, name, "trainer", "unparsed effect text", unparsed)
+            continue
+        entry = assemble(frags, is_attack=False)
+        if entry is None or not entry.get("play"):
+            defer(key, name, "trainer", "fragments would not compose", sentences(text))
+            continue
+        entry["name"] = name
+        gen[key] = entry
+
+    return gen, queue
+
+
+# ---------------------------------------------------------------------------- report
+
+def usage_rank() -> dict[str, float]:
+    """cardId(str) -> meta play-rate weight; empty when data/meta is absent."""
+    try:
+        sys.path.insert(0, str(REPO / "tools"))
+        from meta_tracker.meta_usage import usage_table  # type: ignore
+        return {str(k): float(v) for k, v in usage_table().items()}
+    except Exception:
+        return {}
+
+
+def build_report(queue: list[dict], attacks_by_id: dict, cards: list[dict]) -> dict:
+    """Group unparsed sentences by template hash; order groups by count (meta rank folds
+    in when available)."""
+    # attackId -> carrying cardIds (for play-rate attribution)
+    owners: dict[str, list[int]] = {}
+    for c in cards:
+        for aid in (c.get("attacks") or []):
+            owners.setdefault(str(aid), []).append(c["cardId"])
+    rank = usage_rank()
+    groups: dict[str, dict] = {}
+    for q in queue:
+        tpl = template(q["sentence"])
+        h = hashlib.sha1(tpl.encode("utf-8")).hexdigest()[:10]
+        g = groups.setdefault(h, {"template": tpl, "count": 0, "playRate": 0.0,
+                                  "examples": []})
+        g["count"] += 1
+        cids = ([int(q["key"])] if q["kind"] != "attack" else
+                owners.get(q["key"].split(":")[1], []))
+        g["playRate"] += max((rank.get(str(cid), 0.0) for cid in cids), default=0.0)
+        if len(g["examples"]) < 8:
+            g["examples"].append({k: q[k] for k in ("kind", "key", "name", "sentence")})
+    ordered = dict(sorted(groups.items(),
+                          key=lambda kv: (-kv[1]["playRate"], -kv[1]["count"])))
+    return {"_meta": {"tool": "seed_chains.py",
+                      "note": "the hand-authoring queue: each group is one sentence "
+                              "template no rule consumes (M4 item 1c)"},
+            "groups": ordered}
+
+
+# ---------------------------------------------------------------------------- main
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Seed pool-wide ChainDefs (ADR-0050 M4).")
+    ap.add_argument("--stats", action="store_true", help="print rollup only, write nothing")
+    args = ap.parse_args(argv)
+
+    cards = json.loads((DEFS / "card_data.json").read_text(encoding="utf-8"))
+    attacks = json.loads((DEFS / "attack_data.json").read_text(encoding="utf-8"))
+    overrides = json.loads((DEFS / "chain_overrides.json").read_text(encoding="utf-8"))
+
+    gen, queue = seed_pool(cards, attacks, overrides)
+
+    n_att = sum(1 for k in gen if k.startswith("attack:"))
+    att_def = sum(1 for k, v in gen.items() if k.startswith("attack:") and "deferred" in v)
+    n_card = sum(1 for k in gen if not k.startswith("attack:") and not k.startswith("_"))
+    card_def = sum(1 for k, v in gen.items()
+                   if not k.startswith("attack:") and not k.startswith("_")
+                   and "deferred" in v)
+    print(f"attacks: {n_att} generated ({n_att - att_def} live, {att_def} deferred) "
+          f"+ {sum(1 for k in overrides if k.startswith('attack:'))} overridden")
+    print(f"cards:   {n_card} generated ({n_card - card_def} live, {card_def} deferred) "
+          f"+ {sum(1 for k in overrides if not k.startswith('attack:') and k != '_comment')} "
+          f"overridden")
+    print(f"unparsed sentences queued: {len(queue)}")
+    if args.stats:
+        by_kind = Counter(q["kind"] for q in queue)
+        print(f"queue by kind: {dict(by_kind)}")
+        return 0
+
+    body = {"_meta": {"tool": "tools/parity/seed_chains.py",
+                      "note": "machine-seeded layer; chain_overrides.json wins per key; "
+                              "regenerate wholesale, never hand-edit"}}
+    body.update({k: gen[k] for k in sorted(gen, key=lambda x: (x.startswith("attack:"),
+                                                               x.split(":")[-1].zfill(6)))})
+    OUT.write_text(json.dumps(body, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(f"wrote {OUT}")
+
+    report = build_report(queue, {str(a['attackId']): a for a in attacks}, cards)
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1) + "\n",
+                      encoding="utf-8")
+    print(f"wrote {REPORT} ({len(report['groups'])} template groups)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

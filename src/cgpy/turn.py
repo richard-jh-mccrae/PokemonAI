@@ -335,8 +335,9 @@ def _end_turn(gs: GameState, seat: int) -> None:
     gs.emit({"type": int(LogType.TURN_END), "playerIndex": seat})
     _eot_energy_discards(gs, seat)
     _checkup(gs, seat)
-    if gs.result == -1:
-        begin_turn(gs, 1 - seat)
+    if gs.result != -1 or gs.pending is not None:
+        return                       # checkup KO'd something: the claims machine owns flow
+    begin_turn(gs, 1 - seat)
 
 
 def _eot_energy_discards(gs: GameState, seat: int) -> None:
@@ -355,16 +356,43 @@ def _eot_energy_discards(gs: GameState, seat: int) -> None:
 
 
 def _checkup(gs: GameState, ending_seat: int) -> None:
-    """Pokemon Checkup skeleton (Poison -> Burn -> Asleep -> Paralyze). Vanilla M1: only the
-    paralysis auto-recovery is live; condition sources arrive with the chain interpreter."""
+    """Pokémon Checkup between turns, per seat in (ending, other) order, conditions in
+    Poisoned -> Burned -> Asleep -> Paralyzed order (docs/rules.md §8): poison ticks 1
+    counter, burn ticks 2 then flips (heads removes), asleep flips (heads wakes),
+    paralysis auto-recovers after the owner's turn. Tick/flip log shapes are SEEDED (M4,
+    trace-unpinned — micro-traces refine); a checkup KO runs the standard claims flow."""
     for seat in (ending_seat, 1 - ending_seat):
         b = gs.players[seat]
+        if b.active is None:
+            continue
+        me = b.active
+        if b.poisoned:
+            me.hp = max(0, me.hp - 10)
+            gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
+                     "cardId": gs.card_id(me.top), "serial": me.top,
+                     "value": -10, "putDamageCounter": True})
+        if b.burned:
+            me.hp = max(0, me.hp - 20)
+            gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
+                     "cardId": gs.card_id(me.top), "serial": me.top,
+                     "value": -20, "putDamageCounter": True})
+            if gs.coin_flip(seat):
+                b.burned = False
+                gs.emit({"type": int(LogType.BURNED), "playerIndex": seat,
+                         "isRecover": True, "cardId": gs.card_id(me.top),
+                         "serial": me.top})
+        if b.asleep:
+            if gs.coin_flip(seat):
+                b.asleep = False
+                gs.emit({"type": int(LogType.ASLEEP), "playerIndex": seat,
+                         "isRecover": True, "cardId": gs.card_id(me.top),
+                         "serial": me.top})
         if b.paralyzed and seat == ending_seat and b.paralyzed_since_turn < gs.turn:
             b.paralyzed = False
-            if b.active:
-                gs.emit({"type": int(LogType.PARALYZED), "playerIndex": seat,
-                         "isRecover": True, "cardId": gs.card_id(b.active.top),
-                         "serial": b.active.top})
+            gs.emit({"type": int(LogType.PARALYZED), "playerIndex": seat,
+                     "isRecover": True, "cardId": gs.card_id(b.active.top),
+                     "serial": b.active.top})
+    _sweep_kos(gs, credited=ending_seat, then=("begin_turn", 1 - ending_seat))
 
 
 def _discard_in_play(gs: GameState, seat: int, p: PokemonInPlay) -> None:
@@ -392,12 +420,11 @@ def _discard_in_play(gs: GameState, seat: int, p: PokemonInPlay) -> None:
 
 
 def _pose_prize_pick(gs: GameState, seat: int) -> None:
-    """The winner picks prizes ONE SELECT PER KO'd Pokémon, min=max=that Pokémon's prize
+    """A claimant picks prizes ONE SELECT PER KO'd Pokémon, min=max=that Pokémon's prize
     value (pinned: a mega KO poses min 3 — ms_mirror_1001 f69 — while two 1-prize KOs
     pose two min-1 selects — ms_mirror_1002 f26/f33)."""
     b = gs.players[seat]
-    claims = gs.phase_data["prize_claims"]
-    n = min(claims[0], len(b.prize))
+    n = min(gs.phase_data["claims"][0][1], len(b.prize))
     opts = [opt_card(AreaType.PRIZE, i, seat) for i in range(len(b.prize))]
     pose(gs, seat, type=SelectType.CARD, context=SelectContext.TO_HAND, options=opts,
          min_count=n, max_count=n)
@@ -413,32 +440,82 @@ def _prize_value(gs: GameState, p: PokemonInPlay) -> int:
 
 
 def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
+    from .chain import UnsupportedCard, def_for, is_deferred, start_program
+
+    b = gs.players[seat]
+    attacker = b.active
+    adef = def_for(f"attack:{attack_id}")
+    if adef is None or is_deferred(adef):
+        raise UnsupportedCard(
+            f"attack {attack_id} is {'deferred' if adef else 'undefined'}: "
+            f"{(adef or {}).get('deferred', 'no ChainDef')}")
+    gs.emit({"type": int(LogType.ATTACK), "playerIndex": seat,
+             "cardId": gs.card_id(attacker.top), "serial": attacker.top,
+             "attackId": attack_id})
+    if adef.get("selfLockNextTurn"):        # Accelerating Stab / Mega Brave: this attack
+        attacker.attack_locks[str(attack_id)] = gs.turn + 2   # is barred next own turn
+    if adef.get("selfLockAllNextTurn"):     # "can't attack" locks the whole menu (seeded)
+        for aid in gs.stat(attacker.top).attacks:
+            attacker.attack_locks[str(aid)] = gs.turn + 2
+    if b.confused:
+        # Confusion gate (docs/rules.md §8, seeded shape): flip before attacking —
+        # tails: the attack fails and the attacker takes 3 damage counters.
+        if not gs.coin_flip(seat):
+            attacker.hp = max(0, attacker.hp - 30)
+            gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
+                     "cardId": gs.card_id(attacker.top), "serial": attacker.top,
+                     "value": -30, "putDamageCounter": True})
+            if not _sweep_kos(gs, credited=seat, then=("end_turn", seat)):
+                _end_turn(gs, seat)
+            return
+    pre = adef.get("pre")
+    if pre:
+        from .state import EffectFrame
+        gs.frames.append(EffectFrame(program=list(pre), pc=0,
+                                     vars={"attack_id": attack_id},
+                                     seat=seat, source=attacker.top, kind="attack_pre"))
+        from .chain import run_frames
+        run_frames(gs)
+        return
+    _attack_damage_apply(gs, seat, attack_id, {})
+
+
+def _attack_damage_apply(gs: GameState, seat: int, attack_id: int,
+                         pre_vars: dict) -> None:
+    """The damage step: runs directly, or as the continuation of a finished `pre`
+    program (whose frame vars carry coin outcomes / cancellation)."""
     from .chain import def_for, start_program
     from .damage import attack_damage
 
     b, ob = gs.players[seat], gs.players[1 - seat]
     attacker, defender = b.active, ob.active
-    gs.emit({"type": int(LogType.ATTACK), "playerIndex": seat,
-             "cardId": gs.card_id(attacker.top), "serial": attacker.top,
-             "attackId": attack_id})
-    adef_full = def_for(f"attack:{attack_id}") or {}
-    if adef_full.get("selfLockNextTurn"):   # Accelerating Stab / Mega Brave: this attack
-        attacker.attack_locks[str(attack_id)] = gs.turn + 2   # is barred next own turn
-    req = adef_full.get("requiresBenchNamed")
-    does_nothing = req is not None and not any(
-        gs.stat(p.top).name == req for p in b.bench)   # Cosmic Beam without Lunatone:
-    if does_nothing:                                   # no damage, no log (pinned
-        dmg = 0                                        # v2_ml_mirror_5100 f178)
-    else:
-        dmg = attack_damage(gs, attacker, gs.db.attacks[attack_id], defender,
-                            ignore_wr=adef_full.get("ignoreWeaknessResistance", False))
-    if dmg > 0:
+    adef = def_for(f"attack:{attack_id}") or {}
+    req = adef.get("requiresBenchNamed")
+    if req is not None:
+        names = [req] if isinstance(req, str) else list(req)
+        if not all(any(gs.stat(p.top).name == n for p in b.bench) for n in names):
+            _end_turn(gs, seat)     # Cosmic Beam without Lunatone: silent nothing
+            return                  # (pinned v2_ml_mirror_5100 f178)
+    if pre_vars.get("cancel"):      # "If tails, this attack does nothing." — no damage,
+        _end_turn(gs, seat)         # no rider (seeded shape)
+        return
+    dmg = attack_damage(gs, attacker, gs.db.attacks[attack_id], defender,
+                        adef=adef, pre_vars=pre_vars)
+    # An attack WITH a damage component logs HP_CHANGE even when it computes 0 (pinned
+    # perheads_9200 f61: Ball Roll all-tails logs value 0); a component-less status
+    # attack logs nothing.
+    has_damage = (gs.db.attacks[attack_id].damage > 0 or "scale" in adef
+                  or "damage_override" in pre_vars)
+    if defender is not None and (dmg > 0 or has_damage):
         defender.hp = max(0, defender.hp - dmg)
         gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": 1 - seat,
                  "cardId": gs.card_id(defender.top), "serial": defender.top,
                  "value": -dmg, "putDamageCounter": False})
-
-    rider = adef_full.get("rider")
+    if adef.get("lockDefenderRetreat") and defender is not None:
+        defender.retreat_lock_turn = gs.turn + 1   # "Defending Pokémon can't retreat"
+    if adef.get("lockOpponentItems"):              # Itchy Pollen: no ITEM plays for the
+        ob.items_locked_turn = gs.turn + 1         # opponent's next turn (menu-enforced)
+    rider = adef.get("rider")
     if rider:                       # rider runs BEFORE KO processing (pinned ms_mirror_1002
         start_program(gs, seat, attacker.top, rider, kind="attack")  # f25-f26)
         return
@@ -446,46 +523,96 @@ def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
 
 
 def _after_attack(gs: GameState, seat: int) -> None:
-    """Post-attack KO sweep (defender's side; active first, then bench), prize flow.
-    KO thresholds use the stadium-adjusted effective HP (Gravity Mountain)."""
+    """Post-attack KO sweep + prize flow, both sides (recoil riders can KO the attacker).
+    A side left with NO Pokémon by a non-KO departure (Tuck Tail's self-return with an
+    empty bench — pinned tucktail_9521) loses by NO_POKEMON immediately."""
+    if _sweep_kos(gs, credited=seat, then=("end_turn", seat)):
+        return
+    gone = [s for s in (0, 1)
+            if gs.players[s].active is None and not gs.players[s].bench]
+    if gone:
+        if len(gone) == 2:
+            gs.set_result(2, ResultReason.NO_POKEMON)     # simultaneous = DRAW
+        else:
+            gs.set_result(1 - gone[0], ResultReason.NO_POKEMON)
+        return
+    _end_turn(gs, seat)
+
+
+def _sweep_kos(gs: GameState, *, credited: int, then: tuple) -> bool:
+    """Sweep BOTH sides for KOs — the credited seat's opponent first (the pinned
+    defender-side order: active, then bench) — queue one prize claim per KO for the KO'd
+    side's opponent, then start the claims flow. Returns False when nothing was KO'd
+    (the caller continues normally). KO thresholds use stadium-adjusted effective HP."""
     from .chain import stadium_hp_delta
-    ob = gs.players[1 - seat]
-    claims: list[int] = []                        # one prize claim per KO'd Pokémon
-    if ob.active is not None and ob.active.hp + stadium_hp_delta(gs, ob.active) <= 0:
-        claims.append(_prize_value(gs, ob.active))
-        _discard_in_play(gs, 1 - seat, ob.active)
-        ob.active = None
-    for p in [x for x in ob.bench if x.hp + stadium_hp_delta(gs, x) <= 0]:
-        claims.append(_prize_value(gs, p))
-        _discard_in_play(gs, 1 - seat, p)
-        ob.bench.remove(p)
+    claims: list[list[int]] = []              # [claimant seat, prize value] per KO
+    for side in (1 - credited, credited):
+        b = gs.players[side]
+        koed = False
+        if b.active is not None and b.active.hp + stadium_hp_delta(gs, b.active) <= 0:
+            claims.append([1 - side, _prize_value(gs, b.active)])
+            _discard_in_play(gs, side, b.active)
+            b.active = None
+            koed = True
+        for p in [x for x in b.bench if x.hp + stadium_hp_delta(gs, x) <= 0]:
+            claims.append([1 - side, _prize_value(gs, p)])
+            _discard_in_play(gs, side, p)
+            b.bench.remove(p)
+            koed = True
+        if koed:
+            gs.ko_turn[side] = gs.turn        # Unfair Stamp's gate looks back one turn
     if not claims:
-        _end_turn(gs, seat)
-        return
-    gs.ko_turn[1 - seat] = gs.turn                # Unfair Stamp's gate looks back one turn
-    gs.phase_data = {"seat": seat, "prize_claims": claims, "await": "prize"}
-    _pose_prize_pick(gs, seat)
+        return False
+    gs.phase_data = {"await": "prize", "claims": claims, "then": list(then)}
+    _pose_prize_pick(gs, claims[0][0])
+    return True
 
 
-def _after_prizes_taken(gs: GameState, seat: int) -> None:
-    """Post-KO adjudication once the winner finished picking prizes (pinned: reason 3
-    outranks the prize win when the defender also cannot promote)."""
-    b, ob = gs.players[seat], gs.players[1 - seat]
-    i_won = not b.prize
-    they_cant = ob.active is None and not ob.bench
-    if they_cant:                # NO_POKEMON outranks the prize win even when both hold
-        gs.set_result(seat, ResultReason.NO_POKEMON)   # (pinned ms_mirror_1001 f121:
-        return                                         # result=1 reason=3, NOT a draw)
-    if i_won:
-        gs.set_result(seat, ResultReason.PRIZES)
+def _after_prizes_taken(gs: GameState) -> None:
+    """Post-KO adjudication once every claim is settled: NO_POKEMON outranks the prize
+    win (pinned ms_mirror_1001 f121); simultaneous win = DRAW (result 2, rulebook delta);
+    then promotions (KO'd side(s) pick a new Active), then the stored continuation."""
+    d = gs.phase_data
+    winners: list[tuple[int, int]] = []
+    for s in (0, 1):
+        if gs.players[1 - s].active is None and not gs.players[1 - s].bench:
+            winners.append((s, int(ResultReason.NO_POKEMON)))
+    if not winners:
+        for s in (0, 1):
+            if not gs.players[s].prize:
+                winners.append((s, int(ResultReason.PRIZES)))
+    if len(winners) == 2:
+        gs.set_result(2, winners[0][1])       # simultaneous win = DRAW (rulebook delta)
         return
-    if ob.active is not None:                          # bench-only KO: nothing to promote
+    if winners:
+        gs.set_result(*winners[0])
+        return
+    promote = [s for s in (0, 1)
+               if gs.players[s].active is None and gs.players[s].bench]
+    # The attacked side promotes first when both lost their Active (seeded order).
+    credited = d["then"][1] if d["then"][0] == "end_turn" else 1 - d["then"][1]
+    promote.sort(key=lambda s: 0 if s != credited else 1)
+    if promote:
+        d["await"] = "promote"
+        d["promote_queue"] = promote
+        _pose_promotion(gs)
+        return
+    _run_continuation(gs)
+
+
+def _pose_promotion(gs: GameState) -> None:
+    s = gs.phase_data["promote_queue"][0]
+    opts = [opt_card(AreaType.BENCH, i, s) for i in range(len(gs.players[s].bench))]
+    pose(gs, s, type=SelectType.CARD, context=SelectContext.TO_ACTIVE, options=opts)
+
+
+def _run_continuation(gs: GameState) -> None:
+    kind, seat = gs.phase_data["then"]
+    gs.phase_data = {"seat": seat}
+    if kind == "end_turn":
         _end_turn(gs, seat)
-        return
-    gs.phase_data = {"seat": seat, "await": "promote"}
-    opts = [opt_card(AreaType.BENCH, i, 1 - seat) for i in range(len(ob.bench))]
-    pose(gs, 1 - seat, type=SelectType.CARD, context=SelectContext.TO_ACTIVE,
-         options=opts)
+    else:                                     # "begin_turn": a checkup KO resolved
+        begin_turn(gs, seat)
 
 
 def _turn_apply(gs: GameState, indices: list[int]) -> None:
@@ -628,21 +755,34 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
             b.hand.append(serial)
             gs.move_card(serial, AreaType.PRIZE, AreaType.HAND, seat=seat,
                          visible_to_owner=True, visible_to_opponent=False)
-        gs.phase_data["prize_claims"].pop(0)
-        if gs.phase_data["prize_claims"] and b.prize:
-            _pose_prize_pick(gs, seat)
+        gs.phase_data["claims"].pop(0)
+        nxt = next((c for c in gs.phase_data["claims"]
+                    if gs.players[c[0]].prize), None)
+        if nxt is not None:
+            gs.phase_data["claims"] = [c for c in gs.phase_data["claims"]
+                                       if gs.players[c[0]].prize]
+            _pose_prize_pick(gs, nxt[0])
         else:
-            _after_prizes_taken(gs, seat)
+            gs.phase_data["claims"] = []
+            _after_prizes_taken(gs)
 
     elif ctx == SelectContext.TO_ACTIVE:
         o = opts[indices[0]]
-        promoted_by = gs.phase_data.get("seat", 1 - seat)
         ob = gs.players[seat]
         p = ob.bench.pop(o["index"])
         ob.active = p
+        p.moved_active_turn = gs.turn
         gs.move_card(p.top, AreaType.BENCH, AreaType.ACTIVE, seat=seat,
                      visible_to_owner=True, visible_to_opponent=True)
-        _end_turn(gs, promoted_by)
+        q = gs.phase_data.get("promote_queue")
+        if q is not None:
+            q.pop(0)
+            if q:
+                _pose_promotion(gs)
+            else:
+                _run_continuation(gs)
+        else:   # legacy single-promotion path (kept for chain-op promotions)
+            _end_turn(gs, gs.phase_data.get("seat", 1 - seat))
 
     else:
         raise AssertionError(f"turn got answer for unexpected context {ctx}")
@@ -699,6 +839,7 @@ def _do_switch(gs: GameState, seat: int, bench_index: int, *, retreat: bool) -> 
     new_active = b.bench[bench_index]
     b.bench[bench_index] = old_active
     b.active = new_active
+    new_active.moved_active_turn = gs.turn
     b.poisoned = b.burned = b.asleep = b.paralyzed = b.confused = False
     gs.emit({"type": int(LogType.SWITCH), "playerIndex": seat,
              "cardIdActive": gs.card_id(old_active.top), "serialActive": old_active.top,

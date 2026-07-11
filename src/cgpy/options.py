@@ -121,6 +121,10 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
             if len(b.bench) < b.bench_max:
                 opts.append({"type": int(OptionType.PLAY), "index": i})
         elif stat.cardType in (CardType.BASIC_ENERGY, CardType.SPECIAL_ENERGY):
+            if stat.cardType == CardType.SPECIAL_ENERGY:
+                from .chain import def_for, is_deferred
+                if is_deferred(def_for(cid)):
+                    continue   # unmodeled special energy: option absent -> loud divergence
             if not gs.energy_attached:
                 for area, idx, _p in _targets(gs, seat):
                     opts.append({"type": int(OptionType.ATTACH), "area": int(AreaType.HAND),
@@ -137,17 +141,19 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
         elif stat.cardType in (CardType.ITEM, CardType.SUPPORTER):
             from .chain import check_legal, def_for
             cdef = def_for(cid)
-            if cdef is None:
-                continue  # no ChainDef yet: option absent -> visible trace divergence
+            if cdef is None or "play" not in cdef:
+                continue  # no/deferred ChainDef: option absent -> visible trace divergence
             if stat.cardType == CardType.SUPPORTER and (gs.supporter_played or
                                                         going_first_t1):
                 continue
+            if stat.cardType == CardType.ITEM and b.items_locked_turn == gs.turn:
+                continue  # Itchy-Pollen item lock: PLAY options omitted for one turn
             if check_legal(gs, seat, cdef.get("legal", [])):
                 opts.append({"type": int(OptionType.PLAY), "index": i})
         elif stat.cardType == CardType.TOOL:
             from .chain import def_for
-            if def_for(cid) is None:
-                continue  # un-def'd tool: option absent -> visible trace divergence
+            if "tool" not in (def_for(cid) or {}):
+                continue  # un-def'd/deferred tool: option absent -> visible divergence
             for area, idx, p in _targets(gs, seat):
                 if not p.tools:                    # one tool per Pokémon
                     opts.append({"type": int(OptionType.ATTACH),
@@ -155,8 +161,8 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
                                  "inPlayArea": area, "inPlayIndex": idx})
         elif stat.cardType == CardType.STADIUM:
             from .chain import def_for
-            if def_for(cid) is None:
-                continue
+            if "stadium" not in (def_for(cid) or {}):
+                continue  # un-def'd/deferred stadium: option absent -> visible divergence
             if gs.stadium_played:                  # one stadium play per turn
                 continue
             if gs.stadium and gs.card_id(gs.stadium[0]) == cid:
@@ -178,22 +184,36 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
             continue
         opts.append({"type": int(OptionType.ABILITY), "area": area, "index": idx})
 
-    # ATTACK tail (not for the first player's first turn); self-locked attacks
-    # (Accelerating Stab / Mega Brave class) are omitted on the owner's next turn
+    # ATTACK tail (not for the first player's first turn unless the attack's text exempts
+    # it — "If you go first, you can use this attack during your first turn"); self-locked
+    # attacks (Accelerating Stab / Mega Brave class) are omitted on the owner's next turn
     # (pinned v2_ml_mirror_5100 f130 / 5101 f21).
-    if b.active is not None and not going_first_t1 and not b.asleep and not b.paralyzed:
+    if b.active is not None and not b.asleep and not b.paralyzed:
+        from .chain import check_legal, def_for as _adef_for, is_deferred
         for attack_id in gs.stat(b.active.top).attacks:
             atk = gs.db.attacks[attack_id]
+            adef = _adef_for(f"attack:{attack_id}") or {}
+            if is_deferred(adef) and not adef.get("menuOffer", True):
+                continue   # engine menu-gates this conditional attack (Terminal-Period
+                           # pin, mill_9200 f33); other deferred attacks stay OFFERED
+                           # (Phantom-Dive class pin) and raise UnsupportedCard on use
+            if going_first_t1 and not adef.get("allowedFirstTurn"):
+                continue
             if b.active.attack_locks.get(str(attack_id)) == gs.turn:
                 continue
-            if energy_payable(gs, b.active, atk.energies):
+            if adef.get("legal") and not check_legal(gs, seat, adef["legal"],
+                                                     pokemon=b.active):
+                continue  # engine menu-gates conditional attacks (pinned mill_9200 f33:
+            if energy_payable(gs, b.active, atk.energies):   # Terminal Period unoffered)
                 opts.append({"type": int(OptionType.ATTACK), "attackId": attack_id})
 
-    # RETREAT: once per turn, needs a bench, blocked by sleep/paralysis, cost payable —
-    # in provided-energy UNITS (Ignition on an evolution pays 3 with one card, pinned
-    # ms_mirror_1001 f22).
+    # RETREAT: once per turn, needs a bench, blocked by sleep/paralysis and a
+    # can't-retreat attack effect (engine-enforced by omission, probed 2026-07-02 —
+    # tests/sim/test_retreat_lock_engine.py), cost payable in provided-energy UNITS
+    # (Ignition on an evolution pays 3 with one card, pinned ms_mirror_1001 f22).
     if (b.active is not None and b.bench and not gs.retreated
             and not b.asleep and not b.paralyzed
+            and b.active.retreat_lock_turn != gs.turn
             and len(provided_energy(gs, b.active))
             >= effective_retreat_cost(gs, b.active)):
         opts.append({"type": int(OptionType.RETREAT)})

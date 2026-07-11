@@ -22,7 +22,7 @@ class SeededRng:
     def shuffle(self, seq: list, *, seat: int) -> None:
         self._r.shuffle(seq)
 
-    def coin(self) -> bool:
+    def coin(self, seat: int | None = None) -> bool:
         return self._r.random() < 0.5
 
     def draw_bind(self, seat: int, deck: list[int]) -> int:
@@ -63,7 +63,7 @@ class ReplayRandomness:
             seq[:] = order
         # else: leave order as-is; subsequent draws bind identities explicitly.
 
-    def coin(self) -> bool:
+    def coin(self, seat: int | None = None) -> bool:
         if not self.coin_queue:
             raise ReplayError("coin flip requested but no recorded COIN outcome remains")
         return self.coin_queue.pop(0)

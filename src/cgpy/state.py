@@ -40,6 +40,11 @@ class PokemonInPlay:
                             # appearThisTurn renders as entered_turn >= current turn (pinned)
     ability_used_turn: int = -1   # once-per-turn activated-ability gate
     attack_locks: dict = field(default_factory=dict)  # attackId(str) -> global turn locked
+    moved_active_turn: int = -1   # turn it moved bench->active (switch/promotion) — the
+                                  # "moved from your Bench to the Active Spot this turn" cond
+    retreat_lock_turn: int = -1   # global turn this mon cannot RETREAT (lockDefenderRetreat)
+    take_less_turn: int = -1      # "takes N less damage" transient: the global turn it
+    take_less: int = 0            # applies (the attacker's turn after the granting attack)
 
     @property
     def top(self) -> int:
@@ -65,6 +70,9 @@ class PlayerBoard:
     paralyzed_since_turn: int = -1   # for auto-recovery after the owner's next turn
     mulligans: int = 0
     mulligan_asked: bool = False
+    items_locked_turn: int = -1   # Itchy-Pollen class: the global turn this seat cannot
+                                  # play ITEM cards ("During your opponent's next turn,
+                                  # they can't play any Item cards from their hand")
 
 
 @dataclass
@@ -223,7 +231,10 @@ class GameState:
         self.attach_seq[serial] = self.attach_tick
 
     def coin_flip(self, seat: int) -> bool:
-        head = self.rng.coin()
+        try:
+            head = self.rng.coin(seat=seat)   # replay binds per-OWNER (checkup flips
+        except TypeError:                     # belong to the condition owner, not the
+            head = self.rng.coin()            # frame's mover — pinned collapse_9740 f17)
         self.emit({"type": int(LogType.COIN), "playerIndex": seat, "head": bool(head)})
         return head
 

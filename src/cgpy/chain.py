@@ -25,12 +25,38 @@ _DEFS = Path(__file__).resolve().parent / "defs"
 
 @lru_cache(maxsize=1)
 def load_chain_defs() -> dict:
-    """{cardId(str): {"play": [...ops], "legal": [...conds], ...}} — overrides layer only
-    for now (generated seeds arrive with the pool-wide fan-out)."""
-    path = _DEFS / "chain_overrides.json"
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    """The merged ChainDef table: ``generated_chains.json`` (machine layer, M4) under
+    ``chain_overrides.json`` (hand-authored — wins per chain key, whole-entry replacement).
+
+    Loader validation (M4): every pool card AND attack must have an entry — a def, or an
+    explicit ``{"deferred": reason}``. A missing chain is a LOAD error, so a new set/table
+    snapshot cannot silently ship half-covered."""
+    defs: dict = {}
+    gen_path = _DEFS / "generated_chains.json"
+    if gen_path.exists():
+        defs.update(json.loads(gen_path.read_text(encoding="utf-8")))
+    ov_path = _DEFS / "chain_overrides.json"
+    if ov_path.exists():
+        defs.update(json.loads(ov_path.read_text(encoding="utf-8")))
+    defs = {k: v for k, v in defs.items() if not k.startswith("_")}
+
+    if gen_path.exists():                      # only enforce once the M4 layer exists
+        from .cards import CardDB
+        db = CardDB.load()
+        missing = [str(cid) for cid in db.cards if str(cid) not in defs]
+        missing += [f"attack:{aid}" for aid in db.attacks
+                    if f"attack:{aid}" not in defs]
+        if missing:
+            raise RuntimeError(
+                f"chain defs incomplete: {len(missing)} pool chains have neither a def "
+                f"nor an explicit deferral (first: {missing[:5]}) — regenerate with "
+                f"tools/parity/seed_chains.py")
+    return defs
+
+
+def is_deferred(cdef: dict | None) -> bool:
+    """An explicitly deferred chain: known-unmodeled, must never run (UnsupportedCard)."""
+    return cdef is not None and "deferred" in cdef
 
 
 def def_for(card_id: int) -> dict | None:
@@ -199,6 +225,9 @@ def _after_program(gs: GameState, fr: EffectFrame) -> None:
     if fr.kind == "attack":
         from .turn import _after_attack
         _after_attack(gs, fr.seat)
+    elif fr.kind == "attack_pre":
+        from .turn import _attack_damage_apply
+        _attack_damage_apply(gs, fr.seat, fr.vars["attack_id"], fr.vars)
     elif fr.kind in ("play", "ability"):
         from .turn import flush_triggers
         flush_triggers(gs, fr.seat)
@@ -391,12 +420,14 @@ def op_if_heads(gs, fr, args) -> bool:
 def op_trash_energy_enemy(gs, fr, args) -> bool:
     """Discard one energy from any opponent Pokémon (Crushing Hammer, post-heads).
     Options list the opponent's energies in GLOBAL ATTACH ORDER, oldest first (pinned
-    ml_dx_2001 f175 / ml_dx_2000 f95 / ms_mirror_1001 f83)."""
+    ml_dx_2001 f175 / ml_dx_2000 f95 / ms_mirror_1001 f83). ``activeOnly`` restricts to
+    the opponent's Active (the attack-rider flavor — seeded, unpinned)."""
     seat = fr.seat
     opp = 1 - seat
     ob = gs.players[opp]
     plist = ([(int(AreaType.ACTIVE), 0, ob.active)] if ob.active else []) + \
-        [(int(AreaType.BENCH), i, p) for i, p in enumerate(ob.bench)]
+        ([] if args.get("activeOnly") else
+         [(int(AreaType.BENCH), i, p) for i, p in enumerate(ob.bench)])
     from .options import provided_units_of
     entries = []                                  # (attach tick, option dict)
     for area, idx, p in plist:
@@ -548,35 +579,42 @@ def op_bench_counter_damage(gs, fr, args) -> bool:
     return True
 
 
+def _bench_hit(gs, opp: int, target, dmg: int) -> None:
+    """Flat bench damage (no W/R; benched Tera prevention logs a value-0 HP_CHANGE —
+    pinned v2_ms_dx_5401 f100)."""
+    if gs.stat(target.top).tera:
+        dmg = 0
+    target.hp = max(0, target.hp - dmg)
+    gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
+             "cardId": gs.card_id(target.top), "serial": target.top,
+             "value": -dmg, "putDamageCounter": False})
+
+
 def op_choose_bench_damage(gs, fr, args) -> bool:
-    """Attack rider: choose one opponent benched Pokémon, deal flat damage (no W/R on
-    bench). Pinned ms_mirror_1002 f25-f26 (Jetting Blow): DAMAGE ctx, effect=attacker,
-    options over the defender's bench, HP_CHANGE putDamageCounter=false."""
+    """Attack rider: choose `count` opponent benched Pokémon, deal flat damage each (no
+    W/R on bench). Pinned ms_mirror_1002 f25-f26 (Jetting Blow, count 1): DAMAGE ctx,
+    effect=attacker, options over the defender's bench, HP_CHANGE putDamageCounter=false.
+    count>1 = one select min=max=min(count, bench) — seeded shape, unpinned."""
     seat = fr.seat
     opp = 1 - seat
     ob = gs.players[opp]
     if not ob.bench:
         return True
     if "answer" not in fr.vars:
+        n = min(args.get("count", 1), len(ob.bench))
         opts = [opt_card(AreaType.BENCH, i, opp) for i in range(len(ob.bench))]
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.DAMAGE,
-             options=opts, min_count=1, max_count=1, effect_card=fr.source)
+             options=opts, min_count=n, max_count=n, effect_card=fr.source)
         return False
-    o = fr.vars.pop("answered_options")[0]
+    picked = [ob.bench[o["index"]] for o in fr.vars.pop("answered_options")]
     fr.vars.pop("answer")
-    target = ob.bench[o["index"]]
-    dmg = args["damage"]
-    if gs.stat(target.top).tera:
-        dmg = 0        # benched Tera Pokémon take no attack damage; the HP_CHANGE still
-    target.hp = max(0, target.hp - dmg)   # logs with value 0 (pinned v2_ms_dx_5401 f100)
-    gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
-             "cardId": gs.card_id(target.top), "serial": target.top,
-             "value": -dmg, "putDamageCounter": False})
+    for target in picked:
+        _bench_hit(gs, opp, target, args["damage"])
     return True
 
 
 def op_choose_any_damage(gs, fr, args) -> bool:
-    """Cruel Arrow (pinned v2_dx_mirror_5201 f54): choose ANY one opponent Pokémon
+    """Cruel Arrow (pinned v2_dx_mirror_5201 f54): choose ANY `count` opponent Pokémon
     (ctx DAMAGE, active first then bench, effect=attacker); flat damage on the bench
     (no W/R, Tera-bench prevention), W/R-adjusted on the Active (card text)."""
     seat = fr.seat
@@ -587,24 +625,486 @@ def op_choose_any_damage(gs, fr, args) -> bool:
         opts = [opt_card(area, idx, opp) for area, idx, _p in _targets(gs, opp)]
         if not opts:
             return True
+        n = min(args.get("count", 1), len(opts))
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.DAMAGE,
+             options=opts, min_count=n, max_count=n, effect_card=fr.source)
+        return False
+    answered = fr.vars.pop("answered_options")
+    fr.vars.pop("answer")
+    for o in answered:
+        dmg = args["damage"]
+        if o["area"] == int(AreaType.ACTIVE):
+            from .damage import apply_weakness_resistance
+            target = ob.active
+            dmg = apply_weakness_resistance(gs, gs.players[seat].active, target, dmg)
+            target.hp = max(0, target.hp - dmg)
+            gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
+                     "cardId": gs.card_id(target.top), "serial": target.top,
+                     "value": -dmg, "putDamageCounter": False})
+        else:
+            _bench_hit(gs, opp, ob.bench[o["index"]], dmg)
+    return True
+
+
+# ------------------------------------------------------------------- M4 pool-fan-out ops
+# Seeded by tools/parity/seed_chains.py; shapes marked "seeded" are trace-unpinned until a
+# micro-trace (capture_card.py) verifies them — the coverage ledger tracks which.
+
+def op_damage_self(gs, fr, args) -> bool:
+    """Recoil rider: "This Pokémon also does N damage to itself." Damage (not counters) on
+    the attacker's own Active; the post-attack sweep handles a self-KO."""
+    b = gs.players[fr.seat]
+    me = b.active
+    if me is None:
+        return True
+    dmg = args["damage"]
+    me.hp = max(0, me.hp - dmg)
+    gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": fr.seat,
+             "cardId": gs.card_id(me.top), "serial": me.top,
+             "value": -dmg, "putDamageCounter": False})
+    return True
+
+
+def op_damage_own_bench_each(gs, fr, args) -> bool:
+    """"This attack also does N damage to each of your Benched Pokémon." (no W/R on
+    bench; seeded shape)."""
+    for p in list(gs.players[fr.seat].bench):
+        _bench_hit(gs, fr.seat, p, args["damage"])
+    return True
+
+
+def op_heal_self(gs, fr, args) -> bool:
+    """"Heal N damage from this Pokémon." — heal on the attack's own Active; the
+    HP_CHANGE logs even at full HP with value 0 (pinned healself_9200 f91)."""
+    me = gs.players[fr.seat].active
+    if me is None:
+        return True
+    healed = min(args["amount"], me.max_hp - me.hp)
+    me.hp += healed
+    gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": fr.seat,
+             "cardId": gs.card_id(me.top), "serial": me.top,
+             "value": healed, "putDamageCounter": False})
+    return True
+
+
+def op_heal_each(gs, fr, args) -> bool:
+    """"Heal N damage from each of your Pokémon." — active first, bench order; each
+    HP_CHANGE logs even at 0 (the heal-rider rule, pinned healself_9200 f91)."""
+    for p in gs.in_play(fr.seat):
+        healed = min(args["amount"], p.max_hp - p.hp)
+        p.hp += healed
+        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": fr.seat,
+                 "cardId": gs.card_id(p.top), "serial": p.top,
+                 "value": healed, "putDamageCounter": False})
+    return True
+
+
+def op_heal_choose(gs, fr, args) -> bool:
+    """Trainer heal: pick one damaged own Pokémon (ctx HEAL, Wally's shape), heal N."""
+    seat = fr.seat
+    if "answer" not in fr.vars:
+        from .options import _targets
+        opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
+                if p.hp < p.max_hp]
+        if not opts:
+            return True
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.HEAL,
              options=opts, min_count=1, max_count=1, effect_card=fr.source)
         return False
     o = fr.vars.pop("answered_options")[0]
     fr.vars.pop("answer")
-    dmg = args["damage"]
-    if o["area"] == int(AreaType.ACTIVE):
-        from .damage import apply_weakness_resistance
-        target = ob.active
-        dmg = apply_weakness_resistance(gs, gs.players[seat].active, target, dmg)
+    from .turn import _target_of
+    target = _target_of(gs, seat, o["area"], o["index"])
+    healed = min(args["amount"], target.max_hp - target.hp)
+    if healed > 0:
+        target.hp += healed
+        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
+                 "cardId": gs.card_id(target.top), "serial": target.top,
+                 "value": healed, "putDamageCounter": False})
+    return True
+
+
+def op_discard_own_energy(gs, fr, args) -> bool:
+    """"Discard N Energy from this Pokémon." — one DISCARD_ENERGY select per unit with
+    remainEnergyCost counting down, the retreat-cascade shape (pinned family)."""
+    seat = fr.seat
+    me = gs.players[seat].active
+    if me is None:
+        return True
+    from .options import provided_units_of
+    if "left" not in fr.vars:
+        fr.vars["left"] = args.get("n", 1)
+    while fr.vars["left"] > 0 and me.energy:
+        if "answer" not in fr.vars:
+            opts = [{"type": int(OptionType.ENERGY), "area": int(AreaType.ACTIVE),
+                     "index": 0, "playerIndex": seat, "energyIndex": k,
+                     "count": provided_units_of(gs, me, s)}
+                    for k, s in enumerate(me.energy)]
+            pose(gs, seat, type=SelectType.ENERGY, context=SelectContext.DISCARD_ENERGY,
+                 options=opts, effect_card=fr.source,
+                 remain_energy_cost=fr.vars["left"])
+            return False
+        o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+        serial = me.energy[o["energyIndex"]]
+        units = provided_units_of(gs, me, serial)
+        me.energy.remove(serial)
+        gs.players[seat].discard.append(serial)
+        gs.move_card(serial, AreaType.ENERGY, AreaType.DISCARD, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+        fr.vars["left"] -= units
+    fr.vars.pop("left")
+    return True
+
+
+def op_discard_all_own_energy(gs, fr, args) -> bool:
+    """"Discard all Energy from this Pokémon." — no select; discards in ATTACH order
+    (forward — pinned discardall_9610 f13, unlike the KO sweep's LIFO)."""
+    seat = fr.seat
+    me = gs.players[seat].active
+    if me is None:
+        return True
+    for serial in list(me.energy):
+        me.energy.remove(serial)
+        gs.players[seat].discard.append(serial)
+        gs.move_card(serial, AreaType.ENERGY, AreaType.DISCARD, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+
+def op_inflict_condition_self(gs, fr, args) -> bool:
+    """"This Pokémon is now <condition>." — the attack conditions its own Active."""
+    seat = fr.seat
+    b = gs.players[seat]
+    if b.active is None:
+        return True
+    _set_condition(gs, seat, args["condition"])
+    return True
+
+
+def _set_condition(gs: GameState, seat: int, cond: int) -> None:
+    """Set a special condition on the seat's Active (pinned log shape: v2_ml_dx_5501 f22
+    Mind Bend). Rotating conditions (Asleep/Paralyzed/Confused) overwrite each other;
+    marker conditions (Poison/Burn) stack alongside (docs/rules.md §8)."""
+    b = gs.players[seat]
+    log_type = {0: LogType.POISONED, 1: LogType.BURNED, 2: LogType.ASLEEP,
+                3: LogType.PARALYZED, 4: LogType.CONFUSED}[cond]
+    flag = {0: "poisoned", 1: "burned", 2: "asleep", 3: "paralyzed", 4: "confused"}[cond]
+    if cond in (2, 3, 4):
+        b.asleep = b.paralyzed = b.confused = False
+    setattr(b, flag, True)
+    if cond == 3:
+        b.paralyzed_since_turn = gs.turn
+    gs.emit({"type": int(log_type), "playerIndex": seat, "isRecover": False,
+             "cardId": gs.card_id(b.active.top), "serial": b.active.top})
+
+
+def op_opponent_switches(gs, fr, args) -> bool:
+    """"Switch out your opponent's Active Pokémon to the Bench. (Your opponent chooses
+    the new Active Pokémon.)" — the select goes to the OPPONENT (seeded shape: ctx
+    SWITCH over their bench, like a retreat's switch pick)."""
+    opp = 1 - fr.seat
+    ob = gs.players[opp]
+    if not ob.bench:
+        return True
+    if "answer" not in fr.vars:
+        opts = [opt_card(AreaType.BENCH, i, opp) for i in range(len(ob.bench))]
+        pose(gs, opp, type=SelectType.CARD, context=SelectContext.SWITCH,
+             options=opts, effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    from .turn import _do_switch
+    _do_switch(gs, opp, o["index"], retreat=False)
+    return True
+
+
+def op_mill(gs, fr, args) -> bool:
+    """"Discard the top N cards of your/your opponent's deck." — top of deck = list end."""
+    seat = fr.seat if args.get("who", "self") == "self" else 1 - fr.seat
+    b = gs.players[seat]
+    for _ in range(min(args.get("n", 1), len(b.deck))):
+        serial = b.deck.pop()
+        b.discard.append(serial)
+        gs.move_card(serial, AreaType.DECK, AreaType.DISCARD, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+
+def op_discard_hand_draw(gs, fr, args) -> bool:
+    """"Discard your hand and draw N cards." — hand discards front-to-back (seeded)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    for serial in list(b.hand):
+        b.hand.remove(serial)
+        b.discard.append(serial)
+        gs.move_card(serial, AreaType.HAND, AreaType.DISCARD, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for _ in range(args.get("n", 0)):
+        gs.draw(seat)
+    return True
+
+
+def op_take_less_next_turn(gs, fr, args) -> bool:
+    """"During your opponent's next turn, this Pokémon takes N less damage…" — a transient
+    on the attack's own Active, applied by damage.py after W/R on the opponent's next
+    turn only (the grant does not survive a switch-out? it rides the Pokémon — seeded)."""
+    me = gs.players[fr.seat].active
+    if me is not None:
+        me.take_less_turn = gs.turn + 1
+        me.take_less = args["n"]
+    return True
+
+
+def op_may_ask(gs, fr, args) -> bool:
+    """"You may <effect>." attack rider: YES_NO ctx ACTIVATE with effect = the attacker
+    (pinned mill2_9300 f49, Strafe); skipped entirely — no ask — when the optional
+    effect has no live target (`requires` legality, pinned tucktail_9500 f10-f11:
+    benchless Strafe poses nothing). YES splices the sub-program in."""
+    if not check_legal(gs, fr.seat, args.get("requires", [])):
+        return True
+    if "answer" not in fr.vars:
+        pose(gs, fr.seat, type=SelectType.YES_NO, context=SelectContext.ACTIVATE,
+             options=yes_no(), effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    if o["type"] == int(OptionType.YES):
+        fr.program = fr.program[:fr.pc + 1] + list(args["program"]) + \
+            fr.program[fr.pc + 1:]
+    return True
+
+
+def op_deck_energy_attach(gs, fr, args) -> bool:
+    """"Search your deck for a Basic {X} Energy card and attach it to this Pokémon." —
+    deck pick (ctx ATTACH_TO over the revealed deck, Crispin's pinned stage shape), then
+    attach to the Active (target "self") or a chosen in-play target, then shuffle."""
+    seat = fr.seat
+    b = gs.players[seat]
+    if "picked" not in fr.vars:
+        if "answer" not in fr.vars:
+            opts = _zone_options(gs, seat, b.deck, AreaType.DECK, args.get("filter", {}))
+            if not opts:
+                gs.turn_action_count += 1          # skipped ask still bumps tac
+                _shuffle(gs, seat)
+                return True
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+                 options=opts, min_count=0, max_count=min(args.get("max", 1), len(opts)),
+                 deck_listing=list(b.deck), effect_card=fr.source)
+            return False
+        fr.vars["picked"] = [b.deck[o["index"]]
+                             for o in fr.vars.pop("answered_options")]
+        fr.vars.pop("answer")
+        if not fr.vars["picked"]:
+            fr.vars.pop("picked")
+            _shuffle(gs, seat)
+            return True
+    if args.get("target", "self") == "self":
+        target = b.active
+        for s in fr.vars.pop("picked"):
+            if target is None:
+                break
+            b.deck.remove(s)
+            target.energy.append(s)
+            gs.note_attach(s)
+            gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
+                     "cardId": gs.card_id(s), "serial": s,
+                     "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+        _shuffle(gs, seat)
+        return True
+    energy = fr.vars["picked"][0]
+    if "answer" not in fr.vars:
+        from .options import _targets
+        opts = [opt_card(area, idx, seat) for area, idx, _p in _targets(gs, seat)]
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+             options=opts, min_count=1, max_count=1, deck_listing=list(b.deck),
+             context_card=energy, effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    fr.vars.pop("picked")
+    from .turn import _target_of
+    target = _target_of(gs, seat, o["area"], o["index"])
+    b.deck.remove(energy)
+    target.energy.append(energy)
+    gs.note_attach(energy)
+    gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
+             "cardId": gs.card_id(energy), "serial": energy,
+             "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+    _shuffle(gs, seat)
+    return True
+
+
+def op_discard_energy_attach_self(gs, fr, args) -> bool:
+    """"Attach up to N Basic {X} Energy cards from your discard pile to this Pokémon." —
+    one ATTACH_TO pick over the discard (Aura Jab's pinned pick shape), attach all to the
+    attack's own Active (no per-energy target select — target is fixed)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    me = b.active
+    if me is None:
+        return True
+    if "answer" not in fr.vars:
+        opts = _zone_options(gs, seat, b.discard, AreaType.DISCARD,
+                             args.get("filter", {}))
+        if not opts:
+            return True                            # skipped rider: no tac bump (Aura Jab pin)
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+             options=opts, min_count=0,
+             max_count=min(args.get("max", 1), len(opts)), effect_card=fr.source)
+        return False
+    picked = [b.discard[o["index"]] for o in fr.vars.pop("answered_options")]
+    fr.vars.pop("answer")
+    for s in picked:
+        b.discard.remove(s)
+        me.energy.append(s)
+        gs.note_attach(s)
+        gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
+                 "cardId": gs.card_id(s), "serial": s,
+                 "cardIdTarget": gs.card_id(me.top), "serialTarget": me.top})
+    return True
+
+
+def op_self_return_to_hand(gs, fr, args) -> bool:
+    """Tuck Tail (Meowth ex 1546): "Put this Pokémon and all attached cards into your
+    hand." Stack top-first (lower cards from PRE_EVOLUTION), energies LIFO, tools last —
+    the KO/shuffle-in order pins — then the owner promotes (ctx TO_ACTIVE, the
+    Dudunsparce promotion shape). Seeded, micro-trace refines."""
+    seat = fr.seat
+    b = gs.players[seat]
+    if "answer" in fr.vars:                        # the promotion answer
+        o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+        p = b.bench.pop(o["index"])
+        b.active = p
+        p.moved_active_turn = gs.turn
+        gs.move_card(p.top, AreaType.BENCH, AreaType.ACTIVE, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+        return True
+    me = None
+    for p in gs.in_play(seat):
+        if p.top == fr.source:
+            me = p
+            break
+    if me is None:
+        return True
+    was_active = me is b.active
+    from_area = AreaType.ACTIVE if was_active else AreaType.BENCH
+    if was_active:
+        b.active = None
+        b.poisoned = b.burned = False              # conditions leave play with the Active
+        b.asleep = b.paralyzed = b.confused = False
     else:
+        b.bench.remove(me)
+    for k, s in enumerate(reversed(me.stack)):
+        area = from_area if k == 0 else AreaType.PRE_EVOLUTION
+        b.hand.append(s)
+        gs.move_card(s, area, AreaType.HAND, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in list(reversed(me.energy)):
+        b.hand.append(s)
+        gs.move_card(s, AreaType.ENERGY, AreaType.HAND, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in me.tools:
+        b.hand.append(s)
+        gs.move_card(s, AreaType.TOOL, AreaType.HAND, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    if was_active and b.bench:
+        opts = [opt_card(AreaType.BENCH, i, seat) for i in range(len(b.bench))]
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.TO_ACTIVE,
+             options=opts, min_count=1, max_count=1)
+        return False
+    return True
+
+
+def op_distribute_counters(gs, fr, args) -> bool:
+    """Phantom Dive (154): "Put N damage counters on your opponent's Benched Pokémon in
+    any way you like." One CARD select per counter, ctx DAMAGE_COUNTER_ANY over the
+    opponent's bench, remainDamageCounter counting down, effect = the attacker (pinned
+    phantomdive_9441 f16). No bench = no selects."""
+    seat = fr.seat
+    opp = 1 - seat
+    ob = gs.players[opp]
+    if "left" not in fr.vars:
+        fr.vars["left"] = args.get("counters", 1)
+    while fr.vars["left"] > 0 and ob.bench:
+        if "answer" not in fr.vars:
+            opts = [opt_card(AreaType.BENCH, i, opp) for i in range(len(ob.bench))]
+            pose(gs, seat, type=SelectType.CARD,
+                 context=SelectContext.DAMAGE_COUNTER_ANY,
+                 options=opts, min_count=1, max_count=1, effect_card=fr.source,
+                 remain_damage_counter=fr.vars["left"])
+            return False
+        o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
         target = ob.bench[o["index"]]
-        if gs.stat(target.top).tera:
-            dmg = 0                    # benched Tera Pokémon take no attack damage
-    target.hp = max(0, target.hp - dmg)
-    gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
-             "cardId": gs.card_id(target.top), "serial": target.top,
-             "value": -dmg, "putDamageCounter": False})
+        target.hp = max(0, target.hp - 10)
+        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
+                 "cardId": gs.card_id(target.top), "serial": target.top,
+                 "value": -10, "putDamageCounter": True})
+        fr.vars["left"] -= 1
+    fr.vars.pop("left")
+    return True
+
+
+# --- coin pre-ops (the "pre" program runs after the ATTACK log, before damage) -----------
+
+def op_fail_unless_heads(gs, fr, args) -> bool:
+    """"If tails, this attack does nothing." — cancel damage AND the rider program."""
+    if not fr.vars.get("heads"):
+        fr.vars["cancel"] = True
+    return True
+
+
+def op_bonus_if_heads(gs, fr, args) -> bool:
+    if fr.vars.get("heads"):
+        fr.vars["damage_bonus"] = fr.vars.get("damage_bonus", 0) + args["n"]
+    return True
+
+
+def op_coins_count(gs, fr, args) -> bool:
+    """Flip N coins (or one per scale-var unit), tallying heads into the frame."""
+    if "flips_left" not in fr.vars:
+        n = args.get("n")
+        if n is None:
+            from .damage import scale_count
+            n = scale_count(gs, fr.seat, args["var"], args.get("energyType"))
+        fr.vars["flips_left"] = n
+        fr.vars["heads_count"] = 0
+    while fr.vars["flips_left"] > 0:
+        head = _flip(gs, fr)
+        if head is None:
+            return False
+        fr.vars["flips_left"] -= 1
+        if head:
+            fr.vars["heads_count"] += 1
+    fr.vars.pop("flips_left")
+    return True
+
+
+def op_coins_until_tails(gs, fr, args) -> bool:
+    if "heads_count" not in fr.vars:
+        fr.vars["heads_count"] = 0
+        fr.vars["flipping"] = True
+    while fr.vars.get("flipping"):
+        head = _flip(gs, fr)
+        if head is None:
+            return False
+        if head:
+            fr.vars["heads_count"] += 1
+        else:
+            fr.vars.pop("flipping")
+    return True
+
+
+def op_damage_per_heads(gs, fr, args) -> bool:
+    fr.vars["damage_override"] = args["per"] * fr.vars.get("heads_count", 0)
+    return True
+
+
+def op_bonus_per_heads(gs, fr, args) -> bool:
+    fr.vars["damage_bonus"] = fr.vars.get("damage_bonus", 0) + \
+        args["per"] * fr.vars.get("heads_count", 0)
     return True
 
 
@@ -615,15 +1115,7 @@ def op_inflict_condition_active(gs, fr, args) -> bool:
     ob = gs.players[opp]
     if ob.active is None:
         return True
-    cond = args["condition"]
-    log_type = {0: LogType.POISONED, 1: LogType.BURNED, 2: LogType.ASLEEP,
-                3: LogType.PARALYZED, 4: LogType.CONFUSED}[cond]
-    flag = {0: "poisoned", 1: "burned", 2: "asleep", 3: "paralyzed", 4: "confused"}[cond]
-    setattr(ob, flag, True)
-    if cond == 3:
-        ob.paralyzed_since_turn = gs.turn
-    gs.emit({"type": int(log_type), "playerIndex": opp, "isRecover": False,
-             "cardId": gs.card_id(ob.active.top), "serial": ob.active.top})
+    _set_condition(gs, opp, args["condition"])
     return True
 
 
@@ -836,6 +1328,7 @@ def op_draw_then_shuffle_self_in(gs, fr, args) -> bool:
         fr.vars.pop("answer")
         p = b.bench.pop(o["index"])
         b.active = p
+        p.moved_active_turn = gs.turn
         gs.move_card(p.top, AreaType.BENCH, AreaType.ACTIVE, seat=seat,
                      visible_to_owner=True, visible_to_opponent=True)
         return True
@@ -1162,4 +1655,28 @@ OPS = {
     "xInflictConditionActive": op_inflict_condition_active,
     "xDiscardEnergyAttachOneTarget": op_discard_energy_attach_one_target,
     "xChooseAnyDamage": op_choose_any_damage,
+    # M4 pool-fan-out ops (seeded; micro-trace verification flips them to pinned)
+    "xDamageSelf": op_damage_self,
+    "xDamageOwnBenchEach": op_damage_own_bench_each,
+    "xHealSelf": op_heal_self,
+    "xHealEach": op_heal_each,
+    "xHealChoose": op_heal_choose,
+    "xDiscardOwnEnergy": op_discard_own_energy,
+    "xDiscardAllOwnEnergy": op_discard_all_own_energy,
+    "xInflictConditionSelf": op_inflict_condition_self,
+    "xOpponentSwitches": op_opponent_switches,
+    "xMill": op_mill,
+    "xDiscardHandDraw": op_discard_hand_draw,
+    "xTakeLessNextTurn": op_take_less_next_turn,
+    "xMayAsk": op_may_ask,
+    "xDeckEnergyAttach": op_deck_energy_attach,
+    "xDiscardEnergyAttachSelf": op_discard_energy_attach_self,
+    "xSelfReturnToHand": op_self_return_to_hand,
+    "xDistributeCounters": op_distribute_counters,
+    "xFailUnlessHeads": op_fail_unless_heads,
+    "xBonusIfHeads": op_bonus_if_heads,
+    "xCoinsCount": op_coins_count,
+    "xCoinsUntilTails": op_coins_until_tails,
+    "xDamagePerHeads": op_damage_per_heads,
+    "xBonusPerHeads": op_bonus_per_heads,
 }

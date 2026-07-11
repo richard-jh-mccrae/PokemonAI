@@ -57,12 +57,13 @@ class _TraceRandomness(ReplayRandomness):
             raise ReplayError(f"seat {seat}: coin requested but none recorded")
         return self.coin_queues[seat].pop(0)
 
-    # GameState.coin_flip calls rng.coin() without a seat; cgpy binds the acting seat via
-    # engine wiring below (set before each flip).
+    # GameState.coin_flip passes the flip OWNER's seat (checkup flips belong to the
+    # condition owner — pinned collapse_9740 f17); the acting-seat fallback covers
+    # legacy paths that flip without one.
     acting_seat: int = 0
 
-    def coin(self) -> bool:
-        return self.coin_for(self.acting_seat)
+    def coin(self, seat: int | None = None) -> bool:
+        return self.coin_for(seat if seat is not None else self.acting_seat)
 
 
 def _feed_from_window(rnd: _TraceRandomness, mover: int, logs: list[dict]) -> None:
@@ -123,6 +124,25 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
         mover = fr["obs"]["current"]["yourIndex"]
         _feed_from_window(rnd, mover, fr["obs"].get("logs") or [])
 
+    # Coins/draws: the god stream is authoritative when present — each event appears
+    # exactly once, INCLUDING ones whose mover window falls past a truncated
+    # micro-trace's end (coinfail_9200 f113 / tucktail_9521 f14: the last events never
+    # reach the mover's next window).
+    god_coins: dict[int, list[bool]] = {0: [], 1: []}
+    god_draws: dict[int, list[int]] = {0: [], 1: []}
+    saw_god_logs = False
+    for fr in trace.frames:
+        for entry in fr.get("god_logs") or []:
+            saw_god_logs = True
+            if entry.get("type") in ("Coin", int(LogType.COIN)):
+                god_coins[entry.get("playerIndex", 0)].append(bool(entry.get("head")))
+            elif entry.get("type") in ("Draw", int(LogType.DRAW)) \
+                    and entry.get("serial") is not None:
+                god_draws[entry.get("playerIndex", 0)].append(entry["serial"])
+    if saw_god_logs:
+        rnd.coin_queues = god_coins
+        rnd.draw_queues = god_draws
+
     # Prize identities: facedown deals never log serials — bind from the god frames
     # (the first frame where a seat's prize row appears, in array order = deal order).
     fed_prize = {0: False, 1: False}
@@ -165,8 +185,9 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
         report.frames_green += 1
 
         choice = fr.get("choice")
-        if choice is None:
-            break
+        if choice is None or k == len(trace.frames) - 1:
+            break   # final frame: nothing follows to verify — stepping it can demand
+                    # randomness a truncated micro-trace never recorded
         twin = eng.fork() if fork_check else None
         try:
             eng.step(choice)
