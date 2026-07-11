@@ -7,13 +7,16 @@
 > choose-target); cards **856→870 live / 62→87 verified** (recovery items, look-reveal-take,
 > coin-gust Catcher, double-inflict Laser, self-mill, Stage-1/Tera/named-family/any-number
 > search nouns, `anyOf` union specs); **Blissey ex Happy Switch = the first authored
-> ability override** (energy-move op). Fixtures 54→125 (12816 clean frames), interpreter
-> ops **60/60 conformance-pinned (UNPINNED emptied)**, cross-engine audit over all 69 new
-> attacks: 0 divergent (+ the `staging-mismatch` skip class for own-board-sensitive
-> scalers). New §9b pins: enum-order multi-inflict, idempotent-condition silence,
-> switch-clears-with-recovers (reverse enum), tick `putDamageCounter=false`,
-> `energyAttached` resets at TURN_END, imperative-"up to"-min-1, moved-energy keeps its
-> attach tick, ACE-SPEC 1× deck rule. Latent `condBonus` dict-iteration crash fixed.
+> ability override** (energy-move op). Batch 2a same day: Energy Switch (rides the
+> move-energy op), Enhanced Hammer (energy filters), heal-active family, Boxed Order
+> ("Your turn ends" completion flag) → cards **876 live / 90 verified**. Fixtures
+> 54→133 (13930 clean frames), interpreter ops **62/62 conformance-pinned (UNPINNED
+> emptied)**, cross-engine audit over all 69 new attacks: 0 divergent (+ the
+> `staging-mismatch` skip class for own-board-sensitive scalers). New §9b pins:
+> enum-order multi-inflict, idempotent-condition silence, switch-clears-with-recovers
+> (reverse enum), tick `putDamageCounter=false`, `energyAttached` resets at TURN_END,
+> imperative-"up to"-min-1, moved-energy keeps its attach tick, ACE-SPEC 1× deck rule.
+> Latent `condBonus` dict-iteration crash fixed.
 
 **Goal:** ChainDefs for the full 1267-card pool, derived mostly by pipeline, verified per
 card, tracked in a committed ledger. Exact parity is only ever *measured* by
@@ -99,6 +102,17 @@ digested in docs/pyeng/determinism.md §9–10.
   damage (Steel Burst class, needs a pre-op with count feedback); "Then, discard that
   Stadium" riders. Run the audit diff over each new batch (staging-mismatch rows are
   expected for own-board scalers — micro-trace those).
+
+  **Hand-pick channel design (probed 2026-07-11, `psychout_9970` f21):** Psych Out
+  poses NO select and NO reveal — one `MOVE_CARD` log (victim seat, fromArea 2 HAND →
+  toArea 3, serial = the picked card) right after the damage. Channel: `SeededRng.
+  hand_pick(seat, hand)` = seeded choice; `ReplayRandomness.hand_pick` pops a
+  per-victim FIFO the replayer pre-feeds from victim-hand-exit `MOVE_CARD`s in
+  OPPONENT-mover windows (each event once — mover windows only, like the draw feed).
+  ⚠️ Alignment hazard: CHOSEN forced discards (reveal-and-pick effects, e.g. "your
+  opponent reveals their hand and you discard …") emit the same log shape — those ops
+  must ALSO pop the FIFO (assert-equal against the select answer) or the queue skews.
+  Astonish-class (shuffle into deck) lands toArea DECK — same feed, second toArea.
 
 ## Cold-start commands
 

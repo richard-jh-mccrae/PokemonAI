@@ -95,6 +95,9 @@ def flush_triggers(gs: GameState, seat: int) -> None:
     trigs = gs.pending_triggers
     gs.pending_triggers = []
     if not trigs:
+        if gs.turn_markers.pop("end_turn_after_play", None):   # Boxed Order: "Your
+            _end_turn(gs, seat)                                # turn ends." (seeded)
+            return
         pose_main(gs, seat)
         return
     if len(trigs) == 1:

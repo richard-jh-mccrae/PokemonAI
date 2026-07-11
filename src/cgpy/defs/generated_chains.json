@@ -6095,13 +6095,32 @@
   }
  },
  "1081": {
-  "name": "Enhanced Hammer",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "trashEnergyEnemy",
+    "filter": {
+     "cardType": [
+      6
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "oppEnergyHas",
+    "filter": {
+     "cardType": [
+      6
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a Special Energy from 1 of your opponent’s Pokémon."
+   "rules": [
+    "R-T25"
    ]
-  }
+  },
+  "name": "Enhanced Hammer"
  },
  "1082": {
   "play": [
@@ -6138,13 +6157,33 @@
   }
  },
  "1084": {
-  "name": "Boxed Order",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "cardType": [
+      1
+     ]
+    }
+   },
+   {
+    "op": "xEndTurnAfterPlay"
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your turn ends."
+   "rules": [
+    "R-T01",
+    "R-T26"
    ]
-  }
+  },
+  "name": "Boxed Order"
  },
  "1085": {
   "name": "Awakening Drum",
@@ -6361,13 +6400,31 @@
   }
  },
  "1105": {
-  "name": "Dragon Elixir",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xHealActive",
+    "amount": 60
+   }
+  ],
+  "legal": [
+   {
+    "op": "activeDamaged"
+   },
+   {
+    "op": "activeIs",
+    "filter": {
+     "energyType": [
+      9
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Heal 60 damage from your Active {N} Pokémon."
+   "rules": [
+    "R-T23"
    ]
-  }
+  },
+  "name": "Dragon Elixir"
  },
  "1106": {
   "name": "Deduction Kit",
@@ -6549,13 +6606,25 @@
   "name": "Hop’s Bag"
  },
  "1116": {
-  "name": "Energy Switch",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xMoveEnergyOwn"
+   }
+  ],
+  "legal": [
+   {
+    "op": "ownBasicEnergyExists"
+   },
+   {
+    "op": "benchExists"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Move a Basic Energy from 1 of your Pokémon to another of your Pokémon."
+   "rules": [
+    "R-T22"
    ]
-  }
+  },
+  "name": "Energy Switch"
  },
  "1117": {
   "play": [
@@ -6748,7 +6817,6 @@
   "deferred": "unparsed effect text",
   "_seed": {
    "unparsed": [
-    "Heal 30 damage from your Active Pokémon.",
     "If that Pokémon is an Arven’s Pokémon, heal 100 damage from it instead."
    ]
   }
@@ -6889,13 +6957,27 @@
   }
  },
  "1147": {
-  "name": "Jumbo Ice Cream",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xHealActive",
+    "amount": 80
+   }
+  ],
+  "legal": [
+   {
+    "op": "activeDamaged"
+   },
+   {
+    "op": "activeEnergyMin",
+    "n": 3
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Heal 80 damage from your Active Pokémon that has 3 or more Energy attached."
+   "rules": [
+    "R-T23"
    ]
-  }
+  },
+  "name": "Jumbo Ice Cream"
  },
  "1148": {
   "name": "Blowtorch",
@@ -7457,13 +7539,23 @@
   }
  },
  "1212": {
-  "name": "Cook",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xHealActive",
+    "amount": 70
+   }
+  ],
+  "legal": [
+   {
+    "op": "activeDamaged"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Heal 70 damage from your Active Pokémon."
+   "rules": [
+    "R-T23"
    ]
-  }
+  },
+  "name": "Cook"
  },
  "1214": {
   "name": "Emcee's Hype",

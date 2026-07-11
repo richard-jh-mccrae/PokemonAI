@@ -6,24 +6,24 @@
  },
  "summary": {
   "cards": {
-   "verified": 87,
+   "verified": 90,
    "total": 1267
   },
   "chains": {
-   "verified": 179,
-   "deferred": 765,
+   "verified": 182,
+   "deferred": 759,
    "derived": 1303,
-   "seeded": 575,
+   "seeded": 578,
    "unprobed": 1
   },
   "cleanFrames": {
-   "clean": 12816,
-   "total": 12816,
+   "clean": 13930,
+   "total": 13930,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
-   "covered": 60,
-   "total": 60,
+   "covered": 62,
+   "total": 62,
    "nativeChainVocabulary": 71,
    "coveredOps": [
     "coin",
@@ -63,8 +63,10 @@
     "xDiscardOwnEnergy",
     "xDistributeCounters",
     "xDrawThenShuffleSelfIn",
+    "xEndTurnAfterPlay",
     "xFailUnlessHeads",
     "xHandEnergyAttachChoose",
+    "xHealActive",
     "xHealChoose",
     "xHealEach",
     "xHealMegaBounceEnergy",
@@ -88,7 +90,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 125
+  "traces": 133
  },
  "cards": {
   "1": {
@@ -163,8 +165,12 @@
     "micro_onboard1077_9901",
     "micro_onboard1078_9900",
     "micro_onboard1078_9901",
+    "micro_onboard1081_9900",
+    "micro_onboard1081_9901",
     "micro_onboard1082_9900",
     "micro_onboard1082_9901",
+    "micro_onboard1084_9900",
+    "micro_onboard1084_9901",
     "micro_onboard1094_9900",
     "micro_onboard1094_9901",
     "micro_onboard1095_9900",
@@ -180,6 +186,8 @@
     "micro_onboard1110_9902",
     "micro_onboard1115_9900",
     "micro_onboard1115_9901",
+    "micro_onboard1116_9900",
+    "micro_onboard1116_9901",
     "micro_onboard1118_9900",
     "micro_onboard1118_9901",
     "micro_onboard1124_9900",
@@ -190,6 +198,8 @@
     "micro_onboard1126_9961",
     "micro_onboard1127_9900",
     "micro_onboard1127_9901",
+    "micro_onboard1212_9900",
+    "micro_onboard1212_9901",
     "micro_onboard1233_9900",
     "micro_onboard1233_9901",
     "micro_onboard1238_9900",
@@ -3826,8 +3836,11 @@
     "micro_onboard1077_9901",
     "micro_onboard1078_9900",
     "micro_onboard1078_9901",
+    "micro_onboard1081_9900",
+    "micro_onboard1081_9901",
     "micro_onboard1082_9900",
     "micro_onboard1082_9901",
+    "micro_onboard1084_9901",
     "micro_onboard1094_9900",
     "micro_onboard1094_9901",
     "micro_onboard1095_9900",
@@ -3843,6 +3856,8 @@
     "micro_onboard1110_9902",
     "micro_onboard1115_9900",
     "micro_onboard1115_9901",
+    "micro_onboard1116_9900",
+    "micro_onboard1116_9901",
     "micro_onboard1118_9900",
     "micro_onboard1118_9901",
     "micro_onboard1124_9901",
@@ -3852,6 +3867,7 @@
     "micro_onboard1126_9961",
     "micro_onboard1127_9900",
     "micro_onboard1127_9901",
+    "micro_onboard1212_9901",
     "micro_onboard1233_9900",
     "micro_onboard1233_9901",
     "micro_onboard1238_9900",
@@ -6413,7 +6429,11 @@
     "micro_onboard1077_9901",
     "micro_onboard1078_9900",
     "micro_onboard1078_9901",
+    "micro_onboard1081_9900",
+    "micro_onboard1081_9901",
     "micro_onboard1082_9900",
+    "micro_onboard1084_9900",
+    "micro_onboard1084_9901",
     "micro_onboard1094_9900",
     "micro_onboard1094_9901",
     "micro_onboard1095_9900",
@@ -6429,6 +6449,7 @@
     "micro_onboard1110_9902",
     "micro_onboard1115_9900",
     "micro_onboard1115_9901",
+    "micro_onboard1116_9900",
     "micro_onboard1118_9900",
     "micro_onboard1118_9901",
     "micro_onboard1124_9900",
@@ -6438,6 +6459,8 @@
     "micro_onboard1126_9960",
     "micro_onboard1127_9900",
     "micro_onboard1127_9901",
+    "micro_onboard1212_9900",
+    "micro_onboard1212_9901",
     "micro_onboard1233_9900",
     "micro_onboard1233_9901",
     "micro_onboard1238_9900",
@@ -9289,6 +9312,10 @@
     "micro_onboard1077_9900",
     "micro_onboard1077_9901",
     "micro_onboard1078_9901",
+    "micro_onboard1081_9900",
+    "micro_onboard1081_9901",
+    "micro_onboard1084_9900",
+    "micro_onboard1084_9901",
     "micro_onboard1094_9900",
     "micro_onboard1094_9901",
     "micro_onboard1095_9900",
@@ -9303,6 +9330,8 @@
     "micro_onboard1110_9902",
     "micro_onboard1115_9900",
     "micro_onboard1115_9901",
+    "micro_onboard1116_9900",
+    "micro_onboard1116_9901",
     "micro_onboard1118_9900",
     "micro_onboard1118_9901",
     "micro_onboard1124_9900",
@@ -9312,6 +9341,8 @@
     "micro_onboard1126_9960",
     "micro_onboard1126_9961",
     "micro_onboard1127_9900",
+    "micro_onboard1212_9900",
+    "micro_onboard1212_9901",
     "micro_onboard1238_9900",
     "micro_onboard1238_9901",
     "micro_onboard1238_9960",
@@ -13153,9 +13184,9 @@
   "1081": {
    "name": "Enhanced Hammer",
    "cardType": "item",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
-    "1081": "deferred"
+    "1081": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -13185,11 +13216,13 @@
   "1084": {
    "name": "Boxed Order",
    "cardType": "item",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1084": "deferred"
+    "1084": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard1084_9900"
+   ],
    "updated": "2026-07-11"
   },
   "1085": {
@@ -13426,9 +13459,9 @@
   "1105": {
    "name": "Dragon Elixir",
    "cardType": "item",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
-    "1105": "deferred"
+    "1105": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -13542,11 +13575,14 @@
   "1116": {
    "name": "Energy Switch",
    "cardType": "item",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1116": "deferred"
+    "1116": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard1116_9900",
+    "micro_onboard1116_9901"
+   ],
    "updated": "2026-07-11"
   },
   "1117": {
@@ -13935,9 +13971,9 @@
   "1147": {
    "name": "Jumbo Ice Cream",
    "cardType": "item",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
-    "1147": "deferred"
+    "1147": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -14649,11 +14685,14 @@
   "1212": {
    "name": "Cook",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1212": "deferred"
+    "1212": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard1212_9900",
+    "micro_onboard1212_9901"
+   ],
    "updated": "2026-07-11"
   },
   "1213": {

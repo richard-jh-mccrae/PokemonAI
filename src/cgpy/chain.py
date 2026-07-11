@@ -169,6 +169,21 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
             if not any(gs.stat(s).cardType == CardType.BASIC_ENERGY
                        for p in gs.in_play(seat) for s in p.energy):
                 return False
+        elif op == "oppEnergyHas":           # Enhanced-Hammer class: a matching energy
+            if not any(_card_matches(gs, s, c.get("filter", {}))
+                       for p in gs.in_play(1 - seat) for s in p.energy):
+                return False
+        elif op == "activeDamaged":          # heal-active trainers (seeded gate)
+            if b.active is None or b.active.hp >= b.active.max_hp:
+                return False
+        elif op == "activeIs":               # typed heal-active (Dragon Elixir)
+            if b.active is None or not _card_matches(gs, b.active.top,
+                                                     c.get("filter", {})):
+                return False
+        elif op == "activeEnergyMin":        # Jumbo Ice Cream: 3+ energies attached
+            from .options import provided_energy
+            if b.active is None or len(provided_energy(gs, b.active)) < c["n"]:
+                return False
         elif op == "megaExDamagedInPlay":     # Wally's: the engine peeks for DAMAGE
             if not any(gs.stat(p.top).megaEx and p.hp < p.max_hp
                        for p in gs.in_play(seat)):   # (pinned ms_mirror_1001 f33:
@@ -442,9 +457,12 @@ def op_trash_energy_enemy(gs, fr, args) -> bool:
         ([] if args.get("activeOnly") else
          [(int(AreaType.BENCH), i, p) for i, p in enumerate(ob.bench)])
     from .options import provided_units_of
+    flt = args.get("filter")                      # Enhanced Hammer: Special Energy only
     entries = []                                  # (attach tick, option dict)
     for area, idx, p in plist:
         for k, s in enumerate(p.energy):
+            if flt is not None and not _card_matches(gs, s, flt):
+                continue
             entries.append((gs.attach_seq.get(s, 0),
                             {"type": int(OptionType.ENERGY), "area": area, "index": idx,
                              "playerIndex": opp, "energyIndex": k,
@@ -1711,6 +1729,28 @@ def op_deck_evolve_in_play_and_shuffle(gs, fr, args) -> bool:
     return True
 
 
+def op_heal_active(gs, fr, args) -> bool:
+    """Heal-active trainers (Cook / Dragon Elixir class): heal N from the own Active,
+    no select; HP_CHANGE logs the clamped healed value (seeded — heal-log family)."""
+    seat = fr.seat
+    me = gs.players[seat].active
+    if me is None:
+        return True
+    healed = min(args["amount"], me.max_hp - me.hp)
+    me.hp += healed
+    gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
+             "cardId": gs.card_id(me.top), "serial": me.top,
+             "value": healed, "putDamageCounter": False})
+    return True
+
+
+def op_end_turn_after(gs, fr, args) -> bool:
+    """Boxed Order: "Your turn ends." — flag the play-program completion to end the
+    turn instead of returning to MAIN (seeded)."""
+    gs.turn_markers["end_turn_after_play"] = True
+    return True
+
+
 def op_hand_energy_attach_choose(gs, fr, args) -> bool:
     """Lucky Attachment (Chansey): "Attach a Basic Energy card from your hand to 1 of
     your Pokémon." Two selects (pinned micro_happyswitch_9950 f29-f31): the hand card
@@ -1878,4 +1918,6 @@ OPS = {
     "xBonusPerHeads": op_bonus_per_heads,
     "xMoveEnergyOwn": op_move_energy_own,
     "xHandEnergyAttachChoose": op_hand_energy_attach_choose,
+    "xHealActive": op_heal_active,
+    "xEndTurnAfterPlay": op_end_turn_after,
 }

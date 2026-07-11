@@ -1025,6 +1025,53 @@ def _tr_self_mill(sents, i):
     return None
 
 
+@TRN.rule("R-T22")
+def _tr_move_energy(sents, i):
+    if _s(r"Move a Basic Energy from 1 of your Pok.mon to another of your "
+          r"Pok.mon\.")(sents, i):
+        return (1, Frag("", legal=[{"op": "ownBasicEnergyExists"},
+                                   {"op": "benchExists"}],
+                        play=[{"op": "xMoveEnergyOwn"}]))
+    return None
+
+
+@TRN.rule("R-T23")
+def _tr_heal_active(sents, i):
+    m = _s(r"Heal (\d+) damage from your Active(?: \{(\w)\})? Pok.mon\.")(sents, i)
+    if m:
+        legal = [{"op": "activeDamaged"}]
+        if m.group(2):
+            if m.group(2) not in _TYPE_LETTER:
+                return None
+            legal.append({"op": "activeIs",
+                          "filter": {"energyType": [_TYPE_LETTER[m.group(2)]]}})
+        return (1, Frag("", legal=legal,
+                        play=[{"op": "xHealActive", "amount": int(m.group(1))}]))
+    m = _s(r"Heal (\d+) damage from your Active Pok.mon that has (\d+) or more Energy "
+           r"attached\.")(sents, i)
+    if m:
+        return (1, Frag("", legal=[{"op": "activeDamaged"},
+                                   {"op": "activeEnergyMin", "n": int(m.group(2))}],
+                        play=[{"op": "xHealActive", "amount": int(m.group(1))}]))
+    return None
+
+
+@TRN.rule("R-T25")
+def _tr_discard_opp_special(sents, i):
+    if _s(r"Discard a Special Energy from 1 of your opponent.s Pok.mon\.")(sents, i):
+        flt = {"cardType": [int(CardType.SPECIAL_ENERGY)]}
+        return (1, Frag("", legal=[{"op": "oppEnergyHas", "filter": flt}],
+                        play=[{"op": "trashEnergyEnemy", "filter": flt}]))
+    return None
+
+
+@TRN.rule("R-T26")
+def _tr_turn_ends(sents, i):
+    if _s(r"Your turn ends\.")(sents, i):
+        return (1, Frag("", play=[{"op": "xEndTurnAfterPlay"}]))
+    return None
+
+
 # ---------------------------------------------------------------------------- tools / energy
 
 TOOL = Rules()
