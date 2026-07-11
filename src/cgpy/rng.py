@@ -52,6 +52,7 @@ class ReplayRandomness:
         self.coin_queue: list[bool] = []
         self.shuffle_orders: dict[int, list[list[int]]] = {0: [], 1: []}
         self.prize_feed: dict[int, list[int]] = {0: [], 1: []}
+        self.prize_take_queue: dict[int, list[int]] = {0: [], 1: []}   # god-free path
 
     def shuffle(self, seq: list, *, seat: int) -> None:
         if self.shuffle_orders[seat]:
@@ -77,10 +78,36 @@ class ReplayRandomness:
         return serial
 
     def prize_bind(self, seat: int, deck: list[int], count: int) -> list[int]:
-        if len(self.prize_feed[seat]) < count:
-            raise ReplayError(f"seat {seat}: prize deal requested but no recorded prizes")
-        serials = [self.prize_feed[seat].pop(0) for _ in range(count)]
-        missing = [s for s in serials if s not in deck]
-        if missing:
-            raise ReplayError(f"seat {seat}: recorded prize serials {missing} not in deck")
-        return serials
+        if len(self.prize_feed[seat]) >= count:          # god path: identities known
+            serials = [self.prize_feed[seat].pop(0) for _ in range(count)]
+            missing = [s for s in serials if s not in deck]
+            if missing:
+                raise ReplayError(
+                    f"seat {seat}: recorded prize serials {missing} not in deck")
+            return serials
+        # God-free (cabt) path: deal PROVISIONAL identities (deck top, like the live
+        # rule); the true identity binds at take time via `prize_take` (the owner's
+        # PRIZE->HAND move log carries the serial) with a multiset-preserving swap.
+        return [deck[-(i + 1)] for i in range(count)]
+
+    def prize_take(self, seat: int, serial: int, *, deck: list[int],
+                   prize: list[int]) -> int:
+        """Resolve a provisional prize identity at take time (reveal-oracle, M4).
+
+        Returns the RECORDED serial for this take. Already in the row: removal by
+        identity needs no bookkeeping. Provisionally in the deck: exchange it with the
+        `serial` occupant so both zones stay multiset-exact. No queue = god-path replay
+        (identities were exact at deal)."""
+        q = self.prize_take_queue.get(seat)
+        if not q:
+            return serial
+        recorded = q.pop(0)
+        if recorded in prize:
+            return recorded
+        if recorded in deck:
+            deck[deck.index(recorded)] = serial
+            prize[prize.index(serial)] = recorded
+            return recorded
+        raise ReplayError(
+            f"seat {seat}: recorded prize take {recorded} is in neither the deck "
+            f"nor the prize row — a real divergence")

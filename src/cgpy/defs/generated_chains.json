@@ -1816,7 +1816,14 @@
  },
  "330": {
   "name": "Sylveon",
-  "deferred": "ability unpinned:  Safeguard"
+  "defense": {
+   "preventDamageFromEx": true
+  },
+  "_seed": {
+   "rules": [
+    "R-P01"
+   ]
+  }
  },
  "331": {
   "name": "XerneasEX",
@@ -1895,10 +1902,6 @@
   "_seed": {
    "source": "plain-pokemon"
   }
- },
- "345": {
-  "name": "Crustle",
-  "deferred": "ability unpinned:  Mysterious Rock Inn"
  },
  "346": {
   "name": "Applin",

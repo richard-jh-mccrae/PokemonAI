@@ -139,3 +139,66 @@ frame references live as comments at the enforcement sites in `src/cgpy/`.
   Triggered on-evolve/on-bench abilities pose an ACTIVATE YesNo (ctx 43, contextCard = the
   Pokémon). Recon Directive-class LOOK abilities are not offered with an empty deck;
   pure-draw abilities (Lunar Cycle) still are.
+
+## 9. M4 pool-fan-out pins (micro-trace-verified, 2026-07-11)
+
+Established by per-card micro-traces (`tools/parity/capture_card.py`, committed under
+`tests/fixtures/parity/micro_*.trace.json.gz`) during the pool-wide ChainDef fan-out:
+
+- **Menu gating of attacks.** The engine builds the ATTACK menu from cost AND effect
+  preconditions: a 0-damage attack whose whole effect lacks its resource is UNOFFERED —
+  Terminal Period without exactly-6 opposing counters (micro_mill2 f33), Abundant
+  Harvest with an empty discard (micro_earthquake f6). Plain effect attacks are offered
+  regardless (Phantom Dive / Tuck Tail appear in committed match traces without their
+  machinery ever running). cgpy: attack defs carry `legal` conds evaluated at menu
+  time; deferred attacks stay offered (`menuOffer: false` marks the gated ones) and
+  raise UnsupportedCard on use.
+- **Zero-value logging.** An attack WITH a damage component (printed damage, a scaler,
+  or a per-heads formula) logs HP_CHANGE even when the computation lands on 0
+  (micro_perheads f61: all-tails Ball Roll logs value 0); a component-less status attack
+  logs nothing. Heal riders log HP_CHANGE even at full HP (value 0 — micro_healself f91).
+- **"You may <effect>" attack riders** pose a YES_NO with ctx **ACTIVATE (43)** and
+  `effect` = the attacker (micro_mill2 f49, Strafe) — and are SKIPPED silently when the
+  optional effect has no live target (benchless Strafe poses nothing, micro_tucktail).
+- **Phantom-Dive counter distribution:** one CARD select per counter, ctx
+  **DAMAGE_COUNTER_ANY (14)** over the opponent's bench, `remainDamageCounter` counting
+  down from the full count, effect = the attacker; the main-damage HP_CHANGE lands
+  before the distribution selects (micro_phantomdive f16).
+- **Tuck-Tail self-return:** the returning stack logs top-first (lower cards fromArea
+  PRE_EVOLUTION), then energies LIFO, then tools, all to HAND full-visible; the owner
+  promotes via TO_ACTIVE. A side emptied by a NON-KO departure loses by NO_POKEMON
+  immediately (micro_tucktail_9521: benchless Tuck Tail = instant loss, reason 3).
+- **"Discard all Energy from this Pokémon"** discards in ATTACH order — forward, unlike
+  the KO sweep's LIFO (micro_discardall f13).
+- **Recoil ("also does N damage to itself")** logs HP_CHANGE `putDamageCounter: false`
+  on the attacker after the main damage (micro_recoil); the KO sweep covers both sides.
+- **Checkup:** between TURN_END and TURN_START. Coin flips are attributed to the
+  CONDITION OWNER (micro_collapse f17: the asleep wake-flip logs the sleeper's
+  playerIndex, not the mover's), so replay binds coins per owner. Self-inflicted
+  conditions ("This Pokémon is now Asleep") log the same shape as opponent-inflicted.
+- **Item lock (Itchy Pollen):** "can't play Item cards" is menu-enforced — the locked
+  side's PLAY options for ITEM cards are simply absent for one turn (ml_dx_2000 was
+  green only because the locked side held no items; the lock is now modeled).
+- **Crustle-class defense passives** ("Prevent all damage … by attacks from your
+  opponent's Pokémon {ex}") zero the damage in the defender-mods stage, pierced only by
+  an ignores-effects attack (Nebula Beam's 210 through Crustle — ADR-0032 golden,
+  re-verified cross-engine by the audit seam 46/46).
+
+## 10. Cross-engine audit + god-free replay (M4)
+
+- The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on
+  cgpy via `CG_ENGINE=py` (the alias seam); `tools/parity/diff_audit_engines.py`
+  compares record-for-record with zero tolerance (coin attacks compare on the
+  deterministic min/max fork rows). Sample gate 2026-07-11: 46/46 equal.
+  Nightly full-pool run (manual, needs the DLL for the native half):
+
+      python tools/sim/audit_attacks.py --all --out reports/attack_audit/native_all.json
+      CG_ENGINE=py python tools/sim/audit_attacks.py --all --out reports/attack_audit/cgpy_all.json
+      python tools/parity/diff_audit_engines.py reports/attack_audit/native_all.json reports/attack_audit/cgpy_all.json
+
+- cabt replays (`tools/parity/from_cabt.py`) convert to GOD-FREE parity traces: draws
+  and coins bind from the mover's own log windows, prize identities bind AT TAKE TIME
+  (the owner's PRIZE→HAND move carries the serial; provisional deal identities swap
+  multiset-exactly), and a revealed `select.deck` listing's order is adopted
+  (multiset-checked) — the reveal-oracle path. Kaggle +1 offset: an agent's action at
+  step k+1 answers its observation at step k; step-1 actions are the deck submissions.

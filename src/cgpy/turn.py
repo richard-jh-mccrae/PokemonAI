@@ -750,7 +750,11 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
 
     elif ctx == SelectContext.TO_HAND and gs.phase_data.get("await") == "prize":
         serials = [b.prize[opts[i]["index"]] for i in indices]   # resolve pre-removal
+        take = getattr(gs.rng, "prize_take", None)
         for serial in serials:                                   # take in answer order
+            if take is not None:      # god-free replay: bind identity at take time
+                live = serial if serial in b.prize else b.prize[0]
+                serial = take(seat, live, deck=b.deck, prize=b.prize)
             b.prize.remove(serial)
             b.hand.append(serial)
             gs.move_card(serial, AreaType.PRIZE, AreaType.HAND, seat=seat,

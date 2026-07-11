@@ -6,18 +6,19 @@
  },
  "summary": {
   "cards": {
-   "verified": 61,
+   "verified": 62,
    "total": 1267
   },
   "chains": {
-   "verified": 122,
-   "derived": 1326,
-   "deferred": 851,
-   "seeded": 524
+   "verified": 125,
+   "derived": 1324,
+   "deferred": 849,
+   "seeded": 524,
+   "unprobed": 1
   },
   "cleanFrames": {
-   "clean": 4444,
-   "total": 4444,
+   "clean": 4513,
+   "total": 4513,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
@@ -79,7 +80,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 53
+  "traces": 54
  },
  "cards": {
   "1": {
@@ -107,6 +108,7 @@
     "micro_discardall_9610",
     "micro_ember_9620",
     "micro_fakeout_9200",
+    "micro_onboard410a575_9900",
     "micro_phantomdive_9440",
     "micro_phantomdive_9441",
     "ml_dx_2000",
@@ -141,6 +143,7 @@
     "micro_healself_9200",
     "micro_iris_9770",
     "micro_mill_9630",
+    "micro_onboard410a575_9900",
     "micro_perheads_9200",
     "micro_phantomdive_9440",
     "micro_phantomdive_9441",
@@ -3700,6 +3703,7 @@
     "micro_fennel_9780",
     "micro_iris_9770",
     "micro_mill_9630",
+    "micro_onboard410a575_9900",
     "micro_phantomdive_9440",
     "micro_phantomdive_9441",
     "micro_potion_9760",
@@ -4061,9 +4065,9 @@
   "330": {
    "name": "Sylveon",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
-    "330": "deferred",
+    "330": "seeded",
     "attack:459": "derived"
    },
    "evidence": [],
@@ -4233,9 +4237,9 @@
   "345": {
    "name": "Crustle",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "345": "deferred",
+    "345": "unprobed",
     "attack:479": "seeded"
    },
    "evidence": [],
@@ -4981,13 +4985,15 @@
   "410": {
    "name": "Torchic",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "410": "derived",
-    "attack:575": "seeded",
-    "attack:576": "derived"
+    "410": "verified",
+    "attack:575": "verified",
+    "attack:576": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard410a575_9900"
+   ],
    "updated": "2026-07-11"
   },
   "411": {

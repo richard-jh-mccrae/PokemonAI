@@ -142,6 +142,17 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
     if saw_god_logs:
         rnd.coin_queues = god_coins
         rnd.draw_queues = god_draws
+    else:
+        # God-free trace (cabt conversions): prize identities bind at TAKE time from
+        # the owner's own PRIZE->HAND moves (from_cabt.py; the reveal-oracle path).
+        for fr in trace.frames:
+            mover = fr["obs"]["current"]["yourIndex"]
+            for l in fr["obs"].get("logs") or []:
+                if (l.get("type") == int(LogType.MOVE_CARD)
+                        and l.get("playerIndex") == mover
+                        and l.get("fromArea") == 6 and l.get("toArea") == 2
+                        and l.get("serial") is not None):
+                    rnd.prize_take_queue[mover].append(l["serial"])
 
     # Prize identities: facedown deals never log serials — bind from the god frames
     # (the first frame where a seat's prize row appears, in array order = deal order).
@@ -175,6 +186,19 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
             if err:
                 report.error, report.kind, report.frame = err, "god", k
                 return report
+        else:
+            # God-free: a revealed deck listing IS a reveal — adopt its order
+            # (multiset-checked) so the rendered listing and later draws agree.
+            listing = (fr["obs"].get("select") or {}).get("deck")
+            if listing:
+                serials = [c["serial"] for c in listing]
+                ours = eng.gs.players[mover].deck
+                if sorted(serials) != sorted(ours):
+                    report.error = (f"frame {k}: revealed deck listing is a different "
+                                    f"multiset than cgpy's deck")
+                    report.kind, report.frame = "god", k
+                    return report
+                ours[:] = serials   # listings preserve the TRUE internal order (M0 pin)
 
         ours = _strip_for_compare(eng.observation(mover))
         theirs = _strip_for_compare(fr["obs"])

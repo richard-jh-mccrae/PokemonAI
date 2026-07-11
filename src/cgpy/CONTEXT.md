@@ -61,14 +61,19 @@ mapping, env `CG_ENGINE=py`).
 
 ## Status (2026-07-11)
 
-M0 (vocabulary, snapshots, determinism pins), M1 (harness; setup + vanilla game loop —
-12/12 vanilla traces green), M2 (chain interpreter, 50-card union burn-down — 29 committed
-traces green, CI gate) and M3 (verification API + drop-in selection) are complete. M3
-shipped: `search.py` (structured seeding at MAIN, trainer mid-effect and token-exact
-selects; native-verbatim validation; deterministic prediction reshuffle per pin §4;
-clone-per-step sessions), `game.py`/`compat/`/`alias.py` (`CG_ENGINE=py` runs the whole
-battle harness + agents unchanged — 42-game gate, zero crashes), the clone-safety gate
-(fork at every select of every trace), the native-vs-cgpy verdict-agreement gate on the
-seeded lethal fixtures, and the DLL-free lethal harness (`engine_confirms_py`,
-`lethal_probe.py --engine py`, the f15/f24 win-line drives). Next: M4 (pool-wide fan-out +
-coverage ledger `data/engine/coverage.json`).
+M0 (vocabulary, snapshots, determinism pins), M1 (harness; setup + vanilla game loop),
+M2 (chain interpreter, 50-card union), M3 (verification API + `CG_ENGINE=py` drop-in) and
+the **M4 core** (pool-wide fan-out) are complete. M4 shipped: `tools/parity/seed_chains.py`
+→ `defs/generated_chains.json` (sentence-consumption rules; 1074/1556 attacks + 856/1267
+cards live, the rest explicitly deferred; loader validates full pool coverage),
+`capture_card.py` per-card micro-traces (audit drive-shell + recorder), the committed
+coverage ledger `data/engine/coverage.json` + `report.py` (statuses verified/derived/
+seeded/unprobed/deferred; 54 committed traces, 4513 clean frames), the op-conformance
+gate (52/54 ops trace-pinned), the cross-engine audit seam (`CG_ENGINE=py
+audit_attacks.py` + `diff_audit_engines.py` — sample 46/46 equal incl. Crustle's defense
+passive), `from_cabt.py` god-free replays (take-time prize binding, listing-order
+adoption), `onboard_card.py` (the future-card one-command), and a DLL-free self-play
+smoke. New behavior pins: docs/pyeng/determinism.md §9–10. Ongoing: burn down the
+deferred tail (items/supporters → abilities → tools/stadiums) through the built loop —
+the queue is `reports/parity/unparsed_sentences.json`, ranked in
+data/handoffs/CGGame/05-m4-pool-fanout.md.

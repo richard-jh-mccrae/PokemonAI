@@ -125,7 +125,17 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
                 and not joint_ignore and not adef.get("ignoreResistance"):
             dmg = max(0, dmg - RESISTANCE_REDUCTION)
 
-    # Defender-side transient: "takes N less damage" granted last turn (after W/R).
+    # Defender-side mods. Passive damage prevention (Crustle's Mysterious Rock Inn:
+    # "Prevent all damage done to this Pokémon by attacks from your opponent's Pokémon
+    # {ex}" — ADR-0032 audit-verified, prevent_ex panel) — pierced ONLY by an
+    # ignores-effects attack (Nebula Beam 210 through Crustle, the pinned golden).
+    if not adef.get("ignoreDefenderEffects"):
+        from .chain import def_for
+        ddef = (def_for(gs.stat(defender.top).cardId) or {}).get("defense") or {}
+        astat = gs.stat(attacker.top)
+        if ddef.get("preventDamageFromEx") and (astat.ex or astat.megaEx):
+            return 0
+    # Transient: "takes N less damage" granted last turn (after W/R).
     if defender.take_less_turn == gs.turn and defender.take_less > 0:
         dmg = max(0, dmg - defender.take_less)
     return dmg

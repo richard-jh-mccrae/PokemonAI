@@ -628,7 +628,14 @@
   },
   "attack:1488": {
     "name": "Nebula Beam",
-    "ignoreWeaknessResistance": true
+    "ignoreWeaknessResistance": true,
+    "ignoreDefenderEffects": true
+  },
+  "345": {
+    "name": "Crustle",
+    "defense": {
+      "preventDamageFromEx": true
+    }
   },
   "attack:141": {
     "name": "Mind Bend",

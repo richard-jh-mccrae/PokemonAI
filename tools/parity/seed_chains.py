@@ -931,6 +931,13 @@ def seed_pool(cards: list[dict], attacks: list[dict], overrides: dict) -> tuple[
         if ct == int(CardType.POKEMON):
             if not skills:
                 gen[key] = {"name": name, "_seed": {"source": "plain-pokemon"}}
+            elif len(skills) == 1 and re.match(
+                    r"^Prevent all damage done to this Pok.mon by attacks from your "
+                    r"opponent.s Pok.mon \{ex\}\.$",
+                    " ".join(sentences(skills[0].get("text", "")))):
+                # Crustle-template defense passive (R-P01): audit prevent_ex-verified.
+                gen[key] = {"name": name, "defense": {"preventDamageFromEx": True},
+                            "_seed": {"rules": ["R-P01"]}}
             else:
                 defer(key, name, "ability",
                       f"ability unpinned: {skills[0].get('name', '?')}", [])
