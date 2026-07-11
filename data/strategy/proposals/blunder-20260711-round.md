@@ -2,10 +2,11 @@
 Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.md
 Worklist this round = 7 open corrections (dragapult_ex 0, mega_lucario 2, mega_starmie 5).
 Terminal outcomes (see the round ledger at the bottom of docs/tuning/runs/ + reviewed.json):
-  proposal-routed 3 — 85164605-6 + 85163079-51 (below); 85164131-22 (CRITICAL) folded into the OPEN
-                       blunder-20260709-mega_starmie.md#snipe-the-real-attacker-not-a-bulky-body cluster.
-  refuted 3 — 82749168-38 (benched Tera snipe-immune), 85164605-41 (Salvatore evolves-in-place ≠ Mega
-              Signal hand-fetch), 85058574-16 (Lunar-Cycle-away-the-last-{F} forgoes a 30-dmg attack).
+  proposal-routed 4 — 85164605-6 + 85163079-51 + 85058574-16 (below); 85164131-22 (CRITICAL) folded into
+                       the OPEN blunder-20260709-mega_starmie.md#snipe-the-real-attacker-not-a-bulky-body.
+  refuted 2 — 82749168-38 (benched Tera snipe-immune), 85164605-41 (Salvatore evolves-in-place ≠ Mega
+              Signal hand-fetch). [85058574-16 was INITIALLY refuted then REVERSED 2026-07-11 by the
+              spun-off investigation: Lunar Cycle IS correct; the defect is the deck rule over-firing.]
   covered 1 — 85058574-109 (dragapult_ex Brief already races the Drakloaks; decide()==correct degenerate;
               the multi-turn EXECUTION residual is parked in docs/todo/deferred-multi-turn-criticals.md).
 Routing evidence = real-Pilot retests (tools/train/retest_one.py) + card/rule facts read at source. -->
@@ -82,3 +83,45 @@ correct — no planner/lethal route.
 WHY it wins: it lets the agent cash the last productive swing off a doomed body instead of stranding energy
 on a bench piece and firing a bench-rider into an empty bench. The distinction ("completes the biggest attack
 THIS turn" vs "overbuilds for a turn that won't come") is precise and fixture-guarded on both sides.
+
+---
+
+## lunar-cycle-the-last-{F}-when-the-active-is-a-weak-preevo-and-the-engine-is-online
+- id: lunar-cycle-over-last-f-attach-weak-preevo
+- source: blunder-buster
+- target_layer: deck-strategy
+- candidate_signal: `Board.in_play_ids` (LUNATONE + SOLROCK online — the exact gate the sibling `grab-the-playable-item` Gong rule already uses) + `Board.hand_basic_energy` + `Board.energy_placeable` (all EXIST, used by the current rule) + a **weak-active-pre-evo** read: the Active is a pre-evolution whose own affordable attack this turn is a minor chip (≈30) far below its forward form's output — derive from the provider's `forward_max_damage` (pilot.py:2566/3247, EXISTS) vs the Active's own `CardStat.maxDamage`/attack costs. If a clean boolean doesn't fall out, `candidate_signal: "needs a new signal"` (a small `active_is_weak_preevo` in Board scope).
+- verification_contract: verifier
+- provenance: correction 85058574:f16 (mega_lucario) | fixture tests/fixtures/corrections/ml_lunar_cycle_over_last_f_attach_f16.json | REVERSES the 2026-07-11 initial refute (spun-off investigation, human verdict): Lunar Cycle IS correct; the deck rule over-fires
+- status: open
+- for: deck:mega_lucario
+
+**Spec (authoring spec — thin fodder):**
+Turn 2 (P2), mega_lucario: Active **Riolu** (id 677, pre-evo of Mega Lucario ex) 0e; bench Lunatone (675)
++ Solrock (676); hand holds exactly **one Basic {F}** (the only energy) + Judge×2, Unfair Stamp, Gravity
+Mountain. The human wants **Lunar Cycle** (Lunatone Ability: discard a Basic {F} → **draw 3**) — early-game
+acceleration off the online Solrock↔Lunatone engine. The Pilot instead attaches the {F} to a bench body
+(Solrock, the `attach-solrock-over-line-base` quirk — see NOTE), scoring 0 board progress.
+
+The defect is **`dont-lunar-cycle-away-the-last-attachable-f`** (deck rule, src/agents/mega_lucario/
+strategy.py ~L272-285, weight −30) **over-firing**. Its rationale is *"attach the last {F} FIRST, then Lunar
+Cycle still fires the same turn on the **surplus** — a hold, not a blanket decline."* That premise is **false
+when the single {F} IS the whole attach**: attaching it leaves **no surplus** to cycle, so the guard doesn't
+*defer* the cycle — it **kills** it. `retest_one` (85058574-16): Lunar Cycle [6] = **−30** (this rule alone),
+buried below both attaches ([2] active Riolu +10, [4] bench Solrock +13). W-route can only nudge it to −27
+(competing frames where the rule is correct pin it) → **UNSATISFIED, needs a `when()`-narrowing, not a
+weight** (featurization already blames this hypothesis from [6] — no re-tag).
+
+**Narrow the `when()` to stand down** (let Lunar Cycle fire) when BOTH: (a) the Solrock↔Lunatone engine is
+online (`LUNATONE in board.in_play_ids and SOLROCK in board.in_play_ids`) — so the discarded {F} is
+**Aura-Jab-recoverable** from the pile and the deck is energy-rich (11 {F} + 4 Fighting Gong, a deck
+constant); AND (b) the Active is a **weak pre-evo** whose attach only buys a ~30 chip (the payoff of an
+attach scales with the ACTIVE's output — Aura Jab 130 / Cosmic Beam 70 — not a soon-to-evolve 30-damage
+Riolu). Under both, draw-3 acceleration > 30 chip, and the {F} is not truly "stranded" (recoverable). The
+rule must STILL fire (hold the {F}) when the Active is a real attacker whose attach enables a big hit, or the
+engine is offline — the verifier gate re-measures the f16 fixture (correct=[6]≻both attaches) AND must
+regress none of the frames where the −30 discipline is correct (the T6' probe cases in the rationale).
+
+NOTE — the secondary `attach-solrock-over-line-base` (+3) quirk that tips [4] over [2] among the attaches is
+**real but MOOT here** (the correct play is neither attach). Do NOT chase it off f16 — it only bites on a
+frame where Lunar Cycle is unavailable / the engine is offline; investigate it there (spun-off task).

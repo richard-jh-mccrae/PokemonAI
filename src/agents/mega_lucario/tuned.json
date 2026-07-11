@@ -1,4 +1,8 @@
 {
-  "discard-the-hand-duplicate": 9.53,
-  "keep-engine-supporter-at-discard": -10.47
+  "attach-energy-last": -8.0,
+  "attach-solrock-over-line-base": 1.0,
+  "discard-the-hand-duplicate": 9.46,
+  "dont-lunar-cycle-away-the-last-attachable-f": -27.0,
+  "keep-engine-supporter-at-discard": -10.54,
+  "power-up-attacker": 12.0
 }

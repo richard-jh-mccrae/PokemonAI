@@ -1,6 +1,6 @@
 {
   "deck": "mega_lucario",
-  "generated_at": "2026-07-11T02:02:15",
+  "generated_at": "2026-07-11T08:40:47",
   "open": [],
   "skipped": [
     {
@@ -102,14 +102,6 @@
       "frame": 48,
       "disposition": "covered",
       "reason": "Real-Pilot decide() at the captured f48 = [9] = Fighting Gong = correct (chosen==correct, degenerate on the shipped code). The applied lethal-recover-the-energy-that-wins grab tactical prices it 1001: Lunatone Active (1F, retreat 1 - affordable), benched Mega Lucario at 0 energy, so the grabbed F is both LEGAL and NECESSARY. Kept as the counter-fixture for no-phantom-grab-lethal (blunder-20260710-round.md) - that proposal's preconditions must not regress this frame."
-    },
-    {
-      "key": "85058574-16",
-      "scope": "decision",
-      "episode_id": 85058574,
-      "frame": 16,
-      "disposition": "refuted",
-      "reason": "correct=[6] Lunar Cycle (discard the deck's only {F} to draw 3) forgoes idx2 attach->active Riolu, which enables Accelerating Stab 30 THIS turn (P2, no turn-2 restriction, rules.md L75) and strands the sole energy. The deck's own dont-lunar-cycle-away-the-last-attachable-f (-30) guards exactly this; retest 85058574-16 scores correct=[6] at -30. Forgo-higher-value-attack refutation. NOTE a SEPARATE real bug (attach-solrock-over-line-base +3 tipping the last {F} onto benched Solrock over the attacking active Riolu) is flagged as its own task, not this correction."
     },
     {
       "key": "85058574-114",

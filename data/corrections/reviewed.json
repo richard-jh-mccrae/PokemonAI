@@ -673,11 +673,6 @@
     "reason": "dragapult_ex Brief already ships this f109 doctrine (race the fragile Drakloak pre-evos; do NOT chip the un-KO-able 320HP Tera Dragapult; gust the non-Tera support ex) via the APPLIED proposal blunder-20260710-round.md#dragapult-matchup-plan-the-drakloaks-are-the-target. Read fires at gamma=1.0; decide()==correct==[9] degenerate (chosen==correct match-planner note). The residual MULTI-TURN execution (gust both Drakloaks over turns, then Meowth->Boss's finish on Fezandipiti) is the designed-but-unbuilt M3/M4 layer, already parked in docs/todo/deferred-multi-turn-criticals.md + fixture ml_dragapult_matchup_plan_note_f109.json. Single-frame doctrine covered; multi-turn line is a documented capability-gap.",
     "round": "2026-07-11"
   },
-  "85058574-16": {
-    "disposition": "refuted",
-    "reason": "correct=[6] Lunar Cycle (discard the deck's only {F} to draw 3) forgoes idx2 attach->active Riolu, which enables Accelerating Stab 30 THIS turn (P2, no turn-2 restriction, rules.md L75) and strands the sole energy. The deck's own dont-lunar-cycle-away-the-last-attachable-f (-30) guards exactly this; retest 85058574-16 scores correct=[6] at -30. Forgo-higher-value-attack refutation. NOTE a SEPARATE real bug (attach-solrock-over-line-base +3 tipping the last {F} onto benched Solrock over the attacking active Riolu) is flagged as its own task, not this correction.",
-    "round": "2026-07-11"
-  },
   "82749168-38": {
     "disposition": "refuted",
     "reason": "correct=[0] snipes the benched Dragapult ex, a [Tera] ex that takes NO attack damage while Benched (data/EN_Card_Data.csv id121; docs/rulebook.txt Tera rule) -- the 50 Jetting Blow bench rider does literally 0 there. dont-snipe-a-benched-tera (-60) already ranks it below the real 50-dmg Hoothoot snipe; retest 82749168-38: [0]=-18 vs chosen [1]=12. The correction forgoes the attack's entire snipe effect on a damage-immune body.",
