@@ -98,7 +98,7 @@ def template(s: str) -> str:
 
 # ---------------------------------------------------------------------------- search-spec grammar
 
-_QTY_RE = re.compile(r"^(?:(a|an|1) |up to (\d+) )(.*)$")
+_QTY_RE = re.compile(r"^(?:(a|an|1) |up to (\d+) |(any number of) )(.*)$")
 
 # noun phrase → cgpy card filter (chain._card_matches vocabulary). Longest match wins.
 _NOUN_FILTERS: list[tuple[re.Pattern, dict]] = [
@@ -106,7 +106,15 @@ _NOUN_FILTERS: list[tuple[re.Pattern, dict]] = [
     (re.compile(r"^Basic Energy cards?$"), {"basicEnergy": True}),
     (re.compile(r"^Basic Pok.mon with (\d+) HP or less$"),
      {"pokemon": True, "basic": True, "hpMax": None}),
+    (re.compile(r"^Basic (\w+.s) Pok.mon$"),
+     {"pokemon": True, "basic": True, "nameContains": None}),
     (re.compile(r"^Basic Pok.mon$"), {"pokemon": True, "basic": True}),
+    (re.compile(r"^Stage 1 Pok.mon$"), {"pokemon": True, "stage1": True}),
+    (re.compile(r"^Stage 2 Pok.mon$"), {"pokemon": True, "stage2": True}),
+    (re.compile(r"^Tera Pok.mon$"), {"pokemon": True, "tera": True}),
+    (re.compile(r"^Pok.mon that don.t have a Rule Box$"),
+     {"pokemon": True, "noRuleBox": True}),
+    (re.compile(r"^\{(\w)\} Pok.mon$"), {"pokemon": True, "energyType": None}),
     (re.compile(r"^Pok.mon$"), {"pokemon": True}),
     (re.compile(r"^Mega Evolution Pok.mon$"), {"megaEx": True}),
     (re.compile(r"^Evolution Pok.mon$"), {"evolution": True}),
@@ -119,13 +127,7 @@ _NOUN_FILTERS: list[tuple[re.Pattern, dict]] = [
 ]
 
 
-def parse_search_spec(spec: str) -> tuple[int, dict] | None:
-    """"up to 2 Basic Pokémon with 70 HP or less" → ``(max_count, filter)`` or None."""
-    m = _QTY_RE.match(spec.strip())
-    if not m:
-        return None
-    n = 1 if m.group(1) else int(m.group(2))
-    noun = m.group(3).strip().rstrip(",")
+def _noun_filter(noun: str) -> dict | None:
     for pat, proto in _NOUN_FILTERS:
         pm = pat.match(noun)
         if pm:
@@ -137,8 +139,30 @@ def parse_search_spec(spec: str) -> tuple[int, dict] | None:
                 flt["energyType"] = [_TYPE_LETTER[letter]]
             if "hpMax" in proto and proto["hpMax"] is None:
                 flt["hpMax"] = int(pm.group(1))
-            return (n, flt)
+            if "nameContains" in proto and proto["nameContains"] is None:
+                flt["nameContains"] = pm.group(1)
+            return flt
     return None
+
+
+def parse_search_spec(spec: str) -> tuple[int, dict] | None:
+    """"up to 2 Basic Pokémon with 70 HP or less" → ``(max_count, filter)`` or None.
+    "any number of" quantifies as 60 (the op layer clamps to matches/bench room).
+    "in any combination of X and Y" → an ``anyOf`` union filter."""
+    m = _QTY_RE.match(spec.strip())
+    if not m:
+        return None
+    n = 1 if m.group(1) else (int(m.group(2)) if m.group(2) else 60)
+    noun = m.group(4).strip().rstrip(",")
+    cm = re.match(r"^in any combination of (.+)$", noun)
+    if cm:
+        parts = [p.strip() for p in cm.group(1).split(" and ")]
+        subs = [_noun_filter(p) for p in parts]
+        if len(parts) < 2 or any(s is None for s in subs):
+            return None
+        return (n, {"anyOf": subs})
+    flt = _noun_filter(noun)
+    return (n, flt) if flt is not None else None
 
 
 # ---------------------------------------------------------------------------- rule engine
@@ -262,6 +286,24 @@ def _lock_defender_retreat(sents, i):
     return None
 
 
+@ATK.rule("R-A19")
+def _reduce_defender(sents, i):
+    m = _s(r"During your opponent.s next turn, attacks used by the Defending Pok.mon "
+           r"do (\d+) less damage \(before applying Weakness and Resistance\)\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xReduceDefenderNextTurn",
+                                    "n": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-A20")
+def _lock_defender_attacks(sents, i):
+    if _s(r"During your opponent.s next turn, the Defending Pok.mon can.t use "
+          r"attacks\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xLockDefenderAttacks"}]))
+    return None
+
+
 @ATK.rule("R-A15")
 def _take_less(sents, i):
     m = _s(r"During your opponent.s next turn, this Pok.mon takes (\d+) less damage from "
@@ -307,6 +349,10 @@ _SCALE_SENT: list[tuple[str, str, int]] = [
      "atk_prizes_taken", 1),
     (r"This attack does (\d+) (?:more )?damage for each Prize card your opponent has "
      r"(?:already )?taken\.", "def_prizes_taken", 1),
+    (r"This attack does (\d+) (?:more )?damage for each Pok.mon Tool attached to all "
+     r"of your Pok.mon\.", "atk_tools_in_play", 1),
+    (r"This attack does (\d+) (?:more )?damage for each of your Pok.mon in play\.",
+     "atk_in_play", 1),
 ]
 
 
@@ -318,6 +364,13 @@ def _scaler(sents, i):
             more = " more damage" in sents[i]
             return (1, Frag("", fields={"scale": {"var": var, "per": int(m.group(1)) * mult,
                                                   "add": more}}))
+    m = _s(r"This attack does (\d+) (?:more )?damage for each of your Pok.mon in play "
+           r"that has the (\w[\w '’-]*?) attack\.")(sents, i)
+    if m:
+        return (1, Frag("", fields={"scale": {"var": "atk_named_attack",
+                                              "attackName": m.group(2),
+                                              "per": int(m.group(1)),
+                                              "add": " more damage" in sents[i]}}))
     return None
 
 
@@ -340,6 +393,30 @@ def _cond_bonus(sents, i):
         m = _s(pat)(sents, i)
         if m:
             return (1, Frag("", fields={"condBonus": {"cond": cond, "n": int(m.group(1))}}))
+    m = _s(r"If your opponent.s Active Pok.mon is a \{(\w)\} Pok.mon, this attack does "
+           r"(\d+) more damage\.")(sents, i)
+    if m and m.group(1) in _TYPE_LETTER:
+        return (1, Frag("", fields={"condBonus": {"cond": "def_active_type",
+                                                  "energyType": _TYPE_LETTER[m.group(1)],
+                                                  "n": int(m.group(2))}}))
+    m = _s(r"If your opponent.s Active Pok.mon is Burned, this attack does (\d+) more "
+           r"damage\.")(sents, i)
+    if m:
+        return (1, Frag("", fields={"condBonus": {"cond": "def_active_burned",
+                                                  "n": int(m.group(1))}}))
+    m = _s(r"If you have at least (\d+) \{(\w)\} Energy in play, this attack does (\d+) "
+           r"more damage\.")(sents, i)
+    if m and m.group(2) in _TYPE_LETTER:
+        return (1, Frag("", fields={"condBonus": {"cond": "atk_energy_in_play_min",
+                                                  "min": int(m.group(1)),
+                                                  "energyType": _TYPE_LETTER[m.group(2)],
+                                                  "n": int(m.group(3))}}))
+    m = _s(r"If this Pok.mon has at least (\d+) extra Energy attached \(in addition to "
+           r"this attack.s cost\), this attack does (\d+) more damage\.")(sents, i)
+    if m:
+        return (1, Frag("", fields={"condBonus": {"cond": "self_extra_energy_min",
+                                                  "min": int(m.group(1)),
+                                                  "n": int(m.group(2))}}))
     return None
 
 
@@ -491,6 +568,16 @@ def _coins_per_energy(sents, i):
     return None
 
 
+@ATK.rule("R-C09")
+def _coin_protect(sents, i):
+    if (i + 1 < len(sents) and _s(r"Flip a coin\.")(sents, i)
+            and _s(r"If heads, during your opponent.s next turn, prevent all damage "
+                   r"from and effects of attacks done to this Pok.mon\.")(sents, i + 1)):
+        return (2, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "xProtectNextTurn"}]))
+    return None
+
+
 @ATK.rule("R-C06")
 def _coin_rider(sents, i):
     """Flip a coin. If heads, <known rider clause>. — post-damage coin-gated rider."""
@@ -585,7 +672,7 @@ def _search_hand_rider(sents, i):
 @ATK.rule("R-B18")
 def _deck_energy_attach_self(sents, i):
     m = _s(r"Search your deck for (a|up to \d+) Basic \{(\w)\} Energy cards? and attach "
-           r"(?:it|them) to this Pok.mon\.")(sents, i)
+           r"(?:it|them) to (this Pok.mon|1 of your Pok.mon)\.")(sents, i)
     if not m:
         return None
     k = 1
@@ -594,9 +681,36 @@ def _deck_energy_attach_self(sents, i):
     n = 1 if m.group(1) == "a" else int(m.group(1).split()[-1])
     if m.group(2) not in _TYPE_LETTER:
         return None
-    return (k, Frag("", rider=[{"op": "xDeckEnergyAttach", "max": n, "target": "self",
+    target = "self" if m.group(3).startswith("this") else "choose"
+    return (k, Frag("", rider=[{"op": "xDeckEnergyAttach", "max": n, "target": target,
                                 "filter": {"basicEnergy": True,
                                            "energyType": [_TYPE_LETTER[m.group(2)]]}}]))
+
+
+@ATK.rule("R-B27")
+def _evolve_self_from_deck(sents, i):
+    m = _s(r"Search your deck for a card that evolves from this Pok.mon and put it "
+           r"onto this Pok.mon to evolve it\.")(sents, i)
+    if not m:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    return (k, Frag("", rider=[{"op": "xDeckEvolveSelfAndShuffle"}]))
+
+
+@ATK.rule("R-B26")
+def _hand_energy_attach(sents, i):
+    m = _s(r"Attach a Basic(?: \{(\w)\})? Energy card from your hand to 1 of your "
+           r"Pok.mon\.")(sents, i)
+    if not m:
+        return None
+    flt: dict = {"basicEnergy": True}
+    if m.group(1):
+        if m.group(1) not in _TYPE_LETTER:
+            return None
+        flt["energyType"] = [_TYPE_LETTER[m.group(1)]]
+    return (1, Frag("", rider=[{"op": "xHandEnergyAttachChoose", "filter": flt}]))
 
 
 @ATK.rule("R-B19")
@@ -637,6 +751,41 @@ def _bench_spread(sents, i):
     if m:
         return (1, Frag("", rider=[{"op": "xDistributeCounters",
                                     "counters": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B23")
+def _inflict_two(sents, i):
+    m = _s(r"Your opponent.s Active Pok.mon is now (Poisoned|Burned|Asleep|Paralyzed|"
+           r"Confused) and (Poisoned|Burned|Asleep|Paralyzed|Confused)\.")(sents, i)
+    if m:
+        # Condition-ENUM order, not text order: "Asleep and Poisoned" logs POISONED(17)
+        # then ASLEEP(19) (pinned micro_onboard780a1128); "Burned and Confused" logs
+        # BURNED(18) then CONFUSED(21) (pinned micro_onboard409a573) — ascending in
+        # SpecialConditionType/LogType for both.
+        conds = sorted(_COND[m.group(g)] for g in (1, 2))
+        return (1, Frag("", rider=[{"op": "xInflictConditionActive", "condition": c}
+                                   for c in conds]))
+    return None
+
+
+@ATK.rule("R-B24")
+def _discard_hand_draw_rider(sents, i):
+    m = _s(r"Discard your hand and draw (\d+) cards?\.")(sents, i)
+    if m:
+        return (1, Frag("", rider=[{"op": "xDiscardHandDraw", "n": int(m.group(1))}]))
+    return None
+
+
+@ATK.rule("R-B25")
+def _may_draw_until(sents, i):
+    m = _s(r"You may draw cards until you have (\d+) cards in your hand\.")(sents, i)
+    if m:
+        n = int(m.group(1))
+        return (1, Frag("", rider=[{"op": "xMayAsk",
+                                    "requires": [{"op": "handBelow", "n": n},
+                                                 {"op": "deckNotEmpty"}],
+                                    "program": [{"op": "effectDrawUntil", "n": n}]}]))
     return None
 
 
@@ -796,6 +945,86 @@ def _tr_look_top(sents, i):
     return None
 
 
+@TRN.rule("R-T14")
+def _tr_trash_to_hand(sents, i):
+    m = _s(r"Put (.+?) from your discard pile into your hand\.")(sents, i)
+    if not m:
+        return None
+    spec = parse_search_spec(m.group(1))
+    if spec is None:
+        return None
+    n, flt = spec
+    # Imperative "Put up to N …" is still min 1 (pinned micro_onboard1118 f41:
+    # Energy Retrieval poses min=1 max=2); only a "You may …" wording drops to 0.
+    return (1, Frag("", legal=[{"op": "discardHas", "filter": flt}],
+                    play=[{"op": "effectTrashToHand", "min": 1, "max": n,
+                           "filter": flt}]))
+
+
+@TRN.rule("R-T15")
+def _tr_look_reveal_take(sents, i):
+    m0 = _s(r"Look at the top (\d+) cards of your deck\.")(sents, i)
+    if not m0 or i + 2 >= len(sents):
+        return None
+    m1 = _s(r"You may reveal (.+?) you find there and put (?:it|them) into your "
+            r"hand\.")(sents, i + 1)
+    if not m1 or not _s(r"Shuffle the other cards back into your deck\.")(sents, i + 2):
+        return None
+    spec = parse_search_spec(m1.group(1))
+    if spec is None:
+        return None
+    n_take, flt = spec
+    return (3, Frag("", legal=[{"op": "deckNotEmpty"}],
+                    play=[{"op": "xLookTopMayTakeThenShuffle", "n": int(m0.group(1)),
+                           "min": 0, "max": n_take, "filter": flt}]))
+
+
+@TRN.rule("R-T16")
+def _tr_coin_gust(sents, i):
+    if (i + 1 < len(sents) and _s(r"Flip a coin\.")(sents, i)
+            and _s(r"If heads, switch in 1 of your opponent.s Benched Pok.mon to the "
+                   r"Active Spot\.")(sents, i + 1)):
+        return (2, Frag("", legal=[{"op": "oppBenchExists"}],
+                        play=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                              {"op": "effectSwitchEnemy"}]))
+    return None
+
+
+@TRN.rule("R-T18")
+def _tr_search_any_cards(sents, i):
+    m = _s(r"Search your deck for (a card|up to (\d+) cards) and put (?:it|them) into "
+           r"your hand\.")(sents, i)
+    if not m:
+        return None
+    k = 1
+    if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
+        k = 2
+    n = 1 if m.group(1) == "a card" else int(m.group(2))
+    return (k, Frag("", legal=[{"op": "deckNotEmpty"}],
+                    play=[{"op": "effectDeckToHandAndShuffle", "min": 0, "max": n,
+                           "filter": {}}]))
+
+
+@TRN.rule("R-T20")
+def _tr_inflict_two(sents, i):
+    m = _s(r"Your opponent.s Active Pok.mon is now (Poisoned|Burned|Asleep|Paralyzed|"
+           r"Confused) and (Poisoned|Burned|Asleep|Paralyzed|Confused)\.")(sents, i)
+    if m:
+        conds = sorted(_COND[m.group(g)] for g in (1, 2))   # enum order (R-B23 pin)
+        return (1, Frag("", play=[{"op": "xInflictConditionActive", "condition": c}
+                                  for c in conds]))
+    return None
+
+
+@TRN.rule("R-T21")
+def _tr_self_mill(sents, i):
+    m = _s(r"Discard the top (\d+) cards of your deck\.")(sents, i)
+    if m:
+        return (1, Frag("", legal=[{"op": "deckNotEmpty"}],
+                        play=[{"op": "xMill", "who": "self", "n": int(m.group(1))}]))
+    return None
+
+
 # ---------------------------------------------------------------------------- tools / energy
 
 TOOL = Rules()
@@ -915,6 +1144,10 @@ def seed_pool(cards: list[dict], attacks: list[dict], overrides: dict) -> tuple[
             for op in entry.get("rider") or []:
                 if op["op"] == "xDiscardEnergyAttachSelf":
                     entry["legal"] = [{"op": "discardHas", "filter": op.get("filter", {})}]
+                elif op["op"] == "xHandEnergyAttachChoose":   # Lucky Attachment class:
+                    entry["legal"] = [{"op": "handHas",       # offered only with hand
+                                       "filter": op.get("filter", {})}]   # fuel (pinned
+                    # micro_happyswitch_9950 f28: offered with energies in hand)
         entry["name"] = name
         gen[key] = entry
 

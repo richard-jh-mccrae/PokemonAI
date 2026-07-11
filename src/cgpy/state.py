@@ -45,6 +45,12 @@ class PokemonInPlay:
     retreat_lock_turn: int = -1   # global turn this mon cannot RETREAT (lockDefenderRetreat)
     take_less_turn: int = -1      # "takes N less damage" transient: the global turn it
     take_less: int = 0            # applies (the attacker's turn after the granting attack)
+    protect_turn: int = -1        # Dig-family "prevent all damage from and effects of
+                                  # attacks" transient: the global turn it applies
+    outgoing_less_turn: int = -1  # Intimidating-Stare transient on the DEFENDING mon:
+    outgoing_less: int = 0        # its attacks do N less (pre-W/R) on this global turn
+    no_attack_turn: int = -1      # Snotted-Up transient: this mon can't attack on this
+                                  # global turn (menu-enforced, like sleep/paralysis)
 
     @property
     def top(self) -> int:

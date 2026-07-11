@@ -60,10 +60,17 @@ def scale_count(gs: GameState, seat: int, var: str, energy_type: int | None = No
                     if gs.db.is_energy(gs.card_id(s))
                     and (energy_type is None
                          or int(gs.stat(s).energyType) == energy_type)])
+    if var == "atk_tools_in_play":              # Gadget Show: tools on ALL own mons
+        return sum(len(p.tools) for p in gs.in_play(seat))
+    if var == "atk_in_play":                    # Sweet Circle: own in-play mons
+        return len(list(gs.in_play(seat)))
     raise ValueError(f"unknown scale var {var!r}")
 
 
-def _cond_holds(gs: GameState, seat: int, cond: str, attack_cost: int = 0) -> bool:
+def _cond_holds(gs: GameState, seat: int, cond: str, attack_cost: int = 0,
+                cb: dict | None = None) -> bool:
+    from .options import provided_energy
+    cb = cb or {}
     b, ob = gs.players[seat], gs.players[1 - seat]
     if cond == "def_active_ex":
         return ob.active is not None and (gs.stat(ob.active.top).ex
@@ -76,6 +83,19 @@ def _cond_holds(gs: GameState, seat: int, cond: str, attack_cost: int = 0) -> bo
         return b.active is not None and b.active.moved_active_turn == gs.turn
     if cond == "own_ko_last_turn":
         return gs.ko_turn[seat] == gs.turn - 1
+    if cond == "def_active_type":               # Mirror-Attack class: typed defender
+        return ob.active is not None and \
+            int(gs.stat(ob.active.top).energyType) == cb["energyType"]
+    if cond == "def_active_burned":             # Roasting Heat
+        return ob.active is not None and ob.burned
+    if cond == "atk_energy_in_play_min":        # Electro Fall: >= min {X} in play
+        n = sum(1 for p in gs.in_play(seat) for u in provided_energy(gs, p)
+                if cb.get("energyType") is None or u == cb["energyType"])
+        return n >= cb["min"]
+    if cond == "self_extra_energy_min":         # High-Voltage Press: extra beyond cost
+        if b.active is None:
+            return False
+        return len(provided_energy(gs, b.active)) - attack_cost >= cb["min"]
     raise ValueError(f"unknown condBonus cond {cond!r}")
 
 
@@ -91,15 +111,27 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
         dmg = pre_vars["damage_override"]
     scale = adef.get("scale")
     if scale:
-        units = scale_count(gs, seat, scale["var"], scale.get("energyType"))
+        if scale["var"] == "atk_named_attack":   # Round: own mons having the attack
+            units = sum(1 for p in gs.in_play(seat)
+                        for aid in gs.stat(p.top).attacks
+                        if gs.db.attacks[aid].name == scale["attackName"])
+        else:
+            units = scale_count(gs, seat, scale["var"], scale.get("energyType"))
         if scale.get("add"):
             dmg += scale["per"] * units
         else:
             dmg = scale["per"] * units
     dmg += pre_vars.get("damage_bonus", 0)       # coin "If heads, +N" family
-    for cb in adef.get("condBonus", []):
-        if _cond_holds(gs, seat, cb["cond"], attack_cost=len(attack.energies)):
+    cbs = adef.get("condBonus") or []
+    if isinstance(cbs, dict):                    # the seed layer emits a single dict
+        cbs = [cbs]
+    for cb in cbs:
+        if _cond_holds(gs, seat, cb["cond"], attack_cost=len(attack.energies), cb=cb):
             dmg += cb["n"]
+    # Intimidating-Stare transient riding the attacker: its attacks do N less this
+    # turn, applied before Weakness/Resistance (card text).
+    if attacker.outgoing_less_turn == gs.turn and attacker.outgoing_less > 0:
+        dmg -= attacker.outgoing_less
     if dmg <= 0:
         return 0
 
@@ -134,6 +166,10 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
         ddef = (def_for(gs.stat(defender.top).cardId) or {}).get("defense") or {}
         astat = gs.stat(attacker.top)
         if ddef.get("preventDamageFromEx") and (astat.ex or astat.megaEx):
+            return 0
+        # Dig-family transient: "prevent all damage from and effects of attacks done
+        # to this Pokémon" granted last turn — same pierce seam as Crustle.
+        if defender.protect_turn == gs.turn:
             return 0
     # Transient: "takes N less damage" granted last turn (after W/R).
     if defender.take_less_turn == gs.turn and defender.take_less > 0:

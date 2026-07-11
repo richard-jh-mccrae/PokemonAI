@@ -107,7 +107,13 @@ def _card_matches(gs: GameState, serial: int, flt: dict) -> bool:
         return False
     if flt.get("megaEx") and not stat.megaEx:
         return False
+    if flt.get("stage1") and not stat.stage1:
+        return False
     if flt.get("stage2") and not stat.stage2:
+        return False
+    if flt.get("tera") and not stat.tera:
+        return False
+    if "nameContains" in flt and flt["nameContains"] not in stat.name:
         return False
     if flt.get("evolution") and not stat.evolvesFrom:
         return False
@@ -155,6 +161,13 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
                 return False
         elif op == "handNotEmptyBesides":
             if len(b.hand) <= 1:
+                return False
+        elif op == "handBelow":       # draw-until riders: targetless once hand >= n
+            if len(b.hand) >= c["n"]:  # (pinned micro_onboard125a159: Return with a
+                return False           # full hand poses NO ask, straight to turn end)
+        elif op == "ownBasicEnergyExists":   # Happy-Switch class: a movable Basic
+            if not any(gs.stat(s).cardType == CardType.BASIC_ENERGY
+                       for p in gs.in_play(seat) for s in p.energy):
                 return False
         elif op == "megaExDamagedInPlay":     # Wally's: the engine peeks for DAMAGE
             if not any(gs.stat(p.top).megaEx and p.hp < p.max_hp
@@ -785,16 +798,21 @@ def op_inflict_condition_self(gs, fr, args) -> bool:
 def _set_condition(gs: GameState, seat: int, cond: int) -> None:
     """Set a special condition on the seat's Active (pinned log shape: v2_ml_dx_5501 f22
     Mind Bend). Rotating conditions (Asleep/Paralyzed/Confused) overwrite each other;
-    marker conditions (Poison/Burn) stack alongside (docs/rules.md §8)."""
+    marker conditions (Poison/Burn) stack alongside (docs/rules.md §8). Re-applying a
+    condition the target ALREADY has is silent — no log (pinned micro_onboard780a1128
+    f51: second Pollen Bomb on a still-poisoned target logs ASLEEP only)."""
     b = gs.players[seat]
     log_type = {0: LogType.POISONED, 1: LogType.BURNED, 2: LogType.ASLEEP,
                 3: LogType.PARALYZED, 4: LogType.CONFUSED}[cond]
     flag = {0: "poisoned", 1: "burned", 2: "asleep", 3: "paralyzed", 4: "confused"}[cond]
+    already = getattr(b, flag)
     if cond in (2, 3, 4):
         b.asleep = b.paralyzed = b.confused = False
     setattr(b, flag, True)
     if cond == 3:
         b.paralyzed_since_turn = gs.turn
+    if already:
+        return
     gs.emit({"type": int(log_type), "playerIndex": seat, "isRecover": False,
              "cardId": gs.card_id(b.active.top), "serial": b.active.top})
 
@@ -842,6 +860,74 @@ def op_discard_hand_draw(gs, fr, args) -> bool:
                      visible_to_owner=True, visible_to_opponent=True)
     for _ in range(args.get("n", 0)):
         gs.draw(seat)
+    return True
+
+
+def op_reduce_defender_next_turn(gs, fr, args) -> bool:
+    """Intimidating Stare: "During your opponent's next turn, attacks used by the
+    Defending Pokémon do N less damage (before applying Weakness and Resistance)."
+    A transient on the DEFENDING mon (rides it, take-less convention; seeded)."""
+    them = gs.players[1 - fr.seat].active
+    if them is not None:
+        them.outgoing_less_turn = gs.turn + 1
+        them.outgoing_less = args["n"]
+    return True
+
+
+def op_lock_defender_attacks(gs, fr, args) -> bool:
+    """Snotted Up: "During your opponent's next turn, the Defending Pokémon can't use
+    attacks." — menu-enforced on the defender's next turn (rides the mon; seeded)."""
+    them = gs.players[1 - fr.seat].active
+    if them is not None:
+        them.no_attack_turn = gs.turn + 1
+    return True
+
+
+def op_deck_evolve_self_and_shuffle(gs, fr, args) -> bool:
+    """Ascension: "Search your deck for a card that evolves from this Pokémon and put
+    it onto this Pokémon to evolve it. Then, shuffle your deck." One EVOLVES_TO pick
+    over the revealed deck (may whiff; Salvatore's pick shape), target fixed = the
+    attack's own Active; evolve + shuffle (seeded — micro-trace refines)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    me = b.active
+    if me is None:
+        return True
+    if "answer" not in fr.vars:
+        name = gs.stat(me.top).name
+        opts = [opt_card(AreaType.DECK, i, seat) for i, s in enumerate(b.deck)
+                if gs.stat(s).cardType == CardType.POKEMON
+                and gs.stat(s).evolvesFrom == name]
+        if not opts:                               # empty optional search: never posed
+            gs.turn_action_count += 1
+            _shuffle(gs, seat)
+            return True
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.EVOLVES_TO,
+             options=opts, min_count=0, max_count=1,
+             deck_listing=list(b.deck), effect_card=fr.source)
+        return False
+    picked = [b.deck[o["index"]] for o in fr.vars.pop("answered_options")]
+    fr.vars.pop("answer")
+    if not picked:                                 # whiff: the reveal still shuffles
+        _shuffle(gs, seat)
+        return True
+    evo = picked[0]
+    from .turn import _apply_evolution
+    b.deck.remove(evo)
+    _apply_evolution(gs, seat, evo, me)
+    _shuffle(gs, seat)
+    return True
+
+
+def op_protect_next_turn(gs, fr, args) -> bool:
+    """Dig family: "during your opponent's next turn, prevent all damage from and
+    effects of attacks done to this Pokémon." — a transient on the attack's own
+    Active; damage.py zeroes incoming attack damage on the opponent's next turn
+    (rides the Pokémon, take-less convention). Effect suppression beyond damage is
+    NOT yet modeled — a trace with an effect-carrying attack into protection pins it."""
+    me = gs.players[fr.seat].active
+    if me is not None:
+        me.protect_turn = gs.turn + 1
     return True
 
 
@@ -938,7 +1024,9 @@ def op_deck_energy_attach(gs, fr, args) -> bool:
 def op_discard_energy_attach_self(gs, fr, args) -> bool:
     """"Attach up to N Basic {X} Energy cards from your discard pile to this Pokémon." —
     one ATTACH_TO pick over the discard (Aura Jab's pinned pick shape), attach all to the
-    attack's own Active (no per-energy target select — target is fixed)."""
+    attack's own Active (no per-energy target select — target is fixed). Imperative
+    wording poses min=1 (pinned micro_onboard534 f16, the Energy-Retrieval rule; the
+    carrier attack is menu-gated on discard fuel so a pick always exists)."""
     seat = fr.seat
     b = gs.players[seat]
     me = b.active
@@ -950,7 +1038,7 @@ def op_discard_energy_attach_self(gs, fr, args) -> bool:
         if not opts:
             return True                            # skipped rider: no tac bump (Aura Jab pin)
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
-             options=opts, min_count=0,
+             options=opts, min_count=1,
              max_count=min(args.get("max", 1), len(opts)), effect_card=fr.source)
         return False
     picked = [b.discard[o["index"]] for o in fr.vars.pop("answered_options")]
@@ -1623,6 +1711,111 @@ def op_deck_evolve_in_play_and_shuffle(gs, fr, args) -> bool:
     return True
 
 
+def op_hand_energy_attach_choose(gs, fr, args) -> bool:
+    """Lucky Attachment (Chansey): "Attach a Basic Energy card from your hand to 1 of
+    your Pokémon." Two selects (pinned micro_happyswitch_9950 f29-f31): the hand card
+    (ctx ATTACH_TO, type CARD, options = matching HAND indices ascending), then the
+    holder (ctx ATTACH_FROM, in-play order, contextCard = the picked energy); resolves
+    as a standard ATTACH log with a fresh attach tick. Skips silently when the hand
+    has no match (0-damage carriers are menu-gated on the resource instead)."""
+    from .options import _targets
+    seat = fr.seat
+    b = gs.players[seat]
+    if "picked" not in fr.vars:
+        if "answer" not in fr.vars:
+            opts = _zone_options(gs, seat, b.hand, AreaType.HAND,
+                                 args.get("filter", {}))
+            if not opts:
+                return True
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+                 options=opts, min_count=1, max_count=1, effect_card=fr.source)
+            return False
+        fr.vars["picked"] = b.hand[fr.vars.pop("answered_options")[0]["index"]]
+        fr.vars.pop("answer")
+    energy = fr.vars["picked"]
+    if "answer" not in fr.vars:
+        opts = [opt_card(area, idx, seat) for area, idx, _p in _targets(gs, seat)]
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+             options=opts, min_count=1, max_count=1,
+             context_card=energy, effect_card=fr.source)
+        return False
+    t_o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    fr.vars.pop("picked")
+    from .turn import _target_of
+    target = _target_of(gs, seat, t_o["area"], t_o["index"])
+    b.hand.remove(energy)
+    target.energy.append(energy)
+    gs.note_attach(energy)
+    gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
+             "cardId": gs.card_id(energy), "serial": energy,
+             "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+    return True
+
+
+def op_move_energy_own(gs, fr, args) -> bool:
+    """Happy Switch (Blissey ex 125): move a Basic Energy between own Pokémon. Two
+    selects (pinned micro_happyswitch_9950 f193-f196): the energy (ctx
+    SWITCH_ENERGY_CARD, type ATTACHED_CARD, options = own BASIC energies in GLOBAL
+    ATTACH order, oldest first), then the destination (ctx ATTACH_FROM, type CARD,
+    in-play order with the source Pokémon EXCLUDED); one MOVE_ATTACHED log with
+    Before/After mons. The moved energy keeps its original attach tick (seeded —
+    a later energy select would expose a re-tick)."""
+    from .options import _targets
+    seat = fr.seat
+    if "moving" not in fr.vars:
+        if "answer" not in fr.vars:
+            entries = []
+            for area, idx, p in _targets(gs, seat):
+                for k, s in enumerate(p.energy):
+                    if gs.stat(s).cardType != CardType.BASIC_ENERGY:
+                        continue
+                    entries.append((gs.attach_seq.get(s, 0),
+                                    {"type": int(OptionType.ENERGY_CARD),
+                                     "area": area, "index": idx,
+                                     "playerIndex": seat, "energyIndex": k}))
+            entries.sort(key=lambda e: e[0])
+            opts = [o for _t, o in entries]
+            if not opts:
+                return True
+            pose(gs, seat, type=SelectType.ATTACHED_CARD,
+                 context=SelectContext.SWITCH_ENERGY_CARD, options=opts,
+                 min_count=1, max_count=1, effect_card=fr.source)
+            return False
+        fr.vars["moving"] = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+    src_o = fr.vars["moving"]
+    from .turn import _target_of
+    if "answer" not in fr.vars:
+        moving_serial = _target_of(gs, seat, src_o["area"],
+                                   src_o["index"]).energy[src_o["energyIndex"]]
+        opts = [opt_card(area, idx, seat) for area, idx, _p in _targets(gs, seat)
+                if not (area == src_o["area"] and idx == src_o["index"])]
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+             options=opts, min_count=1, max_count=1,
+             context_card=moving_serial, effect_card=fr.source)
+        return False
+    t_o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    fr.vars.pop("moving")
+    source = _target_of(gs, seat, src_o["area"], src_o["index"])
+    target = _target_of(gs, seat, t_o["area"], t_o["index"])
+    serial = source.energy[src_o["energyIndex"]]
+    source.energy.remove(serial)
+    # The move PRESERVES the original attach tick and the holder's energy list stays
+    # in global attach-tick order — the moved (older) energy lands BEFORE a newer
+    # pre-existing one (pinned micro_happyswitch_9951 f47: [60, 40]).
+    tick = gs.attach_seq.get(serial, 0)
+    pos = next((k for k, s in enumerate(target.energy)
+                if gs.attach_seq.get(s, 0) > tick), len(target.energy))
+    target.energy.insert(pos, serial)
+    gs.emit({"type": int(LogType.MOVE_ATTACHED), "playerIndex": seat,
+             "cardId": gs.card_id(serial), "serial": serial,
+             "cardIdBefore": gs.card_id(source.top), "serialBefore": source.top,
+             "cardIdAfter": gs.card_id(target.top), "serialAfter": target.top})
+    return True
+
+
 OPS = {
     "effectDraw": op_effect_draw,
     "effectDrawUntil": op_effect_draw_until,
@@ -1668,6 +1861,10 @@ OPS = {
     "xMill": op_mill,
     "xDiscardHandDraw": op_discard_hand_draw,
     "xTakeLessNextTurn": op_take_less_next_turn,
+    "xProtectNextTurn": op_protect_next_turn,
+    "xReduceDefenderNextTurn": op_reduce_defender_next_turn,
+    "xLockDefenderAttacks": op_lock_defender_attacks,
+    "xDeckEvolveSelfAndShuffle": op_deck_evolve_self_and_shuffle,
     "xMayAsk": op_may_ask,
     "xDeckEnergyAttach": op_deck_energy_attach,
     "xDiscardEnergyAttachSelf": op_discard_energy_attach_self,
@@ -1679,4 +1876,6 @@ OPS = {
     "xCoinsUntilTails": op_coins_until_tails,
     "xDamagePerHeads": op_damage_per_heads,
     "xBonusPerHeads": op_bonus_per_heads,
+    "xMoveEnergyOwn": op_move_energy_own,
+    "xHandEnergyAttachChoose": op_hand_energy_attach_choose,
 }

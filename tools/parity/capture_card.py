@@ -78,10 +78,12 @@ def build_decks(db: CardDB, card_id: int) -> tuple[list[int], list[int], list[in
         fodder = bench_fodder(live, set(chain))
         own = build_side_deck(chain, cost_types or [int(card.energyType) or 3], fodder)
     else:
-        # Trainer/energy target: a sturdy basic line carries the game; 4x target rides.
+        # Trainer/energy target: a sturdy basic line carries the game; 4x target rides
+        # (1x for an ACE SPEC — the deck rule caps those at one copy).
         body = bench_fodder(live, set(), n=3)
         chain = [body[0]]
-        own = [card_id] * 4 + [body[0]] * 4 + [body[1]] * 4 + [body[2]] * 4
+        copies = 1 if db.card(card_id).aceSpec else 4
+        own = [card_id] * copies + [body[0]] * 4 + [body[1]] * 4 + [body[2]] * 4
         etype = int(db.card(body[0]).energyType) or 3
         own += [_ENERGY_CARD.get(etype, 3)] * (60 - len(own))
     opp_body = bench_fodder(live, set(chain), n=2)

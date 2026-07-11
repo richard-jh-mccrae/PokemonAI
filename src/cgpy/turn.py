@@ -333,6 +333,10 @@ def begin_turn(gs: GameState, seat: int) -> None:
 
 def _end_turn(gs: GameState, seat: int) -> None:
     gs.emit({"type": int(LogType.TURN_END), "playerIndex": seat})
+    gs.energy_attached = False    # native resets AT TURN_END — observable False during a
+    # between-turns promotion select (pinned micro_onboard780a1128 f54). The sibling
+    # flags (supporterPlayed/stadiumPlayed/retreated) stay reset-at-TURN_START until a
+    # trace pins them.
     _eot_energy_discards(gs, seat)
     _checkup(gs, seat)
     if gs.result != -1 or gs.pending is not None:
@@ -359,8 +363,10 @@ def _checkup(gs: GameState, ending_seat: int) -> None:
     """Pokémon Checkup between turns, per seat in (ending, other) order, conditions in
     Poisoned -> Burned -> Asleep -> Paralyzed order (docs/rules.md §8): poison ticks 1
     counter, burn ticks 2 then flips (heads removes), asleep flips (heads wakes),
-    paralysis auto-recovers after the owner's turn. Tick/flip log shapes are SEEDED (M4,
-    trace-unpinned — micro-traces refine); a checkup KO runs the standard claims flow."""
+    paralysis auto-recovers after the owner's turn. Condition-damage HP_CHANGEs log
+    putDamageCounter=FALSE (poison tick pinned micro_onboard780a1128 f13; burn by
+    analogy, seeded) — True is reserved for counter-PLACEMENT effects (Risky Ruins,
+    distribute-counters, both pinned). A checkup KO runs the standard claims flow."""
     for seat in (ending_seat, 1 - ending_seat):
         b = gs.players[seat]
         if b.active is None:
@@ -370,12 +376,12 @@ def _checkup(gs: GameState, ending_seat: int) -> None:
             me.hp = max(0, me.hp - 10)
             gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
                      "cardId": gs.card_id(me.top), "serial": me.top,
-                     "value": -10, "putDamageCounter": True})
+                     "value": -10, "putDamageCounter": False})
         if b.burned:
             me.hp = max(0, me.hp - 20)
             gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
                      "cardId": gs.card_id(me.top), "serial": me.top,
-                     "value": -20, "putDamageCounter": True})
+                     "value": -20, "putDamageCounter": False})
             if gs.coin_flip(seat):
                 b.burned = False
                 gs.emit({"type": int(LogType.BURNED), "playerIndex": seat,
@@ -464,7 +470,7 @@ def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
             attacker.hp = max(0, attacker.hp - 30)
             gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
                      "cardId": gs.card_id(attacker.top), "serial": attacker.top,
-                     "value": -30, "putDamageCounter": True})
+                     "value": -30, "putDamageCounter": False})  # poison-tick analogy (seeded)
             if not _sweep_kos(gs, credited=seat, then=("end_turn", seat)):
                 _end_turn(gs, seat)
             return
@@ -844,10 +850,22 @@ def _do_switch(gs: GameState, seat: int, bench_index: int, *, retreat: bool) -> 
     b.bench[bench_index] = old_active
     b.active = new_active
     new_active.moved_active_turn = gs.turn
+    cleared = [(flag, lt) for flag, lt in
+               (("confused", LogType.CONFUSED), ("paralyzed", LogType.PARALYZED),
+                ("asleep", LogType.ASLEEP), ("burned", LogType.BURNED),
+                ("poisoned", LogType.POISONED)) if getattr(b, flag)]
     b.poisoned = b.burned = b.asleep = b.paralyzed = b.confused = False
     gs.emit({"type": int(LogType.SWITCH), "playerIndex": seat,
              "cardIdActive": gs.card_id(old_active.top), "serialActive": old_active.top,
              "cardIdBench": gs.card_id(new_active.top), "serialBench": new_active.top})
+    for _flag, lt in cleared:
+        # Leaving the Active Spot clears conditions WITH isRecover logs after the
+        # SWITCH log (pinned micro_onboard780a1128 f28), in REVERSE enum order —
+        # CONFUSED before BURNED (pinned micro_onboard409a573_9901 f41), the mirror
+        # of the inflict logs' ascending order.
+        gs.emit({"type": int(lt), "playerIndex": seat,
+                 "isRecover": True, "cardId": gs.card_id(old_active.top),
+                 "serial": old_active.top})
 
 
 # ---------------------------------------------------------------------------- dispatch

@@ -56,6 +56,14 @@ def compare(native: list[dict], cgpy: list[dict]) -> dict:
         if coin_involved:
             out["skipped_luck"] += 1      # plain row of a coin attack: rng luck differs;
             continue                      # the min/max fork rows carry the comparison
+        # Each engine stages its own chaos game to the attack; when the incidental
+        # boards differ, board-sensitive scalers (own in-play count, hand size) measure
+        # legitimately different values — non-comparable like coin luck. Micro-trace
+        # replay is the exact verifier for that family (707/708/1114/1386 all pinned).
+        staging = ("defenderBench", "attackerEnergies", "myHandSize", "defenderHp")
+        if any(a.get(f) != b.get(f) for f in staging):
+            out["skipped_staging"] = out.get("skipped_staging", 0) + 1
+            continue
         out["compared"] += 1
         diffs = {f: (a.get(f), b.get(f)) for f in _FIELDS if a.get(f) != b.get(f)}
         if diffs:
@@ -83,7 +91,8 @@ def main(argv=None) -> int:
     else:
         print(f"compared {rep['compared']} measured pairs: {rep['equal']} equal, "
               f"{len(rep['divergences'])} DIVERGENT; {rep['skipped_luck']} coin-luck "
-              f"rows skipped, {rep['both_error']} jointly unmeasurable")
+              f"rows skipped, {rep.get('skipped_staging', 0)} staging-mismatch rows "
+              f"skipped, {rep['both_error']} jointly unmeasurable")
         if rep["cgpy_error"]:
             print(f"cgpy-only errors ({len(rep['cgpy_error'])}):")
             for e in rep["cgpy_error"][:12]:

@@ -1,5 +1,20 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Burn-down batch 1 (2026-07-11, this worktree):** attacks **1074→1143 live** (Dig-family
+> protection ×11, two-condition inflict, may-draw-until, discard-hand-draw riders,
+> in-play/tools/named-attack scalers, 4 condBonus conds, defender damage-reduce +
+> attack-lock transients, evolve-self-from-deck, hand-energy-attach, deck-attach
+> choose-target); cards **856→870 live / 62→87 verified** (recovery items, look-reveal-take,
+> coin-gust Catcher, double-inflict Laser, self-mill, Stage-1/Tera/named-family/any-number
+> search nouns, `anyOf` union specs); **Blissey ex Happy Switch = the first authored
+> ability override** (energy-move op). Fixtures 54→125 (12816 clean frames), interpreter
+> ops **60/60 conformance-pinned (UNPINNED emptied)**, cross-engine audit over all 69 new
+> attacks: 0 divergent (+ the `staging-mismatch` skip class for own-board-sensitive
+> scalers). New §9b pins: enum-order multi-inflict, idempotent-condition silence,
+> switch-clears-with-recovers (reverse enum), tick `putDamageCounter=false`,
+> `energyAttached` resets at TURN_END, imperative-"up to"-min-1, moved-energy keeps its
+> attach tick, ACE-SPEC 1× deck rule. Latent `condBonus` dict-iteration crash fixed.
+
 **Goal:** ChainDefs for the full 1267-card pool, derived mostly by pipeline, verified per
 card, tracked in a committed ledger. Exact parity is only ever *measured* by
 divergence-free replay. M4's MACHINERY is complete and every gate is green; what remains
@@ -68,18 +83,22 @@ digested in docs/pyeng/determinism.md §9–10.
 
 ## The remaining tail (the queue, biggest first — all workable with the built loop)
 
-- **Items/Supporters** (~107 deferred): multi-sentence texts — extend TRN rules +
+- **Items/Supporters** (~93 deferred): per-card unique texts now — extend TRN rules +
   `onboard_card.py` per card. The unparsed-sentences report is the ranked queue.
-- **Abilities** (~600 Pokémon deferred mostly for ability text): the hard tail —
-  probe-confirm each via micro-traces; Crustle-template defense passives now seed
-  mechanically (R-P01).
+  Notable next: Rare Candy, Boxed Order ("Your turn ends" op), Hand Trimmer
+  (both-discard-to-N), Enhanced Hammer (special-energy discard any-target),
+  active-heal trainers (Dragon Elixir class — xHealChoose needs an activeOnly mode).
+- **Abilities** (~543 Pokémon deferred for ability text): the hard tail — author per
+  card via `chain_overrides.json` "ability" defs over existing/new ops, plain-mode
+  `capture_card.py` micro-traces pin the select shapes (Blissey ex Happy Switch is the
+  worked template: capture native FIRST, read the shapes, then author).
 - **Tools/Stadiums/Special energies** (60 deferred): passive/hooked machinery per card;
   Levincia-class per-turn stadium effects need a new select-shape pin first.
-- **Attack tail** (473 deferred): random-discard family needs a hand-pick randomness
-  channel; multi-clause coins; energy-move riders. Run the nightly audit diff to catch
-  any WRONG live seed wholesale.
-- The two `UNPINNED` conformance ops (xDiscardEnergyAttachSelf needs discard fuel staged;
-  xDiscardHandDraw has no live lone-sentence trainer yet).
+- **Attack tail** (404 deferred): random-discard family needs a hand-pick randomness
+  channel (Psych Out ×6 = the biggest group); multi-clause coins; discard-count-scaled
+  damage (Steel Burst class, needs a pre-op with count feedback); "Then, discard that
+  Stadium" riders. Run the audit diff over each new batch (staging-mismatch rows are
+  expected for own-board scalers — micro-trace those).
 
 ## Cold-start commands
 

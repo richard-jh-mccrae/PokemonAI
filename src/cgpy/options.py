@@ -188,7 +188,8 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
     # it — "If you go first, you can use this attack during your first turn"); self-locked
     # attacks (Accelerating Stab / Mega Brave class) are omitted on the owner's next turn
     # (pinned v2_ml_mirror_5100 f130 / 5101 f21).
-    if b.active is not None and not b.asleep and not b.paralyzed:
+    if (b.active is not None and not b.asleep and not b.paralyzed
+            and b.active.no_attack_turn != gs.turn):   # Snotted-Up lock (seeded)
         from .chain import check_legal, def_for as _adef_for, is_deferred
         for attack_id in gs.stat(b.active.top).attacks:
             atk = gs.db.attacks[attack_id]

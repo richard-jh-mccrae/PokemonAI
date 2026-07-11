@@ -712,10 +712,6 @@
    "source": "plain-pokemon"
   }
  },
- "125": {
-  "name": "Blissey ex",
-  "deferred": "ability unpinned: Happy Switch"
- },
  "126": {
   "name": "Galvantula",
   "deferred": "ability unpinned: Compound Eyes"
@@ -6042,24 +6038,50 @@
   }
  },
  "1077": {
-  "name": "Roto-Stick",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xLookTopMayTakeThenShuffle",
+    "n": 4,
+    "min": 0,
+    "max": 60,
+    "filter": {
+     "cardType": [
+      3
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Look at the top 4 cards of your deck.",
-    "You may reveal any number of Supporter cards you find there and put them into your hand.",
-    "Shuffle the other cards back into your deck."
+   "rules": [
+    "R-T15"
    ]
-  }
+  },
+  "name": "Roto-Stick"
  },
  "1078": {
-  "name": "Hole-Digging Shovel",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xMill",
+    "who": "self",
+    "n": 2
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard the top 2 cards of your deck."
+   "rules": [
+    "R-T21"
    ]
-  }
+  },
+  "name": "Hole-Digging Shovel"
  },
  "1079": {
   "name": "Rare Candy",
@@ -6082,14 +6104,28 @@
   }
  },
  "1082": {
-  "name": "Hyper Aroma",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "pokemon": true,
+     "stage1": true
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 Stage 1 Pokémon, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-T01"
    ]
-  }
+  },
+  "name": "Hyper Aroma"
  },
  "1083": {
   "name": "Love Ball",
@@ -6189,24 +6225,60 @@
   }
  },
  "1094": {
-  "name": "Bug Catching Set",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xLookTopMayTakeThenShuffle",
+    "n": 7,
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true,
+       "energyType": [
+        1
+       ]
+      },
+      {
+       "basicEnergy": true,
+       "energyType": [
+        1
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Look at the top 7 cards of your deck.",
-    "You may reveal up to 2 in any combination of {G} Pokémon and Basic {G} Energy cards you find there and put them into your hand.",
-    "Shuffle the other cards back into your deck."
+   "rules": [
+    "R-T15"
    ]
-  }
+  },
+  "name": "Bug Catching Set"
  },
  "1095": {
-  "name": "Dangerous Laser",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "xInflictConditionActive",
+    "condition": 1
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 4
+   }
+  ],
+  "legal": [],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Burned and Confused."
+   "rules": [
+    "R-T20"
    ]
-  }
+  },
+  "name": "Dangerous Laser"
  },
  "1096": {
   "name": "Poké Vital A",
@@ -6326,22 +6398,74 @@
   }
  },
  "1109": {
-  "name": "Miracle Headset",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectTrashToHand",
+    "min": 1,
+    "max": 2,
+    "filter": {
+     "cardType": [
+      3
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "discardHas",
+    "filter": {
+     "cardType": [
+      3
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Put up to 2 Supporter cards from your discard pile into your hand."
+   "rules": [
+    "R-T14"
    ]
-  }
+  },
+  "name": "Miracle Headset"
  },
  "1110": {
-  "name": "Max Rod",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectTrashToHand",
+    "min": 1,
+    "max": 5,
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true
+      },
+      {
+       "basicEnergy": true
+      }
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "discardHas",
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true
+      },
+      {
+       "basicEnergy": true
+      }
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Put up to 5 in any combination of Pokémon and Basic Energy cards from your discard pile into your hand."
+   "rules": [
+    "R-T14"
    ]
-  }
+  },
+  "name": "Max Rod"
  },
  "1111": {
   "play": [
@@ -6397,14 +6521,32 @@
   }
  },
  "1115": {
-  "name": "Hop’s Bag",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectDeckToBenchAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "pokemon": true,
+     "basic": true,
+     "nameContains": "Hop’s"
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "benchSpace"
+   },
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 Basic Hop’s Pokémon and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-T02"
    ]
-  }
+  },
+  "name": "Hop’s Bag"
  },
  "1116": {
   "name": "Energy Switch",
@@ -6435,13 +6577,30 @@
   "name": "Potion"
  },
  "1118": {
-  "name": "Energy Retrieval",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectTrashToHand",
+    "min": 1,
+    "max": 2,
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "discardHas",
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Put up to 2 Basic Energy cards from your discard pile into your hand."
+   "rules": [
+    "R-T14"
    ]
-  }
+  },
+  "name": "Energy Retrieval"
  },
  "1119": {
   "play": [
@@ -6467,14 +6626,29 @@
   "name": "Energy Search"
  },
  "1124": {
-  "name": "Pokémon Catcher",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "effectSwitchEnemy"
+   }
+  ],
+  "legal": [
+   {
+    "op": "oppBenchExists"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, switch in 1 of your opponent’s Benched Pokémon to the Active Spot."
+   "rules": [
+    "R-T16"
    ]
-  }
+  },
+  "name": "Pokémon Catcher"
  },
  "1125": {
   "play": [
@@ -6500,24 +6674,55 @@
   "name": "Master Ball"
  },
  "1126": {
-  "name": "Precious Trolley",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectDeckToBenchAndShuffle",
+    "min": 0,
+    "max": 60,
+    "filter": {
+     "pokemon": true,
+     "basic": true
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "benchSpace"
+   },
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for any number of Basic Pokémon and put them onto your Bench.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-T02"
    ]
-  }
+  },
+  "name": "Precious Trolley"
  },
  "1127": {
-  "name": "Tera Orb",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 1,
+    "filter": {
+     "pokemon": true,
+     "tera": true
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a Tera Pokémon, reveal it, and put it into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-T01"
    ]
-  }
+  },
+  "name": "Tera Orb"
  },
  "1128": {
   "name": "Brilliant Blender",
@@ -7000,7 +7205,6 @@
   "deferred": "unparsed effect text",
   "_seed": {
    "unparsed": [
-    "Put up to 3 in any combination of Pokémon that don’t have a Rule Box and Basic Energy cards from your discard pile into your hand.",
     "(Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)"
    ]
   }
@@ -7106,9 +7310,7 @@
   "deferred": "unparsed effect text",
   "_seed": {
    "unparsed": [
-    "You can use this card only when it is the last card in your hand.",
-    "Search your deck for up to 2 cards and put them into your hand.",
-    "Then, shuffle your deck."
+    "You can use this card only when it is the last card in your hand."
    ]
   }
  },
@@ -7434,14 +7636,39 @@
   "name": "Firebreather"
  },
  "1233": {
-  "name": "Canari",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "costHandTrash",
+    "n": 1
+   },
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 4,
+    "filter": {
+     "pokemon": true,
+     "energyType": [
+      4
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "handOthers",
+    "n": 1
+   },
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 4 {L} Pokémon, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-T01",
+    "R-T08"
    ]
-  }
+  },
+  "name": "Canari"
  },
  "1234": {
   "name": "Anthea & Concordia",
@@ -7491,13 +7718,56 @@
   }
  },
  "1238": {
-  "name": "Tarragon",
-  "deferred": "unparsed effect text",
+  "play": [
+   {
+    "op": "effectTrashToHand",
+    "min": 1,
+    "max": 4,
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true,
+       "energyType": [
+        6
+       ]
+      },
+      {
+       "basicEnergy": true,
+       "energyType": [
+        6
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "legal": [
+   {
+    "op": "discardHas",
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true,
+       "energyType": [
+        6
+       ]
+      },
+      {
+       "basicEnergy": true,
+       "energyType": [
+        6
+       ]
+      }
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Put up to 4 in any combination of {F} Pokémon and Basic {F} Energy cards from your discard pile into your hand."
+   "rules": [
+    "R-T14"
    ]
-  }
+  },
+  "name": "Tarragon"
  },
  "1239": {
   "name": "Naveen",
@@ -8133,14 +8403,17 @@
   }
  },
  "attack:39": {
-  "name": "Ascension",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEvolveSelfAndShuffle"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card that evolves from this Pokémon and put it onto this Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B27"
    ]
-  }
+  },
+  "name": "Ascension"
  },
  "attack:40": {
   "pre": [
@@ -8333,13 +8606,17 @@
   }
  },
  "attack:57": {
-  "name": "Mirror Attack",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "def_active_type",
+   "energyType": 5,
+   "n": 30
+  },
   "_seed": {
-   "unparsed": [
-    "If your opponent’s Active Pokémon is a {P} Pokémon, this attack does 30 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Mirror Attack"
  },
  "attack:58": {
   "name": "Evolution Jammer",
@@ -8466,13 +8743,18 @@
   "name": "Shred"
  },
  "attack:71": {
-  "name": "Burst Roar",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDiscardHandDraw",
+    "n": 6
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard your hand and draw 6 cards."
+   "rules": [
+    "R-B24"
    ]
-  }
+  },
+  "name": "Burst Roar"
  },
  "attack:72": {
   "name": "Bellowing Thunder",
@@ -8500,14 +8782,24 @@
   }
  },
  "attack:75": {
-  "name": "Dig",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Dig"
  },
  "attack:76": {
   "name": "Land Crush",
@@ -8642,13 +8934,16 @@
   "name": "Prism Edge"
  },
  "attack:90": {
-  "name": "Roasting Heat",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "def_active_burned",
+   "n": 40
+  },
   "_seed": {
-   "unparsed": [
-    "If your opponent’s Active Pokémon is Burned, this attack does 40 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Roasting Heat"
  },
  "attack:91": {
   "rider": [
@@ -9315,13 +9610,28 @@
   }
  },
  "attack:157": {
-  "name": "Lucky Attachment",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xHandEnergyAttachChoose",
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Attach a Basic Energy card from your hand to 1 of your Pokémon."
+   "rules": [
+    "R-B26"
    ]
-  }
+  },
+  "legal": [
+   {
+    "op": "handHas",
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ],
+  "name": "Lucky Attachment"
  },
  "attack:158": {
   "selfLockAllNextTurn": true,
@@ -9333,13 +9643,32 @@
   "name": "Boundless Power"
  },
  "attack:159": {
-  "name": "Return",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "handBelow",
+      "n": 6
+     },
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDrawUntil",
+      "n": 6
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may draw cards until you have 6 cards in your hand."
+   "rules": [
+    "R-B25"
    ]
-  }
+  },
+  "name": "Return"
  },
  "attack:160": {
   "name": "Shocking Web",
@@ -10062,14 +10391,19 @@
   }
  },
  "attack:234": {
-  "name": "Precocious Evolution",
-  "deferred": "unparsed effect text",
+  "allowedFirstTurn": true,
+  "rider": [
+   {
+    "op": "xDeckEvolveSelfAndShuffle"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card that evolves from this Pokémon and put it onto this Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-A16",
+    "R-B27"
    ]
-  }
+  },
+  "name": "Precocious Evolution"
  },
  "attack:235": {
   "rider": [
@@ -10158,14 +10492,24 @@
   "name": "Eon Blade"
  },
  "attack:244": {
-  "name": "Splashing Dodge",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Splashing Dodge"
  },
  "attack:245": {
   "rider": [
@@ -10598,14 +10942,25 @@
   "name": "Energy Short"
  },
  "attack:286": {
-  "name": "Summon Lightning",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 2,
+    "filter": {
+     "pokemon": true,
+     "energyType": [
+      4
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 2 {L} Pokémon, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Summon Lightning"
  },
  "attack:287": {
   "name": "Prize Count",
@@ -11979,13 +12334,18 @@
   "name": "Destructive Drill"
  },
  "attack:427": {
-  "name": "Intimidating Stare",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xReduceDefenderNextTurn",
+    "n": 20
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, attacks used by the Defending Pokémon do 20 less damage (before applying Weakness and Resistance)."
+   "rules": [
+    "R-A19"
    ]
-  }
+  },
+  "name": "Intimidating Stare"
  },
  "attack:428": {
   "name": "Peck",
@@ -12083,13 +12443,18 @@
   "name": "Double-Edge"
  },
  "attack:440": {
-  "name": "Magical Charm",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xReduceDefenderNextTurn",
+    "n": 100
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, attacks used by the Defending Pokémon do 100 less damage (before applying Weakness and Resistance)."
+   "rules": [
+    "R-A19"
    ]
-  }
+  },
+  "name": "Magical Charm"
  },
  "attack:441": {
   "name": "Angelite",
@@ -12413,14 +12778,17 @@
   }
  },
  "attack:478": {
-  "name": "Ascension",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEvolveSelfAndShuffle"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card that evolves from this Pokémon and put it onto this Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B27"
    ]
-  }
+  },
+  "name": "Ascension"
  },
  "attack:479": {
   "ignoreDefenderEffects": true,
@@ -12471,14 +12839,25 @@
   }
  },
  "attack:484": {
-  "name": "Grass Kagura",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttach",
+    "max": 1,
+    "target": "choose",
+    "filter": {
+     "basicEnergy": true,
+     "energyType": [
+      1
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a Basic {G} Energy card and attach it to 1 of your Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B18"
    ]
-  }
+  },
+  "name": "Grass Kagura"
  },
  "attack:485": {
   "selfLockNextTurn": true,
@@ -12579,14 +12958,25 @@
   "name": "Shining Feathers"
  },
  "attack:495": {
-  "name": "Fire Kagura",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttach",
+    "max": 1,
+    "target": "choose",
+    "filter": {
+     "basicEnergy": true,
+     "energyType": [
+      2
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a Basic {R} Energy card and attach it to 1 of your Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B18"
    ]
-  }
+  },
+  "name": "Fire Kagura"
  },
  "attack:496": {
   "rider": [
@@ -12676,14 +13066,24 @@
   }
  },
  "attack:505": {
-  "name": "Undulate",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Undulate"
  },
  "attack:506": {
   "rider": [
@@ -12760,14 +13160,25 @@
   }
  },
  "attack:513": {
-  "name": "Water Kagura",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttach",
+    "max": 1,
+    "target": "choose",
+    "filter": {
+     "basicEnergy": true,
+     "energyType": [
+      3
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a Basic {W} Energy card and attach it to 1 of your Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B18"
    ]
-  }
+  },
+  "name": "Water Kagura"
  },
  "attack:514": {
   "rider": [
@@ -12806,13 +13217,17 @@
   "name": "Dual Bolt"
  },
  "attack:517": {
-  "name": "High-Voltage Press",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "self_extra_energy_min",
+   "min": 2,
+   "n": 100
+  },
   "_seed": {
-   "unparsed": [
-    "If this Pokémon has at least 2 extra Energy attached (in addition to this attack’s cost), this attack does 100 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "High-Voltage Press"
  },
  "attack:518": {
   "rider": [
@@ -12866,13 +13281,17 @@
   }
  },
  "attack:524": {
-  "name": "Gadget Show",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_tools_in_play",
+   "per": 30,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 30 damage for each Pokémon Tool attached to all of your Pokémon."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Gadget Show"
  },
  "attack:525": {
   "name": "Scratch",
@@ -12924,13 +13343,32 @@
   }
  },
  "attack:531": {
-  "name": "Corkscrew Dive",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "handBelow",
+      "n": 6
+     },
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDrawUntil",
+      "n": 6
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may draw cards until you have 6 cards in your hand."
+   "rules": [
+    "R-B25"
    ]
-  }
+  },
+  "name": "Corkscrew Dive"
  },
  "attack:532": {
   "rider": [
@@ -13006,14 +13444,25 @@
   "name": "Reckless Charge"
  },
  "attack:538": {
-  "name": "Rock Kagura",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEnergyAttach",
+    "max": 1,
+    "target": "choose",
+    "filter": {
+     "basicEnergy": true,
+     "energyType": [
+      6
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a Basic {F} Energy card and attach it to 1 of your Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B18"
    ]
-  }
+  },
+  "name": "Rock Kagura"
  },
  "attack:539": {
   "rider": [
@@ -13152,13 +13601,17 @@
   }
  },
  "attack:554": {
-  "name": "Gadget Show",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_tools_in_play",
+   "per": 30,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 30 damage for each Pokémon Tool attached to all of your Pokémon."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Gadget Show"
  },
  "attack:555": {
   "name": "Cut Up",
@@ -13274,13 +13727,17 @@
   }
  },
  "attack:569": {
-  "name": "Punishing Fang",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "def_active_type",
+   "energyType": 7,
+   "n": 100
+  },
   "_seed": {
-   "unparsed": [
-    "If your opponent’s Active Pokémon is a {D} Pokémon, this attack does 100 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Punishing Fang"
  },
  "attack:570": {
   "rider": [
@@ -13313,13 +13770,22 @@
   }
  },
  "attack:573": {
-  "name": "Cruel Coal",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xInflictConditionActive",
+    "condition": 1
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 4
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Burned and Confused."
+   "rules": [
+    "R-B23"
    ]
-  }
+  },
+  "name": "Cruel Coal"
  },
  "attack:574": {
   "rider": [
@@ -13421,13 +13887,17 @@
   "name": "Singe"
  },
  "attack:582": {
-  "name": "Gadget Show",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_tools_in_play",
+   "per": 30,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 30 damage for each Pokémon Tool attached to all of your Pokémon."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Gadget Show"
  },
  "attack:583": {
   "name": "Dark Frost",
@@ -13509,13 +13979,17 @@
   "name": "Manual Wash"
  },
  "attack:592": {
-  "name": "Gadget Show",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_tools_in_play",
+   "per": 30,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 30 damage for each Pokémon Tool attached to all of your Pokémon."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Gadget Show"
  },
  "attack:593": {
   "rider": [
@@ -13538,14 +14012,24 @@
   }
  },
  "attack:595": {
-  "name": "Dive",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Dive"
  },
  "attack:596": {
   "name": "Gentle Slap",
@@ -13792,14 +14276,17 @@
   "name": "Mountain Munch"
  },
  "attack:620": {
-  "name": "Explosive Ascension",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEvolveSelfAndShuffle"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card that evolves from this Pokémon and put it onto this Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B27"
    ]
-  }
+  },
+  "name": "Explosive Ascension"
  },
  "attack:621": {
   "rider": [
@@ -14451,14 +14938,24 @@
   }
  },
  "attack:684": {
-  "name": "Hide",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Hide"
  },
  "attack:685": {
   "name": "Leafage",
@@ -14664,22 +15161,32 @@
   }
  },
  "attack:707": {
-  "name": "Round",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_named_attack",
+   "attackName": "Round",
+   "per": 20,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 20 damage for each of your Pokémon in play that has the Round attack."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Round"
  },
  "attack:708": {
-  "name": "Round",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_named_attack",
+   "attackName": "Round",
+   "per": 40,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 40 damage for each of your Pokémon in play that has the Round attack."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Round"
  },
  "attack:709": {
   "name": "Wave Splash",
@@ -14688,13 +15195,18 @@
   }
  },
  "attack:710": {
-  "name": "Round",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_named_attack",
+   "attackName": "Round",
+   "per": 70,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 70 damage for each of your Pokémon in play that has the Round attack."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Round"
  },
  "attack:711": {
   "name": "Hyper Voice",
@@ -14733,13 +15245,17 @@
   }
  },
  "attack:716": {
-  "name": "Snotted Up",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xLockDefenderAttacks"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, the Defending Pokémon can’t use attacks."
+   "rules": [
+    "R-A20"
    ]
-  }
+  },
+  "name": "Snotted Up"
  },
  "attack:717": {
   "pre": [
@@ -14759,13 +15275,17 @@
   "name": "Continuous Headbutt"
  },
  "attack:718": {
-  "name": "Sheer Cold",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xLockDefenderAttacks"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, the Defending Pokémon can’t use attacks."
+   "rules": [
+    "R-A20"
    ]
-  }
+  },
+  "name": "Sheer Cold"
  },
  "attack:719": {
   "name": "Drag Off",
@@ -15529,23 +16049,52 @@
   "name": "Add On"
  },
  "attack:790": {
-  "name": "Swift Flight",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Swift Flight"
  },
  "attack:791": {
-  "name": "Return",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "handBelow",
+      "n": 6
+     },
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDrawUntil",
+      "n": 6
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may draw cards until you have 6 cards in your hand."
+   "rules": [
+    "R-B25"
    ]
-  }
+  },
+  "name": "Return"
  },
  "attack:792": {
   "pre": [
@@ -15777,14 +16326,35 @@
   }
  },
  "attack:816": {
-  "name": "Licking Catch",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true,
+       "energyType": [
+        2
+       ]
+      },
+      {
+       "basicEnergy": true,
+       "energyType": [
+        2
+       ]
+      }
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 in any combination of {R} Pokémon and Basic {R} Energy cards, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Licking Catch"
  },
  "attack:817": {
   "name": "Fire Claws",
@@ -16200,13 +16770,17 @@
   "name": "Oceanic Gloom"
  },
  "attack:859": {
-  "name": "Power Press",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "self_extra_energy_min",
+   "min": 2,
+   "n": 80
+  },
   "_seed": {
-   "unparsed": [
-    "If this Pokémon has at least 2 extra Energy attached (in addition to this attack’s cost), this attack does 80 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Power Press"
  },
  "attack:860": {
   "name": "Harden",
@@ -16332,14 +16906,25 @@
   }
  },
  "attack:875": {
-  "name": "Invite Evil",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "pokemon": true,
+     "energyType": [
+      7
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 {D} Pokémon, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Invite Evil"
  },
  "attack:876": {
   "name": "Knock Off",
@@ -17056,14 +17641,34 @@
   "name": "Stomping Wood"
  },
  "attack:945": {
-  "name": "Traverse Time",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "anyOf": [
+      {
+       "pokemon": true,
+       "energyType": [
+        1
+       ]
+      },
+      {
+       "cardType": [
+        4
+       ]
+      }
+     ]
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for up to 3 in any combination of {G} Pokémon and Stadium cards, reveal them, and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B17"
    ]
-  }
+  },
+  "name": "Traverse Time"
  },
  "attack:946": {
   "name": "Solar Cutter",
@@ -17181,13 +17786,16 @@
   }
  },
  "attack:959": {
-  "name": "Roasting Heat",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "def_active_burned",
+   "n": 160
+  },
   "_seed": {
-   "unparsed": [
-    "If your opponent’s Active Pokémon is Burned, this attack does 160 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Roasting Heat"
  },
  "attack:960": {
   "rider": [
@@ -17544,13 +18152,32 @@
   }
  },
  "attack:1000": {
-  "name": "Greedy Hunt",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "handBelow",
+      "n": 6
+     },
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDrawUntil",
+      "n": 6
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may draw cards until you have 6 cards in your hand."
+   "rules": [
+    "R-B25"
    ]
-  }
+  },
+  "name": "Greedy Hunt"
  },
  "attack:1001": {
   "name": "Pitch-Black Fangs",
@@ -17777,13 +18404,17 @@
   "name": "Absorb"
  },
  "attack:1025": {
-  "name": "Pumped-Up Whip",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "self_extra_energy_min",
+   "min": 2,
+   "n": 140
+  },
   "_seed": {
-   "unparsed": [
-    "If this Pokémon has at least 2 extra Energy attached (in addition to this attack’s cost), this attack does 140 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Pumped-Up Whip"
  },
  "attack:1026": {
   "name": "Razor Leaf",
@@ -18063,14 +18694,24 @@
   "name": "Water Shot"
  },
  "attack:1054": {
-  "name": "Hide",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Hide"
  },
  "attack:1055": {
   "name": "Chilling Wings",
@@ -18155,13 +18796,18 @@
   "name": "Flashing Bolt"
  },
  "attack:1062": {
-  "name": "Electro Fall",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "atk_energy_in_play_min",
+   "min": 4,
+   "energyType": 4,
+   "n": 90
+  },
   "_seed": {
-   "unparsed": [
-    "If you have at least 4 {L} Energy in play, this attack does 90 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Electro Fall"
  },
  "attack:1063": {
   "rider": [
@@ -18515,13 +19161,18 @@
   }
  },
  "attack:1095": {
-  "name": "Charm",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xReduceDefenderNextTurn",
+    "n": 20
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, attacks used by the Defending Pokémon do 20 less damage (before applying Weakness and Resistance)."
+   "rules": [
+    "R-A19"
    ]
-  }
+  },
+  "name": "Charm"
  },
  "attack:1096": {
   "name": "Skip",
@@ -18687,13 +19338,17 @@
   "name": "Draining Kiss"
  },
  "attack:1114": {
-  "name": "Sweet Circle",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_in_play",
+   "per": 20,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 20 damage for each of your Pokémon in play."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Sweet Circle"
  },
  "attack:1115": {
   "name": "Petty Grudge",
@@ -18812,13 +19467,22 @@
   }
  },
  "attack:1128": {
-  "name": "Pollen Bomb",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xInflictConditionActive",
+    "condition": 0
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 2
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Asleep and Poisoned."
+   "rules": [
+    "R-B23"
    ]
-  }
+  },
+  "name": "Pollen Bomb"
  },
  "attack:1129": {
   "name": "Lively Flower",
@@ -19137,13 +19801,18 @@
   "name": "Blizzard Edge"
  },
  "attack:1160": {
-  "name": "Crystal Fall",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "atk_energy_in_play_min",
+   "min": 4,
+   "energyType": 3,
+   "n": 90
+  },
   "_seed": {
-   "unparsed": [
-    "If you have at least 4 {W} Energy in play, this attack does 90 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Crystal Fall"
  },
  "attack:1161": {
   "rider": [
@@ -19234,13 +19903,18 @@
   "name": "Electric Run"
  },
  "attack:1168": {
-  "name": "Growl",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xReduceDefenderNextTurn",
+    "n": 30
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, attacks used by the Defending Pokémon do 30 less damage (before applying Weakness and Resistance)."
+   "rules": [
+    "R-A19"
    ]
-  }
+  },
+  "name": "Growl"
  },
  "attack:1169": {
   "name": "Tiny Charge",
@@ -19270,13 +19944,32 @@
   }
  },
  "attack:1173": {
-  "name": "Hexa-Magic",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xMayAsk",
+    "requires": [
+     {
+      "op": "handBelow",
+      "n": 6
+     },
+     {
+      "op": "deckNotEmpty"
+     }
+    ],
+    "program": [
+     {
+      "op": "effectDrawUntil",
+      "n": 6
+     }
+    ]
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "You may draw cards until you have 6 cards in your hand."
+   "rules": [
+    "R-B25"
    ]
-  }
+  },
+  "name": "Hexa-Magic"
  },
  "attack:1174": {
   "rider": [
@@ -19682,13 +20375,18 @@
   "name": "Ball Roll"
  },
  "attack:1214": {
-  "name": "Round",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_named_attack",
+   "attackName": "Round",
+   "per": 40,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 40 damage for each of your Pokémon in play that has the Round attack."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Round"
  },
  "attack:1215": {
   "name": "Seismic Toss",
@@ -19854,22 +20552,36 @@
   "name": "Trading Places"
  },
  "attack:1232": {
-  "name": "Twilight Poison",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xInflictConditionActive",
+    "condition": 0
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 2
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Asleep and Poisoned."
+   "rules": [
+    "R-B23"
    ]
-  }
+  },
+  "name": "Twilight Poison"
  },
  "attack:1233": {
-  "name": "Flare Fall",
-  "deferred": "unparsed effect text",
+  "condBonus": {
+   "cond": "atk_energy_in_play_min",
+   "min": 4,
+   "energyType": 2,
+   "n": 90
+  },
   "_seed": {
-   "unparsed": [
-    "If you have at least 4 {R} Energy in play, this attack does 90 more damage."
+   "rules": [
+    "R-A09"
    ]
-  }
+  },
+  "name": "Flare Fall"
  },
  "attack:1234": {
   "name": "Combustion",
@@ -19984,13 +20696,17 @@
   }
  },
  "attack:1245": {
-  "name": "Sheer Cold",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xLockDefenderAttacks"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, the Defending Pokémon can’t use attacks."
+   "rules": [
+    "R-A20"
    ]
-  }
+  },
+  "name": "Sheer Cold"
  },
  "attack:1246": {
   "name": "Snow Coating",
@@ -20102,13 +20818,20 @@
   "name": "Powerful Bolt"
  },
  "attack:1257": {
-  "name": "Fast Flight",
-  "deferred": "unparsed effect text",
+  "allowedFirstTurn": true,
+  "rider": [
+   {
+    "op": "xDiscardHandDraw",
+    "n": 5
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard your hand and draw 5 cards."
+   "rules": [
+    "R-A16",
+    "R-B24"
    ]
-  }
+  },
+  "name": "Fast Flight"
  },
  "attack:1258": {
   "rider": [
@@ -20166,14 +20889,17 @@
   "name": "Double-Edge"
  },
  "attack:1262": {
-  "name": "Ascension",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDeckEvolveSelfAndShuffle"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Search your deck for a card that evolves from this Pokémon and put it onto this Pokémon to evolve it.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-B27"
    ]
-  }
+  },
+  "name": "Ascension"
  },
  "attack:1263": {
   "name": "Assassin’s Magic",
@@ -20195,23 +20921,37 @@
   }
  },
  "attack:1265": {
-  "name": "Gadget Show",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_tools_in_play",
+   "per": 30,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 30 damage for each Pokémon Tool attached to all of your Pokémon."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Gadget Show"
  },
  "attack:1266": {
-  "name": "Splashing Dodge",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Splashing Dodge"
  },
  "attack:1267": {
   "name": "Horrifying Revenge",
@@ -20610,14 +21350,24 @@
   }
  },
  "attack:1309": {
-  "name": "Agility",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Agility"
  },
  "attack:1310": {
   "name": "Enhanced Blade",
@@ -20657,13 +21407,22 @@
   "name": "Poison Spray"
  },
  "attack:1313": {
-  "name": "Bloom Powder",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xInflictConditionActive",
+    "condition": 0
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 2
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Asleep and Poisoned."
+   "rules": [
+    "R-B23"
    ]
-  }
+  },
+  "name": "Bloom Powder"
  },
  "attack:1314": {
   "name": "Vine Slap",
@@ -20738,13 +21497,18 @@
   "name": "Slashing Strike"
  },
  "attack:1322": {
-  "name": "Growl",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xReduceDefenderNextTurn",
+    "n": 20
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, attacks used by the Defending Pokémon do 20 less damage (before applying Weakness and Resistance)."
+   "rules": [
+    "R-A19"
    ]
-  }
+  },
+  "name": "Growl"
  },
  "attack:1323": {
   "name": "Seed Bomb",
@@ -21405,14 +22169,24 @@
   "name": "Draining Kiss"
  },
  "attack:1382": {
-  "name": "Hide",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Hide"
  },
  "attack:1383": {
   "name": "Flop",
@@ -21440,13 +22214,17 @@
   }
  },
  "attack:1386": {
-  "name": "Cosmic Beatdown",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_in_play",
+   "per": 20,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 20 damage for each of your Pokémon in play."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Cosmic Beatdown"
  },
  "attack:1387": {
   "name": "Ram",
@@ -22305,13 +23083,17 @@
   }
  },
  "attack:1467": {
-  "name": "Regal Command",
-  "deferred": "unparsed effect text",
+  "scale": {
+   "var": "atk_in_play",
+   "per": 20,
+   "add": false
+  },
   "_seed": {
-   "unparsed": [
-    "This attack does 20 damage for each of your Pokémon in play."
+   "rules": [
+    "R-A08"
    ]
-  }
+  },
+  "name": "Regal Command"
  },
  "attack:1468": {
   "name": "Solar Coiling",
@@ -22329,14 +23111,24 @@
   }
  },
  "attack:1470": {
-  "name": "Hide",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage from and effects of attacks done to this Pokémon."
+   "rules": [
+    "R-C09"
    ]
-  }
+  },
+  "name": "Hide"
  },
  "attack:1471": {
   "condBonus": {
@@ -22432,13 +23224,26 @@
   }
  },
  "attack:1481": {
-  "name": "Dire Nails",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xInflictConditionActive",
+    "condition": 0
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 1
+   },
+   {
+    "op": "effectSwitchMe"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Burned and Poisoned."
+   "rules": [
+    "R-B08",
+    "R-B23"
    ]
-  }
+  },
+  "name": "Dire Nails"
  },
  "attack:1482": {
   "pre": [
@@ -22496,13 +23301,17 @@
   "name": "Icy Wind"
  },
  "attack:1490": {
-  "name": "Freezing Chill",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xLockDefenderAttacks"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, the Defending Pokémon can’t use attacks."
+   "rules": [
+    "R-A20"
    ]
-  }
+  },
+  "name": "Freezing Chill"
  },
  "attack:1491": {
   "name": "Strength",
@@ -22935,13 +23744,27 @@
   }
  },
  "attack:1532": {
-  "name": "Hazardous Tail",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDamageSelf",
+    "damage": 70
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 0
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 3
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent’s Active Pokémon is now Paralyzed and Poisoned."
+   "rules": [
+    "R-B01",
+    "R-B23"
    ]
-  }
+  },
+  "name": "Hazardous Tail"
  },
  "attack:1533": {
   "name": "Soul Destroyer",

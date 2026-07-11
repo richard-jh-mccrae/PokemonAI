@@ -184,12 +184,58 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   an ignores-effects attack (Nebula Beam's 210 through Crustle — ADR-0032 golden,
   re-verified cross-engine by the audit seam 46/46).
 
+### 9b. Burn-down batch pins (2026-07-11, micro-trace-verified)
+
+- **Multi-condition inflict order = condition-ENUM order**, not text order: "Asleep and
+  Poisoned" logs POISONED(17)→ASLEEP(19) (micro_onboard780a1128), "Burned and Confused"
+  logs BURNED(18)→CONFUSED(21) (micro_onboard409a573).
+- **Re-applying a condition the target already has is SILENT** — no log
+  (micro_onboard780a1128 f51: second Pollen Bomb on a still-poisoned target logs
+  ASLEEP only).
+- **Leaving the Active Spot clears conditions WITH isRecover logs**, emitted after the
+  SWITCH log in REVERSE enum order — CONFUSED before BURNED
+  (micro_onboard780a1128 f28; order pinned micro_onboard409a573_9901 f41).
+- **Checkup/confusion condition-damage HP_CHANGEs log `putDamageCounter: false`**
+  (poison tick pinned micro_onboard780a1128 f13; burn/confusion by family analogy).
+  `true` is reserved for counter-PLACEMENT effects (Risky Ruins, distribute-counters).
+- **`energyAttached` resets at TURN_END**, observable False during a between-turns
+  promotion select (micro_onboard780a1128 f54); the sibling flags stay
+  reset-at-TURN_START until a trace pins them.
+- **Imperative "up to N" selects pose min=1** — Energy Retrieval min=1 max=2
+  (micro_onboard1118 f41), Abundant Harvest discard-attach min=1 (micro_onboard534
+  f16); only a "You may …" wording drops to min 0 (Pokégear's pinned shape).
+- **"You may draw cards until you have N" is skipped silently once hand ≥ N** (the
+  may-ask targetless rule; micro_onboard125a159: Return with a full hand poses
+  nothing) — `handBelow` legality gate.
+- **Happy Switch (energy-move ability)**: energy pick ctx SWITCH_ENERGY_CARD(28) type
+  ATTACHED_CARD over own BASIC energies in GLOBAL ATTACH order, then destination ctx
+  ATTACH_FROM with `contextCard` = the energy and the source mon EXCLUDED; one
+  MOVE_ATTACHED log with Before/After mons. **A moved energy keeps its original attach
+  tick** and the holder's energy list stays tick-ordered (micro_happyswitch_9951 f47:
+  moved-older lands before resident-newer).
+- **Lucky-Attachment class** ("Attach a Basic Energy from your hand to 1 of your
+  Pokémon", 0 damage): menu-gated on hand fuel; hand pick ctx ATTACH_TO (type CARD),
+  then holder ctx ATTACH_FROM with contextCard; standard ATTACH log, fresh tick
+  (micro_happyswitch_9950 f28-f31).
+- **Dig-family protection** ("prevent all damage from and effects of attacks")
+  rides the mon as a next-turn transient; an attack into it logs HP_CHANGE **0**
+  (micro_onboard65a75_9902 f23) — same defender-mods stage and ignores-effects pierce
+  seam as Crustle.
+- **ACE SPEC deck rule**: one copy per deck (native battle_start errorType 4 on 4×;
+  capture_card now builds 1×).
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on
   cgpy via `CG_ENGINE=py` (the alias seam); `tools/parity/diff_audit_engines.py`
   compares record-for-record with zero tolerance (coin attacks compare on the
-  deterministic min/max fork rows). Sample gate 2026-07-11: 46/46 equal.
+  deterministic min/max fork rows). Sample gate 2026-07-11: 46/46 equal; burn-down
+  batch: all 69 newly-live attacks equal. Rows whose incidental staging differs
+  (defenderBench/attackerEnergies/myHandSize/defenderHp — each engine plays its own
+  chaos game to the attack) are skipped as `staging-mismatch`, the coin-luck rule's
+  sibling: own-board-sensitive scalers (Round / Sweet Circle class) measure
+  legitimately different values there; micro-trace replay is that family's exact
+  verifier (707/708/1114/1386 all pinned).
   Nightly full-pool run (manual, needs the DLL for the native half):
 
       python tools/sim/audit_attacks.py --all --out reports/attack_audit/native_all.json
