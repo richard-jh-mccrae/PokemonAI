@@ -2,11 +2,12 @@
 Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.md
 Worklist this round = 7 open corrections (dragapult_ex 0, mega_lucario 2, mega_starmie 5).
 Terminal outcomes (see the round ledger at the bottom of docs/tuning/runs/ + reviewed.json):
-  proposal-routed 4 — 85164605-6 + 85163079-51 + 85058574-16 (below); 85164131-22 (CRITICAL) folded into
-                       the OPEN blunder-20260709-mega_starmie.md#snipe-the-real-attacker-not-a-bulky-body.
-  refuted 2 — 82749168-38 (benched Tera snipe-immune), 85164605-41 (Salvatore evolves-in-place ≠ Mega
-              Signal hand-fetch). [85058574-16 was INITIALLY refuted then REVERSED 2026-07-11 by the
-              spun-off investigation: Lunar Cycle IS correct; the defect is the deck rule over-firing.]
+  proposal-routed 5 — 85164605-6 + 85163079-51 + 85058574-16 + 85164605-41 (below); 85164131-22 (CRITICAL)
+                       folded into the OPEN blunder-20260709-mega_starmie.md#snipe-the-real-attacker-not-a-bulky-body.
+  refuted 1 — 82749168-38 (benched Tera snipe-immune). [Two initial refutes REVERSED 2026-07-11 after human
+              verification: 85058574-16 (Lunar Cycle IS correct — deck rule over-fires) and 85164605-41 (Mega
+              Signal IS cheaper — the Staryu were evolvable this turn, so Item-fetch+evolve = the Supporter's
+              result but preserves the Supporter; planner should prefer the cheapest evolution enabler).]
   covered 1 — 85058574-109 (dragapult_ex Brief already races the Drakloaks; decide()==correct degenerate;
               the multi-turn EXECUTION residual is parked in docs/todo/deferred-multi-turn-criticals.md).
 Routing evidence = real-Pilot retests (tools/train/retest_one.py) + card/rule facts read at source. -->
@@ -125,3 +126,42 @@ regress none of the frames where the −30 discipline is correct (the T6' probe 
 NOTE — the secondary `attach-solrock-over-line-base` (+3) quirk that tips [4] over [2] among the attaches is
 **real but MOOT here** (the correct play is neither attach). Do NOT chase it off f16 — it only bites on a
 frame where Lunar Cycle is unavailable / the engine is offline; investigate it there (spun-off task).
+
+---
+
+## ko_for_prizes should evolve with the cheapest enabler (free direct-evolve > Item tutor > Supporter tutor)
+- id: planner-prefer-cheapest-evolution-enabler
+- source: blunder-buster
+- target_layer: planner-code
+- candidate_signal: the ko_for_prizes evolution-enabler step in planner.py already commits an evolution tutor (see the covered precedent 83455356:f11, `test_planner_engine.py::test_critical_a212_*`). The missing discrimination = card-cost/type of the enabler: `CardStat.cardType` (Item vs Supporter, EXISTS) + "evolved form already in hand AND pre-evo directly evolvable this turn" (a legal direct-evolve option is present in the select → `appearThisTurn==False` on the pre-evo + the Stage-1 in hand). No new board infra beyond reading the option list the planner already enumerates.
+- verification_contract: verifier
+- provenance: correction 85164605:f41 (mega_starmie) | fixture tests/fixtures/corrections/ms_prefer_cheap_evolution_enabler_f41.json | REVERSES the 2026-07-11 initial refute (human verdict, verified against the match: the Staryu were played a prior turn → evolvable this turn) | do NOT regress the covered precedent 83455356:f11 (Salvatore IS the only enabler there — no Mega in hand → the Supporter tutor is correct)
+- status: open
+- for: general
+
+**Spec (authoring spec — thin fodder):**
+Turn 5 (P2), mega_starmie. Board (verified from the f41 obs): Active **Cinderace** (1e); **bench 2× Staryu, BOTH
+`appearThisTurn=False` → evolvable this turn** (bench0 carries **3 {W}**); hand = **Mega Starmie ex** (1),
+**Mega Signal** (Item), **2× Salvatore** (Supporter), Boss's Orders, Lillie's, Wally's, Ultra Ball. Opp Active
+Kadabra 80/80. The Planner's `ko_for_prizes` line commits **Salvatore** (`planned` step[0], "evolution tutor
+unlocks a 1-prize KO") — a **Supporter** — to field a Mega Starmie ex attacker. The human: *"Mega Signal, an
+Item, is less expensive than a Supporter — just play that instead"* (correct=[3]).
+
+The human is right, and the initial refute (that Mega Signal "only hand-fetches, doesn't evolve" and would be a
+"redundant duplicate") was **wrong**: because the Staryu is **evolvable this turn**, Mega Signal (Item) →
+fetch the Mega → the same-turn manual **Evolve** (select options [4]/[5], type-9, are legally offered) reaches
+the identical board as Salvatore's search-evolve — but **spends an Item, not the scarce Supporter** (Boss's
+Orders is in hand and wants that Supporter slot for a gust-KO). And with **two** Staryu and only one Mega in
+hand, the fetched 2nd Mega is not redundant. Both tutors score an identical −17 in the weight layer
+(`dig-before-commit` +20, `dont-tutor-the-held-wincon` −45, `fetch-when-it-fills-a-need` +8), so scoring can
+never break this — **the Planner commits Salvatore**, so the fix is planner-code, never a weight/when().
+
+**Author:** in the `ko_for_prizes` evolution-enabler selection, rank enablers by cost — prefer, in order,
+(1) a **free direct-evolve** (the evolved form is already in hand and the pre-evo is directly evolvable this
+turn — options [4]/[5] here, strictly the cheapest: no card leaves the deck, no tutor spent), then (2) an
+**Item** tutor (Mega Signal), then (3) a **Supporter** tutor (Salvatore). The human's correct=[3] is the
+**floor** (anything-but-the-Supporter); the true optimum is arguably the free direct-evolve [4] — resolve the
+exact target at authoring (the fixture pins correct=[3]; if the author lands on [4], update the fixture and
+note it). **Regression guard:** the covered precedent **83455356:f11** must stay green — there the Mega is NOT
+in hand and Salvatore is the *only* enabler, so the Supporter tutor is correctly committed
+(`test_planner_engine.py::test_critical_a212_*`).

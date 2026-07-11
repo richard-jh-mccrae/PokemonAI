@@ -677,10 +677,5 @@
     "disposition": "refuted",
     "reason": "correct=[0] snipes the benched Dragapult ex, a [Tera] ex that takes NO attack damage while Benched (data/EN_Card_Data.csv id121; docs/rulebook.txt Tera rule) -- the 50 Jetting Blow bench rider does literally 0 there. dont-snipe-a-benched-tera (-60) already ranks it below the real 50-dmg Hoothoot snipe; retest 82749168-38: [0]=-18 vs chosen [1]=12. The correction forgoes the attack's entire snipe effect on a damage-immune body.",
     "round": "2026-07-11"
-  },
-  "85164605-41": {
-    "disposition": "refuted",
-    "reason": "correct=[3] Mega Signal (Item; hand-fetch a Mega ex) is NOT equivalent to chosen [0] Salvatore (Supporter that search-EVOLVES a bench Staryu into Mega Starmie ex = the KO attacker the Turn Planner commits as ko_for_prizes step[0]). Mega Starmie ex is ALREADY in hand -> Mega Signal fetches a redundant duplicate and advances nothing (both carry dont-tutor-the-held-wincon -45). The human's cheaper-equivalent premise is false; retest confirms planner's Salvatore [0] is correct.",
-    "round": "2026-07-11"
   }
 }

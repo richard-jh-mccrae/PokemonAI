@@ -1,7 +1,30 @@
 {
   "deck": "mega_starmie",
-  "generated_at": "2026-07-11T08:40:48",
-  "open": [],
+  "generated_at": "2026-07-11T08:54:13",
+  "open": [
+    {
+      "id": "wasted-resource-85164605-41",
+      "key": "85164605-41",
+      "scope": "decision",
+      "subject": 41,
+      "seat": 1,
+      "span_len": 0,
+      "attribution": null,
+      "category": "wasted_resource",
+      "episode_id": 85164605,
+      "frame": 41,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Main' (turn 5) to prefer 'Play Mega Signal' over 'Play Salvatore'",
+      "rationale": "Mega Signal, an Item, is less expensive than a Supporter, just play that instead",
+      "agent_build": "mega_starmie_20260710_2f201b4-dirty",
+      "built_at": "2026-07-10T00:00:00",
+      "critical": false,
+      "planner_committed": true,
+      "lethal_locked": false,
+      "posture_mismatch": false,
+      "believed_archetype": "Alakazam"
+    }
+  ],
   "skipped": [
     {
       "key": "82750161-29",
@@ -1047,14 +1070,6 @@
       "frame": 100,
       "disposition": "covered",
       "reason": "attack-last defers the non-lethal Nebula Beam (154.7<KO); real Pilot plays Harlequin (dig-before-commit +20) first. retest chosen [5]->[0]=Harlequin, FIXED=True"
-    },
-    {
-      "key": "85164605-41",
-      "scope": "decision",
-      "episode_id": 85164605,
-      "frame": 41,
-      "disposition": "refuted",
-      "reason": "correct=[3] Mega Signal (Item; hand-fetch a Mega ex) is NOT equivalent to chosen [0] Salvatore (Supporter that search-EVOLVES a bench Staryu into Mega Starmie ex = the KO attacker the Turn Planner commits as ko_for_prizes step[0]). Mega Starmie ex is ALREADY in hand -> Mega Signal fetches a redundant duplicate and advances nothing (both carry dont-tutor-the-held-wincon -45). The human's cheaper-equivalent premise is false; retest confirms planner's Salvatore [0] is correct."
     }
   ]
 }
