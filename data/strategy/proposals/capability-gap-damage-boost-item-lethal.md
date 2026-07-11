@@ -16,7 +16,22 @@ same retreat→promote→act shape, different enabler (a damage-boost Item inste
 - candidate_signal: needs a new signal — a new `_family_win_candidates` tier (src/common/strategy/planner.py) that composes **promote a benched {F} attacker → play N damage-boost Items → swing lethal**, min-bound sound; PLUS decide() follow-up steering hooks (retreat the Active, promote the RIGHT benched body, play the boost Item(s), attack) so the cascade completes. DEPENDENCY: a `damage_boost_active` behavioral read for Premium Power Pro (card id 1141, "+30 dmg to your opponent's Active from your {F} Pokémon this turn") — currently untagged; model it like the Ignition/`discard_eot` burst in `_attach_provided`/`_best_affordable_ko_value` (a per-turn flat rider on the attacker's damage, typed to {F}, capped by copies in hand + Item-play legality).
 - verification_contract: verifier
 - provenance: docs/adr/0050-multi-step-lethal-verification-tool.md (DoD#3) | correction 84889011:f24 | fixture tests/fixtures/corrections/ml_lethal_retreat_boost_to_ko_f24.json (seeded: search_begin_input + own_prizes) | pinned target tests/strategy/test_lethal_helpers.py::test_engine_confirms_multi_step_line_proves_a_real_missed_win | [[retreat-to-promote-deferrals]] | [[lethal-verification-tool-grill]]
-- status: open
+- status: applied
+- applied (2026-07-11, update-strategy): new `_family_win_candidates` **tier 5** (src/common/strategy/planner.py)
+  gated by kill-switch `boost_lethal` (ctor default False; wired ON in all 3 agents' main.py). Composes
+  retreat → promote a benched {F} attacker → play N damage-boost Items → boosted swing lethal, min-bound
+  sound, engine-confirmed on lock by the existing `_win_line` gate. STALE DEPENDENCY corrected at grill: the
+  proposal's asked-for `damage_boost_active` behavioral read was ALREADY built — `parse_card_damage_boost`
+  (+30/{F} for Premium Power Pro 1141), `CardStat.damageBoost*`, `TurnBoostTracker`, `_boost_lethal_tactical`,
+  `context["atk_boosts"]` all exist; **card 1141 stays untagged** (text-driven, not a function tag). The ONE
+  real new primitive: an optional typed boost rider (`boost_amount`/`boost_type`/`promote_bench_names`) on the
+  win oracle `_best_affordable_ko_value` (default-off → byte-identical), so the WIN oracle can price an
+  unplayed in-hand boost + a provably-benched `requiresBench` partner (Cosmic Beam's Lunatone). The verify
+  cascade feeds the boost tracker from the sim's own obs (snapshot+restore; never leaks into the live match),
+  so a multi-copy line self-completes. Steering reuses the sibling's KO-aware promote (`promote_ko_aware`) to
+  bring up the boosted body. Gate: `engine_confirms(f24)` True on the `[correct]`-only form flags-ON; the full
+  explicit line True (target real); flags-OFF still REFUTES (no phantom) — `tests/strategy/test_planner_boost_promote.py`
+  + the pinned `test_engine_confirms_multi_step_line_proves_a_real_missed_win`. Inert on mega_starmie. Off-flag byte-identical.
 
 **Spec (authoring spec — thin fodder, not finished code):**
 The Lethal Solver's ONE generator family (`_family_win_candidates`, ADR-0037) has no tier that reaches a win

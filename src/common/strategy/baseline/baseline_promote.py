@@ -26,6 +26,18 @@ HYPOTHESES = [
         and c.promote_target_kos,
         weight=50, status="testing"),
     Hypothesis(
+        id="promote-the-ko-attacker",
+        rationale="At a forced promote / retreat SWITCH, bring up the benched body whose affordable attack "
+                  "— given the Energy attachable this turn plus any playable {F} damage-boost — Knocks Out "
+                  "the opponent's Active (`is_ko_promote_target`/`board.ko_promote_slot`, `promote_ko_aware`). "
+                  "Role-independent and KO-gated: it fires only on a real KO of the current Active, so it "
+                  "steers the promote toward the body that actually takes the prize — Mega Lucario ex "
+                  "(Aura Jab 130) over Solrock (Cosmic Beam 70) at ml f26/f48; the boosted Solrock (70+60) at "
+                  "ml f24. Scores +45 — above `promote-the-ready-wincon` (+40) and `promote-the-staller` "
+                  "(+20), below `interpose` (+50) so a deny-prizes soak still wins its case (ADR-0044).",
+        when=lambda c: c.select_context in (_TO_ACTIVE, _SWITCH) and c.is_ko_promote_target,
+        weight=45, status="testing"),
+    Hypothesis(
         id="interpose-the-cheap-attacker-to-preserve-the-wincon",
         rationale="At a forced promote (TO_ACTIVE) with a higher-prize wincon on the Bench, promote a "
                   "cheaper body that can act instead (`promote_target_can_attack`, lower `card_prize_value`) "

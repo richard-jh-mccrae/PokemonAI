@@ -13,20 +13,69 @@ from __future__ import annotations
 
 from common.telemetry import to_record
 
+# AreaType values (see src/cg/api.py) — hardcoded so retest never imports the native `cg` lib.
+_ACTIVE, _BENCH = 4, 5
+
+
+def _body_sig(obs, option):
+    """The interchangeability signature — ``(card_id, energies, hp)`` — of the in-play Pokémon an
+    option targets, or ``None`` when the option does not resolve to a board body (a hand/deck/effect
+    option never matches by body). Two options with the SAME signature are indistinguishable picks."""
+    try:
+        area, idx = option.get("area"), option.get("index")
+        if area not in (_ACTIVE, _BENCH):
+            return None
+        bodies = obs["current"]["players"][option.get("playerIndex", 0)][
+            "active" if area == _ACTIVE else "bench"]
+        if not (isinstance(idx, int) and 0 <= idx < len(bodies)):
+            return None
+        body = bodies[idx]
+        if not isinstance(body, dict):
+            return None
+        return (body.get("id"), tuple(sorted(body.get("energies") or [])), body.get("hp"))
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def _is_fixed(correct, chosen_after, obs):
+    """Whether the blunder is resolved: every ``correct`` slot is now chosen, OR the agent chose an
+    option targeting a board body INDISTINGUISHABLE from it (same card + attached energy + HP). The
+    body reconciliation is the duplicate-species case — f75 offers two byte-identical bench Riolus,
+    so picking either satisfies the doctrine (the strict-index bar re-flagged the equally-valid twin).
+    An energized copy vs a bare one differ in ``energies`` → NOT interchangeable, so the guard never
+    masks a real positional miss. ``None`` when the Correction names no ``correct`` (ADR-0049)."""
+    if not correct:
+        return None
+    if not chosen_after:
+        return False
+    if all(c in chosen_after for c in correct):
+        return True
+    options = ((obs or {}).get("select") or {}).get("option") or []
+
+    def sig(i):
+        return _body_sig(obs, options[i]) if 0 <= i < len(options) else None
+
+    chosen_sigs = [sig(i) for i in chosen_after]
+    for c in correct:
+        cs = sig(c)
+        if c in chosen_after or (cs is not None and cs in chosen_sigs):
+            continue
+        return False
+    return True
+
 
 def retest(correction, pilot, *, tier: int = 0) -> dict:
     """Diff the decision at this Correction's state: live ``before`` vs re-derived ``after``.
 
-    ``fixed`` is True when every ``correct`` position is now chosen (the blunder would no longer
-    occur under ``pilot``), and **None when the Correction names no ``correct``** — a prose-only
-    scoped Correction (ADR-0049) asserts nothing to check, so there is nothing to be fixed. Other
-    fields degrade to None when ``obs``/``live_trace`` are absent.
+    ``fixed`` is True when every ``correct`` position is now chosen (or an indistinguishable
+    duplicate-species twin of it — see ``_is_fixed``), and **None when the Correction names no
+    ``correct``** — a prose-only scoped Correction (ADR-0049) asserts nothing to check, so there is
+    nothing to be fixed. Other fields degrade to None when ``obs``/``live_trace`` are absent.
     """
     before = correction.live_trace
     after = to_record(pilot.explain(correction.obs), tier=tier) if correction.obs is not None else None
     chosen_after = after["chosen"] if after else None
-    fixed = (None if not correction.correct
-             else bool(after) and all(c in chosen_after for c in correction.correct))
+    fixed = _is_fixed(correction.correct, chosen_after, correction.obs)
     return {
         "before": before,
         "after": after,

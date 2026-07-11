@@ -21,13 +21,27 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
   — re-scope this proposal to the f75 tie-break only: `snipe-the-evolving-threat` must beat, or the
   path axis must stand down under, a competing evolving-threat target the human declines. Verified failing
   on origin/main (baseline_snipe.py unchanged by the intervening lethal-verification PRs).
+  [SUPERSEDED for f75 — see the "f75 sub-signal RESOLVED" note below: f75 is a duplicate-species harness
+  artifact (its two Riolus are the SAME body), not a path-axis authoring task.]
 - extended (2026-07-11 round): **CRITICAL 85164131:f22** (mega_starmie mirror) is a sharper, dead-Active
   instance of sub-signal #1 that exposes a *fourth* burying shape — see spec sub-signal **#4** below. The
   leaf's clean, retest-verified fix generalises the whole cluster: a `board.evolving_wincon_on_bench` signal
   + a stand-down gate on the current-attacker rungs. This subsumes the #1 "restore a rung" sketch and does
   NOT regress the ADR-0044 forced-promotion tests (they require the forward form ALREADY in play, where the
-  new signal is False). The f75 path-axis tie-break (reopened note above) is the ONE residual the gate does
-  not touch (it gates forced-promotion/top-threat/threat, not `snipe-on-the-path` +12) — author both together.
+  new signal is False). Sub-signal **#4 (f22) is the ONE remaining OPEN build in this proposal** — the f75
+  sub-signal is now resolved separately (next note), so it is NOT the "author both together" path-axis task
+  this note first assumed; #4 is a distinct dead-Active board needing the `evolving_wincon_on_bench` gate.
+- f75 sub-signal RESOLVED (2026-07-11, update-strategy PR #80, rung change REFUTED): f75 options [1] and [3]
+  are the SAME Riolu (id 677, 80 HP, 0 energy) — byte-identical bodies differing only in internal serial
+  (74 vs 73). The doctrine ("snipe the Riolu that becomes Mega Lucario, not the 0-energy Hariyama") is
+  already SATISFIED by `snipe-the-evolving-threat` (+45), which fires on both Riolus; the shipped
+  `tests/strategy/test_snipe_the_real_attacker.py` passes by matching the CARD (the agent lands on the
+  identical twin [1]). No rung/weight can prefer [3] over an indistinguishable [1]. The residual "failure"
+  was purely the blunder-buster real-Pilot retest comparing decide() to the exact index [3]. FIX: the retest
+  harness (`tools/train/tuner/retest.py`) now matches DUPLICATE-SPECIES targets by body signature (card id +
+  attached energy + HP); an energized copy vs a bare one is NOT interchangeable, so a real positional miss
+  still reports unfixed. Fixture unchanged (`correct` stays [3]). Tests: `tests/tuner/test_tuner_retest.py`
+  (+3). This does NOT touch sub-signal #4 (f22), which remains OPEN.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
