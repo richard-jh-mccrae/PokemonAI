@@ -24,6 +24,13 @@ not a Workflow: grill and commit stay in the interactive loop. Full fan-out mech
 [authoring-gates.md](references/authoring-gates.md).)
 
 ### Phase 0 · Load + enrich (fan out, read-only)
+Enumerate the queue first. Files are **multi-proposal**: each `## ` entry is one proposal with its own
+`- status:` line — status is per-entry, never file-level. Extract the open set in one command (do not
+re-derive it):
+```
+grep -rn '^- status: open' data/strategy/proposals/*.md
+```
+Each hit is `<file>:<line>: - status: open`; the enclosing `## ` heading above it is the proposal.
 Read open proposals from `data/strategy/proposals/` (status `open`). **Fan out one read-only agent per
 proposal** to follow `provenance` → source doc, confirm `candidate_signal` maps to a real signal, and
 return a tight **grill brief** (candidate trigger + weight band + capability-gap smell). Bounce any `spec`
