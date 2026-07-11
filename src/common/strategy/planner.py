@@ -381,21 +381,56 @@ class PlannerMixin:
             if any(self._tutor_evolution_wins(obs, board, opp, p) for p, _ in targets):
                 yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                rationale="lethal (unlock): the evolution tutor evolves the winning attacker")
+        # tier 5 (`boost_lethal`): retreat into a benched attacker whose DAMAGE-BOOSTED KO wins — the
+        # promote-a-benched-{F}-attacker → play N damage-boost Items → swing-lethal shape (ml f24:
+        # Solrock's Cosmic Beam 70 + 2x Premium Power Pro = 130 exact OHKOs Duraludon; opp bench empty
+        # -> a bench-empty win). The retreat is the driven step; the SWITCH then promotes the boosted
+        # body (`promote_ko_aware`'s `is_ko_promote_target`), the Items price at KO_SCORE via
+        # `_boost_lethal_tactical` once it is Active, and the final swing is the direct tier-0 KO. The
+        # boost total is this-turn plays + playable hand copies (`_typed_boost_total`); the retreated
+        # Active benches as the `requiresBench` partner. Min-bound sound; engine-verified on lock.
+        if self.boost_lethal and ma is not None:
+            for i, o in enumerate(options):
+                if i in seen or o.get("type") != _RETREAT:
+                    continue
+                for j, p in enumerate(me.get("bench") or []):
+                    if not p:
+                        continue
+                    pstat = self.stats.get(p.get("id")) if self.stats else None
+                    if pstat is None:
+                        continue
+                    boost = self._typed_boost_total(obs, pstat, opp)
+                    if boost <= 0:                          # no boost applies -> not this tier
+                        continue
+                    names = self._promote_bench_names(me, j, ma)
+                    if self._develop_wins(obs, board, opp, p.get("id"),
+                                          len(p.get("energies") or []), body=p,
+                                          boost_amount=boost, boost_type=pstat.energyType,
+                                          promote_bench_names=names):
+                        seen.add(i)
+                        yield TurnLine(next_step=[i], goal="win", kind="unlock",
+                                       rationale="lethal (boost): retreat into the boosted KO attacker wins")
+                        break
 
     def _develop_wins(self, obs, board, opp, attacker_id, energy, body=None,
-                      extra_type=None, extra_units: int = 0) -> bool:
+                      extra_type=None, extra_units: int = 0,
+                      boost_amount: int = 0, boost_type=None, promote_bench_names=None) -> bool:
         """SOUND: this attacker, carrying ``energy``, takes a min-bound affordable KO of the
         opponent's Active AND that KO wins — it reaches my remaining prize count or their bench is
         empty (no Pokémon to promote). The family's shared develop-tier win test: worst-coin damage
         floors via ``bound="min"``, rider snipes deliberately under-counted (conservative).
         ``body``/``extra_type``/``extra_units`` forward to the typed-affordability guard (an Energy
         the line provides can't fund a specific-type slot it doesn't match — Ignition never pays a
-        {W}); budget beyond attached+extra stays wild (fail-open)."""
+        {W}); budget beyond attached+extra stays wild (fail-open). ``boost_amount``/``boost_type``/
+        ``promote_bench_names`` forward the damage-boost rider (the `boost_lethal` tier: a typed
+        this-turn boost + a provably-benched `requiresBench` partner)."""
         if not (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench):
             return False
         return self._best_affordable_ko_value(obs, board, opp, attacker_id, energy, bound="min",
                                               body=body, extra_type=extra_type,
-                                              extra_units=extra_units) > 0
+                                              extra_units=extra_units, boost_amount=boost_amount,
+                                              boost_type=boost_type,
+                                              promote_bench_names=promote_bench_names) > 0
 
     def _attach_provided(self, obs, select, board, option) -> int:
         """Energy units this ATTACH provides the Active — 1 for a plain Energy; 3 for a
@@ -620,6 +655,13 @@ class PlannerMixin:
 
         was_planning = self._planning
         self._planning = True                          # the cascade re-runs decide(): never nest a
+        # This-turn boosts PLAYED inside the cascade (the sim's own Premium Power Pro plays) must be
+        # priced by the boost tracker so a later step's decide() sees the running total (a multi-copy
+        # boost line, ml f24). observe() is skipped under `_planning` for the REAL stream, so drive the
+        # tracker explicitly from the sim's obs here — snapshot + restore so the match state a real
+        # decision resumes on is untouched (the sim's future never leaks into the live tracker).
+        boost_snap = {k: list(v) for k, v in self._turn_boosts._by_side.items()}
+        boost_turn_snap = self._turn_boosts._last_turn
         try:                                           # search, never verify inside a verify
             ob = cgapi.to_observation_class(obs)
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=True)
@@ -641,6 +683,8 @@ class PlannerMixin:
                     verdict = False                    # passed to the opponent unresolved: no win
                     break
                 od = _prune_none(asdict(o))
+                if self.boost_lethal:                  # count this-turn boost plays in the running sim
+                    self._turn_boosts.observe(od)      # (gated: off -> the cascade is byte-identical)
                 chosen = list(self.decide(od))
                 if record is not None:
                     osel = od.get("select") or {}
@@ -661,6 +705,8 @@ class PlannerMixin:
             return None
         finally:
             self._planning = was_planning
+            self._turn_boosts._by_side = boost_snap        # restore live match state — the sim's own
+            self._turn_boosts._last_turn = boost_turn_snap  # boost plays never leak past the verify
 
     # ═══ THE HEURISTIC RUNGS — rank-grade, never a guarantee (ADR-0031) ═══
 

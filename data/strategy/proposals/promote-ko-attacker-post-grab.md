@@ -17,7 +17,18 @@ Distinct from the sibling `capability-gap-damage-boost-item-lethal.md` (f24, a r
 - candidate_signal: extend an existing signal — the post-grab tactical cascade / promote-target valuation (`_grab_lethal_tactical` and the promote-slot picker `best_promote_slot` / `is_best_promote_target`, src/common/strategy/). After a grab that yields the Energy a benched attacker needs, the retreat→promote must bring up the benched body whose affordable attack **KOs the opp Active**, and attach the fetched Energy to THAT body — not a lesser benched attacker whose swing does not KO. KO-aware promote/attach, not "promote the highest-HP" or "promote any ready attacker".
 - verification_contract: verifier
 - provenance: docs/adr/0050-multi-step-lethal-verification-tool.md (DoD#3 audit) | corrections 84890060:f26, 84890060:f48 | fixtures tests/fixtures/corrections/ml_lethal_recover_energy_retreat_ko_f26.json, ml_lethal_recover_energy_via_gong_f48.json (both seeded: search_begin_input + own_prizes) | [[lethal-verification-tool-grill]] | [[retreat-to-promote-deferrals]]
-- status: open
+- status: applied
+- applied (2026-07-11, update-strategy): KO-aware promote steering, kill-switch `promote_ko_aware` (ctor
+  default False; wired ON in all 3 agents' main.py). Authored as a ROLE-INDEPENDENT signal
+  `board.ko_promote_slot` (`_ko_aware_promote_slot`, src/common/pilot.py) + a new Hypothesis
+  `promote-the-ko-attacker` (+45, `status:testing`, `baseline_promote.py`) that fires on
+  `is_ko_promote_target` — ordered ABOVE `promote-the-ready-wincon` (+40), BELOW `interpose` (+50) so the
+  ADR-0044 deny-prizes soak still wins its case. Deviation from spec: `_best_promote_slot` was NOT mutated
+  (it is wincon-scoped — Solrock isn't a wincon in mega_lucario, and the boost gate runs on an empty
+  Strategy); the role-independent signal unifies f26/f48 (KO body) AND f24 (boosted body) and works before
+  a deck Strategy loads. Gate: f26/f48 now promote Mega Lucario ex (Aura Jab 130 ≥ Tangela 80) and the KO
+  lands; flag OFF → promotes Solrock, no KO (`tests/strategy/test_planner_boost_promote.py`, 6 green).
+  Off-flag byte-identical. Shares the KO oracle boost rider with the sibling `damage-boost-item-lethal`.
 
 **Spec (authoring spec — thin fodder, not finished code):**
 At f26 (my prizes 6; my Active Lunatone 110/1{F}/retreat 1, Bench Solrock 110/0E and **Mega Lucario ex**

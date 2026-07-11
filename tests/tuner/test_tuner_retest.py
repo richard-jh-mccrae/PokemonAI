@@ -1,7 +1,11 @@
 """Retest: diff how the agent would decide now vs the embedded live trace (ADR-0019)."""
+import json
+import sys
+from pathlib import Path
+
 from common.pilot import Pilot
 from common.strategy import Hypothesis, Strategy
-from pilot_helpers import HAND, MAIN, card_opt, make_select, state
+from pilot_helpers import BENCH, DAMAGE, HAND, MAIN, card_opt, make_select, poke, state
 
 from train.blunder.correction import build_correction
 from train.blunder.decisions import Decision
@@ -49,6 +53,50 @@ def test_retest_surfaces_layer_verdicts():
     legacy = retest(_correction(obs, correct=[1], live_trace={"chosen": [0], "margin": 0}),
                     Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
     assert legacy["planned_before"] is None                            # pre-planner trace degrades
+
+
+def test_retest_treats_indistinguishable_duplicate_species_as_fixed():
+    """Duplicate-species reconciliation: two byte-identical bench bodies (the f75 shape) are
+    interchangeable snipe targets, so picking either satisfies the doctrine — the strict-index bar
+    wrongly re-flagged the equally-valid twin the engine deterministically lands on."""
+    twin = lambda: poke(677, energy=0, hp=80, max_hp=80)
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=DAMAGE, current=state(opp_bench=[twin(), twin()]))
+    corr = _correction(obs, correct=[1], live_trace={"chosen": [0], "margin": 0})
+
+    r = retest(corr, Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
+    assert r["chosen_after"] == [0]        # bare pilot breaks the tie to the first option
+    assert r["fixed"] is True              # ...but [0] is the identical twin of correct [1]
+
+
+def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
+    """The guard is state-exact: two copies of one card that differ in ATTACHED ENERGY are NOT
+    interchangeable, so a real positional miss (wanted the energized copy) still reports unfixed."""
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=DAMAGE,
+                      current=state(opp_bench=[poke(677, energy=0, hp=80, max_hp=80),
+                                              poke(677, energy=2, hp=80, max_hp=80)]))
+    corr = _correction(obs, correct=[1], live_trace={"chosen": [0], "margin": 0})
+
+    r = retest(corr, Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
+    assert r["chosen_after"] == [0]        # picked the bare copy
+    assert r["fixed"] is False             # correct [1] is energized — different body, not a twin
+
+
+def test_retest_reconciles_the_reopened_f75_duplicate_riolu_snipe():
+    """The reopened f75 case end-to-end: the shipped mega_starmie Pilot snipes a Riolu, but an
+    identical twin, so its slot differs from correct=[3]. Body reconciliation reports it FIXED,
+    mirroring tests/strategy/test_snipe_the_real_attacker.py's by_card_id assertion."""
+    repo = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo / "tools"))
+    from train.tune import _build_pilot
+    fx = json.loads((repo / "tests" / "fixtures" / "corrections" /
+                     "ms_snipe_evolving_wincon_preevo_f75.json").read_text(encoding="utf-8"))
+    corr = _correction(fx["obs"], correct=fx["correct"],
+                       live_trace={"chosen": fx["chosen"], "margin": 0})
+
+    r = retest(corr, _build_pilot("mega_starmie")[0])
+    assert r["fixed"] is True              # picks an (equally-valid) Riolu — reconciled by body
 
 
 def _turn_correction(*, correct, span):

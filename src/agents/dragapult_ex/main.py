@@ -72,6 +72,11 @@ _pilot = Pilot(
                                                       # family + verify-every-lock (A/B-cleared 2026-07-03)
     lethal_veto=_params.get("lethal_veto", True),     # ADR-0037 stage-3 kill-switch: replay the verified
                                                       # cascade (A/B-cleared 2026-07-03)
+    promote_ko_aware=_params.get("promote_ko_aware", True),  # kill-switch: KO-aware, boost-inclusive
+                                                      # promote pick (Proposal C: promote the benched wincon
+                                                      # whose attack KOs the opp Active, not the energy-ranked)
+    boost_lethal=_params.get("boost_lethal", True),  # kill-switch: the promote-+-damage-boost-Item win tier
+                                                      # (Proposal B); presumes lethal_family, engine-confirmed
     brief_preevo=_params.get("brief_preevo", True),  # ADR-0038 kill-switch: Brief fragile_preevo lever
                                                       # (A/B-cleared 2026-07-04: 68% vs 69% baseline vs
                                                       # mega_lucario, mirror 52% — non-degradation + neutral)

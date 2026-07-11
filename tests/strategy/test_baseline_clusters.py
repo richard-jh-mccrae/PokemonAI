@@ -46,6 +46,7 @@ CLUSTERS = {
     "promote": (PROMOTE_HYPOTHESES, {
         "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
         "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach",
+        "promote-the-ko-attacker",          # KO-aware, boost-inclusive promote (promote_ko_aware)
         "dont-promote-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
     "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker",
                                      "swap-out-the-locked-attacker", "dont-play-switch-for-no-gain",

@@ -10,17 +10,22 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
 - candidate_signal: CardStat/provider `forward_max_damage` (EXISTS — Riolu→Mega Lucario ex = 270) + benched-Pokémon attached-energy (`target_is_threat`/imminence) + attacker-vs-support role; reconcile against `snipe-the-forced-promotion` (+40) and `snipe-the-top-threat` (+30) in baseline_snipe.py
 - verification_contract: verifier
 - provenance: corrections 82224509:f47, 82523811:f41, 82523811:f61, 82753102:f85, 81785223:f39, 81785223:f45, 81905522:f75 | fixtures tests/fixtures/corrections/ms_snipe_evolving_wincon_preevo_f75.json, ms_snipe_riolu_over_lunatone_f47.json, ms_snipe_energized_bench_f39.json, ms_snipe_attacker_line_over_support_f85.json | see [[snipe-threat-two-signals]] (the deferred "evolves-into-attacker" signal, frame 75)
-- status: open
-- reopened (2026-07-10): the `applied` marking was FALSE for the frame-75 sub-signal — the gating fixture
-  `ms_snipe_evolving_wincon_preevo_f75` still fails on the real Pilot (decide()=[1], human correct=[3]).
-  `snipe-the-evolving-threat` (+45) was restored and fires on BOTH evolving-threat candidates, but on the
-  wanted target [3] it is the ONLY rung (45), while [1] ALSO picks up `snipe-on-the-path` (+12) → 57, so
-  the path tie-break out-votes the human's pick. Sub-signals #2 (energized-imminence, f39/f45) and #3
-  (attacker-line over bulky support, f85) may be covered by the 2026-07-10 snipe-KO-dominance +
-  forced-promotion-readiness work (`blunder-20260710-round.md#snipe-order-a-ko-dominates-the-positional-stack`)
-  — re-scope this proposal to the f75 tie-break only: `snipe-the-evolving-threat` must beat, or the
-  path axis must stand down under, a competing evolving-threat target the human declines. Verified failing
-  on origin/main (baseline_snipe.py unchanged by the intervening lethal-verification PRs).
+- status: applied
+- rung change REFUTED; resolved via retest-harness reconciliation (2026-07-11, update-strategy). The
+  reopened premise was WRONG at the fixture: f75 options **[1] and [3] are the SAME Riolu** (id 677, 80 HP,
+  0 energy) — byte-identical bodies differing only in internal serial (74 vs 73). The human's doctrine
+  ("Hariyama is strongest but 0 energy → not a threat; snipe the Riolu that becomes Mega Lucario") is
+  already SATISFIED by the restored `snipe-the-evolving-threat` (+45), which fires on both Riolus; the
+  shipped `tests/strategy/test_snipe_the_real_attacker.py` passes by matching the CARD (the agent lands on
+  the identical twin [1]). No rung/weight can prefer [3] over an indistinguishable [1], and the
+  `snipe-on-the-path` (+12) tie-break only picks ONE of two co-equal bodies by object identity — a path
+  stand-down would yield a 45–45 tie that still resolves to [1], never [3]. The residual "failure" was purely
+  the blunder-buster real-Pilot retest comparing decide() to the exact index [3]. FIX (user-chosen): teach
+  the retest harness (`tools/train/tuner/retest.py`) to match DUPLICATE-SPECIES targets by body signature
+  (card id + attached energy + HP) — mirroring the shipped pytest — so an equally-valid identical twin counts
+  as fixed; an energized copy vs a bare one (different energies) is NOT interchangeable, so a real positional
+  miss still reports unfixed. Fixture unchanged (`correct` stays [3]). Tests: `tests/tuner/test_tuner_retest.py`
+  (+3: twin→fixed, energized-copy guard→unfixed, reopened-f75 end-to-end→fixed). See [[snipe-threat-two-signals]].
 - for: general
 
 **Spec (authoring spec — thin fodder):**

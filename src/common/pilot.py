@@ -235,6 +235,10 @@ class Board:
     best_promote_slot: tuple | None = None  # (AreaType, index) of MY benched win-condition best to bring
                                        # to Active at a promote/switch — READY (Energy >= cheapest attack)
                                        # AND most-Energy. Backs `promote-the-powered-attacker`, not a bare copy/slot-0 (ep83007714 f92/f104)
+    ko_promote_slot: tuple | None = None  # (AreaType, index) of the benched body whose affordable attack —
+                                       # given this turn's attachable Energy + a playable {F} damage-boost —
+                                       # KOs the opp Active (`promote_ko_aware`; None when off / no KO-body).
+                                       # Backs `promote-the-ko-attacker`, role-independent (ml f26/f48/f24)
     evolve_to_ready_wincon_available: bool = False  # win-condition in hand AND the payoff's IMMEDIATE
                                        # pre-evo on the Bench already carries enough Energy that evolving THIS turn
                                        # yields a ready attacker — worth promoting to evolve. False -> bare/too-deep
@@ -560,6 +564,9 @@ class Context:
     is_best_promote_target: bool = False  # at a TO_ACTIVE promote OR a SWITCH (my retreat's new-Active
                                        # pick), this option brings up board.best_promote_slot — most-built
                                        # ready wincon. `promote-the-powered-attacker` fires so it's the built Mega, not a bare copy
+    is_ko_promote_target: bool = False  # at a promote/switch, this option brings up board.ko_promote_slot —
+                                       # the benched body whose (boost-inclusive) attack KOs the opp Active
+                                       # (`promote_ko_aware`). Backs `promote-the-ko-attacker`
     card_prize_value: int = 1          # prizes a KO of THIS option's card yields (Mega ex 3 / ex 2
                                        # / else 1) — cost of exposing it; interpose rule promotes a
                                        # body whose value is below the benched wincon's
@@ -697,7 +704,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  snipe_prize_redundant=False, forced_promotion=False,
                  value_model=None, escalation=False,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
-                 lethal_seed_exact=True):
+                 lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -777,6 +784,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.forgo_ko = forgo_ko                        # ADR-0045 kill-switch (S4): forgo a NON-winning KO
                                                         # under the tight sound gate ("don't wake the giant").
                                                         # Default OFF — the riskiest lever, ladder-gated
+        self.promote_ko_aware = promote_ko_aware        # kill-switch: KO-aware, boost-inclusive promote
+                                                        # pick — prefer promoting the benched wincon whose
+                                                        # affordable attack (given the attachable Energy +
+                                                        # playable {F} damage-boost) KOs the opp Active,
+                                                        # over the energy-ranked pick. OFF = byte-identical
+        self.boost_lethal = boost_lethal                # kill-switch: the `_family_win_candidates` tier that
+                                                        # composes promote-a-benched-{F}-attacker → play N
+                                                        # damage-boost Items → swing lethal (presumes
+                                                        # lethal_family; engine-confirmed on every lock)
         self.prize_economy_fetch = prize_economy_fetch  # ADR-0048 kill-switch: prize-economy FETCH tie-break
                                                         # + broadened line recognition (credit a secondary
                                                         # attacker Line's pre-evo). Default ON; OFF reverts to
@@ -1594,7 +1610,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _best_affordable_ko_value(self, obs: dict, board: Board, opp: dict, attacker_id: int | None,
                                   energy: int, *, bound: str = "exact", body: dict | None = None,
-                                  extra_type=None, extra_units: int = 0) -> float:
+                                  extra_type=None, extra_units: int = 0,
+                                  boost_amount: int = 0, boost_type=None,
+                                  promote_bench_names=None) -> float:
         """The best KO value `attacker_id` (carrying `energy` Energy) reaches against the opponent's
         Active — KO_SCORE + prize − efficiency + bench-snipe rider, mirroring `_tactical`'s KO branch
         so a hypothetical attacker is valued exactly like the real one. 0 if no affordable attack
@@ -1606,7 +1624,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         when the count suffices (Ignition's {C}{C}{C} never funds Jetting Blow's {W}). Energy budget
         beyond the body's attached cards — a planned attach — is `extra_units` of `extra_type` when
         the caller knows the card, else counted WILD (any type, fail-open). ``body=None`` keeps the
-        legacy count-only check."""
+        legacy count-only check.
+
+        Damage-boost rider (``boost_amount``/``boost_type``, default off): a typed flat this-turn
+        boost — Premium Power Pro's +30 to my {F} attacks (``_boost_lethal_tactical``'s arithmetic) —
+        added to the predicted damage BEFORE the KO compare, so the boosted line (`boost_lethal`) and
+        the KO-aware promote (`promote_ko_aware`) see the crossing. Routed through the oracle's own
+        ``atk_boosts`` context, so it inherits the attacker-type gate and the before-W/R placement.
+        ``promote_bench_names`` (default None) names the bodies that WILL sit on my Bench after the
+        promote/retreat this KO presumes — a `requiresBench` attack (Cosmic Beam needs a benched
+        Lunatone) whose partner is provably benched then reads its printed damage rather than the
+        does-nothing floor. Both are additive: with the rider off and no bench names the call is
+        byte-identical (``context=None``)."""
         stat = self.stats.get(attacker_id) if (self.stats and attacker_id is not None) else None
         opp_hp = (opp or {}).get("hp", 0)
         if not (stat and opp_hp):
@@ -1616,6 +1645,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if extra_type is None and extra_units:
             wild += extra_units     # UNKNOWN-type extra stays wild — only a provably-colourless
                                     # extra (extra_type=0, Ignition) is strict; never false-suppress
+        ctx = None
+        if boost_amount or promote_bench_names is not None:
+            ctx = {}
+            if boost_amount:
+                ctx["atk_boosts"] = ((boost_amount, boost_type, False),)
+            if promote_bench_names is not None:
+                ctx["atk_bench_names"] = tuple(promote_bench_names)
         best = 0.0
         for aid in (stat.attacks or ()):
             cost = self.attack_costs.get(aid, 99)
@@ -1624,9 +1660,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if body is not None and not self._attack_type_payable(
                     aid, body, extra_type=extra_type, extra_units=extra_units, wild_units=wild):
                 continue                                        # count met, a specific-type slot is not
+            eff_bound = bound
+            if bound == "min" and promote_bench_names is not None:
+                ast = self._attack_stat(aid)                    # a requiresBench-only conditional whose
+                if (ast is not None and getattr(ast, "requiresBench", None)                # partner is
+                        and all(n in promote_bench_names for n in ast.requiresBench)       # provably
+                        and (ast.damageMax is None or ast.damageMax == ast.damage)):       # benched
+                    eff_bound = "exact"     # is deterministic — read printed, not the does-nothing floor
             # per-attack oracle (ADR-0032): prevention is attack-scoped now — a benched non-ex (or an
             # ignore-flag attack) still registers its KO against a prevent_ex_damage wall
-            dmg = self.predicted_damage(attacker_id, aid, opp, bound=bound)
+            dmg = self.predicted_damage(attacker_id, aid, opp, bound=eff_bound, context=ctx)
             if dmg >= opp_hp:
                 val = (KO_SCORE + self._prize_value(opp) - _EFFICIENCY * cost
                        + self._bench_snipe_bonus(board, aid) + self._bench_spread_bonus(board, aid))
@@ -2125,6 +2168,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             select.get("context") in (_TO_ACTIVE, _SWITCH) and board.best_promote_slot is not None
             and option.get("playerIndex", state.get("yourIndex", 0)) == state.get("yourIndex", 0)
             and (option.get("area"), option.get("index")) == board.best_promote_slot)
+        is_ko_promote_target = (
+            select.get("context") in (_TO_ACTIVE, _SWITCH) and board.ko_promote_slot is not None
+            and option.get("playerIndex", state.get("yourIndex", 0)) == state.get("yourIndex", 0)
+            and (option.get("area"), option.get("index")) == board.ko_promote_slot)
         card_prize_value = self._prize_value({"id": cid}) if cid is not None else 1
         promote_target_can_attack = self._promote_target_can_attack(obs, select, option)
         promote_target_hits_weakness = self._promote_target_hits_weakness(obs, select, option)
@@ -2240,6 +2287,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        evolve_body_energy=self._evolve_body_energy(obs, option),
                        promote_target_kos=promote_target_kos,
                        is_best_promote_target=is_best_promote_target,
+                       is_ko_promote_target=is_ko_promote_target,
                        card_prize_value=card_prize_value,
                        promote_target_can_attack=promote_target_can_attack,
                        promote_target_hits_weakness=promote_target_hits_weakness,
@@ -2756,6 +2804,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             phase=phase,                                            # derived ADVISORY phase — bands +
                                                                     # trace only, never a gate
         )
+        if self.promote_ko_aware and select is not None and select.get("context") in (_TO_ACTIVE, _SWITCH):
+            board.ko_promote_slot = self._ko_aware_promote_slot(obs, board, me, oa)   # KO-aware,
+            #                                             boost-inclusive promote target (KO-gated; None
+            #                                             when no benched body reaches a KO -> inert)
         if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
             board = replace(board,                      # Tool is in hand (common case pays nothing)
                             tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
@@ -3059,6 +3111,106 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 if e >= _min_attack_cost(self.stats, p.get("id")) and (best is None or e > best[0]):
                     best = (e, i)
         return (_BENCH, best[1]) if best else None
+
+    def _ko_aware_promote_slot(self, obs: dict, board: Board, me: dict,
+                               opp: dict | None) -> tuple | None:
+        """(_BENCH, index) of the benched body to promote whose best affordable attack — given the
+        Energy attachable THIS turn (the manual attach, when unspent) plus any playable {F}
+        damage-boost — Knocks Out the opponent's Active. The KO-aware, boost-inclusive promote pick
+        (`promote_ko_aware`): among the benched bodies that reach such a KO it prefers the one already
+        carrying the most Energy (deterministic index tiebreak). None when no benched body reaches a
+        KO — the picker then stands down (`is_ko_promote_target` false everywhere).
+
+        This is a promote *steering* signal (a Hypothesis then weights it), not a Lethal lock, so it
+        may model one planned attach; the KO valuation itself is min-bound sound. It KO-gates (fires
+        only on a real KO of the CURRENT opp Active), so it never perturbs a board with no KO and its
+        Hypothesis sits below the ADR-0044 interpose promote (deny-prizes still wins its cases). ROLE-
+        INDEPENDENT so it works before any deck Strategy is loaded — ml f26/f48: promote Mega Lucario
+        ex (Aura Jab 130 >= Tangela 80) over Solrock (70); ml f24: promote the boosted Solrock."""
+        if not (opp and opp.get("hp")):
+            return None
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        bench = me.get("bench") or []
+        hand_ids = frozenset(c.get("id") for c in (me.get("hand") or [])
+                             if c and c.get("id") is not None)
+        hand_basic = self._hand_basic_energy(me.get("hand") or [])       # {EnergyType: count}
+        best = None                                                      # (energy, index)
+        for i, p in enumerate(bench):
+            if not p:
+                continue
+            e = len(p.get("energies") or [])
+            pstat = self.stats.get(p.get("id")) if self.stats else None
+            # this turn's manual attach, when unspent — typed to the body's own Energy when the hand
+            # holds that Basic, else counted WILD (fail-open)
+            if not board.energy_attached and self._best_hand_attach_units(hand_ids, pstat) >= 1:
+                planned = 1
+                ptype = (pstat.energyType if (pstat and pstat.energyType in hand_basic) else None)
+            else:
+                planned, ptype = 0, None
+            boost = self._typed_boost_total(obs, pstat, opp)
+            # bodies that WILL sit on my Bench after this promote: the current Active retreats down,
+            # every other benched body stays (a requiresBench partner is satisfiable from these)
+            bench_names = self._promote_bench_names(me, i, ma)
+            ko = self._best_affordable_ko_value(
+                obs, board, opp, p.get("id"), e + planned, bound="min", body=p,
+                extra_type=ptype, extra_units=planned, boost_amount=boost,
+                boost_type=(pstat.energyType if pstat else None), promote_bench_names=bench_names)
+            if ko > 0 and (best is None or e > best[0]):
+                best = (e, i)
+        return (_BENCH, best[1]) if best else None
+
+    def _promote_bench_names(self, me: dict, promoted_index: int, ma: dict | None) -> set:
+        """Names on my Bench AFTER promoting bench slot ``promoted_index`` — every other benched body
+        plus the current Active (which retreats to the Bench). The `requiresBench` partner set a
+        promoted attacker can count on (Cosmic Beam's benched Lunatone is the retreated Active)."""
+        names = set()
+        for j, b in enumerate(me.get("bench") or []):
+            if j == promoted_index or not b:
+                continue
+            st = self.stats.get(b.get("id")) if self.stats else None
+            if st is not None and st.name:
+                names.add(st.name)
+        ma_stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
+        if ma_stat is not None and ma_stat.name:
+            names.add(ma_stat.name)
+        return names
+
+    def _typed_boost_total(self, obs: dict, body_stat, defender: dict | None) -> int:
+        """Total flat this-turn damage-boost applicable to ``body_stat`` attacking the opponent's
+        Active — the boosts already PLAYED this turn (`TurnBoostTracker`) plus the playable boost-Item
+        copies still in MY hand (Items stack; a Supporter is one/turn, dropped once `supporterPlayed`).
+        Each boost carries its own gates — the attacker-type ("your {F} Pokémon") and the defender-{ex}
+        scope — applied here so a boost the line can't legally cash is never counted. 0 with no body."""
+        if body_stat is None:
+            return 0
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        dstat = self.stats.get((defender or {}).get("id")) if (self.stats and defender) else None
+        def_is_ex = bool(dstat and (dstat.ex or dstat.megaEx))
+
+        def applies(atype, vs_ex) -> bool:
+            if atype is not None and getattr(body_stat, "energyType", None) != atype:
+                return False
+            return not (vs_ex and not def_is_ex)
+
+        total = 0
+        for amount, atype, vs_ex in self._turn_boosts.boosts_for(yi):
+            if applies(atype, vs_ex):
+                total += amount
+        supporter_spent = bool(state.get("supporterPlayed"))
+        for c in (me.get("hand") or []):
+            st = self.stats.get((c or {}).get("id")) if (self.stats and c) else None
+            if st is None or not getattr(st, "damageBoost", 0) or getattr(st, "hp", 0):
+                continue
+            if getattr(st, "cardType", None) == 2:            # a Tool boost lives while ATTACHED
+                continue                                       # (visible board state, priced elsewhere)
+            if st.cardType == _SUPPORTER and supporter_spent:
+                continue
+            if applies(st.damageBoostType, st.damageBoostVsEx):
+                total += st.damageBoost
+        return total
 
     def _bench_wincon_prize_value(self, me: dict) -> int:
         """The greatest prize value among my BENCHED win-condition bodies (Mega ex 3 / ex 2 / else 1), 0 if
