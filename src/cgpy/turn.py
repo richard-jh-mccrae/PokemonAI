@@ -477,6 +477,15 @@ def _resolve_attack(gs: GameState, seat: int, attack_id: int) -> None:
             if not _sweep_kos(gs, credited=seat, then=("end_turn", seat)):
                 _end_turn(gs, seat)
             return
+    if attacker.attack_gate_turn == gs.turn:
+        # Sand-Attack gate: "if the Defending Pokémon tries to use an attack, your
+        # opponent flips a coin. If tails, that attack doesn't happen." The gated
+        # mover owns the flip (the confusion-channel convention); the fire path is
+        # unpinned — no captured defender attack under the gate yet (cn139/971/1513
+        # pin only the arming turn).
+        if not gs.coin_flip(seat):
+            _end_turn(gs, seat)
+            return
     pre = adef.get("pre")
     if pre:
         from .state import EffectFrame
@@ -526,7 +535,16 @@ def _attack_damage_apply(gs: GameState, seat: int, attack_id: int,
         ob.items_locked_turn = gs.turn + 1         # opponent's next turn (menu-enforced)
     rider = adef.get("rider")
     if rider:                       # rider runs BEFORE KO processing (pinned ms_mirror_1002
-        start_program(gs, seat, attacker.top, rider, kind="attack")  # f25-f26)
+        # The rider frame inherits the PRE program's coin state (Magical Leaf: the
+        # pre flip both boosts the damage AND gates the rider heal). Coin-count ops
+        # reset their own tallies, so inherited keys never skew a fresh flip set.
+        from .state import EffectFrame
+        inherited = {k: pre_vars[k] for k in ("heads", "heads_count", "flips_total")
+                     if k in pre_vars}
+        gs.frames.append(EffectFrame(program=list(rider), pc=0, vars=inherited,
+                                     seat=seat, source=attacker.top, kind="attack"))
+        from .chain import run_frames
+        run_frames(gs)
         return
     _after_attack(gs, seat)
 
@@ -555,7 +573,10 @@ def _sweep_kos(gs: GameState, *, credited: int, then: tuple) -> bool:
     (the caller continues normally). KO thresholds use stadium-adjusted effective HP."""
     from .chain import stadium_hp_delta
     claims: list[list[int]] = []              # [claimant seat, prize value] per KO
-    for side in (1 - credited, credited):
+    # Side order: the CREDITED side's own deaths sweep (and claim) first — pinned
+    # cn364_9001 f18: Thump-Thump's recoil self-KO discards before the effect-KO'd
+    # defender, and the opponent's 1-prize claim poses before the attacker's 3.
+    for side in (credited, 1 - credited):
         b = gs.players[side]
         koed = False
         if b.active is not None and b.active.hp + stadium_hp_delta(gs, b.active) <= 0:

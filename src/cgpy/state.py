@@ -51,6 +51,8 @@ class PokemonInPlay:
     outgoing_less: int = 0        # its attacks do N less (pre-W/R) on this global turn
     no_attack_turn: int = -1      # Snotted-Up transient: this mon can't attack on this
                                   # global turn (menu-enforced, like sleep/paralysis)
+    attack_gate_turn: int = -1    # Sand-Attack transient: on this global turn, this
+                                  # mon's attacks need a heads first (tails = nothing)
 
     @property
     def top(self) -> int:

@@ -202,6 +202,14 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
         elif op == "koLastTurn":              # Unfair Stamp: own KO on opp's last turn
             if gs.ko_turn[seat] != gs.turn - 1:
                 return False
+        elif op == "rareCandyPairExists":     # Rare Candy: menu-gated on a legal
+            if not _rare_candy_pairs(gs, seat):  # (basic, hand stage-2) pair — pinned
+                return False                     # trc_9000: never offered without one
+        elif op == "anyHandAbove":            # Hand Trimmer: hidden unless SOMEONE
+            n = c.get("n", 5)                 # holds more than n (pinned trh_9000
+            if not (len(b.hand) - 1 > n       # f75: 2/5 hands -> END only). Own hand
+                    or len(gs.players[1 - seat].hand) > n):  # counts w/o this card
+                return False
         elif op == "handHas":
             if not any(_card_matches(gs, s, c["filter"]) for s in b.hand):
                 return False
@@ -358,10 +366,13 @@ def op_deck_to_hand_and_shuffle(gs, fr, args) -> bool:
     seat = fr.seat
     b = gs.players[seat]
     if "maxVar" in args and "answer" not in fr.vars:
-        # "a number of cards up to the number of your Benched Pokémon" (Nab 'n' Dash):
-        # the cap resolves at use time; an empty bench skips the ask like a zero-option
-        # search (unpinned edge — no trace reaches it benchless).
-        args = dict(args, max=len(b.bench))
+        # Use-time caps: "up to the number of your Benched Pokémon" (Nab 'n' Dash) /
+        # "up to the number of heads" (All-You-Can-Grab, pinned cn1013_9000 f34
+        # max 3 = heads). A zero cap skips the ask like a zero-option search
+        # (unpinned edge — no captured benchless/headless run).
+        cap = (len(b.bench) if args["maxVar"] == "atk_bench"
+               else fr.vars.get("heads_count", 0))
+        args = dict(args, max=cap)
         if args["max"] <= 0:
             gs.turn_action_count += 1
             _shuffle(gs, seat)
@@ -492,44 +503,64 @@ def op_trash_energy_enemy(gs, fr, args) -> bool:
     seat = fr.seat
     opp = 1 - seat
     ob = gs.players[opp]
-    plist = ([(int(AreaType.ACTIVE), 0, ob.active)] if ob.active else []) + \
-        ([] if args.get("activeOnly") else
-         [(int(AreaType.BENCH), i, p) for i, p in enumerate(ob.bench)])
-    from .options import provided_units_of
-    flt = args.get("filter")                      # Enhanced Hammer: Special Energy only
-    entries = []                                  # (attach tick, option dict)
-    for area, idx, p in plist:
-        for k, s in enumerate(p.energy):
-            if flt is not None and not _card_matches(gs, s, flt):
-                continue
-            entries.append((gs.attach_seq.get(s, 0),
-                            {"type": int(OptionType.ENERGY), "area": area, "index": idx,
-                             "playerIndex": opp, "energyIndex": k,
-                             "count": provided_units_of(gs, p, s)}))
-    entries.sort(key=lambda e: e[0])
-    options = [o for _tick, o in entries]
-    if not options:
-        return True
-    if "answer" not in fr.vars:
-        pose(gs, seat, type=SelectType.ENERGY, context=SelectContext.DISCARD_ENERGY,
-             options=options, effect_card=fr.source,
-             remain_energy_cost=1)     # pinned ms_mirror_1002 f14 (Crushing Hammer)
-        return False
-    o = fr.vars.pop("answered_options")[0]
-    fr.vars.pop("answer")
-    p = ob.active if o["area"] == int(AreaType.ACTIVE) else ob.bench[o["index"]]
-    serial = p.energy[o["energyIndex"]]
-    p.energy.remove(serial)
-    ob.discard.append(serial)
-    gs.move_card(serial, AreaType.ENERGY, AreaType.DISCARD, seat=opp,
-                 visible_to_owner=True, visible_to_opponent=True)
-    return True
+    while True:
+        if args.get("perHeads"):
+            # Hyper Whirlpool / Coiling Crush: one discard per recorded heads (the
+            # observed zero-heads / zero-energy runs are silent — cn469/cn1037);
+            # each pick re-poses over the remaining energies.
+            left = fr.vars.setdefault("discards_left",
+                                      fr.vars.get("heads_count", 0))
+            if left <= 0:
+                fr.vars.pop("discards_left", None)
+                return True
+        plist = ([(int(AreaType.ACTIVE), 0, ob.active)] if ob.active else []) + \
+            ([] if args.get("activeOnly") else
+             [(int(AreaType.BENCH), i, p) for i, p in enumerate(ob.bench)])
+        from .options import provided_units_of
+        flt = args.get("filter")                  # Enhanced Hammer: Special Energy only
+        entries = []                              # (attach tick, option dict)
+        for area, idx, p in plist:
+            for k, s in enumerate(p.energy):
+                if flt is not None and not _card_matches(gs, s, flt):
+                    continue
+                entries.append((gs.attach_seq.get(s, 0),
+                                {"type": int(OptionType.ENERGY), "area": area,
+                                 "index": idx, "playerIndex": opp, "energyIndex": k,
+                                 "count": provided_units_of(gs, p, s)}))
+        entries.sort(key=lambda e: e[0])
+        options = [o for _tick, o in entries]
+        if not options:
+            fr.vars.pop("discards_left", None)
+            return True
+        if "answer" not in fr.vars:
+            pose(gs, seat, type=SelectType.ENERGY,
+                 context=SelectContext.DISCARD_ENERGY,
+                 options=options, effect_card=fr.source,
+                 remain_energy_cost=1)  # pinned ms_mirror_1002 f14 (Crushing Hammer)
+            return False
+        o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+        p = ob.active if o["area"] == int(AreaType.ACTIVE) else ob.bench[o["index"]]
+        serial = p.energy[o["energyIndex"]]
+        p.energy.remove(serial)
+        ob.discard.append(serial)
+        gs.move_card(serial, AreaType.ENERGY, AreaType.DISCARD, seat=opp,
+                     visible_to_owner=True, visible_to_opponent=True)
+        if not args.get("perHeads"):
+            return True
+        fr.vars["discards_left"] -= 1
 
 
 def op_trash_to_hand(gs, fr, args) -> bool:
-    """Recover matching card(s) from own discard to hand (Night Stretcher)."""
+    """Recover matching card(s) from own discard to hand (Night Stretcher).
+    ``maxVar: "heads_count"`` (Odor Sleuth): cap = recorded heads, zero = silent."""
     seat = fr.seat
     b = gs.players[seat]
+    if args.get("maxVar") == "heads_count":
+        cap = fr.vars.get("heads_count", 0)
+        if cap <= 0 and "answer" not in fr.vars:
+            return True
+        args = dict(args, max=cap)
     if "answer" not in fr.vars:
         opts = _zone_options(gs, seat, b.discard, AreaType.DISCARD,
                              args.get("filter", {}))
@@ -789,12 +820,39 @@ def op_heal_choose(gs, fr, args) -> bool:
     fr.vars.pop("answer")
     from .turn import _target_of
     target = _target_of(gs, seat, o["area"], o["index"])
-    healed = min(args["amount"], target.max_hp - target.hp)
+    cap = (target.max_hp - target.hp) if args.get("all") else args["amount"]
+    healed = min(cap, target.max_hp - target.hp)
     if healed > 0:
         target.hp += healed
         gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
                  "cardId": gs.card_id(target.top), "serial": target.top,
                  "value": healed, "putDamageCounter": False})
+    return True
+
+
+def op_if_heads_count_below(gs, fr, args) -> bool:
+    """Skip the next `skip` ops unless heads_count reached `n` (all-heads gates:
+    Bellyful of Milk / Tri Kinesis)."""
+    if fr.vars.get("heads_count", 0) < args["n"]:
+        fr.pc += args.get("skip", 1)
+    return True
+
+
+def op_choose_condition_inflict(gs, fr, args) -> bool:
+    """Miraculous Paint's heads: "choose a Special Condition. Your opponent's Active
+    Pokémon is now affected by that Special Condition." — ctx AFFECT_SPECIAL_CONDITION,
+    type SPECIAL_CONDITION, min1 max1, effect = the attacker, options = all five
+    conditions in enum order (pinned cn1003_9701 f15-f16)."""
+    if "answer" not in fr.vars:
+        opts = [{"type": int(OptionType.SPECIAL_CONDITION), "specialConditionType": k}
+                for k in range(5)]
+        pose(gs, fr.seat, type=SelectType.SPECIAL_CONDITION,
+             context=SelectContext.AFFECT_SPECIAL_CONDITION,
+             options=opts, effect_card=fr.source)
+        return False
+    cond = fr.vars.pop("answered_options")[0]["specialConditionType"]
+    fr.vars.pop("answer")
+    _set_condition(gs, 1 - fr.seat, cond)
     return True
 
 
@@ -899,9 +957,12 @@ def op_opponent_switches(gs, fr, args) -> bool:
 
 
 def op_mill(gs, fr, args) -> bool:
-    """"Discard the top N cards of your/your opponent's deck." — top of deck = list end."""
+    """"Discard the top N cards of your/your opponent's deck." — top of deck = list
+    end. ``nVar: "heads_count"``: one per recorded heads (Wreak Havoc class)."""
     seat = fr.seat if args.get("who", "self") == "self" else 1 - fr.seat
     b = gs.players[seat]
+    if args.get("nVar") == "heads_count":
+        args = dict(args, n=fr.vars.get("heads_count", 0))
     for _ in range(min(args.get("n", 1), len(b.deck))):
         serial = b.deck.pop()
         b.discard.append(serial)
@@ -1123,17 +1184,21 @@ def op_deck_energy_attach_distribute(gs, fr, args) -> bool:
         if "pending_cards" not in v:
             if bi >= len(buckets):
                 v.pop("bucket_i", None)
-                _shuffle(gs, seat)
+                if b.deck:               # an empty deck logs no SHUFFLE (pinned
+                    _shuffle(gs, seat)   # trc_9000 f279: deck-out Kaleidowaltz)
                 return True
             bk = buckets[bi]
             if "answer" not in v:
+                bk_max = bk.get("max", 1)
+                if "maxPerHeads" in bk:          # Kaleidowaltz: 2 per recorded heads;
+                    bk_max = bk["maxPerHeads"] * v.get("heads_count", 0)
                 opts = _zone_options(gs, seat, b.deck, AreaType.DECK,
                                      bk.get("filter", {}))
-                if not opts:
-                    gs.turn_action_count += 1    # skipped ask still bumps tac
-                    v["bucket_i"] = bi + 1
+                if not opts or bk_max <= 0:      # zero heads still shuffles at the
+                    gs.turn_action_count += 1    # end (pinned cn1453_9000 f19);
+                    v["bucket_i"] = bi + 1       # skipped ask still bumps tac
                     continue
-                cap = min(bk.get("max", 1), len(opts))
+                cap = min(bk_max, len(opts))
                 if bk.get("distinctTypes"):
                     kinds = {int(gs.stat(b.deck[o["index"]]).energyType)
                              for o in opts}
@@ -1568,9 +1633,16 @@ def op_may_ask(gs, fr, args) -> bool:
 def op_deck_energy_attach(gs, fr, args) -> bool:
     """"Search your deck for a Basic {X} Energy card and attach it to this Pokémon." —
     deck pick (ctx ATTACH_TO over the revealed deck, Crispin's pinned stage shape), then
-    attach to the Active (target "self") or a chosen in-play target, then shuffle."""
+    attach to the Active (target "self") or a chosen in-play target, then shuffle.
+    ``maxVar: "heads_count"`` (Gormandizer): cap = recorded heads; ZERO heads does
+    NOTHING — no ask, no shuffle (pinned cn1547_9000 f8 vs cn1453's shuffling twin)."""
     seat = fr.seat
     b = gs.players[seat]
+    if args.get("maxVar") == "heads_count":
+        cap = fr.vars.get("heads_count", 0)
+        if cap <= 0 and "picked" not in fr.vars and "answer" not in fr.vars:
+            return True
+        args = dict(args, max=cap)
     if "picked" not in fr.vars:
         if "answer" not in fr.vars:
             opts = _zone_options(gs, seat, b.deck, AreaType.DECK, args.get("filter", {}))
@@ -1755,18 +1827,26 @@ def op_bonus_if_heads(gs, fr, args) -> bool:
 
 
 def op_coins_count(gs, fr, args) -> bool:
-    """Flip N coins (or one per scale-var unit), tallying heads into the frame."""
+    """Flip N coins (or one per scale-var unit), tallying heads into the frame.
+    ``owner: "opp"`` — the OPPONENT flips (Bench Manipulation: COIN playerIndex =
+    the victim, pinned cn607_9000 f24); the flip seat drives the replay coin
+    channel. ``flips_total`` persists for tails/all-heads math."""
     if "flips_left" not in fr.vars:
         n = args.get("n")
         if n is None:
             from .damage import scale_count
             n = scale_count(gs, fr.seat, args["var"], args.get("energyType"))
         fr.vars["flips_left"] = n
+        fr.vars["flips_total"] = n
         fr.vars["heads_count"] = 0
+    flip_seat = 1 - fr.seat if args.get("owner") == "opp" else fr.seat
     while fr.vars["flips_left"] > 0:
-        head = _flip(gs, fr)
-        if head is None:
-            return False
+        if args.get("owner") == "opp":
+            head = gs.coin_flip(flip_seat)     # opponent flips never go manual-coin
+        else:
+            head = _flip(gs, fr)
+            if head is None:
+                return False
         fr.vars["flips_left"] -= 1
         if head:
             fr.vars["heads_count"] += 1
@@ -1775,7 +1855,9 @@ def op_coins_count(gs, fr, args) -> bool:
 
 
 def op_coins_until_tails(gs, fr, args) -> bool:
-    if "heads_count" not in fr.vars:
+    # Guard on "flipping", not "heads_count": rider frames may inherit a PRE program's
+    # heads_count (the Magical-Leaf threading), and this op always tallies afresh.
+    if "flipping" not in fr.vars:
         fr.vars["heads_count"] = 0
         fr.vars["flipping"] = True
     while fr.vars.get("flipping"):
@@ -1800,6 +1882,304 @@ def op_bonus_per_heads(gs, fr, args) -> bool:
     return True
 
 
+def op_if_tails(gs, fr, args) -> bool:
+    """Skip the next `skip` ops when the last flip was HEADS (ifHeads mirror)."""
+    if fr.vars.get("heads"):
+        fr.pc += args.get("skip", 1)
+    return True
+
+
+def op_skip(gs, fr, args) -> bool:
+    """Unconditional jump over the next `n` ops (branch glue)."""
+    fr.pc += args.get("n", 1)
+    return True
+
+
+def op_bonus_if_all_heads(gs, fr, args) -> bool:
+    """Hyper Lariat: "If both of them are heads, this attack does N more damage."
+    (pre — coins log before the HP_CHANGE, pinned cn1102_9001: HH → −200)."""
+    if fr.vars.get("heads_count", 0) == fr.vars.get("flips_total", -1):
+        fr.vars["damage_bonus"] = fr.vars.get("damage_bonus", 0) + args["n"]
+    return True
+
+
+def op_damage_per_tails(gs, fr, args) -> bool:
+    """Bench Manipulation: damage per TAILS over the recorded flip set (a zero-tails
+    run still logs HP value 0 — pinned cn607_9000 f24)."""
+    tails = fr.vars.get("flips_total", 0) - fr.vars.get("heads_count", 0)
+    fr.vars["damage_override"] = args["per"] * tails
+    return True
+
+
+def op_damage_self_if_no_heads(gs, fr, args) -> bool:
+    """Reckless Abandon: "If both of them are tails, this Pokémon also does N damage
+    to itself." — rider; the self-hit logs HP_CHANGE and the normal sweep buries the
+    body (pinned cn662_9000/9001: TT → −90 self + full self-KO + opponent prize)."""
+    if fr.vars.get("heads_count", 0) == 0 and fr.vars.get("flips_total", 0) > 0:
+        me = gs.players[fr.seat].active
+        if me is not None:
+            me.hp = max(0, me.hp - args["damage"])
+            gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": fr.seat,
+                     "cardId": gs.card_id(me.top), "serial": me.top,
+                     "value": -args["damage"], "putDamageCounter": False})
+    return True
+
+
+def op_self_lock_all_next_turn(gs, fr, args) -> bool:
+    """Power Rush's tails rider: this Pokémon can't use attacks next turn (the same
+    attack_locks mechanics as the unconditional selfLockAllNextTurn field)."""
+    me = gs.players[fr.seat].active
+    if me is not None:
+        for aid in gs.stat(me.top).attacks:
+            me.attack_locks[str(aid)] = gs.turn + 2
+    return True
+
+
+def _effect_ko(gs, p) -> None:
+    """Mark an in-play mon dead by card effect: NO HP_CHANGE log (pinned cn259_9000
+    f17 / cn364_9001 f18: straight stack-discard moves) — the normal sweep discards
+    the stack and runs the prize/promotion flow. −1000 beats any stadium HP bonus."""
+    p.hp = -1000
+
+
+def op_knock_out_active(gs, fr, args) -> bool:
+    """"Your opponent's Active Pokémon is Knocked Out." (Thump-Thump Boom's heads —
+    pinned cn364_9001; Swinging Sphene's heads adds ``basicOnly``)."""
+    victim = gs.players[1 - fr.seat].active
+    if victim is None:
+        return True
+    if args.get("basicOnly") and not gs.stat(victim.top).basic:
+        return True
+    _effect_ko(gs, victim)
+    return True
+
+
+def op_knock_out_choose(gs, fr, args) -> bool:
+    """Choose-and-KO: ctx DISCARD CARD select over matching opponent mons, min1 max1,
+    effect = the attacker (pinned cn259_9000 f16: Swinging Sphene's tails over the
+    benched Basics). ``scope``: "bench" | "any" (any = active first, bench order —
+    Tri Kinesis, shape unpinned beyond the bench flavor). Zero candidates → no-op."""
+    seat = fr.seat
+    ob = gs.players[1 - seat]
+    rows = []
+    if args.get("scope", "bench") != "bench" and ob.active is not None:
+        rows.append((int(AreaType.ACTIVE), 0, ob.active))
+    rows += [(int(AreaType.BENCH), i, p) for i, p in enumerate(ob.bench)]
+    if args.get("basicOnly"):
+        rows = [(a, i, p) for a, i, p in rows if gs.stat(p.top).basic]
+    if not rows:
+        return True
+    if "answer" not in fr.vars:
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.DISCARD,
+             options=[opt_card(a, i, 1 - seat) for a, i, _p in rows],
+             effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    target = (ob.active if o["area"] == int(AreaType.ACTIVE)
+              else ob.bench[o["index"]])
+    _effect_ko(gs, target)
+    return True
+
+
+def op_coin_damage_each_opp(gs, fr, args) -> bool:
+    """Nullifying Zero: one flip per opponent mon (active first, bench order — the
+    attacker flips, pinned cn1526_9000: 1 opp mon → 1 COIN p0); heads → N damage to
+    that mon (active takes W/R like any attack hit; bench damage never does); misses
+    log nothing (pinned: tails → no HP entry at all)."""
+    seat = fr.seat
+    ob = gs.players[1 - seat]
+    from .damage import apply_weakness_resistance
+    me = gs.players[seat].active
+    rows = ([(True, ob.active)] if ob.active is not None else []) + \
+        [(False, p) for p in ob.bench]
+    for is_active, p in rows:
+        head = gs.coin_flip(seat)
+        if not head:
+            continue
+        dmg = args["damage"]
+        if is_active and me is not None:
+            dmg = apply_weakness_resistance(gs, me, p, dmg)
+        p.hp = max(0, p.hp - dmg)
+        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": 1 - seat,
+                 "cardId": gs.card_id(p.top), "serial": p.top,
+                 "value": -dmg, "putDamageCounter": False})
+    return True
+
+
+def op_shuffle_in_play_into_deck_choose(gs, fr, args) -> bool:
+    """Mystical Return (heads rider): choose an opponent mon and shuffle it AND all
+    attached cards into their deck. Pinned cn173_9000 f10-f11: ctx TO_DECK CARD min1
+    max1 over the opponent bench, one MOVE per card (top BEN→DECK; pre-evos/energies/
+    tools follow the KO-sweep area order), then ONE SHUFFLE of the victim's deck.
+    ``scope: "any"`` (Reversing Gust) adds the Active (heads path unpinned — modeled
+    on the bench flavor; a shuffled-out Active triggers the owner's promotion, the
+    Tuck-Tail shape). Zero candidates → no-op."""
+    seat = fr.seat
+    victim = 1 - seat
+    vb = gs.players[victim]
+    if "shuffled_active" in fr.vars:               # the promotion answer (scope any)
+        o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+        p = vb.bench.pop(o["index"])
+        vb.active = p
+        p.moved_active_turn = gs.turn
+        gs.move_card(p.top, AreaType.BENCH, AreaType.ACTIVE, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+        return True
+    rows = []
+    if args.get("scope") == "any" and vb.active is not None:
+        rows.append((int(AreaType.ACTIVE), 0, vb.active))
+    rows += [(int(AreaType.BENCH), i, p) for i, p in enumerate(vb.bench)]
+    if not rows:
+        return True
+    if "answer" not in fr.vars:
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.TO_DECK,
+             options=[opt_card(a, i, victim) for a, i, _p in rows],
+             effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    was_active = o["area"] == int(AreaType.ACTIVE)
+    if was_active:
+        target = vb.active
+        vb.active = None
+        vb.poisoned = vb.burned = False            # conditions leave with the Active
+        vb.asleep = vb.paralyzed = vb.confused = False
+        from_area = AreaType.ACTIVE
+    else:
+        target = vb.bench.pop(o["index"])
+        from_area = AreaType.BENCH
+    for k, s in enumerate(reversed(target.stack)):
+        area = from_area if k == 0 else AreaType.PRE_EVOLUTION
+        vb.deck.append(s)
+        gs.move_card(s, area, AreaType.DECK, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in list(target.energy):
+        vb.deck.append(s)
+        gs.move_card(s, AreaType.ENERGY, AreaType.DECK, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in target.tools:
+        vb.deck.append(s)
+        gs.move_card(s, AreaType.TOOL, AreaType.DECK, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    _shuffle(gs, victim)
+    if was_active and vb.bench:
+        fr.vars["shuffled_active"] = True
+        pose(gs, victim, type=SelectType.CARD, context=SelectContext.TO_ACTIVE,
+             options=[opt_card(AreaType.BENCH, i, victim)
+                      for i in range(len(vb.bench))])
+        return False
+    return True
+
+
+def _rare_candy_pairs(gs, seat):
+    """Legal (hand stage-2 index, target area, target index) pairs: a Basic in play
+    that did NOT enter this turn, and a hand Stage 2 whose pre-pre-evolution name
+    matches it (name-chain lookup through any intermediate print)."""
+    from .options import _targets
+    b = gs.players[seat]
+    if gs.turn <= 2:                     # "can't use this card during your first turn"
+        return []
+    stage1_from = {}                     # stage1 name -> its basic's name
+    for cid in gs.db.cards:
+        st = gs.db.card(cid)
+        if st.cardType == CardType.POKEMON and st.stage1 and st.evolvesFrom:
+            stage1_from[st.name] = st.evolvesFrom
+    pairs = []
+    for i, s in enumerate(b.hand):
+        st = gs.stat(s)
+        if st.cardType != CardType.POKEMON or not st.stage2:
+            continue
+        basic_name = stage1_from.get(st.evolvesFrom)
+        if basic_name is None:
+            continue
+        for area, idx, p in _targets(gs, seat):
+            if (gs.stat(p.top).basic and p.entered_turn < gs.turn
+                    and gs.stat(p.top).name == basic_name):
+                pairs.append((i, area, idx))
+    return pairs
+
+
+def op_rare_candy_evolve(gs, fr, args) -> bool:
+    """Rare Candy: ctx EVOLVE, type EVOLVE, min1 max1, effect = the Candy itself,
+    options in the MAIN-menu evolve encoding — hand index of the Stage 2 + the
+    in-play Basic target (pinned trcx_9100 f13); resolution = one EVOLVE log with the
+    Stage 1 skipped (f14). Pair order: hand index major, then board order (single-pair
+    pinned; multi-pair order is the MAIN-menu convention)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    if "answer" not in fr.vars:
+        opts = [{"type": int(OptionType.EVOLVE), "area": int(AreaType.HAND),
+                 "index": i, "inPlayArea": area, "inPlayIndex": idx}
+                for i, area, idx in _rare_candy_pairs(gs, seat)]
+        if not opts:
+            return True                  # unreachable behind the menu gate
+        pose(gs, seat, type=SelectType.EVOLVE, context=SelectContext.EVOLVE,
+             options=opts, effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    serial = b.hand[o["index"]]
+    from .turn import _apply_evolution, _target_of
+    target = _target_of(gs, seat, o["inPlayArea"], o["inPlayIndex"])
+    b.hand.remove(serial)
+    _apply_evolution(gs, seat, serial, target)
+    return True
+
+
+def op_both_hand_trim_to(gs, fr, args) -> bool:
+    """Hand Trimmer: "Each player discards cards from their hand until they have N
+    cards in their hand. Your opponent discards first." — per discarding player, ONE
+    ctx DISCARD CARD select over their whole hand with min = max = hand − N (pinned
+    trh_9000 f105: hand 7 → min2 max2; f68: hand 6 → min1 max1), moves public both
+    ways in answer order (f69/f71). The opponent's chosen exits are opp-turn hand
+    exits, so they drain the replay hand-pick FIFO (hand_pick_expect)."""
+    seat = fr.seat
+    n = args.get("n", 5)
+    while True:
+        stage = fr.vars.setdefault("trim_stage", 0)    # 0 = opponent, 1 = self
+        if stage > 1:
+            fr.vars.pop("trim_stage", None)
+            return True
+        victim = 1 - seat if stage == 0 else seat
+        vb = gs.players[victim]
+        if "answer" in fr.vars:
+            picked = [vb.hand[o["index"]] for o in fr.vars.pop("answered_options")]
+            fr.vars.pop("answer")
+            for s in picked:
+                vb.hand.remove(s)
+                vb.discard.append(s)
+                gs.move_card(s, AreaType.HAND, AreaType.DISCARD, seat=victim,
+                             visible_to_owner=True, visible_to_opponent=True)
+            if victim != seat:
+                gs.rng.hand_pick_expect(victim, picked)
+            fr.vars["trim_stage"] = stage + 1
+            continue
+        k = len(vb.hand) - n
+        if k <= 0:
+            fr.vars["trim_stage"] = stage + 1
+            continue
+        pose(gs, victim, type=SelectType.CARD, context=SelectContext.DISCARD,
+             options=[opt_card(AreaType.HAND, i, victim)
+                      for i in range(len(vb.hand))],
+             min_count=k, max_count=k, effect_card=fr.source)
+        return False
+
+
+def op_gate_defender_attacks_coin(gs, fr, args) -> bool:
+    """Sand Attack: "During your opponent's next turn, if the Defending Pokémon tries
+    to use an attack, your opponent flips a coin. If tails, that attack doesn't
+    happen." — arms a transient on the DEFENDER for the opponent's next turn; the
+    flip itself happens in the attack flow (turn.py — the gate turn's mover owns the
+    coin, the confusion-check channel). The gate's fire path is unpinned (no captured
+    defender attack under it yet); the arming side is exercised by the cn139 pins."""
+    defender = gs.players[1 - fr.seat].active
+    if defender is not None:
+        defender.attack_gate_turn = gs.turn + 1
+    return True
+
+
 def op_inflict_condition_active(gs, fr, args) -> bool:
     """Attack rider: inflict a special condition on the defending Active (pinned
     v2_ml_dx_5501 f22: Mind Bend logs CONFUSED isRecover=false after the damage)."""
@@ -1817,6 +2197,11 @@ def op_discard_energy_attach_bench(gs, fr, args) -> bool:
     min 1, contextCard = that energy); each attach emits the plain ATTACH log."""
     seat = fr.seat
     b = gs.players[seat]
+    if args.get("maxVar") == "heads_count":     # Energizing Sketch: cap = heads
+        cap = fr.vars.get("heads_count", 0)
+        if cap <= 0 and "picked" not in fr.vars and "answer" not in fr.vars:
+            return True
+        args = dict(args, max=cap)
     if "picked" not in fr.vars:
         if "answer" not in fr.vars:
             opts = _zone_options(gs, seat, b.discard, AreaType.DISCARD,
@@ -2512,6 +2897,21 @@ OPS = {
     "xOppHandRevealChoose": op_opp_hand_reveal_choose,
     "xDamagePerRevealed": op_damage_per_revealed,
     "xDeckEnergyAttachDistribute": op_deck_energy_attach_distribute,
+    "ifTails": op_if_tails,
+    "xSkip": op_skip,
+    "xBonusIfAllHeads": op_bonus_if_all_heads,
+    "xDamagePerTails": op_damage_per_tails,
+    "xDamageSelfIfNoHeads": op_damage_self_if_no_heads,
+    "xSelfLockAllNextTurn": op_self_lock_all_next_turn,
+    "xKnockOutActive": op_knock_out_active,
+    "xKnockOutChoose": op_knock_out_choose,
+    "xCoinDamageEachOpp": op_coin_damage_each_opp,
+    "xShuffleInPlayIntoDeckChoose": op_shuffle_in_play_into_deck_choose,
+    "xGateDefenderAttacksCoin": op_gate_defender_attacks_coin,
+    "xIfHeadsCountBelow": op_if_heads_count_below,
+    "xChooseConditionInflict": op_choose_condition_inflict,
+    "xRareCandyEvolve": op_rare_candy_evolve,
+    "xBothHandTrimTo": op_both_hand_trim_to,
     "xDeckAttachPerBench": op_deck_attach_per_bench,
     "xDeckEvolvePerBench": op_deck_evolve_per_bench,
     "xDeckEvolveChooseAndShuffle": op_deck_evolve_choose_and_shuffle,

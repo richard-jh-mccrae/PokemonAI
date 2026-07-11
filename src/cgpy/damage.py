@@ -64,6 +64,9 @@ def scale_count(gs: GameState, seat: int, var: str, energy_type: int | None = No
         return sum(len(p.tools) for p in gs.in_play(seat))
     if var == "atk_in_play":                    # Sweet Circle: own in-play mons
         return len(list(gs.in_play(seat)))
+    if var == "atk_in_play_type":               # Ruffians Attack: own typed mons
+        return len([p for p in gs.in_play(seat)
+                    if int(gs.stat(p.top).energyType) == energy_type])
     raise ValueError(f"unknown scale var {var!r}")
 
 

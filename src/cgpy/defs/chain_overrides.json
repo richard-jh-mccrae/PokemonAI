@@ -481,6 +481,36 @@
    ]
   }
  },
+ "1079": {
+  "name": "Rare Candy",
+  "_provenance": "skip-evolve: ctx37 EVOLVE select in the MAIN-menu option encoding, menu-gated on a legal pair (pinned trcx_9100 f13-f14 / trc_9000 never offered)",
+  "legal": [
+   {
+    "op": "rareCandyPairExists"
+   }
+  ],
+  "play": [
+   {
+    "op": "xRareCandyEvolve"
+   }
+  ]
+ },
+ "1087": {
+  "name": "Hand Trimmer",
+  "_provenance": "both players discard to 5, opponent first, own-choice ctx8 one-at-a-time picks (pinned trh_9000 f68-f69); opp exits drain the hand-pick FIFO; hidden unless someone holds >5 (f75)",
+  "legal": [
+   {
+    "op": "anyHandAbove",
+    "n": 5
+   }
+  ],
+  "play": [
+   {
+    "op": "xBothHandTrimTo",
+    "n": 5
+   }
+  ]
+ },
  "851": {
   "name": "Silcoon",
   "_provenance": "Multiplying Cocoon on-evolve ask -> deck-to-bench Silcoon/Cascoon (pinned rvl1230_9000 f7-f9: ctx43 YES_NO then ctx TO_BENCH min0 max1 with listing)",

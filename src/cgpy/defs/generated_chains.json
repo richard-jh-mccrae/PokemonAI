@@ -6067,17 +6067,6 @@
   },
   "name": "Hole-Digging Shovel"
  },
- "1079": {
-  "name": "Rare Candy",
-  "deferred": "unparsed effect text",
-  "_seed": {
-   "unparsed": [
-    "Choose 1 of your Basic Pokémon in play.",
-    "If you have a Stage 2 card in your hand that evolves from that Pokémon, put that card onto the Basic Pokémon to evolve it, skipping the Stage 1.",
-    "You can’t use this card during your first turn or on a Basic Pokémon that was put into play this turn."
-   ]
-  }
- },
  "1081": {
   "play": [
    {
@@ -6175,17 +6164,6 @@
   "_seed": {
    "unparsed": [
     "Draw a card for each of your Ancient Pokémon in play."
-   ]
-  }
- },
- "1087": {
-  "name": "Hand Trimmer",
-  "deferred": "unparsed effect text",
-  "_seed": {
-   "unparsed": [
-    "Each player discards cards from their hand until they have 5 cards in their hand.",
-    "Your opponent discards first.",
-    "(If a player has 5 or fewer cards in their hand, they do not discard.)"
    ]
   }
  },
@@ -9687,14 +9665,17 @@
   }
  },
  "attack:139": {
-  "name": "Sand Attack",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xGateDefenderAttacksCoin"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, if the Defending Pokémon tries to use an attack, your opponent flips a coin.",
-    "If tails, that attack doesn’t happen."
+   "rules": [
+    "R-F01"
    ]
-  }
+  },
+  "name": "Sand Attack"
  },
  "attack:140": {
   "name": "Spooky Shot",
@@ -10028,15 +10009,30 @@
   "name": "Shadow Bind"
  },
  "attack:173": {
-  "name": "Mystical Return",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "oppBenchExists"
+   }
+  ],
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xShuffleInPlayIntoDeckChoose",
+    "scope": "bench"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, choose 1 of your opponent’s Benched Pokémon.",
-    "Shuffle that Pokémon and all attached cards into their deck."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Mystical Return"
  },
  "attack:174": {
   "rider": [
@@ -10952,15 +10948,34 @@
   }
  },
  "attack:259": {
-  "name": "Swinging Sphene",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 2
+   },
+   {
+    "op": "xKnockOutActive",
+    "basicOnly": true
+   },
+   {
+    "op": "xSkip",
+    "n": 1
+   },
+   {
+    "op": "xKnockOutChoose",
+    "scope": "bench",
+    "basicOnly": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, Knock Out your opponent’s Active Basic Pokémon.",
-    "If tails, Knock Out 1 of your opponent’s Benched Basic Pokémon."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Swinging Sphene"
  },
  "attack:260": {
   "rider": [
@@ -10985,14 +11000,25 @@
   "name": "Humming Charge"
  },
  "attack:261": {
-  "name": "Cotton Wings",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn",
+    "damageOnly": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage done to this Pokémon by attacks."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Cotton Wings"
  },
  "attack:262": {
   "name": "Time Manipulation",
@@ -12074,15 +12100,29 @@
   }
  },
  "attack:364": {
-  "name": "Thump-Thump Boom",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xDamageSelf",
+    "damage": 100
+   },
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xKnockOutActive"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "This Pokémon does 100 damage to itself.",
-    "Flip a coin.",
-    "If heads, your opponent’s Active Pokémon is Knocked Out."
+   "rules": [
+    "R-B01",
+    "R-F02"
    ]
-  }
+  },
+  "name": "Thump-Thump Boom"
  },
  "attack:365": {
   "name": "Electric Ball",
@@ -13108,14 +13148,22 @@
   "name": "Slashing Strike"
  },
  "attack:469": {
-  "name": "Hyper Whirlpool",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsUntilTails"
+   },
+   {
+    "op": "trashEnergyEnemy",
+    "activeOnly": true,
+    "perHeads": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin until you get tails.",
-    "For each heads, discard an Energy from your opponent’s Active Pokémon."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Hyper Whirlpool"
  },
  "attack:470": {
   "name": "Vise Grip",
@@ -14578,14 +14626,26 @@
   }
  },
  "attack:607": {
-  "name": "Bench Manipulation",
-  "deferred": "unparsed effect text",
+  "ignoreWeakness": true,
+  "ignoreResistance": true,
+  "pre": [
+   {
+    "op": "xCoinsCount",
+    "var": "def_bench",
+    "owner": "opp"
+   },
+   {
+    "op": "xDamagePerTails",
+    "per": 80
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Your opponent flips a coin for each of their Benched Pokémon.",
-    "This attack does 80 damage to your opponent’s Active Pokémon for each tails."
+   "rules": [
+    "R-A01",
+    "R-F03"
    ]
-  }
+  },
+  "name": "Bench Manipulation"
  },
  "attack:608": {
   "pre": [
@@ -15179,14 +15239,22 @@
   "name": "Dangerous Incisors"
  },
  "attack:662": {
-  "name": "Reckless Abandon",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 2
+   },
+   {
+    "op": "xDamageSelfIfNoHeads",
+    "damage": 90
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 2 coins.",
-    "If both of them are tails, this Pokémon also does 90 damage to itself."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Reckless Abandon"
  },
  "attack:663": {
   "rider": [
@@ -15422,15 +15490,37 @@
   }
  },
  "attack:686": {
-  "name": "Bemusing Aroma",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 3
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 0
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 3
+   },
+   {
+    "op": "xSkip",
+    "n": 1
+   },
+   {
+    "op": "xInflictConditionActive",
+    "condition": 4
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, your opponent’s Active Pokémon is now Paralyzed and Poisoned.",
-    "If tails, your opponent’s Active Pokémon is now Confused."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Bemusing Aroma"
  },
  "attack:687": {
   "name": "Cut",
@@ -17496,14 +17586,23 @@
   }
  },
  "attack:879": {
-  "name": "Ruffians Attack",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xCoinsCount",
+    "var": "atk_in_play_type",
+    "energyType": 7
+   },
+   {
+    "op": "xDamagePerHeads",
+    "per": 60
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin for each {D} Pokémon you have in play.",
-    "This attack does 60 damage for each heads."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Ruffians Attack"
  },
  "attack:880": {
   "name": "Drool",
@@ -17823,14 +17922,24 @@
   }
  },
  "attack:910": {
-  "name": "Odor Sleuth",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 3
+   },
+   {
+    "op": "effectTrashToHand",
+    "min": 0,
+    "maxVar": "heads_count",
+    "filter": {}
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 3 coins.",
-    "Put a number of cards up to the number of heads from your discard pile into your hand."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Odor Sleuth"
  },
  "attack:911": {
   "name": "Special Fang",
@@ -18267,15 +18376,25 @@
   }
  },
  "attack:951": {
-  "name": "Reversing Gust",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xShuffleInPlayIntoDeckChoose",
+    "scope": "any"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, choose 1 of your opponent’s Pokémon.",
-    "Shuffle that Pokémon and all attached cards into their deck."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Reversing Gust"
  },
  "attack:952": {
   "rider": [
@@ -18486,14 +18605,17 @@
   }
  },
  "attack:971": {
-  "name": "Sand Attack",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xGateDefenderAttacksCoin"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, if the Defending Pokémon tries to use an attack, your opponent flips a coin.",
-    "If tails, that attack doesn’t happen."
+   "rules": [
+    "R-F01"
    ]
-  }
+  },
+  "name": "Sand Attack"
  },
  "attack:972": {
   "name": "Mud Shot",
@@ -18776,15 +18898,24 @@
   "name": "Poison Jab"
  },
  "attack:1003": {
-  "name": "Miraculous Paint",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xChooseConditionInflict"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, choose a Special Condition.",
-    "Your opponent’s Active Pokémon is now affected by that Special Condition."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Miraculous Paint"
  },
  "attack:1004": {
   "name": "Welcoming Tail",
@@ -18860,15 +18991,24 @@
   }
  },
  "attack:1013": {
-  "name": "All-You-Can-Grab",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsUntilTails"
+   },
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "maxVar": "heads_count",
+    "filter": {},
+    "reveal": false
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin until you get tails.",
-    "Search your deck for a number of cards up to the number of heads and put them into your hand.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "All-You-Can-Grab"
  },
  "attack:1014": {
   "name": "Speed Attack",
@@ -18904,14 +19044,27 @@
   "name": "Repeating Drill"
  },
  "attack:1017": {
-  "name": "Bellyful of Milk",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 2
+   },
+   {
+    "op": "xIfHeadsCountBelow",
+    "n": 2,
+    "skip": 1
+   },
+   {
+    "op": "xHealChoose",
+    "all": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 2 coins.",
-    "If both of them are heads, heal all damage from 1 of your Pokémon."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Bellyful of Milk"
  },
  "attack:1018": {
   "name": "Tackle",
@@ -19084,14 +19237,23 @@
   }
  },
  "attack:1037": {
-  "name": "Coiling Crush",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 2
+   },
+   {
+    "op": "trashEnergyEnemy",
+    "activeOnly": true,
+    "perHeads": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 2 coins.",
-    "For each heads, discard an Energy from your opponent’s Active Pokémon."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Coiling Crush"
  },
  "attack:1038": {
   "name": "Heat Crawler",
@@ -19831,14 +19993,22 @@
   }
  },
  "attack:1102": {
-  "name": "Hyper Lariat",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "xCoinsCount",
+    "n": 2
+   },
+   {
+    "op": "xBonusIfAllHeads",
+    "n": 100
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 2 coins.",
-    "If both of them are heads, this attack does 100 more damage."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Hyper Lariat"
  },
  "attack:1103": {
   "name": "Tackle",
@@ -20072,14 +20242,24 @@
   }
  },
  "attack:1125": {
-  "name": "Power Rush",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifTails",
+    "skip": 1
+   },
+   {
+    "op": "xSelfLockAllNextTurn"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If tails, during your next turn, this Pokémon can’t use attacks."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Power Rush"
  },
  "attack:1126": {
   "name": "Seed Bomb",
@@ -20926,14 +21106,25 @@
   "name": "Iron Feathers"
  },
  "attack:1205": {
-  "name": "Iron Defense",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xProtectNextTurn",
+    "damageOnly": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, during your opponent’s next turn, prevent all damage done to this Pokémon by attacks."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Iron Defense"
  },
  "attack:1206": {
   "name": "Rollout",
@@ -21078,14 +21269,25 @@
   }
  },
  "attack:1219": {
-  "name": "Energizing Sketch",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 3
+   },
+   {
+    "op": "xDiscardEnergyAttachBench",
+    "maxVar": "heads_count",
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 3 coins.",
-    "Attach an amount of Basic Energy up to the number of heads from your discard pile to your Benched Pokémon in any way you like."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Energizing Sketch"
  },
  "attack:1220": {
   "name": "Hook",
@@ -21538,14 +21740,27 @@
   "name": "Focused Wish"
  },
  "attack:1260": {
-  "name": "Tri Kinesis",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 3
+   },
+   {
+    "op": "xIfHeadsCountBelow",
+    "n": 3,
+    "skip": 1
+   },
+   {
+    "op": "xKnockOutChoose",
+    "scope": "any"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 3 coins.",
-    "If all of them are heads, Knock Out 1 of your opponent’s Pokémon."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Tri Kinesis"
  },
  "attack:1261": {
   "rider": [
@@ -21679,14 +21894,22 @@
   }
  },
  "attack:1271": {
-  "name": "Relentless Burrowing",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsUntilTails"
+   },
+   {
+    "op": "xMill",
+    "who": "opp",
+    "nVar": "heads_count"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin until you get tails.",
-    "For each heads, discard the top card of your opponent’s deck."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Relentless Burrowing"
  },
  "attack:1272": {
   "name": "Mud Shot",
@@ -22308,14 +22531,31 @@
   "name": "Tons of Treading"
  },
  "attack:1329": {
-  "name": "Magical Leaf",
-  "deferred": "unparsed effect text",
+  "pre": [
+   {
+    "op": "coin"
+   },
+   {
+    "op": "xBonusIfHeads",
+    "n": 30
+   }
+  ],
+  "rider": [
+   {
+    "op": "ifHeads",
+    "skip": 1
+   },
+   {
+    "op": "xHealSelf",
+    "amount": 30
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin.",
-    "If heads, this attack does 30 more damage, and heal 30 damage from this Pokémon."
+   "rules": [
+    "R-F02"
    ]
-  }
+  },
+  "name": "Magical Leaf"
  },
  "attack:1330": {
   "condBonus": {
@@ -23670,15 +23910,35 @@
   }
  },
  "attack:1453": {
-  "name": "Kaleidowaltz",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "rider": [
+   {
+    "op": "xCoinsCount",
+    "n": 3
+   },
+   {
+    "op": "xDeckEnergyAttachDistribute",
+    "buckets": [
+     {
+      "filter": {
+       "basicEnergy": true
+      },
+      "maxPerHeads": 2
+     }
+    ],
+    "mode": "anyWay"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip 3 coins.",
-    "For each heads, search your deck for up to 2 Basic Energy cards and attach them to your Pokémon in any way you like.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Kaleidowaltz"
  },
  "attack:1454": {
   "scale": {
@@ -24350,14 +24610,17 @@
   "name": "Obliterating Nose"
  },
  "attack:1513": {
-  "name": "Sand Attack",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xGateDefenderAttacksCoin"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "During your opponent’s next turn, if the Defending Pokémon tries to use an attack, your opponent flips a coin.",
-    "If tails, that attack doesn’t happen."
+   "rules": [
+    "R-F01"
    ]
-  }
+  },
+  "name": "Sand Attack"
  },
  "attack:1514": {
   "name": "Bite",
@@ -24438,14 +24701,22 @@
   "name": "Get Angry"
  },
  "attack:1523": {
-  "name": "Wreak Havoc",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsUntilTails"
+   },
+   {
+    "op": "xMill",
+    "who": "opp",
+    "nVar": "heads_count"
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin until you get tails.",
-    "For each heads, discard the top card of your opponent’s deck."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Wreak Havoc"
  },
  "attack:1524": {
   "name": "Vengeful Kick",
@@ -24471,14 +24742,19 @@
   "name": "Gaia Wave"
  },
  "attack:1526": {
-  "name": "Nullifying Zero",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinDamageEachOpp",
+    "damage": 150
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "For each of your opponent’s Pokémon, flip a coin.",
-    "If heads, this attack does 150 damage to that Pokémon."
+   "rules": [
+    "R-F03",
+    "R-N00"
    ]
-  }
+  },
+  "name": "Nullifying Zero"
  },
  "attack:1527": {
   "pre": [
@@ -24709,15 +24985,25 @@
   "name": "Tuck Tail"
  },
  "attack:1547": {
-  "name": "Gormandizer",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsUntilTails"
+   },
+   {
+    "op": "xDeckEnergyAttach",
+    "maxVar": "heads_count",
+    "target": "self",
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin until you get tails.",
-    "Search your deck for an amount of Basic Energy up to the number of heads and attach it to this Pokémon.",
-    "Then, shuffle your deck."
+   "rules": [
+    "R-F03"
    ]
-  }
+  },
+  "name": "Gormandizer"
  },
  "attack:1548": {
   "rider": [

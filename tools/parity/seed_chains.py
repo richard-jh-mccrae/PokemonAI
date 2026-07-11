@@ -476,7 +476,7 @@ def _cond_bonus(sents, i):
 
 @ATK.rule("R-B01")
 def _recoil(sents, i):
-    m = _s(r"This Pok.mon also does (\d+) damage to itself\.")(sents, i)
+    m = _s(r"This Pok.mon (?:also )?does (\d+) damage to itself\.")(sents, i)
     if m:
         return (1, Frag("", rider=[{"op": "xDamageSelf", "damage": int(m.group(1))}]))
     return None
@@ -727,6 +727,221 @@ def _opp_hand_shuffle_in_random(sents, i):
             and _s(r"Your opponent reveals that card and shuffles it into their "
                    r"deck\.")(sents, i + 1)):
         return (2, Frag("", rider=[{"op": "xOppHandShuffleInRandom", "n": 1}]))
+    return None
+
+
+@ATK.rule("R-F01")
+def _sand_attack_gate(sents, i):
+    """Sand Attack: arm the defender-side attack-gate coin (the fire path lives in
+    turn.py's attack flow; arming pinned cn139_9000)."""
+    if (_s(r"During your opponent.s next turn, if the Defending Pok.mon tries to use "
+           r"an attack, your opponent flips a coin\.")(sents, i)
+            and i + 1 < len(sents)
+            and _s(r"If tails, that attack doesn.t happen\.")(sents, i + 1)):
+        return (2, Frag("", rider=[{"op": "xGateDefenderAttacksCoin"}]))
+    return None
+
+
+@ATK.rule("R-F02")
+def _coin_single_composites(sents, i):
+    """"Flip a coin." + one pinned follow-up clause (or two for the branch prints)."""
+    if not _s(r"Flip a coin\.")(sents, i) or i + 1 >= len(sents):
+        return None
+    nxt = sents[i + 1]
+    third = sents[i + 2] if i + 2 < len(sents) else None
+    # Mystical Return / Reversing Gust: heads -> choose + shuffle-in (3 sentences)
+    m = re.match(r"^If heads, choose 1 of your opponent.s (Benched )?Pok.mon\.$", nxt)
+    if m and third is not None and re.match(
+            r"^Shuffle that Pok.mon and all attached cards into their deck\.$", third):
+        scope = "bench" if m.group(1) else "any"
+        # the benched flavor is menu-gated on an opponent bench (pinned cn173_9000
+        # f13: RETREAT where cgpy offered the attack); "any" always has the Active
+        gate = [{"op": "oppBenchExists"}] if scope == "bench" else []
+        return (3, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "xShuffleInPlayIntoDeckChoose",
+                                    "scope": scope}], legal=gate))
+    # Swinging Sphene: heads -> KO Active Basic / tails -> KO a Benched Basic
+    # (ifHeads guards the HEADS branch: tails skips over it — pinned cn259_9000 f16)
+    if (re.match(r"^If heads, Knock Out your opponent.s Active Basic Pok.mon\.$", nxt)
+            and third is not None and re.match(
+                r"^If tails, Knock Out 1 of your opponent.s Benched Basic "
+                r"Pok.mon\.$", third)):
+        return (3, Frag("", rider=[{"op": "coin"},
+                                   {"op": "ifHeads", "skip": 2},
+                                   {"op": "xKnockOutActive", "basicOnly": True},
+                                   {"op": "xSkip", "n": 1},
+                                   {"op": "xKnockOutChoose", "scope": "bench",
+                                    "basicOnly": True}]))
+    # Bemusing Aroma: heads -> Paralyzed+Poisoned / tails -> Confused (POISON logs
+    # first on heads — pinned cn686_9000 f14)
+    if (re.match(r"^If heads, your opponent.s Active Pok.mon is now Paralyzed and "
+                 r"Poisoned\.$", nxt)
+            and third is not None
+            and re.match(r"^If tails, your opponent.s Active Pok.mon is now "
+                         r"Confused\.$", third)):
+        P = int(SpecialConditionType.POISON)
+        PA = int(SpecialConditionType.PARALYZE)
+        C = int(SpecialConditionType.CONFUSE)
+        return (3, Frag("", rider=[{"op": "coin"},
+                                   {"op": "ifHeads", "skip": 3},
+                                   {"op": "xInflictConditionActive", "condition": P},
+                                   {"op": "xInflictConditionActive", "condition": PA},
+                                   {"op": "xSkip", "n": 1},
+                                   {"op": "xInflictConditionActive", "condition": C}]))
+    # Thump-Thump Boom's tail pair rides after R-B01's recoil: heads -> opp Active KO'd
+    if re.match(r"^If heads, your opponent.s Active Pok.mon is Knocked Out\.$", nxt):
+        return (2, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "xKnockOutActive"}]))
+    # Cotton Wings / Iron Defense: heads -> prevent all DAMAGE next turn (damage-only
+    # variant of the Dig-family protect; arming pinned cn1205_9600 f9)
+    if re.match(r"^If heads, during your opponent.s next turn, prevent all damage done "
+                r"to this Pok.mon by attacks\.$", nxt):
+        return (2, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "xProtectNextTurn", "damageOnly": True}]))
+    # Power Rush: tails -> this Pokémon can't attack next turn (pinned cn1125: rider
+    # coin after the HP_CHANGE)
+    if re.match(r"^If tails, during your next turn, this Pok.mon can.t use "
+                r"attacks\.$", nxt):
+        return (2, Frag("", rider=[{"op": "coin"}, {"op": "ifTails", "skip": 1},
+                                   {"op": "xSelfLockAllNextTurn"}]))
+    # Magical Leaf: heads -> +30 AND heal 30 (pre coin feeds the rider heal through
+    # the inherited-vars threading; coin logs before HP — pinned cn1329)
+    m = re.match(r"^If heads, this attack does (\d+) more damage, and heal (\d+) "
+                 r"damage from this Pok.mon\.$", nxt)
+    if m:
+        return (2, Frag("", pre=[{"op": "coin"},
+                                 {"op": "xBonusIfHeads", "n": int(m.group(1))}],
+                        rider=[{"op": "ifHeads", "skip": 1},
+                               {"op": "xHealSelf", "amount": int(m.group(2))}]))
+    # Miraculous Paint: heads -> choose a Special Condition and inflict it (ctx 47
+    # SPECIAL_CONDITION select — pinned cn1003_9701 f15)
+    if (re.match(r"^If heads, choose a Special Condition\.$", nxt)
+            and third is not None
+            and re.match(r"^Your opponent.s Active Pok.mon is now affected by that "
+                         r"Special Condition\.$", third)):
+        return (3, Frag("", rider=[{"op": "coin"}, {"op": "ifHeads", "skip": 1},
+                                   {"op": "xChooseConditionInflict"}]))
+    return None
+
+
+@ATK.rule("R-F03")
+def _coin_multi_composites(sents, i):
+    """"Flip N coins." / until-tails / per-mon flip composites."""
+    m0 = _s(r"Flip (\d+) coins\.")(sents, i)
+    until = _s(r"Flip a coin until you get tails\.")(sents, i)
+    if (m0 or until) and i + 1 < len(sents):
+        head_op = ({"op": "xCoinsCount", "n": int(m0.group(1))} if m0
+                   else {"op": "xCoinsUntilTails"})
+        nxt = sents[i + 1]
+        third = sents[i + 2] if i + 2 < len(sents) else None
+        shuffle_next = (third is not None
+                        and re.match(r"^Then, shuffle your deck\.$", third))
+        # Reckless Abandon: both tails -> recoil (pinned cn662)
+        m = re.match(r"^If both of them are tails, this Pok.mon also does (\d+) "
+                     r"damage to itself\.$", nxt)
+        if m:
+            return (2, Frag("", rider=[head_op, {"op": "xDamageSelfIfNoHeads",
+                                                 "damage": int(m.group(1))}]))
+        # Hyper Lariat: both heads -> more damage (pre — pinned cn1102)
+        m = re.match(r"^If both of them are heads, this attack does (\d+) more "
+                     r"damage\.$", nxt)
+        if m:
+            return (2, Frag("", pre=[head_op, {"op": "xBonusIfAllHeads",
+                                               "n": int(m.group(1))}]))
+        # Bellyful of Milk: both heads -> full-heal one of yours
+        if re.match(r"^If both of them are heads, heal all damage from 1 of your "
+                    r"Pok.mon\.$", nxt):
+            return (2, Frag("", rider=[head_op,
+                                       {"op": "xIfHeadsCountBelow", "n": 2, "skip": 1},
+                                       {"op": "xHealChoose", "all": True}]))
+        # Tri Kinesis: all heads -> KO 1 opponent Pokémon (choose)
+        m = re.match(r"^If all of them are heads, Knock Out 1 of your opponent.s "
+                     r"Pok.mon\.$", nxt)
+        if m and m0:
+            return (2, Frag("", rider=[head_op,
+                                       {"op": "xIfHeadsCountBelow",
+                                        "n": int(m0.group(1)), "skip": 1},
+                                       {"op": "xKnockOutChoose", "scope": "any"}]))
+        # per-heads riders: opp-energy discard (pinned-silent cn469/cn1037), opp mill
+        # (cn1271), discard-pile picks / deck searches with heads-count caps
+        if re.match(r"^For each heads, discard an Energy from your opponent.s Active "
+                    r"Pok.mon\.$", nxt):
+            return (2, Frag("", rider=[head_op, {"op": "trashEnergyEnemy",
+                                                 "activeOnly": True,
+                                                 "perHeads": True}]))
+        if re.match(r"^For each heads, discard the top card of your opponent.s "
+                    r"deck\.$", nxt):
+            return (2, Frag("", rider=[head_op, {"op": "xMill", "who": "opp",
+                                                 "nVar": "heads_count"}]))
+        m = re.match(r"^Put a number of cards up to the number of heads from your "
+                     r"discard pile into your hand\.$", nxt)
+        if m:
+            return (2, Frag("", rider=[head_op,
+                                       {"op": "effectTrashToHand", "min": 0,
+                                        "maxVar": "heads_count", "filter": {}}]))
+        m = re.match(r"^Attach an amount of Basic Energy up to the number of heads "
+                     r"from your discard pile to your Benched Pok.mon in any way you "
+                     r"like\.$", nxt)
+        if m:
+            return (2, Frag("", rider=[head_op,
+                                       {"op": "xDiscardEnergyAttachBench",
+                                        "maxVar": "heads_count",
+                                        "filter": {"basicEnergy": True}}]))
+        m = re.match(r"^Search your deck for a number of cards up to the number of "
+                     r"heads and put them into your hand\.$", nxt)
+        if m and shuffle_next:
+            return (3, Frag("", rider=[head_op,
+                                       {"op": "effectDeckToHandAndShuffle", "min": 0,
+                                        "maxVar": "heads_count", "filter": {},
+                                        "reveal": False}]))
+        m = re.match(r"^For each heads, search your deck for up to (\d+) Basic Energy "
+                     r"cards and attach them to your Pok.mon in any way you like\.$",
+                     nxt)
+        if m and shuffle_next:
+            # menu-gated on a nonempty deck (pinned trc_9001 f223: only the sibling
+            # attack offered at deckCount 0)
+            return (3, Frag("", rider=[head_op,
+                                       {"op": "xDeckEnergyAttachDistribute",
+                                        "buckets": [{"filter": {"basicEnergy": True},
+                                                     "maxPerHeads": int(m.group(1))}],
+                                        "mode": "anyWay"}],
+                            legal=[{"op": "deckNotEmpty"}]))
+        m = re.match(r"^Search your deck for an amount of Basic Energy up to the "
+                     r"number of heads and attach it to this Pok.mon\.$", nxt)
+        if m and shuffle_next:
+            return (3, Frag("", rider=[head_op,
+                                       {"op": "xDeckEnergyAttach",
+                                        "maxVar": "heads_count", "target": "self",
+                                        "filter": {"basicEnergy": True}}]))
+    # Ruffians Attack: flip per own {X} mon, damage per heads (pre)
+    m = _s(r"Flip a coin for each \{(\w)\} Pok.mon you have in play\.")(sents, i)
+    if m and m.group(1) in _TYPE_LETTER and i + 1 < len(sents):
+        t = re.match(r"^This attack does (\d+) damage for each heads\.$", sents[i + 1])
+        if t:
+            return (2, Frag("", pre=[{"op": "xCoinsCount", "var": "atk_in_play_type",
+                                      "energyType": _TYPE_LETTER[m.group(1)]},
+                                     {"op": "xDamagePerHeads",
+                                      "per": int(t.group(1))}]))
+    # Bench Manipulation: the OPPONENT flips per their benched mon; damage per tails
+    # (pinned cn607_9000: COIN playerIndex = victim, zero-tails logs HP 0)
+    if (_s(r"Your opponent flips a coin for each of their Benched Pok.mon\.")(sents, i)
+            and i + 1 < len(sents)):
+        t = re.match(r"^This attack does (\d+) damage to your opponent.s Active "
+                     r"Pok.mon for each tails\.$", sents[i + 1])
+        if t:
+            return (2, Frag("", pre=[{"op": "xCoinsCount", "var": "def_bench",
+                                      "owner": "opp"},
+                                     {"op": "xDamagePerTails",
+                                      "per": int(t.group(1))}]))
+    # Nullifying Zero: per-opponent-mon flips, 150 to each mon on heads (pinned
+    # cn1526_9000: attacker owns the flips; misses log nothing)
+    if (_s(r"For each of your opponent.s Pok.mon, flip a coin\.")(sents, i)
+            and i + 1 < len(sents)):
+        t = re.match(r"^If heads, this attack does (\d+) damage to that Pok.mon\.$",
+                     sents[i + 1])
+        if t:
+            return (2, Frag("", rider=[{"op": "xCoinDamageEachOpp",
+                                        "damage": int(t.group(1))}]))
     return None
 
 

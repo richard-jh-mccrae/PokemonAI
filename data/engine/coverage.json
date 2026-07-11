@@ -6,24 +6,24 @@
  },
  "summary": {
   "cards": {
-   "verified": 126,
+   "verified": 159,
    "total": 1267
   },
   "chains": {
-   "verified": 299,
-   "deferred": 688,
-   "derived": 1237,
-   "seeded": 597,
+   "verified": 393,
+   "deferred": 657,
+   "derived": 1183,
+   "seeded": 588,
    "unprobed": 2
   },
   "cleanFrames": {
-   "clean": 19900,
-   "total": 19900,
+   "clean": 25994,
+   "total": 25994,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
-   "covered": 77,
-   "total": 77,
+   "covered": 92,
+   "total": 92,
    "nativeChainVocabulary": 71,
    "coveredOps": [
     "coin",
@@ -36,23 +36,30 @@
     "effectSwitchMe",
     "effectTrashToHand",
     "ifHeads",
+    "ifTails",
     "trashEnergyEnemy",
     "xActivateAsk",
     "xBenchCounterDamage",
+    "xBonusIfAllHeads",
     "xBonusIfHeads",
     "xBonusPerDiscarded",
     "xBonusPerHeads",
+    "xBothHandTrimTo",
     "xBothShuffleCoinDraw",
     "xBothShuffleHandDraw",
     "xChooseAnyDamage",
     "xChooseBenchDamage",
+    "xChooseConditionInflict",
+    "xCoinDamageEachOpp",
     "xCoinsCount",
     "xCoinsUntilTails",
     "xDamageOwnBenchEach",
     "xDamagePerDiscarded",
     "xDamagePerHeads",
     "xDamagePerRevealed",
+    "xDamagePerTails",
     "xDamageSelf",
+    "xDamageSelfIfNoHeads",
     "xDeckAttachPerBench",
     "xDeckDistinctBasicEnergyTakeAttach",
     "xDeckDistinctBasicEnergyToHand",
@@ -76,14 +83,18 @@
     "xDrawThenShuffleSelfIn",
     "xEndTurnAfterPlay",
     "xFailUnlessHeads",
+    "xGateDefenderAttacksCoin",
     "xHandEnergyAttachChoose",
     "xHealActive",
     "xHealChoose",
     "xHealEach",
     "xHealMegaBounceEnergy",
     "xHealSelf",
+    "xIfHeadsCountBelow",
     "xInflictConditionActive",
     "xInflictConditionSelf",
+    "xKnockOutActive",
+    "xKnockOutChoose",
     "xLockDefenderAttacks",
     "xLookTopMayTakeThenShuffle",
     "xLookTopTakeRestBottom",
@@ -99,13 +110,17 @@
     "xOrderTriggers",
     "xOwnShuffleHandDraw",
     "xProtectNextTurn",
+    "xRareCandyEvolve",
     "xReduceDefenderNextTurn",
+    "xSelfLockAllNextTurn",
     "xSelfReturnToHand",
+    "xShuffleInPlayIntoDeckChoose",
+    "xSkip",
     "xTakeLessNextTurn",
     "xTurnDamageBonus"
    ]
   },
-  "traces": 218
+  "traces": 289
  },
  "cards": {
   "1": {
@@ -116,6 +131,13 @@
     "1": "verified"
    },
    "evidence": [
+    "cn1329_9000",
+    "cn1329_9001",
+    "cn259_9000",
+    "cn259_9001",
+    "cn686_9000",
+    "cn686_9001",
+    "cn951_9000",
     "micro_bonusheads_9200",
     "micro_onboard349a484_9900",
     "micro_onboard349a484_9901",
@@ -142,6 +164,10 @@
     "2": "verified"
    },
    "evidence": [
+    "cn1037_9000",
+    "cn1037_9001",
+    "cnt_groundmelter_9980",
+    "cnt_lavaburst_9980",
     "micro_cnt_groundmelter_9980",
     "micro_cnt_lavaburst_9980",
     "micro_discardall_9610",
@@ -174,6 +200,68 @@
     "3": "verified"
    },
    "evidence": [
+    "cn1003_9000",
+    "cn1003_9700",
+    "cn1003_9701",
+    "cn1003_9702",
+    "cn1003_9703",
+    "cn1003_9704",
+    "cn1003_9705",
+    "cn1013_9000",
+    "cn1013_9001",
+    "cn1037_9000",
+    "cn1037_9001",
+    "cn1102_9000",
+    "cn1102_9001",
+    "cn1125_9000",
+    "cn1125_9001",
+    "cn1205_9600",
+    "cn1205_9601",
+    "cn1260_9000",
+    "cn1260_9001",
+    "cn1271_9000",
+    "cn1271_9001",
+    "cn1329_9000",
+    "cn1329_9001",
+    "cn139_9000",
+    "cn139_9001",
+    "cn1453_9000",
+    "cn1453_9001",
+    "cn1513_9000",
+    "cn1513_9001",
+    "cn1526_9000",
+    "cn1526_9001",
+    "cn1547_9000",
+    "cn1547_9001",
+    "cn173_9000",
+    "cn173_9001",
+    "cn259_9000",
+    "cn259_9001",
+    "cn261_9000",
+    "cn261_9001",
+    "cn364_9000",
+    "cn364_9001",
+    "cn469_9000",
+    "cn469_9001",
+    "cn607_9000",
+    "cn607_9001",
+    "cn662_9000",
+    "cn662_9001",
+    "cn686_9000",
+    "cn686_9001",
+    "cn879_9000",
+    "cn879_9001",
+    "cn951_9000",
+    "cn971_9000",
+    "cn971_9001",
+    "cnt_bellowing_9980",
+    "cnt_doubleeater_9980",
+    "cnt_dragoff_9980",
+    "cnt_flashspear_9980",
+    "cnt_followme_9980",
+    "cnt_groundmelter_9980",
+    "cnt_lavaburst_9980",
+    "cnt_steelburst_9980",
     "micro_bonusheads_9200",
     "micro_cnt_bellowing_9980",
     "micro_cnt_doubleeater_9980",
@@ -366,6 +454,15 @@
     "sgc87_9300",
     "sgc87_9301",
     "sgc87_9302",
+    "trc_9000",
+    "trc_9001",
+    "trc_9002",
+    "trcx_9100",
+    "trcx_9101",
+    "trcx_9102",
+    "trh_9000",
+    "trh_9001",
+    "trh_9002",
     "v2_ms_dx_5400",
     "v2_ms_dx_5401",
     "v2_ms_mirror_5000",
@@ -383,6 +480,10 @@
     "4": "verified"
    },
    "evidence": [
+    "cn364_9000",
+    "cn364_9001",
+    "cnt_bellowing_9980",
+    "cnt_flashspear_9980",
     "micro_cnt_bellowing_9980",
     "micro_cnt_flashspear_9980",
     "micro_onboard213a286_9900",
@@ -410,6 +511,16 @@
     "5": "verified"
    },
    "evidence": [
+    "cn1260_9000",
+    "cn1260_9001",
+    "cn139_9000",
+    "cn139_9001",
+    "cn173_9000",
+    "cn173_9001",
+    "cn607_9000",
+    "cn607_9001",
+    "cnt_doubleeater_9980",
+    "cnt_followme_9980",
     "micro_cnt_doubleeater_9980",
     "micro_cnt_followme_9980",
     "micro_discardall_9610",
@@ -440,6 +551,9 @@
     "sgc87_9300",
     "sgc87_9301",
     "sgc87_9302",
+    "trcx_9100",
+    "trcx_9101",
+    "trcx_9102",
     "v2_dx_mirror_5200",
     "v2_dx_mirror_5201",
     "v2_ml_dx_5500",
@@ -469,6 +583,17 @@
     "6": "verified"
    },
    "evidence": [
+    "cn1271_9000",
+    "cn1271_9001",
+    "cn1513_9000",
+    "cn1513_9001",
+    "cn1526_9000",
+    "cn1526_9001",
+    "cn259_9000",
+    "cn259_9001",
+    "cn971_9000",
+    "cn971_9001",
+    "cnt_bellowing_9980",
     "micro_cnt_bellowing_9980",
     "micro_coinfail_9200",
     "micro_earthquake_9710",
@@ -479,6 +604,12 @@
     "micro_pushdown_9200",
     "ml_dx_2000",
     "ml_dx_2001",
+    "trc_9000",
+    "trc_9001",
+    "trc_9002",
+    "trh_9000",
+    "trh_9001",
+    "trh_9002",
     "v2_ml_dx_5500",
     "v2_ml_dx_5501",
     "v2_ml_mirror_5100",
@@ -496,6 +627,17 @@
     "7": "verified"
    },
    "evidence": [
+    "cn1003_9000",
+    "cn1003_9700",
+    "cn1003_9701",
+    "cn1003_9702",
+    "cn1003_9703",
+    "cn1003_9704",
+    "cn1003_9705",
+    "cn1125_9000",
+    "cn1125_9001",
+    "cn879_9000",
+    "cn879_9001",
     "micro_mill_9630",
     "micro_onboard896a1293_9900",
     "micro_onboard896a1293_9901",
@@ -540,6 +682,13 @@
     "8": "verified"
    },
    "evidence": [
+    "cn1013_9000",
+    "cn1013_9001",
+    "cn1205_9600",
+    "cn1205_9601",
+    "cn261_9000",
+    "cn261_9001",
+    "cnt_steelburst_9980",
     "micro_cnt_steelburst_9980",
     "micro_deckattach_9720"
    ],
@@ -807,6 +956,7 @@
     "attack:20": "verified"
    },
    "evidence": [
+    "cnt_groundmelter_9980",
     "micro_cnt_groundmelter_9980"
    ],
    "updated": "2026-07-12"
@@ -962,6 +1112,8 @@
     "attack:40": "verified"
    },
    "evidence": [
+    "cn173_9000",
+    "cnt_flashspear_9980",
     "micro_cnt_flashspear_9980",
     "micro_onboard43a39_9900",
     "micro_onboard43a39_9901",
@@ -1203,6 +1355,50 @@
     "attack:72": "verified"
    },
    "evidence": [
+    "cn1003_9702",
+    "cn1003_9705",
+    "cn1013_9000",
+    "cn1037_9000",
+    "cn1037_9001",
+    "cn1102_9000",
+    "cn1102_9001",
+    "cn1125_9000",
+    "cn1125_9001",
+    "cn1205_9600",
+    "cn1205_9601",
+    "cn1260_9000",
+    "cn1260_9001",
+    "cn1271_9000",
+    "cn1271_9001",
+    "cn1329_9000",
+    "cn1329_9001",
+    "cn139_9000",
+    "cn139_9001",
+    "cn1453_9000",
+    "cn1453_9001",
+    "cn1513_9001",
+    "cn1526_9000",
+    "cn1526_9001",
+    "cn1547_9000",
+    "cn1547_9001",
+    "cn259_9000",
+    "cn259_9001",
+    "cn261_9000",
+    "cn261_9001",
+    "cn364_9000",
+    "cn364_9001",
+    "cn469_9001",
+    "cn607_9000",
+    "cn607_9001",
+    "cn662_9000",
+    "cn662_9001",
+    "cn686_9000",
+    "cn686_9001",
+    "cn879_9000",
+    "cn879_9001",
+    "cn951_9000",
+    "cn971_9001",
+    "cnt_bellowing_9980",
     "micro_cnt_bellowing_9980",
     "micro_onboard63a71_9900",
     "micro_onboard63a71_9901",
@@ -1331,6 +1527,7 @@
     "attack:79": "verified"
    },
    "evidence": [
+    "cn951_9000",
     "micro_rigidify_9200"
    ],
    "updated": "2026-07-12"
@@ -1338,13 +1535,15 @@
   "69": {
    "name": "Nuzleaf",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "69": "derived",
-    "attack:80": "derived",
-    "attack:81": "seeded"
+    "69": "verified",
+    "attack:80": "verified",
+    "attack:81": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn951_9000"
+   ],
    "updated": "2026-07-12"
   },
   "70": {
@@ -1832,13 +2031,16 @@
   "111": {
    "name": "Sandygast",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "111": "derived",
-    "attack:139": "deferred",
-    "attack:140": "derived"
+    "111": "verified",
+    "attack:139": "verified",
+    "attack:140": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn139_9000",
+    "cn139_9001"
+   ],
    "updated": "2026-07-12"
   },
   "112": {
@@ -1929,6 +2131,7 @@
     "attack:149": "verified"
    },
    "evidence": [
+    "cnt_steelburst_9980",
     "micro_cnt_steelburst_9980"
    ],
    "updated": "2026-07-12"
@@ -2146,13 +2349,16 @@
   "134": {
    "name": "Sylveon",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "134": "derived",
-    "attack:173": "deferred",
-    "attack:174": "seeded"
+    "134": "verified",
+    "attack:173": "verified",
+    "attack:174": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn173_9000",
+    "cn173_9001"
+   ],
    "updated": "2026-07-12"
   },
   "135": {
@@ -2659,10 +2865,12 @@
    "cardType": "pokemon",
    "status": "seeded",
    "chains": {
-    "177": "derived",
+    "177": "verified",
     "attack:234": "seeded"
    },
-   "evidence": [],
+   "evidence": [
+    "cn259_9001"
+   ],
    "updated": "2026-07-12"
   },
   "178": {
@@ -2761,13 +2969,16 @@
   "186": {
    "name": "Gimmighoul",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "derived",
    "chains": {
-    "186": "derived",
-    "attack:245": "seeded",
+    "186": "verified",
+    "attack:245": "verified",
     "attack:246": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1013_9000",
+    "cn1013_9001"
+   ],
    "updated": "2026-07-12"
   },
   "187": {
@@ -2846,23 +3057,29 @@
    "cardType": "pokemon",
    "status": "deferred",
    "chains": {
-    "193": "derived",
+    "193": "verified",
     "attack:258": "deferred",
-    "attack:259": "deferred"
+    "attack:259": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn259_9000",
+    "cn259_9001"
+   ],
    "updated": "2026-07-12"
   },
   "194": {
    "name": "Altaria",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "194": "derived",
-    "attack:260": "seeded",
-    "attack:261": "deferred"
+    "194": "verified",
+    "attack:260": "verified",
+    "attack:261": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn261_9000",
+    "cn261_9001"
+   ],
    "updated": "2026-07-12"
   },
   "195": {
@@ -2892,12 +3109,14 @@
   "197": {
    "name": "Swablu",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "197": "derived",
-    "attack:266": "seeded"
+    "197": "verified",
+    "attack:266": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn261_9001"
+   ],
    "updated": "2026-07-12"
   },
   "198": {
@@ -3474,6 +3693,7 @@
     "attack:337": "seeded"
    },
    "evidence": [
+    "cnt_flashspear_9980",
     "micro_cnt_flashspear_9980"
    ],
    "updated": "2026-07-12"
@@ -3710,22 +3930,28 @@
    "cardType": "pokemon",
    "status": "deferred",
    "chains": {
-    "265": "derived",
+    "265": "verified",
     "attack:363": "deferred"
    },
-   "evidence": [],
+   "evidence": [
+    "cn364_9000",
+    "cn364_9001"
+   ],
    "updated": "2026-07-12"
   },
   "266": {
    "name": "Iono’s Electrode",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "266": "derived",
-    "attack:364": "deferred",
-    "attack:365": "derived"
+    "266": "verified",
+    "attack:364": "verified",
+    "attack:365": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn364_9000",
+    "cn364_9001"
+   ],
    "updated": "2026-07-12"
   },
   "267": {
@@ -4124,6 +4350,55 @@
     "attack:413": "seeded"
    },
    "evidence": [
+    "cn1003_9000",
+    "cn1003_9700",
+    "cn1003_9701",
+    "cn1003_9702",
+    "cn1003_9703",
+    "cn1003_9704",
+    "cn1003_9705",
+    "cn1013_9000",
+    "cn1013_9001",
+    "cn1037_9000",
+    "cn1037_9001",
+    "cn1102_9000",
+    "cn1102_9001",
+    "cn1125_9000",
+    "cn1205_9600",
+    "cn1260_9000",
+    "cn1260_9001",
+    "cn1271_9000",
+    "cn1329_9000",
+    "cn1329_9001",
+    "cn139_9000",
+    "cn139_9001",
+    "cn1453_9000",
+    "cn1453_9001",
+    "cn1526_9000",
+    "cn1526_9001",
+    "cn1547_9000",
+    "cn1547_9001",
+    "cn173_9001",
+    "cn259_9000",
+    "cn259_9001",
+    "cn261_9000",
+    "cn261_9001",
+    "cn364_9000",
+    "cn364_9001",
+    "cn469_9000",
+    "cn469_9001",
+    "cn607_9000",
+    "cn607_9001",
+    "cn662_9000",
+    "cn686_9000",
+    "cn686_9001",
+    "cn879_9000",
+    "cn879_9001",
+    "cn951_9000",
+    "cn971_9000",
+    "cnt_followme_9980",
+    "cnt_lavaburst_9980",
+    "cnt_steelburst_9980",
     "micro_cnt_followme_9980",
     "micro_cnt_lavaburst_9980",
     "micro_cnt_steelburst_9980",
@@ -4523,10 +4798,13 @@
    "cardType": "pokemon",
    "status": "derived",
    "chains": {
-    "321": "derived",
+    "321": "verified",
     "attack:448": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "cn686_9000",
+    "cn686_9001"
+   ],
    "updated": "2026-07-12"
   },
   "322": {
@@ -4704,12 +4982,15 @@
   "337": {
    "name": "LugiaEX",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "337": "derived",
-    "attack:469": "deferred"
+    "337": "verified",
+    "attack:469": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn469_9000",
+    "cn469_9001"
+   ],
    "updated": "2026-07-12"
   },
   "338": {
@@ -4918,6 +5199,7 @@
     "attack:492": "verified"
    },
    "evidence": [
+    "cnt_lavaburst_9980",
     "micro_cnt_lavaburst_9980"
    ],
    "updated": "2026-07-12"
@@ -4931,6 +5213,7 @@
     "attack:493": "verified"
    },
    "evidence": [
+    "cnt_lavaburst_9980",
     "micro_cnt_lavaburst_9980"
    ],
    "updated": "2026-07-12"
@@ -5778,24 +6061,30 @@
   "429": {
    "name": "Team Rocket's Drowzee",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "429": "derived",
-    "attack:605": "seeded"
+    "429": "verified",
+    "attack:605": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn607_9000",
+    "cn607_9001"
+   ],
    "updated": "2026-07-12"
   },
   "430": {
    "name": "Team Rocket's Hypno",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "430": "derived",
-    "attack:606": "derived",
-    "attack:607": "deferred"
+    "430": "verified",
+    "attack:606": "verified",
+    "attack:607": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn607_9000",
+    "cn607_9001"
+   ],
    "updated": "2026-07-12"
   },
   "431": {
@@ -6224,23 +6513,29 @@
   "468": {
    "name": "Team Rocket's Rattata",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "468": "derived",
-    "attack:661": "seeded"
+    "468": "verified",
+    "attack:661": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn662_9000",
+    "cn662_9001"
+   ],
    "updated": "2026-07-12"
   },
   "469": {
    "name": "Team Rocket's Raticate",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "469": "derived",
-    "attack:662": "deferred"
+    "469": "verified",
+    "attack:662": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn662_9000",
+    "cn662_9001"
+   ],
    "updated": "2026-07-12"
   },
   "470": {
@@ -6419,13 +6714,16 @@
   "485": {
    "name": "Lilligant",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "485": "derived",
-    "attack:686": "deferred",
-    "attack:687": "derived"
+    "485": "verified",
+    "attack:686": "verified",
+    "attack:687": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn686_9000",
+    "cn686_9001"
+   ],
    "updated": "2026-07-12"
   },
   "486": {
@@ -6699,6 +6997,7 @@
     "attack:720": "verified"
    },
    "evidence": [
+    "cnt_dragoff_9980",
     "micro_cnt_dragoff_9980"
    ],
    "updated": "2026-07-12"
@@ -6783,6 +7082,13 @@
     "attack:732": "seeded"
    },
    "evidence": [
+    "cnt_bellowing_9980",
+    "cnt_doubleeater_9980",
+    "cnt_dragoff_9980",
+    "cnt_flashspear_9980",
+    "cnt_followme_9980",
+    "cnt_groundmelter_9980",
+    "cnt_steelburst_9980",
     "micro_cnt_bellowing_9980",
     "micro_cnt_doubleeater_9980",
     "micro_cnt_dragoff_9980",
@@ -7990,6 +8296,7 @@
     "attack:878": "verified"
    },
    "evidence": [
+    "cn879_9000",
     "micro_onboard896a1293_9900",
     "sg1_9000",
     "sg1_9001"
@@ -7999,12 +8306,15 @@
   "611": {
    "name": "Scrafty",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "611": "derived",
-    "attack:879": "deferred"
+    "611": "verified",
+    "attack:879": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn879_9000",
+    "cn879_9001"
+   ],
    "updated": "2026-07-12"
   },
   "612": {
@@ -8223,7 +8533,7 @@
    "status": "deferred",
    "chains": {
     "630": "derived",
-    "attack:910": "deferred",
+    "attack:910": "seeded",
     "attack:911": "deferred"
    },
    "evidence": [],
@@ -8541,13 +8851,15 @@
   "658": {
    "name": "Shiftry",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "658": "derived",
-    "attack:951": "deferred",
-    "attack:952": "seeded"
+    "658": "verified",
+    "attack:951": "verified",
+    "attack:952": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn951_9000"
+   ],
    "updated": "2026-07-12"
   },
   "659": {
@@ -8672,25 +8984,31 @@
   "669": {
    "name": "Sandshrew",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "669": "derived",
-    "attack:969": "derived",
-    "attack:970": "derived"
+    "669": "verified",
+    "attack:969": "verified",
+    "attack:970": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn971_9000",
+    "cn971_9001"
+   ],
    "updated": "2026-07-12"
   },
   "670": {
    "name": "Sandslash",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "670": "derived",
-    "attack:971": "deferred",
-    "attack:972": "derived"
+    "670": "verified",
+    "attack:971": "verified",
+    "attack:972": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn971_9000",
+    "cn971_9001"
+   ],
    "updated": "2026-07-12"
   },
   "671": {
@@ -8993,23 +9311,36 @@
   "692": {
    "name": "Shroodle",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "692": "derived",
-    "attack:1002": "seeded"
+    "692": "verified",
+    "attack:1002": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1003_9000",
+    "cn1003_9700",
+    "cn1003_9701",
+    "cn1003_9704"
+   ],
    "updated": "2026-07-12"
   },
   "693": {
    "name": "Grafaiai",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "693": "derived",
-    "attack:1003": "deferred"
+    "693": "verified",
+    "attack:1003": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1003_9000",
+    "cn1003_9700",
+    "cn1003_9701",
+    "cn1003_9702",
+    "cn1003_9703",
+    "cn1003_9704",
+    "cn1003_9705"
+   ],
    "updated": "2026-07-12"
   },
   "694": {
@@ -9084,13 +9415,16 @@
   "700": {
    "name": "Gholdengo",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "700": "derived",
-    "attack:1013": "deferred",
-    "attack:1014": "derived"
+    "700": "verified",
+    "attack:1013": "verified",
+    "attack:1014": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1013_9000",
+    "cn1013_9001"
+   ],
    "updated": "2026-07-12"
   },
   "701": {
@@ -9118,10 +9452,10 @@
   "703": {
    "name": "Miltank",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "703": "derived",
-    "attack:1017": "deferred",
+    "attack:1017": "seeded",
     "attack:1018": "derived"
    },
    "evidence": [],
@@ -9276,25 +9610,31 @@
   "717": {
    "name": "Sizzlipede",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "717": "derived",
-    "attack:1035": "derived",
-    "attack:1036": "derived"
+    "717": "verified",
+    "attack:1035": "verified",
+    "attack:1036": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1037_9000",
+    "cn1037_9001"
+   ],
    "updated": "2026-07-12"
   },
   "718": {
    "name": "Centiskorch",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "derived",
    "chains": {
-    "718": "derived",
-    "attack:1037": "deferred",
+    "718": "verified",
+    "attack:1037": "verified",
     "attack:1038": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1037_9000",
+    "cn1037_9001"
+   ],
    "updated": "2026-07-12"
   },
   "719": {
@@ -9722,6 +10062,62 @@
     "attack:1090": "verified"
    },
    "evidence": [
+    "cn1003_9000",
+    "cn1003_9700",
+    "cn1003_9701",
+    "cn1003_9702",
+    "cn1003_9703",
+    "cn1003_9704",
+    "cn1003_9705",
+    "cn1013_9000",
+    "cn1013_9001",
+    "cn1037_9000",
+    "cn1037_9001",
+    "cn1102_9000",
+    "cn1102_9001",
+    "cn1125_9000",
+    "cn1125_9001",
+    "cn1205_9601",
+    "cn1260_9000",
+    "cn1271_9000",
+    "cn1271_9001",
+    "cn1329_9000",
+    "cn139_9000",
+    "cn139_9001",
+    "cn1453_9001",
+    "cn1513_9000",
+    "cn1513_9001",
+    "cn1526_9000",
+    "cn1526_9001",
+    "cn1547_9000",
+    "cn1547_9001",
+    "cn173_9000",
+    "cn173_9001",
+    "cn259_9000",
+    "cn259_9001",
+    "cn261_9000",
+    "cn261_9001",
+    "cn364_9000",
+    "cn364_9001",
+    "cn469_9000",
+    "cn469_9001",
+    "cn607_9000",
+    "cn607_9001",
+    "cn662_9000",
+    "cn662_9001",
+    "cn686_9000",
+    "cn686_9001",
+    "cn879_9000",
+    "cn879_9001",
+    "cn951_9000",
+    "cn971_9000",
+    "cn971_9001",
+    "cnt_bellowing_9980",
+    "cnt_dragoff_9980",
+    "cnt_flashspear_9980",
+    "cnt_followme_9980",
+    "cnt_groundmelter_9980",
+    "cnt_lavaburst_9980",
     "micro_cnt_bellowing_9980",
     "micro_cnt_dragoff_9980",
     "micro_cnt_flashspear_9980",
@@ -9867,7 +10263,16 @@
     "sgc234_9301",
     "sgc87_9300",
     "sgc87_9301",
-    "sgc87_9302"
+    "sgc87_9302",
+    "trc_9000",
+    "trc_9001",
+    "trc_9002",
+    "trcx_9100",
+    "trcx_9101",
+    "trcx_9102",
+    "trh_9000",
+    "trh_9001",
+    "trh_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -9935,25 +10340,31 @@
   "760": {
    "name": "Stufful",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "760": "derived",
-    "attack:1099": "derived",
-    "attack:1100": "derived"
+    "760": "verified",
+    "attack:1099": "verified",
+    "attack:1100": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1102_9000",
+    "cn1102_9001"
+   ],
    "updated": "2026-07-12"
   },
   "761": {
    "name": "Bewear",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "761": "derived",
-    "attack:1101": "derived",
-    "attack:1102": "deferred"
+    "761": "verified",
+    "attack:1101": "verified",
+    "attack:1102": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1102_9000",
+    "cn1102_9001"
+   ],
    "updated": "2026-07-12"
   },
   "762": {
@@ -10135,11 +10546,14 @@
    "cardType": "pokemon",
    "status": "deferred",
    "chains": {
-    "777": "derived",
+    "777": "verified",
     "attack:1124": "deferred",
-    "attack:1125": "deferred"
+    "attack:1125": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1125_9000",
+    "cn1125_9001"
+   ],
    "updated": "2026-07-12"
   },
   "778": {
@@ -10829,13 +11243,16 @@
   "836": {
    "name": "Bronzor",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "836": "derived",
-    "attack:1205": "deferred",
-    "attack:1206": "derived"
+    "836": "verified",
+    "attack:1205": "verified",
+    "attack:1206": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1205_9600",
+    "cn1205_9601"
+   ],
    "updated": "2026-07-12"
   },
   "837": {
@@ -10936,10 +11353,10 @@
   "845": {
    "name": "Smeargle",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "845": "derived",
-    "attack:1219": "deferred",
+    "attack:1219": "seeded",
     "attack:1220": "derived"
    },
    "evidence": [],
@@ -11001,7 +11418,8 @@
    },
    "evidence": [
     "rvl1230_9000",
-    "rvl1230_9001"
+    "rvl1230_9001",
+    "trcx_9102"
    ],
    "updated": "2026-07-12"
   },
@@ -11015,7 +11433,9 @@
    },
    "evidence": [
     "rvl1230_9000",
-    "rvl1230_9001"
+    "rvl1230_9001",
+    "trcx_9101",
+    "trcx_9102"
    ],
    "updated": "2026-07-12"
   },
@@ -11030,7 +11450,9 @@
    },
    "evidence": [
     "rvl1230_9000",
-    "rvl1230_9001"
+    "rvl1230_9001",
+    "trcx_9100",
+    "trcx_9101"
    ],
    "updated": "2026-07-12"
   },
@@ -11267,22 +11689,27 @@
    "cardType": "pokemon",
    "status": "seeded",
    "chains": {
-    "873": "derived",
+    "873": "verified",
     "attack:1259": "seeded"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1260_9000"
+   ],
    "updated": "2026-07-12"
   },
   "874": {
    "name": "Team Rocket's Exeggutor",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "874": "derived",
-    "attack:1260": "deferred",
-    "attack:1261": "seeded"
+    "874": "verified",
+    "attack:1260": "verified",
+    "attack:1261": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1260_9000",
+    "cn1260_9001"
+   ],
    "updated": "2026-07-12"
   },
   "875": {
@@ -11357,12 +11784,15 @@
   "881": {
    "name": "Team Rocket's Diglett",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "881": "derived",
-    "attack:1271": "deferred"
+    "881": "verified",
+    "attack:1271": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1271_9000",
+    "cn1271_9001"
+   ],
    "updated": "2026-07-12"
   },
   "882": {
@@ -11827,23 +12257,29 @@
   "922": {
    "name": "Sprigatito",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "922": "derived",
-    "attack:1328": "seeded"
+    "922": "verified",
+    "attack:1328": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1329_9000",
+    "cn1329_9001"
+   ],
    "updated": "2026-07-12"
   },
   "923": {
    "name": "Floragato",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "923": "derived",
-    "attack:1329": "deferred"
+    "923": "verified",
+    "attack:1329": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1329_9000",
+    "cn1329_9001"
+   ],
    "updated": "2026-07-12"
   },
   "924": {
@@ -12798,13 +13234,22 @@
   "1006": {
    "name": "Mega Audino ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1006": "derived",
-    "attack:1453": "deferred",
-    "attack:1454": "seeded"
+    "1006": "verified",
+    "attack:1453": "verified",
+    "attack:1454": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1453_9000",
+    "cn1453_9001",
+    "trc_9000",
+    "trc_9001",
+    "trc_9002",
+    "trh_9000",
+    "trh_9001",
+    "trh_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1007": {
@@ -13207,6 +13652,7 @@
     "attack:1500": "verified"
    },
    "evidence": [
+    "cnt_followme_9980",
     "micro_cnt_followme_9980"
    ],
    "updated": "2026-07-12"
@@ -13231,6 +13677,7 @@
     "attack:1502": "verified"
    },
    "evidence": [
+    "cnt_doubleeater_9980",
     "micro_cnt_doubleeater_9980"
    ],
    "updated": "2026-07-12"
@@ -13308,13 +13755,16 @@
   "1048": {
    "name": "Hippopotas",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1048": "derived",
-    "attack:1513": "deferred",
-    "attack:1514": "derived"
+    "1048": "verified",
+    "attack:1513": "verified",
+    "attack:1514": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cn1513_9000",
+    "cn1513_9001"
+   ],
    "updated": "2026-07-12"
   },
   "1049": {
@@ -13381,7 +13831,7 @@
    "status": "deferred",
    "chains": {
     "1054": "deferred",
-    "attack:1523": "deferred"
+    "attack:1523": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -13400,13 +13850,15 @@
   "1056": {
    "name": "Mega Zygarde ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
     "1056": "verified",
-    "attack:1525": "seeded",
-    "attack:1526": "deferred"
+    "attack:1525": "verified",
+    "attack:1526": "verified"
    },
    "evidence": [
+    "cn1526_9000",
+    "cn1526_9001",
     "micro_bonusheads_9200",
     "micro_coinfail_9200",
     "micro_fakeout_9200",
@@ -13415,7 +13867,14 @@
     "micro_powpow_9200",
     "micro_pushdown_9200",
     "micro_recoil_9100",
-    "micro_rigidify_9200"
+    "micro_rigidify_9200",
+    "trc_9000",
+    "trc_9001",
+    "trc_9002",
+    "trcx_9100",
+    "trcx_9101",
+    "trh_9000",
+    "trh_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -13602,13 +14061,15 @@
   "1072": {
    "name": "Snorlax",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1072": "derived",
-    "attack:1547": "deferred",
+    "1072": "verified",
+    "attack:1547": "verified",
     "attack:1548": "verified"
    },
    "evidence": [
+    "cn1547_9000",
+    "cn1547_9001",
     "micro_collapse_9745"
    ],
    "updated": "2026-07-12"
@@ -13700,11 +14161,13 @@
   "1079": {
    "name": "Rare Candy",
    "cardType": "item",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1079": "deferred"
+    "1079": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "trcx_9100"
+   ],
    "updated": "2026-07-12"
   },
   "1080": {
@@ -13800,11 +14263,14 @@
   "1087": {
    "name": "Hand Trimmer",
    "cardType": "item",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1087": "deferred"
+    "1087": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "trh_9000",
+    "trh_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1088": {
