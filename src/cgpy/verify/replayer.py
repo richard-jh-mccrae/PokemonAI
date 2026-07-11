@@ -231,11 +231,60 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
                 serials = [c["serial"] for c in listing]
                 ours = eng.gs.players[mover].deck
                 if sorted(serials) != sorted(ours):
-                    report.error = (f"frame {k}: revealed deck listing is a different "
-                                    f"multiset than cgpy's deck")
-                    report.kind, report.frame = "god", k
-                    return report
+                    # Provisional-prize reconciliation (reveal-oracle, the prize_take
+                    # rule applied at listing time): the facedown prize deal bound
+                    # deck-top identities provisionally, so a listing that reveals the
+                    # TRUE deck can name cards cgpy parked in the prize row — swap the
+                    # differences pairwise (multiset-exact across deck+prizes). Any
+                    # residue is a real divergence.
+                    prize = eng.gs.players[mover].prize
+                    ours_ctr, listing_ctr = {}, {}
+                    for s in ours:
+                        ours_ctr[s] = ours_ctr.get(s, 0) + 1
+                    for s in serials:
+                        listing_ctr[s] = listing_ctr.get(s, 0) + 1
+                    extra_deck = sorted(s for s in ours_ctr
+                                        for _ in range(ours_ctr[s]
+                                                       - listing_ctr.get(s, 0))
+                                        if ours_ctr[s] > listing_ctr.get(s, 0))
+                    extra_listing = sorted(s for s in listing_ctr
+                                           for _ in range(listing_ctr[s]
+                                                          - ours_ctr.get(s, 0))
+                                           if listing_ctr[s] > ours_ctr.get(s, 0))
+                    if (len(extra_deck) == len(extra_listing)
+                            and all(s in prize for s in extra_listing)):
+                        for wrong, right in zip(extra_deck, extra_listing):
+                            ours[ours.index(wrong)] = right
+                            prize[prize.index(right)] = wrong
+                    if sorted(serials) != sorted(ours):
+                        report.error = (f"frame {k}: revealed deck listing is a "
+                                        f"different multiset than cgpy's deck")
+                        report.kind, report.frame = "god", k
+                        return report
+                old_order = list(ours)
                 ours[:] = serials   # listings preserve the TRUE internal order (M0 pin)
+                if (eng.gs.pending is not None
+                        and eng.gs.pending.deck_listing is not None
+                        and old_order != serials):
+                    # the pose snapshotted the pre-adoption order — re-point the
+                    # listing at the revealed truth and remap option deck-indices
+                    # through serial identity (duplicates take positions in order)
+                    eng.gs.pending.deck_listing = list(serials)
+                    used: set[int] = set()
+
+                    def _new_index(old_i: int) -> int:
+                        s = old_order[old_i]
+                        for j, s2 in enumerate(serials):
+                            if s2 == s and j not in used:
+                                used.add(j)
+                                return j
+                        return old_i
+                    for o in eng.gs.pending.options:
+                        if o.get("area") == int(AreaType.DECK) and "index" in o:
+                            o["index"] = _new_index(o["index"])
+                    if all(o.get("area") == int(AreaType.DECK)
+                           for o in eng.gs.pending.options):
+                        eng.gs.pending.options.sort(key=lambda o: o["index"])
 
         ours = _strip_for_compare(eng.observation(mover))
         theirs = _strip_for_compare(fr["obs"])

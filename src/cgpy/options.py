@@ -201,6 +201,15 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
             continue
         opts.append({"type": int(OptionType.ABILITY), "area": area, "index": idx})
 
+    # Stadium per-turn activated effect (Levincia class): ABILITY option on area 7,
+    # once per player-turn, gated by the def's legal conds (pinned lev_9000 f40/f51:
+    # {type 10, area 7, index 0}; absent after use and without discard targets).
+    if gs.stadium and not gs.turn_markers.get("stadium_ability"):
+        sdef = (_def_for(gs.card_id(gs.stadium[0])) or {}).get("stadiumAbility")
+        if sdef is not None and _check_legal(gs, seat, sdef.get("legal", [])):
+            opts.append({"type": int(OptionType.ABILITY),
+                         "area": int(AreaType.STADIUM), "index": 0})
+
     # ATTACK tail (not for the first player's first turn unless the attack's text exempts
     # it — "If you go first, you can use this attack during your first turn"); self-locked
     # attacks (Accelerating Stab / Mega Brave class) are omitted on the owner's next turn

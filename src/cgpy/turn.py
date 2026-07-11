@@ -743,6 +743,17 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
                 _pose_retreat_energy(gs, seat, cost)
         elif t == OptionType.ABILITY:
             from .chain import UnsupportedCard, def_for, start_program
+            if o["area"] == int(AreaType.STADIUM):
+                # Levincia-class per-turn stadium effect (pinned lev_9000 f51-f53:
+                # ABILITY option area 7, once per player-turn)
+                serial = gs.stadium[0]
+                sdef = (def_for(gs.card_id(serial)) or {}).get("stadiumAbility")
+                if sdef is None or "program" not in sdef:
+                    raise UnsupportedCard(
+                        f"stadium {gs.card_id(serial)} ability program unpinned")
+                gs.turn_markers["stadium_ability"] = True
+                start_program(gs, seat, serial, sdef["program"], kind="ability")
+                return
             p = _target_of(gs, seat, o["area"], o["index"])
             cid = gs.card_id(p.top)
             adef = (def_for(cid) or {}).get("ability")

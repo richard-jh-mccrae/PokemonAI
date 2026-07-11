@@ -481,6 +481,37 @@
    ]
   }
  },
+ "1254": {
+  "name": "Levincia",
+  "_provenance": "per-turn stadium ability: MAIN option {type10, area7}, ctx TO_HAND pick over discard {L} basics min1 max2, DISC->HAND both-visible (pinned lev_9000 f51-f53, lev_9002 f34 single-target max1)",
+  "stadium": {},
+  "stadiumAbility": {
+   "legal": [
+    {
+     "op": "discardHas",
+     "filter": {
+      "basicEnergy": true,
+      "energyType": [
+       4
+      ]
+     }
+    }
+   ],
+   "program": [
+    {
+     "op": "effectTrashToHand",
+     "min": 1,
+     "max": 2,
+     "filter": {
+      "basicEnergy": true,
+      "energyType": [
+       4
+      ]
+     }
+    }
+   ]
+  }
+ },
  "1079": {
   "name": "Rare Candy",
   "_provenance": "skip-evolve: ctx37 EVOLVE select in the MAIN-menu option encoding, menu-gated on a legal pair (pinned trcx_9100 f13-f14 / trc_9000 never offered)",

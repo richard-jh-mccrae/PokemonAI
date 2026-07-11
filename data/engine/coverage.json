@@ -6,19 +6,19 @@
  },
  "summary": {
   "cards": {
-   "verified": 159,
+   "verified": 160,
    "total": 1267
   },
   "chains": {
-   "verified": 393,
-   "deferred": 657,
+   "verified": 394,
+   "deferred": 656,
    "derived": 1183,
    "seeded": 588,
    "unprobed": 2
   },
   "cleanFrames": {
-   "clean": 25994,
-   "total": 25994,
+   "clean": 26321,
+   "total": 26321,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
@@ -120,7 +120,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 289
+  "traces": 293
  },
  "cards": {
   "1": {
@@ -262,6 +262,10 @@
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
     "cnt_steelburst_9980",
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003",
     "micro_bonusheads_9200",
     "micro_cnt_bellowing_9980",
     "micro_cnt_doubleeater_9980",
@@ -484,6 +488,10 @@
     "cn364_9001",
     "cnt_bellowing_9980",
     "cnt_flashspear_9980",
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003",
     "micro_cnt_bellowing_9980",
     "micro_cnt_flashspear_9980",
     "micro_onboard213a286_9900",
@@ -1399,6 +1407,10 @@
     "cn951_9000",
     "cn971_9001",
     "cnt_bellowing_9980",
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003",
     "micro_cnt_bellowing_9980",
     "micro_onboard63a71_9900",
     "micro_onboard63a71_9901",
@@ -4399,6 +4411,10 @@
     "cnt_followme_9980",
     "cnt_lavaburst_9980",
     "cnt_steelburst_9980",
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003",
     "micro_cnt_followme_9980",
     "micro_cnt_lavaburst_9980",
     "micro_cnt_steelburst_9980",
@@ -10118,6 +10134,10 @@
     "cnt_followme_9980",
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003",
     "micro_cnt_bellowing_9980",
     "micro_cnt_dragoff_9980",
     "micro_cnt_flashspear_9980",
@@ -13243,6 +13263,10 @@
    "evidence": [
     "cn1453_9000",
     "cn1453_9001",
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -13859,6 +13883,7 @@
    "evidence": [
     "cn1526_9000",
     "cn1526_9001",
+    "lev_9000",
     "micro_bonusheads_9200",
     "micro_coinfail_9200",
     "micro_fakeout_9200",
@@ -16187,11 +16212,16 @@
   "1254": {
    "name": "Levincia",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1254": "deferred"
+    "1254": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "lev_9000",
+    "lev_9001",
+    "lev_9002",
+    "lev_9003"
+   ],
    "updated": "2026-07-12"
   },
   "1255": {
