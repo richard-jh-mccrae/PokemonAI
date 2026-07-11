@@ -6,24 +6,24 @@
  },
  "summary": {
   "cards": {
-   "verified": 90,
+   "verified": 94,
    "total": 1267
   },
   "chains": {
-   "verified": 182,
-   "deferred": 759,
-   "derived": 1303,
-   "seeded": 578,
+   "verified": 199,
+   "deferred": 747,
+   "derived": 1292,
+   "seeded": 584,
    "unprobed": 1
   },
   "cleanFrames": {
-   "clean": 13930,
-   "total": 13930,
+   "clean": 14634,
+   "total": 14634,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
-   "covered": 62,
-   "total": 62,
+   "covered": 64,
+   "total": 64,
    "nativeChainVocabulary": 71,
    "coveredOps": [
     "coin",
@@ -80,6 +80,8 @@
     "xMill",
     "xMoveDamageCounters",
     "xMoveEnergyOwn",
+    "xOppHandDiscardRandom",
+    "xOppHandShuffleInRandom",
     "xOpponentSwitches",
     "xOrderTriggers",
     "xOwnShuffleHandDraw",
@@ -90,7 +92,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 133
+  "traces": 144
  },
  "cards": {
   "1": {
@@ -161,6 +163,10 @@
     "micro_healself_9200",
     "micro_iris_9770",
     "micro_mill_9630",
+    "micro_onboard103a130_9900",
+    "micro_onboard103a130_9901",
+    "micro_onboard1076a1554_9900",
+    "micro_onboard1076a1554_9901",
     "micro_onboard1077_9900",
     "micro_onboard1077_9901",
     "micro_onboard1078_9900",
@@ -233,10 +239,16 @@
     "micro_onboard65a75_9900",
     "micro_onboard65a75_9901",
     "micro_onboard65a75_9902",
+    "micro_onboard753a1087_9900",
+    "micro_onboard753a1087_9901",
     "micro_onboard769a1114_9900",
     "micro_onboard769a1114_9901",
     "micro_onboard780a1128_9931",
     "micro_onboard780a1128_9932",
+    "micro_onboard843a1216_9900",
+    "micro_onboard843a1216_9901",
+    "micro_onboard896a1293_9900",
+    "micro_onboard896a1293_9901",
     "micro_onboard964a1386_9900",
     "micro_onboard964a1386_9901",
     "micro_perheads_9200",
@@ -244,6 +256,7 @@
     "micro_phantomdive_9441",
     "micro_potion_9760",
     "micro_powpow_9200",
+    "micro_psychout_9970",
     "micro_pushdown_9200",
     "micro_recoil_9100",
     "micro_rigidify_9200",
@@ -283,6 +296,8 @@
    },
    "evidence": [
     "micro_discardall_9610",
+    "micro_onboard753a1087_9900",
+    "micro_onboard753a1087_9901",
     "micro_onboard769a1114_9900",
     "micro_onboard769a1114_9901",
     "micro_onboard964a1386_9900",
@@ -290,6 +305,7 @@
     "micro_perheads_9200",
     "micro_phantomdive_9440",
     "micro_phantomdive_9441",
+    "micro_psychout_9970",
     "ml_dx_2000",
     "ml_dx_2001",
     "v2_dx_mirror_5200",
@@ -348,6 +364,8 @@
    },
    "evidence": [
     "micro_mill_9630",
+    "micro_onboard896a1293_9900",
+    "micro_onboard896a1293_9901",
     "ml_dx_2000",
     "ml_dx_2001",
     "v2_dx_mirror_5200",
@@ -777,15 +795,16 @@
   "43": {
    "name": "Eevee",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "43": "derived",
+    "43": "verified",
     "attack:39": "verified",
     "attack:40": "verified"
    },
    "evidence": [
     "micro_onboard43a39_9900",
-    "micro_onboard43a39_9901"
+    "micro_onboard43a39_9901",
+    "micro_psychout_9970"
    ],
    "updated": "2026-07-11"
   },
@@ -1493,12 +1512,15 @@
   "103": {
    "name": "Snorunt",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "derived",
    "chains": {
     "103": "derived",
-    "attack:130": "deferred"
+    "attack:130": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard103a130_9900",
+    "micro_onboard103a130_9901"
+   ],
    "updated": "2026-07-11"
   },
   "104": {
@@ -3202,11 +3224,13 @@
    "cardType": "pokemon",
    "status": "deferred",
    "chains": {
-    "246": "derived",
-    "attack:340": "deferred",
+    "246": "verified",
+    "attack:340": "verified",
     "attack:341": "deferred"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_psychout_9970"
+   ],
    "updated": "2026-07-11"
   },
   "247": {
@@ -3832,6 +3856,8 @@
     "micro_happyswitch_9951",
     "micro_iris_9770",
     "micro_mill_9630",
+    "micro_onboard103a130_9900",
+    "micro_onboard1076a1554_9901",
     "micro_onboard1077_9900",
     "micro_onboard1077_9901",
     "micro_onboard1078_9900",
@@ -3894,9 +3920,12 @@
     "micro_onboard534_9902",
     "micro_onboard63a71_9900",
     "micro_onboard63a71_9901",
+    "micro_onboard753a1087_9901",
     "micro_onboard769a1114_9901",
     "micro_onboard780a1128_9931",
     "micro_onboard780a1128_9932",
+    "micro_onboard896a1293_9900",
+    "micro_onboard896a1293_9901",
     "micro_onboard964a1386_9900",
     "micro_onboard964a1386_9901",
     "micro_phantomdive_9440",
@@ -4794,10 +4823,10 @@
   "376": {
    "name": "Rotom",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "376": "derived",
-    "attack:523": "deferred",
+    "attack:523": "seeded",
     "attack:524": "seeded"
    },
    "evidence": [],
@@ -5461,10 +5490,10 @@
   "433": {
    "name": "Team Rocket's Chingling",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "433": "derived",
-    "attack:611": "deferred"
+    "attack:611": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -5883,10 +5912,10 @@
   "470": {
    "name": "Team Rocket's Meowth",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "470": "derived",
-    "attack:663": "deferred",
+    "attack:663": "seeded",
     "attack:664": "seeded"
    },
    "evidence": [],
@@ -6425,6 +6454,7 @@
     "micro_healeach_9755",
     "micro_iris_9770",
     "micro_mill_9630",
+    "micro_onboard1076a1554_9900",
     "micro_onboard1077_9900",
     "micro_onboard1077_9901",
     "micro_onboard1078_9900",
@@ -6481,13 +6511,18 @@
     "micro_onboard63a71_9901",
     "micro_onboard65a75_9900",
     "micro_onboard65a75_9901",
+    "micro_onboard753a1087_9900",
+    "micro_onboard753a1087_9901",
     "micro_onboard769a1114_9901",
     "micro_onboard780a1128_9931",
     "micro_onboard780a1128_9932",
+    "micro_onboard843a1216_9900",
+    "micro_onboard896a1293_9900",
     "micro_onboard964a1386_9900",
     "micro_onboard964a1386_9901",
     "micro_phantomdive_9440",
     "micro_potion_9760",
+    "micro_psychout_9970",
     "micro_tucktail_9530"
    ],
    "updated": "2026-07-11"
@@ -7575,10 +7610,10 @@
   "609": {
    "name": "Liepard",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "609": "derived",
-    "attack:876": "deferred"
+    "attack:876": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -7586,13 +7621,15 @@
   "610": {
    "name": "Scraggy",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "610": "derived",
-    "attack:877": "derived",
-    "attack:878": "derived"
+    "610": "verified",
+    "attack:877": "verified",
+    "attack:878": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard896a1293_9900"
+   ],
    "updated": "2026-07-11"
   },
   "611": {
@@ -9270,23 +9307,29 @@
    "cardType": "pokemon",
    "status": "seeded",
    "chains": {
-    "752": "derived",
-    "attack:1085": "derived",
+    "752": "verified",
+    "attack:1085": "verified",
     "attack:1086": "seeded"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard753a1087_9900",
+    "micro_onboard753a1087_9901"
+   ],
    "updated": "2026-07-11"
   },
   "753": {
    "name": "Houndstone",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "753": "derived",
-    "attack:1087": "deferred",
-    "attack:1088": "derived"
+    "753": "verified",
+    "attack:1087": "verified",
+    "attack:1088": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard753a1087_9900",
+    "micro_onboard753a1087_9901"
+   ],
    "updated": "2026-07-11"
   },
   "754": {
@@ -9309,6 +9352,8 @@
     "micro_happyswitch_9951",
     "micro_iris_9770",
     "micro_mill_9630",
+    "micro_onboard103a130_9901",
+    "micro_onboard1076a1554_9900",
     "micro_onboard1077_9900",
     "micro_onboard1077_9901",
     "micro_onboard1078_9901",
@@ -9369,11 +9414,17 @@
     "micro_onboard65a75_9900",
     "micro_onboard65a75_9901",
     "micro_onboard65a75_9902",
+    "micro_onboard753a1087_9900",
     "micro_onboard769a1114_9900",
     "micro_onboard769a1114_9901",
     "micro_onboard780a1128_9932",
+    "micro_onboard843a1216_9900",
+    "micro_onboard843a1216_9901",
+    "micro_onboard896a1293_9900",
+    "micro_onboard896a1293_9901",
     "micro_onboard964a1386_9900",
     "micro_potion_9760",
+    "micro_psychout_9970",
     "micro_tucktail_9530"
    ],
    "updated": "2026-07-11"
@@ -10414,12 +10465,15 @@
   "843": {
    "name": "Aipom",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "843": "derived",
-    "attack:1216": "deferred"
+    "843": "verified",
+    "attack:1216": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard843a1216_9900",
+    "micro_onboard843a1216_9901"
+   ],
    "updated": "2026-07-11"
   },
   "844": {
@@ -11010,10 +11064,10 @@
   "895": {
    "name": "Scraggy",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "895": "derived",
-    "attack:1292": "deferred"
+    "attack:1292": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -11024,9 +11078,12 @@
    "status": "deferred",
    "chains": {
     "896": "deferred",
-    "attack:1293": "deferred"
+    "attack:1293": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard896a1293_9900",
+    "micro_onboard896a1293_9901"
+   ],
    "updated": "2026-07-11"
   },
   "897": {
@@ -12028,11 +12085,11 @@
   "984": {
    "name": "Mandibuzz ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "seeded",
    "chains": {
     "984": "derived",
     "attack:1417": "seeded",
-    "attack:1418": "deferred"
+    "attack:1418": "seeded"
    },
    "evidence": [],
    "updated": "2026-07-11"
@@ -13124,13 +13181,16 @@
   "1076": {
    "name": "Furfrou",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "derived",
    "chains": {
     "1076": "derived",
-    "attack:1554": "deferred",
-    "attack:1555": "derived"
+    "attack:1554": "verified",
+    "attack:1555": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "micro_onboard1076a1554_9900",
+    "micro_onboard1076a1554_9901"
+   ],
    "updated": "2026-07-11"
   },
   "1077": {

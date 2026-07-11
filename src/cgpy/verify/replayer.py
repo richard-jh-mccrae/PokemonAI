@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from ..engine import Engine
 from ..rng import ReplayRandomness
-from ..schema import LogType
+from ..schema import AreaType, LogType
 from .differ import Divergence, first_divergence
 from .trace import Trace
 
@@ -153,6 +153,43 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
                         and l.get("fromArea") == 6 and l.get("toArea") == 2
                         and l.get("serial") is not None):
                     rnd.prize_take_queue[mover].append(l["serial"])
+
+    # Hand-pick channel (Psych Out family): a victim's forced hand exits — MOVE_CARD
+    # out of HAND while the TURN belongs to their opponent — feed a per-victim FIFO in
+    # chronological order (pinned psychout_9970 f21: no select, no reveal, just the
+    # move log). Voluntary exits are always own-turn, so the turn gate excludes them;
+    # setup-phase exits (mulligans, placements) precede the first TurnStart and are
+    # skipped. God stream preferred (exactly-once, serials always visible); god-free
+    # traces feed from the victim's OWN windows (their view always carries the serial),
+    # with per-seat turn tracking since each seat's windows tile the game exactly once.
+    if saw_god_logs:
+        cur_turn = None
+        for fr in trace.frames:
+            for entry in fr.get("god_logs") or []:
+                ty = entry.get("type")
+                if ty in ("TurnStart", int(LogType.TURN_START)):
+                    cur_turn = entry.get("playerIndex")
+                elif (ty in ("MoveCard", int(LogType.MOVE_CARD))
+                        and entry.get("fromArea") == int(AreaType.HAND)
+                        and entry.get("serial") is not None
+                        and cur_turn is not None
+                        and entry.get("playerIndex") == 1 - cur_turn):
+                    rnd.hand_pick_queue[entry["playerIndex"]].append(entry["serial"])
+    else:
+        turn_seen: dict[int, int | None] = {0: None, 1: None}
+        for fr in trace.frames:
+            mover = fr["obs"]["current"]["yourIndex"]
+            cur_turn = turn_seen[mover]
+            for l in fr["obs"].get("logs") or []:
+                if l.get("type") == int(LogType.TURN_START):
+                    cur_turn = l.get("playerIndex")
+                elif (l.get("type") == int(LogType.MOVE_CARD)
+                        and l.get("fromArea") == int(AreaType.HAND)
+                        and l.get("serial") is not None
+                        and l.get("playerIndex") == mover
+                        and cur_turn == 1 - mover):
+                    rnd.hand_pick_queue[mover].append(l["serial"])
+            turn_seen[mover] = cur_turn
 
     # Prize identities: facedown deals never log serials — bind from the god frames
     # (the first frame where a seat's prize row appears, in array order = deal order).

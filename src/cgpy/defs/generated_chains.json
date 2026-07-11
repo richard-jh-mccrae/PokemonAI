@@ -9477,14 +9477,18 @@
   }
  },
  "attack:130": {
-  "name": "Astonish",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandShuffleInRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Choose a random card from your opponent’s hand.",
-    "Your opponent reveals that card and shuffles it into their deck."
+   "rules": [
+    "R-B29"
    ]
-  }
+  },
+  "name": "Astonish"
  },
  "attack:131": {
   "name": "Frost Smash",
@@ -11577,13 +11581,18 @@
   "name": "Psychic"
  },
  "attack:340": {
-  "name": "Psych Out",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a random card from your opponent’s hand."
+   "rules": [
+    "R-B28"
    ]
-  }
+  },
+  "name": "Psych Out"
  },
  "attack:341": {
   "name": "Amazez",
@@ -13363,14 +13372,18 @@
   }
  },
  "attack:523": {
-  "name": "Astonish",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandShuffleInRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Choose a random card from your opponent’s hand.",
-    "Your opponent reveals that card and shuffles it into their deck."
+   "rules": [
+    "R-B29"
    ]
-  }
+  },
+  "name": "Astonish"
  },
  "attack:524": {
   "scale": {
@@ -14272,13 +14285,18 @@
   }
  },
  "attack:611": {
-  "name": "Chiming Commotion",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a random card from your opponent’s hand."
+   "rules": [
+    "R-B28"
    ]
-  }
+  },
+  "name": "Chiming Commotion"
  },
  "attack:612": {
   "name": "Gemstone Mimicry",
@@ -14827,14 +14845,18 @@
   }
  },
  "attack:663": {
-  "name": "Paw-cket Pilfer",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandShuffleInRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Choose a random card from your opponent’s hand.",
-    "Your opponent reveals that card and shuffles it into their deck."
+   "rules": [
+    "R-B29"
    ]
-  }
+  },
+  "name": "Paw-cket Pilfer"
  },
  "attack:664": {
   "pre": [
@@ -17019,13 +17041,18 @@
   "name": "Invite Evil"
  },
  "attack:876": {
-  "name": "Knock Off",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a random card from your opponent’s hand."
+   "rules": [
+    "R-B28"
    ]
-  }
+  },
+  "name": "Knock Off"
  },
  "attack:877": {
   "name": "Headbutt",
@@ -19161,15 +19188,21 @@
   "name": "Take Down"
  },
  "attack:1087": {
-  "name": "Horrifying Bite",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xCoinsUntilTails"
+   },
+   {
+    "op": "xOppHandShuffleInRandom",
+    "perHeads": true
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Flip a coin until you get tails.",
-    "For each heads, choose a random card from your opponent’s hand.",
-    "Your opponent reveals those cards and shuffles them into their deck."
+   "rules": [
+    "R-C10"
    ]
-  }
+  },
+  "name": "Horrifying Bite"
  },
  "attack:1088": {
   "name": "Hammer In",
@@ -20487,13 +20520,18 @@
   }
  },
  "attack:1216": {
-  "name": "Astonish",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandShuffleInRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Choose a random card from your opponent’s hand, and your opponent reveals that card and shuffles it into their deck."
+   "rules": [
+    "R-B29"
    ]
-  }
+  },
+  "name": "Astonish"
  },
  "attack:1217": {
   "name": "Slap",
@@ -21271,22 +21309,38 @@
   "name": "Punk Smash"
  },
  "attack:1292": {
-  "name": "Knock Off",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a random card from your opponent’s hand."
+   "rules": [
+    "R-B28"
    ]
-  }
+  },
+  "name": "Knock Off"
  },
  "attack:1293": {
-  "name": "Outlaw Leg",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "n": 1
+   },
+   {
+    "op": "xMill",
+    "who": "opp",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a random card from your opponent’s hand."
+   "rules": [
+    "R-B15",
+    "R-B28"
    ]
-  }
+  },
+  "name": "Outlaw Leg"
  },
  "attack:1294": {
   "name": "Corkscrew Punch",
@@ -22612,13 +22666,18 @@
   "name": "Bone Shot"
  },
  "attack:1418": {
-  "name": "Vulture Claw",
-  "deferred": "unparsed effect text",
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "n": 1
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard a random card from your opponent’s hand."
+   "rules": [
+    "R-B28"
    ]
-  }
+  },
+  "name": "Vulture Claw"
  },
  "attack:1419": {
   "rider": [
@@ -24074,13 +24133,24 @@
   }
  },
  "attack:1554": {
-  "name": "Hand Trim",
-  "deferred": "unparsed effect text",
+  "legal": [
+   {
+    "op": "oppHandAbove",
+    "n": 5
+   }
+  ],
+  "rider": [
+   {
+    "op": "xOppHandDiscardRandom",
+    "untilLeft": 5
+   }
+  ],
   "_seed": {
-   "unparsed": [
-    "Discard random cards from your opponent’s hand until they have 5 cards in their hand."
+   "rules": [
+    "R-B28"
    ]
-  }
+  },
+  "name": "Hand Trim"
  },
  "attack:1555": {
   "name": "Headbutt",

@@ -33,6 +33,13 @@ class SeededRng:
         """Which serials the facedown prize deal takes: the top `count` cards."""
         return [deck[-(i + 1)] for i in range(count)]
 
+    def hand_pick(self, seat: int, hand: list[int]) -> int:
+        """Which serial a random pick from ``seat``'s hand takes (Psych Out family)."""
+        return hand[self._r.randrange(len(hand))]
+
+    def hand_pick_expect(self, seat: int, serials: list[int]) -> None:
+        """Known-identity forced hand exits: nothing to bind in seeded play."""
+
 
 class ReplayError(AssertionError):
     """A replay asked for randomness the trace does not determine — a real divergence."""
@@ -53,6 +60,12 @@ class ReplayRandomness:
         self.shuffle_orders: dict[int, list[list[int]]] = {0: [], 1: []}
         self.prize_feed: dict[int, list[int]] = {0: [], 1: []}
         self.prize_take_queue: dict[int, list[int]] = {0: [], 1: []}   # god-free path
+        # Per-victim FIFO of forced hand exits during the OPPONENT's turn (Psych Out
+        # family). Fed by the replayer from the trace's MOVE_CARD stream; consumed by
+        # hand_pick (random picks) AND hand_pick_expect (known-identity forced exits,
+        # e.g. Judge's opponent half) so the queue never skews (the M4 alignment hazard,
+        # docs/pyeng/determinism.md §9).
+        self.hand_pick_queue: dict[int, list[int]] = {0: [], 1: []}
 
     def shuffle(self, seq: list, *, seat: int) -> None:
         if self.shuffle_orders[seat]:
@@ -89,6 +102,39 @@ class ReplayRandomness:
         # rule); the true identity binds at take time via `prize_take` (the owner's
         # PRIZE->HAND move log carries the serial) with a multiset-preserving swap.
         return [deck[-(i + 1)] for i in range(count)]
+
+    def hand_pick(self, seat: int, hand: list[int]) -> int:
+        q = self.hand_pick_queue[seat]
+        if not q:
+            raise ReplayError(
+                f"seat {seat}: random hand pick requested but no recorded forced hand "
+                f"exit remains")
+        serial = q.pop(0)
+        if serial not in hand:
+            raise ReplayError(
+                f"seat {seat}: recorded hand pick {serial} not in hand {hand}")
+        return serial
+
+    def hand_pick_expect(self, seat: int, serials: list[int]) -> None:
+        """Drain the FIFO through a known-identity forced exit (whole-hand shuffles,
+        reveal-and-pick discards): pop one entry per moved card and require the popped
+        set to match. An EMPTY queue skips silently (a truncated trace whose feed never
+        saw the tail events); a partial/mismatched pop is a real skew — raise."""
+        q = self.hand_pick_queue[seat]
+        if not q:
+            return
+        expected = list(serials)
+        for _ in serials:
+            if not q:
+                raise ReplayError(
+                    f"seat {seat}: forced hand exit of {len(serials)} cards but only "
+                    f"{len(serials) - len(expected)} recorded picks remained")
+            got = q.pop(0)
+            if got not in expected:
+                raise ReplayError(
+                    f"seat {seat}: recorded forced hand exit {got} not among the "
+                    f"cards this effect moves {expected}")
+            expected.remove(got)
 
     def prize_take(self, seat: int, serial: int, *, deck: list[int],
                    prize: list[int]) -> int:

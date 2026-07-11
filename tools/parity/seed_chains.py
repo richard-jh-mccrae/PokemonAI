@@ -643,6 +643,55 @@ def _mill(sents, i):
     return None
 
 
+@ATK.rule("R-B28")
+def _opp_hand_discard_random(sents, i):
+    """The hand-pick rng channel (Psych Out family): random discard from the
+    opponent's hand, plain or until-N-left (Hand Trim)."""
+    if _s(r"Discard a random card from your opponent.s hand\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xOppHandDiscardRandom", "n": 1}]))
+    m = _s(r"Discard random cards from your opponent.s hand until they have (\d+) "
+           r"cards? in their hand\.")(sents, i)
+    if m:
+        n = int(m.group(1))
+        # Menu-gated: the engine hides the attack until the opponent holds MORE than n
+        # (pinned onboard1076a1554: 6 offers, 5 hides). Plain 1-card variants are NOT
+        # gated — offered at oppHand 0 (onboard103a130_9901 f39 etc.).
+        return (1, Frag("", rider=[{"op": "xOppHandDiscardRandom", "untilLeft": n}],
+                        legal=[{"op": "oppHandAbove", "n": n}]))
+    return None
+
+
+@ATK.rule("R-B29")
+def _opp_hand_shuffle_in_random(sents, i):
+    """Astonish class: random pick from the opponent's hand, revealed, shuffled into
+    their deck — two-sentence and comma-joined single-sentence prints."""
+    if _s(r"Choose a random card from your opponent.s hand, and your opponent reveals "
+          r"that card and shuffles it into their deck\.")(sents, i):
+        return (1, Frag("", rider=[{"op": "xOppHandShuffleInRandom", "n": 1}]))
+    if (_s(r"Choose a random card from your opponent.s hand\.")(sents, i)
+            and i + 1 < len(sents)
+            and _s(r"Your opponent reveals that card and shuffles it into their "
+                   r"deck\.")(sents, i + 1)):
+        return (2, Frag("", rider=[{"op": "xOppHandShuffleInRandom", "n": 1}]))
+    return None
+
+
+@ATK.rule("R-C10")
+def _coins_until_tails_hand_shuffle_in(sents, i):
+    """Horrifying Bite: until-tails flips drive per-heads random shuffle-ins (the
+    flips are effect-only — printed damage stands, so the coins ride post-damage)."""
+    if (_s(r"Flip a coin until you get tails\.")(sents, i)
+            and i + 2 < len(sents)
+            and _s(r"For each heads, choose a random card from your opponent.s "
+                   r"hand\.")(sents, i + 1)
+            and _s(r"Your opponent reveals those cards and shuffles them into their "
+                   r"deck\.")(sents, i + 2)):
+        return (3, Frag("", rider=[{"op": "xCoinsUntilTails"},
+                                   {"op": "xOppHandShuffleInRandom",
+                                    "perHeads": True}]))
+    return None
+
+
 @ATK.rule("R-B16")
 def _may_switch_self(sents, i):
     if _s(r"You may switch this Pok.mon with 1 of your Benched Pok.mon\.")(sents, i):

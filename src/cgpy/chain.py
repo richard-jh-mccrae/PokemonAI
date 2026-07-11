@@ -197,6 +197,10 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
         elif op == "handHas":
             if not any(_card_matches(gs, s, c["filter"]) for s in b.hand):
                 return False
+        elif op == "oppHandAbove":     # Hand Trim: menu-gated until the opponent holds
+            if len(gs.players[1 - seat].hand) <= c["n"]:   # MORE than n (pinned
+                return False                               # onboard1076a1554: 6 offers,
+                                                           # 5 hides)
         elif op == "inPlayNamed":
             if not any(gs.stat(p.top).name == c["name"] for p in gs.in_play(seat)):
                 return False
@@ -513,9 +517,13 @@ def op_trash_to_hand(gs, fr, args) -> bool:
 def _both_shuffle_hands(gs, actor: int) -> None:
     """Both players return hands to deck and shuffle — actor's moves+shuffle first, then
     the opponent's, BEFORE any draws (pinned ml_dx_2000 f44/f45 Judge windows). Per-player
-    return order is front-to-back hand order (pinned ms_mirror_1000 f9)."""
+    return order is front-to-back hand order (pinned ms_mirror_1000 f9). The opponent's
+    exits happen on the actor's turn, so they share the replay hand-pick feed — drain it
+    (the M4 alignment hazard; no-op in seeded play)."""
     for seat in (actor, 1 - actor):
         b = gs.players[seat]
+        if seat != actor:
+            gs.rng.hand_pick_expect(seat, list(b.hand))
         for s in list(b.hand):
             b.hand.remove(s)
             b.deck.append(s)
@@ -881,6 +889,53 @@ def op_discard_hand_draw(gs, fr, args) -> bool:
     return True
 
 
+def op_opp_hand_discard_random(gs, fr, args) -> bool:
+    """"Discard a random card from your opponent's hand." — the hand-pick rng channel:
+    no select, no reveal, one public MOVE_CARD HAND→DISCARD per pick (pinned
+    psychout_9970 f21/f23: the serial is visible in BOTH windows). ``untilLeft``:
+    Hand Trim discards until the opponent holds N (no-op at or below N)."""
+    victim = 1 - fr.seat
+    vb = gs.players[victim]
+    count = max(0, len(vb.hand) - args["untilLeft"]) if "untilLeft" in args \
+        else args.get("n", 1)
+    for _ in range(count):
+        if not vb.hand:
+            break
+        serial = gs.rng.hand_pick(victim, vb.hand)
+        vb.hand.remove(serial)
+        vb.discard.append(serial)
+        gs.move_card(serial, AreaType.HAND, AreaType.DISCARD, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+
+def op_opp_hand_shuffle_in_random(gs, fr, args) -> bool:
+    """Astonish class: "Choose a random card from your opponent's hand. Your opponent
+    reveals that card and shuffles it into their deck." — the reveal makes the exit
+    public both ways; one shuffle after all moves. ``perHeads``: one pick per recorded
+    heads (Horrifying Bite, after xCoinsUntilTails)."""
+    victim = 1 - fr.seat
+    vb = gs.players[victim]
+    count = fr.vars.get("heads_count", 0) if args.get("perHeads") else args.get("n", 1)
+    moved = False
+    for _ in range(count):
+        if not vb.hand:
+            break
+        serial = gs.rng.hand_pick(victim, vb.hand)
+        vb.hand.remove(serial)
+        vb.deck.append(serial)
+        gs.move_card(serial, AreaType.HAND, AreaType.DECK, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+        moved = True
+    # Shuffle semantics differ per native script (both trace-pinned): the plain variant
+    # shuffles only when a card actually moved (onboard103a130_9901 f45 / 843a1216_9900
+    # f27: empty hand -> no SHUFFLE); the perHeads variant shuffles whenever picks were
+    # ATTEMPTED (onboard753a1087_9901 f33: 1 heads, empty hand, SHUFFLE logged).
+    if moved or (args.get("perHeads") and count > 0):
+        _shuffle(gs, victim)
+    return True
+
+
 def op_reduce_defender_next_turn(gs, fr, args) -> bool:
     """Intimidating Stare: "During your opponent's next turn, attacks used by the
     Defending Pokémon do N less damage (before applying Weakness and Resistance)."
@@ -922,7 +977,8 @@ def op_deck_evolve_self_and_shuffle(gs, fr, args) -> bool:
             return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.EVOLVES_TO,
              options=opts, min_count=0, max_count=1,
-             deck_listing=list(b.deck), effect_card=fr.source)
+             deck_listing=list(b.deck), effect_card=fr.source,
+             context_card=me.top)   # the evolving mon itself (pinned psychout_9970 f37)
         return False
     picked = [b.deck[o["index"]] for o in fr.vars.pop("answered_options")]
     fr.vars.pop("answer")
@@ -1920,4 +1976,6 @@ OPS = {
     "xHandEnergyAttachChoose": op_hand_energy_attach_choose,
     "xHealActive": op_heal_active,
     "xEndTurnAfterPlay": op_end_turn_after,
+    "xOppHandDiscardRandom": op_opp_hand_discard_random,
+    "xOppHandShuffleInRandom": op_opp_hand_shuffle_in_random,
 }
