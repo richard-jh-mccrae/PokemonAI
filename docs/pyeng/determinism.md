@@ -224,6 +224,46 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
 - **ACE SPEC deck rule**: one copy per deck (native battle_start errorType 4 on 4×;
   capture_card now builds 1×).
 
+### 9c. Burn-down batches 2b–3 pins (2026-07-11)
+
+- **Hand-pick randomness channel** (Psych Out family): the native poses NO select and
+  NO reveal — one public MOVE_CARD HAND→DISCARD per pick, serial visible in BOTH
+  windows (micro_psychout_9970 f21/f23). Replay binds picks from a per-victim FIFO of
+  forced hand exits — MOVE_CARDs out of HAND while the TURN belongs to the victim's
+  opponent (god stream when present; else the victim's OWN windows, per-seat
+  turn-tracked). Every KNOWN-identity forced exit (Judge's opponent half) must drain
+  the same FIFO via `hand_pick_expect` — multiset-asserted — or mixed games skew
+  (`rng.py`; the M4 alignment hazard, now built).
+- **Astonish-family shuffle rides the variant**: the plain shuffle-in shuffles only
+  when a card actually MOVED (micro_onboard103a130_9901 f45, empty hand → no
+  SHUFFLE); the per-heads flavor (Horrifying Bite) shuffles whenever picks were
+  ATTEMPTED (micro_onboard753a1087_9901 f33: 1 heads, empty hand, SHUFFLE logged).
+- **Hand Trim is menu-gated on `oppHandAbove`** — offered at opp hand 6, hidden at 5
+  (micro_onboard1076a1554); the plain 1-card random discards are NOT gated (offered
+  at opp hand 0, micro_onboard103a130_9901 f39).
+- **Ascension's EVOLVES_TO deck pick carries `contextCard` = the evolving mon itself**
+  (micro_psychout_9970 f37; effect = the same serial).
+- **Count-scaled own-energy discard** (Steel Burst class): `all` variants pose
+  nothing — matching energies leave in forward attach order BEFORE the HP_CHANGE
+  (micro_cnt_steelburst_9980 f12); choose variants pose ONE ATTACHED_CARD select,
+  ctx DISCARD_ENERGY_CARD(26), min 0, max = min(n, present), options in board order
+  with per-holder `energyIndex` (micro_cnt_lavaburst_9980 f16 self-scope,
+  micro_cnt_bellowing_9980 f17 own-wide; "You may" adds nothing — min is already 0).
+  Zero candidates pose nothing (micro_cnt_flashspear_9980 f14). Hand flavor: ONE CARD
+  select ctx DISCARD(8) min 0 over the filtered hand (micro_cnt_doubleeater_9980 f11).
+- **Gust attacks** (Pull / Drag Off / Follow Me) reuse the Boss's-Orders shape: ctx
+  SWITCH(3) CARD select over the defender's bench posed to the ATTACKER,
+  effect=attacker, then a SWITCH log; Drag Off's rider hits the NEW Active flat,
+  `putDamageCounter: false` (micro_cnt_dragoff_9980 f8/f9 — pin target had no
+  weakness, so W/R remains formally open).
+- **Melt Away** ("no Energy attached → no Retreat Cost") is a card passive on the
+  RETREAT menu gate: offered on a bare cost-3 Magcargo (micro_cnt_lavaburst_9980
+  f32); modeled as `retreat.freeIfNoEnergy` (Charmander 788 shares the text). The
+  payability convention itself stands.
+- **"Then, discard that Stadium."** rider = the replace-and-place discard shape (the
+  stadium to its OWNER's discard, public STADIUM→DISCARD move); the discard-path
+  branch is authored-but-unexercised (no stadium reached play in the pin traces).
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on

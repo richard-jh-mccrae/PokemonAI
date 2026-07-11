@@ -14,7 +14,7 @@ parity — for DLL-free local play AND a clone/seed/step verification engine.
 | M1 — trace harness + vanilla game loop | [02-m1-harness-vanilla-loop.md](02-m1-harness-vanilla-loop.md) | ✅ done (12/12 vanilla traces green) |
 | M2 — chain interpreter + 50-union burn-down + CI gate | [03-m2-union-burndown.md](03-m2-union-burndown.md) | ✅ done (41/41 traces green, 29 committed fixtures, goldens in) |
 | M3 — verification API + `CG_ENGINE=py` selection | [04-m3-verification-api.md](04-m3-verification-api.md) | ✅ done (42-game drop-in gate 0 crashes; verdict agreement 4/4 + f110 True-on-both; clone-safety all traces; DLL-free lethal harness) |
-| M4 — pool-wide fan-out + coverage ledger | [05-m4-pool-fanout.md](05-m4-pool-fanout.md) | 🟢 core done 2026-07-11 (all 8 items built) — burn-down batches 1+2a done same day: **1143/1556 attacks + 876 cards live (90 verified), 133 traces green (13930 frames), op conformance 62/62 (UNPINNED empty), 69-attack cross-engine audit 0 divergent**; the tail continues through the built loop (hand-pick channel design probed + noted) |
+| M4 — pool-wide fan-out + coverage ledger | [05-m4-pool-fanout.md](05-m4-pool-fanout.md) | 🟢 core done 2026-07-11 (all 8 items built) — burn-down batches 1+2a+2b+3 done same day: **1175/1556 attacks live (batch 2b = the hand-pick rng channel + all 12 Psych Out family texts; batch 3 = count-scaled discards + gust + stadium rider + the free-retreat passive), 152 traces green (15199 frames), op conformance 69/69 (UNPINNED empty), cross-engine audits 0 divergent**; the tail continues through the built loop (next: reveal-hand family, shuffle-deck stragglers, multi-clause coins) |
 
 ## Cold-start resume protocol (any session, this worktree)
 

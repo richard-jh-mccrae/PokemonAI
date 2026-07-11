@@ -1,5 +1,20 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Burn-down batches 2b–3 (2026-07-11, later same day):** attacks **1143→1175 live**.
+> Batch 2b built the **hand-pick rng channel** (`SeededRng.hand_pick` + replay FIFO from
+> opp-turn hand-exit MOVE_CARDs + `hand_pick_expect` alignment drain through Judge-class
+> movers — the designed hazard, now closed) → all 12 Psych Out / Astonish / Hand Trim /
+> Outlaw Leg / Horrifying Bite texts live (ops `xOppHandDiscardRandom` /
+> `xOppHandShuffleInRandom`, rules R-B28/29 + R-C10); per-variant shuffle semantics,
+> the Hand Trim `oppHandAbove` menu gate and Ascension's EVOLVES_TO `contextCard` all
+> pinned. Batch 3: **count-scaled discards** (`xDiscardEnergyCountScaled` /
+> `xDiscardHandCountScaled` + per/bonus damage ops, R-D01 — Steel Burst class ×13),
+> **gust** (`effectSwitchEnemy` + `damageNew`, R-D02 ×4), **stadium-discard rider**
+> (`xDiscardStadium`, R-D03 ×3), and the **`retreat.freeIfNoEnergy` passive** (Melt
+> Away — pinned from a RETREAT-menu divergence; Charmander 788 same text). Fixtures
+> 133→152 (15199 clean frames), ops **69/69 pinned**, gate 483, cross-engine audit both
+> batches 0 divergent. Pins digested in determinism.md §9c.
+
 > **Burn-down batch 1 (2026-07-11, this worktree):** attacks **1074→1143 live** (Dig-family
 > protection ×11, two-condition inflict, may-draw-until, discard-hand-draw riders,
 > in-play/tools/named-attack scalers, 4 condBonus conds, defender damage-reduce +
@@ -88,31 +103,28 @@ digested in docs/pyeng/determinism.md §9–10.
 
 - **Items/Supporters** (~93 deferred): per-card unique texts now — extend TRN rules +
   `onboard_card.py` per card. The unparsed-sentences report is the ranked queue.
-  Notable next: Rare Candy, Boxed Order ("Your turn ends" op), Hand Trimmer
-  (both-discard-to-N), Enhanced Hammer (special-energy discard any-target),
-  active-heal trainers (Dragon Elixir class — xHealChoose needs an activeOnly mode).
-- **Abilities** (~543 Pokémon deferred for ability text): the hard tail — author per
+  Notable next: Rare Candy, Hand Trimmer (both-discard-to-N — the hand-pick channel's
+  `hand_pick_expect` covers its chosen-discard side), active-heal trainers (Dragon
+  Elixir class — xHealChoose needs an activeOnly mode).
+- **Abilities** (~518 Pokémon deferred for ability text): the hard tail — author per
   card via `chain_overrides.json` "ability" defs over existing/new ops, plain-mode
   `capture_card.py` micro-traces pin the select shapes (Blissey ex Happy Switch is the
-  worked template: capture native FIRST, read the shapes, then author).
+  worked template: capture native FIRST, read the shapes, then author). Card-level
+  PASSIVES piggyback the same override file with data keys (`defense`, `retreat` —
+  Crustle / Melt Away are the worked examples). Board-wide passives (Archaludon 170,
+  Latias ex 184, N's Castle 1253, Rescue Board 1157) still need their machinery.
 - **Tools/Stadiums/Special energies** (60 deferred): passive/hooked machinery per card;
   Levincia-class per-turn stadium effects need a new select-shape pin first.
-- **Attack tail** (404 deferred): random-discard family needs a hand-pick randomness
-  channel (Psych Out ×6 = the biggest group); multi-clause coins; discard-count-scaled
-  damage (Steel Burst class, needs a pre-op with count feedback); "Then, discard that
-  Stadium" riders. Run the audit diff over each new batch (staging-mismatch rows are
-  expected for own-board scalers — micro-trace those).
-
-  **Hand-pick channel design (probed 2026-07-11, `psychout_9970` f21):** Psych Out
-  poses NO select and NO reveal — one `MOVE_CARD` log (victim seat, fromArea 2 HAND →
-  toArea 3, serial = the picked card) right after the damage. Channel: `SeededRng.
-  hand_pick(seat, hand)` = seeded choice; `ReplayRandomness.hand_pick` pops a
-  per-victim FIFO the replayer pre-feeds from victim-hand-exit `MOVE_CARD`s in
-  OPPONENT-mover windows (each event once — mover windows only, like the draw feed).
-  ⚠️ Alignment hazard: CHOSEN forced discards (reveal-and-pick effects, e.g. "your
-  opponent reveals their hand and you discard …") emit the same log shape — those ops
-  must ALSO pop the FIFO (assert-equal against the select answer) or the queue skews.
-  Astonish-class (shuffle into deck) lands toArea DECK — same feed, second toArea.
+- **Attack tail** (372 deferred, no single big family left): the unparsed queue's head
+  is now composition tails. Next coherent groups: **reveal-hand family** (×5 — "Your
+  opponent reveals their hand." ± discard-items / per-trainer damage; capture-first to
+  pin the reveal shape, and any deterministic forced discards must `hand_pick_expect`),
+  **"Then, shuffle your deck." stragglers** (×8 — each blocked by an unmatched search
+  sibling sentence), **multi-clause coins** (×~17, heterogeneous: if-all-heads bonus,
+  both-tails recoil, per-heads energy discard, coin-KO effects, mon+cards shuffle-in),
+  energy-bounce-to-hand (×4), opponent-chooses-switch variants. Run the audit diff
+  over each new batch (staging-mismatch rows are expected for own-board scalers —
+  micro-trace those).
 
 ## Cold-start commands
 
