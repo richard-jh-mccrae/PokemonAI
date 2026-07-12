@@ -714,10 +714,17 @@ def op_bench_counter_damage(gs, fr, args) -> bool:
     return True
 
 
-def _bench_hit(gs, opp: int, target, dmg: int) -> None:
-    """Flat bench damage (no W/R; benched Tera prevention logs a value-0 HP_CHANGE —
-    pinned v2_ms_dx_5401 f100)."""
-    if gs.stat(target.top).tera:
+def _bench_hit(gs, opp: int, target, dmg: int, *, ignore_effects: bool = False) -> None:
+    """Flat bench damage: no W/R, but the shared defender-side mods DO apply —
+    benched Tera prevention (value-0 HP_CHANGE, pinned v2_ms_dx_5401 f100), Crustle
+    ex-immunity (kaggle 82229122: a Jetting Blow snipe into a benched Crustle does 0),
+    Dig protect, take-less transient and the Full Metal Lab blanket."""
+    from .damage import apply_defender_mods
+    attacker = gs.players[1 - opp].active
+    if attacker is not None:
+        dmg = apply_defender_mods(gs, attacker, target, dmg, is_active=False,
+                                  ignore_effects=ignore_effects)
+    elif gs.stat(target.top).tera:
         dmg = 0
     target.hp = max(0, target.hp - dmg)
     gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
@@ -1890,10 +1897,11 @@ def op_distribute_counters(gs, fr, args) -> bool:
         o = fr.vars.pop("answered_options")[0]
         fr.vars.pop("answer")
         target = ob.bench[o["index"]]
-        target.hp = max(0, target.hp - 10)
-        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
+        target.hp -= 10          # damage COUNTERS stack raw past 0 (native renders a
+        gs.emit({"type": int(LogType.HP_CHANGE),   # benched mon at −10, unlike direct
+                 "playerIndex": opp,               # damage which floors the active at 0
                  "cardId": gs.card_id(target.top), "serial": target.top,
-                 "value": -10, "putDamageCounter": True})
+                 "value": -10, "putDamageCounter": True})  # — kaggle 83699582 f100
         fr.vars["left"] -= 1
     fr.vars.pop("left")
     return True

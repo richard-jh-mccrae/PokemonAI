@@ -24,11 +24,15 @@ def pokemon_dict(gs: GameState, p: PokemonInPlay) -> dict:
 
     energies: list[int] = list(provided_energy(gs, p))
     delta = stadium_hp_delta(gs, p)
+    # A negative stadium/energy delta (Gravity Mountain −30) floors the RENDERED hp
+    # at 0 — a KO'd Stage-2 renders 0, not −30 (kaggle 85050368: Aura Jab into a
+    # Gravity-Mountain Dragapult ex). Raw damage-counter overkill (stored hp already
+    # negative, delta 0) is unaffected — native renders that raw.
     return {
         "id": gs.card_id(p.top),
         "serial": p.top,
         "playerIndex": gs.owner(p.top),
-        "hp": p.hp + delta,
+        "hp": max(0, p.hp + delta) if delta < 0 else p.hp + delta,
         "maxHp": p.max_hp + delta,
         "appearThisTurn": p.entered_turn >= gs.turn,
         "energies": energies,

@@ -487,6 +487,27 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   prize reduction (`legacyPrizeReduction`, once/game); Boomerang re-attach on
   attack-discard (`recoverOnAttackDiscard`).
 
+### 9h. Damage-model pins (2026-07-12, kaggle-ladder-verified)
+
+- **Defender-side mods apply to bench snipes too** (`damage.apply_defender_mods`,
+  shared by the Active path and `chain._bench_hit`): Crustle's ex-immunity, the
+  Dig protect transient, the take-less transient and the Full Metal Lab blanket
+  all reduce/prevent FLAT bench-snipe damage — not just Active damage (kaggle
+  82229122: a Jetting Blow snipe into a benched Crustle does 0). Weakness/
+  Resistance stays Active-only. The ex-immune / protect preventions are pierced by
+  an ignores-effects attack; benched-Tera and the stadium blanket are not.
+- **HP clamp asymmetry — direct damage floors at 0, damage COUNTERS stack raw**:
+  a KO'd Active rendered by direct attack damage shows 0, but a benched mon
+  overkilled by damage COUNTERS (Phantom Dive) renders NEGATIVE (kaggle 83699582
+  f100: −10). So `op_distribute_counters` no longer clamps (`target.hp -= 10`); the
+  KO sweep still catches `hp ≤ 0`. Direct-damage paths keep `max(0, …)`.
+- **A negative stadium HP delta floors the RENDERED hp at 0**: Gravity Mountain
+  (−30 on a Stage 2) renders a KO'd Dragapult ex at 0, not −30 (kaggle 85050368:
+  Aura Jab, base 130, into a Gravity-Mountain Dragapult). `render.card_dict` now
+  does `max(0, p.hp + delta)` when `delta < 0`. This changes ONLY mons whose
+  delta-adjusted hp is negative (a floor native also applies) — raw counter
+  overkill (delta 0) is untouched, so both pins coexist.
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on

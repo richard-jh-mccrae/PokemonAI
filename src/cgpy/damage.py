@@ -171,31 +171,42 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
                 and not joint_ignore and not adef.get("ignoreResistance"):
             dmg = max(0, dmg - RESISTANCE_REDUCTION)
 
-    # Defender-side mods. Passive damage prevention (Crustle's Mysterious Rock Inn:
-    # "Prevent all damage done to this Pokémon by attacks from your opponent's Pokémon
-    # {ex}" — ADR-0032 audit-verified, prevent_ex panel) — pierced ONLY by an
-    # ignores-effects attack (Nebula Beam 210 through Crustle, the pinned golden).
-    if not adef.get("ignoreDefenderEffects"):
-        from .chain import def_for
-        ddef = (def_for(gs.stat(defender.top).cardId) or {}).get("defense") or {}
+    return apply_defender_mods(gs, attacker, defender, dmg,
+                               is_active=defender_is_active,
+                               ignore_effects=adef.get("ignoreDefenderEffects", False))
+
+
+def apply_defender_mods(gs: GameState, attacker: PokemonInPlay,
+                        defender: PokemonInPlay, dmg: int, *, is_active: bool,
+                        ignore_effects: bool) -> int:
+    """The defender-side reductions/preventions shared by the Active-damage path AND
+    flat bench snipes (`chain._bench_hit`) — everything AFTER Weakness/Resistance
+    (which is Active-only). Passive prevention (Crustle ex-immune), Dig protect and
+    the take-less transient are pierced by an ignores-effects attack; benched-Tera
+    prevention and the stadium blanket (Full Metal Lab) are field/print effects that
+    are NOT pierced."""
+    from .chain import def_for
+    dstat = gs.stat(defender.top)
+    if not is_active and dstat.tera:
+        return 0                        # benched Tera takes 0 (pinned v2_ms_dx_5401)
+    if not ignore_effects:
+        # Crustle's Mysterious Rock Inn: "Prevent all damage done to this Pokémon by
+        # attacks from your opponent's Pokémon {ex}" (ADR-0032 prevent_ex panel) —
+        # applies to benched targets too (kaggle 82229122: Jetting Blow snipe into a
+        # benched Crustle does 0).
+        ddef = (def_for(dstat.cardId) or {}).get("defense") or {}
         astat = gs.stat(attacker.top)
         if ddef.get("preventDamageFromEx") and (astat.ex or astat.megaEx):
             return 0
-        # Dig-family transient: "prevent all damage from and effects of attacks done
-        # to this Pokémon" granted last turn — same pierce seam as Crustle.
-        if defender.protect_turn == gs.turn:
+        if defender.protect_turn == gs.turn:       # Dig-family transient
             return 0
-    # Transient: "takes N less damage" granted last turn (after W/R).
     if defender.take_less_turn == gs.turn and defender.take_less > 0:
         dmg = max(0, dmg - defender.take_less)
-    # Stadium blanket, post-W/R side (Full Metal Lab: "{M} Pokémon take 30 less damage
-    # from attacks from the opponent's Pokémon (after applying Weakness and
-    # Resistance)") — both sides' {M} mons, Active or benched; a stadium is a global
-    # field effect, not an effect ON the defender, so ignoreDefenderEffects does not
-    # pierce it (unpinned reading — a kaggle divergence will correct it if wrong).
-    if gs.stadium and gs.owner(defender.top) != seat:
-        from .chain import def_for as _sdef_for
-        tl = ((_sdef_for(gs.card_id(gs.stadium[0])) or {})
+    # Stadium blanket (Full Metal Lab: {M} mons take 30 less, both sides, Active or
+    # benched) — a field effect, not an effect ON the defender, so ignore_effects
+    # does not pierce it (unpinned reading — a kaggle divergence corrects it if wrong).
+    if gs.stadium and gs.owner(defender.top) != gs.owner(attacker.top):
+        tl = ((def_for(gs.card_id(gs.stadium[0])) or {})
               .get("stadium", {}).get("takeLess"))
         if tl and int(dstat.energyType) == tl["defenderType"]:
             dmg = max(0, dmg - tl["n"])
