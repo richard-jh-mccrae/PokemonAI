@@ -62,7 +62,9 @@ def _mon(entry: dict | None) -> dict | None:
         "name": _name(entry.get("id")),
         "hp": entry.get("hp"),
         "max_hp": entry.get("maxHp"),
-        "energy": len(entry.get("energies") or ()),
+        # attached energy UNITS as EnergyType ints — public info, typed so the
+        # board can render real symbols, not a generic count
+        "energies": list(entry.get("energies") or ()),
         "tools": [_name(t.get("id")) for t in entry.get("tools") or ()],
     }
 
@@ -132,16 +134,6 @@ def _hand_name(me: dict, index: int | None) -> str:
     return "?"
 
 
-def _pile_name(current: dict, player_index: int, pile: str, index: int | None) -> str:
-    players = current.get("players") or []
-    if not (0 <= player_index < len(players)):
-        return "?"
-    cards = players[player_index].get(pile) or []
-    if index is not None and 0 <= index < len(cards):
-        return _name(cards[index].get("id"))
-    return "?"
-
-
 def _attached_name(entry: dict | None, key: str, index: int | None) -> str:
     cards = (entry or {}).get(key) or []
     if index is not None and 0 <= index < len(cards):
@@ -193,6 +185,7 @@ def _option(i: int, opt: dict, current: dict, seat: int,
     kind = opt.get("type")
     player_index = opt.get("playerIndex", seat)
     label, source, target = "Select", None, None
+    pile_card = pile_kind = None    # revealed-pile picks carry the card for the carousel
 
     if kind == _PLAY:
         label = f"Play {_hand_name(me, opt.get('index'))}"
@@ -213,18 +206,28 @@ def _option(i: int, opt: dict, current: dict, seat: int,
             label = _board_label(current, opt, seat, player_index)
             target = _place(area, index, opp=player_index != seat)
         elif area == _A_DECK and deck and index is not None and 0 <= index < len(deck):
-            label = _name(deck[index].get("id"))       # a revealed search candidate
+            pile_card = deck[index].get("id")          # a revealed search candidate
+            label = _name(pile_card)
+            pile_kind = "deck" if pile_card is not None else None
         elif area == _A_HAND:
             label = _hand_name(me, index)
             source = _place(area, index)
         elif area == _A_DISCARD:
-            label = _pile_name(current, player_index, "discard", index)
+            players = current.get("players") or []
+            cards = (players[player_index].get("discard") or []
+                     if 0 <= player_index < len(players) else [])
+            entry = cards[index] if index is not None and 0 <= index < len(cards) else None
+            pile_card = entry.get("id") if entry else None
+            pile_kind = "discard" if pile_card is not None else None
+            label = _name(pile_card) if entry else "?"
             if player_index != seat:
                 label = f"{label} (opp discard)"
         elif area == 12:                               # LOOKING — a revealed card
             looking = current.get("looking") or []
             entry = looking[index] if index is not None and 0 <= index < len(looking) else None
             label = _name(entry.get("id")) if entry else "Face-down card"
+            pile_card = entry.get("id") if entry else None
+            pile_kind = "looking" if pile_card is not None else None
         elif area == 6:                                # PRIZE — face-down by rule
             label = "Face-down prize"
         else:
@@ -276,6 +279,9 @@ def _option(i: int, opt: dict, current: dict, seat: int,
         out["source"] = source
     if target:
         out["target"] = target
+    if pile_card is not None and pile_kind:
+        out["card"] = pile_card
+        out["pile"] = pile_kind
     return out
 
 

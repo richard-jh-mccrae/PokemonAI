@@ -13,7 +13,7 @@ python -m uvicorn arena.server:app --port 8000
 ```
 
 Open <http://localhost:8000> — pick/build a deck, play. Replays land in
-`data/replays/PvC/`. Tests: `python -m pytest tests/test_arena_*.py -q`
+`data/replays/PvC/`. Tests: `python -m pytest tests/arena/ -q`
 
 ## 2. Host machine setup (always-on box)
 

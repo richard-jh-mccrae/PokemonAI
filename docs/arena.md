@@ -29,6 +29,14 @@ browser ── REST /api/* ──────────┐
 
 - One **Table** = one worker subprocess = one live match (engine holds one battle
   per process). Capped (`cap=4` default); overflow gets a friendly 409.
+- **Board interactions are sugar over the option list**: drag a hand card onto a
+  lit-up Pokémon (attach/evolve) or onto your side of the board (play it); tap a
+  dash-outlined Pokémon to pick it (snipe targets, promotions); every gesture
+  resolves to the same option index a panel tap would send. Attached energy renders
+  as typed pips; the stats line's Discard count opens either player's discard pile
+  (public info, like a real table — hands and decks stay counts). Fetch/reveal picks
+  (deck search, discard fetch, look-at-top) swap the text panel for a card carousel:
+  wheel or drag to scroll, the centered scan is the candidate, tap it to take it.
 - The **human bridge** wraps the Visitor as an env agent callable: obs out over the
   WebSocket, option indices back in (ADR-0033). Env timeouts are overridden at
   `env.make` — the cabt defaults would forfeit a slow human.
@@ -94,15 +102,15 @@ Copies `data/replays/PvC/*.json` from the Arena host into the local repo
 
 | REQ | Behavior | Tests |
 | --- | --- | --- |
-| REQ-ARENA-0001 | Deck Text resolves whole or rejects whole with every problem; preset gallery lists only playable decks; the builder's pool catalog + id-list validation enforce the construction rules | tests/test_arena_decks.py |
-| REQ-ARENA-0002 | PvC replays saved Self-play-Corpus-shaped with `info.pvc` metadata; Rating patched in post-game | tests/test_arena_replay_store.py |
-| REQ-ARENA-0003 | The view-model labels every option, carries tap coordinates, renders bot events, hides hidden info | tests/test_arena_view.py |
-| REQ-ARENA-0004 | The worker hosts one PvC Match: bridge protocol, concede/forfeit, no-clock overrides, replay on every end | tests/test_arena_worker.py |
-| REQ-ARENA-0005 | Tables are capped, freed on end, idle-swept to Forfeit | tests/test_arena_tables.py |
-| REQ-ARENA-0006 | REST funnel + match WebSocket + rating endpoint behave per contract | tests/test_arena_server.py |
-| REQ-ARENA-0007 | Full stack: browser-shaped client plays a real match; replay is Tuner-shaped | tests/test_arena_system.py |
-| REQ-ARENA-0008 | One-command SSH pull of PvC replays | tests/test_arena_pull.py |
-| REQ-ARENA-0009 | Card images: pool-printing scan URLs, skip-existing fetch, imageless fallback | tests/test_arena_images.py |
+| REQ-ARENA-0001 | Deck Text resolves whole or rejects whole with every problem; preset gallery lists only playable decks; the builder's pool catalog + id-list validation enforce the construction rules | tests/arena/test_arena_decks.py |
+| REQ-ARENA-0002 | PvC replays saved Self-play-Corpus-shaped with `info.pvc` metadata; Rating patched in post-game | tests/arena/test_arena_replay_store.py |
+| REQ-ARENA-0003 | The view-model labels every option, carries tap coordinates, renders bot events, types attached energy, lists both (public) discards, hides hidden info | tests/arena/test_arena_view.py |
+| REQ-ARENA-0004 | The worker hosts one PvC Match: bridge protocol, concede/forfeit, no-clock overrides, replay on every end | tests/arena/test_arena_worker.py |
+| REQ-ARENA-0005 | Tables are capped, freed on end, idle-swept to Forfeit | tests/arena/test_arena_tables.py |
+| REQ-ARENA-0006 | REST funnel + match WebSocket + rating endpoint behave per contract | tests/arena/test_arena_server.py |
+| REQ-ARENA-0007 | Full stack: browser-shaped client plays a real match; replay is Tuner-shaped | tests/arena/test_arena_system.py |
+| REQ-ARENA-0008 | One-command SSH pull of PvC replays | tests/arena/test_arena_pull.py |
+| REQ-ARENA-0009 | Card images: pool-printing scan URLs, skip-existing fetch, imageless fallback | tests/arena/test_arena_images.py |
 
 ## Ops notes
 
