@@ -49,7 +49,9 @@ HYPOTHESES = [
                   "Stands down on a KO target (that's snipe-for-the-ko).",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_top_threat and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
-                        and not c.target_promotion_mirage),    # ADR-0044: nor a non-promotion imminence mirage
+                        and not c.target_promotion_mirage      # ADR-0044: nor a non-promotion imminence mirage
+                        and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
+                                                               # stand down off the developing higher-prize wincon
         weight=30, status="testing"),
     Hypothesis(
         id="snipe-the-threat",
@@ -61,7 +63,9 @@ HYPOTHESES = [
                   "targets above bare ones) as the legible imminence signal on top of it.",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_threat and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
-                        and not c.target_promotion_mirage),    # ADR-0044: nor a non-promotion imminence mirage
+                        and not c.target_promotion_mirage      # ADR-0044: nor a non-promotion imminence mirage
+                        and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
+                                                               # stand down off the developing higher-prize wincon
         weight=20, status="testing"),
     Hypothesis(
         id="snipe-on-the-path",
@@ -81,7 +85,9 @@ HYPOTHESES = [
                   "carries Energy now. Pre-chip that body this turn. Overrides the energized-imminence "
                   "tier for this pick (its mirages are suppressed); silent while their Active is alive.",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_forced_promotion
-                        and not c.board.snipe_ko_available),
+                        and not c.board.snipe_ko_available
+                        and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
+                                                               # stand down off the developing higher-prize wincon
         weight=40, status="testing"),
     Hypothesis(
         id="snipe-the-evolving-threat",

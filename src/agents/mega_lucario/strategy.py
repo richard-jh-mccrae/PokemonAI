@@ -278,11 +278,33 @@ HYPOTHESES = [
                   "`energy_attached` flips, this guard stands down, and Lunar Cycle still fires the "
                   "same turn on the surplus — the doctrine's 'hold that F back', not a blanket "
                   "decline. Surfaced by the T6' probe (the always-YES default would have paid the "
-                  "stranding discard).",
+                  "stranding discard). STANDS DOWN when the single {F} IS the whole attach (no surplus "
+                  "to cycle) AND the engine is online AND the Active is a weak pre-evo: then attaching "
+                  "the lone {F} kills the cycle rather than deferring it, and its 30 chip doesn't change "
+                  "tempo — the discarded {F} is Aura-Jab-recoverable, so draw-3 acceleration wins (ml "
+                  "85058574 f16). Still fires for a real-attacker Active or an offline engine.",
         when=lambda c: c.option_type == _ABILITY and c.card_id == LUNATONE
         and c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
-        and not c.board.energy_attached and c.board.energy_placeable,
+        and not c.board.energy_attached and c.board.energy_placeable
+        and not (LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
+                 and c.board.active_is_weak_preevo),
         weight=-30, status="assumed"),
+    Hypothesis(
+        id="lunar-cycle-the-weak-preevo-last-f",
+        rationale="The other side of the last-{F} coin (ml 85058574 f16): when the Solrock↔Lunatone engine "
+                  "is ONLINE and the Active is a weak pre-evo (Riolu's 30 chip vs Mega Lucario ex 130/270), "
+                  "spend the lone Basic {F} on Lunar Cycle (draw 3) rather than an attach that only powers a "
+                  "tempo-neutral chip. Standing the −30 guard down is necessary but not sufficient — Lunar "
+                  "Cycle at 0 still sits below the attaches (`power-up-attacker` +15). This positive rung "
+                  "carries it past them; the discarded {F} is Aura-Jab-recoverable and the deck is {F}-rich, "
+                  "so the acceleration is not a stranded loss. Fires on the EXACT complement of the guard's "
+                  "stand-down, so the two are mutually exclusive by construction. SEED; ladder-tuned.",
+        when=lambda c: c.option_type == _ABILITY and c.card_id == LUNATONE
+        and c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
+        and not c.board.energy_attached
+        and LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
+        and c.board.active_is_weak_preevo,
+        weight=20, status="assumed"),
     Hypothesis(
         id="gravity-mountain-vs-stage2",
         rationale="Gravity Mountain (−30 HP to every Stage 2, both sides) NEVER touches our board — "

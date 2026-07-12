@@ -550,8 +550,8 @@
   ],
   "chosen_label": "Play Salvatore",
   "correct": [
-    3
+    4
   ],
-  "correct_label": "Play Mega Signal",
-  "rationale": "Mega Signal, an Item, is less expensive than a Supporter, just play that instead"
+  "correct_label": "Evolve Staryu (bench · 70/70) into Mega Starmie ex",
+  "rationale": "The Staryu is evolvable this turn and the Mega Starmie ex is in hand, so the FREE direct-evolve reaches the same 1-prize KO as any tutor while spending no card and no tutor slot - the cheapest enabler (free direct-evolve > Item tutor > Supporter tutor)"
 }

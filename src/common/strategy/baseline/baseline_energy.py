@@ -198,11 +198,15 @@ HYPOTHESES = [
                   "(+25)/`build-active-wincon` (+20) keep building toward (ep83037962 f48: 2nd Water onto "
                   "a doomed Mega instead of benched Staryu). Payoff-side complement of "
                   "`dont-feed-the-doomed`; weighted -45 to cancel that stack, though a lethal-unlocking "
-                  "burst stays KO_SCORE tactical and dominates.",
+                  "burst stays KO_SCORE tactical and dominates. Stands down when THIS attach COMPLETES the "
+                  "doomed Active's biggest attack (`attach_completes_biggest_attack`) — go down swinging with "
+                  "the payoff attack this last turn (ms 85163079 f51: 2W+1 = Nebula 210), unlike overbuilding "
+                  "for a turn that won't come (f48: 1W→2W still short of CCC=3).",
         when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
         and bool(_WINCON_ROLES & set(c.attach_target_roles))
         and c.board.active_doomed and not c.attach_target_needs
-        and c.board.my_bench > 0,
+        and c.board.my_bench > 0
+        and not c.attach_completes_biggest_attack,  # go down swinging: this attach turns the big attack ON now
         weight=-45, status="testing"),
     Hypothesis(
         id="feed-the-firing-accelerator",
