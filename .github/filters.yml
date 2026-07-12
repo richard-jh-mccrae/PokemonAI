@@ -1,0 +1,68 @@
+# Path filters for selective CI (consumed by .github/workflows/ci.yml via dorny/paths-filter).
+# Each filter is a boolean the "Determine test plan" step turns into pytest targets, applying
+# the reverse-dependency unions (e.g. a `sim` change also runs arena). Broad + fail-safe: when a
+# change could break a test, that test runs. See docs/ci.md for the full mapping table.
+
+# Foundation & shared infra — imported/loaded by ~everything => full suite.
+full:
+  - 'src/cg/**'
+  - 'src/common/**'
+  - 'requirements.txt'
+  - '.coveragerc'
+  - 'pytest.ini'
+  - '.github/**'
+  - 'tests/conftest.py'
+  - 'tests/pilot_helpers.py'
+  - 'tests/scouting_helpers.py'
+  - 'tests/lethal_helpers.py'
+  - 'tests/fixtures/**'
+  - 'data/**'
+  - 'tools/build_card_functions.py'
+  - 'tools/build_card_effects.py'
+  - 'tools/audit_card_functions.py'
+  - 'tools/verify_meta_cards.py'
+
+# Leaf/tool source areas + their own tests (reverse deps applied in the ci.yml plan step).
+agents:
+  - 'src/agents/**'
+  - 'tests/agents/**'
+arena:
+  - 'tools/arena/**'
+  - 'tests/arena/**'
+sim:
+  - 'tools/sim/**'
+  - 'tests/sim/**'
+submit:
+  - 'tools/submit/**'
+  - 'tools/submit_agent.py'
+  - 'tests/submit/**'
+train:
+  - 'tools/train/**'
+  - 'tests/train/**'
+meta:
+  - 'tools/meta_tracker/**'
+  - 'tools/deck_convert.py'
+  - 'tools/deck_stealer.py'
+  - 'tools/export_meta_decks.py'
+  - 'tools/run_meta_tracker.py'
+  - 'tests/meta_tracker/**'
+scouting:
+  - 'tools/build_scouting_artifact.py'
+  - 'tests/scouting/**'
+strategy:
+  - 'tests/strategy/**'
+cards:
+  - 'tests/cards/**'
+tuner:
+  - 'tests/tuner/**'
+blunder:
+  - 'tests/blunder/**'
+value:
+  - 'tests/value/**'
+
+# Ignorable (no runtime surface) and a catch-all for the fail-safe in the plan step.
+docs:
+  - '**/*.md'
+  - 'docs/**'
+any:
+  - '**'
