@@ -67,13 +67,19 @@ class UnsupportedCard(NotImplementedError):
     """A card without a ChainDef was exercised — fail loud, never guess (ADR-0050)."""
 
 
+def stadium_def(gs: GameState) -> dict:
+    """The in-play stadium's `stadium` def dict ({} when none) — the passive-hook
+    lookup shared by options/damage/chain."""
+    if not gs.stadium:
+        return {}
+    return (def_for(gs.card_id(gs.stadium[0])) or {}).get("stadium") or {}
+
+
 def stadium_hp_delta(gs: GameState, p) -> int:
     """The in-play stadium's HP modifier for this Pokémon (Gravity Mountain: Stage 2s
     −30 both sides, pinned ml_dx_2001 f112: 320-HP Dragapult ex renders 290). Damage
     counters live on stored hp/max_hp; the delta floats with the stadium."""
-    if not gs.stadium:
-        return 0
-    sdef = (def_for(gs.card_id(gs.stadium[0])) or {}).get("stadium", {})
+    sdef = stadium_def(gs)
     if "stage2HpDelta" in sdef and gs.stat(p.top).stage2:
         return sdef["stage2HpDelta"]
     return 0
@@ -223,6 +229,9 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
         elif op == "inPlayHas":
             if not any(_card_matches(gs, p.top, c["filter"])
                        for p in gs.in_play(seat)):
+                return False
+        elif op == "benchHas":               # Surfing Beach: a matching benched mon
+            if not any(_card_matches(gs, p.top, c["filter"]) for p in b.bench):
                 return False
         elif op == "selfHasEnergyType":       # ability holder has an energy of this type
             if pokemon is None or not any(
@@ -418,13 +427,19 @@ def op_deck_to_bench_and_shuffle(gs, fr, args) -> bool:
 
 
 def op_effect_switch_me(gs, fr, args) -> bool:
-    """Switch own Active with a chosen benched Pokémon (Switch / Dunsparce class)."""
+    """Switch own Active with a chosen benched Pokémon (Switch / Dunsparce class).
+    ``filter`` narrows the candidates (Surfing Beach: benched {W} only — pinned
+    surfbeach_9002 f65: one option for the one {W} benched)."""
     seat = fr.seat
     b = gs.players[seat]
     if not b.bench:
         return True
+    flt = args.get("filter")
     if "answer" not in fr.vars:
-        opts = [opt_card(AreaType.BENCH, i, seat) for i in range(len(b.bench))]
+        opts = [opt_card(AreaType.BENCH, i, seat) for i, p in enumerate(b.bench)
+                if flt is None or _card_matches(gs, p.top, flt)]
+        if not opts:
+            return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.SWITCH,
              options=opts, effect_card=fr.source)
         return False
@@ -1805,6 +1820,10 @@ def op_distribute_counters(gs, fr, args) -> bool:
     seat = fr.seat
     opp = 1 - seat
     ob = gs.players[opp]
+    if stadium_def(gs).get("benchCounterShield"):
+        return True   # Battle Cage: counters can't land on benched mons — no legal
+                      # targets, so no selects, nothing placed (UNPINNED shape;
+                      # kaggle episodes verify)
     if "left" not in fr.vars:
         fr.vars["left"] = args.get("counters", 1)
     while fr.vars["left"] > 0 and ob.bench:
@@ -2339,7 +2358,11 @@ def op_move_damage_counters(gs, fr, args) -> bool:
                  "cardId": gs.card_id(src.top), "serial": src.top,
                  "value": n * 10, "putDamageCounter": False})
     if "answer" not in fr.vars:
-        opts = [opt_card(area, idx, opp) for area, idx, _p in _targets(gs, opp)]
+        opts = [opt_card(area, idx, opp) for area, idx, _p in _targets(gs, opp)
+                if not (area == int(AreaType.BENCH)
+                        and stadium_def(gs).get("benchCounterShield"))]
+        # Battle Cage: benched destinations excluded (UNPINNED shape); Adrena-Brain's
+        # move is ability-sourced counter placement, squarely in the shield's text
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.DAMAGE_COUNTER,
              options=opts, min_count=1, max_count=1, effect_card=fr.source)
         return False

@@ -892,5 +892,107 @@
     "n": 5
    }
   ]
+ },
+ "1244": {
+  "name": "Full Metal Lab",
+  "_provenance": "passive: {M} defenders take 30 less from opposing attacks post-W/R, both sides, Active or benched (damage.py takeLess hook; ignoreDefenderEffects does NOT pierce — a stadium is field-wide, not an effect ON the mon; UNPINNED reading, kaggle episodes verify). Play flow = generic stadium.",
+  "stadium": {
+   "takeLess": {
+    "defenderType": 8,
+    "n": 30
+   }
+  }
+ },
+ "1255": {
+  "name": "Postwick",
+  "_provenance": "passive: Hop-family attackers do +30 to the opposing ACTIVE pre-W/R, both players (damage.py activeBonus hook; UNPINNED reading, kaggle episodes verify).",
+  "stadium": {
+   "activeBonus": {
+    "attackerNameContains": "Hop’s",
+    "n": 30
+   }
+  }
+ },
+ "1256": {
+  "name": "Team Rocket's Watchtower",
+  "_provenance": "passive: {C} mons in play have no Abilities — MAIN ability options suppressed both sides (options.py suppressAbilitiesType; triggered/passive abilities of {C} mons NOT yet suppressed — UNPINNED, fail-loud).",
+  "stadium": {
+   "suppressAbilitiesType": 0
+  }
+ },
+ "1259": {
+  "name": "Spikemuth Gym",
+  "_provenance": "per-turn stadium ability (Levincia machinery): ctx TO_HAND min0 max1 with deck listing over Marnie-family Pokemon, declinable (pinned spikemuth_9001 f162 choice [] / f168 pick), reveal-to-hand + shuffle.",
+  "stadium": {},
+  "stadiumAbility": {
+   "legal": [
+    {
+     "op": "deckNotEmpty"
+    }
+   ],
+   "program": [
+    {
+     "op": "effectDeckToHandAndShuffle",
+     "min": 0,
+     "max": 1,
+     "filter": {
+      "pokemon": true,
+      "nameContains": "Marnie's"
+     }
+    }
+   ]
+  }
+ },
+ "1261": {
+  "name": "Forest of Vitality",
+  "_provenance": "passive: {G} mons may evolve into {G} evolutions the turn they entered (options.py evolveImmediateType waives entered_turn, NOT the turn<=2 first-turn ban; UNPINNED shape, kaggle episodes verify).",
+  "stadium": {
+   "evolveImmediateType": 1
+  }
+ },
+ "1262": {
+  "name": "Surfing Beach",
+  "_provenance": "per-turn stadium ability (Levincia machinery): switch Active {W} with a benched {W} — ctx SWITCH min1 max1 over {W} benched only (pinned surfbeach_9002 f65: one option, non-W benched excluded); gate = Active is {W} AND a benched {W} exists (activeIs + benchHas).",
+  "stadium": {},
+  "stadiumAbility": {
+   "legal": [
+    {
+     "op": "activeIs",
+     "filter": {
+      "pokemon": true,
+      "energyType": [
+       3
+      ]
+     }
+    },
+    {
+     "op": "benchHas",
+     "filter": {
+      "pokemon": true,
+      "energyType": [
+       3
+      ]
+     }
+    }
+   ],
+   "program": [
+    {
+     "op": "effectSwitchMe",
+     "filter": {
+      "pokemon": true,
+      "energyType": [
+       3
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "1264": {
+  "name": "Battle Cage",
+  "_provenance": "passive: damage counters from opposing attack/ability effects cannot land on benched mons — distribute-counter ops skip entirely, counter-move dest selects exclude bench (benchCounterShield; UNPINNED shapes, kaggle episodes verify). Attack DAMAGE to bench unaffected; Risky-Ruins-class stadium-sourced counters unaffected (not from a Pokemon).",
+  "stadium": {
+   "benchCounterShield": true
+  }
  }
 }

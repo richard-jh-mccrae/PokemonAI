@@ -140,6 +140,8 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
             opp_active_ex = (ob.active is not None and not ob.active_facedown
                              and (gs.stat(ob.active.top).ex
                                   or gs.stat(ob.active.top).megaEx))
+            from .chain import stadium_def as _sd
+            ev_type = _sd(gs).get("evolveImmediateType")
             for area, idx, p in _targets(gs, seat):
                 # Fighting-Roar-class passive on the TARGET: "can evolve during your
                 # first turn or the turn you play it" while the opponent's Active is
@@ -147,9 +149,16 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
                 # EVOLVE offered onto a this-turn Luxio vs Mega Latias ex).
                 waived = opp_active_ex and (_cdef_for(gs.card_id(p.top)) or {}).get(
                     "evolve", {}).get("immediateIfOppActiveEx", False)
+                # Forest of Vitality: "{G} Pokémon can evolve into {G} Pokémon during
+                # the turn they play those Pokémon, except during their first turn" —
+                # waives entered_turn only, NOT the turn<=2 ban (UNPINNED shape;
+                # kaggle episodes verify).
+                forest = (ev_type is not None
+                          and int(gs.stat(p.top).energyType) == ev_type
+                          and int(stat.energyType) == ev_type)
                 if not waived and gs.turn <= 2:
                     continue  # neither player evolves on their own first turn
-                if not waived and p.entered_turn >= gs.turn:
+                if not (waived or forest) and p.entered_turn >= gs.turn:
                     continue  # can't evolve the turn it entered play / evolved
                 if gs.stat(p.top).name == stat.evolvesFrom:
                     opts.append({"type": int(OptionType.EVOLVE),
@@ -193,11 +202,18 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
     # a def "ability" entry, once per turn per Pokémon (+ optional global-name limit).
     from .chain import check_legal as _check_legal
     from .chain import def_for as _def_for
+    from .chain import stadium_def as _stadium_def
+    sup_type = _stadium_def(gs).get("suppressAbilitiesType")
     for area, idx, p in _targets(gs, seat):
         cid = gs.card_id(p.top)
         adef = (_def_for(cid) or {}).get("ability")
         if adef is None or p.ability_used_turn >= gs.turn:
             continue
+        if sup_type is not None and int(gs.stat(p.top).energyType) == sup_type:
+            continue   # Team Rocket's Watchtower: "{C} Pokémon in play have no
+                       # Abilities" — MAIN options suppressed both sides (UNPINNED
+                       # shape; triggered/passive abilities of typed mons stay
+                       # un-suppressed until a trace demands it)
         if adef.get("oncePerTurnGlobal") and gs.turn_markers.get(f"ability:{cid}"):
             continue
         if not _check_legal(gs, seat, adef.get("legal", []), pokemon=p):

@@ -1,5 +1,29 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Stadium batch (2026-07-12, same session, follow-on): 7 of the 9 queued stadiums
+> authored — ladder 123→129/414, and NO remaining episode divergence names any of
+> the seven.** Activated (Levincia machinery + captures): **Spikemuth Gym 1259**
+> (may-whiff Marnie-family search — note: Marnie's cards use an ASCII apostrophe,
+> Hop's/Iono's use U+2019; DERIVE family strings from the card table) and
+> **Surfing Beach 1262** (ctx SWITCH over benched {W} only; `effectSwitchMe` grew
+> `filter`, `check_legal` grew `benchHas`). Passive hooks (UNPINNED readings,
+> ladder-verified): **Full Metal Lab 1244** `takeLess` (post-W/R −30 {M}
+> defenders) + **Postwick 1255** `activeBonus` (+30 Hop-family attackers) in
+> damage.py, **Watchtower 1256** `suppressAbilitiesType` (MAIN options of {C}
+> mons omitted) + **Forest of Vitality 1261** `evolveImmediateType` ({G}→{G}
+> same-turn, T1 ban stays) in options.py, **Battle Cage 1264**
+> `benchCounterShield` (distribute-counters skip; counter-move dests exclude
+> bench) in chain.py; `stadium_def(gs)` = the shared hook lookup. capture_card.py
+> grew `--body <cardId>` (typed carrying lines) and area-7 stadium-ability
+> targeting. **Deferred with notes (§9f): Jamming Tower 1246** (tool inertness
+> retro-toggles mutate-model hpBonus → needs an HP-recompute + KO pass on stadium
+> enter/leave) and **Area Zero 1250** (Tera-gated bench-max 8 + forced discards).
+> Fixtures 305→**323** (30284 frames), gate 998 all-green, ledger 174/1267
+> verified. The queue after stadiums: **supporters Dawn 1231 (24) / Explorer's
+> Guidance 1185 (17) / Brock's Scouting 1210 (15) / Waitress 1235 (9), special
+> energies Telepath 19 (19) / Mist 11 (14), tools Lucky Helmet 1156 (12),
+> ctx43/nonselect residual classes (15+19).**
+
 > **Ability-tail batch (2026-07-12, second session): the kaggle-episode ladder.**
 > The cabt match-replay fixture's f34 divergence named card 269 — **Iono's Bellibolt
 > ex Electric Streamer** (NOT Kilowattrel as the previous handoff guessed — the

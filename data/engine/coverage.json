@@ -6,19 +6,19 @@
  },
  "summary": {
   "cards": {
-   "verified": 166,
+   "verified": 174,
    "total": 1267
   },
   "chains": {
-   "verified": 404,
-   "deferred": 652,
-   "derived": 1179,
-   "seeded": 586,
+   "verified": 414,
+   "deferred": 645,
+   "derived": 1177,
+   "seeded": 585,
    "unprobed": 2
   },
   "cleanFrames": {
-   "clean": 28616,
-   "total": 28616,
+   "clean": 30284,
+   "total": 30284,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
@@ -120,7 +120,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 305
+  "traces": 323
  },
  "cards": {
   "1": {
@@ -138,6 +138,9 @@
     "cn686_9000",
     "cn686_9001",
     "cn951_9000",
+    "forestvit_9000",
+    "forestvit_9001",
+    "forestvit_9002",
     "micro_bonusheads_9200",
     "micro_onboard349a484_9900",
     "micro_onboard349a484_9901",
@@ -200,6 +203,8 @@
     "3": "verified"
    },
    "evidence": [
+    "battlecage_9000",
+    "battlecage_9001",
     "carmine_9000",
     "carmine_9001",
     "carmine_9002",
@@ -274,6 +279,11 @@
     "flashdraw_9000",
     "flashdraw_9001",
     "flashdraw_9002",
+    "fmlab_9000",
+    "fmlab_9001",
+    "forestvit_9000",
+    "forestvit_9001",
+    "forestvit_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -404,6 +414,8 @@
     "ms_mirror_1000",
     "ms_mirror_1001",
     "ms_mirror_1002",
+    "postwick_9000",
+    "postwick_9001",
     "rvl1230_9000",
     "rvl1230_9001",
     "rvl1371_9000",
@@ -470,6 +482,12 @@
     "sgc87_9300",
     "sgc87_9301",
     "sgc87_9302",
+    "spikemuth_9000",
+    "spikemuth_9001",
+    "spikemuth_9002",
+    "surfbeach_9000",
+    "surfbeach_9001",
+    "surfbeach_9002",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -484,7 +502,10 @@
     "v2_ms_mirror_5000",
     "v2_ms_mirror_5001",
     "v2_ms_ml_5300",
-    "v2_ms_ml_5301"
+    "v2_ms_ml_5301",
+    "watchtower_9000",
+    "watchtower_9001",
+    "watchtower_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -609,6 +630,8 @@
     "6": "verified"
    },
    "evidence": [
+    "battlecage_9000",
+    "battlecage_9001",
     "carmine_9000",
     "carmine_9001",
     "carmine_9002",
@@ -626,6 +649,8 @@
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
+    "fmlab_9000",
+    "fmlab_9001",
     "micro_cnt_bellowing_9980",
     "micro_coinfail_9200",
     "micro_earthquake_9710",
@@ -636,6 +661,8 @@
     "micro_pushdown_9200",
     "ml_dx_2000",
     "ml_dx_2001",
+    "postwick_9000",
+    "postwick_9001",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -685,6 +712,9 @@
     "rvlitems401_9101",
     "sg1_9000",
     "sg1_9001",
+    "spikemuth_9000",
+    "spikemuth_9001",
+    "spikemuth_9002",
     "v2_dx_mirror_5200",
     "v2_dx_mirror_5201",
     "v2_ml_dx_5500",
@@ -1522,7 +1552,9 @@
    "evidence": [
     "micro_onboard65a75_9900",
     "micro_onboard65a75_9901",
-    "micro_onboard65a75_9902"
+    "micro_onboard65a75_9902",
+    "watchtower_9000",
+    "watchtower_9001"
    ],
    "updated": "2026-07-12"
   },
@@ -1564,6 +1596,9 @@
    },
    "evidence": [
     "cn951_9000",
+    "forestvit_9000",
+    "forestvit_9001",
+    "forestvit_9002",
     "micro_rigidify_9200"
    ],
    "updated": "2026-07-12"
@@ -2667,10 +2702,14 @@
    "cardType": "pokemon",
    "status": "derived",
    "chains": {
-    "157": "derived",
+    "157": "verified",
     "attack:205": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "surfbeach_9000",
+    "surfbeach_9001",
+    "surfbeach_9002"
+   ],
    "updated": "2026-07-12"
   },
   "158": {
@@ -8725,12 +8764,16 @@
   "642": {
    "name": "Marnie's Purrloin",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "642": "derived",
-    "attack:929": "seeded"
+    "642": "verified",
+    "attack:929": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "spikemuth_9000",
+    "spikemuth_9001",
+    "spikemuth_9002"
+   ],
    "updated": "2026-07-12"
   },
   "643": {
@@ -10118,6 +10161,8 @@
     "attack:1090": "verified"
    },
    "evidence": [
+    "battlecage_9000",
+    "battlecage_9001",
     "carmine_9001",
     "carmine_9002",
     "cn1003_9000",
@@ -10184,6 +10229,11 @@
     "estream_9002",
     "flashdraw_9000",
     "flashdraw_9001",
+    "fmlab_9000",
+    "fmlab_9001",
+    "forestvit_9000",
+    "forestvit_9001",
+    "forestvit_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -10278,6 +10328,8 @@
     "micro_potion_9760",
     "micro_psychout_9970",
     "micro_tucktail_9530",
+    "postwick_9000",
+    "postwick_9001",
     "rvl1230_9000",
     "rvl1230_9001",
     "rvl1371_9000",
@@ -10334,6 +10386,10 @@
     "sgc87_9300",
     "sgc87_9301",
     "sgc87_9302",
+    "spikemuth_9001",
+    "surfbeach_9000",
+    "surfbeach_9001",
+    "surfbeach_9002",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -10342,7 +10398,10 @@
     "trcx_9102",
     "trh_9000",
     "trh_9001",
-    "trh_9002"
+    "trh_9002",
+    "watchtower_9000",
+    "watchtower_9001",
+    "watchtower_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -13311,6 +13370,8 @@
     "attack:1454": "verified"
    },
    "evidence": [
+    "battlecage_9000",
+    "battlecage_9001",
     "carmine_9000",
     "carmine_9001",
     "carmine_9002",
@@ -13319,10 +13380,13 @@
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
+    "fmlab_9000",
+    "fmlab_9001",
     "lev_9000",
     "lev_9001",
     "lev_9002",
     "lev_9003",
+    "postwick_9001",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -13937,6 +14001,8 @@
     "attack:1526": "verified"
    },
    "evidence": [
+    "battlecage_9000",
+    "battlecage_9001",
     "carmine_9000",
     "carmine_9002",
     "cn1526_9000",
@@ -13949,6 +14015,9 @@
     "flashdraw_9000",
     "flashdraw_9001",
     "flashdraw_9002",
+    "fmlab_9001",
+    "forestvit_9000",
+    "forestvit_9002",
     "lev_9000",
     "micro_bonusheads_9200",
     "micro_coinfail_9200",
@@ -13959,13 +14028,22 @@
     "micro_pushdown_9200",
     "micro_recoil_9100",
     "micro_rigidify_9200",
+    "postwick_9000",
+    "postwick_9001",
+    "spikemuth_9000",
+    "spikemuth_9001",
+    "spikemuth_9002",
+    "surfbeach_9000",
+    "surfbeach_9001",
     "trc_9000",
     "trc_9001",
     "trc_9002",
     "trcx_9100",
     "trcx_9101",
     "trh_9000",
-    "trh_9002"
+    "trh_9002",
+    "watchtower_9001",
+    "watchtower_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -16180,11 +16258,14 @@
   "1244": {
    "name": "Full Metal Lab",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1244": "deferred"
+    "1244": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "fmlab_9000",
+    "fmlab_9001"
+   ],
    "updated": "2026-07-12"
   },
   "1245": {
@@ -16300,21 +16381,28 @@
   "1255": {
    "name": "Postwick",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1255": "deferred"
+    "1255": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "postwick_9000",
+    "postwick_9001"
+   ],
    "updated": "2026-07-12"
   },
   "1256": {
    "name": "Team Rocket's Watchtower",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1256": "deferred"
+    "1256": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "watchtower_9000",
+    "watchtower_9001",
+    "watchtower_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1257": {
@@ -16340,11 +16428,15 @@
   "1259": {
    "name": "Spikemuth Gym",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1259": "deferred"
+    "1259": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "spikemuth_9000",
+    "spikemuth_9001",
+    "spikemuth_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1260": {
@@ -16368,21 +16460,29 @@
   "1261": {
    "name": "Forest of Vitality",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1261": "deferred"
+    "1261": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "forestvit_9000",
+    "forestvit_9001",
+    "forestvit_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1262": {
    "name": "Surfing Beach",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1262": "deferred"
+    "1262": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "surfbeach_9000",
+    "surfbeach_9001",
+    "surfbeach_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1263": {
@@ -16398,11 +16498,14 @@
   "1264": {
    "name": "Battle Cage",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1264": "deferred"
+    "1264": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "battlecage_9000",
+    "battlecage_9001"
+   ],
    "updated": "2026-07-12"
   },
   "1265": {

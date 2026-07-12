@@ -394,6 +394,33 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   convention). The sg1463 "stays silently" pin is compatible: its attack ends the
   turn before tac ever renders again.
 
+### 9f. Stadium batch pins (2026-07-12)
+
+- **Spikemuth Gym** (1259, Levincia-machinery activated effect): ctx TO_HAND
+  min 0 max 1 with the deck listing, over Marnie-family Pokémon, DECLINABLE
+  (spikemuth_9001 f162 answers []); reveal-to-hand + shuffle. NOTE the family
+  string: Marnie's cards carry an ASCII apostrophe while Hop's/Iono's carry
+  U+2019 — derive family filters from the card table, never retype them.
+- **Surfing Beach** (1262, activated): ctx SWITCH min 1 max 1 over the BENCHED
+  {W} mons only (surfbeach_9002 f65: one option, non-{W} benched unlisted);
+  gate = Active {W} AND a benched {W}.
+- **Passive-hook stadiums** (all UNPINNED readings verified by the kaggle
+  ladder — every episode that named them now replays past their frames):
+  Full Metal Lab `takeLess` (post-W/R −30 for {M} defenders, both sides,
+  bench included, NOT pierced by ignoreDefenderEffects), Postwick `activeBonus`
+  (+30 pre-W/R for Hop-family attackers into the opposing Active), Team Rocket's
+  Watchtower `suppressAbilitiesType` (MAIN ability options of {C} mons omitted
+  both sides; triggered/passive abilities not yet suppressed — fail-loud),
+  Forest of Vitality `evolveImmediateType` ({G}→{G} same-turn evolve, first-turn
+  ban NOT waived), Battle Cage `benchCounterShield` (Pokémon-sourced counter
+  distributions skip; counter-move dest selects exclude bench; Risky-Ruins-class
+  stadium-sourced counters unaffected).
+- **Deferred with machinery notes**: Jamming Tower 1246 (tool inertness must
+  retro-toggle Hero's-Cape-class hpBonus, which MUTATES max_hp at attach — needs
+  an HP-recompute + KO-check pass on stadium enter/leave); Area Zero Underdepths
+  1250 (bench-max 8 under a Tera gate + forced bench discards on losing it and
+  on leave-play, player-who-played first).
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on

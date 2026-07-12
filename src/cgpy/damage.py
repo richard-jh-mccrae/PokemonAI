@@ -150,6 +150,16 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
                 continue
             dmg += mod["bonus"]
 
+    # Stadium blanket, pre-W/R side (Postwick: "Attacks used by Hop's Pokémon do 30
+    # more damage to the opponent's Active Pokémon (before applying Weakness and
+    # Resistance)") — both players' attackers, opposing Active only.
+    if defender_is_active and gs.stadium and gs.owner(defender.top) != seat:
+        from .chain import def_for as _sdef_for
+        sb = ((_sdef_for(gs.card_id(gs.stadium[0])) or {})
+              .get("stadium", {}).get("activeBonus"))
+        if sb and sb["attackerNameContains"] in gs.stat(attacker.top).name:
+            dmg += sb["n"]
+
     joint_ignore = adef.get("ignoreWeaknessResistance", False)
     if defender_is_active:
         atk_type = gs.stat(attacker.top).energyType
@@ -177,4 +187,15 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
     # Transient: "takes N less damage" granted last turn (after W/R).
     if defender.take_less_turn == gs.turn and defender.take_less > 0:
         dmg = max(0, dmg - defender.take_less)
+    # Stadium blanket, post-W/R side (Full Metal Lab: "{M} Pokémon take 30 less damage
+    # from attacks from the opponent's Pokémon (after applying Weakness and
+    # Resistance)") — both sides' {M} mons, Active or benched; a stadium is a global
+    # field effect, not an effect ON the defender, so ignoreDefenderEffects does not
+    # pierce it (unpinned reading — a kaggle divergence will correct it if wrong).
+    if gs.stadium and gs.owner(defender.top) != seat:
+        from .chain import def_for as _sdef_for
+        tl = ((_sdef_for(gs.card_id(gs.stadium[0])) or {})
+              .get("stadium", {}).get("takeLess"))
+        if tl and int(dstat.energyType) == tl["defenderType"]:
+            dmg = max(0, dmg - tl["n"])
     return dmg

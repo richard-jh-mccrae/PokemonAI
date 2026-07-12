@@ -62,10 +62,13 @@ def _live_pool(db: CardDB) -> dict[int, dict]:
     return out
 
 
-def build_decks(db: CardDB, card_id: int) -> tuple[list[int], list[int], list[int]]:
+def build_decks(db: CardDB, card_id: int,
+                body_id: int | None = None) -> tuple[list[int], list[int], list[int]]:
     """(own deck, opponent deck, own evolution chain) for a target card. Fodder and the
     opponent body come from the LIVE pool (no deferred attacks), so the chaos tail can't
-    poison the trace with an unmodeled attack."""
+    poison the trace with an unmodeled attack. ``body_id`` swaps the trainer-target
+    carrying line for a specific basic's evolution line (typed gates: Spikemuth Gym
+    needs Marnie's mons in the deck, Surfing Beach a {W} board)."""
     pool = _plain_pool(db)
     live = _live_pool(db)
     card = db.card(card_id)
@@ -80,11 +83,20 @@ def build_decks(db: CardDB, card_id: int) -> tuple[list[int], list[int], list[in
     else:
         # Trainer/energy target: a sturdy basic line carries the game; 4x target rides
         # (1x for an ACE SPEC — the deck rule caps those at one copy).
-        body = bench_fodder(live, set(), n=3)
-        chain = [body[0]]
         copies = 1 if db.card(card_id).aceSpec else 4
-        own = [card_id] * copies + [body[0]] * 4 + [body[1]] * 4 + [body[2]] * 4
-        etype = int(db.card(body[0]).energyType) or 3
+        if body_id is not None:
+            chain = evolution_chain(body_id, pool)
+            fodder = bench_fodder(live, set(chain), n=2)
+            own = [card_id] * copies
+            for cid in chain:
+                own += [cid] * 4
+            own += [fodder[0]] * 4
+            etype = int(db.card(chain[0]).energyType) or 3
+        else:
+            body = bench_fodder(live, set(), n=3)
+            chain = [body[0]]
+            own = [card_id] * copies + [body[0]] * 4 + [body[1]] * 4 + [body[2]] * 4
+            etype = int(db.card(body[0]).energyType) or 3
         own += [_ENERGY_CARD.get(etype, 3)] * (60 - len(own))
     opp_body = bench_fodder(live, set(chain), n=2)
     opp = build_side_deck([opp_body[0]], [0], opp_body[1:])
@@ -143,7 +155,11 @@ def target_policy(db: CardDB, card_id: int, chain: list[int],
                 if idx is not None and idx < len(hand) \
                         and hand[idx].get("id") == card_id:
                     return [i]
-            if t == int(OptionType.ABILITY) and is_pokemon:
+            if t == int(OptionType.ABILITY) and o.get("area") == 7:
+                stad = next(iter(cur.get("stadium") or []), None) or {}
+                if stad.get("id") == card_id:
+                    return [i]   # the target STADIUM's per-turn activated effect
+            elif t == int(OptionType.ABILITY) and is_pokemon:
                 players = cur.get("players") or []
                 me = players[0] or {}
                 area = o.get("area")
@@ -310,7 +326,8 @@ def capture_attack(db: CardDB, card_id: int, attack_id: int, seed: int):
     raise RuntimeError("unreachable")
 
 
-def capture_card(card_id: int, seed: int, *, attack_id: int | None = None):
+def capture_card(card_id: int, seed: int, *, attack_id: int | None = None,
+                 body_id: int | None = None):
     """One recorded native game biased around `card_id` → Trace (parity-trace/1).
     Pokémon targets with a specific --attack go through the audit drive-shell;
     everything else uses the target-biased chaos policy."""
@@ -323,7 +340,7 @@ def capture_card(card_id: int, seed: int, *, attack_id: int | None = None):
     if attack_id is not None:
         return capture_attack(db, card_id, attack_id, seed)
 
-    own, opp, chain = build_decks(db, card_id)
+    own, opp, chain = build_decks(db, card_id, body_id)
     attack_ids = (list(db.card(card_id).attacks)
                   if db.card(card_id).cardType == int(CardType.POKEMON) else [])
     rng = random.Random(seed)
@@ -369,6 +386,9 @@ def main(argv=None) -> int:
     ap.add_argument("card", type=int, help="target cardId")
     ap.add_argument("--attack", type=int, default=None,
                     help="target one attackId (default: all the card's attacks)")
+    ap.add_argument("--body", type=int, default=None,
+                    help="carrying basic for trainer targets (typed gates: Spikemuth "
+                         "Gym wants a Marnie's line, Surfing Beach a {W} line)")
     ap.add_argument("-n", "--games", type=int, default=1)
     ap.add_argument("--seed", type=int, default=9000)
     ap.add_argument("--out", default=str(REPO / "data" / "parity"))
@@ -379,7 +399,7 @@ def main(argv=None) -> int:
     out = Path(args.out)
     for i in range(args.games):
         seed = args.seed + i
-        tr = capture_card(args.card, seed, attack_id=args.attack)
+        tr = capture_card(args.card, seed, attack_id=args.attack, body_id=args.body)
         path = out / f"{prefix}_{seed}.trace.json.gz"
         tr.save(path)
         r = tr.meta["result"]
