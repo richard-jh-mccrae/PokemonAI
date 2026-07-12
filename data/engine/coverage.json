@@ -6,19 +6,19 @@
  },
  "summary": {
   "cards": {
-   "verified": 184,
+   "verified": 193,
    "total": 1267
   },
   "chains": {
-   "verified": 435,
-   "deferred": 632,
-   "derived": 1171,
-   "seeded": 583,
-   "unprobed": 2
+   "verified": 444,
+   "unprobed": 3,
+   "deferred": 623,
+   "derived": 1170,
+   "seeded": 583
   },
   "cleanFrames": {
-   "clean": 34521,
-   "total": 34521,
+   "clean": 37538,
+   "total": 37538,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
@@ -125,7 +125,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 350
+  "traces": 373
  },
  "cards": {
   "1": {
@@ -146,6 +146,8 @@
     "forestvit_9000",
     "forestvit_9001",
     "forestvit_9002",
+    "growgrass_9000",
+    "growgrass_9001",
     "micro_bonusheads_9200",
     "micro_onboard349a484_9900",
     "micro_onboard349a484_9901",
@@ -231,6 +233,9 @@
     "archala_9002",
     "battlecage_9000",
     "battlecage_9001",
+    "boomer_9000",
+    "boomer_9001",
+    "boomer_9002",
     "brockscout_9000",
     "brockscout_9001",
     "brockscout_9002",
@@ -308,6 +313,9 @@
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
+    "enrich_9000",
+    "enrich_9001",
+    "enrich_9002",
     "estream_9000",
     "estream_9001",
     "estream_9002",
@@ -325,6 +333,11 @@
     "grimm_9000",
     "grimm_9001",
     "grimm_9002",
+    "growgrass_9000",
+    "growgrass_9001",
+    "legacy_9000",
+    "legacy_9001",
+    "legacy_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -452,14 +465,23 @@
     "micro_rigidify_9200",
     "micro_tucktail_9521",
     "micro_tucktail_9530",
+    "mist_9000",
+    "mist_9001",
+    "mist_9002",
     "ms_mirror_1000",
     "ms_mirror_1001",
     "ms_mirror_1002",
+    "neoupper_9000",
+    "neoupper_9001",
+    "neoupper_9002",
     "noctowl_9000",
     "noctowl_9001",
     "noctowl_9002",
     "postwick_9000",
     "postwick_9001",
+    "rockf_9000",
+    "rockf_9001",
+    "rockf_9002",
     "rvl1230_9000",
     "rvl1230_9001",
     "rvl1371_9000",
@@ -532,6 +554,9 @@
     "surfbeach_9000",
     "surfbeach_9001",
     "surfbeach_9002",
+    "telepath_9000",
+    "telepath_9001",
+    "telepath_9002",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -608,6 +633,9 @@
     "alakazam_9000",
     "alakazam_9001",
     "alakazam_9002",
+    "boomer_9000",
+    "boomer_9001",
+    "boomer_9002",
     "cn1260_9000",
     "cn1260_9001",
     "cn139_9000",
@@ -618,6 +646,12 @@
     "cn607_9001",
     "cnt_doubleeater_9980",
     "cnt_followme_9980",
+    "enrich_9000",
+    "enrich_9001",
+    "enrich_9002",
+    "legacy_9000",
+    "legacy_9001",
+    "legacy_9002",
     "micro_cnt_doubleeater_9980",
     "micro_cnt_followme_9980",
     "micro_discardall_9610",
@@ -631,8 +665,14 @@
     "micro_phantomdive_9440",
     "micro_phantomdive_9441",
     "micro_psychout_9970",
+    "mist_9000",
+    "mist_9001",
+    "mist_9002",
     "ml_dx_2000",
     "ml_dx_2001",
+    "neoupper_9000",
+    "neoupper_9001",
+    "neoupper_9002",
     "rvl297_9000",
     "rvl297_9001",
     "rvl297_9500",
@@ -648,6 +688,9 @@
     "sgc87_9300",
     "sgc87_9301",
     "sgc87_9302",
+    "telepath_9000",
+    "telepath_9001",
+    "telepath_9002",
     "trcx_9100",
     "trcx_9101",
     "trcx_9102",
@@ -713,6 +756,9 @@
     "ml_dx_2001",
     "postwick_9000",
     "postwick_9001",
+    "rockf_9000",
+    "rockf_9001",
+    "rockf_9002",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -815,59 +861,79 @@
   "9": {
    "name": "Boomerang Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "9": "deferred"
+    "9": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "boomer_9000",
+    "boomer_9001",
+    "boomer_9002"
+   ],
    "updated": "2026-07-12"
   },
   "10": {
    "name": "Neo Upper Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "10": "deferred"
+    "10": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "neoupper_9000",
+    "neoupper_9001",
+    "neoupper_9002"
+   ],
    "updated": "2026-07-12"
   },
   "11": {
    "name": "Mist Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "11": "deferred"
+    "11": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "mist_9000",
+    "mist_9001",
+    "mist_9002"
+   ],
    "updated": "2026-07-12"
   },
   "12": {
    "name": "Legacy Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "12": "deferred"
+    "12": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "legacy_9000",
+    "legacy_9001",
+    "legacy_9002"
+   ],
    "updated": "2026-07-12"
   },
   "13": {
    "name": "Enriching Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "13": "deferred"
+    "13": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "enrich_9000",
+    "enrich_9001",
+    "enrich_9002"
+   ],
    "updated": "2026-07-12"
   },
   "14": {
    "name": "Spiky Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "14": "deferred"
+    "14": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -914,31 +980,42 @@
   "18": {
    "name": "Grow Grass Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "18": "deferred"
+    "18": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "growgrass_9000",
+    "growgrass_9001"
+   ],
    "updated": "2026-07-12"
   },
   "19": {
    "name": "Telepath Psychic Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "19": "deferred"
+    "19": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "telepath_9000",
+    "telepath_9001",
+    "telepath_9002"
+   ],
    "updated": "2026-07-12"
   },
   "20": {
    "name": "Rock Fighting Energy",
    "cardType": "special-energy",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "20": "deferred"
+    "20": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "rockf_9000",
+    "rockf_9001",
+    "rockf_9002"
+   ],
    "updated": "2026-07-12"
   },
   "21": {
@@ -965,7 +1042,10 @@
     "attack:3": "verified"
    },
    "evidence": [
-    "micro_pushdown_9200"
+    "micro_pushdown_9200",
+    "rockf_9000",
+    "rockf_9001",
+    "rockf_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -1348,14 +1428,31 @@
   "53": {
    "name": "Marill",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
     "53": "verified",
     "attack:55": "verified",
-    "attack:56": "derived"
+    "attack:56": "verified"
    },
    "evidence": [
-    "micro_perheads_9200"
+    "boomer_9000",
+    "boomer_9001",
+    "boomer_9002",
+    "enrich_9000",
+    "enrich_9001",
+    "enrich_9002",
+    "legacy_9000",
+    "legacy_9001",
+    "legacy_9002",
+    "micro_perheads_9200",
+    "mist_9000",
+    "mist_9001",
+    "mist_9002",
+    "neoupper_9000",
+    "neoupper_9001",
+    "neoupper_9002",
+    "telepath_9001",
+    "telepath_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -1657,6 +1754,8 @@
     "forestvit_9000",
     "forestvit_9001",
     "forestvit_9002",
+    "growgrass_9000",
+    "growgrass_9001",
     "micro_rigidify_9200"
    ],
    "updated": "2026-07-12"
@@ -10274,6 +10373,9 @@
     "archala_9002",
     "battlecage_9000",
     "battlecage_9001",
+    "boomer_9000",
+    "boomer_9001",
+    "boomer_9002",
     "brockscout_9000",
     "brockscout_9001",
     "brockscout_9002",
@@ -10344,6 +10446,9 @@
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
+    "enrich_9000",
+    "enrich_9001",
+    "enrich_9002",
     "estream_9000",
     "estream_9001",
     "estream_9002",
@@ -10360,6 +10465,11 @@
     "grimm_9000",
     "grimm_9001",
     "grimm_9002",
+    "growgrass_9000",
+    "growgrass_9001",
+    "legacy_9000",
+    "legacy_9001",
+    "legacy_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -10454,11 +10564,18 @@
     "micro_potion_9760",
     "micro_psychout_9970",
     "micro_tucktail_9530",
+    "mist_9001",
+    "mist_9002",
+    "neoupper_9000",
+    "neoupper_9001",
     "noctowl_9000",
     "noctowl_9001",
     "noctowl_9002",
     "postwick_9000",
     "postwick_9001",
+    "rockf_9000",
+    "rockf_9001",
+    "rockf_9002",
     "rvl1230_9000",
     "rvl1230_9001",
     "rvl1371_9000",
@@ -10519,6 +10636,9 @@
     "surfbeach_9000",
     "surfbeach_9001",
     "surfbeach_9002",
+    "telepath_9000",
+    "telepath_9001",
+    "telepath_9002",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -14139,6 +14259,9 @@
     "archala_9002",
     "battlecage_9000",
     "battlecage_9001",
+    "boomer_9000",
+    "boomer_9001",
+    "boomer_9002",
     "brockscout_9000",
     "brockscout_9001",
     "brockscout_9002",
@@ -14154,6 +14277,8 @@
     "dawn_9002",
     "duskball_9000",
     "duskball_9002",
+    "enrich_9000",
+    "enrich_9001",
     "estream_9000",
     "estream_9001",
     "estream_9002",
@@ -14169,6 +14294,11 @@
     "grimm_9000",
     "grimm_9001",
     "grimm_9002",
+    "growgrass_9000",
+    "growgrass_9001",
+    "legacy_9000",
+    "legacy_9001",
+    "legacy_9002",
     "lev_9000",
     "micro_bonusheads_9200",
     "micro_coinfail_9200",
@@ -14179,15 +14309,27 @@
     "micro_pushdown_9200",
     "micro_recoil_9100",
     "micro_rigidify_9200",
+    "mist_9000",
+    "mist_9001",
+    "mist_9002",
+    "neoupper_9000",
+    "neoupper_9001",
+    "neoupper_9002",
     "noctowl_9001",
     "noctowl_9002",
     "postwick_9000",
     "postwick_9001",
+    "rockf_9000",
+    "rockf_9001",
+    "rockf_9002",
     "spikemuth_9000",
     "spikemuth_9001",
     "spikemuth_9002",
     "surfbeach_9000",
     "surfbeach_9001",
+    "telepath_9000",
+    "telepath_9001",
+    "telepath_9002",
     "trc_9000",
     "trc_9001",
     "trc_9002",

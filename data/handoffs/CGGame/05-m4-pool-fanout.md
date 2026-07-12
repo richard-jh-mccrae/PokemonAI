@@ -1,5 +1,26 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Special-energy batch (2026-07-12, same session, fourth follow-on): ladder
+> 143→155/414.** All 9 queued special energies authored — the KEY INSIGHT: the
+> provide type already comes from the card table's `energyType` fallback, so a
+> special energy needs a def ONLY to un-defer its attach option + carry
+> secondaries. New machinery: an **energy `onAttach` hook** in the ATTACH handler
+> (source = the ENERGY serial for effect-card identity, `kind="ability"` so it's
+> not discarded — the holder-discard bug on enrich_9002), driving **Telepath 19**
+> (search 2 Basic {P} to bench, {P}-holder-gated) and **Enriching 13** (draw 4);
+> **Grow Grass 18** +20 HP as a floating render delta folded into
+> `stadium_hp_delta` (NOT a mutate — tracks holder type across evolution);
+> **Neo Upper 10** `providesOnStage2:[10,10]`. Legacy/Mist/Rock/Boomerang/Spiky
+> ship their defs (attach clears) with combat interiors DEFERRED — Spiky's
+> counter resolves in the turn-TRANSITION (defender's next window, spiky_9002
+> f10, not the attack window f8; needs a between-turns hook). Fixtures 350→**373**
+> (37538 frames), gate **1148 all-green**, ops 97/97, ledger 193/1267. Pins §9h.
+> KNOWN EDGE: Grow Grass discarded off a holder — native's +20 outlives it one
+> render (growgrass_9002 f262). Queue now: **nonselect:current (39, mostly
+> Spiky-counter + turn-transition timing), tools Lucky Helmet 1156 (17) / Hop's
+> Choice Band 1171 (11), deferred attacks 1046 (14) / Hammer In 223 (12) / 1042,
+> type-12 option decode (13), Xerosic 1197 / Sacred Ash 1129 / Colress 1194.**
+
 > **Supporter + onEvolve-ability batch (2026-07-12, same session, third follow-on):
 > ladder 129→143/414.** Five supporters capture-first: **Dawn 1231**
 > (`xDeckToHandBuckets` — sequential per-category min0-max1 picks),

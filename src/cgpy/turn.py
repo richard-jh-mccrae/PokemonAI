@@ -529,6 +529,11 @@ def _attack_damage_apply(gs: GameState, seat: int, attack_id: int,
         gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": 1 - seat,
                  "cardId": gs.card_id(defender.top), "serial": defender.top,
                  "value": -dmg, "putDamageCounter": False})
+        # Spiky-Energy counter-punch (def key spikyCounter) is DEFERRED: native
+        # applies it during the turn-TRANSITION, not the attack — it surfaces in the
+        # defender's next-turn window (spiky_9002 f10), not the attacker's attack
+        # window (f8). Matching that needs a between-turns hook; the def is present
+        # so the attach option clears, the ladder names it where a holder is hit.
     if adef.get("lockDefenderRetreat") and defender is not None:
         defender.retreat_lock_turn = gs.turn + 1   # "Defending Pokémon can't retreat"
     if adef.get("lockOpponentItems"):              # Itchy Pollen: no ITEM plays for the
@@ -702,11 +707,11 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
                     gs.supporter_played = True
                 start_program(gs, seat, serial, cdef["play"])
         elif t == OptionType.ATTACH:
+            from .chain import _card_matches, def_for, start_program
             serial = b.hand[o["index"]]
             target = _target_of(gs, seat, o["inPlayArea"], o["inPlayIndex"])
             b.hand.remove(serial)
             if gs.stat(serial).cardType == 2:             # a TOOL: no per-turn limit
-                from .chain import def_for
                 target.tools.append(serial)
                 bonus = (def_for(gs.card_id(serial)) or {}).get("tool", {}) \
                     .get("hpBonus", 0)
@@ -716,9 +721,24 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
                 target.energy.append(serial)
                 gs.note_attach(serial)
                 gs.energy_attached = True
+                # Grow-Grass-class HP passive is a floating render-time delta
+                # (chain.stadium_hp_delta), NOT a mutate here — it must track the
+                # holder's type across evolution/energy-move
             gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
                      "cardId": gs.card_id(serial), "serial": serial,
                      "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+            # on-attach-from-hand program (Telepath search-bench / Enriching draw),
+            # gated by the holder filter — runs before returning to MAIN
+            if gs.stat(serial).cardType != 2:
+                oa = (def_for(gs.card_id(serial)) or {}).get("onAttach")
+                if oa and _card_matches(gs, target.top, oa.get("holder", {})):
+                    # source = the ENERGY (so posed selects carry effect=energy —
+                    # pinned telepath_9002 f99 effect 19 not the holder 53), and
+                    # kind="ability" so completion does NOT discard it ("play" would —
+                    # the holder-discard bug caught on enrich_9002)
+                    start_program(gs, seat, serial, oa["program"], kind="ability")
+                    if gs.pending is not None:
+                        return          # a select is posed; MAIN follows on completion
             pose_main(gs, seat)
         elif t == OptionType.EVOLVE:
             from .chain import def_for

@@ -456,6 +456,37 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
 - **Metal Defender**: self no-Weakness transient during the opponent's next turn
   (UNPINNED interior; archala_9000/9002 replays verify end-to-end).
 
+### 9h. Special-energy batch pins (2026-07-12)
+
+- **The provide type comes from the card table's `energyType` fallback** — a
+  special energy needs a def ONLY to (a) make its attach option appear
+  (deferred = option absent) and (b) carry secondaries. Telepath provides {P}
+  (type 5), Grow Grass {G}, Rock {F}, Legacy = energyType 10 = RAINBOW = 1
+  all-type flex unit, the rest {C} — all straight from the table.
+- **On-attach-from-hand program** (`onAttach: {holder, program}`): runs in the
+  ATTACH handler AFTER the ATTACH log, gated by a holder filter, with source =
+  the ENERGY serial (posed selects carry effect=energy — pinned telepath_9002
+  f99 effect 19 not the holder 53) and `kind="ability"` so completion does NOT
+  discard it (a "play"-kind program discards its source — the holder-discard bug
+  on enrich_9002). Telepath → search up to 2 Basic {P} to bench (holder {P});
+  Enriching → draw 4 (any holder).
+- **Grow Grass +20 HP is a floating render-time delta** folded into
+  `stadium_hp_delta` (renamed conceptually to "the HP delta"), NOT a mutate at
+  attach — it must track the holder's type across evolution. Common case
+  (attach-and-keep) verified (growgrass_9000/9001). KNOWN EDGE: when Grow Grass
+  is discarded off a holder, native's +20 outlives the energy by one render
+  (growgrass_9002 f262: empty energyCards, maxHp still 80) — the delta drops it
+  immediately; a rare energy-leaves-play interaction left as a residual.
+- **Neo Upper**: `providesOnStage2: [10, 10]` (2 all-type units on a Stage 2
+  holder, else {C}) — a new provide branch above providesOnEvolution.
+- **DEFERRED combat interiors** (def present so attach clears; the ladder names
+  them where exercised): Spiky counter-punch (`spikyCounter`) resolves during the
+  turn-TRANSITION — it surfaces in the DEFENDER's next-turn window (spiky_9002
+  f10), not the attacker's attack window (f8) — needs a between-turns hook;
+  Mist/Rock prevent-all-opp-effects (`preventOppEffects`, broad); Legacy on-KO
+  prize reduction (`legacyPrizeReduction`, once/game); Boomerang re-attach on
+  attack-discard (`recoverOnAttackDiscard`).
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on

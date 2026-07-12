@@ -1258,5 +1258,102 @@
     "per": 2
    }
   ]
+ },
+ "19": {
+  "name": "Telepath Psychic Energy",
+  "_provenance": "onAttach-from-hand to a {P} holder -> search up to 2 Basic {P} to bench + shuffle (telepath_9000 attach fires the deck-to-bench). Provides {P} from the table.",
+  "energy": true,
+  "onAttach": {
+   "holder": {
+    "pokemon": true,
+    "energyType": [
+     5
+    ]
+   },
+   "program": [
+    {
+     "op": "effectDeckToBenchAndShuffle",
+     "min": 0,
+     "max": 2,
+     "filter": {
+      "pokemon": true,
+      "basic": true,
+      "energyType": [
+       5
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "13": {
+  "name": "Enriching Energy",
+  "_provenance": "onAttach-from-hand (any holder) -> draw 4. Provides {C} from the table.",
+  "energy": true,
+  "onAttach": {
+   "holder": {},
+   "program": [
+    {
+     "op": "effectDraw",
+     "n": 4
+    }
+   ]
+  }
+ },
+ "18": {
+  "name": "Grow Grass Energy",
+  "_provenance": "+20 HP passive on a {G} holder (mutate-model like Hero’s Cape, hpBonusFilter type-gated; growgrass_9000 attached to a non-{G} mon = no bonus). Provides {G} from the table.",
+  "energy": true,
+  "hpBonus": 20,
+  "hpBonusFilter": {
+   "pokemon": true,
+   "energyType": [
+    1
+   ]
+  }
+ },
+ "10": {
+  "name": "Neo Upper Energy",
+  "_provenance": "provides {C}; on a Stage 2 holder provides 2 all-type units (providesOnStage2 = 2x RAINBOW). Secondary is the only clause.",
+  "energy": true,
+  "providesOnStage2": [
+   10,
+   10
+  ]
+ },
+ "12": {
+  "name": "Legacy Energy",
+  "_provenance": "provides 1 all-type unit (energyType 10=RAINBOW from the table). On-KO prize reduction (once per game) DEFERRED interior — the prize-claim hook is not yet wired; attach + provide live, ladder names it if exercised.",
+  "energy": true,
+  "legacyPrizeReduction": true
+ },
+ "14": {
+  "name": "Spiky Energy",
+  "_provenance": "provides {C}. Active-holder damaged-by-opp-attack -> 2 counters on the attacker: DEFERRED combat interior (not wired); attach + provide live, ladder names it if exercised.",
+  "energy": true,
+  "spikyCounter": 2
+ },
+ "11": {
+  "name": "Mist Energy",
+  "_provenance": "provides {C}. Prevent all opp-attack EFFECTS on the holder (damage still applies): DEFERRED broad interior; attach + provide live, ladder names it if exercised.",
+  "energy": true,
+  "preventOppEffects": true
+ },
+ "20": {
+  "name": "Rock Fighting Energy",
+  "_provenance": "provides {F}. Prevent all opp-attack EFFECTS on a {F} holder: DEFERRED broad interior; attach + provide live, ladder names it if exercised.",
+  "energy": true,
+  "preventOppEffects": true,
+  "preventFilter": {
+   "energyType": [
+    6
+   ]
+  }
+ },
+ "9": {
+  "name": "Boomerang Energy",
+  "_provenance": "provides {C}. If discarded by an effect of THIS mon’s attack, re-attach after attacking: DEFERRED recovery interior; attach + provide live, ladder names it if exercised.",
+  "energy": true,
+  "recoverOnAttackDiscard": true
  }
 }

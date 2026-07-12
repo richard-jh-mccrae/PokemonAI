@@ -58,9 +58,12 @@ def provided_energy(gs: GameState, p: PokemonInPlay) -> list[int]:
 
     units: list[int] = []
     holder_is_evolution = bool(gs.stat(p.top).evolvesFrom)
+    holder_is_stage2 = gs.stat(p.top).stage2
     for s in p.energy:
         cdef = def_for(gs.card_id(s)) or {}
-        if holder_is_evolution and "providesOnEvolution" in cdef:
+        if holder_is_stage2 and "providesOnStage2" in cdef:
+            units.extend(cdef["providesOnStage2"])   # Neo Upper: 2 all-type on a S2
+        elif holder_is_evolution and "providesOnEvolution" in cdef:
             units.extend(cdef["providesOnEvolution"])
         elif "provides" in cdef:
             units.extend(cdef["provides"])
@@ -74,6 +77,8 @@ def provided_units_of(gs: GameState, p: PokemonInPlay, serial: int) -> int:
     from .chain import def_for
 
     cdef = def_for(gs.card_id(serial)) or {}
+    if gs.stat(p.top).stage2 and "providesOnStage2" in cdef:
+        return len(cdef["providesOnStage2"])
     if bool(gs.stat(p.top).evolvesFrom) and "providesOnEvolution" in cdef:
         return len(cdef["providesOnEvolution"])
     if "provides" in cdef:

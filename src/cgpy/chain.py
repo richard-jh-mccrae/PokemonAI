@@ -76,13 +76,21 @@ def stadium_def(gs: GameState) -> dict:
 
 
 def stadium_hp_delta(gs: GameState, p) -> int:
-    """The in-play stadium's HP modifier for this Pokémon (Gravity Mountain: Stage 2s
-    −30 both sides, pinned ml_dx_2001 f112: 320-HP Dragapult ex renders 290). Damage
-    counters live on stored hp/max_hp; the delta floats with the stadium."""
+    """The floating HP modifier for this Pokémon: the in-play stadium's (Gravity
+    Mountain: Stage 2s −30 both sides, pinned ml_dx_2001 f112: 320-HP Dragapult ex
+    renders 290) PLUS matching attached-energy bonuses (Grow Grass: +20 on a {G}
+    holder — computed live so it floats with the holder's type across evolution,
+    unlike the mutate-model tools). Damage counters live on stored hp/max_hp."""
+    delta = 0
     sdef = stadium_def(gs)
     if "stage2HpDelta" in sdef and gs.stat(p.top).stage2:
-        return sdef["stage2HpDelta"]
-    return 0
+        delta += sdef["stage2HpDelta"]
+    for s in p.energy:
+        edef = def_for(gs.card_id(s)) or {}
+        hb = edef.get("hpBonus", 0)
+        if hb and _card_matches(gs, p.top, edef.get("hpBonusFilter", {})):
+            delta += hb
+    return delta
 
 
 # ---------------------------------------------------------------------------- filters
