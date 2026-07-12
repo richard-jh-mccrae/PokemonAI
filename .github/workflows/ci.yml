@@ -43,7 +43,164 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      # SELECTIVE TESTING. A pull request runs only the test dirs its diff can affect. The
+      # filters below are the declarative source->area map; each is a boolean output. The reverse
+      # dependencies (e.g. arena imports sim.selfplay, so a sim change must also run arena) are
+      # applied in the "Determine test plan" step. Pushes to main and manual dispatch skip the
+      # filter and run the FULL suite. Rationale + table: docs/ci.md.
+      - name: Detect changed areas
+        if: github.event_name == 'pull_request'
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            # Foundation & shared infra — imported/loaded by ~everything => full suite.
+            full:
+              - 'src/cg/**'
+              - 'src/common/**'
+              - 'requirements.txt'
+              - '.coveragerc'
+              - 'pytest.ini'
+              - '.github/workflows/**'
+              - 'tests/conftest.py'
+              - 'tests/pilot_helpers.py'
+              - 'tests/scouting_helpers.py'
+              - 'tests/lethal_helpers.py'
+              - 'tests/fixtures/**'
+              - 'data/**'
+              - 'tools/build_card_functions.py'
+              - 'tools/build_card_effects.py'
+              - 'tools/audit_card_functions.py'
+              - 'tools/verify_meta_cards.py'
+            # Leaf/tool source areas + their own tests (reverse deps applied in the next step).
+            agents:
+              - 'src/agents/**'
+              - 'tests/agents/**'
+            arena:
+              - 'tools/arena/**'
+              - 'tests/arena/**'
+            sim:
+              - 'tools/sim/**'
+              - 'tests/sim/**'
+            submit:
+              - 'tools/submit/**'
+              - 'tools/submit_agent.py'
+              - 'tests/submit/**'
+            train:
+              - 'tools/train/**'
+              - 'tests/train/**'
+            meta:
+              - 'tools/meta_tracker/**'
+              - 'tools/deck_convert.py'
+              - 'tools/deck_stealer.py'
+              - 'tools/export_meta_decks.py'
+              - 'tools/run_meta_tracker.py'
+              - 'tests/meta_tracker/**'
+            scouting:
+              - 'tools/build_scouting_artifact.py'
+              - 'tests/scouting/**'
+            strategy:
+              - 'tests/strategy/**'
+            cards:
+              - 'tests/cards/**'
+            tuner:
+              - 'tests/tuner/**'
+            blunder:
+              - 'tests/blunder/**'
+            value:
+              - 'tests/value/**'
+            # Ignorable (no runtime surface) and a catch-all for the fail-safe below.
+            docs:
+              - '**/*.md'
+              - 'docs/**'
+            any:
+              - '**'
+
+      # Turn the filter booleans into a concrete pytest target list, applying reverse-dependency
+      # unions. Fail-safe: on a push/dispatch, or when a change matches no known filter, run the
+      # FULL suite; a docs-only diff runs nothing. The coverage gate is only meaningful when the
+      # scouting tests are in scope (else it measures 0% and falsely fails); the audit gate runs
+      # when attack/damage/effect code (sim / meta_tracker / cards) is in scope.
+      - name: Determine test plan
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          F_full: ${{ steps.changes.outputs.full }}
+          F_agents: ${{ steps.changes.outputs.agents }}
+          F_arena: ${{ steps.changes.outputs.arena }}
+          F_sim: ${{ steps.changes.outputs.sim }}
+          F_submit: ${{ steps.changes.outputs.submit }}
+          F_train: ${{ steps.changes.outputs.train }}
+          F_meta: ${{ steps.changes.outputs.meta }}
+          F_scouting: ${{ steps.changes.outputs.scouting }}
+          F_strategy: ${{ steps.changes.outputs.strategy }}
+          F_cards: ${{ steps.changes.outputs.cards }}
+          F_tuner: ${{ steps.changes.outputs.tuner }}
+          F_blunder: ${{ steps.changes.outputs.blunder }}
+          F_value: ${{ steps.changes.outputs.value }}
+          F_docs: ${{ steps.changes.outputs.docs }}
+          F_any: ${{ steps.changes.outputs.any }}
+        run: |
+          run_all=false
+          dirs=()
+          add() { for d in "$@"; do dirs+=("$d"); done; }
+
+          if [ "$EVENT" != "pull_request" ]; then
+            run_all=true
+          else
+            if [ "$F_full" = "true" ]; then run_all=true; fi
+            if [ "$F_agents"   = "true" ]; then add tests/agents; fi
+            if [ "$F_arena"    = "true" ]; then add tests/arena; fi
+            if [ "$F_sim"      = "true" ]; then add tests/sim tests/arena; fi
+            if [ "$F_submit"   = "true" ]; then add tests/submit tests/sim tests/arena; fi
+            if [ "$F_train"    = "true" ]; then add tests/train tests/tuner tests/blunder tests/value tests/sim; fi
+            if [ "$F_meta"     = "true" ]; then add tests/meta_tracker tests/cards tests/arena tests/sim tests/submit tests/train tests/tuner tests/blunder; fi
+            if [ "$F_scouting" = "true" ]; then add tests/scouting; fi
+            if [ "$F_strategy" = "true" ]; then add tests/strategy; fi
+            if [ "$F_cards"    = "true" ]; then add tests/cards; fi
+            if [ "$F_tuner"    = "true" ]; then add tests/tuner; fi
+            if [ "$F_blunder"  = "true" ]; then add tests/blunder; fi
+            if [ "$F_value"    = "true" ]; then add tests/value; fi
+
+            # Something changed but nothing recognised (and not docs-only) => full suite.
+            matched=false
+            for v in "$F_full" "$F_agents" "$F_arena" "$F_sim" "$F_submit" "$F_train" "$F_meta" \
+                     "$F_scouting" "$F_strategy" "$F_cards" "$F_tuner" "$F_blunder" "$F_value" "$F_docs"; do
+              if [ "$v" = "true" ]; then matched=true; fi
+            done
+            if [ "$F_any" = "true" ] && [ "$matched" = "false" ]; then run_all=true; fi
+          fi
+
+          if [ "$run_all" = "true" ]; then
+            MODE=all; PATHS=tests; COV=true; AUDIT=true; EMPTY=false
+          elif [ "${#dirs[@]}" -eq 0 ]; then
+            MODE=none; PATHS=""; COV=false; AUDIT=false; EMPTY=true
+          else
+            PATHS=$(printf '%s\n' "${dirs[@]}" | sort -u | tr '\n' ' ' | sed 's/ *$//')
+            MODE=selective; EMPTY=false
+            case " $PATHS " in *" tests/scouting "*) COV=true ;; *) COV=false ;; esac
+            case " $PATHS " in
+              *" tests/sim "*|*" tests/meta_tracker "*|*" tests/cards "*) AUDIT=true ;;
+              *) AUDIT=false ;;
+            esac
+          fi
+
+          echo "plan: mode=$MODE  coverage=$COV  audit=$AUDIT"
+          echo "pytest targets: ${PATHS:-(none)}"
+          {
+            echo "mode=$MODE"
+            echo "paths=$PATHS"
+            echo "coverage=$COV"
+            echo "audit=$AUDIT"
+            echo "empty=$EMPTY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: No tests affected (docs-only change)
+        if: steps.plan.outputs.empty == 'true'
+        run: echo "Diff touches only docs / non-code paths — no test suites to run. ✅"
+
       - name: Install dependencies
+        if: steps.plan.outputs.empty != 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -52,30 +209,40 @@ jobs:
       # Windows (sim.py picks by os.name). Engine-backed legality/playability tests depend on it.
       # Fail fast & clearly (and print which library loaded) if it can't.
       - name: Verify native engine loads
+        if: steps.plan.outputs.empty != 'true'
         run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
 
-      # Whole suite runs offline on both OSes: native engine ships in-repo, kaggle-environments is
-      # a pip dep, and the Kaggle CLI is monkeypatched in tests. Enforces the .coveragerc Scouting
-      # gate (fail_under=80) and emits JUnit + coverage XML as artifacts.
-      - name: Run tests (JUnit + Scouting coverage gate)
+      # Runs the selected test dirs offline (native engine ships in-repo, kaggle-environments is a
+      # pip dep, the Kaggle CLI is monkeypatched). pytest.ini anchors rootdir at the repo root so a
+      # subset invocation still loads tests/conftest.py (the sys.path setup). The Scouting coverage
+      # gate (.coveragerc, fail_under=80) only runs when the scouting tests are in scope.
+      - name: Run tests (JUnit + conditional Scouting coverage gate)
+        if: steps.plan.outputs.empty != 'true'
+        env:
+          PYTEST_PATHS: ${{ steps.plan.outputs.paths }}
+          RUN_COVERAGE: ${{ steps.plan.outputs.coverage }}
         run: |
           mkdir -p reports
-          python -m pytest tests/ -q \
+          COV=""
+          if [ "$RUN_COVERAGE" = "true" ]; then
+            COV="--cov=src/common/scouting --cov=tools/meta_tracker --cov-report=term-missing --cov-report=xml:reports/coverage-${{ matrix.os }}-py${{ matrix.python-version }}.xml"
+          fi
+          echo "pytest targets: $PYTEST_PATHS  (coverage gate: $RUN_COVERAGE)"
+          python -m pytest $PYTEST_PATHS -q \
             --junitxml=reports/junit-${{ matrix.os }}-py${{ matrix.python-version }}.xml \
-            --cov=src/common/scouting \
-            --cov=tools/meta_tracker \
-            --cov-report=term-missing \
-            --cov-report=xml:reports/coverage-${{ matrix.os }}-py${{ matrix.python-version }}.xml \
+            $COV \
             --durations=10
 
       # ADR-0032 soundness gate: a bounded engine audit (the ignore-flag family + goldens, <1 min)
       # diffed against the SHIPPED damage oracle — fails on any over-prediction (damage the closed
-      # form promises that the engine won't deal = phantom-KO risk). Full-pool audit stays manual.
+      # form promises that the engine won't deal = phantom-KO risk). Runs whenever attack/damage/
+      # effect code is in scope (sim / meta_tracker / cards tests), and always on a full run.
       - name: Attack-audit soundness gate
+        if: steps.plan.outputs.audit == 'true'
         run: python tools/sim/ci_audit_gate.py
 
       - name: Upload test & coverage reports
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.plan.outputs.empty != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: reports-${{ matrix.os }}-py${{ matrix.python-version }}
