@@ -24,6 +24,7 @@
 #let runtest(body) = callout(accent,    "Run & test — you",       none, body)
 #let insight(body) = callout(contrastc, "Writeup insight",        none, body)
 #let forus(body)   = callout(toolc,     "For this repo",          none, body)
+#let plain(body)   = callout(toolc,     "In plain English",       none, body)
 
 // ---- TITLE PAGE ------------------------------------------------------------
 #v(3.0cm)
@@ -101,6 +102,155 @@ insight per dollar, the build order is:
 Phases 1–5 are the program. Phase 6 buys raw strength if budget and time remain, and even then
 its job is to *measure the gap* the report discusses, not to become the submission. If you do
 only three things, do 1–3: that is the entire writeup spine for under fifty dollars.
+
+// ===========================================================================
+= The ideas in plain English
+// ===========================================================================
+
+*New to machine learning? Read this section first — every later section leans on it.* The plan
+uses a dozen ML terms as if they were common words. They are not, so here is each one, defined
+before it is used, in the language of the systems you already build. Nothing here is deep; each
+idea is something you could implement as a loop over an array once the jargon is stripped away.
+
+== The core trick: a model that predicts winning
+
+You already know the shape of your agent: each situation is described by a list of numbers
+(*features* — "am I ahead on prizes?", "is my active in lethal range?"), each feature has a
+*weight* saying how much it matters, and the *score* of a move is the weighted sum. That is a
+linear model, and it is 90% of the ML in this plan. Everything below is about *learning the
+weights automatically* and *adding a couple of new tools around them*.
+
+#defn("Value model / value net / P(win)")[A function that reads the board and outputs a single
+number: the probability you will eventually win from here, between 0 and 1. Think of it as a
+*fuel gauge for the game* — not "how much damage did I just do" but "how likely am I to win
+overall". Your repo already has a small one (`value_model.json`). The whole plan is built around
+making it good, because once you can score any position, everything else follows.]
+
+#defn("Training / regression")[Teaching the model its weights by showing it examples. You feed it
+thousands of past positions, each labelled with who actually won, and an algorithm nudges the
+weights over and over to make its predictions match the outcomes — the same idea as
+least-squares curve-fitting, just with more inputs. "Regression" is just the word for
+fitting a number-predicting function to data.]
+
+#defn("Calibration")[Whether the fuel gauge is honest. If the model says "70% to win" on a
+thousand positions, you should win about 700 of them. A *well-calibrated* model's numbers mean
+what they say. *Brier score* and *log-loss* are just two ways to score calibration — lower is
+better — the way you would check a sensor against ground truth before trusting its reading.]
+
+#defn("Self-play")[The agent plays against copies of itself, over and over, to generate an
+endless supply of labelled games *for free*. This is your data source: no humans, no downloads,
+just your simulator running overnight. Your ~1000 games/minute is the whole fuel supply.]
+
+#defn("Deep Monte-Carlo")[Two words. *Monte-Carlo* means "estimate something by trying it many
+times and averaging" — like estimating a dice's fairness by rolling it a thousand times instead
+of doing the probability algebra. *Deep* means "use a neural network to store those averages".
+Put together: play millions of self-play games, and for each position, learn the average
+outcome. That is how the value model gets trained. It is *cheap per game but needs a lot of
+games* — the opposite of clever, but it parallelises perfectly, which is why it fits a laptop
+plus a cheap GPU rental.]
+
+#defn("Neural network")[A flexible function with many tunable numbers that can approximate
+complicated input-output relationships a straight-line model cannot. You only need one here if
+the simple linear model fails its calibration check — reach for it last, not first.]
+
+#defn("Discount (γ)")[A knob for "how much do I value a reward later versus now". Setting it to
+1.0 means a win counts fully no matter which turn it arrives — correct for us, because the only
+reward is winning the game, and a win on turn 30 is worth exactly as much as a win on turn 8.]
+
+== The two hard problems: luck, and blame
+
+Card games have two properties that break naive approaches, and two named tools fix them.
+
+#defn("Credit assignment")[The blame problem. A match is a long chain of decisions with a single
+win-or-lose at the very end. If you lose, *which* decision was the mistake? Naively blaming every
+move in a loss (and praising every move in a win) is what your manual corrections quietly avoid,
+and it is wrong: you can play perfectly and lose to bad shuffles. The fix uses the value model:
+walk the game, and at each decision ask "did my win-probability *drop* when I chose this move
+instead of the best available one?" That drop, written $Delta P("win")$, is the automated blunder
+detector — exactly what a chess engine does when it annotates a game with "?!" and "??" marks.]
+
+#defn("Variance, and variance reduction")[The luck problem. Card games are so swingy that if
+agent A is genuinely 2% better than agent B, you might have to play *tens of thousands* of games
+before the win-rate reliably shows it — the shuffles drown the skill. *Variance reduction* is a
+statistical trick that subtracts out the luck you can account for (you know the deck's odds, you
+know your own strategy) and leaves the skill signal — like noise-cancelling headphones for
+randomness. It does not change the true answer, it just lets you hear it with far fewer games.]
+
+#defn("AIVAT")[The specific, proven variance-reduction method this plan uses. Its guarantee is
+that it is *unbiased* — it never distorts the real answer, it only sharpens it — even if the
+value model you plug into it is mediocre. In poker it cut the number of games needed for a
+confident conclusion by more than 10×. This is the fix for your "cross-deck gauntlet was
+uninformative" problem: the gauntlet was not lying, it was just too noisy to hear.]
+
+#defn("Paired seeds / duplicate deals")[The simplest luck-canceller. Give both agents being
+compared the *exact same shuffles*, and mirror who goes first — so if a deal was lucky, both
+sides get that luck and it cancels. This is literally how duplicate bridge tournaments remove the
+deal from the scoring.]
+
+== Teaching a fast policy: teacher and student
+
+The runtime agent must decide in seconds on a CPU. These tools let a slow, strong "teacher"
+pour its skill into your fast rule layer.
+
+#defn("Expert iteration (teacher / student)")[The teacher — here, your planner plus the value
+model, allowed to think hard — is strong but too slow to ship. The *apprentice* — your fast
+linear rule layer — watches the teacher's choices and adjusts its weights to imitate them,
+absorbing the teacher's skill into something that runs instantly. You keep your interpretable
+rules; they just get *taught* instead of hand-tuned.]
+
+#defn("DAgger")[A refinement of the above. Instead of only showing the student the teacher's
+games, you let the *student* drive and have the teacher correct it at every step — so the student
+also learns how to recover from its own mistakes, not just how to copy a perfect game. (The name
+stands for Dataset Aggregation and does not matter; the let-the-student-drive idea does.)]
+
+#defn("Behavior cloning")[The bluntest copy: train a model to predict "what move did that agent
+make in this state?" from a log of its games. Pure imitation, no notion of winning — but a
+surprisingly strong starting point, and dirt cheap. It is the warm-start for the exploiter below.]
+
+#defn("Reinforcement learning / PPO")[Learning by trial and error: the agent tries moves, gets
+rewarded for winning, and shifts toward what worked. *PPO* is just the most popular, stable recipe
+for doing this without the training blowing up — you use it off-the-shelf from a library, you do
+not implement it.]
+
+#defn("Best response / exploiter")[Train a fresh opponent whose *only* goal is to beat *your*
+agent, and see how badly it can. If a cheaply-trained exploiter crushes you, your agent has a
+blind spot worth knowing about *before* the competition finds it. A strong agent is not
+automatically a robust one — this is how you check.]
+
+== Reading what the machine learned
+
+The point of the whole exercise is a report full of communicable strategy, so these tools turn a
+trained model back into words.
+
+#defn("Feature construction")[Instead of hand-writing every rule, let the system *notice* that
+two conditions occurring together predict a mistake, and mint that combination as a new
+feature automatically. This is the machine proposing its own strategic hypotheses — the thing
+that stops you hand-authoring rules forever.]
+
+#defn("Distillation")[Take a strong but hard-to-read model and train a simple, readable model (a
+small decision tree, say) to imitate it — so you can *read* the strategy the strong one found.
+The catch, proven in the research and central to this plan: the readable copy can be *weaker* than
+the original. So you keep the strong model as the one that plays, and use the readable copy only
+to *explain* it in the writeup.]
+
+#defn("Set encoder / permutation-invariance")[A hand of cards has no meaningful order — "Pikachu
+then Oran Berry" is the same hand as "Oran Berry then Pikachu". A naive model wastes effort
+relearning what a Pikachu is in every hand slot. A *set encoder* treats the hand as an unordered
+bag, so each card is learned once. You only need this if the simple model underperforms — it is a
+data-efficiency upgrade, not a starting requirement.]
+
+#defn("Translation surface")[Not a standard term — it is how this plan uses your named-feature
+layer. Because every feature has a plain-English name and a weight, the model's knowledge reads
+as sentences ("being ahead on prizes is worth three times avoiding a knockout"). That readability
+is what converts training results into report content — the feature layer *translates* what the
+machine learned into what you write down.]
+
+#keyidea[
+  If you remember only one thing: **the value model — the win-probability fuel gauge — is the
+  keystone.** It is the blunder detector (credit assignment), the luck-canceller's helper (AIVAT),
+  and the teacher's brain (expert iteration), all at once. Build that one small thing well and the
+  rest of the plan is wiring around it.
+]
 
 // ===========================================================================
 = What the reframe changes
@@ -256,6 +406,13 @@ kill-switched.
 *Goal:* log every decision, and turn the existing linear value model into a calibrated
 $P("win")$ engine trained across all deck pairings.
 
+#plain[
+  You are building the *win-probability fuel gauge*. You save every decision your agent faces
+  plus who eventually won that game, then fit a model to predict "chance of winning from here".
+  *Calibrated* means honest: when it says 70%, it wins about 70% of the time. You keep it a
+  weighted sum of named features (not a black box) so it stays readable.
+]
+
 #build[
   + Extend `live_trace` to emit one structured record per decision: full engine observation, the
     legal option menu as structured actions, the active Hypothesis feature activations, the Read's
@@ -294,6 +451,15 @@ $P("win")$ engine trained across all deck pairings.
 
 *Goal:* replace uninformative gauntlet winrates with a provably-unbiased, variance-reduced,
 paired-seed, skill-stratified measurement protocol.
+
+#plain[
+  This phase is *noise-cancelling headphones for luck.* Raw win-rate is so drowned in shuffle
+  luck that a real 2% edge can hide for tens of thousands of games. Three fixes stack: give both
+  agents the *same shuffles* so luck cancels (paired seeds); use AIVAT to mathematically subtract
+  the luck you can account for (provably without distorting the true answer); and report separately
+  on the deals where skill *could* matter (stratification). Result: you can trust a conclusion from
+  ~10× fewer games — which is why your old gauntlet felt useless.
+]
 
 #build[
   + Build a paired-seed / mirrored-deal harness on cgpy's deterministic seeds: sample a fixed set
@@ -368,6 +534,15 @@ your months of human corrections; clustered flags become named blunder classes.
 *Goal:* tune weights *and grow the feature set automatically*, warm-started from the planner as
 the expert; harvest new (or confirmed) strategic concepts for the writeup.
 
+#plain[
+  This is *teacher and student.* The teacher (planner + value model, thinking hard) is too slow to
+  ship; the student (your fast rule layer) watches the teacher's choices and adjusts its weights to
+  copy them — so your interpretable rules get *taught* instead of hand-tuned. The bonus: the system
+  also *proposes new rules* by noticing which pairs of conditions, occurring together, predict a
+  mistake. One guardrail from the research — the student must learn against a *competent* opponent,
+  never a random one, or it learns to exploit nonsense.
+]
+
 #build[
   + Set up expert iteration: the *expert* is the planner + value core under shallow search; the
     *apprentice* is the linear Hypothesis layer, which remains the runtime policy. The per-decision
@@ -407,6 +582,14 @@ the expert; harvest new (or confirmed) strategic concepts for the writeup.
 
 *Goal:* measure how exploitable your strong agent is, cheaply, and feed the discovered weaknesses
 back — the ByteRL recipe as a diagnostic.
+
+#plain[
+  You hire a *sparring partner whose only job is to beat you.* First cheaply copy your own agent
+  (behavior cloning — imitate its moves from logs). Then let that copy learn, by trial and error
+  (reinforcement learning, using the off-the-shelf PPO recipe), with one goal: exploit your agent.
+  If it finds an easy win, you have a blind spot — fix it now, before the competition's opponents
+  find it. Strong does not mean unbeatable, and this is how you check the difference.
+]
 
 #build[
   + Behavior-clone the current agent from its own self-play logs (a supervised classifier of its
