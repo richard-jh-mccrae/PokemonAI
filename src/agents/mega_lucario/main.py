@@ -78,13 +78,10 @@ _pilot = Pilot(
                                                       # whose attack KOs the opp Active, not the energy-ranked)
     boost_lethal=_params.get("boost_lethal", True),  # kill-switch: the promote-+-damage-boost-Item win tier
                                                       # (Proposal B); presumes lethal_family, engine-confirmed
-    brief_preevo=_params.get("brief_preevo", True),  # ADR-0038 kill-switch: Brief fragile_preevo lever
-                                                      # (A/B-cleared 2026-07-04: 68% vs 69% baseline vs
-                                                      # mega_lucario, mirror 52% — non-degradation + neutral)
-    brief_engine=_params.get("brief_engine", False),  # ADR-0038 kill-switch: Brief engine lever, gated on
-                                                      # opp_is_engine_dependent. DEFAULT OFF: the stress leg
-                                                      # priced a WRONG assertion at ~4% (46%, CI 43-49) — arms
-                                                      # via the first real true-asserting Brief's own A/B
+    matchup_targeting=_params.get("matchup_targeting", True),  # ADR-0051 kill-switch: the MatchupPlan
+                                                      # target-priority spine (Brief + Read-Intel + general
+                                                      # draw-engine fact) that steers snipe/gust. Supersedes
+                                                      # the retired ADR-0038 brief_preevo/brief_engine levers
     objectives_race=_params.get("objectives_race", True),  # ADR-0040 kill-switch: Tier-3 KO Race —
                                                       # wall attacks priced by best min-turn SEQUENCE
                                                       # (chip included), not the biggest single hit

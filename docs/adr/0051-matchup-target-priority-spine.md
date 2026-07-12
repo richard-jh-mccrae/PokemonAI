@@ -64,9 +64,11 @@ feedback, not gauntlet A/B.
 
 - The three flagged mega_starmie blunders stay fixed; the draw-engine-over-wincon inversion is now
   overridden by recognition rather than relying on the generic (still name-keyed) `forward_max_damage`.
-- **Supersedes** the ADR-0038 scattered Brief levers (`_BRIEF_PREEVO_SNIPE_BOOST` in `_body_threat_rank`,
-  `_gust_brief_denial`). Those remain in place, harmless (same direction), until retired in the review
-  pass — the `brief_preevo` end-to-end test now toggles `matchup_targeting`.
+- **Replaces** the ADR-0038 scattered Brief levers. Both the gust lever (`_gust_brief_denial`, Phase 2)
+  and the snipe levers (`_BRIEF_PREEVO_SNIPE_BOOST` / `_BRIEF_ENGINE_SNIPE_BOOST` in `_body_threat_rank`
+  plus the `brief_preevo` / `brief_engine` kill-switches and their main.py wiring) are now RETIRED
+  (Phase 2/3). `matchup_targeting` is the single kill-switch; `opp_is_engine_dependent` is unwired again
+  (a Brief hunts an engine via the explicit `disruption_target` role, no property gate).
 
 ## Phasing
 
@@ -77,10 +79,13 @@ feedback, not gauntlet A/B.
   prize difference. Only positive priorities apply (a KO-able draw engine is still worth its prize).
   **Retires** the old `_gust_brief_denial` / `_BRIEF_GUST_DENIAL` (ADR-0038); the old engine+dependence
   gate is replaced by the explicit `disruption_target` role (a plain `engine` is now neutral).
-- Phase 3 (next): proactive disruption (hold hand-disruption for the engine's swing turn; gust-to-KO
-  priority). **Also pending: retire the snipe-side old levers** — `_BRIEF_PREEVO_SNIPE_BOOST` /
-  `_BRIEF_ENGINE_SNIPE_BOOST` in `_body_threat_rank` and the `brief_preevo`/`brief_engine` kill-switches
-  (superseded by `_snipe_matchup_tactical`; still live, harmless, same direction).
+- **Phase 3a (built): retired the snipe-side old levers** — `_BRIEF_PREEVO_SNIPE_BOOST` /
+  `_BRIEF_ENGINE_SNIPE_BOOST` in `_body_threat_rank`, the `brief_preevo`/`brief_engine` ctor params +
+  storage + all four main.py wirings, and the dead `brief_roles`/`engine_dependent` params threaded
+  through `_target_threat_rank`/`_strongest_threat_rank`/planner. `_body_threat_rank` is now the pure
+  generic (card-fact + Read-modulated) threat order; brief consumption is 100% via the spine.
+- Phase 3b (next): proactive disruption (hold hand-disruption for the engine's swing turn; gust-to-KO
+  priority).
 - Phase 4: build/fetch priors biased by the anticipated opponent.
 
 Open follow-ups: the general tier flags only *direct* `draw`-tag bodies; a draw-engine *pre-evo*

@@ -26,15 +26,13 @@ REQUIRED_SWITCHES = (
     "planner_key_threat",   # ADR-0031 KO-the-key-threat Goal-Ladder rung
     "lethal_family",        # ADR-0037 the ONE win-generator family + verify-every-lock
     "lethal_veto",          # ADR-0037 replay the verified cascade
-    "brief_preevo",         # ADR-0038 Brief fragile_preevo lever (A/B-cleared 2026-07-04)
+    "matchup_targeting",    # ADR-0051 MatchupPlan target-priority spine (superseded ADR-0038 levers)
 )
 
-# Wired-but-ARMED-OFF switches: present + overlay-controllable, default False — the ADR-0038 engine
-# lever's stress leg priced a wrong opp_is_engine_dependent assertion at ~4%, so it arms only via the
-# first real true-asserting Brief's own A/B (then it moves into REQUIRED_SWITCHES).
-ARMED_OFF_SWITCHES = (
-    "brief_engine",         # ADR-0038 Brief engine lever (stress leg 2026-07-04: 46%, CI 43-49)
-)
+# Wired-but-ARMED-OFF switches: present + overlay-controllable, default False — deliberately dark
+# until an evidence gate clears (then a switch moves into REQUIRED_SWITCHES). Currently none: the
+# ADR-0038 brief_engine lever was retired into the ADR-0051 MatchupPlan spine.
+ARMED_OFF_SWITCHES = ()
 
 AGENT_MAINS = sorted((REPO / "src" / "agents").glob("*/main.py"))
 

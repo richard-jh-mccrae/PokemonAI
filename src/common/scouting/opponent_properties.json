@@ -3,8 +3,8 @@
   "properties": {
     "opp_is_engine_dependent": {
       "type": "bool",
-      "consumer": "brief_engine lever (ADR-0038): hard gate on the γ-scaled sub-tier snipe-rank boost + gust tie-break for the Brief's `engine` targets; omitted/false = engine targets stay intel-only (a tempo lever, not a kill). Agents currently run it DEFAULT OFF — the 2026-07-04 stress leg priced a WRONG assertion at ~4% win-rate, so the first real true-asserting Brief must clear its own A/B before the flip",
-      "note": "the deck's setup hinges on a specific draw/search engine Pokémon; gusting + KOing it strangles the deck. HIGH-BAR call: asserting this moves play and a wrong call is priced (~4%) — assert only with strong evidence."
+      "consumer": "unwired (ADR-0051): the old brief_engine snipe/gust lever this gated was retired into the MatchupPlan spine — a Brief that wants an engine hunted now names it a `disruption_target` target directly (no property gate). Kept as a forward contract for a future engine-dependence consumer (e.g. Phase-3 proactive disruption).",
+      "note": "the deck's setup hinges on a specific draw/search engine Pokémon; gusting + KOing it strangles the deck. To act on it today, tag that engine `disruption_target` in the Brief's targets."
     },
     "opp_donk_vulnerable": {
       "type": "bool",

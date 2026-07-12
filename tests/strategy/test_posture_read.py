@@ -487,9 +487,9 @@ def test_board_resolves_the_matched_briefs_threats_and_targets_to_ids():
 
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_resolving_the_brief_changes_no_decision_or_score():
-    # Kill-switch-OFF neutrality (ADR-0038): the Pilot ctor defaults brief_preevo/brief_engine False,
-    # so a resolved Brief on the Board must yield byte-identical choices AND scores vs a Pilot with
-    # no Brief — the levers move play only when an agent's main.py opts in.
+    # Scope containment: the MatchupPlan steers only bench snipe (DAMAGE) and gust (SWITCH), so a
+    # resolved Brief on the Board must yield byte-identical choices AND scores at a MAIN play menu vs
+    # a Pilot with no Brief — the spine never leaks into a decision it doesn't own.
     obs = _obs_two_option_menu()
     on, off = _ml_pilot([_ml_brief_full()]), _ml_pilot(None)
     assert on.decide(obs) == off.decide(obs)
@@ -524,44 +524,6 @@ def _lever_pilot(**kw):
                  stats=_lever_stats(), attacks={11: 120}, attack_costs={11: 1}, **kw)
 
 
-def _rank_obs(*bench):
-    obs = make_select([card_opt(BENCH, i, player=1) for i in range(len(bench))], context=DAMAGE,
-                      current=state(active=poke(SNIPER), opp_bench=list(bench)))
-    return obs, obs["select"]
-
-
-@pytest.mark.req("REQ-POSTURE-0007")
-def test_briefed_preevo_overtakes_an_energized_attacker_at_full_gamma():
-    # The tier-crossing preevo boost (ADR-0038): a bare briefed pre-evolution (Riolu) outranks an
-    # ENERGIZED attacker once γ is high — authored payoff-denial beats the generic imminence tier.
-    pilot = _lever_pilot(brief_preevo=True)
-    obs, select = _rank_obs(poke(RIOLU, hp=80), poke(BRUISER, energy=2, hp=120))
-    roles = {RIOLU: "fragile_preevo"}
-    riolu = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles)
-    energized = pilot._target_threat_rank(obs, select, select["option"][1], gamma=1.0, brief_roles=roles)
-    assert riolu > energized
-    # baseline sanity: without the Brief the energized body owns the tier
-    base_r = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0)
-    base_e = pilot._target_threat_rank(obs, select, select["option"][1], gamma=1.0)
-    assert base_e > base_r
-
-
-@pytest.mark.req("REQ-POSTURE-0007")
-def test_preevo_boost_is_gamma_scaled_and_dies_with_the_switch():
-    # γ scales the boost continuously (ADR-0026 no-regression is structural: γ=0 → generic rank);
-    # the brief_preevo kill-switch (ctor default False) zeroes it outright.
-    obs, select = _rank_obs(poke(RIOLU, hp=80))
-    opt, roles = select["option"][0], {RIOLU: "fragile_preevo"}
-    on = _lever_pilot(brief_preevo=True)
-    generic = on._target_threat_rank(obs, select, opt, gamma=0.0)
-    assert on._target_threat_rank(obs, select, opt, gamma=0.0, brief_roles=roles) == generic
-    mid = on._target_threat_rank(obs, select, opt, gamma=0.5, brief_roles=roles)
-    full = on._target_threat_rank(obs, select, opt, gamma=1.0, brief_roles=roles)
-    assert full > mid > generic
-    off = _lever_pilot()                                   # ctor default: lever OFF
-    assert off._target_threat_rank(obs, select, opt, gamma=1.0, brief_roles=roles) == generic
-
-
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
     # Threading proof: recognized opponent → matched Brief resolves Riolu → _board() threads the
@@ -581,16 +543,15 @@ def test_snipe_hunts_the_briefed_preevo_end_to_end():
 
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_briefed_preevo_boost_never_overrides_a_ko():
-    # KO supremacy is structural: a KO-able target (snipe-for-the-ko, +60) still beats the boosted
-    # non-KO-able briefed preevo (snipe-the-top-threat +30 / snipe-the-threat +20).
+    # KO supremacy is structural: a KO-able target (snipe-for-the-ko, +60) still beats the MatchupPlan
+    # boost on the non-KO-able briefed preevo — the matchup term stands down while a snipe-KO is on offer.
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=1, hp=40)]     # Solrock dies to the 50 rider
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
                                     opp_bench=bench))
-    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], brief_preevo=True,
-                      bench_snipe={11: 50})
+    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], bench_snipe={11: 50})
     assert on.decide(obs) == [1]                           # take the prize, boost notwithstanding
 
 
@@ -619,46 +580,6 @@ def test_gust_target_prefers_the_briefed_preevo_sub_prize():
                  matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=0.0))
     assert (p._gust_target_tactical(obs, select, cold, select["option"][0])
             == p._gust_target_tactical(obs, select, cold, select["option"][1]))
-
-
-@pytest.mark.req("REQ-POSTURE-0008")
-def test_engine_boost_needs_the_dependence_property_and_stays_sub_tier():
-    # The engine lever is HARD-GATED on opp_is_engine_dependent (the shipped Lucario Brief judged it
-    # FALSE → must not fire) and sub-tier (an energized live attacker still outranks the engine).
-    pilot = _lever_pilot(brief_engine=True)
-    obs, select = _rank_obs(poke(SOLROCK, hp=110), poke(BRUISER, energy=2, hp=120))
-    roles = {SOLROCK: "engine"}
-    base = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles)
-    gated = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles,
-                                      engine_dependent=True)
-    assert base == pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0)  # bool absent → silent
-    assert gated > base                                    # gate open → boost
-    energized = pilot._target_threat_rank(obs, select, select["option"][1], gamma=1.0,
-                                          brief_roles=roles, engine_dependent=True)
-    assert energized > gated                               # sub-tier: imminence keeps priority
-    off = _lever_pilot()
-    assert (off._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles,
-                                    engine_dependent=True) == base)
-
-
-@pytest.mark.req("REQ-POSTURE-0008")
-def test_engine_dependence_threads_from_the_brief_to_the_board_rank():
-    # Construction threading: a matched Brief ASSERTING opp_is_engine_dependent lifts the engine
-    # body's strongest_threat_rank; the shipped assert-true-only Lucario Brief (property omitted)
-    # leaves the rank byte-identical to a no-Brief Pilot.
-    dependent = Brief(slug="dep", label="DEP", covers=["Mega Lucario ex"],
-                      opponent_properties={"opp_is_engine_dependent": True},
-                      targets=[{"card": "Solrock", "role": "engine", "why": "draw"}])
-    lucario_like = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
-                         targets=[{"card": "Solrock", "role": "engine", "why": "draw"}])
-    bench = [poke(SOLROCK, hp=110)]
-    obs = make_select([card_opt(BENCH, 0, player=1)], context=DAMAGE,
-                      current=state(active=poke(MEGA_LUCARIO), opp_active=poke(MEGA_LUCARIO, hp=340),
-                                    opp_bench=bench))
-    rank = lambda briefs: _lever_pilot(scout=Scout(tiny_artifact()), briefs=briefs,
-                                       brief_engine=True)._board(obs, obs["select"]).strongest_threat_rank
-    assert rank([dependent]) > rank(None)                  # asserted → boost reaches the Board rank
-    assert rank([lucario_like]) == rank(None)              # omitted (assert-true-only) → silent
 
 
 @pytest.mark.req("REQ-POSTURE-0008")

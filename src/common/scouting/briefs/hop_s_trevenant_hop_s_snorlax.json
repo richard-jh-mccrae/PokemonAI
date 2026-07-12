@@ -34,7 +34,7 @@
     {
       "card": "Hop's Phantump",
       "role": "fragile_preevo",
-      "why": "70 HP, 1 prize, Darkness x2; base of the ONLY wincon line. Snipe/gust in the evolution window to deny a Trevenant prize-free. This is the sole target row (arms the live brief_preevo lever at the high-value wincon pre-evo)."
+      "why": "70 HP, 1 prize, Darkness x2; base of the ONLY wincon line. Snipe/gust in the evolution window to deny a Trevenant prize-free. This is the sole target row (the fragile_preevo target the MatchupPlan prioritizes, ADR-0051)."
     }
   ],
   "sources": [
