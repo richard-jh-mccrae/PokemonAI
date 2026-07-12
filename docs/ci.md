@@ -14,12 +14,13 @@ To keep pull-request feedback fast, a PR runs **only the test directories whose 
 its diff can affect** — not the whole suite. On **push to `main`** and **manual dispatch**
 the **full** suite always runs (main must be green end-to-end).
 
-The mapping lives entirely in [`ci.yml`](../.github/workflows/ci.yml) — no external script.
 A [`dorny/paths-filter`](https://github.com/dorny/paths-filter) step (*Detect changed
-areas*) holds the declarative source-area → filter globs; the *Determine test plan* step
-then turns those booleans into a concrete pytest target list, applying the reverse-dependency
-unions. It is derived from the repo's real module import graph and is deliberately **broad
-and fail-safe**: when a change *could* break a test, that test runs.
+areas*) reads the declarative source-area → glob map from
+[`.github/filters.yml`](../.github/filters.yml); the *Determine test plan* step in
+[`ci.yml`](../.github/workflows/ci.yml) then turns those booleans into a concrete pytest
+target list, applying the reverse-dependency unions. The map is derived from the repo's real
+module import graph and is deliberately **broad and fail-safe**: when a change *could* break
+a test, that test runs.
 
 ### Which change runs which tests
 
@@ -39,8 +40,8 @@ and fail-safe**: when a change *could* break a test, that test runs.
 
 The plan step unions the sets for a multi-area diff, and any *foundation* filter (or a
 change that matches no filter — the `any`-but-nothing-recognised case) forces the full
-suite. The `filters:` block is the source-area map; the reverse-dependency unions (e.g.
-`sim` → also `arena`) are the `add …` lines in the *Determine test plan* step.
+suite. `.github/filters.yml` is the source-area map; the reverse-dependency unions (e.g.
+`sim` → also `arena`) are the `add …` lines in the *Determine test plan* step of `ci.yml`.
 
 ### Conditional gates
 
@@ -101,10 +102,10 @@ itself is reproduced by the `filters:` + *Determine test plan* blocks in `ci.yml
 CI is **tests only** — the global Doxygen / Sphinx / GitHub Pages / PDF steps are omitted
 until those toolchains exist in the repo (see `CLAUDE.md`).
 
-- **Add a new subsystem?** Add a filter to the `filters:` block in `ci.yml` and a matching
-  `add tests/<area>` line in the *Determine test plan* step (plus any reverse-dependency
-  dirs). Until you do, changes there fall through to the fail-safe full run — correct, just
-  not minimal.
+- **Add a new subsystem?** Add a filter to `.github/filters.yml` and a matching
+  `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any
+  reverse-dependency dirs). Until you do, changes there fall through to the fail-safe full
+  run — correct, just not minimal.
 - **Cover more interpreters / OSes?** Extend the `matrix` in `ci.yml`.
 - **Run CI on feature branches without a PR?** Broaden `on.push.branches` (pushes always
   run the full suite).

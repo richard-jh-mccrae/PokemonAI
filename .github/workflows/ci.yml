@@ -44,77 +44,16 @@ jobs:
           cache-dependency-path: requirements.txt
 
       # SELECTIVE TESTING. A pull request runs only the test dirs its diff can affect. The
-      # filters below are the declarative source->area map; each is a boolean output. The reverse
-      # dependencies (e.g. arena imports sim.selfplay, so a sim change must also run arena) are
-      # applied in the "Determine test plan" step. Pushes to main and manual dispatch skip the
-      # filter and run the FULL suite. Rationale + table: docs/ci.md.
+      # declarative source->area map lives in .github/filters.yml; each filter is a boolean
+      # output. The reverse dependencies (e.g. arena imports sim.selfplay, so a sim change must
+      # also run arena) are applied in the "Determine test plan" step. Pushes to main and manual
+      # dispatch skip the filter and run the FULL suite. Rationale + table: docs/ci.md.
       - name: Detect changed areas
         if: github.event_name == 'pull_request'
         id: changes
         uses: dorny/paths-filter@v3
         with:
-          filters: |
-            # Foundation & shared infra — imported/loaded by ~everything => full suite.
-            full:
-              - 'src/cg/**'
-              - 'src/common/**'
-              - 'requirements.txt'
-              - '.coveragerc'
-              - 'pytest.ini'
-              - '.github/workflows/**'
-              - 'tests/conftest.py'
-              - 'tests/pilot_helpers.py'
-              - 'tests/scouting_helpers.py'
-              - 'tests/lethal_helpers.py'
-              - 'tests/fixtures/**'
-              - 'data/**'
-              - 'tools/build_card_functions.py'
-              - 'tools/build_card_effects.py'
-              - 'tools/audit_card_functions.py'
-              - 'tools/verify_meta_cards.py'
-            # Leaf/tool source areas + their own tests (reverse deps applied in the next step).
-            agents:
-              - 'src/agents/**'
-              - 'tests/agents/**'
-            arena:
-              - 'tools/arena/**'
-              - 'tests/arena/**'
-            sim:
-              - 'tools/sim/**'
-              - 'tests/sim/**'
-            submit:
-              - 'tools/submit/**'
-              - 'tools/submit_agent.py'
-              - 'tests/submit/**'
-            train:
-              - 'tools/train/**'
-              - 'tests/train/**'
-            meta:
-              - 'tools/meta_tracker/**'
-              - 'tools/deck_convert.py'
-              - 'tools/deck_stealer.py'
-              - 'tools/export_meta_decks.py'
-              - 'tools/run_meta_tracker.py'
-              - 'tests/meta_tracker/**'
-            scouting:
-              - 'tools/build_scouting_artifact.py'
-              - 'tests/scouting/**'
-            strategy:
-              - 'tests/strategy/**'
-            cards:
-              - 'tests/cards/**'
-            tuner:
-              - 'tests/tuner/**'
-            blunder:
-              - 'tests/blunder/**'
-            value:
-              - 'tests/value/**'
-            # Ignorable (no runtime surface) and a catch-all for the fail-safe below.
-            docs:
-              - '**/*.md'
-              - 'docs/**'
-            any:
-              - '**'
+          filters: .github/filters.yml
 
       # Turn the filter booleans into a concrete pytest target list, applying reverse-dependency
       # unions. Fail-safe: on a push/dispatch, or when a change matches no known filter, run the
