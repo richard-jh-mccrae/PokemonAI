@@ -70,10 +70,17 @@ feedback, not gauntlet A/B.
 
 ## Phasing
 
-- **Phase 1 (built): spine + bench-snipe consumption + role-enum expansion.** ← this ADR
-- Phase 2 (next): **gust** target selection reads the same plan (as a sub-prize tie-break, NOT the ×5
-  snipe override — gust is primarily prize/KO value); then retire the old scattered levers.
-- Phase 3: proactive disruption (hold hand-disruption for the engine's swing turn; gust-to-KO priority).
+- **Phase 1 (built): spine + bench-snipe consumption + role-enum expansion.**
+- **Phase 2 (built): gust** target selection reads the same plan as a **sub-prize tie-break**
+  (`_gust_matchup_priority`, `_MATCHUP_GUST_SCALE`), NOT the ×5 snipe override — gust is primarily
+  prize/KO value, so the plan only breaks ties among equal-value KO-able bodies and never overrides a
+  prize difference. Only positive priorities apply (a KO-able draw engine is still worth its prize).
+  **Retires** the old `_gust_brief_denial` / `_BRIEF_GUST_DENIAL` (ADR-0038); the old engine+dependence
+  gate is replaced by the explicit `disruption_target` role (a plain `engine` is now neutral).
+- Phase 3 (next): proactive disruption (hold hand-disruption for the engine's swing turn; gust-to-KO
+  priority). **Also pending: retire the snipe-side old levers** — `_BRIEF_PREEVO_SNIPE_BOOST` /
+  `_BRIEF_ENGINE_SNIPE_BOOST` in `_body_threat_rank` and the `brief_preevo`/`brief_engine` kill-switches
+  (superseded by `_snipe_matchup_tactical`; still live, harmless, same direction).
 - Phase 4: build/fetch priors biased by the anticipated opponent.
 
 Open follow-ups: the general tier flags only *direct* `draw`-tag bodies; a draw-engine *pre-evo*
