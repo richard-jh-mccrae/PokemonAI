@@ -33,6 +33,7 @@ EPISODES = [
                                                # Duraludon's Hammer In / Raging Hammer
     ("episode-83285531-replay.json.gz", 84),   # Nebula Beam ignore-effects pierces Full
                                                # Metal Lab's -30 (+ Memory Dive)
+    ("episode-82234130-replay.json.gz", 114),  # Latias ex Skyliner: Basic Pokémon retreat free
 ]
 
 

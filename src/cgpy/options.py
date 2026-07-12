@@ -95,6 +95,21 @@ def effective_retreat_cost(gs: GameState, p: PokemonInPlay) -> int:
     cdef = def_for(gs.card_id(p.top)) or {}
     if cdef.get("retreat", {}).get("freeIfNoEnergy") and not p.energy:
         return 0
+    # Passive retreat-zeroing abilities on an in-play holder (Latias ex "Skyliner":
+    # "Your Basic Pokémon in play have no Retreat Cost") — an un-suppressed holder on
+    # the retreating mon's own side (pinned episode-83688149 f47: a benched Latias ex
+    # lets a bare Dreepy retreat).
+    from .chain import stadium_def as _stadium_def
+    p_seat = gs.owner(p.top)
+    sup_type = _stadium_def(gs).get("suppressAbilitiesType")
+    for h in gs.in_play(p_seat):
+        hdef = def_for(gs.card_id(h.top)) or {}
+        if not hdef.get("zeroRetreatBasics"):
+            continue
+        if sup_type is not None and int(gs.stat(h.top).energyType) == sup_type:
+            continue
+        if gs.stat(p.top).basic:
+            return 0
     cost = gs.stat(p.top).retreatCost
     for s in p.tools:
         cost += (def_for(gs.card_id(s)) or {}).get("tool", {}).get("retreatBonus", 0)
