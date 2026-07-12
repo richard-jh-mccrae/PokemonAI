@@ -34,6 +34,8 @@ EPISODES = [
     ("episode-83285531-replay.json.gz", 84),   # Nebula Beam ignore-effects pierces Full
                                                # Metal Lab's -30 (+ Memory Dive)
     ("episode-82234130-replay.json.gz", 114),  # Latias ex Skyliner: Basic Pokémon retreat free
+    ("episode-83692318-replay.json.gz", 144),  # clean Froslass-deck game (Munkidori/Risky-Ruins
+                                               # counter placements; general counter coverage)
 ]
 
 
@@ -48,3 +50,17 @@ def test_cabt_episode_replays_clean(name, frames):
     assert len(trace.frames) == frames, "conversion shrank — the episode changed?"
     report = replay(trace)
     assert report.clean, f"\n{report}"
+
+
+def test_froslass_freezing_shroud_fires():
+    """Froslass "Freezing Shroud" puts a Checkup damage counter on every ability-Pokémon
+    (both sides, except Froslass). This episode isn't clean end-to-end (a later,
+    unrelated blocker), but WITHOUT the ability cgpy diverges at the very first
+    Freezing-Shroud checkup (frame 54: both Drakloak + both Munkidori take a counter,
+    the Froslass Active skipped); WITH it, the replay sails well past. Guards the
+    between-turns counter placement + order without needing a fully-clean fixture."""
+    path = FIXTURES / "episode-83697279-replay.json.gz"
+    payload = json.loads(gzip.decompress(path.read_bytes()))
+    report = replay(convert(payload))
+    assert report.frames_green > 54, (
+        f"Freezing Shroud regressed — diverged at the checkup:\n{report}")

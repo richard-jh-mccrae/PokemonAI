@@ -1439,5 +1439,12 @@
  "184": {
   "name": "Latias ex",
   "zeroRetreatBasics": true
+ },
+ "104": {
+  "name": "Froslass",
+  "checkupFieldCounters": {
+   "targetHasAbility": true,
+   "exceptName": "Froslass"
+  }
  }
 }

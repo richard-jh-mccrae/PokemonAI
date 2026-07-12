@@ -401,7 +401,31 @@ def _checkup(gs: GameState, ending_seat: int) -> None:
             gs.emit({"type": int(LogType.PARALYZED), "playerIndex": seat,
                      "isRecover": True, "cardId": gs.card_id(b.active.top),
                      "serial": b.active.top})
+    _checkup_field_counters(gs)
     _sweep_kos(gs, credited=ending_seat, then=("begin_turn", 1 - ending_seat))
+
+
+def _checkup_field_counters(gs: GameState) -> None:
+    """Froslass "Freezing Shroud": "During Pokémon Checkup, put 1 damage counter on each
+    Pokémon that has an Ability (both yours and your opponent's), except any Froslass."
+    Each in-play Froslass fires one pass; within a pass, seat 0's board then seat 1's,
+    active-then-bench (pinned episode-83697279 f54: counters land on both Drakloak then
+    both Munkidori, the Froslass Active skipped)."""
+    from .chain import def_for
+    passes = [p for s in (0, 1) for p in gs.in_play(s)
+              if (def_for(gs.card_id(p.top)) or {}).get("checkupFieldCounters")]
+    for src in passes:
+        cfg = (def_for(gs.card_id(src.top)) or {})["checkupFieldCounters"]
+        for seat in (0, 1):
+            for p in gs.in_play(seat):          # active first, then bench (state.in_play)
+                if cfg.get("targetHasAbility") and not gs.stat(p.top).skills:
+                    continue
+                if gs.stat(p.top).name == cfg.get("exceptName"):
+                    continue
+                p.hp = max(0, p.hp - 10)
+                gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": seat,
+                         "cardId": gs.card_id(p.top), "serial": p.top,
+                         "value": -10, "putDamageCounter": True})
 
 
 def _discard_in_play(gs: GameState, seat: int, p: PokemonInPlay) -> None:
