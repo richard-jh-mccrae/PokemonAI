@@ -1,5 +1,30 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Nonselect-residual batch (2026-07-12, same session, fifth follow-on): ladder
+> 155→165/414 (commit 4498e46).** The `nonselect:current` ladder class was
+> dominated by HP-render divergences (27 of 41). Three structural damage-model
+> fixes cleared them: **(1)** defender-side mods now apply to flat bench SNIPES,
+> not just Active damage — factored `damage.apply_defender_mods()` shared with
+> `chain._bench_hit` (Crustle ex-immunity / Dig protect / take-less / Full Metal
+> Lab); a Jetting Blow snipe into a benched Crustle now does 0. **(2)** HP clamp
+> asymmetry: direct attack damage floors a KO'd Active at 0, but damage COUNTERS
+> (Phantom Dive) stack RAW past 0 — native renders a benched mon at −10;
+> `op_distribute_counters` no longer clamps. **(3)** a negative stadium HP delta
+> (Gravity Mountain −30) floors the RENDERED hp at 0 — a KO'd Stage-2 renders 0,
+> not −30 (Aura Jab); `render.card_dict` clamps `max(0, hp+delta)` for delta<0.
+> Pins §9h; gate 1148 all-green, ledger 193/1267.
+>
+> **KNOWN LIMITATION surfaced (the discard residual class, 6 eps, NOT a card
+> bug):** Buddy-Buddy Poffin "diverges" because cgpy's GOD-FREE reconstructed
+> hidden deck drifts from native's true deck — cgpy kept 2 Staryu in the deck that
+> native had dealt to prizes, so cgpy poses a bench search native (whiffing)
+> skips. The reveal-oracle can't perfectly attribute duplicate cards between deck
+> and prizes without god frames; the Poffin/Mega-Signal search is merely the first
+> REVEAL that exposes an earlier prize-deal drift. Fixing needs better hidden-zone
+> identity tracking in `verify/replayer.py` (infrastructure, deferred). The
+> remaining nonselect tail: counter-COUNT mismatches (Munkidori Adrena-Brain
+> counter-move) + a few singletons.
+
 > **Special-energy batch (2026-07-12, same session, fourth follow-on): ladder
 > 143→155/414.** All 9 queued special energies authored — the KEY INSIGHT: the
 > provide type already comes from the card table's `energyType` fallback, so a
