@@ -38,6 +38,8 @@ EPISODES = [
                                                # counter placements; general counter coverage)
     ("episode-83286739-replay.json.gz", 83),   # Xerosic's Machinations: opponent discards to 3
     ("episode-83665001-replay.json.gz", 51),   # Sacred Ash: shuffle Pokémon from discard to deck
+    ("episode-82871172-replay.json.gz", 153),  # Full Moon Rondo: +20 damage per benched
+                                               # Pokémon (both sides)
 ]
 
 

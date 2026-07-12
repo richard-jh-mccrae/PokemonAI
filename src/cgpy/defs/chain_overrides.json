@@ -1541,5 +1541,13 @@
         }
       }
     ]
+  },
+  "attack:371": {
+    "name": "Full Moon Rondo",
+    "scale": {
+      "var": "all_bench",
+      "per": 20,
+      "add": true
+    }
   }
 }

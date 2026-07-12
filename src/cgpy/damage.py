@@ -38,6 +38,8 @@ def scale_count(gs: GameState, seat: int, var: str, energy_type: int | None = No
         return len(b.bench)
     if var == "def_bench":
         return len(ob.bench)
+    if var == "all_bench":                      # Full Moon Rondo: both benches
+        return len(b.bench) + len(ob.bench)
     if var == "atk_active_energy":
         if b.active is None:
             return 0
