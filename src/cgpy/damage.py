@@ -164,7 +164,8 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
     if defender_is_active:
         atk_type = gs.stat(attacker.top).energyType
         if dstat.weakness is not None and dstat.weakness == atk_type \
-                and not joint_ignore and not adef.get("ignoreWeakness"):
+                and not joint_ignore and not adef.get("ignoreWeakness") \
+                and defender.no_weakness_turn != gs.turn:   # Metal-Defender transient
             dmg *= WEAKNESS_MULTIPLIER
         if dstat.resistance is not None and dstat.resistance == atk_type \
                 and not joint_ignore and not adef.get("ignoreResistance"):

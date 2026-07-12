@@ -6,24 +6,24 @@
  },
  "summary": {
   "cards": {
-   "verified": 174,
+   "verified": 184,
    "total": 1267
   },
   "chains": {
-   "verified": 414,
-   "deferred": 645,
-   "derived": 1177,
-   "seeded": 585,
+   "verified": 435,
+   "deferred": 632,
+   "derived": 1171,
+   "seeded": 583,
    "unprobed": 2
   },
   "cleanFrames": {
-   "clean": 30284,
-   "total": 30284,
+   "clean": 34521,
+   "total": 34521,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
-   "covered": 92,
-   "total": 92,
+   "covered": 97,
+   "total": 97,
    "nativeChainVocabulary": 71,
    "coveredOps": [
     "coin",
@@ -53,6 +53,7 @@
     "xCoinDamageEachOpp",
     "xCoinsCount",
     "xCoinsUntilTails",
+    "xCounterOppActiveScaled",
     "xDamageOwnBenchEach",
     "xDamagePerDiscarded",
     "xDamagePerHeads",
@@ -70,6 +71,8 @@
     "xDeckEvolvePerBench",
     "xDeckEvolveSelfAndShuffle",
     "xDeckTakeSequenceAndShuffle",
+    "xDeckToHandBuckets",
+    "xDeckToHandEitherOr",
     "xDiscardAllOwnEnergy",
     "xDiscardEnergyAttachBench",
     "xDiscardEnergyAttachOneTarget",
@@ -96,6 +99,7 @@
     "xKnockOutActive",
     "xKnockOutChoose",
     "xLockDefenderAttacks",
+    "xLookEnergyAttachChoose",
     "xLookTopMayTakeThenShuffle",
     "xLookTopTakeRestBottom",
     "xMayAsk",
@@ -113,6 +117,7 @@
     "xRareCandyEvolve",
     "xReduceDefenderNextTurn",
     "xSelfLockAllNextTurn",
+    "xSelfNoWeaknessNextTurn",
     "xSelfReturnToHand",
     "xShuffleInPlayIntoDeckChoose",
     "xSkip",
@@ -120,7 +125,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 323
+  "traces": 350
  },
  "cards": {
   "1": {
@@ -167,10 +172,22 @@
     "2": "verified"
    },
    "evidence": [
+    "brockscout_9000",
+    "brockscout_9001",
+    "brockscout_9002",
     "cn1037_9000",
     "cn1037_9001",
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
+    "cyrano_9000",
+    "cyrano_9001",
+    "cyrano_9002",
+    "dawn_9000",
+    "dawn_9001",
+    "dawn_9002",
+    "explguid_9000",
+    "explguid_9001",
+    "explguid_9002",
     "micro_cnt_groundmelter_9980",
     "micro_cnt_lavaburst_9980",
     "micro_discardall_9610",
@@ -191,7 +208,10 @@
     "v2_dx_mirror_5201",
     "v2_ml_dx_5500",
     "v2_ms_dx_5400",
-    "v2_ms_dx_5401"
+    "v2_ms_dx_5401",
+    "waitress_9000",
+    "waitress_9001",
+    "waitress_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -203,8 +223,17 @@
     "3": "verified"
    },
    "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002",
+    "archala_9000",
+    "archala_9001",
+    "archala_9002",
     "battlecage_9000",
     "battlecage_9001",
+    "brockscout_9000",
+    "brockscout_9001",
+    "brockscout_9002",
     "carmine_9000",
     "carmine_9001",
     "carmine_9002",
@@ -270,12 +299,21 @@
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
     "cnt_steelburst_9980",
+    "cyrano_9000",
+    "cyrano_9001",
+    "cyrano_9002",
+    "dawn_9000",
+    "dawn_9001",
+    "dawn_9002",
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
     "estream_9000",
     "estream_9001",
     "estream_9002",
+    "explguid_9000",
+    "explguid_9001",
+    "explguid_9002",
     "flashdraw_9000",
     "flashdraw_9001",
     "flashdraw_9002",
@@ -284,6 +322,9 @@
     "forestvit_9000",
     "forestvit_9001",
     "forestvit_9002",
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -414,6 +455,9 @@
     "ms_mirror_1000",
     "ms_mirror_1001",
     "ms_mirror_1002",
+    "noctowl_9000",
+    "noctowl_9001",
+    "noctowl_9002",
     "postwick_9000",
     "postwick_9001",
     "rvl1230_9000",
@@ -503,6 +547,9 @@
     "v2_ms_mirror_5001",
     "v2_ms_ml_5300",
     "v2_ms_ml_5301",
+    "waitress_9000",
+    "waitress_9001",
+    "waitress_9002",
     "watchtower_9000",
     "watchtower_9001",
     "watchtower_9002"
@@ -558,6 +605,9 @@
     "5": "verified"
    },
    "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002",
     "cn1260_9000",
     "cn1260_9001",
     "cn139_9000",
@@ -697,6 +747,9 @@
     "cn1125_9001",
     "cn879_9000",
     "cn879_9001",
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002",
     "micro_mill_9630",
     "micro_onboard896a1293_9900",
     "micro_onboard896a1293_9901",
@@ -744,6 +797,9 @@
     "8": "verified"
    },
    "evidence": [
+    "archala_9000",
+    "archala_9001",
+    "archala_9002",
     "cn1013_9000",
     "cn1013_9001",
     "cn1205_9600",
@@ -1535,6 +1591,8 @@
     "attack:73": "verified"
    },
    "evidence": [
+    "noctowl_9000",
+    "noctowl_9001",
     "rvl73_9000",
     "rvl73_9001"
    ],
@@ -2080,12 +2138,16 @@
   "109": {
    "name": "Abra",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "derived",
    "chains": {
-    "109": "deferred",
+    "109": "verified",
     "attack:137": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002"
+   ],
    "updated": "2026-07-12"
   },
   "110": {
@@ -2631,8 +2693,21 @@
     "attack:196": "verified"
    },
    "evidence": [
+    "brockscout_9000",
+    "brockscout_9001",
+    "brockscout_9002",
+    "cyrano_9000",
+    "cyrano_9001",
+    "cyrano_9002",
+    "dawn_9000",
+    "dawn_9001",
+    "dawn_9002",
+    "explguid_9001",
+    "explguid_9002",
     "sg965_9000",
-    "sg965_9001"
+    "sg965_9001",
+    "waitress_9000",
+    "waitress_9001"
    ],
    "updated": "2026-07-12"
   },
@@ -2847,11 +2922,15 @@
    "cardType": "pokemon",
    "status": "seeded",
    "chains": {
-    "169": "derived",
-    "attack:223": "derived",
+    "169": "verified",
+    "attack:223": "verified",
     "attack:224": "seeded"
    },
-   "evidence": [],
+   "evidence": [
+    "archala_9000",
+    "archala_9001",
+    "archala_9002"
+   ],
    "updated": "2026-07-12"
   },
   "170": {
@@ -2893,12 +2972,15 @@
   "173": {
    "name": "Noctowl",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "173": "deferred",
-    "attack:229": "derived"
+    "173": "verified",
+    "attack:229": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "noctowl_9001",
+    "noctowl_9002"
+   ],
    "updated": "2026-07-12"
   },
   "174": {
@@ -3095,12 +3177,15 @@
   "190": {
    "name": "Archaludon ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "190": "deferred",
-    "attack:253": "deferred"
+    "190": "verified",
+    "attack:253": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "archala_9000",
+    "archala_9002"
+   ],
    "updated": "2026-07-12"
   },
   "191": {
@@ -8813,13 +8898,17 @@
   "646": {
    "name": "Marnie's Impidimp",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "derived",
    "chains": {
-    "646": "derived",
-    "attack:934": "seeded",
+    "646": "verified",
+    "attack:934": "verified",
     "attack:935": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002"
+   ],
    "updated": "2026-07-12"
   },
   "647": {
@@ -8827,21 +8916,29 @@
    "cardType": "pokemon",
    "status": "derived",
    "chains": {
-    "647": "derived",
+    "647": "verified",
     "attack:936": "derived"
    },
-   "evidence": [],
+   "evidence": [
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002"
+   ],
    "updated": "2026-07-12"
   },
   "648": {
    "name": "Marnie's Grimmsnarl ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "648": "deferred",
-    "attack:937": "seeded"
+    "648": "verified",
+    "attack:937": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002"
+   ],
    "updated": "2026-07-12"
   },
   "649": {
@@ -10001,23 +10098,31 @@
   "742": {
    "name": "Kadabra",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "742": "deferred",
-    "attack:1071": "derived"
+    "742": "verified",
+    "attack:1071": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002"
+   ],
    "updated": "2026-07-12"
   },
   "743": {
    "name": "Alakazam",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "743": "deferred",
-    "attack:1072": "deferred"
+    "743": "verified",
+    "attack:1072": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002"
+   ],
    "updated": "2026-07-12"
   },
   "744": {
@@ -10161,8 +10266,17 @@
     "attack:1090": "verified"
    },
    "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002",
+    "archala_9000",
+    "archala_9001",
+    "archala_9002",
     "battlecage_9000",
     "battlecage_9001",
+    "brockscout_9000",
+    "brockscout_9001",
+    "brockscout_9002",
     "carmine_9001",
     "carmine_9002",
     "cn1003_9000",
@@ -10221,12 +10335,21 @@
     "cnt_followme_9980",
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
+    "cyrano_9000",
+    "cyrano_9001",
+    "cyrano_9002",
+    "dawn_9000",
+    "dawn_9001",
+    "dawn_9002",
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
     "estream_9000",
     "estream_9001",
     "estream_9002",
+    "explguid_9000",
+    "explguid_9001",
+    "explguid_9002",
     "flashdraw_9000",
     "flashdraw_9001",
     "fmlab_9000",
@@ -10234,6 +10357,9 @@
     "forestvit_9000",
     "forestvit_9001",
     "forestvit_9002",
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -10328,6 +10454,9 @@
     "micro_potion_9760",
     "micro_psychout_9970",
     "micro_tucktail_9530",
+    "noctowl_9000",
+    "noctowl_9001",
+    "noctowl_9002",
     "postwick_9000",
     "postwick_9001",
     "rvl1230_9000",
@@ -10399,6 +10528,8 @@
     "trh_9000",
     "trh_9001",
     "trh_9002",
+    "waitress_9000",
+    "waitress_9001",
     "watchtower_9000",
     "watchtower_9001",
     "watchtower_9002"
@@ -14001,23 +14132,43 @@
     "attack:1526": "verified"
    },
    "evidence": [
+    "alakazam_9000",
+    "alakazam_9001",
+    "alakazam_9002",
+    "archala_9000",
+    "archala_9002",
     "battlecage_9000",
     "battlecage_9001",
+    "brockscout_9000",
+    "brockscout_9001",
+    "brockscout_9002",
     "carmine_9000",
     "carmine_9002",
     "cn1526_9000",
     "cn1526_9001",
+    "cyrano_9000",
+    "cyrano_9001",
+    "cyrano_9002",
+    "dawn_9000",
+    "dawn_9001",
+    "dawn_9002",
     "duskball_9000",
     "duskball_9002",
     "estream_9000",
     "estream_9001",
     "estream_9002",
+    "explguid_9000",
+    "explguid_9001",
+    "explguid_9002",
     "flashdraw_9000",
     "flashdraw_9001",
     "flashdraw_9002",
     "fmlab_9001",
     "forestvit_9000",
     "forestvit_9002",
+    "grimm_9000",
+    "grimm_9001",
+    "grimm_9002",
     "lev_9000",
     "micro_bonusheads_9200",
     "micro_coinfail_9200",
@@ -14028,6 +14179,8 @@
     "micro_pushdown_9200",
     "micro_recoil_9100",
     "micro_rigidify_9200",
+    "noctowl_9001",
+    "noctowl_9002",
     "postwick_9000",
     "postwick_9001",
     "spikemuth_9000",
@@ -14042,6 +14195,9 @@
     "trcx_9101",
     "trh_9000",
     "trh_9002",
+    "waitress_9000",
+    "waitress_9001",
+    "waitress_9002",
     "watchtower_9001",
     "watchtower_9002"
    ],
@@ -15579,11 +15735,15 @@
   "1185": {
    "name": "Explorer’s Guidance",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1185": "deferred"
+    "1185": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "explguid_9000",
+    "explguid_9001",
+    "explguid_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1186": {
@@ -15800,11 +15960,15 @@
   "1205": {
    "name": "Cyrano",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1205": "deferred"
+    "1205": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "cyrano_9000",
+    "cyrano_9001",
+    "cyrano_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1206": {
@@ -15852,11 +16016,15 @@
   "1210": {
    "name": "Brock’s Scouting",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1210": "deferred"
+    "1210": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "brockscout_9000",
+    "brockscout_9001",
+    "brockscout_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1211": {
@@ -16122,11 +16290,15 @@
   "1231": {
    "name": "Dawn",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1231": "deferred"
+    "1231": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "dawn_9000",
+    "dawn_9001",
+    "dawn_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1232": {
@@ -16165,11 +16337,15 @@
   "1235": {
    "name": "Waitress",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1235": "deferred"
+    "1235": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "waitress_9000",
+    "waitress_9001",
+    "waitress_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1236": {

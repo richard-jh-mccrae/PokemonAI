@@ -1,5 +1,27 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Supporter + onEvolve-ability batch (2026-07-12, same session, third follow-on):
+> ladder 129→143/414.** Five supporters capture-first: **Dawn 1231**
+> (`xDeckToHandBuckets` — sequential per-category min0-max1 picks),
+> **Brock's Scouting 1210** (`xDeckToHandEitherOr` — union pick 1, a-only after,
+> b-pick ends it), **Explorer's Guidance 1185** (look-op `rest:"discard"`, one
+> min2-max2 pick over all six), **Waitress 1235** (`xLookEnergyAttachChoose` —
+> look-6, energy pick, cc'd holder pick, rest+shuffle), **Cyrano 1205** (ONE
+> multi-pick min0 max=min(3,matches); `ex` filter key = ex|megaEx). Then the
+> **35-episode ctx43 class** decoded as onEvolve ability asks and closed:
+> **Archaludon ex 190 Assemble Alloy** (distribute op `source:"discard"` — min1,
+> no listing, no shuffle), **Marnie's Grimmsnarl ex 648 Punk Up** (deck
+> distribute + family targets + `targetListing:false` placement quirk),
+> **Kadabra/Alakazam 742/743 Psychic Draw** (silent draw), **Noctowl 173 Jewel
+> Seeker** (hook `legal` gates the ASK — Tera-in-play, pinned by absence), plus
+> ride-alongs **Abra 109 Teleporter** (`selfIsActive`; Run-Away-Draw machinery
+> n=0), **Metal Defender 253** (no-Weakness transient) and **Powerful Hand 1072**
+> (hand-scaled counters, value-0 logged). Fixtures 323→**350** (34521 frames),
+> gate **1079 all-green**, ops **97/97**, ledger 184/1267. Pins §9g. The queue
+> now: **special energies Telepath 19 (24) / Mist 11 (14), tools Lucky Helmet
+> 1156 (17), deferred attacks 1046 (14) / Hammer In 223 (12) / Mega Brave 983,
+> MISS type12 (12 — undecoded option type), 28 nonselect residuals.**
+
 > **Stadium batch (2026-07-12, same session, follow-on): 7 of the 9 queued stadiums
 > authored — ladder 123→129/414, and NO remaining episode divergence names any of
 > the seven.** Activated (Levincia machinery + captures): **Spikemuth Gym 1259**

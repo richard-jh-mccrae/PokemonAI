@@ -421,6 +421,41 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   1250 (bench-max 8 under a Tera gate + forced bench discards on losing it and
   on leave-play, player-who-played first).
 
+### 9g. Supporter + onEvolve-ability batch pins (2026-07-12)
+
+- **Multi-card searches pose SEQUENTIALLY, min0 max1 each** (Brock's Scouting,
+  brockscout_9000 f131→f132: the second pick posed after the first card reached
+  the hand) — EXCEPT Cyrano's "up to 3 Pokémon {ex}", ONE multi-pick select with
+  max = min(3, matches) (cyrano_9000 f11 max3 / f38 max2; Mega Zygarde ex counts
+  as {ex}). Dawn = one min0-max1 pick PER CATEGORY (Basic / Stage 1 / Stage 2);
+  buckets beyond the first are UNPINNED (no evolution reached a capture deck) —
+  authored as skip-with-tac-bump, decline-does-not-abort (Crispin precedent).
+- **Explorer's Guidance**: look top 6, ONE ctx TO_HAND pick min2 max2 over ALL
+  six (unfiltered — energies listed, explguid_9000 f17), picks exit LOOKING→HAND
+  in answer order, the rest DISCARD in looking order, NO shuffle (f18).
+- **Waitress**: look top 6, ctx ATTACH_TO min0 max1 over the Basic Energies only
+  (waitress_9000 f10; declinable — 9001 f138 answers []), then ctx ATTACH_FROM
+  min1 max1 WITH contextCard = the picked energy (f11 — the Chansey echo, unlike
+  Electric Streamer's cc-less holder pick), rest to deck + shuffle (f12).
+- **onEvolve asks** (Assemble Alloy / Punk Up / Psychic Draw / Jewel Seeker /
+  Multiplying Cocoon all share it): ctx 43 YES_NO, type 9, contextCard = the
+  just-evolved mon, effect None. A hook `legal` gates the ASK itself (Noctowl's
+  Tera condition — pinned by absence: 8 evolves, no Tera, no ask). Assemble
+  Alloy's effect = the distribute op with `source: "discard"`: picks pose over
+  DISCARD positions, NO listing, **min 1** max 2 (archala_9002 f243 — the "may"
+  was the ask), per-energy ctx ATTACH_FROM cc=energy over {M} targets only
+  (f244), NO end shuffle. Punk Up = the deck distribute (min0 max5, listing at
+  the pick) but its placement selects DROP the deck listing (grimm_9000 f103 —
+  per-script quirk, `targetListing: false`).
+- **Teleporter** (Abra): Active-gated (`selfIsActive`) once-per-turn
+  shuffle-self-in — the Run-Away-Draw machinery with n=0 (no draw, unconditional
+  shuffle-in; option presence pinned alakazam_9001 f4).
+- **Powerful Hand**: counters = 2 × own hand on the opposing Active, silent
+  HP_CHANGE putDamageCounter=true, emitted EVEN AT ZERO counters
+  (alakazam_9002 f126: empty hand logs value 0 — the computed-0 convention).
+- **Metal Defender**: self no-Weakness transient during the opponent's next turn
+  (UNPINNED interior; archala_9000/9002 replays verify end-to-end).
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on

@@ -994,5 +994,269 @@
   "stadium": {
    "benchCounterShield": true
   }
+ },
+ "1231": {
+  "name": "Dawn",
+  "_provenance": "sequential per-category to-hand picks (Basic / Stage 1 / Stage 2), each ctx TO_HAND min0 max1 with listing (pinned dawn_9000 f96 bucket-1; buckets 2-3 UNPINNED — capture decks held no evolutions; ladder verifies), empty bucket skips with tac bump, one shuffle.",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "play": [
+   {
+    "op": "xDeckToHandBuckets",
+    "buckets": [
+     {
+      "filter": {
+       "pokemon": true,
+       "basic": true
+      }
+     },
+     {
+      "filter": {
+       "pokemon": true,
+       "stage1": true
+      }
+     },
+     {
+      "filter": {
+       "pokemon": true,
+       "stage2": true
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "1185": {
+  "name": "Explorer’s Guidance",
+  "_provenance": "look top 6, take EXACTLY 2 (min2 max2, unfiltered — energies listed, pinned explguid_9000 f17), rest DISCARDED in looking order (f18), no shuffle.",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "play": [
+   {
+    "op": "xLookTopTakeRestBottom",
+    "n": 6,
+    "take": 2,
+    "rest": "discard"
+   }
+  ]
+ },
+ "1210": {
+  "name": "Brock’s Scouting",
+  "_provenance": "either-or search: up to 2 Basics OR 1 Evolution — sequential min0 max1 picks (pinned brockscout_9000 f131-f132 basic-basic; Evolution branch UNPINNED, ladder verifies), revealed, one shuffle.",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "play": [
+   {
+    "op": "xDeckToHandEitherOr",
+    "a": {
+     "filter": {
+      "pokemon": true,
+      "basic": true
+     },
+     "n": 2
+    },
+    "b": {
+     "filter": {
+      "pokemon": true,
+      "evolution": true
+     },
+     "n": 1
+    }
+   }
+  ]
+ },
+ "1235": {
+  "name": "Waitress",
+  "_provenance": "look top 6, ctx ATTACH_TO min0 max1 over the Basic Energies among them (pinned waitress_9000 f10, declinable 9001 f138), then ctx ATTACH_FROM min1 max1 contextCard=energy (f11), rest to deck + shuffle (f12).",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "play": [
+   {
+    "op": "xLookEnergyAttachChoose",
+    "n": 6,
+    "filter": {
+     "basicEnergy": true
+    }
+   }
+  ]
+ },
+ "1205": {
+  "name": "Cyrano",
+  "_provenance": "single multi-pick search: ctx TO_HAND min0 max=min(3, matches) over Pokemon {ex} incl. megaEx (pinned cyrano_9000 f11 max3 / f38 max2 clamp; declinable f57), revealed, shuffle.",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "play": [
+   {
+    "op": "effectDeckToHandAndShuffle",
+    "min": 0,
+    "max": 3,
+    "filter": {
+     "pokemon": true,
+     "ex": true
+    }
+   }
+  ]
+ },
+ "742": {
+  "name": "Kadabra",
+  "_provenance": "Psychic Draw onEvolve ask -> silent draw 2 (pinned alakazam_9000 f123: ctx43 ask, no further selects)",
+  "onEvolve": {
+   "program": [
+    {
+     "op": "effectDraw",
+     "n": 2
+    }
+   ]
+  }
+ },
+ "743": {
+  "name": "Alakazam",
+  "_provenance": "Psychic Draw onEvolve ask -> silent draw 3 (pinned alakazam_9000 f128)",
+  "onEvolve": {
+   "program": [
+    {
+     "op": "effectDraw",
+     "n": 3
+    }
+   ]
+  }
+ },
+ "190": {
+  "name": "Archaludon ex",
+  "_provenance": "Assemble Alloy onEvolve ask -> attach up to 2 Basic {M} from DISCARD to {M} mons any way (pinned archala_9002 f243: ctx22 over discard positions, NO listing, min1 max2; f244: per-energy ctx21 cc=energy, {M} targets only) — the distribute op source:\"discard\", no end shuffle",
+  "onEvolve": {
+   "program": [
+    {
+     "op": "xDeckEnergyAttachDistribute",
+     "source": "discard",
+     "mode": "anyWay",
+     "buckets": [
+      {
+       "filter": {
+        "basicEnergy": true,
+        "energyType": [
+         8
+        ]
+       },
+       "max": 2
+      }
+     ],
+     "targets": {
+      "pokemon": true,
+      "energyType": [
+       8
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "648": {
+  "name": "Marnie's Grimmsnarl ex",
+  "_provenance": "Punk Up onEvolve ask -> search deck up to 5 Basic {D}, attach to Marnie family any way, shuffle (pinned grimm_9000 f102: ctx22 min0 max5 listing; f103: per-energy ctx21 cc=energy, family targets) — the existing deck distribute op",
+  "onEvolve": {
+   "program": [
+    {
+     "op": "xDeckEnergyAttachDistribute",
+     "mode": "anyWay",
+     "buckets": [
+      {
+       "filter": {
+        "basicEnergy": true,
+        "energyType": [
+         7
+        ]
+       },
+       "max": 5
+      }
+     ],
+     "targets": {
+      "pokemon": true,
+      "nameContains": "Marnie's"
+     },
+     "targetListing": false
+    }
+   ]
+  }
+ },
+ "173": {
+  "name": "Noctowl",
+  "_provenance": "Jewel Seeker onEvolve ask GATED on own Tera in play (pinned by absence: 8 evolves across noctowl_9001/9002, no Tera, no ask) -> search up to 2 Trainers, reveal, to hand, shuffle (yes-path UNPINNED, ladder verifies)",
+  "onEvolve": {
+   "legal": [
+    {
+     "op": "inPlayHas",
+     "filter": {
+      "tera": true
+     }
+    }
+   ],
+   "program": [
+    {
+     "op": "effectDeckToHandAndShuffle",
+     "min": 0,
+     "max": 2,
+     "filter": {
+      "cardType": [
+       1,
+       2,
+       3,
+       4
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "109": {
+  "name": "Abra",
+  "_provenance": "Teleporter: Active-only once-per-turn shuffle-self-in (Run Away Draw machinery, n=0 = no draw; alakazam_9001 f4 pins the MAIN option presence; shuffle-in + promotion shapes = the Dudunsparce pins)",
+  "ability": {
+   "legal": [
+    {
+     "op": "selfIsActive"
+    }
+   ],
+   "program": [
+    {
+     "op": "xDrawThenShuffleSelfIn",
+     "n": 0
+    }
+   ]
+  }
+ },
+ "attack:253": {
+  "name": "Metal Defender",
+  "_provenance": "self no-Weakness transient next opp turn (UNPINNED shape, from text; archala replays verify)",
+  "rider": [
+   {
+    "op": "xSelfNoWeaknessNextTurn"
+   }
+  ]
+ },
+ "attack:1072": {
+  "name": "Powerful Hand",
+  "_provenance": "counters = 2 x own hand on opp Active, silent HP_CHANGE putDamageCounter (UNPINNED shape, from text; alakazam replays verify)",
+  "rider": [
+   {
+    "op": "xCounterOppActiveScaled",
+    "per": 2
+   }
+  ]
  }
 }

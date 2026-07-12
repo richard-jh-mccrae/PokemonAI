@@ -53,6 +53,8 @@ class PokemonInPlay:
                                   # global turn (menu-enforced, like sleep/paralysis)
     attack_gate_turn: int = -1    # Sand-Attack transient: on this global turn, this
                                   # mon's attacks need a heads first (tails = nothing)
+    no_weakness_turn: int = -1    # Metal-Defender transient: on this global turn,
+                                  # this mon has no Weakness
 
     @property
     def top(self) -> int:

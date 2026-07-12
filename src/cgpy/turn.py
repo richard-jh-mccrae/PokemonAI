@@ -728,9 +728,15 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
             _apply_evolution(gs, seat, serial, target)
             hook = (def_for(gs.card_id(serial)) or {}).get("onEvolve")
             if hook:                                # Hariyama-class triggered ask
-                gs.pending_triggers.append({        # (pinned ml_dx_2001 f29-f30)
-                    "cardId": gs.card_id(serial), "serial": serial, "source": serial,
-                    "ops": [{"op": "xActivateAsk", "program": hook["program"]}]})
+                from .chain import check_legal
+                # a hook `legal` gates the ASK itself (Noctowl Jewel Seeker: no
+                # Tera in play -> no ask, pinned noctowl_9001/9002 by absence)
+                if check_legal(gs, seat, hook.get("legal", [])):
+                    gs.pending_triggers.append({    # (pinned ml_dx_2001 f29-f30)
+                        "cardId": gs.card_id(serial), "serial": serial,
+                        "source": serial,
+                        "ops": [{"op": "xActivateAsk",
+                                 "program": hook["program"]}]})
             flush_triggers(gs, seat)
         elif t == OptionType.RETREAT:
             from .options import effective_retreat_cost
