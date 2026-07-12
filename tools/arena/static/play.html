@@ -44,12 +44,32 @@
 <footer id="dock">
   <div class="hand" id="hand"></div>
   <div class="prompt" id="prompt"></div>
+  <div class="carousel" id="carousel" hidden>
+    <div class="car-row">
+      <button type="button" class="car-btn" id="car-prev" aria-label="Previous card">‹</button>
+      <div class="car-viewport" id="car-viewport">
+        <div class="car-strip" id="car-strip"></div>
+      </div>
+      <button type="button" class="car-btn" id="car-next" aria-label="Next card">›</button>
+    </div>
+    <div class="car-caption" id="car-caption"></div>
+  </div>
   <div class="options" id="options"></div>
   <div class="confirm-row" id="confirm-row" hidden>
     <button type="button" class="btn" id="skip-btn" hidden>Skip</button>
     <button type="button" class="btn btn-primary" id="confirm-btn" disabled>Confirm</button>
   </div>
 </footer>
+
+<div id="pile-overlay" hidden>
+  <div class="overlay-card pile-panel">
+    <div class="pile-head">
+      <h2 id="pile-title"></h2>
+      <button type="button" class="pile-close" id="pile-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="pile-grid" id="pile-grid"></div>
+  </div>
+</div>
 
 <div id="overlay" hidden>
   <div class="overlay-card">

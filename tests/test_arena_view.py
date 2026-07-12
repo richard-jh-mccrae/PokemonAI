@@ -105,6 +105,9 @@ def test_search_pick_labels_come_from_the_revealed_deck():
 
     assert [o["label"] for o in v["select"]["options"]] == ["Ultra Ball", "Staryu"]
     assert v["select"]["prompt"] == "Choose a card to take"
+    # revealed picks carry the card + pile, so the browser can show the actual scans
+    assert [(o["card"], o["pile"]) for o in v["select"]["options"]] == \
+        [(ULTRA, "deck"), (STARYU, "deck")]
 
 
 @req
@@ -115,9 +118,27 @@ def test_discard_pile_picks_are_labeled_from_the_discard():
         {"type": ph.CARD, "area": ph.DISCARD, "index": 1, "playerIndex": 0},
     ], context=ph.TO_HAND, current=cur)
 
-    labels = [o["label"] for o in view.build_view(obs)["select"]["options"]]
+    opts = view.build_view(obs)["select"]["options"]
 
-    assert "Ultra Ball" in labels[0] and "Staryu" in labels[1]
+    assert "Ultra Ball" in opts[0]["label"] and "Staryu" in opts[1]["label"]
+    assert [(o["card"], o["pile"]) for o in opts] == \
+        [(ULTRA, "discard"), (STARYU, "discard")]
+
+
+@req
+def test_looking_reveals_carry_the_card_but_board_picks_do_not():
+    cur = ph.state(active=ph.poke(STARYU, hp=70, max_hp=70))
+    cur["looking"] = [{"id": ULTRA, "serial": 1, "playerIndex": 0}]
+    obs = ph.make_select([
+        {"type": ph.CARD, "area": 12, "index": 0, "playerIndex": 0},   # LOOKING
+        ph.card_opt(ph.ACTIVE, 0, player=0),                           # a board pick
+    ], current=cur)
+
+    opts = view.build_view(obs)["select"]["options"]
+
+    assert opts[0]["label"] == "Ultra Ball"
+    assert opts[0]["card"] == ULTRA and opts[0]["pile"] == "looking"
+    assert "pile" not in opts[1]                     # board targets keep the board flow
 
 
 @req
@@ -142,6 +163,35 @@ def test_attached_card_picks_name_the_card_and_its_pokemon():
     assert "Hero" in labels[1] and "Staryu" in labels[1]
     assert "Water" in labels[2] and "Staryu" in labels[2]
     assert "Select" not in labels                        # nothing left blind
+
+
+@req
+def test_mon_energies_are_typed_not_a_bare_count():
+    mine = ph.poke(STARYU, hp=70, max_hp=70)
+    mine["energies"] = [3, 3]                            # two Water units
+    theirs = ph.poke(STARYU, hp=70, max_hp=70)
+    theirs["energies"] = [2]                             # one Fire unit — public info
+    cur = ph.state(active=mine, opp_active=theirs)
+
+    v = view.build_view(ph.make_select([ph.opt(14)], current=cur))
+
+    assert v["you"]["active"]["energies"] == [3, 3]      # EnergyType ints, order kept
+    assert v["opp"]["active"]["energies"] == [2]
+
+
+@req
+def test_discards_are_public_while_hands_and_decks_stay_counts():
+    cur = ph.state(discard=(ULTRA,), opp_discard=(STARYU, ULTRA),
+                   opp_hand_count=5, deck_count=30)
+
+    v = view.build_view(ph.make_select([ph.opt(14)], current=cur))
+
+    assert [c["name"] for c in v["you"]["discard"]] == ["Ultra Ball"]
+    assert [c["name"] for c in v["opp"]["discard"]] == ["Staryu", "Ultra Ball"]
+    for side in (v["you"], v["opp"]):                    # hidden zones: counts only
+        assert "deck" not in side
+        assert isinstance(side["deck_count"], int)
+    assert "hand" not in v["opp"] and v["opp"]["hand_count"] == 5
 
 
 @req
