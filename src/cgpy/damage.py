@@ -197,10 +197,12 @@ def apply_defender_mods(gs: GameState, attacker: PokemonInPlay,
                         ignore_effects: bool) -> int:
     """The defender-side reductions/preventions shared by the Active-damage path AND
     flat bench snipes (`chain._bench_hit`) — everything AFTER Weakness/Resistance
-    (which is Active-only). Passive prevention (Crustle ex-immune), Dig protect and
-    the take-less transient are pierced by an ignores-effects attack; benched-Tera
-    prevention and the stadium blanket (Full Metal Lab) are field/print effects that
-    are NOT pierced."""
+    (which is Active-only). Passive prevention (Crustle ex-immune), Dig protect, the
+    take-less transient AND the stadium blanket (Full Metal Lab) are pierced by an
+    ignores-effects attack (pinned episode-83391727 f42: Nebula Beam — "damage isn't
+    affected by ... any effects on your opponent's Active Pokémon" — does its full 210
+    to a Metal Duraludon despite Full Metal Lab). Only benched-Tera prevention is a
+    print effect that is NOT pierced."""
     from .chain import def_for
     dstat = gs.stat(defender.top)
     if not is_active and dstat.tera:
@@ -216,14 +218,13 @@ def apply_defender_mods(gs: GameState, attacker: PokemonInPlay,
             return 0
         if defender.protect_turn == gs.turn:       # Dig-family transient
             return 0
-    if defender.take_less_turn == gs.turn and defender.take_less > 0:
-        dmg = max(0, dmg - defender.take_less)
-    # Stadium blanket (Full Metal Lab: {M} mons take 30 less, both sides, Active or
-    # benched) — a field effect, not an effect ON the defender, so ignore_effects
-    # does not pierce it (unpinned reading — a kaggle divergence corrects it if wrong).
-    if gs.stadium and gs.owner(defender.top) != gs.owner(attacker.top):
-        tl = ((def_for(gs.card_id(gs.stadium[0])) or {})
-              .get("stadium", {}).get("takeLess"))
-        if tl and int(dstat.energyType) == tl["defenderType"]:
-            dmg = max(0, dmg - tl["n"])
+        if defender.take_less_turn == gs.turn and defender.take_less > 0:
+            dmg = max(0, dmg - defender.take_less)
+        # Stadium blanket (Full Metal Lab: {M} mons take 30 less, both sides, Active or
+        # benched) — an on-the-Pokémon effect an ignores-effects attack pierces.
+        if gs.stadium and gs.owner(defender.top) != gs.owner(attacker.top):
+            tl = ((def_for(gs.card_id(gs.stadium[0])) or {})
+                  .get("stadium", {}).get("takeLess"))
+            if tl and int(dstat.energyType) == tl["defenderType"]:
+                dmg = max(0, dmg - tl["n"])
     return dmg

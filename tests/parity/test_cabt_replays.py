@@ -31,6 +31,8 @@ EPISODES = [
     ("episode-82229122-replay.json.gz", 110),  # Deluxe Bomb reactive counters; Crustle snipe
     ("episode-85046764-replay.json.gz", 152),  # Relicanth Memory Dive: Archaludon ex uses
                                                # Duraludon's Hammer In / Raging Hammer
+    ("episode-83285531-replay.json.gz", 84),   # Nebula Beam ignore-effects pierces Full
+                                               # Metal Lab's -30 (+ Memory Dive)
 ]
 
 
