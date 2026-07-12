@@ -320,6 +320,91 @@ def test_opp_property_safe_when_no_brief():
     assert Board().opp_property("opp_tempo", "x") == "x"
 
 
+# ---- ADR-0051: the MatchupPlan target-priority spine, built onto the Board ----
+
+def _mp_pilot(matchup_targeting=True, posture=True):
+    prov = DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True,
+                       minAttackCost=1, minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=280, megaEx=True),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=70),
+        SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
+    })
+    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
+                     roles={MEGA: ["win_condition"]}, params={})
+    brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
+                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
+                 functions=CardFunctions({SOLROCK: ["draw"]}),
+                 attacks={11: 120}, attack_costs={11: 1},
+                 scout=Scout(tiny_artifact()), briefs=[brief],
+                 posture=posture, matchup_targeting=matchup_targeting)
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_board_carries_a_matchup_plan_from_brief_and_general_tiers():
+    # A recognized opponent composes the spine onto the Board: the Brief names Riolu a
+    # fragile_preevo (positive target), and Solrock's general `draw`-engine card fact
+    # de-prioritizes it (avoid) with no Brief entry needed.
+    board = _board_of(_mp_pilot(), _obs_facing_mega_lucario())
+    assert board.matchup_plan.priority(RIOLU) > 0
+    assert board.matchup_plan.priority(SOLROCK) < 0
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_matchup_plan_is_inert_when_the_kill_switch_is_off():
+    # matchup_targeting=False -> an empty plan, every priority 0 (clean A/B off-switch).
+    board = _board_of(_mp_pilot(matchup_targeting=False), _obs_facing_mega_lucario())
+    assert board.matchup_plan.priority(RIOLU) == 0.0
+    assert board.matchup_plan.priority(SOLROCK) == 0.0
+
+
+# ---- ADR-0051 consumption: the snipe pick reads the MatchupPlan ----
+
+SNIPER = 700
+
+
+def _mp_snipe_pilot(matchup_targeting=True):
+    prov = DictCardStatProvider({
+        SNIPER: CardStat(SNIPER, name="Sniper", maxDamage=120, attacks=(11,)),
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=280, megaEx=True,
+                               maxDamage=270, evolvesFrom="Riolu"),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
+        SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
+    })
+    brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
+                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
+                 functions=CardFunctions({SOLROCK: ["draw"]}),
+                 attacks={11: 120}, bench_snipe={11: 50},
+                 scout=Scout(tiny_artifact()), briefs=[brief],
+                 posture=True, matchup_targeting=matchup_targeting)
+
+
+def _damage_select_over_ml_bench():
+    # A bench-snipe (DAMAGE) select vs the recognized Mega Lucario ex board. Rider 50 KOs neither
+    # bench body (Solrock 90 / Riolu 70) -> no snipe-KO, so the positional/matchup steer decides.
+    cur = state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=280),
+                opp_bench=[poke(SOLROCK, hp=90, max_hp=90), poke(RIOLU, hp=70, max_hp=70)], turn=4)
+    return make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                       context=DAMAGE, current=cur)
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
+    dec = _mp_snipe_pilot().explain(_damage_select_over_ml_bench())
+    # Solrock's general draw-engine fact -> negative matchup contribution; Riolu (Brief
+    # fragile_preevo) -> positive. The pick lands on the wincon line, not the engine.
+    assert dec.options[1].tactical > 0 > dec.options[0].tactical
+    assert dec.chosen == [1]
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_snipe_matchup_term_silent_under_kill_switch():
+    dec = _mp_snipe_pilot(matchup_targeting=False).explain(_damage_select_over_ml_bench())
+    assert dec.options[0].tactical == 0.0 and dec.options[1].tactical == 0.0
+
+
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_brief_target_and_threat_accessors_read_resolved_ids():
     # Surface B: the Brief's threats/targets, resolved to ids, are queryable off the Board by id/role.
@@ -464,16 +549,17 @@ def test_preevo_boost_is_gamma_scaled_and_dies_with_the_switch():
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
     # Threading proof: recognized opponent → matched Brief resolves Riolu → _board() threads the
-    # roles into strongest_threat_rank → the snipe pick flips to the briefed preevo (lever ON only).
+    # roles into the MatchupPlan → the snipe pick flips to the briefed preevo. The ADR-0051 spine
+    # (`matchup_targeting`, default ON) is now the switch; OFF reverts to generic order.
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=2, hp=110)]
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
                                     opp_bench=bench))
-    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], brief_preevo=True)
-    off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])
-    assert on.decide(obs) == [0]                           # the bare briefed Riolu
+    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])                       # default ON
+    off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], matchup_targeting=False)
+    assert on.decide(obs) == [0]                           # the bare briefed Riolu (fragile_preevo)
     assert off.decide(obs) == [1]                          # generic order: the energized Solrock
 
 

@@ -17,6 +17,7 @@ from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
+from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
@@ -65,6 +66,11 @@ _BRIEF_ENGINE_SNIPE_BOOST = 500  # γ-scaled, sub-tier boost for a Brief `engine
                            # the Brief asserting `opp_is_engine_dependent` (ADR-0038): strangle the
                            # engine when nothing is imminent — an energized live attacker still wins
                            # (an engine kill has no deadline).
+_MATCHUP_PRIORITY_SCALE = 5  # ADR-0051: scale from a MatchupPlan role priority (base ≤100, γ-pre-scaled)
+                           # into the snipe/gust TACTICAL band — above the positional snipe rungs (Σ≲150)
+                           # yet below KO_SCORE (1000), so it steers WHICH non-KO body to target but a
+                           # real Knock Out always wins. A negative (`avoid`) priority pushes a draw engine
+                           # below every real target.
 _RETREAT_POSITION_EPS = 0.001  # positioning tie-break for retreat-to-lethal lookahead: when retreating
                            # into a ready wincon takes the SAME KO the spent Active could, prefer it (wincon
                            # ends up Active) — tiny, only breaks exact ties, never beats a real edge.
@@ -347,6 +353,10 @@ class Board:
     brief_target_roles: dict = field(default_factory=dict)  # {opp card id: Dossier role} the Brief lists as
                                           # disruption/snipe TARGETS (fragile_preevo/prize_liability/engine).
                                           # Behavior-neutral: the surface exists; nothing scores off it yet.
+    matchup_plan: MatchupPlan = field(default_factory=MatchupPlan)  # ADR-0051 unified opponent target-
+                                          # priority spine: composes Brief + Read-Intel (γ-gated) + the
+                                          # general draw-engine card fact. `priority(opp_id)` steers
+                                          # snipe/gust. Empty (all-0) default = inert (kill-switch/no Read).
     my_discard_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in
                                           # MY open discard — the recover-rider fuel (Aura Jab class)
     active_best_attack_locked: bool = False  # my Active's HIGHEST-damage attack is transient-locked this
@@ -734,7 +744,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  value_model=None, escalation=False,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
-                 evolving_wincon_priority=True):
+                 evolving_wincon_priority=True, matchup_targeting=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -832,6 +842,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # + broadened line recognition (credit a secondary
                                                         # attacker Line's pre-evo). Default ON; OFF reverts to
                                                         # win-condition-only recognition — a secondary Line is inert
+        self.matchup_targeting = matchup_targeting      # ADR-0051 kill-switch (default ON): the MatchupPlan
+                                                        # target-priority spine — Brief + Read-Intel (γ-gated)
+                                                        # + general draw-engine card fact, read by snipe/gust.
+                                                        # OFF = empty plan (every priority 0), byte-identical
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -1102,7 +1116,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _option_trace(self, obs: dict, select: dict, board: Board, option: dict,
                       index: int) -> OptionTrace:
+        ctx = self._context(obs, select, board, option)   # built first: the matchup snipe steer
+                                                           # respects its ADR-0044 redundancy flags
         tactical = (self._tactical(obs, board, option)
+                    + self._snipe_matchup_tactical(obs, select, board, option, ctx)
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._gust_stall_target_tactical(obs, select, board, option)
@@ -1111,7 +1128,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._retreat_to_lethal_tactical(obs, board, option)
                     + self._grab_lethal_tactical(obs, select, board, option)
                     + self._grab_enabler_lethal_tactical(obs, select, board, option))
-        ctx = self._context(obs, select, board, option)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         score = sum(w for _, w in fired) + tactical
@@ -2737,6 +2753,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             resolve_brief_cards(brief, _ids_for_name)
             if (brief is not None and _ids_for_name is not None) else (frozenset(), {}))
         engine_dep = bool(brief.opponent_properties.get("opp_is_engine_dependent")) if brief else False
+        matchup_plan = self._matchup_plan(opp, brief_target_roles, read, gamma)   # ADR-0051 spine
         active_doomed = self._active_doomed(ma, oa, opp)
         active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
         # the Energy my Active can actually PAY an attack with this turn: attached + the best unspent
@@ -2857,6 +2874,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             brief=brief,                                            # matched Matchup Brief (ADR-0027); None = off
             brief_threat_ids=brief_threat_ids,                      # its threats/targets resolved to card ids
             brief_target_roles=brief_target_roles,                  # (behavior-neutral consumer surface)
+            matchup_plan=matchup_plan,                              # ADR-0051 unified target-priority spine
             **path_sig,                                             # Tier-3 two-sided Prize Path
             line_ready=(base_plan == Plan.RACE),                    # the readiness signal old plan
                                                                     # gates migrated to (ADR-0040)
@@ -3488,6 +3506,56 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if (poke or {}).get("id") is None:
             return None
         return self._body_threat_rank(obs, poke, read, gamma, brief_roles, engine_dependent)
+
+    def _matchup_plan(self, opp: dict, brief_roles: dict, read, gamma: float):
+        """Compose the ADR-0051 MatchupPlan for this decision — the unified opponent target-
+        priority spine read by the snipe/gust consumers. Empty (inert) when the kill-switch is
+        off. Curated ``brief_roles`` (already resolved to ids) is the top tier; ``read.targets``
+        Intel is the γ-gated speculative tier; the general ``draw``-engine card fact is the
+        always-on floor. Pure over the resolved inputs — the composition lives in
+        ``matchup_plan.build_matchup_plan``."""
+        if not self.matchup_targeting:
+            return MatchupPlan()
+        read_roles = {t.cardId: t.role for t in (read.targets if read else [])}
+        return build_matchup_plan(brief_roles=brief_roles, read_roles=read_roles,
+                                  draw_engine_ids=self._draw_engine_ids(opp), gamma=gamma)
+
+    def _snipe_matchup_tactical(self, obs: dict, select: dict, board: Board, option: dict,
+                                ctx) -> float:
+        """ADR-0051: steer a bench SNIPE by the MatchupPlan — toward the highest-priority target,
+        away from a negative-priority draw engine. Scored in the tactical band (above the
+        positional snipe rungs, below KO_SCORE), so it decides WHICH body to chip while a real KO
+        still wins. Stands down when a snipe-KO is on offer (defer to the KO logic, exactly as the
+        positional rungs do) and off any non bench-DAMAGE option. 0 when the plan is inert.
+
+        A POSITIVE boost stands down on an ADR-0044 redundant / promotion-mirage body: chip is best
+        spent advancing my Prize Path, not on a body off it that I mean to gust around (test_107 —
+        the redundant 2nd wincon copy AND the off-path Hariyama pre-evo both defer to the on-path
+        small). The `snipe-the-evolving-threat` positional rung still fires on a genuine on-path /
+        imminent pre-evo, so the wincon line is not abandoned — only the extra boost stands down. A
+        negative (`avoid`) priority always applies — de-prioritizing a draw engine is safe regardless."""
+        if (select.get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH or board.snipe_ko_available):
+            return 0.0
+        poke = self._option_pokemon(obs, select, option)
+        cid = (poke or {}).get("id")
+        if cid is None:
+            return 0.0
+        pri = board.matchup_plan.priority(cid) * _MATCHUP_PRIORITY_SCALE
+        if pri > 0 and (ctx.target_prize_redundant or ctx.target_promotion_mirage):
+            return 0.0                                     # don't chip a body ADR-0044 says I don't need
+        return pri
+
+    def _draw_engine_ids(self, opp: dict) -> frozenset:
+        """Opponent in-play body ids whose card carries the general ``draw`` Function Tag — a draw
+        ENGINE (Dudunsparce / Budew class) that is a poor target in EVERY deck (matchup-agnostic).
+        The general tier of the MatchupPlan; empty when no provider / no opponent."""
+        if not self.functions or not opp:
+            return frozenset()
+        ids = {(p or {}).get("id")
+               for p in (opp.get("active") or []) + (opp.get("bench") or [])
+               if p and p.get("id") is not None and "draw" in self.functions.tags(p["id"])}
+        return frozenset(ids)
 
     def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0,
                           brief_roles=None, engine_dependent: bool = False) -> float:

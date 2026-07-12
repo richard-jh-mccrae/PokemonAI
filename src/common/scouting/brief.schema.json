@@ -35,7 +35,7 @@
         "type": "object", "additionalProperties": false, "required": ["card", "role", "why"],
         "properties": {
           "card": {"type": "string"},
-          "role": {"type": "string", "enum": ["fragile_preevo", "prize_liability", "engine"]},
+          "role": {"type": "string", "enum": ["fragile_preevo", "prize_liability", "engine", "disruption_target", "avoid"]},
           "why": {"type": "string"}
         }
       }
