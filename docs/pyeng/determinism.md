@@ -41,9 +41,16 @@ card's index) — first-divergence diffs in M1 will correct any residue here.
 
 - The fork **does not preserve** the provided `your_deck` order — it reshuffles the predicted
   hidden zones itself (probe: draws did not follow a distinctive given order).
-- The fork **is deterministic**: two identical `search_begin` calls + identical steps produce
-  identical draws/outcomes. (So cgpy's `state_from_obs` may apply its own deterministic shuffle;
-  callers already must not trust order-dependent verdicts — planner doctrine.)
+- The fork **is deterministic from a plain MAIN select** (`(select.type, select.context) ==
+  (0, 0)`): two identical `search_begin` calls + identical steps produce identical
+  draws/outcomes — 0/186 divergent (2026-07-12 probe). (So cgpy's `state_from_obs` may apply
+  its own deterministic shuffle; callers already must not trust order-dependent verdicts —
+  planner doctrine.)
+- **Mid-effect forks are NOT reproducible**: begun from a pending effect select (TO_HAND,
+  TO_BENCH, DISCARD, EVOLVES_*, ATTACH_*, …) the fork's reshuffle varies call-to-call —
+  44/62 divergent in the same probe, and no mid-effect context is trustworthy (EVOLVES_FROM
+  diverged 2/4; SWITCH/DISCARD_ENERGY were quiet only at n≤7). Fork from MAIN; never pin or
+  replay through a mid-effect fork.
 
 ## 5. Setup & mulligan state machine
 

@@ -197,11 +197,18 @@ def probe_fork() -> None:
 
     print("== fork ==")
     rng = random.Random(3)
-    obs, _ = battle_start(deck, deck)
-    obs = _drive_random(obs, battle_select, rng, 12)  # past setup, into the turn loop
-    if obs.get("select") is None or (obs.get("current") or {}).get("result", -1) not in (-1, None):
-        print(" game ended too early; rerun")
+    # Retry until the chaos game lands on a plain MAIN select: fork determinism holds
+    # only there — mid-effect forks reshuffle differently call-to-call (determinism.md §4).
+    for _ in range(20):
+        obs, _ = battle_start(deck, deck)
+        obs = _drive_random(obs, battle_select, rng, 12)  # past setup, into the turn loop
+        sel = obs.get("select")
+        if sel is not None and (obs.get("current") or {}).get("result", -1) in (-1, None) \
+                and (sel.get("type"), sel.get("context")) == (0, 0):
+            break
         battle_finish()
+    else:
+        print(" no plain-MAIN state reached in 20 games; rerun")
         return
 
     v = json.loads(visualize_data())

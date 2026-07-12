@@ -132,44 +132,56 @@ def test_validation_error_codes():
 
 
 def test_fork_reshuffles_but_is_deterministic():
-    """search_begin ignores the provided deck order yet is reproducible call-to-call."""
+    """search_begin ignores the provided deck order yet is reproducible call-to-call.
+
+    Reproducibility is pinned for forks from a plain MAIN select only — a fork begun
+    mid-effect (a pending trainer/attack select) reshuffles differently call-to-call
+    (probed 2026-07-12: 0/186 MAIN forks divergent vs 44/62 mid-effect; determinism.md
+    §4), so chaos games retry until one lands on MAIN.
+    """
     from cg import api
 
     deck = _agent_deck()
     rng = random.Random(3)
-    obs, _ = battle_start(deck, deck)
-    try:
-        obs = _drive(obs, rng, 12)
-        if obs.get("select") is None or (obs.get("current") or {}).get("result", -1) not in (-1, None):
-            pytest.skip("game ended during setup (stochastic)")
-        v = json.loads(visualize_data())
-        seat = obs["current"]["yourIndex"]
-        me, opp = v[-1]["current"]["players"][seat], v[-1]["current"]["players"][1 - seat]
-        given = list(reversed([c["id"] for c in me["deck"]]))
-        o = api.to_observation_class(obs)
+    for _ in range(20):
+        obs, _ = battle_start(deck, deck)
+        try:
+            obs = _drive(obs, rng, 12)
+            if obs.get("select") is None or (obs.get("current") or {}).get("result", -1) not in (-1, None):
+                continue  # game ended during setup (stochastic)
+            sel = obs["select"]
+            if (sel.get("type"), sel.get("context")) != (0, 0):
+                continue  # mid-effect select: the fork legitimately varies there
+            v = json.loads(visualize_data())
+            seat = obs["current"]["yourIndex"]
+            me, opp = v[-1]["current"]["players"][seat], v[-1]["current"]["players"][1 - seat]
+            given = list(reversed([c["id"] for c in me["deck"]]))
+            o = api.to_observation_class(obs)
 
-        def run():
-            st = api.search_begin(o, given, [c["id"] for c in me["prize"]],
-                                  [c["id"] for c in opp["deck"]], [c["id"] for c in opp["prize"]],
-                                  [c["id"] for c in opp["hand"]], [], manual_coin=True)
-            drawn = []
-            for _ in range(30):
-                ob = st.observation
-                if ob.current and ob.current.result != -1:
-                    break
-                if ob.select is None:
-                    break
-                drawn += [l.cardId for l in ob.logs
-                          if l.type == api.LogType.DRAW and l.playerIndex == seat and l.cardId]
-                end_i = next((i for i, op in enumerate(ob.select.option)
-                              if op.type == api.OptionType.END), None)
-                st = api.search_step(st.searchId, [end_i if end_i is not None else 0])
-            api.search_end()
-            return drawn
+            def run():
+                st = api.search_begin(o, given, [c["id"] for c in me["prize"]],
+                                      [c["id"] for c in opp["deck"]], [c["id"] for c in opp["prize"]],
+                                      [c["id"] for c in opp["hand"]], [], manual_coin=True)
+                drawn = []
+                for _ in range(30):
+                    ob = st.observation
+                    if ob.current and ob.current.result != -1:
+                        break
+                    if ob.select is None:
+                        break
+                    drawn += [l.cardId for l in ob.logs
+                              if l.type == api.LogType.DRAW and l.playerIndex == seat and l.cardId]
+                    end_i = next((i for i, op in enumerate(ob.select.option)
+                                  if op.type == api.OptionType.END), None)
+                    st = api.search_step(st.searchId, [end_i if end_i is not None else 0])
+                api.search_end()
+                return drawn
 
-        d1, d2 = run(), run()
-        assert d1 == d2, "fork must be deterministic across identical calls"
-        if len(d1) >= 4:
-            assert d1 != given[: len(d1)], "fork reshuffles (given order not preserved)"
-    finally:
-        battle_finish()
+            d1, d2 = run(), run()
+            assert d1 == d2, "fork must be deterministic across identical calls"
+            if len(d1) >= 4:
+                assert d1 != given[: len(d1)], "fork reshuffles (given order not preserved)"
+            return
+        finally:
+            battle_finish()
+    pytest.skip("no plain-MAIN post-drive state reached in 20 games (stochastic)")
