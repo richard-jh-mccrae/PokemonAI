@@ -1549,5 +1549,22 @@
       "per": 20,
       "add": true
     }
+  },
+  "756": {
+    "name": "Mega Kangaskhan ex",
+    "ability": {
+      "legal": [
+        {
+          "op": "selfIsActive"
+        }
+      ],
+      "oncePerTurnGlobal": true,
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 2
+        }
+      ]
+    }
   }
 }

@@ -40,6 +40,8 @@ EPISODES = [
     ("episode-83665001-replay.json.gz", 51),   # Sacred Ash: shuffle Pokémon from discard to deck
     ("episode-82871172-replay.json.gz", 153),  # Full Moon Rondo: +20 damage per benched
                                                # Pokémon (both sides)
+    ("episode-84895564-replay.json.gz", 42),   # Mega Kangaskhan ex Run Errand: draw 2,
+                                               # Active-only, 1×/turn globally
 ]
 
 
