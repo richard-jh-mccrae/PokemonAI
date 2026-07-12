@@ -759,9 +759,11 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
             adef = (def_for(cid) or {}).get("ability")
             if adef is None or "program" not in adef:
                 raise UnsupportedCard(f"card {cid} ability program unpinned")
-            p.ability_used_turn = gs.turn           # no log for the activation itself
-            if adef.get("oncePerTurnGlobal"):       # (pinned ml_dx_2000 f26-f27)
-                gs.turn_markers[f"ability:{cid}"] = True
+            if not adef.get("repeatable"):          # "as often as you like" class re-
+                p.ability_used_turn = gs.turn       # offers (pinned estream_9000 t85:
+            if adef.get("oncePerTurnGlobal"):       # 3 uses in one turn); no log for
+                gs.turn_markers[f"ability:{cid}"] = True   # the activation itself
+                                                    # (oncePerTurnGlobal: ml_dx_2000 f26)
             start_program(gs, seat, p.top, adef["program"], kind="ability")
         elif t == OptionType.ATTACK:
             _resolve_attack(gs, seat, o["attackId"])

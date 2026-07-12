@@ -227,6 +227,8 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
         elif op == "selfHasEnergyType":       # ability holder has an energy of this type
             if pokemon is None or not any(
                     int(gs.stat(s).energyType) == c["energyType"]
+                    and (not c.get("basic")
+                         or gs.stat(s).cardType == CardType.BASIC_ENERGY)
                     for s in pokemon.energy):
                 return False
         else:
@@ -1217,6 +1219,11 @@ def op_deck_energy_attach_distribute(gs, fr, args) -> bool:
             continue
         rows = targets_now()
         if not rows:                             # nowhere to place: cards stay in deck
+            # the unposable placement asks still bump tac — one per remaining card
+            # (anyWay) or one for the batch (oneTarget): kaggle ep-82228017 f18
+            # tac +3 for 3 picked energies on an empty bench (the sg1463 pin can't
+            # see this — its attack ends the turn before tac renders again)
+            gs.turn_action_count += len(cards) if mode != "oneTarget" else 1
             v["pending_cards"] = []
             continue
         from .turn import _target_of
@@ -1426,7 +1433,10 @@ def op_discard_energy_count_scaled(gs, fr, args) -> bool:
     board order with per-holder energyIndex (pinned cnt_lavaburst_9980 f16 self /
     cnt_bellowing_9980 f17 own-wide; "You may" adds nothing — min is already 0). An
     empty candidate list poses nothing (pinned cnt_flashspear_9980 f14: bench had no
-    Basic Energy, straight to base damage). ``scope``: self | own | bench."""
+    Basic Energy, straight to base damage). ``scope``: self | own | bench | holder
+    (the program's source mon — ability costs work from the bench, pinned
+    flashdraw_9001 f162). ``min`` (default 0) raises the floor for mandatory costs
+    (Flashing Draw: min 1 max 1, pinned flashdraw_9000 f33)."""
     seat = fr.seat
     b = gs.players[seat]
     flt = args.get("filter", {})
@@ -1435,6 +1445,11 @@ def op_discard_energy_count_scaled(gs, fr, args) -> bool:
         holders = [(int(AreaType.ACTIVE), 0, b.active)] if b.active else []
     elif scope == "bench":
         holders = [(int(AreaType.BENCH), i, p) for i, p in enumerate(b.bench)]
+    elif scope == "holder":
+        holders = [(area, idx, p) for area, idx, p in
+                   ([(int(AreaType.ACTIVE), 0, b.active)] if b.active else [])
+                   + [(int(AreaType.BENCH), i, q) for i, q in enumerate(b.bench)]
+                   if p.top == fr.source]
     else:
         holders = ([(int(AreaType.ACTIVE), 0, b.active)] if b.active else []) + \
             [(int(AreaType.BENCH), i, p) for i, p in enumerate(b.bench)]
@@ -1463,7 +1478,8 @@ def op_discard_energy_count_scaled(gs, fr, args) -> bool:
         n = min(args.get("max", len(cands)), len(cands))
         pose(gs, seat, type=SelectType.ATTACHED_CARD,
              context=SelectContext.DISCARD_ENERGY_CARD, options=opts,
-             min_count=0, max_count=n, effect_card=fr.source)
+             min_count=min(args.get("min", 0), n), max_count=n,
+             effect_card=fr.source)
         return False
     answered = fr.vars.pop("answered_options")
     fr.vars.pop("answer")
@@ -2365,8 +2381,8 @@ def op_look_top_take_rest_bottom(gs, fr, args) -> bool:
         n = min(args.get("n", 2), len(b.deck))
         gs.looking = []
         gs.looking_owner = seat
-        for _ in range(n):
-            s = b.deck.pop()
+        for s in gs.rng.look_bind(seat, b.deck, n):
+            b.deck.remove(s)
             gs.looking.append(s)
             gs.move_card(s, AreaType.DECK, AreaType.LOOKING, seat=seat,
                          visible_to_owner=True, visible_to_opponent=False)
@@ -2604,15 +2620,19 @@ def op_heal_mega_bounce_energy(gs, fr, args) -> bool:
 def op_look_top_may_take_then_shuffle(gs, fr, args) -> bool:
     """Pokégear class: move the top n deck cards to LOOKING (pop order — top of deck
     first, pinned ms_mirror_1000 f9→f10), may take up to `max` filter-matches to hand,
-    the rest return to deck in looking order, then shuffle (pinned f11)."""
+    the rest return to deck in looking order, then shuffle (pinned f11).
+    ``fromBottom``: Dusk Ball reads the BOTTOM n instead, bottom-most first (pinned
+    duskball_9000 f6: moves == god deck[:7] in order). Identities route through
+    rng.look_bind so god-free replays bind the recorded reveal."""
     seat = fr.seat
     b = gs.players[seat]
     if "answer" not in fr.vars:
         n = min(args.get("n", 7), len(b.deck))
         gs.looking = []
         gs.looking_owner = seat
-        for _ in range(n):
-            s = b.deck.pop()                       # top of deck = list end (pinned)
+        for s in gs.rng.look_bind(seat, b.deck, n,
+                                  from_bottom=bool(args.get("fromBottom"))):
+            b.deck.remove(s)
             gs.looking.append(s)
             gs.move_card(s, AreaType.DECK, AreaType.LOOKING, seat=seat,
                          visible_to_owner=True, visible_to_opponent=False)
@@ -2728,7 +2748,10 @@ def op_hand_energy_attach_choose(gs, fr, args) -> bool:
     (ctx ATTACH_TO, type CARD, options = matching HAND indices ascending), then the
     holder (ctx ATTACH_FROM, in-play order, contextCard = the picked energy); resolves
     as a standard ATTACH log with a fresh attach tick. Skips silently when the hand
-    has no match (0-damage carriers are menu-gated on the resource instead)."""
+    has no match (0-damage carriers are menu-gated on the resource instead).
+    `targetFilter` narrows the holders (Electric Streamer: Iono's family only, pinned
+    estream_9000 f113 — non-family mons unlisted) and `targetContextCard: false` drops
+    the holder select's contextCard (estream_9000 f63 vs Chansey's energy echo)."""
     from .options import _targets
     seat = fr.seat
     b = gs.players[seat]
@@ -2745,10 +2768,14 @@ def op_hand_energy_attach_choose(gs, fr, args) -> bool:
         fr.vars.pop("answer")
     energy = fr.vars["picked"]
     if "answer" not in fr.vars:
-        opts = [opt_card(area, idx, seat) for area, idx, _p in _targets(gs, seat)]
+        opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
+                if _card_matches(gs, p.top, args.get("targetFilter", {}))]
+        if not opts:
+            return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
              options=opts, min_count=1, max_count=1,
-             context_card=energy, effect_card=fr.source)
+             context_card=None if args.get("targetContextCard") is False else energy,
+             effect_card=fr.source)
         return False
     t_o = fr.vars.pop("answered_options")[0]
     fr.vars.pop("answer")

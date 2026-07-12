@@ -209,7 +209,7 @@ class GameState:
         board = self.players[seat]
         if not board.deck:
             return None
-        serial = self.rng.draw_bind(seat, board.deck)
+        serial = self.rng.draw_bind(seat, board.deck, prize=board.prize)
         board.deck.remove(serial)
         board.hand.append(serial)
         self.emit({"type": int(LogType.DRAW), "playerIndex": seat,

@@ -25,7 +25,8 @@ class SeededRng:
     def coin(self, seat: int | None = None) -> bool:
         return self._r.random() < 0.5
 
-    def draw_bind(self, seat: int, deck: list[int]) -> int:
+    def draw_bind(self, seat: int, deck: list[int],
+                  *, prize: list[int] | None = None) -> int:
         """Which serial the next draw takes: the deck top (list end)."""
         return deck[-1]
 
@@ -39,6 +40,12 @@ class SeededRng:
 
     def hand_pick_expect(self, seat: int, serials: list[int]) -> None:
         """Known-identity forced hand exits: nothing to bind in seeded play."""
+
+    def look_bind(self, seat: int, deck: list[int], n: int,
+                  *, from_bottom: bool = False) -> list[int]:
+        """Which serials a look-at-deck reveal takes, in take order: positional
+        (top = list end, bottom = list start)."""
+        return list(deck[:n]) if from_bottom else [deck[-1 - i] for i in range(n)]
 
 
 class ReplayError(AssertionError):
@@ -66,6 +73,10 @@ class ReplayRandomness:
         # e.g. Judge's opponent half) so the queue never skews (the M4 alignment hazard,
         # docs/pyeng/determinism.md §9).
         self.hand_pick_queue: dict[int, list[int]] = {0: [], 1: []}
+        # God-free look-reveal binding (Pokégear / Dusk Ball class): the replayer
+        # pre-feeds the NEXT frame's recorded DECK->LOOKING serials; a look consumes
+        # them in recorded order regardless of which end of the deck it reads.
+        self.look_feed: dict[int, list[int]] = {0: [], 1: []}
 
     def shuffle(self, seq: list, *, seat: int) -> None:
         if self.shuffle_orders[seat]:
@@ -82,12 +93,23 @@ class ReplayRandomness:
             raise ReplayError("coin flip requested but no recorded COIN outcome remains")
         return self.coin_queue.pop(0)
 
-    def draw_bind(self, seat: int, deck: list[int]) -> int:
+    def draw_bind(self, seat: int, deck: list[int],
+                  *, prize: list[int] | None = None) -> int:
         if not self.draw_queues[seat]:
             raise ReplayError(f"seat {seat}: draw requested but no recorded DRAW remains")
         serial = self.draw_queues[seat].pop(0)
         if serial not in deck:
-            raise ReplayError(f"seat {seat}: recorded draw serial {serial} not in deck")
+            # God-free reveal-oracle: the DRAW proves this serial really sits in the
+            # deck — a provisional facedown prize deal may have parked it in the prize
+            # row instead. Exchange it with the would-have-drawn deck top; both zones
+            # stay multiset-exact and prize identities remain provisional until a
+            # take/listing re-binds them (the prize_take rule's draw-side mirror).
+            if prize is not None and serial in prize and deck:
+                prize[prize.index(serial)] = deck[-1]
+                deck[-1] = serial
+            else:
+                raise ReplayError(
+                    f"seat {seat}: recorded draw serial {serial} not in deck")
         return serial
 
     def prize_bind(self, seat: int, deck: list[int], count: int) -> list[int]:
@@ -135,6 +157,25 @@ class ReplayRandomness:
                     f"seat {seat}: recorded forced hand exit {got} not among the "
                     f"cards this effect moves {expected}")
             expected.remove(got)
+
+    def look_bind(self, seat: int, deck: list[int], n: int,
+                  *, from_bottom: bool = False) -> list[int]:
+        """Look-reveal identities: consume the pre-fed recorded serials (in recorded
+        order — direction-agnostic), positional for any unfed remainder."""
+        feed = self.look_feed.get(seat) or []
+        out: list[int] = []
+        while feed and len(out) < n:
+            s = feed.pop(0)
+            if s not in deck:
+                raise ReplayError(
+                    f"seat {seat}: recorded look serial {s} not in deck")
+            out.append(s)
+        if len(out) < n:
+            rest = [s for s in (deck[:n] if from_bottom
+                                else [deck[-1 - i] for i in range(n)])
+                    if s not in out]
+            out += rest[:n - len(out)]
+        return out
 
     def prize_take(self, seat: int, serial: int, *, deck: list[int],
                    prize: list[int]) -> int:

@@ -6,19 +6,19 @@
  },
  "summary": {
   "cards": {
-   "verified": 160,
+   "verified": 166,
    "total": 1267
   },
   "chains": {
-   "verified": 394,
-   "deferred": 656,
-   "derived": 1183,
-   "seeded": 588,
+   "verified": 404,
+   "deferred": 652,
+   "derived": 1179,
+   "seeded": 586,
    "unprobed": 2
   },
   "cleanFrames": {
-   "clean": 26321,
-   "total": 26321,
+   "clean": 28616,
+   "total": 28616,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
@@ -120,7 +120,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 293
+  "traces": 305
  },
  "cards": {
   "1": {
@@ -200,6 +200,9 @@
     "3": "verified"
    },
    "evidence": [
+    "carmine_9000",
+    "carmine_9001",
+    "carmine_9002",
     "cn1003_9000",
     "cn1003_9700",
     "cn1003_9701",
@@ -262,6 +265,15 @@
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
     "cnt_steelburst_9980",
+    "duskball_9000",
+    "duskball_9001",
+    "duskball_9002",
+    "estream_9000",
+    "estream_9001",
+    "estream_9002",
+    "flashdraw_9000",
+    "flashdraw_9001",
+    "flashdraw_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -488,6 +500,12 @@
     "cn364_9001",
     "cnt_bellowing_9980",
     "cnt_flashspear_9980",
+    "estream_9000",
+    "estream_9001",
+    "estream_9002",
+    "flashdraw_9000",
+    "flashdraw_9001",
+    "flashdraw_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -591,6 +609,9 @@
     "6": "verified"
    },
    "evidence": [
+    "carmine_9000",
+    "carmine_9001",
+    "carmine_9002",
     "cn1271_9000",
     "cn1271_9001",
     "cn1513_9000",
@@ -602,6 +623,9 @@
     "cn971_9000",
     "cn971_9001",
     "cnt_bellowing_9980",
+    "duskball_9000",
+    "duskball_9001",
+    "duskball_9002",
     "micro_cnt_bellowing_9980",
     "micro_coinfail_9200",
     "micro_earthquake_9710",
@@ -3980,45 +4004,61 @@
   "268": {
    "name": "Iono’s Tadbulb",
    "cardType": "pokemon",
-   "status": "derived",
+   "status": "verified",
    "chains": {
-    "268": "derived",
-    "attack:367": "derived"
+    "268": "verified",
+    "attack:367": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "estream_9000",
+    "estream_9001",
+    "estream_9002"
+   ],
    "updated": "2026-07-12"
   },
   "269": {
    "name": "Iono’s Bellibolt ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "269": "deferred",
-    "attack:368": "seeded"
+    "269": "verified",
+    "attack:368": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "estream_9000",
+    "estream_9001",
+    "estream_9002"
+   ],
    "updated": "2026-07-12"
   },
   "270": {
    "name": "Iono’s Wattrel",
    "cardType": "pokemon",
-   "status": "seeded",
+   "status": "verified",
    "chains": {
-    "270": "derived",
-    "attack:369": "seeded"
+    "270": "verified",
+    "attack:369": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "flashdraw_9000",
+    "flashdraw_9001",
+    "flashdraw_9002"
+   ],
    "updated": "2026-07-12"
   },
   "271": {
    "name": "Iono’s Kilowattrel",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "271": "deferred",
-    "attack:370": "derived"
+    "271": "verified",
+    "attack:370": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "flashdraw_9000",
+    "flashdraw_9001",
+    "flashdraw_9002"
+   ],
    "updated": "2026-07-12"
   },
   "272": {
@@ -10078,6 +10118,8 @@
     "attack:1090": "verified"
    },
    "evidence": [
+    "carmine_9001",
+    "carmine_9002",
     "cn1003_9000",
     "cn1003_9700",
     "cn1003_9701",
@@ -10134,6 +10176,14 @@
     "cnt_followme_9980",
     "cnt_groundmelter_9980",
     "cnt_lavaburst_9980",
+    "duskball_9000",
+    "duskball_9001",
+    "duskball_9002",
+    "estream_9000",
+    "estream_9001",
+    "estream_9002",
+    "flashdraw_9000",
+    "flashdraw_9001",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -13261,8 +13311,14 @@
     "attack:1454": "verified"
    },
    "evidence": [
+    "carmine_9000",
+    "carmine_9001",
+    "carmine_9002",
     "cn1453_9000",
     "cn1453_9001",
+    "duskball_9000",
+    "duskball_9001",
+    "duskball_9002",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -13881,8 +13937,18 @@
     "attack:1526": "verified"
    },
    "evidence": [
+    "carmine_9000",
+    "carmine_9002",
     "cn1526_9000",
     "cn1526_9001",
+    "duskball_9000",
+    "duskball_9002",
+    "estream_9000",
+    "estream_9001",
+    "estream_9002",
+    "flashdraw_9000",
+    "flashdraw_9001",
+    "flashdraw_9002",
     "lev_9000",
     "micro_bonusheads_9200",
     "micro_coinfail_9200",
@@ -14464,11 +14530,14 @@
   "1102": {
    "name": "Dusk Ball",
    "cardType": "item",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1102": "deferred"
+    "1102": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "duskball_9000",
+    "duskball_9001"
+   ],
    "updated": "2026-07-12"
   },
   "1103": {
@@ -15510,11 +15579,15 @@
   "1192": {
    "name": "Carmine",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1192": "deferred"
+    "1192": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "carmine_9000",
+    "carmine_9001",
+    "carmine_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1193": {

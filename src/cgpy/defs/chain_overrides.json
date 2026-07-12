@@ -785,5 +785,112 @@
     }
    ]
   }
+ },
+ "269": {
+  "name": "Iono’s Bellibolt ex",
+  "_provenance": "Electric Streamer: repeatable hand->Iono-family L-basic attach. Pinned estream_9000: f61-f63 select shapes (ctx22 hand pick then ctx21 holder, contextCard None), f111/f113 per-mon options + family-filtered targets (Latias/Zygarde unlisted), t85 3 uses in one turn; match-replay f34-f38 menu gate = hand holds a Basic {L}",
+  "ability": {
+   "repeatable": true,
+   "legal": [
+    {
+     "op": "handHas",
+     "filter": {
+      "cardType": [
+       5
+      ],
+      "energyType": [
+       4
+      ]
+     }
+    }
+   ],
+   "program": [
+    {
+     "op": "xHandEnergyAttachChoose",
+     "filter": {
+      "cardType": [
+       5
+      ],
+      "energyType": [
+       4
+      ]
+     },
+     "targetFilter": {
+      "nameContains": "Iono’s"
+     },
+     "targetContextCard": false
+    }
+   ]
+  }
+ },
+ "271": {
+  "name": "Iono’s Kilowattrel",
+  "_provenance": "Flashing Draw: cost = discard one attached Basic {L} (ctx26 ATTACHED_CARD min1 max1, holder-scoped ENERGY_CARD options energyIndex-ascending, pinned flashdraw_9000 f33 / 9001 f162 bench holder / 9002 f77 six candidates), then silent draw-to-6. Menu gate = L-basic attached AND hand<6 (139 hand>=6 frames all unoffered) + default once-per-turn (9002 same-turn re-offer absent). Deck-empty gating UNPINNED (no deck gate authored, Lunar-Cycle precedent).",
+  "ability": {
+   "legal": [
+    {
+     "op": "selfHasEnergyType",
+     "energyType": 4,
+     "basic": true
+    },
+    {
+     "op": "handBelow",
+     "n": 6
+    }
+   ],
+   "program": [
+    {
+     "op": "xDiscardEnergyCountScaled",
+     "scope": "holder",
+     "min": 1,
+     "max": 1,
+     "filter": {
+      "cardType": [
+       5
+      ],
+      "energyType": [
+       4
+      ]
+     }
+    },
+    {
+     "op": "effectDrawUntil",
+     "n": 6
+    }
+   ]
+  }
+ },
+ "1102": {
+  "name": "Dusk Ball",
+  "_provenance": "bottom-7 look (moves == god deck[:7] bottom-first, pinned duskball_9000 f6), ctx TO_HAND min0 max1 over Pokemon matches (9001 f113 two options + declined choice []), pick exits LOOKING->HAND revealed, rest back then shuffle — the Pokegear op with fromBottom",
+  "legal": [
+   {
+    "op": "deckNotEmpty"
+   }
+  ],
+  "play": [
+   {
+    "op": "xLookTopMayTakeThenShuffle",
+    "n": 7,
+    "min": 0,
+    "max": 1,
+    "fromBottom": true,
+    "filter": {
+     "pokemon": true
+    }
+   }
+  ]
+ },
+ "1192": {
+  "name": "Carmine",
+  "_provenance": "discard-hand-draw-5, no selects (no effect=1192 select in any capture); allowedFirstTurn waives the first-player T1 supporter ban (pinned carmine_9000 f4 / 9002 f5: PLAY offered and taken at t1, supporterPlayed flips after)",
+  "allowedFirstTurn": true,
+  "legal": [],
+  "play": [
+   {
+    "op": "xDiscardHandDraw",
+    "n": 5
+   }
+  ]
  }
 }

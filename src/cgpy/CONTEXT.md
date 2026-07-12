@@ -73,7 +73,11 @@ gate (52/54 ops trace-pinned), the cross-engine audit seam (`CG_ENGINE=py
 audit_attacks.py` + `diff_audit_engines.py` — sample 46/46 equal incl. Crustle's defense
 passive), `from_cabt.py` god-free replays (take-time prize binding, listing-order
 adoption), `onboard_card.py` (the future-card one-command), and a DLL-free self-play
-smoke. New behavior pins: docs/pyeng/determinism.md §9–10. Ongoing: burn down the
-deferred tail (items/supporters → abilities → tools/stadiums) through the built loop —
-the queue is `reports/parity/unparsed_sentences.json`, ranked in
+smoke. New behavior pins: docs/pyeng/determinism.md §9–10. The 2026-07-12 ability-tail
+batch added the god-free reveal-oracle channels (draw-side prize swap, pre-step listing
+adoption, `look_feed` DECK→LOOKING binding) and the **kaggle-episode ladder**: all 414
+real episodes under the main checkout's `data/replays/` convert + replay
+(`tests/parity/test_cabt_replays.py` pins two end-to-end; 123/414 fully green). Ongoing:
+burn down the deferred tail through that ladder — the attribution tally (first
+divergence → card id) is the ranked queue, digested in
 data/handoffs/CGGame/05-m4-pool-fanout.md.

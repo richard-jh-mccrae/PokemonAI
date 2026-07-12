@@ -1,5 +1,40 @@
 # M4 — pool-wide fan-out + coverage ledger 🟢 CORE DONE (2026-07-11; the burn-down continues)
 
+> **Ability-tail batch (2026-07-12, second session): the kaggle-episode ladder.**
+> The cabt match-replay fixture's f34 divergence named card 269 — **Iono's Bellibolt
+> ex Electric Streamer** (NOT Kilowattrel as the previous handoff guessed — the
+> divergence, not the guess, is the authority). Authored capture-first
+> (estream_9000-9002): the first REPEATABLE ability (`repeatable` def key skips
+> `ability_used_turn`; 3 uses in one turn pinned), Iono's-family `targetFilter`,
+> `targetContextCard: false` (no energy echo on the holder select, unlike Chansey).
+> That ONE card took the fixture **34/60 → 60/60 CLEAN**. Then **Kilowattrel 271
+> Flashing Draw** (holder-scoped L-basic discard cost via
+> `xDiscardEnergyCountScaled scope:"holder" min:1` + silent draw-to-6; gate =
+> L-attached AND hand<6, once-per-turn), **Dusk Ball 1102** (Pokégear op +
+> `fromBottom`: bottom-7 bottom-first pinned) and **Carmine 1192**
+> (`allowedFirstTurn` waives the T1 supporter ban; discard-hand-draw-5).
+> **The ladder scaled to the whole kaggle archive**: all 414
+> `data/replays/*/episode-*-replay.json` episodes (MAIN checkout) now convert +
+> replay through four god-free reveal-oracle channels — take-time prizes (M4),
+> draw-side prize swap (`draw_bind` prize kwarg), **pre-step listing adoption**
+> (option SETS must filter over the true deck — a post-hoc remap cannot fix a
+> wrong set; this one seam was ~150 episodes), and `rng.look_feed` DECK→LOOKING
+> pre-binding (direction-agnostic: Pokégear top / Dusk Ball bottom). Plus the
+> no-target distribute tac pin (ep-82228017: +1 per unposable placement ask).
+> Result: **19 → 123/414 episodes fully green**; the attribution tally
+> (option-diff → card id) is the ranked real-game queue: **Full Metal Lab 1244 /
+> Battle Cage 1264 / Watchtower 1256 (stadiums), Dawn 1231 / Brock's Scouting
+> 1210 / Waitress 1235 (supporters), Telepath Psychic Energy 19 + Mist 11
+> (special energies), Lucky Helmet 1156 / Hop's Choice Band 1171 (tools),
+> Ogerpon 96 + Mega Kangaskhan 756 (the ability tail proper), 15 nonselect
+> residuals (one diagnosed class: opp-discard render gap)**. Gate additions:
+> `tests/parity/test_cabt_replays.py` (both committed episodes end-to-end) + 12
+> new fixtures (estream/flashdraw/duskball/carmine ×3). Fixtures 293→**305**
+> (28616 clean frames), ops 92/92, ledger 166/1267 verified. Pins: §9e + §10.
+> Rerun the ladder:
+> `python <scratchpad>/attribute_cabt.py`-equivalent — convert each episode via
+> `from_cabt.convert` + `replay`, option-diff the first divergence, tally.
+
 > **Burn-down batch 4 (2026-07-12):** attacks **1175→1238 live** (+63); three sub-batches,
 > all capture-first. **4a — the reveal-hand family ×9** (`xOppHandReveal` /
 > `xOppHandRevealChoose` / `xDamagePerRevealed`, rules R-E01/E02): the LOOKING round-trip

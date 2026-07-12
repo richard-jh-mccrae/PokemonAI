@@ -160,9 +160,12 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
             cdef = def_for(cid)
             if cdef is None or "play" not in cdef:
                 continue  # no/deferred ChainDef: option absent -> visible trace divergence
-            if stat.cardType == CardType.SUPPORTER and (gs.supporter_played or
-                                                        going_first_t1):
-                continue
+            if stat.cardType == CardType.SUPPORTER and (
+                    gs.supporter_played
+                    or (going_first_t1 and not cdef.get("allowedFirstTurn"))):
+                continue   # Carmine's "If you go first, you may use this card during
+                           # your first turn" waives the T1 supporter ban (pinned
+                           # carmine_9000 f4: PLAY offered and taken at t1)
             if stat.cardType == CardType.ITEM and b.items_locked_turn == gs.turn:
                 continue  # Itchy-Pollen item lock: PLAY options omitted for one turn
             if check_legal(gs, seat, cdef.get("legal", [])):

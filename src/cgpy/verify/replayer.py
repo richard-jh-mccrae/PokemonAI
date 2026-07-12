@@ -298,6 +298,89 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
         if choice is None or k == len(trace.frames) - 1:
             break   # final frame: nothing follows to verify — stepping it can demand
                     # randomness a truncated micro-trace never recorded
+
+        # God-free look-reveal pre-binding: if the NEXT recorded frame's own-window
+        # logs show DECK->LOOKING moves (Pokégear-class look-at-top-N), those serials
+        # are the deck-top truth — swap any provisionally prize-parked ones back and
+        # arrange the deck top to yield them in pop order BEFORE stepping, so the
+        # emitted MOVE_CARD logs, the looking zone and its options all bind right
+        # (the draw/prize/listing reveal-oracle rule's fourth channel).
+        if fr.get("god") is None:
+            nxt = trace.frames[k + 1]["obs"]
+
+            # Listing pre-adoption: a deck listing in the NEXT frame means the step
+            # below poses a search over the deck — reconcile provisionally
+            # prize-parked serials and adopt the revealed order BEFORE the pose, so
+            # the option SET is filtered over the true deck (a post-hoc index remap
+            # cannot fix a wrong set — kaggle 83692318 f6: prize-swapped serials made
+            # Poké Pad offer supporters). Skipped when the CURRENT select is itself
+            # deck-indexed (the answer below still resolves through those indices).
+            nxt_listing = (nxt.get("select") or {}).get("deck")
+            cur_deck_indexed = (
+                eng.gs.pending is not None
+                and (eng.gs.pending.deck_listing is not None
+                     or any(o.get("area") == int(AreaType.DECK)
+                            for o in eng.gs.pending.options)))
+            if nxt_listing and not cur_deck_indexed:
+                nxt_mover = nxt["current"]["yourIndex"]
+                serials = [c["serial"] for c in nxt_listing]
+                nb = eng.gs.players[nxt_mover]
+                ours_d = nb.deck
+                if sorted(serials) != sorted(ours_d):
+                    ours_ctr: dict[int, int] = {}
+                    listing_ctr: dict[int, int] = {}
+                    for s in ours_d:
+                        ours_ctr[s] = ours_ctr.get(s, 0) + 1
+                    for s in serials:
+                        listing_ctr[s] = listing_ctr.get(s, 0) + 1
+                    extra_deck = sorted(s for s in ours_ctr
+                                        for _ in range(ours_ctr[s]
+                                                       - listing_ctr.get(s, 0))
+                                        if ours_ctr[s] > listing_ctr.get(s, 0))
+                    extra_listing = sorted(s for s in listing_ctr
+                                           for _ in range(listing_ctr[s]
+                                                          - ours_ctr.get(s, 0))
+                                           if listing_ctr[s] > ours_ctr.get(s, 0))
+                    if (len(extra_deck) == len(extra_listing)
+                            and all(s in nb.prize for s in extra_listing)):
+                        for wrong, right in zip(extra_deck, extra_listing):
+                            ours_d[ours_d.index(wrong)] = right
+                            nb.prize[nb.prize.index(right)] = wrong
+                if sorted(serials) == sorted(ours_d):
+                    ours_d[:] = serials
+                # residue: leave it — the next frame's compare reports the truth
+
+            rec_moves: list[int] = []
+            look_owner = -1
+            for l in nxt.get("logs") or []:
+                if (l.get("type") == int(LogType.MOVE_CARD)
+                        and l.get("fromArea") == int(AreaType.DECK)
+                        and l.get("toArea") == int(AreaType.LOOKING)
+                        and l.get("serial") is not None):
+                    rec_moves.append(l["serial"])
+                    look_owner = l.get("playerIndex", -1)
+            if rec_moves and look_owner in (0, 1):
+                lb = eng.gs.players[look_owner]
+                ok = True
+                for r in rec_moves:
+                    if r in lb.deck:
+                        continue
+                    if r in lb.prize:
+                        swap = next((d for d in lb.deck if d not in rec_moves), None)
+                        if swap is None:
+                            ok = False
+                            break
+                        lb.prize[lb.prize.index(r)] = swap
+                        lb.deck[lb.deck.index(swap)] = r
+                    else:
+                        ok = False    # not a deck reveal (or a real divergence —
+                        break         # the next frame's compare will report it)
+                if ok:
+                    # feed identities in recorded order — the look op consumes them
+                    # via rng.look_bind whichever deck end it reads (Dusk Ball reads
+                    # the BOTTOM; Pokégear the top)
+                    rnd.look_feed[look_owner] = list(rec_moves)
+
         twin = eng.fork() if fork_check else None
         try:
             eng.step(choice)
@@ -307,6 +390,8 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
             report.error = f"frame {k}: cgpy raised on recorded choice {choice}: {e!r}"
             report.kind, report.frame = "error", k
             return report
+        finally:
+            rnd.look_feed = {0: [], 1: []}   # a look feed binds ONE step only
         if twin is not None:
             d = first_divergence(eng.god_frame(), twin.god_frame())
             if d is None and eng.gs.outbox != twin.gs.outbox:

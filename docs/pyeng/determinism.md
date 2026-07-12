@@ -350,6 +350,43 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   (match-replay fixture: 4/60 → 34/60 green; the next divergence names card 269's
   ability).
 
+### 9e. Ability-tail batch pins (2026-07-12, kaggle-ladder-verified)
+
+- **Electric Streamer** (Iono's Bellibolt ex 269 — the first REPEATABLE ability):
+  MAIN option {type ABILITY, area, index} per in-play Bellibolt, re-offered after
+  each use — 3 activations in one turn (estream_9000 t85); menu gate = the hand
+  holds a Basic {L} (perfect biconditional over 63 MAIN frames; match-replay
+  f34-f38: gated off the moment the last L basic leaves the hand). Activation =
+  the Chansey hand-attach shape (ctx ATTACH_TO hand pick, then ctx ATTACH_FROM
+  holder) EXCEPT the holder select carries NO contextCard (estream_9000 f63 vs
+  the pinned Chansey energy echo) and targets filter to the Iono's name family —
+  Latias/Zygarde unlisted (f113), Voltorb/Tadbulb/Wattrel/Kilowattrel listed
+  (match-replay f37). Def keys: `repeatable`, `targetFilter`,
+  `targetContextCard: false`.
+- **Flashing Draw** (Iono's Kilowattrel 271): once-per-turn (a used mon's option
+  vanishes for the turn — flashdraw_9002); menu gate = an L basic attached to
+  THIS mon AND hand < 6 (139 hand≥6 frames all unoffered; deck-empty gating
+  UNPINNED — authored without a deck gate on the Lunar-Cycle precedent). Cost =
+  ONE attached L basic: ctx DISCARD_ENERGY_CARD, type ATTACHED_CARD, min1 max1,
+  ENERGY_CARD options on the holder (bench holders keep their area/index —
+  flashdraw_9001 f162; six candidates energyIndex-ascending — 9002 f77); then a
+  silent draw-to-6. `xDiscardEnergyCountScaled` grew `scope: "holder"` +
+  `min` for this.
+- **Dusk Ball** (1102): the Pokégear op with `fromBottom` — takes deck[:7]
+  BOTTOM-FIRST (moves == god deck[:7] in order, duskball_9000 f6), ctx TO_HAND
+  min0 max1 over Pokémon matches only (9001 f113 two options; empty choice []
+  declines), pick exits LOOKING→HAND revealed, rest back + shuffle.
+- **Carmine** (1192): `allowedFirstTurn` on a SUPPORTER def waives the
+  first-player-T1 supporter ban (carmine_9000 f4 / 9002 f5: PLAY offered and
+  taken at t1); body = silent discard-hand-draw-5 (no effect-1192 select in any
+  capture).
+- **No-target distribute bump**: `xDeckEnergyAttachDistribute` picks with NO
+  legal placement stay in the deck, but the unposable placement asks still bump
+  turnActionCount — one per remaining card (anyWay; kaggle ep-82228017 f18 tac +3
+  for 3 energies on an empty bench), one per batch (oneTarget, by the family
+  convention). The sg1463 "stays silently" pin is compatible: its attack ends the
+  turn before tac ever renders again.
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on
@@ -374,3 +411,21 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   multiset-exactly), and a revealed `select.deck` listing's order is adopted
   (multiset-checked) — the reveal-oracle path. Kaggle +1 offset: an agent's action at
   step k+1 answers its observation at step k; step-1 actions are the deck submissions.
+- Reveal-oracle channels beyond the deal (2026-07-12, all multiset-preserving swaps
+  through the provisional prize row): a recorded DRAW whose serial sits provisionally
+  in the prize row swaps with the would-have-drawn deck top (`draw_bind`'s prize
+  kwarg); a NEXT-frame `select.deck` listing is adopted BEFORE the step poses the
+  search, so option SETS filter over the true deck — a post-hoc index remap cannot
+  fix a wrong set (kaggle 83692318 f6: Poké Pad offered supporters; skipped when the
+  CURRENT select is itself deck-indexed); NEXT-frame DECK→LOOKING move logs pre-feed
+  `rng.look_feed`, consumed by `look_bind` in recorded order whichever deck end the
+  op reads (Pokégear top / Dusk Ball bottom), cleared after one step.
+- The kaggle-episode ladder: every `data/replays/*/episode-*-replay.json` under the
+  MAIN checkout converts and replays; the first divergence per episode, attributed
+  back to the option it misses (ability slot → board mon, play/attach → hand card,
+  attackId → attack), is the ranked real-game burn-down queue. 2026-07-12 state:
+  **123/414 episodes fully green** (was 19 before this batch); top of the queue:
+  Full Metal Lab 1244 / Battle Cage 1264 (stadiums), Dawn 1231 / Brock's Scouting
+  1210 (supporters), Telepath Psychic Energy 19 (special energy), Lucky Helmet 1156
+  (tool). Gate: `tests/parity/test_cabt_replays.py` pins the two committed episodes
+  (arena 60/60, kaggle-81364540 43/43) end-to-end.
