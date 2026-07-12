@@ -1431,5 +1431,9 @@
     "tera": true
    }
   }
+ },
+ "57": {
+  "name": "Relicanth",
+  "grantsPreEvoAttacks": true
  }
 }

@@ -110,6 +110,29 @@ def effective_retreat_cost(gs: GameState, p: PokemonInPlay) -> int:
     return max(0, cost)
 
 
+def available_attack_ids(gs: GameState, seat: int, active: PokemonInPlay) -> list[int]:
+    """The active's usable attacks. Normally just the top card's. Relicanth's Memory
+    Dive ("Each of your evolved Pokémon can use any attack from its previous
+    Evolutions") appends every pre-evolution's attacks — own attacks FIRST, then
+    pre-evos top-adjacent-first (pinned episode-85046764 f76: an Archaludon ex over a
+    Duraludon offers [Metal Defender, Hammer In, Raging Hammer])."""
+    from .chain import def_for as _def_for
+    from .chain import stadium_def as _stadium_def
+    ids = list(gs.stat(active.top).attacks)
+    if len(active.stack) <= 1:
+        return ids                                  # a Basic: no previous Evolutions
+    sup_type = _stadium_def(gs).get("suppressAbilitiesType")
+    has_memory_dive = any(
+        (_def_for(gs.card_id(p.top)) or {}).get("grantsPreEvoAttacks")
+        and not (sup_type is not None
+                 and int(gs.stat(p.top).energyType) == sup_type)
+        for p in gs.in_play(seat))
+    if has_memory_dive:
+        for serial in reversed(active.stack[:-1]):  # pre-evolutions, top-adjacent first
+            ids += list(gs.stat(serial).attacks)
+    return ids
+
+
 def attack_cost_after_tools(gs: GameState, p: PokemonInPlay, cost: tuple) -> tuple:
     """`cost` reduced by attached-tool discounts: Hop's Choice Band ({C} less for a
     Hop's Pokémon) removes a Colorless requirement; Sparkling Crystal (1 Energy less
@@ -277,7 +300,7 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
     if (b.active is not None and not b.asleep and not b.paralyzed
             and b.active.no_attack_turn != gs.turn):   # Snotted-Up lock (seeded)
         from .chain import check_legal, def_for as _adef_for, is_deferred
-        for attack_id in gs.stat(b.active.top).attacks:
+        for attack_id in available_attack_ids(gs, seat, b.active):
             atk = gs.db.attacks[attack_id]
             adef = _adef_for(f"attack:{attack_id}") or {}
             if is_deferred(adef) and not adef.get("menuOffer", True):

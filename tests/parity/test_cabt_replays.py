@@ -29,6 +29,8 @@ EPISODES = [
     ("episode-84073333-replay.json.gz", 111),  # Lucky Helmet reactive draw-2-when-damaged
     ("episode-82749168-replay.json.gz", 96),   # Sparkling Crystal Tera cost -1
     ("episode-82229122-replay.json.gz", 110),  # Deluxe Bomb reactive counters; Crustle snipe
+    ("episode-85046764-replay.json.gz", 152),  # Relicanth Memory Dive: Archaludon ex uses
+                                               # Duraludon's Hammer In / Raging Hammer
 ]
 
 
