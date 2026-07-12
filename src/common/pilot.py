@@ -306,6 +306,14 @@ class Board:
     opp_has_hand_size_attacker: bool = False  # opponent has a Pokémon in play (or in a committed
                                           # evolution line) that SCALES damage with hand size (a
                                           # `hand_size_attacker`, e.g. Alakazam) — `play-harlequin-vs-hand-size` gate. Card-fact, not meta guess
+    opp_hand_size: int = 0                # opponent's current hand size (`handCount`) — the resource
+                                          # STACK a hand-disruption Supporter strips on the engine's
+                                          # swing turn (ADR-0051 Phase 3b `strip-the-stacked-engine-hand`). Sound off handCount.
+    my_hand_size: int = 0                 # my current hand size — the don't-gift-a-refresh comparator
+                                          # (only strip when theirs exceeds mine, so we net-strip rather than hand them a fresh hand)
+    opp_draw_engine_in_play: bool = False  # opponent has a `draw`-tagged ENGINE (Dudunsparce/Budew
+                                          # class) in play — the "engine swing turn" gate; a non-engine
+                                          # deck has no swing turn to hold for (hand-size decks are `play-harlequin-vs-hand-size`). ADR-0051 Phase 3b
     deck_empty_ids: frozenset = field(default_factory=frozenset)  # MY card ids the deck is PROVABLY
                                           # empty of. Stateless: every copy seen OUTSIDE the deck reaches the
                                           # 60-count. With `obs['own_prizes']` it's EXACT. Sound, never probabilistic. Queried by `deck_definitely_empty_of`.
@@ -2847,6 +2855,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
             opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
             opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
+            opp_hand_size=int((opp or {}).get("handCount") or 0),
+            my_hand_size=len(me.get("hand") or []),
+            opp_draw_engine_in_play=bool(self._draw_engine_ids(opp)),
             deck_empty_ids=deck_empty,
             deck_known_counts=deck_known,
             deck_contains_odds=deck_odds_map,

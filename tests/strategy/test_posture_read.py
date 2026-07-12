@@ -499,6 +499,7 @@ def test_resolving_the_brief_changes_no_decision_or_score():
 # ---- ADR-0038 Brief levers: Brief intel sharpens the owning Tactical signal (γ-scaled) ----
 
 BRUISER = 720   # a plain 120-damage attacker body (the energized competitor in rank tests)
+EX_INERT = 721  # a 2-prize ex body with no Energy — the "bigger inert prize" the wincon-denial bump beats
 
 
 def _lever_stats():
@@ -516,6 +517,7 @@ def _lever_stats():
         GARDEVOIR: CardStat(GARDEVOIR, name="Gardevoir ex", hp=310, maxDamage=190,
                             evolvesFrom="Kirlia"),
         BRUISER: CardStat(BRUISER, name="Bruiser", hp=120, maxDamage=120),
+        EX_INERT: CardStat(EX_INERT, name="Inert ex", hp=80, ex=True, maxDamage=120),
     })
 
 
@@ -562,10 +564,12 @@ def _gust_obs(*bench):
 
 
 @pytest.mark.req("REQ-POSTURE-0007")
-def test_gust_target_prefers_the_briefed_preevo_sub_prize():
-    # ADR-0051: among equal-prize KO-able evolving preevos, the gust tie-break drags up the higher-
-    # priority MatchupPlan target (Riolu, fragile_preevo); sub-prize, so it never overrides a real
-    # prize difference. Sourced from the one spine, not the retired _gust_brief_denial lever.
+def test_gust_target_prefers_the_briefed_wincon_preevo():
+    # ADR-0051: among equal-prize KO-able evolving pre-evos, the gust drags up the briefed WINCON-line
+    # pre-evo (Riolu, fragile_preevo) over a non-wincon one (Kirlia). Phase 3b gives a wincon-line role
+    # the denial bump, so this preference is deliberate and above the bare sub-prize tie-break that a
+    # non-wincon role gets (that pure-sub-prize path is covered by the disruption-target test). Sourced
+    # from the one spine, not the retired _gust_brief_denial lever; γ=0 → inert plan, perfectly neutral.
     obs, select = _gust_obs(poke(RIOLU, hp=80), poke(KIRLIA, hp=80))
     board = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
                   opp_bench=((RIOLU, 80), (KIRLIA, 80)),
@@ -573,8 +577,7 @@ def test_gust_target_prefers_the_briefed_preevo_sub_prize():
     p = _lever_pilot()
     riolu = p._gust_target_tactical(obs, select, board, select["option"][0])
     kirlia = p._gust_target_tactical(obs, select, board, select["option"][1])
-    assert riolu > kirlia
-    assert riolu - kirlia < 1                              # sub-prize tie-break
+    assert riolu > kirlia                                  # briefed wincon-line pre-evo preferred
     cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,   # γ=0 → inert plan
                  opp_bench=((RIOLU, 80), (KIRLIA, 80)),
                  matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=0.0))
@@ -599,6 +602,87 @@ def test_gust_target_prefers_a_disruption_target_sub_prize():
                 matchup_plan=build_matchup_plan(brief_roles={SOLROCK: "engine"}, gamma=1.0))
     assert (p._gust_target_tactical(obs, select, eng, select["option"][0])
             == p._gust_target_tactical(obs, select, eng, select["option"][1]))
+
+
+@pytest.mark.req("REQ-POSTURE-0011")
+def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
+    # ADR-0051 Phase 3b: a fragile-wincon matchup is won by denying the LINE, not prize count. The
+    # denial bump lifts a 1-prize wincon pre-evo (fragile_preevo) ABOVE a 2-prize inert ex in the gust
+    # target pick — drag up the crib wincon over the fatter inert prize. γ-scaled and role-scoped; a
+    # moderate ~1.5-prize nudge (not the ×5 snipe override), so it stays below the live-threat term.
+    obs, select = _gust_obs(poke(RIOLU, hp=80), poke(EX_INERT, hp=80))
+    p = _lever_pilot()
+    hot = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
+                opp_bench=((RIOLU, 80), (EX_INERT, 80)),
+                matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=1.0))
+    preevo = p._gust_target_tactical(obs, select, hot, select["option"][0])
+    inert_ex = p._gust_target_tactical(obs, select, hot, select["option"][1])
+    assert preevo > inert_ex                                   # denial bump overrides the +1 prize gap
+    cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,   # γ=0 → bump vanishes
+                 opp_bench=((RIOLU, 80), (EX_INERT, 80)),
+                 matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=0.0))
+    assert (p._gust_target_tactical(obs, select, cold, select["option"][1])         # prize-first restored:
+            > p._gust_target_tactical(obs, select, cold, select["option"][0]))       # the 2-prize ex wins
+
+
+# ---- ADR-0051 Phase 3b: hold hand-disruption for the draw-engine's swing turn ----
+
+JUDGE_CARD = 1250   # a hand_disruption + shuffle_hand Supporter (Judge / Iono class)
+OPP_WALL = 810      # opponent's benign Active in the disruption scenarios
+
+
+def _fired(trace):
+    return {h.id for h, _ in trace.fired}
+
+
+def _mp_disruption_pilot():
+    prov = DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
+                       minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
+        SOLROCK: CardStat(SOLROCK, name="Dudunsparce", hp=120, maxDamage=30),   # stands in as draw engine
+        OPP_WALL: CardStat(OPP_WALL, name="Wall", hp=200),
+        JUDGE_CARD: CardStat(JUDGE_CARD, name="Judge", cardType=3),
+    })
+    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
+                     roles={MEGA: ["win_condition"]}, params={})
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
+                 functions=CardFunctions({SOLROCK: ["draw"],
+                                          JUDGE_CARD: ["draw", "hand_disruption", "shuffle_hand"]}),
+                 attacks={11: 120}, attack_costs={11: 1})
+
+
+def _disruption_obs(opp_hand, my_extra=0, draw_engine=True):
+    opp_bench = [{"id": SOLROCK, "energies": []}] if draw_engine else []
+    me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
+          "hand": [{"id": JUDGE_CARD}] + [{"id": 1}] * my_extra, "discard": [], "prize": []}
+    opp = {"active": [{"id": OPP_WALL, "energies": []}], "bench": opp_bench,
+           "handCount": opp_hand, "discard": [], "prize": []}
+    return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
+            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                       "option": [{"type": PLAY, "index": 0}], "deck": None}, "logs": []}
+
+
+@pytest.mark.req("REQ-POSTURE-0010")
+def test_strip_the_stacked_engine_hand_fires_on_a_stacked_draw_engine():
+    # A `draw` engine (Dudunsparce) is in play AND the opponent's hand has stacked to 7 (> my 1):
+    # play the hand_disruption Supporter to strip the engine's swing-turn resources.
+    p = _mp_disruption_pilot()
+    assert "strip-the-stacked-engine-hand" in _fired(p.explain(_disruption_obs(opp_hand=7)).options[0])
+
+
+@pytest.mark.req("REQ-POSTURE-0010")
+def test_strip_the_stacked_engine_hand_holds_below_the_threshold_or_when_it_would_gift():
+    # The HOLD side: silent when the hand is small (nothing stacked to strip), when our own hand is
+    # as large (a symmetric refresh gifts them a fresh hand for no net), and when NO draw engine is
+    # in play (a non-engine deck has no swing turn to hold for — that's play-harlequin's job).
+    p = _mp_disruption_pilot()
+
+    def fired(**kw):
+        return _fired(p.explain(_disruption_obs(**kw)).options[0])
+
+    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=4)                    # not stacked
+    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, my_extra=7)        # would gift a refresh
+    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, draw_engine=False)  # no engine in play
 
 
 # ---- ADR-0041: the posture record on the Decision -> Decision Telemetry (stderr) ----

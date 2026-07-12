@@ -1,6 +1,6 @@
 # ADR-0051 — Matchup Target Priority is one spine the targeting decisions read
 
-Status: Accepted (Phase 1 built 2026-07-12)
+Status: Accepted (Phases 1–3b built 2026-07-12/13)
 Related: ADR-0026 (the Read / γ), ADR-0027 (Matchup Briefs), ADR-0038 (γ-gated Brief levers — superseded here), ADR-0044 (opponent-choice snipe reads), ADR-0047 (Opponent Model facade)
 
 ## Context
@@ -84,8 +84,23 @@ feedback, not gauntlet A/B.
   storage + all four main.py wirings, and the dead `brief_roles`/`engine_dependent` params threaded
   through `_target_threat_rank`/`_strongest_threat_rank`/planner. `_body_threat_rank` is now the pure
   generic (card-fact + Read-modulated) threat order; brief consumption is 100% via the spine.
-- Phase 3b (next): proactive disruption (hold hand-disruption for the engine's swing turn; gust-to-KO
-  priority).
+- **Phase 3b (built): proactive disruption**, two slices.
+  - *Hold hand-disruption for the engine's swing turn* — `strip-the-stacked-engine-hand`
+    (`baseline_disruption.py`, +22): play a `hand_disruption` Supporter when a `draw`-tagged engine is
+    in play (`opp_draw_engine_in_play`), the opponent's hand has stacked to `_STACKED_HAND` (6)+ cards
+    (`opp_hand_size`, sound off `handCount`), AND it exceeds mine (`my_hand_size` — the don't-gift-a-
+    refresh guard). Below the threshold the rule is silent — that *is* the hold. Scoped to draw-engine
+    decks (a hand-size attacker stays the separate `play-harlequin-vs-hand-size` trigger). Only 3 of 18
+    `hand_disruption` cards (Judge / Iono / Harlequin) also carry `shuffle_hand`, so for those the
+    `hold-wincon-dont-shuffle` guard binds; the other 15 are *one-sided* (strip the opponent only, don't
+    touch my hand), where the don't-gift guard is merely conservative — relaxing it for one-sided
+    disruption (pure upside) is a follow-up.
+  - *Gust-to-KO toward the wincon* — `_gust_wincon_denial` (`doctrine_gust.py`, `_WINCON_DENIAL_PRIZES`
+    1.5 × γ): a `fragile_preevo` / `prize_liability` gust target is worth ~1.5 extra effective prizes,
+    so the gust drags the 1-prize crib wincon up over a bigger INERT body (a fragile-wincon matchup is
+    won by denying the line, not prize count — the user's call). A moderate small-integer-band bump, NOT
+    the ×5 snipe override: it sits above a plain prize gap but below the live-threat denial term
+    (`_gust_target_denial`, a full prize) and any lethal KO. γ=0 ⇒ silent (prize-first restored).
 - Phase 4: build/fetch priors biased by the anticipated opponent.
 
 Open follow-ups: the general tier flags only *direct* `draw`-tag bodies; a draw-engine *pre-evo*
