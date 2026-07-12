@@ -529,6 +529,13 @@ def _attack_damage_apply(gs: GameState, seat: int, attack_id: int,
         gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": 1 - seat,
                  "cardId": gs.card_id(defender.top), "serial": defender.top,
                  "value": -dmg, "putDamageCounter": False})
+        # Reactive defender-tool triggers ("If the Pokémon this card is attached to is
+        # in the Active Spot and is damaged by an attack ... even if this Pokémon is
+        # Knocked Out"): fire in the attacker's attack window, AFTER the damage
+        # HP_CHANGE and BEFORE the KO sweep (pinned episode-84073333 f33: 70 to a
+        # Lucky-Helmet Snorunt → DRAW_REVERSE ×2 for its owner → then the KO/discard).
+        if dmg > 0:
+            _react_damaged_active(gs, 1 - seat, attacker)
         # Spiky-Energy counter-punch (def key spikyCounter) is DEFERRED: native
         # applies it during the turn-TRANSITION, not the attack — it surfaces in the
         # defender's next-turn window (spiky_9002 f10), not the attacker's attack
@@ -552,6 +559,35 @@ def _attack_damage_apply(gs: GameState, seat: int, attack_id: int,
         run_frames(gs)
         return
     _after_attack(gs, seat)
+
+
+def _react_damaged_active(gs: GameState, def_seat: int, attacker: "PokemonInPlay") -> None:
+    """Resolve reactive tools on the just-damaged Active holder (def key
+    tool.onDamagedActive), in attach order, before the KO sweep. Lucky Helmet draws
+    the holder's owner 2 cards; Deluxe Bomb puts counters on the attacker then discards
+    itself (both pinned to fire even when the holder is Knocked Out by the same hit)."""
+    from .chain import def_for
+    holder = gs.players[def_seat].active
+    if holder is None:
+        return
+    for s in list(holder.tools):
+        react = (def_for(gs.card_id(s)) or {}).get("tool", {}).get("onDamagedActive")
+        if not react:
+            continue
+        if "draw" in react:                     # Lucky Helmet: owner draws N
+            for _ in range(react["draw"]):
+                gs.draw(def_seat)
+        if "counterAttacker" in react:          # Deluxe Bomb: counters on the attacker
+            n = react["counterAttacker"] * 10
+            attacker.hp = max(0, attacker.hp - n)
+            gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": 1 - def_seat,
+                     "cardId": gs.card_id(attacker.top), "serial": attacker.top,
+                     "value": -n, "putDamageCounter": True})
+            if react.get("discardSelf"):        # "discard this card" once counters placed
+                holder.tools.remove(s)
+                gs.players[def_seat].discard.append(s)
+                gs.move_card(s, AreaType.TOOL, AreaType.DISCARD, seat=def_seat,
+                             visible_to_owner=True, visible_to_opponent=True)
 
 
 def _after_attack(gs: GameState, seat: int) -> None:
@@ -712,11 +748,17 @@ def _turn_apply(gs: GameState, indices: list[int]) -> None:
             target = _target_of(gs, seat, o["inPlayArea"], o["inPlayIndex"])
             b.hand.remove(serial)
             if gs.stat(serial).cardType == 2:             # a TOOL: no per-turn limit
+                from .chain import _card_matches
                 target.tools.append(serial)
-                bonus = (def_for(gs.card_id(serial)) or {}).get("tool", {}) \
-                    .get("hpBonus", 0)
-                target.max_hp += bonus                    # Hero's Cape: +100 HP
-                target.hp += bonus
+                tdef = (def_for(gs.card_id(serial)) or {}).get("tool", {})
+                bonus = tdef.get("hpBonus", 0)
+                # A family-gated HP tool (Cynthia's Power Weight +70 to a Cynthia's
+                # Pokémon) only grants HP when the holder matches its filter.
+                hb_flt = tdef.get("hpBonusHolder")
+                if bonus and (hb_flt is None
+                              or _card_matches(gs, target.top, hb_flt)):
+                    target.max_hp += bonus                # Hero's Cape: +100 HP
+                    target.hp += bonus
             else:
                 target.energy.append(serial)
                 gs.note_attach(serial)
@@ -872,14 +914,17 @@ def _apply_evolution(gs: GameState, seat: int, serial: int, target: PokemonInPla
     """Stack `serial` onto `target` (source zone already vacated by the caller): HP delta
     carries over, entered_turn resets, Active conditions clear; emits the EVOLVE log (the
     only log — deck-sourced evolution emits no MOVE_CARD, pinned ms_mirror_1001 f16)."""
-    from .chain import def_for
+    from .chain import _card_matches, def_for
     b = gs.players[seat]
     old_top, old_max = target.top, target.max_hp
     target.stack.append(serial)
     new_max = gs.stat(serial).hp                   # attached-tool HP bonuses carry over
     for s in target.tools:                         # (Hero's Cape survives evolution —
-        new_max += (def_for(gs.card_id(s)) or {}).get("tool", {}).get("hpBonus", 0)
-    target.max_hp = new_max                        # pinned ms_mirror_1000 f21: 310+100)
+        tdef = (def_for(gs.card_id(s)) or {}).get("tool", {})
+        hb_flt = tdef.get("hpBonusHolder")
+        if hb_flt is None or _card_matches(gs, serial, hb_flt):
+            new_max += tdef.get("hpBonus", 0)       # pinned ms_mirror_1000 f21: 310+100
+    target.max_hp = new_max
     target.hp += new_max - old_max
     target.entered_turn = gs.turn
     if target is b.active:                  # evolving clears special conditions

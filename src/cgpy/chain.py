@@ -139,6 +139,14 @@ def _card_matches(gs: GameState, serial: int, flt: dict) -> bool:
         return False
     if "nameContains" in flt and flt["nameContains"] not in stat.name:
         return False
+    if "nameFamily" in flt:
+        # Trainer-owner family ("Hop's Pokémon", "Cynthia's Pokémon"): the possessive
+        # apostrophe is INCONSISTENT in the card table (Hop's Choice Band = U+2019 but
+        # "Hop's Phantump" = ASCII 0x27), so match on an apostrophe-normalized substring
+        # (memory: DERIVE family strings from the card table, normalize the quote).
+        fam = flt["nameFamily"].replace("’", "'")
+        if fam not in stat.name.replace("’", "'"):
+            return False
     if flt.get("evolution") and not stat.evolvesFrom:
         return False
     if flt.get("noRuleBox") and (stat.ex or stat.megaEx):

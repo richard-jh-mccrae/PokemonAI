@@ -150,6 +150,22 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
                 continue
             dmg += mod["bonus"]
 
+    # Attached-tool attacker bonus, pre-W/R, opponent's Active only (Hop's Choice Band
+    # +30 for a Hop's Pokémon; Maximum Belt +50 vs an ex; Brave Bangle +30 for a
+    # Rule-Box-less holder — all "before applying Weakness and Resistance").
+    if defender_is_active:
+        from .chain import _card_matches, def_for as _tdef_for
+        for s in attacker.tools:
+            ab = (_tdef_for(gs.card_id(s)) or {}).get("tool", {}).get("attackBonus")
+            if not ab:
+                continue
+            if ab.get("defenderEx") and not (dstat.ex or dstat.megaEx):
+                continue
+            hf = ab.get("holder")
+            if hf is not None and not _card_matches(gs, attacker.top, hf):
+                continue
+            dmg += ab["n"]
+
     # Stadium blanket, pre-W/R side (Postwick: "Attacks used by Hop's Pokémon do 30
     # more damage to the opponent's Active Pokémon (before applying Weakness and
     # Resistance)") — both players' attackers, opposing Active only.

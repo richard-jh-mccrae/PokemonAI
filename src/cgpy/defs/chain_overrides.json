@@ -1355,5 +1355,81 @@
   "_provenance": "provides {C}. If discarded by an effect of THIS mon’s attack, re-attach after attacking: DEFERRED recovery interior; attach + provide live, ladder names it if exercised.",
   "energy": true,
   "recoverOnAttackDiscard": true
+ },
+ "1158": {
+  "name": "Maximum Belt",
+  "tool": {
+   "attackBonus": {
+    "n": 50,
+    "defenderEx": true
+   }
+  }
+ },
+ "1171": {
+  "name": "Hop’s Choice Band",
+  "tool": {
+   "attackBonus": {
+    "n": 30,
+    "holder": {
+     "nameFamily": "Hop's"
+    }
+   },
+   "attackCostReduceColorless": 1,
+   "attackCostHolder": {
+    "nameFamily": "Hop's"
+   }
+  }
+ },
+ "1173": {
+  "name": "Cynthia's Power Weight",
+  "tool": {
+   "hpBonus": 70,
+   "hpBonusHolder": {
+    "nameFamily": "Cynthia's"
+   }
+  }
+ },
+ "1175": {
+  "name": "Brave Bangle",
+  "tool": {
+   "attackBonus": {
+    "n": 30,
+    "holder": {
+     "noRuleBox": true
+    }
+   }
+  }
+ },
+ "1156": {
+  "name": "Lucky Helmet",
+  "tool": {
+   "onDamagedActive": {
+    "draw": 2
+   }
+  }
+ },
+ "1167": {
+  "name": "Deluxe Bomb",
+  "tool": {
+   "onDamagedActive": {
+    "counterAttacker": 12,
+    "discardSelf": true
+   }
+  }
+ },
+ "1166": {
+  "name": "Gravity Gemstone",
+  "tool": {
+   "retreatBonusBothActive": 1
+  }
+ },
+ "1165": {
+  "name": "Sparkling Crystal",
+  "tool": {
+   "attackCostReduce": 1,
+   "attackCostHolder": {
+    "tera": true
+   }
+  }
  }
 }

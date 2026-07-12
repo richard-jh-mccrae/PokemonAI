@@ -26,6 +26,9 @@ FIXTURES = REPO / "tests" / "fixtures"
 EPISODES = [
     ("match-replay.json", 60),              # arena episode (Iono deck; card 269)
     ("episode-81364540-replay.json.gz", 43),  # kaggle episode (look-reveal binding)
+    ("episode-84073333-replay.json.gz", 111),  # Lucky Helmet reactive draw-2-when-damaged
+    ("episode-82749168-replay.json.gz", 96),   # Sparkling Crystal Tera cost -1
+    ("episode-82229122-replay.json.gz", 110),  # Deluxe Bomb reactive counters; Crustle snipe
 ]
 
 

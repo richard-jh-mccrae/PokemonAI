@@ -98,7 +98,43 @@ def effective_retreat_cost(gs: GameState, p: PokemonInPlay) -> int:
     cost = gs.stat(p.top).retreatCost
     for s in p.tools:
         cost += (def_for(gs.card_id(s)) or {}).get("tool", {}).get("retreatBonus", 0)
+    # Gravity Gemstone: "the Retreat Cost of BOTH Active Pokémon is {C} more" while its
+    # holder is Active — a field effect keyed on either active holding one (this fn is
+    # only ever called for an Active, so it applies to whichever side is retreating).
+    for seat in (0, 1):
+        act = gs.players[seat].active
+        if act is not None:
+            for s in act.tools:
+                cost += (def_for(gs.card_id(s)) or {}).get("tool", {}) \
+                    .get("retreatBonusBothActive", 0)
     return max(0, cost)
+
+
+def attack_cost_after_tools(gs: GameState, p: PokemonInPlay, cost: tuple) -> tuple:
+    """`cost` reduced by attached-tool discounts: Hop's Choice Band ({C} less for a
+    Hop's Pokémon) removes a Colorless requirement; Sparkling Crystal (1 Energy less
+    for a Tera holder, "any type") removes one unit, preferring Colorless."""
+    from .chain import _card_matches, def_for
+    from .schema import EnergyType
+    reduced = list(cost)
+    for s in p.tools:
+        tdef = (def_for(gs.card_id(s)) or {}).get("tool", {})
+        red_c = tdef.get("attackCostReduceColorless", 0)
+        red_any = tdef.get("attackCostReduce", 0)
+        if not (red_c or red_any):
+            continue
+        hf = tdef.get("attackCostHolder")
+        if hf is not None and not _card_matches(gs, p.top, hf):
+            continue
+        for _ in range(red_c):
+            if int(EnergyType.COLORLESS) in reduced:
+                reduced.remove(int(EnergyType.COLORLESS))
+        for _ in range(red_any):        # any-type: drop a Colorless if present, else any
+            if int(EnergyType.COLORLESS) in reduced:
+                reduced.remove(int(EnergyType.COLORLESS))
+            elif reduced:
+                reduced.pop()
+    return tuple(reduced)
 
 
 def energy_payable(gs: GameState, p: PokemonInPlay, cost: tuple) -> bool:
@@ -255,7 +291,8 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
             if adef.get("legal") and not check_legal(gs, seat, adef["legal"],
                                                      pokemon=b.active):
                 continue  # engine menu-gates conditional attacks (pinned mill_9200 f33:
-            if energy_payable(gs, b.active, atk.energies):   # Terminal Period unoffered)
+            cost = attack_cost_after_tools(gs, b.active, atk.energies)
+            if energy_payable(gs, b.active, cost):   # Terminal Period unoffered)
                 opts.append({"type": int(OptionType.ATTACK), "attackId": attack_id})
 
     # RETREAT: once per turn, needs a bench, blocked by sleep/paralysis and a
