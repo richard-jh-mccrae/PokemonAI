@@ -6,24 +6,24 @@
  },
  "summary": {
   "cards": {
-   "verified": 193,
+   "verified": 195,
    "total": 1267
   },
   "chains": {
-   "verified": 444,
-   "unprobed": 3,
-   "deferred": 623,
+   "verified": 446,
+   "unprobed": 16,
+   "deferred": 608,
    "derived": 1170,
    "seeded": 583
   },
   "cleanFrames": {
-   "clean": 37538,
-   "total": 37538,
+   "clean": 37909,
+   "total": 37909,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
-   "covered": 97,
-   "total": 97,
+   "covered": 99,
+   "total": 99,
    "nativeChainVocabulary": 71,
    "coveredOps": [
     "coin",
@@ -110,9 +110,11 @@
     "xOppHandReveal",
     "xOppHandRevealChoose",
     "xOppHandShuffleInRandom",
+    "xOppHandTrimTo",
     "xOpponentSwitches",
     "xOrderTriggers",
     "xOwnShuffleHandDraw",
+    "xPickDiscard",
     "xProtectNextTurn",
     "xRareCandyEvolve",
     "xReduceDefenderNextTurn",
@@ -125,7 +127,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 373
+  "traces": 376
  },
  "cards": {
   "1": {
@@ -511,6 +513,7 @@
     "rvlitems401_9101",
     "rvlitems800_9100",
     "rvlitems800_9101",
+    "sash_9000",
     "sg105_9000",
     "sg105_9001",
     "sg1078_9000",
@@ -577,7 +580,9 @@
     "waitress_9002",
     "watchtower_9000",
     "watchtower_9001",
-    "watchtower_9002"
+    "watchtower_9002",
+    "xero_9000",
+    "xero_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -759,6 +764,7 @@
     "rockf_9000",
     "rockf_9001",
     "rockf_9002",
+    "sash_9000",
     "trc_9000",
     "trc_9001",
     "trc_9002",
@@ -770,7 +776,9 @@
     "v2_ml_mirror_5100",
     "v2_ml_mirror_5101",
     "v2_ms_ml_5300",
-    "v2_ms_ml_5301"
+    "v2_ms_ml_5301",
+    "xero_9000",
+    "xero_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -1493,9 +1501,9 @@
   "57": {
    "name": "Relicanth",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "57": "deferred",
+    "57": "unprobed",
     "attack:61": "derived"
    },
    "evidence": [],
@@ -2181,9 +2189,9 @@
   "104": {
    "name": "Froslass",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "104": "deferred",
+    "104": "unprobed",
     "attack:131": "derived"
    },
    "evidence": [],
@@ -3203,9 +3211,9 @@
   "184": {
    "name": "Latias ex",
    "cardType": "pokemon",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "184": "deferred",
+    "184": "unprobed",
     "attack:243": "seeded"
    },
    "evidence": [],
@@ -10599,6 +10607,7 @@
     "rvlitems401_9100",
     "rvlitems800_9100",
     "rvlitems800_9101",
+    "sash_9000",
     "sg105_9000",
     "sg105_9001",
     "sg1078_9000",
@@ -10652,7 +10661,9 @@
     "waitress_9001",
     "watchtower_9000",
     "watchtower_9001",
-    "watchtower_9002"
+    "watchtower_9002",
+    "xero_9000",
+    "xero_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -13638,12 +13649,15 @@
     "lev_9002",
     "lev_9003",
     "postwick_9001",
+    "sash_9000",
     "trc_9000",
     "trc_9001",
     "trc_9002",
     "trh_9000",
     "trh_9001",
-    "trh_9002"
+    "trh_9002",
+    "xero_9000",
+    "xero_9002"
    ],
    "updated": "2026-07-12"
   },
@@ -14341,7 +14355,8 @@
     "waitress_9001",
     "waitress_9002",
     "watchtower_9001",
-    "watchtower_9002"
+    "watchtower_9002",
+    "xero_9000"
    ],
    "updated": "2026-07-12"
   },
@@ -15246,11 +15261,13 @@
   "1129": {
    "name": "Sacred Ash",
    "cardType": "item",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1129": "deferred"
+    "1129": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "sash_9000"
+   ],
    "updated": "2026-07-12"
   },
   "1130": {
@@ -15553,9 +15570,9 @@
   "1156": {
    "name": "Lucky Helmet",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1156": "deferred"
+    "1156": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15573,9 +15590,9 @@
   "1158": {
    "name": "Maximum Belt",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1158": "deferred"
+    "1158": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15649,9 +15666,9 @@
   "1165": {
    "name": "Sparkling Crystal",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1165": "deferred"
+    "1165": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15659,9 +15676,9 @@
   "1166": {
    "name": "Gravity Gemstone",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1166": "deferred"
+    "1166": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15669,9 +15686,9 @@
   "1167": {
    "name": "Deluxe Bomb",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1167": "deferred"
+    "1167": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15709,9 +15726,9 @@
   "1171": {
    "name": "Hop’s Choice Band",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1171": "deferred"
+    "1171": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15729,9 +15746,9 @@
   "1173": {
    "name": "Cynthia's Power Weight",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1173": "deferred"
+    "1173": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15762,9 +15779,9 @@
   "1175": {
    "name": "Brave Bangle",
    "cardType": "tool",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1175": "deferred"
+    "1175": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15867,9 +15884,9 @@
   "1184": {
    "name": "Lana’s Aid",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1184": "deferred"
+    "1184": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -15983,9 +16000,9 @@
   "1194": {
    "name": "Colress’s Tenacity",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1194": "deferred"
+    "1194": "unprobed"
    },
    "evidence": [],
    "updated": "2026-07-12"
@@ -16013,11 +16030,14 @@
   "1197": {
    "name": "Xerosic’s Machinations",
    "cardType": "supporter",
-   "status": "deferred",
+   "status": "verified",
    "chains": {
-    "1197": "deferred"
+    "1197": "verified"
    },
-   "evidence": [],
+   "evidence": [
+    "xero_9000",
+    "xero_9002"
+   ],
    "updated": "2026-07-12"
   },
   "1198": {

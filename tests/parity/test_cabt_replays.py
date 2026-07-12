@@ -36,6 +36,8 @@ EPISODES = [
     ("episode-82234130-replay.json.gz", 114),  # Latias ex Skyliner: Basic Pokémon retreat free
     ("episode-83692318-replay.json.gz", 144),  # clean Froslass-deck game (Munkidori/Risky-Ruins
                                                # counter placements; general counter coverage)
+    ("episode-83286739-replay.json.gz", 83),   # Xerosic's Machinations: opponent discards to 3
+    ("episode-83665001-replay.json.gz", 51),   # Sacred Ash: shuffle Pokémon from discard to deck
 ]
 
 

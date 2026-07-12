@@ -2271,6 +2271,68 @@ def op_both_hand_trim_to(gs, fr, args) -> bool:
         return False
 
 
+def op_pick_discard(gs, fr, args) -> bool:
+    """Discard-pile pick to hand or deck: ONE multi-pick select over the filtered
+    discard, min 1 max min(n, available), then move public (both ways) to the dest;
+    a `deck` dest shuffles after (Sacred Ash: "Shuffle up to 5 Pokémon from your
+    discard into your deck" — ctx TO_DECK, pinned ep-83687506 f110 min1 max3; Lana's
+    Aid: "Put up to 3 … Pokémon without a Rule Box and Basic Energy from your discard
+    into your hand" — ctx TO_HAND, pinned ep-83693752 f109 min1 max3). Empty filter
+    result → no pose (deck-search convention)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    to_deck = args.get("dest") == "deck"
+    if "answer" in fr.vars:
+        picked = [b.discard[o["index"]] for o in fr.vars.pop("answered_options")]
+        fr.vars.pop("answer")
+        dest = b.deck if to_deck else b.hand
+        toarea = AreaType.DECK if to_deck else AreaType.HAND
+        for s in picked:
+            b.discard.remove(s)
+            dest.append(s)
+            gs.move_card(s, AreaType.DISCARD, toarea, seat=seat,
+                         visible_to_owner=True, visible_to_opponent=True)
+        if to_deck and picked:
+            _shuffle(gs, seat)
+        return True
+    opts = _zone_options(gs, seat, b.discard, AreaType.DISCARD, args.get("filter", {}))
+    if not opts:
+        return True
+    ctx = SelectContext.TO_DECK if to_deck else SelectContext.TO_HAND
+    pose(gs, seat, type=SelectType.CARD, context=ctx, options=opts,
+         min_count=1, max_count=min(args["n"], len(opts)), effect_card=fr.source)
+    return False
+
+
+def op_opp_hand_trim_to(gs, fr, args) -> bool:
+    """Xerosic's Machinations: "Your opponent discards cards from their hand until they
+    have N cards in their hand." — the ONE-sided sibling of xBothHandTrimTo: the
+    opponent picks their own exits via ONE ctx DISCARD select, min = max = hand − N
+    over their whole hand; the chosen exits are opp-turn hand exits, so they drain the
+    replay hand-pick FIFO (hand_pick_expect)."""
+    seat = fr.seat
+    n = args.get("n", 3)
+    victim = 1 - seat
+    vb = gs.players[victim]
+    if "answer" in fr.vars:
+        picked = [vb.hand[o["index"]] for o in fr.vars.pop("answered_options")]
+        fr.vars.pop("answer")
+        for s in picked:
+            vb.hand.remove(s)
+            vb.discard.append(s)
+            gs.move_card(s, AreaType.HAND, AreaType.DISCARD, seat=victim,
+                         visible_to_owner=True, visible_to_opponent=True)
+        gs.rng.hand_pick_expect(victim, picked)
+        return True
+    k = len(vb.hand) - n
+    if k <= 0:
+        return True
+    pose(gs, victim, type=SelectType.CARD, context=SelectContext.DISCARD,
+         options=[opt_card(AreaType.HAND, i, victim) for i in range(len(vb.hand))],
+         min_count=k, max_count=k, effect_card=fr.source)
+    return False
+
+
 def op_gate_defender_attacks_coin(gs, fr, args) -> bool:
     """Sand Attack: "During your opponent's next turn, if the Defending Pokémon tries
     to use an attack, your opponent flips a coin. If tails, that attack doesn't
@@ -3203,6 +3265,8 @@ OPS = {
     "xChooseConditionInflict": op_choose_condition_inflict,
     "xRareCandyEvolve": op_rare_candy_evolve,
     "xBothHandTrimTo": op_both_hand_trim_to,
+    "xOppHandTrimTo": op_opp_hand_trim_to,
+    "xPickDiscard": op_pick_discard,
     "xDeckAttachPerBench": op_deck_attach_per_bench,
     "xDeckEvolvePerBench": op_deck_evolve_per_bench,
     "xDeckEvolveChooseAndShuffle": op_deck_evolve_choose_and_shuffle,
