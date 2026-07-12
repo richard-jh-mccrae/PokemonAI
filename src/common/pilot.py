@@ -205,6 +205,17 @@ class Board:
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among opponent's
                                                 # benched snipe targets at a DAMAGE select — most dangerous
                                                 # latent evolving threat (Riolu→Mega Lucario over Hariyama). None off a Damage select
+    evolving_wincon_on_bench: bool = False  # at a DAMAGE select, some benched opponent snipe target is a
+                                        # developing WIN-CONDITION pre-evolution: forward damage reaches a
+                                        # win-condition-class body (>= _EVOLVING_THREAT_DMG), its evolved form
+                                        # is NOT yet in play, AND that form is a genuine higher-prize payoff
+                                        # (>= 2 prizes). When present, the current-attacker snipe rungs
+                                        # (top-threat / threat / forced-promotion) stand down on every body
+                                        # that is NOT that pre-evo, so `snipe-the-evolving-threat` (+45) takes
+                                        # the developing wincon instead of a bulky/energized current body whose
+                                        # rungs SUM past it (ms 85164131 f22 — chip the Staryu that becomes
+                                        # Mega Starmie ex, not the energized 1-prize Cinderace). Mirrors the
+                                        # `snipe_ko_available` sum-burial stand-down. Kill-switch `evolving_wincon_priority`
     bench_threat_present: bool = False  # at a DAMAGE select, some benched snipe target already carries
                                         # Energy (an imminent attacker) — evolving-threat snipe
                                         # stands down: snipe-the-threat (energized) is the priority
@@ -256,6 +267,13 @@ class Board:
                                        # this game — a `gust`-tagged card in their discard; can drag my
                                        # benched finisher out, so interposing a cheap body taxes that gust
     active_is_wincon: bool = False     # my Active IS the win-condition / primary attacker
+    active_is_weak_preevo: bool = False  # my Active is a WIN-CONDITION line pre-evolution whose own printed
+                                       # output is a minor chip far below the body it evolves into — an Energy
+                                       # on it buys little tempo (Riolu's 30 vs Mega Lucario ex 130/270). Read
+                                       # by mega_lucario's `dont-lunar-cycle-away-the-last-attachable-f`
+                                       # stand-down: with the engine online, discard the last {F} to draw 3
+                                       # rather than sink it into the weak pre-evo (ml 85058574 f16). False for
+                                       # a real-attacker pre-evo (Makuhita→Hariyama 210) or a non-preevo active
     can_wall_line_with_disruptor: bool = False  # dragapult f32/f20: my Active is a fragile developing
                                        # win-condition LINE pre-evo, a benched `item_lock` disruptor
                                        # (Budew) can be promoted as a sacrificial wall, and the opp
@@ -470,6 +488,14 @@ class Context:
     attach_target_under_max: bool = False  # receiving Pokémon carries fewer Energy than its
                                            # HIGHEST-damage attack costs — can't yet fire its big attack
                                            # (1 W can Jetting Blow but not Nebula Beam CCC). Fail-CLOSED (False when unknown).
+    attach_completes_biggest_attack: bool = False  # this ATTACH onto the ACTIVE crosses it from short-of to
+                                           # able-to-afford its HIGHEST-damage attack THIS turn (was < maxDamageCost,
+                                           # attached + provided >= maxDamageCost). Gates the stand-down of
+                                           # `dont-overbuild-the-doomed-wincon`: a DOOMED Active that this very
+                                           # attach turns the big attack ON should still fire it — go down swinging
+                                           # (ms 85163079 f51: 2W+1 = Nebula 210), unlike one merely overbuilt for a
+                                           # turn that won't come (ep83037962 f48: 1W→2W still short of CCC=3).
+                                           # Fail-CLOSED (False when target / CardStat / maxDamageCost unknown).
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
                                            # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
@@ -619,8 +645,11 @@ class Context:
                                    # fetch target (see doctrine_fetch._FETCH_FILTERS) is PROVABLY gone from
                                    # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / unknown filter
     search_redundant_wincon: bool = False  # this option PLAYS a tutor that can fetch ONLY the
-                                   # win-condition AND wincon already in hand — so it'd only dig a redundant
-                                   # copy (Mega Signal with a Mega in hand). False off a search / a tutor that can fetch anything else
+                                   # win-condition AND that payoff has no productive landing — wincon already in
+                                   # hand, OR no deployable base for it (its immediate pre-evo neither in play nor
+                                   # in hand). So the tutor only digs a redundant copy (Mega Signal with a Mega in
+                                   # hand) or a dead card it can't deploy (Mega Signal turn-1, no Staryu — ms f6).
+                                   # False off a search / a tutor that can fetch anything else / when a base IS deployable
     search_targets_unlikely: bool = False  # this option PLAYS a search whose every still-REACHABLE
                                    # fetch target is PROBABLY (not provably) prized — P(deck contains it)
                                    # below whiff threshold (ADR-0029). PROBABILISTIC complement to search_targets_exhausted; mutually exclusive with it.
@@ -704,7 +733,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  snipe_prize_redundant=False, forced_promotion=False,
                  value_model=None, escalation=False,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
-                 lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False):
+                 lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
+                 evolving_wincon_priority=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -777,6 +807,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.forced_promotion = forced_promotion        # ADR-0044 kill-switch: the Forced-Promotion Read
                                                         # — when their Active is dead, pre-chip the ready
                                                         # wincon they'll promote, not the energized bench-sitter
+        self.evolving_wincon_priority = evolving_wincon_priority  # kill-switch (default ON): at a DAMAGE snipe
+                                                        # with a developing higher-prize wincon pre-evo on the
+                                                        # opp bench, the current-attacker rungs stand down so
+                                                        # their SUM can't bury `snipe-the-evolving-threat` (ms
+                                                        # 85164131 f22). Backs `Board.evolving_wincon_on_bench`
         self.match_planner_steer = match_planner_steer  # ADR-0045 kill-switch (S3): the Match Planner's
                                                         # Game Plan directed goal biases the Turn Planner's
                                                         # candidate ranking (sub-prize, confidence-scaled).
@@ -2197,6 +2232,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and "accel_source" in at_roles and self._attach_target_needs(at_target)
             and not board.accel_recipient_missing and not board.bench_wincon_ready)
+        attach_completes_biggest_attack = (
+            option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
+            and self._attach_completes_biggest_attack(at_target, tags))
         search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
         search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
@@ -2240,6 +2278,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_is_energy=self._attach_is_energy(stat),
                        attach_target_is_utility_body=attach_target_is_utility_body,
                        attach_target_under_max=self._attach_target_under_max(at_target),
+                       attach_completes_biggest_attack=attach_completes_biggest_attack,
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_type_wasted=self._attach_type_wasted(stat, at_target),
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
@@ -2512,6 +2551,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return len((target.get("energies") or [])) < cost
 
+    def _attach_completes_biggest_attack(self, target: dict | None, tags: list) -> bool:
+        """True if attaching this Energy onto the ACTIVE crosses it from short-of to able-to-afford its
+        HIGHEST-damage attack THIS turn — the attach COMPLETES the big attack. Guards the stand-down of
+        `dont-overbuild-the-doomed-wincon`: a doomed Active this very attach turns the payoff attack ON
+        should fire it (go down swinging, ms 85163079 f51: 2 W + 1 = Nebula CCC), unlike one merely
+        overbuilt for a turn that won't come (ep83037962 f48: 1 W → 2 W, still short of CCC=3, dies first).
+        `provided` mirrors the planner's `_attach_provided` (3 for a `discard_eot` burst onto an Evolution,
+        else 1). Fail-CLOSED (False when target / CardStat / maxDamageCost unknown), like `_attach_target_under_max`."""
+        if not target:
+            return False
+        stat = self.stats.get(target.get("id")) if self.stats else None
+        cost = getattr(stat, "maxDamageCost", None) if stat else None
+        if cost is None:
+            return False
+        have = len((target.get("energies") or []))
+        provided = 3 if ("discard_eot" in (tags or []) and getattr(stat, "evolvesFrom", None)) else 1
+        return have < cost and (have + provided) >= cost
+
     def _attach_from_target_needs(self, obs: dict, select: dict, option: dict) -> bool:
         """At an ATTACH_FROM target-select (the engine's recipient-pick step for a multi-attach
         effect — e.g. Turbo Flare's 'attach a Basic Energy to a Benched Pokémon'), True if the
@@ -2745,6 +2802,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             top_fetch_priority_id=self._top_fetch_priority_id(select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
+            evolving_wincon_on_bench=self._evolving_wincon_on_bench(obs, select),
             bench_threat_present=self._bench_threat_present(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
             snipe_ko_available=self._snipe_ko_available(
@@ -2776,6 +2834,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             no_supporter_in_hand=self._no_supporter_in_hand(me),
             opp_has_played_gust=self._opp_has_played_gust(opp),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
+            active_is_weak_preevo=self._active_is_weak_preevo(ma),
             can_wall_line_with_disruptor=self._can_wall_line_with_disruptor(me, ma, oa),
             priority_wincon_slot=self._priority_wincon_slot(
                 me, active_lethal, active_doomed),
@@ -2886,6 +2945,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0
         ids = {cid} | self._forward_card_ids(cid)
         return max((self._prize_value({"id": i}) for i in ids), default=0)
+
+    def _active_is_weak_preevo(self, ma: dict | None) -> bool:
+        """True iff my Active is a WIN-CONDITION line pre-evolution (`_line_preevo_set`) whose OWN printed
+        output is a minor chip far below the body it evolves into — attaching an Energy to it buys little
+        tempo (Riolu's 30 vs Mega Lucario ex 130/270). Read by mega_lucario's Lunar-Cycle stand-down: with
+        the engine online, discard the last {F} to draw 3 rather than sink it into a weak pre-evo whose 30
+        chip doesn't change the game's tempo (ml 85058574 f16). 'Weak' = own maxDamage is under half the
+        forward form's max, so a real-attacker pre-evo (Makuhita→Hariyama 210) still keeps the {F}. FAIL-CLOSED
+        on missing stats / non-preevo active."""
+        cid = (ma or {}).get("id")
+        if cid is None or cid not in self._line_preevo_set():
+            return False
+        stat = self.stats.get(cid) if self.stats else None
+        own = getattr(stat, "maxDamage", None) if stat else None
+        fwd_fn = getattr(self.stats, "forward_max_damage", None) if self.stats else None
+        fwd = fwd_fn(cid) if fwd_fn else None
+        if not own or not fwd:
+            return False
+        return own * 2 <= fwd
 
     def _line_preevo_in_play(self, me: dict) -> bool:
         """True if a non-payoff member of any Line's path (a pre-evolution) is on my Active/Bench —
@@ -3295,6 +3373,32 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 if fwd is not None and (best is None or fwd > best):
                     best = fwd
         return best
+
+    def _evolving_wincon_on_bench(self, obs: dict, select: dict | None) -> bool:
+        """True iff some benched opponent snipe target is a DEVELOPING WIN-CONDITION pre-evolution: its
+        forward-evolution damage reaches a win-condition-class body (>= _EVOLVING_THREAT_DMG), its evolved
+        form is NOT yet in play, AND that form is a genuine higher-prize payoff (>= 2 prizes). When present,
+        the current-attacker snipe rungs stand down on every body that is NOT that pre-evo, so the +45
+        `snipe-the-evolving-threat` takes the developing wincon instead of a bulky/energized current body
+        whose rungs SUM past it (ms 85164131 f22: chip the Staryu that becomes Mega Starmie ex = 3 prizes,
+        not the energized 1-prize Cinderace). Mirrors the `snipe_ko_available` sum-burial stand-down. Off
+        (False) when the `evolving_wincon_priority` kill-switch is disabled or off a DAMAGE select. FAIL-CLOSED."""
+        if not getattr(self, "evolving_wincon_priority", True):
+            return False
+        if not select or select.get("context") != _DAMAGE:
+            return False
+        for o in (select.get("option") or []):
+            if o.get("type") != _CARD or o.get("area") != _BENCH:
+                continue
+            fwd = self._target_forward_damage(obs, select, o)
+            if fwd is None or fwd < _EVOLVING_THREAT_DMG:
+                continue
+            if self._target_forward_form_in_play(obs, select, o):
+                continue
+            cid = (self._option_pokemon(obs, select, o) or {}).get("id")
+            if cid is not None and self._forward_payoff_prize_value(cid) >= 2:
+                return True
+        return False
 
     def _target_forward_form_in_play(self, obs: dict, select: dict, option: dict) -> bool:
         """True iff this bench DAMAGE snipe target is a PRE-EVOLUTION whose evolved form is ALREADY on

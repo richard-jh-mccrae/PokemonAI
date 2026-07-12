@@ -10,7 +10,17 @@ separately (C1 covered by recover-to-refill-bench; C2/C3 refuted, human ack, tes
 - candidate_signal: CardStat/provider `forward_max_damage` (EXISTS — Riolu→Mega Lucario ex = 270) + benched-Pokémon attached-energy (`target_is_threat`/imminence) + attacker-vs-support role; reconcile against `snipe-the-forced-promotion` (+40) and `snipe-the-top-threat` (+30) in baseline_snipe.py
 - verification_contract: verifier
 - provenance: corrections 82224509:f47, 82523811:f41, 82523811:f61, 82753102:f85, 81785223:f39, 81785223:f45, 81905522:f75, **85164131:f22 (CRITICAL, 2026-07-11 round)** | fixtures tests/fixtures/corrections/ms_snipe_evolving_wincon_preevo_f75.json, ms_snipe_riolu_over_lunatone_f47.json, ms_snipe_energized_bench_f39.json, ms_snipe_attacker_line_over_support_f85.json, **ms_snipe_evolving_wincon_over_promotion_stack_f22.json** | see [[snipe-threat-two-signals]] (the deferred "evolves-into-attacker" signal, frame 75)
-- status: open
+- status: applied
+- resolution (2026-07-12, update-strategy): APPLIED — sub-signal #4 (85164131:f22), the ONE remaining OPEN
+  build (per the 2026-07-11 note: #1 subsumed by this fix, #2/#3 covered by the 2026-07-10 snipe-KO/forced-promotion
+  work, f75 resolved as a harness artifact). New `Board.evolving_wincon_on_bench` (pilot.py `_evolving_wincon_on_bench`:
+  a benched opp pre-evo with forward damage ≥ EVOLVING_THREAT_DMG, forward form NOT in play, forward payoff ≥ 2 prizes)
+  behind an on-by-default `evolving_wincon_priority` kill-switch. Appended the stand-down gate
+  `and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)` to `snipe-the-top-threat`,
+  `snipe-the-threat`, `snipe-the-forced-promotion` (baseline_snipe.py) — mirrors the `snipe_ko_available` sum-burial
+  stand-down; the existing +45 `snipe-the-evolving-threat` is the beneficiary (unchanged). f22 → Cinderace 90→0,
+  Staryu 45 → picks [1], FIXED; no KO forgone. ADR-0044 test_45/test_107 green (forward form in play → signal False).
+  Full suite green.
 - reopened (2026-07-10): the `applied` marking was FALSE for the frame-75 sub-signal — the gating fixture
   `ms_snipe_evolving_wincon_preevo_f75` still fails on the real Pilot (decide()=[1], human correct=[3]).
   `snipe-the-evolving-threat` (+45) was restored and fires on BOTH evolving-threat candidates, but on the

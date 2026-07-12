@@ -181,6 +181,22 @@ def test_critical_a212_evolution_tutor_line_is_fixed_on_its_real_replay_state():
     assert decision.chosen == fx["correct"]        # agent now plays Salvatore as human marked
 
 
+@pytest.mark.req("REQ-PLANNER-0035")
+def test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler():
+    """f41 (planner-prefer-cheapest-evolution-enabler): on the ACTUAL captured state a benched Staryu is
+    evolvable this turn AND Mega Starmie ex is already in hand, so the FREE direct-evolve ([4]: evolve →
+    retreat → attach → KO) reaches the SAME 1-prize KO as the Salvatore evolution-tutor ([0]) but spends
+    no card and no scarce Supporter slot. Both enabler lines tie on prizes+survival, so the cheapest-
+    enabler cost tier must break the tie toward the free-evolve — the agent commits [4], not the tutor."""
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections"
+                     / "ms_prefer_cheap_evolution_enabler_f41.json").read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    decision = pilot.explain(fx["obs"])
+    assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # Planner acted
+    assert "free evolve" in decision.planned.rationale                                 # via the free-evolve line
+    assert decision.chosen == fx["correct"]        # agent now direct-evolves ([4]), not the tutor
+
+
 @pytest.mark.req("REQ-PLANNER-0036")
 def test_critical_6858_heal_before_attach_is_fixed_on_its_real_replay_state():
     """CRITICAL 6858 ('heal first, then attach Ignition, then attack for KO'): on the ACTUAL captured

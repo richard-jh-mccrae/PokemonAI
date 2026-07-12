@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _COIN_HEAD, _END, _EVOLVE,
-                                     _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, _TO_HAND, KO_SCORE)
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _BENCH, _COIN_HEAD, _END,
+                                     _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, _TO_HAND, KO_SCORE)
 
 
 def _prune_none(v):
@@ -49,6 +49,13 @@ _PLANNER_DEV_W = 1.0           # development left on my end-of-turn board (engin
 _PLANNER_DEV_CAP = 100.0       # + attached Energy, `_board_development`) … capped below a prize
 _PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on MY cheapest Prize
                                # Path — sub-prize, ranks lines within the rung, never beats a prize
+_PLANNER_ENABLER_FREE = 8.0    # cheapest-enabler tier (ADR-0031): a FREE direct-evolve (evolved form
+                               # already in hand, pre-evo legally evolvable this turn) is the cheapest
+                               # first step to the SAME KO — no card leaves the deck, no tutor spent.
+_PLANNER_ENABLER_ITEM = 4.0    # an Item tutor (Mega Signal) is cheaper than the scarce Supporter slot
+                               # but spends a card — below free-evolve, above the Supporter tutor (0).
+                               # Both stay sub-prize/sub-survival: they only break a same-KO tie among
+                               # enablers, never outrank a genuine prize or survival delta (decision 3).
 _PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Automatic Value Model's P(win) on the simmed
                                # end-of-turn board scales into a sub-prize band (< one KO_SCORE), so
                                # the learned leaf breaks prize-EQUAL ties, never overriding a prize
@@ -1075,17 +1082,26 @@ class PlannerMixin:
         threat = self._threat_magnitude(opp)
         lines = []
         for i, o in enumerate(options):
+            cost = 0.0                                    # cheapest-enabler tier (ADR-0031): an enabler
+                                                          # that PRESERVES deck/slot resources outranks a
+                                                          # tutor reaching the SAME KO; 0 = the scarce
+                                                          # Supporter tutor (last), sub-prize throughout
             if o.get("type") == _RETREAT:
                 cand = self._retreat_ko_candidate(obs, board, opp, opp_player, extra)
-                kind = "retreat"
+                kind, cost = "retreat", _PLANNER_ENABLER_FREE   # spends no card/slot — a free enabler
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
                 cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra)
-                kind = "evolve"
+                kind, cost = "free evolve", _PLANNER_ENABLER_FREE
+            elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _BENCH:
+                retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
+                cand = self._free_evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra,
+                                                      retreat_on_menu)
+                kind, cost = "free evolve", _PLANNER_ENABLER_FREE
             elif o.get("type") == _PLAY and self._is_evolution_tutor(obs, select, o):
                 retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
                 cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, extra,
                                                        retreat_on_menu)
-                kind = "evolution tutor"
+                kind = "evolution tutor"                  # a Supporter — least-preferred enabler (cost 0)
             elif o.get("type") == _PLAY:
                 cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player)
                 kind = "energy tutor"
@@ -1096,6 +1112,8 @@ class PlannerMixin:
             prizes, survives = cand
             value = self._leaf_value(prizes=prizes, active_survives=survives, threat_removed=threat)
             value += self._gameplan_goal_bonus("ko_for_prizes", board)       # ADR-0045 seam (S3)
+            value += cost                                 # sub-prize/sub-survival: breaks a same-KO tie
+                                                          # among enablers, never over a real prize delta
             lines.append(TurnLine(next_step=[i], goal="ko_for_prizes", value=value,
                                   rationale=f"plan (ko_for_prizes): {kind} unlocks a {int(prizes)}-prize KO"))
         return lines
@@ -1477,6 +1495,36 @@ class PlannerMixin:
         estat = self.stats.get(evolved_id) if self.stats else None
         my_hp = getattr(estat, "hp", 0) or 0          # evolved max HP — P3 engine-sim resolves damage exactly
         return (self._prize_value(opp), self._survives_after_ko(evolved_id, my_hp, opp_player))
+
+    def _free_evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int,
+                                  retreat_on_menu: bool):
+        """``(prizes, active_survives)`` if a FREE direct-evolve of a BENCHED body unlocks an
+        otherwise-missed KO of the opponent's Active — the CHEAPEST enabler of all: the evolved form
+        is already in hand and the engine only emits this type-9 EVOLVE option for a body legally
+        evolvable this turn (its presence IS the legality signal — no ``appearThisTurn`` read needed),
+        so no card leaves the deck and no tutor is spent. The benched body, evolved, carries its
+        Energy plus this turn's one attach and — reaching the Active via the retreat still on the menu
+        — affords a KO. Mirrors ``_tutor_evolve_ko_candidate``'s benched-body + retreat modelling, but
+        keyed on the in-hand evolved form the option names (not a deck fetch). None when no retreat is
+        available to promote the benched attacker, or the evolution doesn't reach a KO."""
+        if not retreat_on_menu:
+            return None                                   # a benched attacker needs the retreat to attack
+        evolved_id = self._option_card_id(obs, select, option)
+        if evolved_id is None:
+            return None
+        idx = option.get("inPlayIndex")
+        bench = self._my_player(obs).get("bench") or []
+        body = bench[idx] if (idx is not None and 0 <= idx < len(bench)) else None
+        if body is None:
+            return None
+        energy = len(body.get("energies") or [])
+        if self._best_affordable_ko_value(obs, board, opp, evolved_id, energy + extra,
+                                          body=body) <= 0:
+            return None
+        estat = self.stats.get(evolved_id) if self.stats else None
+        my_hp = getattr(estat, "hp", 0) or 0
+        return (self._prize_value(opp),
+                bool(my_hp) and self._survives_after_ko(evolved_id, my_hp, opp_player))
 
     # ---- leaf evaluation (ADR-0031 decision 4): scalar over the resulting end-of-turn board ---------
     def _leaf_value(self, *, prizes: float, active_survives: bool, threat_removed: float = 0.0,

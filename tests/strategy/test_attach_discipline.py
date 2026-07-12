@@ -106,3 +106,22 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
     assert t0.score == t1.score                                      # genuinely a SCORE tie...
     assert t1.attach_to_needy_line and not t0.attach_to_needy_line   # ...broken by the Line-base flag
     assert p.decide(obs) == [1]                                      # so Staryu (Line base) fed, not Cinderace
+
+
+@pytest.mark.req("REQ-GEN-0016")
+def test_attach_completes_biggest_attack_boundary():
+    """The go-down-swinging gate on `dont-overbuild-the-doomed-wincon` (ms 85163079 f51) turns on ONLY
+    when THIS attach crosses the Active up to its biggest-attack cost. Guards the un-fixtured counter-case
+    ep83037962 f48 (1W->2W, still short of Nebula CCC=3) — a synthetic boundary probe, no real replay frame.
+    Mega Starmie ex maxDamageCost=3 (Nebula Beam CCC)."""
+    p = _pilot()
+    # f51 shape: 2 Water -> +1 plain = 3 == cost -> COMPLETES (go down swinging).
+    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": [WATER, WATER]}, []) is True
+    # f48 shape: 1 Water -> +1 plain = 2 < cost 3 -> does NOT complete (don't overbuild; -45 stays).
+    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": [WATER]}, []) is False
+    # already maxed: 3 Water -> not under max at all -> False (nothing to complete).
+    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": [WATER, WATER, WATER]}, []) is False
+    # a discard_eot burst (Ignition CCC) onto the Evolution provides 3: 0 -> 3 == cost -> completes.
+    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": []}, ["discard_eot"]) is True
+    # fail-CLOSED: unknown target / no CardStat -> False.
+    assert p._attach_completes_biggest_attack(None, []) is False

@@ -19,7 +19,16 @@ Routing evidence = real-Pilot retests (tools/train/retest_one.py) + card/rule fa
 - candidate_signal: reuses `Board.wincon_base_deployable` (=_payoff_immediate_preevo_available, pilot.py:174/2689) + `Board.wincon_in_hand` (:164) + `Context.search_redundant_wincon` (:614/2251) — all EXIST; the fix widens the signal that the existing veto already keys on. No new infra.
 - verification_contract: verifier
 - provenance: correction 85164605:f6 (mega_starmie) | fixture tests/fixtures/corrections/ms_premature_wincon_tutor_no_base_f6.json | related: the OPEN sibling 85164605:f41 is REFUTED (at turn 5 a Staryu base IS on the bench, so this same signal correctly stays silent there and Salvatore/Mega Signal are productive — the widen does not touch it)
-- status: open
+- status: refuted
+- resolution (2026-07-12, update-strategy): REFUTED. The specced −45 widen is unsound on two counts.
+  (1) It does NOT flip f6: `decide()` resequences by TIER (`_finish_turn_last`) before score — Mega Signal is a
+  tier-0 free dig, so even after the widen drops it 53→8 (below the +18 attach) it still plays before the
+  tier-2 attach. Flipping f6 requires driving Mega Signal ≤0 (tier-4), not merely below the attach.
+  (2) The widen regresses two green tests encoding the OPPOSITE, sound doctrine — `search-the-confirmed-hit` /
+  `play-a-tutor-for-the-unfound-wincon` (+25): "tutor your provably-in-deck win-condition during setup, develop
+  the base over coming turns." f6's board (wincon in deck, no base) is exactly that shape, so f6's correction
+  directly contradicts an established doctrine. Human verdict: refute. A sound rework (turn-1 + accelerator-active
+  + productive-alternative distinction, plus resequencer-aware ≤0 suppression) would be its own larger proposal.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -57,7 +66,13 @@ deployable.
 - candidate_signal: NEW `Context.attach_completes_biggest_attack: bool` — build in pilot.py's attach section of `_make_context` (near `attach_target_under_max` @2195). For an ATTACH onto the ACTIVE: True iff `len(active.energies) < CardStat.maxDamageCost` AND `len(active.energies) + _attach_provided(...) >= CardStat.maxDamageCost` (this attach crosses the Active up to affording its highest-damage attack THIS turn). Reuses real fields: attach_target_area==_ACTIVE, target `energies`, `CardStat.maxDamageCost` (provider.py:38, verified), planner `_attach_provided` (=1 for a plain Energy). Fail-CLOSED (False when maxDamageCost unknown), matching `_attach_target_under_max`.
 - verification_contract: verifier
 - provenance: correction 85163079:f51 (mega_starmie) | fixture tests/fixtures/corrections/ms_doomed_active_complete_nebula_f51.json | counter-case to protect: ep83037962:f48 (the motivating case of dont-overbuild-the-doomed-wincon — 1W→2W still short of Nebula) must NOT regress
-- status: open
+- status: applied
+- resolution (2026-07-12, update-strategy): APPLIED. New `Context.attach_completes_biggest_attack`
+  (pilot.py `_attach_completes_biggest_attack` + `_make_context`, ACTIVE-only, provided mirrors the planner's
+  `_attach_provided`); gated `dont-overbuild-the-doomed-wincon` with `and not c.attach_completes_biggest_attack`
+  (baseline_energy.py). f51 → attach-to-Active [1] (+20 build-active-wincon, −45 gated off) vs Cinderace [2] +15,
+  FIXED. f48 counter-case (no real replay frame available) guarded by a synthetic boundary UNIT test in
+  tests/strategy/test_attach_discipline.py (1W→2W < CCC=3 → signal False → −45 stays). Full suite green.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
@@ -94,7 +109,15 @@ THIS turn" vs "overbuilds for a turn that won't come") is precise and fixture-gu
 - candidate_signal: `Board.in_play_ids` (LUNATONE + SOLROCK online — the exact gate the sibling `grab-the-playable-item` Gong rule already uses) + `Board.hand_basic_energy` + `Board.energy_placeable` (all EXIST, used by the current rule) + a **weak-active-pre-evo** read: the Active is a pre-evolution whose own affordable attack this turn is a minor chip (≈30) far below its forward form's output — derive from the provider's `forward_max_damage` (pilot.py:2566/3247, EXISTS) vs the Active's own `CardStat.maxDamage`/attack costs. If a clean boolean doesn't fall out, `candidate_signal: "needs a new signal"` (a small `active_is_weak_preevo` in Board scope).
 - verification_contract: verifier
 - provenance: correction 85058574:f16 (mega_lucario) | fixture tests/fixtures/corrections/ml_lunar_cycle_over_last_f_attach_f16.json | REVERSES the 2026-07-11 initial refute (spun-off investigation, human verdict): Lunar Cycle IS correct; the deck rule over-fires
-- status: open
+- status: applied
+- resolution (2026-07-12, update-strategy): APPLIED. New qualified `Board.active_is_weak_preevo`
+  (pilot.py `_active_is_weak_preevo`: Active is a win-condition line pre-evo whose own maxDamage ≤ ½ its
+  `forward_max_damage` — Riolu 30 vs Mega Lucario ex 130/270). Narrowed `dont-lunar-cycle-away-the-last-attachable-f`
+  to stand down when engine-online AND weak-preevo active. NOTE: standing the −30 down was NECESSARY but NOT
+  SUFFICIENT (Lunar Cycle then sat at 0, below the +13/+10 attaches — the proposal's "narrow the when()" mechanism
+  was incomplete), so ALSO added a positive sibling `lunar-cycle-the-weak-preevo-last-f` (+20) firing on the exact
+  complement of the guard's stand-down (mutually exclusive by construction). f16 → Lunar Cycle [6] +20 > Solrock
+  attach [4] +13, FIXED. Full suite green.
 - for: deck:mega_lucario
 
 **Spec (authoring spec — thin fodder):**
@@ -136,7 +159,20 @@ frame where Lunar Cycle is unavailable / the engine is offline; investigate it t
 - candidate_signal: the ko_for_prizes evolution-enabler step in planner.py already commits an evolution tutor (see the covered precedent 83455356:f11, `test_planner_engine.py::test_critical_a212_*`). The missing discrimination = card-cost/type of the enabler: `CardStat.cardType` (Item vs Supporter, EXISTS) + "evolved form already in hand AND pre-evo directly evolvable this turn" (a legal direct-evolve option is present in the select → `appearThisTurn==False` on the pre-evo + the Stage-1 in hand). No new board infra beyond reading the option list the planner already enumerates.
 - verification_contract: verifier
 - provenance: correction 85164605:f41 (mega_starmie) | fixture tests/fixtures/corrections/ms_prefer_cheap_evolution_enabler_f41.json | REVERSES the 2026-07-11 initial refute (human verdict, verified against the match: the Staryu were played a prior turn → evolvable this turn) | do NOT regress the covered precedent 83455356:f11 (Salvatore IS the only enabler there — no Mega in hand → the Supporter tutor is correct)
-- status: open
+- status: applied (free-evolve half) + deferred (item-tutor half)
+- resolution (2026-07-12, update-strategy): PARTIALLY APPLIED. Built the FREE-DIRECT-EVOLVE half in planner.py
+  `_ko_for_prizes_lines`: new `_free_evolve_ko_candidate` branch (type-9 EVOLVE onto a bench body, option presence =
+  legality, no `appearThisTurn` read) + a sub-prize cost tier on `ln.value` (`_PLANNER_ENABLER_FREE=8` for
+  retreat/free-evolve, `_PLANNER_ENABLER_ITEM=4` reserved, tutor=0) so the cheaper enabler wins `max()` without
+  outranking a real prize/survival delta. Human-locked target: f41 → [4] free direct-evolve (fixture correct
+  [3]→[4], correct_label updated; new test_f41 in test_planner_engine.py). a212/f11 (Salvatore-only) stays green —
+  the tier only reorders when a cheaper enabler co-exists. Full suite green.
+  DEFERRED — the ITEM-tutor half (prefer Mega Signal over Salvatore when NO free-evolve exists, the 2nd-Staryu
+  frame not in this fixture). Definition-of-done: a multi-step enabler composer that recognises an Item whose
+  fetch target is an evolution of an in-play, this-turn-evolvable body, verifies the fetched form is deck-present
+  (tracker), and emits a COMPOSITE lethal line whose first committed step is the Item but whose value reflects the
+  downstream evolve+attach KO. The generator currently emits one TurnLine per single option and cannot chain
+  play-item(fetch) + separate manual-evolve; `_PLANNER_ENABLER_ITEM` is wired and waiting for that composer.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
