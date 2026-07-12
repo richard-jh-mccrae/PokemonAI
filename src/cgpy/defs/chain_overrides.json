@@ -1566,5 +1566,25 @@
         }
       ]
     }
+  },
+  "attack:1042": {
+    "name": "Riptide",
+    "scale": {
+      "var": "atk_discard_basic_energy",
+      "energyType": 3,
+      "per": 20,
+      "add": false
+    },
+    "rider": [
+      {
+        "op": "xShuffleDiscardEnergyToDeck",
+        "filter": {
+          "basicEnergy": true,
+          "energyType": [
+            3
+          ]
+        }
+      }
+    ]
   }
 }

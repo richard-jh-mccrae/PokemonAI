@@ -17,9 +17,15 @@ sys.path.insert(0, str(REPO / "tools" / "parity"))
 from cgpy.chain import OPS  # noqa: E402
 from report import build_ledger  # noqa: E402
 
-# Ops with no committed micro-trace yet — each entry says what a pin needs.
-# EMPTY as of 2026-07-11: every interpreter op maps to a committed pinning trace.
-UNPINNED: set[str] = set()
+# Ops with no committed god micro-trace yet — each entry says what a pin needs.
+UNPINNED: set[str] = {
+    # Riptide's shuffle-back: capture_card can't fire Riptide (it's menu-gated at 0
+    # discard-{W} and chaos never fills the discard, fired=0), and a god-free cabt trace
+    # can't live in tests/fixtures/parity/ (test_search_api needs god-frame seeding).
+    # Pinned instead by the committed green cabt fixture episode-83970983 (Riptide clean,
+    # the op fires) in test_cabt_replays.py.
+    "xShuffleDiscardEnergyToDeck",
+}
 
 
 def test_every_op_has_a_committed_pin_or_is_declared_unpinned():

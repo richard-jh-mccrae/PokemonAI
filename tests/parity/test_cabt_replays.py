@@ -42,6 +42,8 @@ EPISODES = [
                                                # Pokémon (both sides)
     ("episode-84895564-replay.json.gz", 42),   # Mega Kangaskhan ex Run Errand: draw 2,
                                                # Active-only, 1×/turn globally
+    ("episode-83970983-replay.json.gz", 41),   # Kyogre Riptide: 20 per Basic {W} in
+                                               # discard, then shuffle those into deck
 ]
 
 

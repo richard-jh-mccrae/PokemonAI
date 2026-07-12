@@ -1043,6 +1043,23 @@ def op_mill(gs, fr, args) -> bool:
     return True
 
 
+def op_shuffle_discard_energy_to_deck(gs, fr, args) -> bool:
+    """Riptide rider: "Then, shuffle those <filter> cards into your deck." — move every
+    matching discard card to the deck (public both ways) and shuffle. Runs AFTER the
+    scale-count damage read the same discard, so the count and the moved set agree."""
+    seat = fr.seat
+    b = gs.players[seat]
+    moved = [s for s in list(b.discard) if _card_matches(gs, s, args.get("filter", {}))]
+    for s in moved:
+        b.discard.remove(s)
+        b.deck.append(s)
+        gs.move_card(s, AreaType.DISCARD, AreaType.DECK, seat=seat,
+                     visible_to_owner=True, visible_to_opponent=True)
+    if moved:
+        _shuffle(gs, seat)
+    return True
+
+
 def op_discard_hand_draw(gs, fr, args) -> bool:
     """"Discard your hand and draw N cards." — hand discards front-to-back (seeded)."""
     seat = fr.seat
@@ -3223,6 +3240,7 @@ OPS = {
     "xInflictConditionSelf": op_inflict_condition_self,
     "xOpponentSwitches": op_opponent_switches,
     "xMill": op_mill,
+    "xShuffleDiscardEnergyToDeck": op_shuffle_discard_energy_to_deck,
     "xDiscardHandDraw": op_discard_hand_draw,
     "xTakeLessNextTurn": op_take_less_next_turn,
     "xProtectNextTurn": op_protect_next_turn,

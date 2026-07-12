@@ -62,6 +62,12 @@ def scale_count(gs: GameState, seat: int, var: str, energy_type: int | None = No
                     if gs.db.is_energy(gs.card_id(s))
                     and (energy_type is None
                          or int(gs.stat(s).energyType) == energy_type)])
+    if var == "atk_discard_basic_energy":        # Riptide: Basic {type} only, in discard
+        from .schema import CardType
+        return len([s for s in b.discard
+                    if gs.stat(s).cardType == CardType.BASIC_ENERGY
+                    and (energy_type is None
+                         or int(gs.stat(s).energyType) == energy_type)])
     if var == "atk_tools_in_play":              # Gadget Show: tools on ALL own mons
         return sum(len(p.tools) for p in gs.in_play(seat))
     if var == "atk_in_play":                    # Sweet Circle: own in-play mons
