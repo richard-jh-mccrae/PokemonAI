@@ -1586,5 +1586,34 @@
         }
       }
     ]
+  },
+  "96": {
+    "name": "Teal Mask Ogerpon ex",
+    "ability": {
+      "legal": [
+        {
+          "op": "handHas",
+          "filter": {
+            "basicEnergy": true,
+            "energyType": [
+              1
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "xHandEnergyAttachChoose",
+          "filter": {
+            "basicEnergy": true,
+            "energyType": [
+              1
+            ]
+          },
+          "holderSelf": true,
+          "thenDraw": 1
+        }
+      ]
+    }
   }
 }

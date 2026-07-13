@@ -72,3 +72,16 @@ def test_froslass_freezing_shroud_fires():
     report = replay(convert(payload))
     assert report.frames_green > 54, (
         f"Freezing Shroud regressed — diverged at the checkup:\n{report}")
+
+
+def test_ogerpon_teal_dance_fires():
+    """Teal Mask Ogerpon ex "Teal Dance": attach a Basic {G} from hand to THIS Pokémon,
+    then draw a card. This episode isn't clean end-to-end (a later, unrelated blocker),
+    but WITHOUT the ability cgpy diverges at the very first activation (frame ~20: the
+    ATTACH_TO {G} pick → ATTACH + DRAW, no ATTACH_FROM since it self-targets); WITH it
+    the replay reaches frame 40. Guards the holderSelf + thenDraw attach branch."""
+    path = FIXTURES / "episode-81906755-replay.json.gz"
+    payload = json.loads(gzip.decompress(path.read_bytes()))
+    report = replay(convert(payload))
+    assert report.frames_green > 21, (
+        f"Teal Dance regressed — diverged at the ability:\n{report}")

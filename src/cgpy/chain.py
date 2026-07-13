@@ -3105,27 +3105,35 @@ def op_hand_energy_attach_choose(gs, fr, args) -> bool:
         fr.vars["picked"] = b.hand[fr.vars.pop("answered_options")[0]["index"]]
         fr.vars.pop("answer")
     energy = fr.vars["picked"]
-    if "answer" not in fr.vars:
-        opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
-                if _card_matches(gs, p.top, args.get("targetFilter", {}))]
-        if not opts:
-            return True
-        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
-             options=opts, min_count=1, max_count=1,
-             context_card=None if args.get("targetContextCard") is False else energy,
-             effect_card=fr.source)
-        return False
-    t_o = fr.vars.pop("answered_options")[0]
-    fr.vars.pop("answer")
+    if args.get("holderSelf"):
+        # Teal Dance: "attach a Basic {G} … to THIS Pokémon" — no holder select, the
+        # ability's own Pokémon (fr.source) is the target (pinned ep-81906755 f20: one
+        # ctx ATTACH_TO pick then straight to ATTACH + DRAW, no ATTACH_FROM).
+        target = next(p for p in gs.in_play(seat) if p.top == fr.source)
+    else:
+        if "answer" not in fr.vars:
+            opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
+                    if _card_matches(gs, p.top, args.get("targetFilter", {}))]
+            if not opts:
+                return True
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+                 options=opts, min_count=1, max_count=1,
+                 context_card=None if args.get("targetContextCard") is False else energy,
+                 effect_card=fr.source)
+            return False
+        t_o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+        from .turn import _target_of
+        target = _target_of(gs, seat, t_o["area"], t_o["index"])
     fr.vars.pop("picked")
-    from .turn import _target_of
-    target = _target_of(gs, seat, t_o["area"], t_o["index"])
     b.hand.remove(energy)
     target.energy.append(energy)
     gs.note_attach(energy)
     gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
              "cardId": gs.card_id(energy), "serial": energy,
              "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+    for _ in range(args.get("thenDraw", 0)):     # "If you attached … draw a card."
+        gs.draw(seat)
     return True
 
 
