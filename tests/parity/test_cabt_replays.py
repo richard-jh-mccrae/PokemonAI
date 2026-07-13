@@ -44,6 +44,9 @@ EPISODES = [
                                                # Active-only, 1×/turn globally
     ("episode-83970983-replay.json.gz", 41),   # Kyogre Riptide: 20 per Basic {W} in
                                                # discard, then shuffle those into deck
+    ("episode-83695982-replay.json.gz", 183),  # Energy Recycler: shuffle Basic Energy
+                                               # from discard to deck (xPickDiscard)
+    ("episode-85687852-replay.json.gz", 14),   # Prism Energy attach un-deferred
 ]
 
 

@@ -1615,5 +1615,32 @@
         }
       ]
     }
+  },
+  "16": {
+    "name": "Prism Energy",
+    "providesOnBasic": [
+      10
+    ]
+  },
+  "1139": {
+    "name": "Energy Recycler",
+    "legal": [
+      {
+        "op": "discardHas",
+        "filter": {
+          "basicEnergy": true
+        }
+      }
+    ],
+    "play": [
+      {
+        "op": "xPickDiscard",
+        "dest": "deck",
+        "n": 5,
+        "filter": {
+          "basicEnergy": true
+        }
+      }
+    ]
   }
 }
