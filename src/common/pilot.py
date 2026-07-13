@@ -274,6 +274,10 @@ class Board:
                                        # (Budew) can be promoted as a sacrificial wall, and the opp
                                        # Active can damage the line NOW — retreat to wall it and develop
                                        # the line on the Bench behind cover (retreat-to-promote maneuver)
+    can_lock_line_with_disruptor: bool = False  # dragapult f20 OFFENSIVE variant: early game, a fragile
+                                       # line-preevo Active with nothing better to do + a benched
+                                       # `item_lock` opener + a cheap reachable retreat — retreat into
+                                       # Budew to DENY the opp's Item turn (no incoming-damage premise)
     tool_deploy_slot: tuple | None = None  # (AreaType, inPlayIndex) of body to equip my held +HP
                                        # Tool this turn — survival-turns target picker (ADR-0028);
                                        # None when no +HP Tool in hand / no body worth equipping
@@ -740,6 +744,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  value_model=None, escalation=False,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
+                 retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  evolving_wincon_priority=True, matchup_targeting=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
@@ -817,6 +822,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # composes promote-a-benched-{F}-attacker → play N
                                                         # damage-boost Items → swing lethal (presumes
                                                         # lethal_family; engine-confirmed on every lock)
+        self.retreat_enabler_lethal = retreat_enabler_lethal  # kill-switch: the `_family_win_candidates` tier
+                                                        # that plays/tutors a retreat-reduction Tool (Air
+                                                        # Balloon) to free a retreat into an already-winning
+                                                        # benched attacker (ml f15; presumes lethal_family,
+                                                        # engine-confirmed on every lock)
+        self.disruptor_lock_maneuver = disruptor_lock_maneuver  # kill-switch: the OFFENSIVE retreat-into-
+                                                        # a-benched-item_lock T2 disruption maneuver (dragapult
+                                                        # f20; feeds `can_lock_line_with_disruptor`).
+                                                        # Ship-and-refine: matchup-dependent value
         self.prize_economy_fetch = prize_economy_fetch  # ADR-0048 kill-switch: prize-economy FETCH tie-break
                                                         # + broadened line recognition (credit a secondary
                                                         # attacker Line's pre-evo). Default ON; OFF reverts to
@@ -1110,7 +1124,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._boost_lethal_tactical(obs, select, board, option)
                     + self._retreat_to_lethal_tactical(obs, board, option)
                     + self._grab_lethal_tactical(obs, select, board, option)
-                    + self._grab_enabler_lethal_tactical(obs, select, board, option))
+                    + self._grab_enabler_lethal_tactical(obs, select, board, option)
+                    + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
+                    + self._attach_retreat_tool_lethal_tactical(obs, select, board, option))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         score = sum(w for _, w in fired) + tactical
@@ -1439,19 +1455,87 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return KO_SCORE + self._prize_value(opp)
         return 0.0
 
+    def _grab_retreat_tool_lethal_tactical(self, obs: dict, select: dict, board: Board,
+                                           option: dict) -> float:
+        """KO_SCORE-class value for grabbing a retreat-reduction Tool (Air Balloon) that FREES a retreat
+        into an already-winning benched attacker — the retreat-enabler lethal (ml f15). My Active can't
+        retreat now; a benched body, promoted, takes a min-bound WINNING KO
+        (`_bench_body_wins_if_promoted`); the grabbed Tool's `retreatReduction` covers the Active's exact
+        retreat shortfall. Extends the grab select because the enabler win rung (`_family_win_candidates`
+        tier 6) is MAIN-only — the same shape as `_grab_enabler_lethal_tactical`, so the Petrel search
+        picks Air Balloon over an off-line Trainer. Gated on `retreat_enabler_lethal`; SOUND (min-bound +
+        win). Its downside mirrors the other grab tacticals: an over-claim only grabs the Tool over
+        another card, never throws a game (the real retreat + KO still gate the later steps). 0 off a grab
+        card, turn 1, or with no such win."""
+        if (not getattr(self, "retreat_enabler_lethal", False) or select.get("context") != _TO_HAND
+                or option.get("type") != _CARD or board.turn <= 1 or board.my_prizes_remaining <= 0):
+            return 0.0
+        opp = self._opp_active(obs)
+        if not (opp or {}).get("hp"):
+            return 0.0
+        me = self._my_player(obs)
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        if ma is None or self._can_retreat(ma):            # only when a Tool is NEEDED to retreat
+            return 0.0
+        need = self._retreat_shortfall(ma)
+        cid = self._option_card_id(obs, select, option)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not (need > 0 and stat is not None and getattr(stat, "retreatReduction", 0) >= need):
+            return 0.0
+        if not self._bench_body_wins_if_promoted(obs, board, opp, me, ma):
+            return 0.0
+        return KO_SCORE + self._prize_value(opp)
+
+    def _attach_retreat_tool_lethal_tactical(self, obs: dict, select: dict, board: Board,
+                                             option: dict) -> float:
+        """KO_SCORE-class value for attaching a retreat-reduction Tool (Air Balloon) to the ACTIVE when it
+        frees a retreat into an already-winning benched attacker (ml f15). Steers the Tool onto the body
+        that must RETREAT (Makuhita), not the wincon the tool doctrine would otherwise prefer — the
+        second half of the retreat-enabler lethal steering, after `_grab_retreat_tool_lethal_tactical`
+        picks it in the Petrel search. Same gate/soundness; 0 off an ACTIVE Tool-attach, turn 1, or with
+        no such win."""
+        if (not getattr(self, "retreat_enabler_lethal", False) or board.turn <= 1
+                or option.get("type") != _ATTACH or option.get("inPlayArea") != _ACTIVE
+                or board.my_prizes_remaining <= 0):
+            return 0.0
+        opp = self._opp_active(obs)
+        if not (opp or {}).get("hp"):
+            return 0.0
+        me = self._my_player(obs)
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        if ma is None or self._can_retreat(ma):            # a Tool is still NEEDED to retreat
+            return 0.0
+        need = self._retreat_shortfall(ma)
+        cid = self._option_card_id(obs, select, option)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not (need > 0 and stat is not None and getattr(stat, "retreatReduction", 0) >= need):
+            return 0.0
+        if not self._bench_body_wins_if_promoted(obs, board, opp, me, ma):
+            return 0.0
+        return KO_SCORE + self._prize_value(opp)
+
     def _can_retreat(self, ma: dict | None) -> bool:
-        """My Active can pay its Retreat Cost this turn — attached Energy >= printed retreat cost
-        (rules.md §Retreat: "pay the Retreat cost in Energy"). Fail-CLOSED on an unknown stat: a
+        """My Active can pay its Retreat Cost this turn — attached Energy >= its EFFECTIVE retreat cost
+        (printed cost minus any ATTACHED retreat-reduction Tool: Air Balloon −2, `retreatReduction`;
+        rules.md §Retreat: "pay the Retreat cost in Energy"). Fail-CLOSED on an unknown stat: a
         KO_SCORE-class claim must never assume a retreat it cannot prove (ml f39: a 0-Energy Meowth ex
-        with retreat 1 "retreated" into a benched Mega and the grab scored 1001)."""
+        with retreat 1 "retreated" into a benched Mega and the grab scored 1001). An attached Tool is a
+        PROVABLE board fact, so subtracting it stays sound (ml f15: Air Balloon on Makuhita -> retreat
+        2−2=0 -> free retreat into the benched Mega Lucario ex)."""
         if not ma or not self.stats:
             return False
         stat = self.stats.get(ma.get("id"))
         if stat is None:
             return False
-        if getattr(stat, "retreatCost", 0) == 0:
+        cost = getattr(stat, "retreatCost", 0)
+        for tool in (ma.get("tools") or []):              # attached retreat-reduction Tools lower it
+            tid = tool.get("id") if isinstance(tool, dict) else tool
+            tstat = self.stats.get(tid) if tid is not None else None
+            cost -= getattr(tstat, "retreatReduction", 0) if tstat is not None else 0
+        cost = max(0, cost)
+        if cost == 0:
             return True                                   # free retreat
-        return len(ma.get("energies") or []) >= stat.retreatCost
+        return len(ma.get("energies") or []) >= cost
 
     def _search_pool_has_reusable_energy(self, board) -> bool:
         """True iff THIS search's revealed pool (`search_deck_ids`) contains a reusable Basic Energy a
@@ -2639,6 +2723,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             active_is_weak_preevo=self._active_is_weak_preevo(ma),
             can_wall_line_with_disruptor=self._can_wall_line_with_disruptor(me, ma, oa),
+            can_lock_line_with_disruptor=self._can_lock_line_with_disruptor(
+                me, ma, oa, state.get("turn", 0)),
             priority_wincon_slot=self._priority_wincon_slot(
                 me, active_lethal, active_doomed),
             attach_from_concentrate_slot=self._attach_from_concentrate_slot(me, select),
@@ -3566,6 +3652,38 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))
                        for b in (me.get("bench") or []))
         return has_lock and self._opp_active_can_damage_us(ma, oa)
+
+    def _can_lock_line_with_disruptor(self, me: dict, ma: dict | None, oa: dict | None,
+                                      turn: int) -> bool:
+        """The OFFENSIVE variant of the disruptor maneuver (dragapult f20, `disruptor_lock_maneuver`):
+        early game, my Active is a fragile win-condition LINE pre-evo with nothing better to do, and a
+        benched `item_lock` disruptor (Budew) can be promoted to deny the opponent their Item turn —
+        attach -> retreat the line-preevo into Budew -> promote -> Itchy Pollen. Unlike
+        `_can_wall_line_with_disruptor` this does NOT require the opponent to threaten damage NOW (their
+        Item-reliant SETUP turn is the target). Gated instead on: `turn` <= 2 (the lock bites their
+        setup), NO win-condition Line body already carries Energy (nothing is being DEVELOPED — else
+        that energy should advance the wincon, not fund the maneuver; the f21 boundary), the retreat is
+        reachable this turn on ONE more Energy (a line-preevo Basic's cheap retreat), and the Active
+        can't already KO (not a wincon attacker being wasted). Kill-switched; board-SOUND (visible
+        zones); silent for decks with no benched item-lock opener. SHIP-AND-REFINE: its ladder value is
+        matchup-dependent (a fragile promoted disruptor may concede a prize) — the kill-switch is the
+        lever if it underperforms."""
+        if not (getattr(self, "disruptor_lock_maneuver", False) and self.functions and turn <= 2
+                and ma and ma.get("id") in self._line_preevo_set() and self.stats):
+            return False
+        has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))
+                       for b in (me.get("bench") or []))
+        if not has_lock:
+            return False
+        line_ids = self._line_preevo_set() | self._wincon_set()
+        in_play = [p for p in (me.get("active") or []) if p] + [b for b in (me.get("bench") or []) if b]
+        if any((p.get("energies") or []) for p in in_play if p.get("id") in line_ids):
+            return False                                  # a wincon Line body is already being energized
+                                                          # -> develop it, don't retreat for the lock (f21)
+        stat = self.stats.get(ma.get("id"))
+        if stat is None or getattr(stat, "retreatCost", 0) > len(ma.get("energies") or []) + 1:
+            return False                                  # the retreat must be reachable this turn
+        return not self._active_maxed_kos(ma, oa)         # don't waste a body that could KO instead
 
     # (Gust Board-signal builders — _active_ko_prizes, _opp_active_condition_gift, etc. — are in
     # doctrine_gust.GustMixin; `_board` calls them as `self.…`.)

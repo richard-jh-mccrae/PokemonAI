@@ -15,7 +15,7 @@ HYPOTHESES = [
                   "fragile line behind a benched item-lock disruptor), not a wasted turn.",
         when=lambda c: not c.board.line_ready and c.select_context == _MAIN
         and c.option_type == _RETREAT
-        and not c.board.can_wall_line_with_disruptor,
+        and not (c.board.can_wall_line_with_disruptor or c.board.can_lock_line_with_disruptor),
         weight=-25, status="testing"),
     Hypothesis(
         id="retreat-to-wall-the-line",
@@ -29,9 +29,12 @@ HYPOTHESES = [
                   "(ahead of a free evolve / Item strip) so it happens FIRST, and `hold-position-in-setup` "
                   "stands down under the same premise. Silent for decks without a benched item-lock opener. "
                   "Budew is sacrificial by design — the opponent KOs it next turn, having bought a locked "
-                  "tempo turn while the win-condition line assembles safely.",
+                  "tempo turn while the win-condition line assembles safely. Also fires for the OFFENSIVE "
+                  "variant (`can_lock_line_with_disruptor`, dragapult f20): early-game, retreat a "
+                  "nothing-better-to-do line-preevo into the item-lock to deny the opponent's Item turn "
+                  "even with no incoming damage.",
         when=lambda c: c.select_context == _MAIN and c.option_type == _RETREAT
-        and c.board.can_wall_line_with_disruptor,
+        and (c.board.can_wall_line_with_disruptor or c.board.can_lock_line_with_disruptor),
         weight=30, status="assumed"),
     Hypothesis(
         id="retreat-to-ready-attacker",

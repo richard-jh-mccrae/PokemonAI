@@ -336,10 +336,45 @@ def begin_turn(gs: GameState, seat: int) -> None:
 
 def _end_turn(gs: GameState, seat: int) -> None:
     gs.emit({"type": int(LogType.TURN_END), "playerIndex": seat})
-    gs.energy_attached = False    # native resets AT TURN_END — observable False during a
-    # between-turns promotion select (pinned micro_onboard780a1128 f54). The sibling
-    # flags (supporterPlayed/stadiumPlayed/retreated) stay reset-at-TURN_START until a
-    # trace pins them.
+    # An Active-holder end-of-turn tool (Powerglass: "you may attach a Basic Energy
+    # from your discard to it") fires AFTER TURN_END (pinned episode-82845418 f11:
+    # TURN_END logged, THEN the ctx-22 attach select) and can pose a select, so the
+    # remaining between-turns flow resumes via `_after_program` (kind "eot_tool"). The
+    # ending player's `energyAttached` is STILL True during that tool select — the mover
+    # is still them and they attached this turn (f11) — so the reset lives in
+    # `_post_end_turn`, AFTER the tool and before the Checkup.
+    if _start_eot_tool_active(gs, seat):
+        return
+    _post_end_turn(gs, seat)
+
+
+def _start_eot_tool_active(gs: GameState, seat: int) -> bool:
+    """Run the ending seat's Active holder's end-of-turn tool program, if any (at most
+    one tool per Pokémon). Returns True when a program was started — its completion
+    owns the `_post_end_turn` continuation (whether it posed a select or resolved
+    synchronously)."""
+    from .chain import def_for, run_frames
+    from .state import EffectFrame
+    holder = gs.players[seat].active
+    if holder is None:
+        return False
+    for s in list(holder.tools):
+        eot = (def_for(gs.card_id(s)) or {}).get("tool", {}).get("onEndTurnActive")
+        if eot:
+            gs.frames.append(EffectFrame(program=[dict(eot)], pc=0, vars={},
+                                         seat=seat, source=s, kind="eot_tool"))
+            run_frames(gs)
+            return True
+    return False
+
+
+def _post_end_turn(gs: GameState, seat: int) -> None:
+    """The between-turns tail after TURN_END (and any end-of-turn tool): Ignition-class
+    self-discards, then the Pokémon Checkup, then the next turn begins."""
+    gs.energy_attached = False    # native reset is observable False during a between-turns
+    # promotion select (pinned micro_onboard780a1128 f54) — i.e. AFTER the end-of-turn
+    # tool (still-True at episode-82845418 f11) and before the Checkup. The sibling flags
+    # (supporterPlayed/stadiumPlayed/retreated) stay reset-at-TURN_START until a trace pins.
     _eot_energy_discards(gs, seat)
     _checkup(gs, seat)
     if gs.result != -1 or gs.pending is not None:

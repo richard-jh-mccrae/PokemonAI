@@ -133,19 +133,27 @@ def test_engine_confirms_win_round_trips_the_search_on_a_real_observation():
     move is not a win, so the verdict is ``False`` — the point is that the engine, not our math, said so."""
     deck = _deck()
     pilot = _engine_pilot(deck)
-    obs, start = battle_start(deck, list(deck))
-    assert start.errorPlayer < 0                          # legal deck loaded
-    try:
-        verdict = None
-        for _ in range(80):
-            cur = obs.get("current") or {}
-            if cur.get("result", -1) != -1:
-                break
-            sel = obs.get("select")
-            if sel is not None and sel.get("context") == 0 and obs.get("search_begin_input"):
-                verdict = pilot._engine_confirms_win(obs, [pilot.decide(obs)])
-                break
-            obs = battle_select(pilot.decide(obs))
-        assert verdict is False        # engine round-tripped + ruled: one early move isn't a win
-    finally:
-        battle_finish()
+    # battle_start shuffles unseeded (no seed param on the native API), so a given drive may not
+    # reach a search-capable main menu inside the step cap, or the candidate step may surface an
+    # unaccounted coin (a sound None, never a chosen flip). Retry over fresh battles until the
+    # engine hands back a concrete verdict — an early move is never a win, so it must be False.
+    # (Same unseeded-shuffle de-flake as `test_live_wiring_...` above — commit 00b1407.)
+    verdict = None
+    for _attempt in range(20):
+        obs, start = battle_start(deck, list(deck))
+        assert start.errorPlayer < 0                      # legal deck loaded
+        try:
+            for _ in range(80):
+                cur = obs.get("current") or {}
+                if cur.get("result", -1) != -1:
+                    break
+                sel = obs.get("select")
+                if sel is not None and sel.get("context") == 0 and obs.get("search_begin_input"):
+                    verdict = pilot._engine_confirms_win(obs, [pilot.decide(obs)])
+                    break
+                obs = battle_select(pilot.decide(obs))
+        finally:
+            battle_finish()
+        if verdict is not None:
+            break
+    assert verdict is False        # engine round-tripped + ruled: one early move isn't a win

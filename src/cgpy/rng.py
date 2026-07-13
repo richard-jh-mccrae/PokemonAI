@@ -47,6 +47,12 @@ class SeededRng:
         (top = list end, bottom = list start)."""
         return list(deck[:n]) if from_bottom else [deck[-1 - i] for i in range(n)]
 
+    def mill_bind(self, seat: int, deck: list[int], prize: list[int],
+                  n: int) -> list[int]:
+        """Which serials a top-of-deck mill discards, in discard order (top = list
+        end). Seeded play: positional."""
+        return [deck[-(i + 1)] for i in range(min(n, len(deck)))]
+
 
 class ReplayError(AssertionError):
     """A replay asked for randomness the trace does not determine — a real divergence."""
@@ -77,6 +83,10 @@ class ReplayRandomness:
         # pre-feeds the NEXT frame's recorded DECK->LOOKING serials; a look consumes
         # them in recorded order regardless of which end of the deck it reads.
         self.look_feed: dict[int, list[int]] = {0: [], 1: []}
+        # God-free mill binding (Hammer-lanche class): the replayer pre-feeds the
+        # NEXT frame's recorded DECK->DISCARD serials in discard order; a top-of-deck
+        # mill consumes them (a provisionally prize-parked one swaps into the deck).
+        self.mill_feed: dict[int, list[int]] = {0: [], 1: []}
 
     def shuffle(self, seq: list, *, seat: int) -> None:
         if self.shuffle_orders[seat]:
@@ -175,6 +185,33 @@ class ReplayRandomness:
                                 else [deck[-1 - i] for i in range(n)])
                     if s not in out]
             out += rest[:n - len(out)]
+        return out
+
+    def mill_bind(self, seat: int, deck: list[int], prize: list[int],
+                  n: int) -> list[int]:
+        """Which serials a top-of-deck mill discards, in discard order (reveal-oracle,
+        M4). God-free: consume the pre-fed recorded DECK->DISCARD serials — a serial a
+        provisional facedown prize deal parked in the prize row swaps back into the deck
+        (multiset-exact, like draw_bind), since the recorded discard proves it was in
+        the deck. Positional (deck top) for any unfed remainder / seeded play. Serials
+        are unique, so identity removal by the caller is unambiguous."""
+        feed = self.mill_feed.get(seat) or []
+        out: list[int] = []
+        for _ in range(min(n, len(deck))):
+            if feed:
+                s = feed.pop(0)
+                if s not in deck:
+                    if prize is not None and s in prize:
+                        filler = next(d for d in reversed(deck) if d not in out)
+                        prize[prize.index(s)] = filler
+                        deck[deck.index(filler)] = s
+                    else:
+                        raise ReplayError(
+                            f"seat {seat}: recorded mill serial {s} is in neither "
+                            f"the deck nor the prize row")
+                out.append(s)
+            else:
+                out.append(next(d for d in reversed(deck) if d not in out))
         return out
 
     def prize_take(self, seat: int, serial: int, *, deck: list[int],

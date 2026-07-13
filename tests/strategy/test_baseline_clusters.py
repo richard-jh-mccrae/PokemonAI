@@ -30,7 +30,8 @@ CLUSTERS = {
         "conserve-burst-when-no-ko", "advance-the-accel-pieces",
         "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy",
         "dont-power-the-draw-engine",           # draw-engine attach at _ATTACH (dragapult f21)
-        "dont-fund-the-non-attacking-body"}),   # broader: engine/tutor/stall at _ATTACH + _ATTACH_FROM (ml f121/f84)
+        "dont-fund-the-non-attacking-body",     # broader: engine/tutor/stall at _ATTACH + _ATTACH_FROM (ml f121/f84)
+        "feed-the-line-for-disruptor-lock"}),   # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)

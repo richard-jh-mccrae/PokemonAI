@@ -1,5 +1,15 @@
 # capability-gap: retreat-to-promote-a-disruptor maneuver (Turn Planner generator)
 
+> **BUILT 2026-07-13 (`disruptor_lock_maneuver`, default ON, kill-switched; user decision to ship-and-
+> refine).** Key diagnosis: the shipped `retreat-to-wall-the-line` premise (`can_wall_line_with_disruptor`)
+> needs the opp to threaten damage, which is FALSE at f20 (0-Energy Gible) — so f20 is OFFENSIVE item-lock
+> disruption, not defensive walling. New signal `can_lock_line_with_disruptor` (early + fragile line-preevo
+> Active + benched `item_lock` opener + reachable cheap retreat + Active can't KO) + rung
+> `feed-the-line-for-disruptor-lock` (+20, the attach step) + `retreat-to-wall-the-line`/`hold-position-in-
+> setup` broadened to the offensive signal (the retreat step). `decide()`=[0] (was [1]); zero dragapult
+> regression. Value is matchup-dependent (a 30-HP Budew may concede a prize) — kill-switch is the lever.
+> Tests: `tests/strategy/test_blunder_20260710_split_fixes.py`.
+
 **Status:** PARTIAL (2026-07-10, PR #70). The maneuver's RETREAT frame is BUILT as `retreat-to-wall-the-line` (see the f32 sibling `85046350:f32`). This fixture's ATTACH-enablement frame (Dreepy @0e, AttachFrom — feed the active line-preevo to enable the wall-retreat) is STILL DEFERRED: re-probed 2026-07-10, `decide()=[1]` bench unchanged (`dont-feed-the-doomed` −30 sinks the correct active attach). Ledgered `deferred` in `data/corrections/reviewed.json` (85046350-20).
 **Fixture:** `tests/fixtures/corrections/dragapult_retreat_to_item_lock_f20.json`
 **Correction:** 85046350:f20 (dragapult_ex, `slow_setup`).

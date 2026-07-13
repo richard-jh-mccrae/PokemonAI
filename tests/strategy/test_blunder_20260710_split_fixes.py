@@ -73,6 +73,33 @@ def test_f32_retreats_to_wall_the_line_with_the_item_lock_disruptor():
     assert "retreat-to-wall-the-line" in _fired_ids(dec.options[fx["correct"][0]])
 
 
+@pytest.mark.req("REQ-GEN-0075")
+def test_f20_feeds_the_active_for_the_offensive_item_lock_maneuver():
+    """f20 (the ATTACH-enablement frame of the OFFENSIVE item-lock maneuver, ``disruptor_lock_maneuver``,
+    BUILT 2026-07-13): turn 2, a fragile Dreepy Active (0 Energy), Budew (item_lock) benched, opponent's
+    Gible can NOT damage us — so this is offensive disruption, not defensive walling. Attach the Crispin
+    Energy to the ACTIVE Dreepy so it can retreat into Budew and Itchy-Pollen the opponent's Item turn.
+    With the maneuver flag ON, ``feed-the-line-for-disruptor-lock`` fires and decide() picks the active
+    recipient [0] over the bench Dreepy [1] (the pre-maneuver blunder)."""
+    fx = _fixture("dragapult_retreat_to_item_lock_f20")
+    pilot = _pilot("dragapult_ex")
+    pilot.disruptor_lock_maneuver = True
+    dec = pilot.explain(fx["obs"])
+    assert dec.chosen == fx["correct"]                          # [0] active Dreepy (step 1 of the maneuver)
+    assert "feed-the-line-for-disruptor-lock" in _fired_ids(dec.options[fx["correct"][0]])
+
+
+def test_f20_inert_with_the_maneuver_flag_off():
+    """Kill-switch bookend: with ``disruptor_lock_maneuver`` OFF the signal is silent
+    (`can_lock_line_with_disruptor` False) so the maneuver rung never fires — the flag is the ship-and-
+    refine lever. (The shipped PROFILE runs it ON, so flip it off explicitly here.)"""
+    fx = _fixture("dragapult_retreat_to_item_lock_f20")
+    pilot = _pilot("dragapult_ex")
+    pilot.disruptor_lock_maneuver = False
+    dec = pilot.explain(fx["obs"])
+    assert "feed-the-line-for-disruptor-lock" not in _fired_ids(dec.options[fx["correct"][0]])
+
+
 @pytest.mark.req("REQ-GUST-0014")
 def test_f10_develops_instead_of_gusting_a_harmless_active():
     """f10: the opp Active (Kyogre, 0 Energy) is harmless NOW — gusting a benched body up would just free

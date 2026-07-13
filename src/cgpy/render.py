@@ -43,6 +43,7 @@ def pokemon_dict(gs: GameState, p: PokemonInPlay) -> dict:
 
 
 def player_dict(gs: GameState, seat: int, viewer: int) -> dict:
+    from .options import effective_bench_max as _effective_bench_max
     b = gs.players[seat]
     if b.active is None:
         active = []
@@ -53,7 +54,7 @@ def player_dict(gs: GameState, seat: int, viewer: int) -> dict:
     return {
         "active": active,
         "bench": [pokemon_dict(gs, p) for p in b.bench],
-        "benchMax": b.bench_max,
+        "benchMax": _effective_bench_max(gs, seat),
         "deckCount": len(b.deck),
         "discard": [card_dict(gs, s) for s in b.discard],
         "prize": [None] * len(b.prize),       # facedown until taken

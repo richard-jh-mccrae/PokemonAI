@@ -91,6 +91,18 @@ def provided_units_of(gs: GameState, p: PokemonInPlay, serial: int) -> int:
     return 1
 
 
+def effective_bench_max(gs: GameState, seat: int) -> int:
+    """Area Zero Underdepths: a player with any Tera Pokémon in play benches up to 8
+    (else the base 5). The discard-to-5 when the last Tera or the stadium leaves is NOT
+    modeled yet (it diverges + is caught if it fires — pinned ep-84897913 stays <=5)."""
+    from .chain import stadium_def
+    b = gs.players[seat]
+    bm = stadium_def(gs).get("benchMaxIfTera")
+    if bm and any(gs.stat(p.top).tera for p in gs.in_play(seat)):
+        return bm
+    return b.bench_max
+
+
 def effective_retreat_cost(gs: GameState, p: PokemonInPlay) -> int:
     """Printed retreat cost adjusted by attached-tool modifiers (Air Balloon −2) and
     card passives (Melt Away: free when NO energy cards attached — pinned
@@ -207,7 +219,7 @@ def main_options(gs: GameState, seat: int) -> list[dict]:
         cid = gs.card_id(serial)
         stat = gs.db.card(cid)
         if stat.cardType == CardType.POKEMON and stat.basic:
-            if len(b.bench) < b.bench_max:
+            if len(b.bench) < effective_bench_max(gs, seat):
                 opts.append({"type": int(OptionType.PLAY), "index": i})
         elif stat.cardType in (CardType.BASIC_ENERGY, CardType.SPECIAL_ENERGY):
             if stat.cardType == CardType.SPECIAL_ENERGY:

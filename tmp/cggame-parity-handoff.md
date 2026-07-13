@@ -17,7 +17,8 @@ parity**. It never imports `cg`. The proof it's faithful = the **parity gate**: 
 native traces replay through cgpy with zero divergence (`tests/parity/`, ~1177 tests, DLL-free
 because the trace *is* the native side). The burn-down target is the **kaggle-episode ladder**:
 434 real meta-deck games (`data/replays/*/episode-*.json.gz`) convert god-free and replay
-through cgpy; each one that replays with zero divergence is "green". We are at **227/434**.
+through cgpy; each one that replays with zero divergence is "green". We are at **266/434**
+(was 227 — see §12 for the 2026-07-13 session's +39: two infra pieces + a 19-agent fan-out).
 
 **The method (never deviate):** capture native behavior → replay through cgpy → the differ
 reports the FIRST divergence with a JSON path → implement exactly that → repeat. Divergences
@@ -460,4 +461,112 @@ python <scratch>/dumpf.py episode-XXXX-replay.json 40 55 # native frames 40-55
 python tools/parity/report.py                         # rebuild coverage.json op ledger
 ```
 
-**Current ladder: 227/434. Target: 434/434. Start with the Phase-1 infra spike (§5).**
+**Current ladder: 298/434. Target: 434/434.** (see §13 for the 2026-07-13 continuation, +32.)
+
+## 12. Session 2026-07-13 progress (branch claude/cggame-parity-handoff-425a45)
+
+Landed **+39 (227 → 266)**, zero regressions throughout, gate green (1191 tests). Six
+committed batches. The last three are the **§7 parallel fan-out** (user opted in): a
+19-agent workflow pinned+modeled+self-verified deferred cards read-only; the orchestrator
+merged defs + ran the single regression ladder + gate per wave.
+
+- **Wave A (+8):** 9 reused-op cards (Prime Catcher, Surfer, Wondrous Patch, N's PP Up,
+  Cynthia's Gabite, Ethan's Quilava, Team Rocket's Proton, Hassel, Barbaracle).
+- **Wave B (+7):** 8 cards needing 7 NEW ops (Blaziken ex, Tool Scrapper, Kieran,
+  Dusclops/Dusknoir Cursed Blast, Eri, Lucian, Energy Swatter) — all cabt-fixture-pinned
+  (UNPINNED + clean fixtures / partial-replay guards).
+- **Stragglers (+4):** Secret Box + Larry's Skill (the 2 agents that failed on output
+  formatting — their `_seed` text was a single clause missing the discard cost; finished
+  by hand with existing ops). **Fan-out lesson:** the worklist card text comes from
+  `generated_chains._seed.unparsed` and is often incomplete — an agent MUST re-verify at
+  `data/EN_Card_Data.csv`.
+
+Fan-out end-join recipe that worked: agents return `{defKey, defJson, newOpName, newOpCode,
+status, episodeResults, notes}` (read-only, verified via monkeypatch injection of
+`chain.load_chain_defs`); orchestrator unions JSON defs (minimal-diff text insert preserving
+2-space/CRLF), appends new op funcs before `OPS = {` + registers, adds any `check_legal`
+cond, then ONE `ladder.py --diff` (catches menu-gate over-offers) + ONE gate. New ops →
+`test_op_conformance` UNPINNED + a cabt fixture (build_ledger ignores cabt traces).
+
+The first two batches (each a clean cabt fixture + determinism pin):
+
+- **Hammer-lanche (attack 1046), +19** (commit 2e38292). Modeled the mill+scale AND
+  built a new reveal-oracle channel: **mill-output binding** (`rng.mill_feed` /
+  `mill_bind`, replayer pre-feeds NEXT-frame DECK→DISCARD serials). A top-of-deck mill
+  now discards native's true top-N despite a god-free shuffle; the `milled_basic_energy`
+  scale counts them. This is the general "bind a deck-order-dependent reveal from the
+  recorded output" pattern — reuse it for any mill. Pin: episode-83690879. See
+  determinism §10 (mill-output binding).
+- **Powerglass (1163), +1 net but reusable infra** (commit 282f750). Built
+  **end-of-turn-tool suspend machinery**: `_end_turn` → `_start_eot_tool_active` →
+  `_post_end_turn`, frame kind `eot_tool`, op `xEotAttachEnergyFromDiscard`. Reuse for
+  ANY end-of-turn "you may" tool/effect. Also corrected the `energyAttached` reset
+  timing (now in `_post_end_turn`, after the tool, before Checkup). Pin: episode-83119861.
+  See determinism §9i.
+
+**Findings for the tail (247-state buckets):** 44 ctx-asks · 31 stadiums (D, verify-hard)
+· 26 A-infra (deck-recon + the **draw-underrun** class) · 21 MISS-play · 20 nonselect
+(hp/tac) · 16 E rabbit-holes · 10 MISS-ability · 9 attach/over · 9 deferred-attacks.
+
+- **draw-underrun (8 eps)** is bucket A and HARD: a supporter that makes the OPPONENT
+  draw (Harlequin/Judge/Unfair Stamp/Iono) draws hidden cards (DRAW_REVERSE, no serials)
+  during the actor's turn. A provisional deck-top draw would diverge the moment the
+  opponent's own turn reveals their real hand — needs the full hidden-zone reconciliation
+  (adopt native's hand at the reveal, rest → deck). Deferred; part of the §5 keystone.
+- **Handheld Fan (1161)** reactive is DORMANT in the corpus (0 energy-move fires across
+  its episodes) — its episodes block on unrelated cards. Per the "only ship a passive a
+  clean episode exercises" rule, left deferred (attach-only would be +0 + unmodeled
+  passive).
+- The tail is now the §7 parallel fan-out shape: ~60-80 "def + maybe-reuse-op" cards
+  (MISS-play/ability/ctx) that are independently verifiable behind no shared wall.
+
+**266-state remaining (168):** the MISS-play/ability tail is largely cleared. Biggest
+buckets now: ctx-asks (~44, onEvolve "you may" riders — a good next fan-out wave, but many
+block earlier), stadiums (~31, verification-hard passives — mostly +0), A-infra (draw-underrun
++ deckCount/discard drift, ~26 — the §5 keystone, still the hard shared wall), nonselect-hp
+residuals (~20, case-by-case), E rabbit-holes (Mega Brave 983, 1267). **Next: either the §5
+hidden-zone keystone (draw-underrun — see §12 memory note) OR a second §7 fan-out wave over
+the ctx-43 onEvolve asks.** The fan-out recipe above is proven; scale it.
+
+## 13. Session 2026-07-13 continuation (same branch, +30 → 296/434)
+
+Three inline batches, each a SHARED-ROOT fix found by characterizing a whole divergence
+cluster (not per-card). Zero regressions throughout; gate green. The method that paid off:
+`ladder.py` tag → cluster the tag by *divergence-frame trigger* (a `char_ctx2.py`-style
+replay-to-frame characterizer, NOT the first matching frame) → one code/data fix clears the
+whole cluster.
+
+- **Rare Candy onEvolve trigger (+12), commit 34d86b7.** The ctx43 cluster (21 eps) was ALL
+  `viaRareCandy=True`: a skip-evolve (`op_rare_candy_evolve`) never fired the Stage-2's onEvolve
+  triggered ability that the MAIN `OptionType.EVOLVE` path queues. Fix: the op appends the same
+  `xActivateAsk` trigger to `gs.pending_triggers`; `_after_program` discards the Candy silently
+  then flushes it. Cleared Alakazam Psychic Draw + Marnie's Grimmsnarl ex Punk Up. (Kadabra/
+  Hariyama/Meowth normal-evolve/onBench asks already worked.)
+- **onEvolve no-target legal gates (+11), same commit 34d86b7.** The ctx0 cluster was the INVERSE
+  — cgpy OVER-asking (native at MAIN). Same 3 cards, each missing a `legal` gate: Hariyama 674
+  `oppBenchExists`, Archaludon ex 190 `discardHas {M}`. **Meowth ex 1071 DEFERRED** (deck-has-
+  Supporter gate needs the §5 keystone — the `deckHas` peek is prize/deck-ambiguous; it regressed
+  ep-85050368, reverted). See determinism §9k.
+- **Stadium play-enable batch (+7), commit cfd0195.** A deferred stadium's PLAY option is absent
+  (options.py gates on a `stadium` key). Probed all 10 with bare `stadium: {}` (play + placement,
+  NO passive); kept the 3 with clean episodes: **Jamming Tower 1246 (+5), Area Zero 1250 (+1),
+  Dizzying Valley 1265 (+1)**. The passive is a verified no-op in every clean episode and diverges
+  (caught) where it matters. The other 7 gained nothing (blocked on unrelated cards or need the
+  activated ability — Grand Tree 1249). Jamming's retro-toggle stays Phase-4. See determinism §9l.
+- **Area Zero bench_max=8 (+2), commit <pending>.** Dynamic `options.effective_bench_max(gs,seat)` =
+  the stadium def's `benchMaxIfTera` (8) when the seat has any Tera in play, else base 5; applied at
+  render/benchSpace/main-option-gen/deck-to-bench. The discard-to-5 when the last Tera/stadium leaves
+  is deferred. Can't regress a clean episode (an AreaZero+Tera one already diverges on benchMax).
+  See determinism §9m.
+
+**298-state tail (136 non-clean) — the §5 hidden-zone keystone is now confirmed dominant:** the
+deck-RECONSTRUCTION drift blocks ~30+ eps that all surface via a deck-reveal — **Hop's Bag ctx5 (7)**
+and **Ethan's Adventure ctx7 (5)** are NOT per-card fixes (their deck-SEARCH option set diverges: a
+missing deck index / index 23-vs-24 = cgpy's reconstructed deck ≠ native's), plus deckCount-off-by-2
+(7), draw-underrun (11), Meowth×2. nonselect:current (50) is genuinely DIFFUSE (KO-timing active-hp0-
+not-removed, damage Δ20/30, turnActionCount off-by-1 — each per-card). Also Mega Brave 983 (7,
+Phase-4), Handheld Fan 1161 (7, dormant), deferred scaling attacks (1267×7, 363×3). **The easy shared
+roots are EXHAUSTED. Next = the §5 keystone** (hidden-zone identity tracking in verify/replayer.py:
+track the SET of possible identities per facedown slot, narrow monotonically as reveals arrive,
+reconcile a search/mill/deckCount against native's observed frame) — the single highest-leverage
+move, unblocking Hop's Bag / Ethan's / deckCount / draw-underrun / Meowth at once.

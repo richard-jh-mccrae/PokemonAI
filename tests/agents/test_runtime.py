@@ -49,6 +49,8 @@ EXPECTED_SHIPPED = {
     "lethal_veto": True,            # ADR-0037
     "promote_ko_aware": True,       # Proposal C (2026-07-11)
     "boost_lethal": True,           # Proposal B (2026-07-11)
+    "retreat_enabler_lethal": True,  # ml f15 retreat-enabler lethal (2026-07-13, engine-confirmed)
+    "disruptor_lock_maneuver": True,  # dragapult f20 offensive item-lock (2026-07-13, ship-and-refine)
     "matchup_targeting": True,      # ADR-0051 MatchupPlan spine (retired brief_preevo/brief_engine)
     "objectives_race": True,        # ADR-0040
     "objectives_path": True,        # ADR-0040

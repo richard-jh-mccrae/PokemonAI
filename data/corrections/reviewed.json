@@ -639,9 +639,9 @@
     "round": "2026-07-09"
   },
   "85046350-20": {
-    "disposition": "deferred",
-    "reason": "PARTIAL 2026-07-10 (PR #70): the maneuver's RETREAT frame is built as retreat-to-wall-the-line (verified via the SIBLING f32 fixture 85046350-32). But THIS fixture is the ATTACH-enablement frame (Dreepy @0 Energy, AttachFrom ctx 21 -- attach to the ACTIVE line-preevo to enable the later wall-retreat), which retreat-to-wall-the-line does NOT touch. Re-probed 2026-07-10: decide()=[1] bench, correct=[0] active -- STILL the blunder (dont-feed-the-doomed -30 sinks the active attach +5 below the bench +15). STILL OPEN: needs a rung that endorses feeding the fragile line-preevo Active when it enables the sacrificial-wall maneuver (can_wall_line_with_disruptor + retreat affordable next turn). See docs/todo/retreat-to-item-lock-maneuver.md.",
-    "round": "2026-07-10"
+    "disposition": "fixed",
+    "reason": "BUILT 2026-07-13 (disruptor_lock_maneuver, default ON, kill-switched). Diagnosed at build time: the shipped retreat rung's premise (can_wall_line_with_disruptor) requires the opp Active to threaten damage, which is FALSE here (0-Energy Gible) -- so f20 is OFFENSIVE item-lock disruption (deny the opp's T2 Item turn), not defensive walling. New signal can_lock_line_with_disruptor (early game + fragile line-preevo Active + benched item_lock opener + reachable cheap retreat + Active can't KO); new rung feed-the-line-for-disruptor-lock (+20) endorses the active-Dreepy attach so it can retreat into Budew; retreat-to-wall-the-line + hold-position-in-setup broadened to the offensive signal so the follow-up retreat completes the maneuver. decide()=[0] (active), was [1] (bench). SHIP-AND-REFINE per user decision 2026-07-13: value is matchup-dependent (a fragile 30-HP Budew may concede a prize) -- kill-switch is the lever. Zero dragapult-corpus regression. Tests in test_blunder_20260710_split_fixes.py.",
+    "round": "2026-07-13"
   },
   "83967840-54": {
     "disposition": "covered",
@@ -659,9 +659,9 @@
     "round": "2026-07-10"
   },
   "84071010-15": {
-    "disposition": "deferred",
-    "reason": "capability-gap: the retreat-Tool-enabled lethal. deck_definitely_has(Air Balloon)=False (P=0.9877; obs carries no own_prizes so the deck tracker never anchors) and the Lethal Solver's contract is 'a probable fetch is never a win' -- locking it would be a phantom. Fixture also stores the REFUTED dead-hand correct=[1]. See docs/todo/lethal-retreat-tool-enabler.md.",
-    "round": "2026-07-10"
+    "disposition": "fixed",
+    "reason": "BUILT 2026-07-13 (retreat_enabler_lethal). The prior phantom objection is retired: the fixture now carries own_prizes + search_begin_input, so the tracker anchors and deck_definitely_has(Air Balloon)=True. New _family_win_candidates tier 6 recognizes the win (a benched attacker wins if promoted, the Active can't retreat now, a retreatReduction Tool the deck definitely holds frees it) + two KO_SCORE grab/attach tacticals steer the cascade (Petrel search -> Air Balloon, attach -> Active) + _can_retreat now credits an attached retreat Tool. Fixture re-tagged correct=[0] (Petrel), category missed_win. decide() LOCKS the engine-verified win (planned.goal='win', verified=True, next_step=[0]); engine_confirms(f15)=True; the three lethal counter-fixtures don't regress. Gated by engine-confirm (a phantom is dropped). Tests in test_planner_boost_promote.py.",
+    "round": "2026-07-13"
   },
   "85046350-10": {
     "disposition": "covered",

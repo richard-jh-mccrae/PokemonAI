@@ -381,6 +381,20 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
                     # the BOTTOM; Pokégear the top)
                     rnd.look_feed[look_owner] = list(rec_moves)
 
+            # God-free mill pre-binding: the NEXT frame's own-window DECK->DISCARD
+            # moves are the exact cards a top-of-deck mill discards (Hammer-lanche
+            # 1046). Feed them per deck-owner so the mill binds native's true top-N
+            # (and its damage scale counts the true discarded energy) — a god-free
+            # shuffle otherwise leaves cgpy's own order, not native's. rng.mill_bind
+            # swaps a provisionally prize-parked serial back into the deck.
+            for l in nxt.get("logs") or []:
+                if (l.get("type") == int(LogType.MOVE_CARD)
+                        and l.get("fromArea") == int(AreaType.DECK)
+                        and l.get("toArea") == int(AreaType.DISCARD)
+                        and l.get("serial") is not None
+                        and l.get("playerIndex") in (0, 1)):
+                    rnd.mill_feed[l["playerIndex"]].append(l["serial"])
+
         twin = eng.fork() if fork_check else None
         try:
             eng.step(choice)
@@ -391,7 +405,8 @@ def replay(trace: Trace, *, compare_god: bool = True, fork_check: bool = False) 
             report.kind, report.frame = "error", k
             return report
         finally:
-            rnd.look_feed = {0: [], 1: []}   # a look feed binds ONE step only
+            rnd.look_feed = {0: [], 1: []}   # a look/mill feed binds ONE step only
+            rnd.mill_feed = {0: [], 1: []}
         if twin is not None:
             d = first_divergence(eng.god_frame(), twin.god_frame())
             if d is None and eng.gs.outbox != twin.gs.outbox:

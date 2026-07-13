@@ -49,6 +49,44 @@ EPISODES = [
     ("episode-85687852-replay.json.gz", 14),   # Prism Energy attach un-deferred
     ("episode-82229613-replay.json.gz", 40),   # Team Rocket's Transceiver: deck-search a
                                                # "Team Rocket" Supporter to hand
+    ("episode-83690879-replay.json.gz", 56),   # Mega Abomasnow ex Hammer-lanche: mill top 6,
+                                               # 100 damage per Basic {W} milled (mill-output
+                                               # reveal-binding + milled_basic_energy scale)
+    ("episode-83119861-replay.json.gz", 55),   # Powerglass end-of-turn tool: after TURN_END,
+                                               # may attach a Basic Energy from discard to the
+                                               # Active holder (suspendable between-turns select)
+    ("episode-83691502-replay.json.gz", 167),  # Prime Catcher: ACE SPEC gust + self-switch
+    ("episode-85164605-replay.json.gz", 147),  # Wondrous Patch: attach a Basic {P} from discard
+                                               # to a benched {P} Pokémon (discard-source distribute)
+    ("episode-83486999-replay.json.gz", 132),  # Blaziken ex Seething Spirit: attach a Basic
+                                               # Energy from discard to a Pokémon (xDiscardEnergyAttachChoose)
+    ("episode-83665798-replay.json.gz", 46),   # Tool Scrapper: discard up to 2 tools in play
+                                               # (xDiscardToolsInPlay)
+    ("episode-83457493-replay.json.gz", 112),  # Kieran: "Choose 1" — switch OR +30 vs ex/V
+                                               # (xFirstEffectChoose splices the picked branch)
+    ("episode-85605555-replay.json.gz", 121),  # Dusclops Cursed Blast ability offered at MAIN
+                                               # (xCurseBlast def; effect exercised in the guard below)
+    ("episode-82871056-replay.json.gz", 33),   # Secret Box (ACE SPEC): discard 3 others, then
+                                               # search Item/Tool/Supporter/Stadium (costHandTrash
+                                               # + xDeckToHandBuckets)
+    ("episode-83459752-replay.json.gz", 75),   # Larry's Skill: discard hand, search Pokémon/
+                                               # Supporter/Basic Energy (xDiscardHandDraw n=0 + buckets)
+    ("episode-85711162-replay.json.gz", 74),    # Alakazam Psychic Draw via Rare Candy: a skip-
+                                                # evolve fires the Stage-2's onEvolve triggered ask
+                                                # (op_rare_candy_evolve queues the onEvolve trigger)
+    ("episode-83971785-replay.json.gz", 44),    # Hariyama Heave-Ho Catcher: onEvolve ask is
+                                                # SUPPRESSED when the opponent has no benched
+                                                # Pokémon (oppBenchExists legal gate — no gust target)
+    ("episode-81907835-replay.json.gz", 84),    # Jamming Tower play-enable: the stadium is offered
+                                                # + placed; its tools-inert passive is a verified
+                                                # no-op here (stadium:{} — passive deferred to Phase 4)
+    ("episode-84897913-replay.json.gz", 51),    # Area Zero Underdepths play-enable: offered +
+                                                # placed; the Tera bench_max=8 passive stays <=5 here
+    ("episode-84077723-replay.json.gz", 56),    # Dizzying Valley play-enable: the confused-no-recover
+                                                # -on-evolve passive is a verified no-op (no such evolve)
+    ("episode-82871704-replay.json.gz", 91),    # Area Zero Underdepths bench_max=8: a player with a
+                                                # Tera in play benches a 6th+ Pokémon (effective_bench_max)
+    ("episode-85609929-replay.json.gz", 118),   # Area Zero bench_max=8, second deck (Tera bench > 5)
 ]
 
 
@@ -77,6 +115,37 @@ def test_froslass_freezing_shroud_fires():
     report = replay(convert(payload))
     assert report.frames_green > 54, (
         f"Freezing Shroud regressed — diverged at the checkup:\n{report}")
+
+
+def _guard(name: str, min_green: int, what: str) -> None:
+    """A card whose op fires but whose episode has a LATER unrelated blocker: assert the
+    replay sails past the op's frames (the '+0 verified groundwork' pattern)."""
+    path = FIXTURES / name
+    payload = json.loads(gzip.decompress(path.read_bytes()))
+    report = replay(convert(payload))
+    assert report.frames_green > min_green, f"{what} regressed:\n{report}"
+
+
+def test_eri_reveals_and_discards_items():
+    # Eri: opp reveals hand, discard up to 2 Item cards found (xOppHandRevealDiscardMulti).
+    _guard("episode-82225138-replay.json.gz", 22, "Eri")
+
+
+def test_lucian_bottoms_hands_and_coin_draws():
+    # Lucian: both bottom their hands, then coin -> draw 6/3 (xBothBottomHandCoinDraw).
+    _guard("episode-85687339-replay.json.gz", 28, "Lucian")
+
+
+def test_energy_swatter_reveals_and_bottoms_energy():
+    # Energy Swatter: reveal opp hand, put a found Energy on the bottom of their deck
+    # (xOppHandRevealChooseFiltered).
+    _guard("episode-82006648-replay.json.gz", 5, "Energy Swatter")
+
+
+def test_dusknoir_cursed_blast_self_ko():
+    # Dusknoir Cursed Blast: put 13 counters on 1 opp Pokémon, then self-KO + opp claims
+    # its prize inline (xCurseBlast, the mid-turn ability self-KO path).
+    _guard("episode-83689598-replay.json.gz", 31, "Cursed Blast")
 
 
 def test_ogerpon_teal_dance_fires():

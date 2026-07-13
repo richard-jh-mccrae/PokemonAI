@@ -126,6 +126,12 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
             units = sum(1 for p in gs.in_play(seat)
                         for aid in gs.stat(p.top).attacks
                         if gs.db.attacks[aid].name == scale["attackName"])
+        elif scale["var"] == "milled_basic_energy":   # Hammer-lanche: "for each Basic
+            from .schema import CardType                # {W} Energy you discarded this way"
+            et = scale.get("energyType")
+            units = len([s for s in pre_vars.get("milled", [])
+                         if gs.stat(s).cardType == CardType.BASIC_ENERGY
+                         and (et is None or int(gs.stat(s).energyType) == et)])
         else:
             units = scale_count(gs, seat, scale["var"], scale.get("energyType"))
         if scale.get("add"):
