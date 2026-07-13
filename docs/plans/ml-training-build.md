@@ -207,3 +207,21 @@ the WP2 checkpoint pool is the stand-in.
 - ADR numbering: 0051–0052 are taken on an unpushed arch-review branch (Stat Provider seam,
   KO Oracle); **next free is 0054**.
 - End of every session: update the status ledger + notes here, and auto-memory.
+
+## Execution notes — model & effort (2026-07-13)
+
+Build sessions run on **Claude Opus 4.8** (Fable 5 trial expiring). Settings and
+compensations:
+
+- **Effort:** `xhigh` for every build session and both gates (S1, S2a, S2b, S3a, S3b, G1,
+  G2); `high` for S4 glue; `max` only to re-run a gate that failed twice. Mechanical
+  subagent fan-outs (test authoring, sweeps, verify votes) run at `low`.
+- **Session kickoff prompts must say to fan out:** Opus 4.8 under-reaches for subagents by
+  default. Each kickoff includes: *"Fan independent verification, test authoring, and
+  sweeps out to parallel subagents; work the main thread on design and integration."*
+- **Spend the price gap on verification** (Opus ≈ half Fable per token): run `/code-review`
+  at the end of S2a and S3b before marking the ledger; hold G1/G2 strictly — the gates are
+  the quality backstop for the builder tier.
+- **Remaining Fable 5 budget, if any, goes to design, not plumbing:** short design-grill
+  sessions for S2a's feature/matchup encoding and S3b's expert-target loss — lock the
+  decisions into this doc's session notes; Opus executes the locked designs.
