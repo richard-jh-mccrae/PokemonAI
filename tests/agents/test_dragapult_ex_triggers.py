@@ -29,6 +29,10 @@ FIRE, PSYCHIC, DRAGON = 2, 5, 9
 JET, PHANTOM = 153, 154            # Dragapult ex attacks (C 70 / FP 200+spread)
 EVOLVE = 9                         # OptionType.EVOLVE
 
+_ATTACK_STATS = {
+    JET: AttackStat(JET, damage=70, cost=1),
+    PHANTOM: AttackStat(PHANTOM, damage=200, cost=2, benchSpread=60),
+}
 _STATS = DictCardStatProvider({
     DREEPY: CardStat(DREEPY, name="Dreepy", energyType=DRAGON, hp=70),
     DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", energyType=DRAGON, hp=90, evolvesFrom="Dreepy"),
@@ -39,19 +43,12 @@ _STATS = DictCardStatProvider({
     MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", energyType=PSYCHIC, hp=110),
     CINDERACE: CardStat(CINDERACE, name="Cinderace", energyType=FIRE, hp=160),
     RISKY_RUINS: CardStat(RISKY_RUINS, hp=0, cardType=4),      # Stadium
-})
-_ATTACK_STATS = {
-    JET: AttackStat(JET, damage=70, cost=1),
-    PHANTOM: AttackStat(PHANTOM, damage=200, cost=2, benchSpread=60),
-}
-_ATTACKS = {aid: st.damage for aid, st in _ATTACK_STATS.items()}
-_COSTS = {aid: st.cost for aid, st in _ATTACK_STATS.items()}
+}, attacks=_ATTACK_STATS)
 
 
 def _pilot():
     return Pilot(STRATEGY, deck=[DREEPY] * 4 + [DRAKLOAK] * 4 + [DRAGAPULT] * 3 + [1] * 49,
-                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=CardFunctions({}),
-                 attacks=_ATTACKS, attack_costs=_COSTS, attack_stats=_ATTACK_STATS)
+                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=CardFunctions({}))
 
 
 def _fired(trace):

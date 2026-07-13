@@ -236,9 +236,8 @@ def test_incoming_sees_the_opponents_discard_scaler():
                          attacks=(1042,), minAttackCost=1),
         MYMON: CardStat(cardId=MYMON, name="Mine", hp=90, energyType=2),
         W_ENERGY: CardStat(cardId=W_ENERGY, name="Basic {W} Energy", cardType=5, energyType=3),
-    })
-    p = Pilot(Strategy(), deck=[1] * 60, stats=stats, functions=CardFunctions({}),
-              attacks={1042: 0}, attack_costs={1042: 1}, attack_stats={1042: RIPTIDE})
+    }, attacks={1042: RIPTIDE})
+    p = Pilot(Strategy(), deck=[1] * 60, stats=stats, functions=CardFunctions({}))
     board = state(active=poke(MYMON, energy=1, hp=90),
                   opp_active=poke(KYOGRE, energy=1, hp=150),
                   opp_discard=[W_ENERGY] * 5, prizes=2, opp_prizes=2)
@@ -277,17 +276,19 @@ def _pilot(attack_stats=None):
     from common.scouting.provider import DictCardStatProvider
     from common.strategy import Line, Strategy
 
+    # flagless baseline records (the old legacy-dict synth, byte-for-byte); an explicit
+    # attack_stats record wins for its id
+    synth = {1487: AttackStat(attackId=1487, damage=120, cost=1, benchSnipe=50),
+             1488: AttackStat(attackId=1488, damage=210, cost=3),
+             142: AttackStat(attackId=142, damage=40, cost=1)}
     stats = DictCardStatProvider({
         1031: MEGA_STARMIE, 50: NON_EX, 345: CRUSTLE,
         9: CardStat(cardId=9, name="Vanilla", hp=40, energyType=2),
-    })
+    }, attacks={**synth, **(attack_stats or {})})
     strat = Strategy(lines=[Line(path=[50, 1031], payoff=1031, role="win_condition")],
                      roles={1031: ["win_condition"]})
     return Pilot(strat, deck=[1] * 60, stats=stats,
-                 functions=CardFunctions({345: ["prevent_ex_damage"]}),
-                 attacks={1487: 120, 1488: 210, 142: 40},
-                 attack_costs={1487: 1, 1488: 3, 142: 1},
-                 bench_snipe={1487: 50}, attack_stats=attack_stats)
+                 functions=CardFunctions({345: ["prevent_ex_damage"]}))
 
 
 @pytest.mark.req("REQ-DMG-0004")
@@ -340,9 +341,9 @@ def test_hand_size_lethal_is_exact_and_lockable():
 
 
 @pytest.mark.req("REQ-DMG-0006")
-def test_pilot_wrapper_degrades_to_legacy_dicts_without_attack_stats():
-    # No attack_stats wired: wrapper synthesizes a flagless record from legacy dicts,
-    # reproducing OLD behavior exactly (prevention zeroes EVERY ex attack, incl. Nebula).
+def test_pilot_wrapper_degrades_to_flagless_records_without_effect_stats():
+    # Only flagless baseline records wired (no effect-parsed AttackStats): reproduces the OLD
+    # pre-oracle behavior exactly (prevention zeroes EVERY ex attack, incl. Nebula).
     p = _pilot(attack_stats=None)
     crustle = {"id": 345, "hp": 140}
     assert p.predicted_damage(1031, 1488, crustle) == 0      # flagless -> old conservative zero

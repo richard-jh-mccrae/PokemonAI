@@ -8,7 +8,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
@@ -34,7 +34,8 @@ def _stats():
                            minCostDamage=10, evolvesFrom="Kadabra"),
         KADABRA: CardStat(KADABRA, name="Kadabra", hp=80, maxDamage=30, evolvesFrom="Abra"),
         HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),
-    })
+    }, attacks={11: AttackStat(11, damage=120, cost=1, benchSnipe=50),
+                20: AttackStat(20, damage=50, cost=1)})
 
 
 def _funcs():
@@ -46,8 +47,7 @@ def _pilot():
     strat = Strategy(lines=[Line(path=[1030, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"], CINDER: ["accel_source"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=_funcs(), attacks={11: 120, 20: 50}, attack_costs={11: 1, 20: 1},
-                 bench_snipe={11: 50})
+                 functions=_funcs())
 
 
 @pytest.mark.req("REQ-GEN-0052")
@@ -100,7 +100,9 @@ def test_prevented_active_damage_does_not_kill_the_bench_snipe_credit():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_a_non_ex_attacker_is_not_prevented():
-    # Sanity: Cinderace (non-ex) NOT blocked by Crustle's ex-lock -- KO oracle still fires.
+    # Sanity: Cinderace (non-ex) NOT blocked by Crustle's ex-lock — the oracle lands its 50;
+    # the Mega ex's plain attack IS zeroed (attack-scoped prevention, the one damage.py home —
+    # the Pilot-side _ability_prevents_damage pair is retired, ADR-0052).
     p = _pilot()
-    assert not p._ability_prevents_damage(p.stats.get(CINDER), CRUSTLE)
-    assert p._ability_prevents_damage(p.stats.get(MEGA), CRUSTLE)        # Mega ex IS blocked
+    assert p.predicted_damage(CINDER, 20, {"id": CRUSTLE, "hp": 150}) == 50
+    assert p.predicted_damage(MEGA, 11, {"id": CRUSTLE, "hp": 150}) == 0

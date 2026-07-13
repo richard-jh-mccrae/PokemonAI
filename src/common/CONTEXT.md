@@ -116,6 +116,22 @@ _Avoid_: recognizer, detector
 
 ### Card knowledge
 
+**Stat Provider**:
+The ONE card-knowledge seam — the interface every consumer asks for engine-derived card facts:
+`get(card_id)` → **CardStat**, `attack(attack_id)` → **AttackStat** (the Attack Effect record), and the
+cross-card queries (forward-evolution index, name resolution). Two adapters share the same record
+classes: the engine-backed runtime one (eager-builds its tables in the pregame window, audit overrides
+included) and the dict-backed test one. Single-card *interpretation* (prize value, is-an-ex-body,
+is-Energy/Supporter/Tool, cheapest-attack affordability) lives on the **records themselves**, so a
+hand-built record in a test answers exactly like the engine path; the provider answers only lookups and
+cross-card questions. Fail-open: unknown id → `None`, and each consumer keeps its own site-specific
+default — a my-side affordability read fails *closed* (`or 99`), an opponent-threat read fails
+*worst-case* (`or 0`); those defaults are epistemics, not interpretation, and stay at the call site.
+_(ADR-0056, built 2026-07-13 — retired the Pilot's seven attack-fact constructor arguments, the
+parallel per-mechanic dicts, and the synth fallback.)_
+_Avoid_: provider (bare — say Stat Provider), card database, CardStat/AttackStat (the records it hands
+out, not the seam), Function Tag / Effect Clause (behavioral JSON tables — separate, offline-built feeds)
+
 **Function Tag**:
 A coarse label for a *behavioral* function a card performs (`draw`, `search`, `energy_accel`,
 `gust`, `heal`, `spread`, `poison`, …) — derived offline by **probing** the card in the engine
@@ -260,10 +276,36 @@ is its recipient. With **no** recipient the acceleration is wasted, so developin
 priority while the accelerator is Active (`accel_recipient_missing` → `develop-the-accel-recipient`).
 _Avoid_: target (overloaded — reserve "recipient" for the body that *receives* accelerated Energy)
 
+**KO Oracle**:
+The ONE closed-form home for combat judgment — *can X KO Y, what is that KO worth, how fast
+does either side fell a body* (`strategy/combat.py`, `CombatMath`, ADR-0052). Owns the damage
+core (composing the pure `damage.py` seam), reachability (cheapest / affordable / maxed /
+can-damage), the shared KO-valuation band every hypothetical attacker is priced on
+(retreat/gust/promote/attach/boost lookaheads), bench-rider prize math, typed affordability,
+the worst-case Incoming family, and `turns_to_ko`. Built from the knowledge seams (the Stat
+Provider, Function Tags, the transient tracker) with per-decision facts as call arguments —
+no Pilot, no Board, standalone-testable. The Pilot delegates through thin wrappers; the
+card-level KO fallback (`minCostDamage` × attack-blind W/R) is retired — no record, no claim.
+_Avoid_: Tactical Evaluator (the Score component that RANKS options — it consumes this),
+Lethal Solver (the sound win rung — a consumer), damage oracle (the `damage.py` per-attack
+seam this composes), combat module (bare)
+
 **Pilot**:
 A deck's complete in-match decision engine — the shared `common/` component behind every
 choice. A deck customises it only by supplying a Strategy.
 _Avoid_: agent (the Kaggle entry function), brain, AI
+
+**Deployment Profile**:
+The one table of shipped kill-switch values — `common/runtime.py` `PROFILE` (ADR-0055): ON
+entries are A/B-cleared or user-decided; armed-off entries stay dark until their evidence
+gate clears. The Pilot ctor stays the *raw-scoring* layer (features off — the neutral
+substrate tests and probes construct); `make_agent(STRATEGY)` is the whole per-agent shell
+(each `main.py` is ~5 lines) and resolves every flag as `params.get(flag, PROFILE[flag])`,
+so a deck's own params and the `AGENT_OVERLAY` A/B lever keep forcing any switch.
+tune/retest/score_diff build through the same profile — a retest decides with the live
+agent's backstops, structurally.
+_Avoid_: kill-switch smear (the retired per-main.py literals), defaults (ambiguous — say
+ctor default vs shipped value)
 
 **Plan**:
 The Pilot's current-turn strategic mode — one of a closed set (`SETUP`, `RACE`,

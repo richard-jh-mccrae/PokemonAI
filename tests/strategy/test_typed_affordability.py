@@ -28,7 +28,7 @@ JETTING = 11        # {W}{C}{C} -> energyTypes (3, 0, 0)
 TURBO = 20          # {C} -> untyped
 
 
-def _stats():
+def _stats(attacks=None):
     return DictCardStatProvider({
         WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=120,
                          maxDamageCost=3, minAttackCost=3, minCostDamage=120, attacks=(JETTING,),
@@ -38,17 +38,23 @@ def _stats():
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
         OPP: CardStat(OPP, name="opp", hp=100),
-    })
+    }, attacks=attacks)
 
 
-def _pilot(**kw):
-    kw.setdefault("attack_stats", {JETTING: AttackStat(JETTING, damage=120, cost=3,
-                                                       energyTypes=(3, 0, 0)),
-                                   TURBO: AttackStat(TURBO, damage=50, cost=1, energyTypes=(0,))})
+# cost/damage-only records (the old legacy-dict synth shape, no energyTypes — fail-open on type)
+_SYNTHS = {JETTING: AttackStat(JETTING, damage=120, cost=3),
+           TURBO: AttackStat(TURBO, damage=50, cost=1)}
+# the full typed records the tests exercise by default
+_TYPED = {JETTING: AttackStat(JETTING, damage=120, cost=3, energyTypes=(3, 0, 0)),
+          TURBO: AttackStat(TURBO, damage=50, cost=1, energyTypes=(0,))}
+
+
+def _pilot(attack_stats=None, **kw):
+    explicit = _TYPED if attack_stats is None else attack_stats
+    merged = {**_SYNTHS, **explicit}       # explicit records win; synths fill the remaining ids
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}, lines=[]),
-                 deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}),
-                 attacks={JETTING: 120, TURBO: 50}, attack_costs={JETTING: 3, TURBO: 1}, **kw)
+                 deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(merged),
+                 functions=CardFunctions({IGNITION: ["discard_eot"]}), **kw)
 
 
 def _body(energies):
@@ -96,7 +102,8 @@ def test_unknown_type_budget_is_wild():
 
 @pytest.mark.req("REQ-GEN-0068")
 def test_unresolvable_attack_record_is_silent():
-    """No AttackStat for the attack -> the count check stays the sole authority."""
+    """No energyTypes on the attack record (the legacy-synth shape) -> the count check stays the
+    sole authority."""
     pilot = _pilot(attack_stats={})
     assert _ko(pilot, body=_body([IGNITION, IGNITION, IGNITION])) >= KO_SCORE
 

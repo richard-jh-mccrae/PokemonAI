@@ -94,11 +94,8 @@ def _pilot():
         1: CardStat(cardId=1, name="Mine", hp=100, energyType=3, attacks=(PLAIN,), minAttackCost=1),
         2: CardStat(cardId=2, name="Theirs", hp=300, energyType=7,
                     attacks=(LOCKED, BONUS), minAttackCost=1),
-    })
-    return Pilot(Strategy(), deck=[1] * 60, stats=stats, functions=CardFunctions({}),
-                 attacks={PLAIN: 120, LOCKED: 90, BONUS: 50, FB: 200, NAMED: 150},
-                 attack_costs={PLAIN: 1, LOCKED: 1, BONUS: 1, FB: 3, NAMED: 1},
-                 attack_stats=_stats())
+    }, attacks=_stats())
+    return Pilot(Strategy(), deck=[1] * 60, stats=stats, functions=CardFunctions({}))
 
 
 @pytest.mark.req("REQ-TRANS-0004")

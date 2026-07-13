@@ -1,15 +1,12 @@
-"""Every shipped agent's main.py wires the full deployment config into its Pilot.
+"""Every shipped agent's main.py IS the shared runtime (ADR-0055) — nothing else.
 
-The Pilot ctor defaults the Posture / Lethal-Solver / Turn-Planner kill-switches to ``False``
-(``pilot.py`` __init__): the ctor is the *raw-scoring* layer, and the validated-best deployment
-config (all A/B-cleared ON: ADR-0026/0030/0031/0037) is opted into at the AGENT (main.py) level.
-
-A new deck built from an incomplete main.py template can silently ship with those layers DARK —
-no engine-ranked planner, no unified lethal family, no key-threat rung — and play far below the
-tuned agent (this is exactly how mega_lucario + dragapult_ex first shipped, 2026-07-03). This test
-pins the invariant so the omission fails CI instead of the grader: every ``Pilot(...)`` in every
-``src/agents/<deck>/main.py`` must pass each switch as ``_params.get("<key>", True)`` — ON by
-default, still overlay-controllable for local A/B (ADR-0021).
+Pre-0055 each main.py carried a byte-copied shell with an 18-line kill-switch smear, and this
+test pinned the smear file-by-file (AST `_params.get("<key>", True)` patterns) so an
+incomplete copy couldn't ship a layer dark. The deployment config is now DATA
+(``common.runtime.PROFILE``, pinned by ``test_runtime.py`` against the Pilot ctor signature),
+so the invariant inverts: a main.py must contain NO local wiring at all — one ``make_agent``
+call, no ``Pilot(...)``, no per-file flag literals. Hand-adding a flag to one agent (the
+pre-0055 drift class) fails here.
 """
 import ast
 from pathlib import Path
@@ -18,85 +15,40 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 
-# The deployment kill-switches every shipped agent must opt into (default ON, overlay-off capable).
-REQUIRED_SWITCHES = (
-    "posture",              # ADR-0026 Read/Posture
-    "lethal_verify",        # ADR-0030 engine-confirm direct lethal locks
-    "planner_engine_rank",  # ADR-0031 engine-sim ranks the planner's candidate lines
-    "planner_key_threat",   # ADR-0031 KO-the-key-threat Goal-Ladder rung
-    "lethal_family",        # ADR-0037 the ONE win-generator family + verify-every-lock
-    "lethal_veto",          # ADR-0037 replay the verified cascade
-    "matchup_targeting",    # ADR-0051 MatchupPlan target-priority spine (superseded ADR-0038 levers)
-)
-
-# Wired-but-ARMED-OFF switches: present + overlay-controllable, default False — deliberately dark
-# until an evidence gate clears (then a switch moves into REQUIRED_SWITCHES). Currently none: the
-# ADR-0038 brief_engine lever was retired into the ADR-0051 MatchupPlan spine.
-ARMED_OFF_SWITCHES = ()
-
 AGENT_MAINS = sorted((REPO / "src" / "agents").glob("*/main.py"))
+FIXTURE_MAIN = REPO / "tests" / "fixtures" / "agents" / "mega_starmie" / "main.py"
+ALL_MAINS = AGENT_MAINS + [FIXTURE_MAIN]
+_IDS = [p.parent.name for p in AGENT_MAINS] + ["fixture_mega_starmie"]
 
 
-def _pilot_call(main_py: Path) -> ast.Call:
-    """The single ``Pilot(...)`` call node in an agent's main.py."""
+@pytest.mark.req("REQ-WIRE-0001")
+@pytest.mark.parametrize("main_py", ALL_MAINS, ids=_IDS)
+def test_main_is_only_the_shared_runtime(main_py):
+    """REQ-WIRE-0001 (inverted, ADR-0055): main.py = import STRATEGY, call make_agent, bind
+    ``agent`` (the harness contract). Any local Pilot build or flag literal is drift from the
+    one deployment profile."""
     tree = ast.parse(main_py.read_text(encoding="utf-8"))
-    calls = [n for n in ast.walk(tree)
-             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "Pilot"]
-    assert len(calls) == 1, f"{main_py}: expected exactly one Pilot(...) call, found {len(calls)}"
-    return calls[0]
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    assert sum(c.func.id == "make_agent" for c in calls) == 1, (
+        f"{main_py}: expected exactly one make_agent(...) call — the shared runtime builds "
+        f"the agent (common/runtime.py).")
+    assert not any(c.func.id == "Pilot" for c in calls), (
+        f"{main_py}: local Pilot(...) build — deployment wiring lives in common.runtime, "
+        f"never per-agent (the pre-0055 dark-layer drift class).")
+    assert "_params.get(" not in main_py.read_text(encoding="utf-8"), (
+        f"{main_py}: per-file kill-switch literal — the shipped value belongs in "
+        f"common.runtime.PROFILE (one decision, every agent).")
+    bound = [t.id for n in ast.walk(tree) if isinstance(n, ast.Assign)
+             for t in n.targets if isinstance(t, ast.Name)]
+    assert "agent" in bound, (
+        f"{main_py}: no module-level `agent` binding — every harness (grader, arena worker, "
+        f"check_agent, battle server) loads main.py and calls module.agent(obs).")
 
 
-def _is_params_get(node: ast.AST, key: str, default: bool) -> bool:
-    """True iff ``node`` is exactly ``_params.get("<key>", <default>)`` (overlay-controllable)."""
-    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "get" and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "_params"):
-        return False
-    if len(node.args) != 2:
-        return False
-    key_arg, default_arg = node.args
-    return (isinstance(key_arg, ast.Constant) and key_arg.value == key
-            and isinstance(default_arg, ast.Constant) and default_arg.value is default)
-
-
-@pytest.mark.parametrize("main_py", AGENT_MAINS, ids=[p.parent.name for p in AGENT_MAINS])
-def test_agent_wires_deployment_switches_on(main_py):
-    """REQ-WIRE-0001: no shipped agent runs the Posture/Lethal/Planner layers dark — each switch is
-    ``_params.get("<key>", True)`` (default ON, overlay can force off for A/B)."""
-    call = _pilot_call(main_py)
-    kwargs = {kw.arg: kw.value for kw in call.keywords if kw.arg}
-    for switch in REQUIRED_SWITCHES:
-        assert switch in kwargs, (
-            f"{main_py}: Pilot(...) is missing `{switch}=` — the agent would run that layer at the "
-            f"ctor default (OFF). Wire it as {switch}=_params.get(\"{switch}\", True).")
-        assert _is_params_get(kwargs[switch], switch, True), (
-            f"{main_py}: `{switch}=` must be _params.get(\"{switch}\", True) (default ON, "
-            f"overlay-controllable), not {ast.dump(kwargs[switch])}.")
-
-
-@pytest.mark.parametrize("main_py", AGENT_MAINS, ids=[p.parent.name for p in AGENT_MAINS])
-def test_agent_wires_armed_off_switches(main_py):
-    """REQ-WIRE-0001: an armed-off switch is WIRED (present, overlay-controllable) but defaults
-    False — deliberately dark until its evidence gate clears (see ARMED_OFF_SWITCHES notes)."""
-    call = _pilot_call(main_py)
-    kwargs = {kw.arg: kw.value for kw in call.keywords if kw.arg}
-    for switch in ARMED_OFF_SWITCHES:
-        assert switch in kwargs, (
-            f"{main_py}: Pilot(...) is missing `{switch}=` — wire it as "
-            f"{switch}=_params.get(\"{switch}\", False) (armed-off, overlay can force on).")
-        assert _is_params_get(kwargs[switch], switch, False), (
-            f"{main_py}: `{switch}=` must be _params.get(\"{switch}\", False) (armed-off; its "
-            f"evidence gate has NOT cleared), not {ast.dump(kwargs[switch])}.")
-
-
-@pytest.mark.parametrize("main_py", AGENT_MAINS, ids=[p.parent.name for p in AGENT_MAINS])
-def test_agent_wires_scout_and_briefs(main_py):
-    """REQ-WIRE-0002: every shipped agent passes ``scout=`` and ``briefs=`` into its Pilot — an
-    agent that omits ``briefs=`` silently gets ZERO Matchup Briefs (ctor default None → []), so a
-    recognized opponent's counterplay never reaches the Board (the ADR-0038 levers run dark)."""
-    call = _pilot_call(main_py)
-    kwargs = {kw.arg for kw in call.keywords if kw.arg}
-    for required in ("scout", "briefs"):
-        assert required in kwargs, (
-            f"{main_py}: Pilot(...) is missing `{required}=` — recognition/Brief routing would be "
-            f"silently OFF for this agent.")
+@pytest.mark.req("REQ-WIRE-0001")
+def test_fixture_main_is_a_byte_copy_of_the_shipped_agent():
+    """REQ-WIRE-0001: the fixture bundle's main.py stays byte-identical to the shipped
+    mega_starmie main.py — the packaged-bundle system tests exercise the fixture, so a drift
+    here silently tests a DIFFERENT deployable."""
+    src = (REPO / "src" / "agents" / "mega_starmie" / "main.py").read_bytes()
+    assert FIXTURE_MAIN.read_bytes() == src

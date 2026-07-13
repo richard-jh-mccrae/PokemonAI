@@ -14,7 +14,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from pilot_helpers import ACTIVE, BENCH, HAND, PLAY, attack_opt, make_select, opt, poke, state
 
@@ -46,7 +46,9 @@ def _stats():
                         minAttackCost=1, minCostDamage=50, attacks=(TURBO,), energyType=2),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         678: CardStat(678, name="opp attacker", hp=180, megaEx=True, maxDamage=210, energyType=7),
-    })
+    }, attacks={NEBULA: AttackStat(NEBULA, damage=210, cost=3),
+                JETTING: AttackStat(JETTING, damage=120, cost=1),
+                TURBO: AttackStat(TURBO, damage=50, cost=1)})
 
 
 _FNS = {HARLEQUIN: ["draw", "shuffle_hand"], LILLIES: ["draw", "shuffle_hand"],
@@ -58,9 +60,7 @@ def _pilot(deck=None, **kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"], ACCEL: ["accel_source"]},
                      lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)])
     return Pilot(strat, deck=deck if deck is not None else [1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=_stats(), functions=CardFunctions(_FNS),
-                 attacks={NEBULA: 210, JETTING: 120, TURBO: 50},
-                 attack_costs={NEBULA: 3, JETTING: 1, TURBO: 1}, **kw)
+                 stats=_stats(), functions=CardFunctions(_FNS), **kw)
 
 
 # ---------------------------------------------------------- f48: dont-overbuild-the-doomed-wincon

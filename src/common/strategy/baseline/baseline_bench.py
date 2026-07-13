@@ -9,13 +9,13 @@ from common.strategy.strategy import Hypothesis
 
 
 def _multi_prize(stat) -> bool:
-    """A 2-prize (ex) or 3-prize (Mega ex) liability — read straight off the engine CardStat."""
-    return bool(stat and (stat.ex or stat.megaEx))
+    """A 2-prize (ex) or 3-prize (Mega ex) liability — the record's own question (ADR-0056)."""
+    return bool(stat and stat.is_ex_body)
 
 
 def _is_pokemon(stat) -> bool:
     """A Pokémon (Trainers / Energy report hp 0) — so a PLAY of it develops the Bench."""
-    return bool(stat and stat.hp > 0)
+    return bool(stat and stat.is_pokemon)
 
 
 HYPOTHESES = [

@@ -1,0 +1,188 @@
+"""The shared agent runtime (ADR-0055): one deployment PROFILE + one Pilot build for every agent.
+
+The Pilot ctor stays the raw-scoring layer; the validated-best deployment config lives in
+``common.runtime.PROFILE`` — the ONE home for "what ships". These tests replace the per-file
+AST pattern `test_agent_wiring.py` pinned pre-0055: the profile is now data, so completeness
+is asserted against the Pilot ctor signature (a new kill-switch that isn't consciously added
+to the profile fails CI) and the shipped values are pinned as a worked example.
+"""
+import importlib.util
+import inspect
+import json
+from pathlib import Path
+
+import pytest
+
+from common.pilot import Pilot
+from common.runtime import PROFILE, build_pilot, make_agent
+from common.scouting.provider import DictCardStatProvider
+from common.strategy import Strategy
+from pilot_helpers import HAND, PLAY, make_select, opt, state
+
+REPO = Path(__file__).resolve().parents[2]
+FIXTURE = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
+
+
+def _fixture_strategy():
+    spec = importlib.util.spec_from_file_location("rt_fixture_strategy", FIXTURE / "strategy.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.STRATEGY
+
+# Ctor params that wire knowledge/strategy seams rather than deployment configuration —
+# everything else in Pilot.__init__ is a deployment flag and MUST appear in PROFILE.
+SEAM_PARAMS = frozenset({
+    "strategy", "deck", "general_strategy", "overrides", "stats", "functions", "effects",
+    "scout", "briefs",
+})
+
+# The shipped deployment config — the A/B-cleared / user-decided values every agent runs
+# (independent source: the pre-0055 main.py literals and their ADR decision records).
+EXPECTED_SHIPPED = {
+    "search_budget": 0,
+    "posture": True,                # ADR-0026
+    "lethal_verify": True,          # ADR-0030
+    "lethal_seed_exact": True,      # ADR-0050
+    "planner_engine_rank": True,    # ADR-0031
+    "planner_key_threat": True,     # ADR-0031
+    "lethal_family": True,          # ADR-0037
+    "lethal_veto": True,            # ADR-0037
+    "promote_ko_aware": True,       # Proposal C (2026-07-11)
+    "boost_lethal": True,           # Proposal B (2026-07-11)
+    "matchup_targeting": True,      # ADR-0051 MatchupPlan spine (retired brief_preevo/brief_engine)
+    "objectives_race": True,        # ADR-0040
+    "objectives_path": True,        # ADR-0040
+    "objectives_phases": True,      # ADR-0040
+    "gamble_lines": True,           # ADR-0039
+    "snipe_prize_redundant": True,  # ADR-0044 (user decision 2026-07-06)
+    "forced_promotion": True,       # ADR-0044
+    "match_planner_steer": True,    # ADR-0045 S3
+    "forgo_ko": True,               # ADR-0045 S4
+    "prize_economy_fetch": True,    # ADR-0048
+    "evolving_wincon_priority": True,  # ms 85164131 f22
+    "value_model": False,           # ADR-0042 armed-off: ships only after its own ladder A/B
+    "escalation": False,            # ADR-0043 armed-off: needs search_budget>0
+}
+
+
+def _ctor_flag_params() -> set[str]:
+    """Every Pilot.__init__ keyword that is deployment configuration (not a seam)."""
+    sig = inspect.signature(Pilot.__init__)
+    return {name for name in sig.parameters if name != "self"} - SEAM_PARAMS
+
+
+@pytest.mark.req("REQ-WIRE-0003")
+def test_profile_covers_every_pilot_flag():
+    """REQ-WIRE-0003: PROFILE and the Pilot ctor's flag params match EXACTLY, both ways — a
+    new kill-switch added to the ctor fails here until its shipped value is consciously added
+    to the profile (the pre-0055 bug class: a flag omitted from one main.py ran that agent's
+    layer dark), and a stale profile key fails here when its ctor param is retired."""
+    flags = _ctor_flag_params()
+    missing = sorted(flags - PROFILE.keys())
+    assert not missing, (
+        f"Pilot ctor flags missing from runtime PROFILE: {missing} — decide their shipped "
+        f"value and add them (this is how a new feature ships to EVERY agent at once).")
+    stale = sorted(PROFILE.keys() - flags)
+    assert not stale, f"PROFILE keys with no Pilot ctor param: {stale} — retire them."
+
+
+@pytest.mark.req("REQ-WIRE-0001")
+def test_profile_ships_the_validated_best_config():
+    """REQ-WIRE-0001 (inverted from the per-file AST pins): the shipped values are the
+    A/B-cleared / user-decided deployment config — in particular no armed-off switch
+    (brief_engine, value_model, escalation) silently flips ON without its evidence gate."""
+    assert PROFILE == EXPECTED_SHIPPED
+
+
+def _raw_seams():
+    """Lib-free knowledge seams so build_pilot never touches the engine in these tests."""
+    return dict(stats=DictCardStatProvider({}), scout=None, briefs=[])
+
+
+@pytest.mark.req("REQ-WIRE-0003")
+def test_build_pilot_applies_the_shipped_profile():
+    """REQ-WIRE-0003: with no params, every flag on the built Pilot reads its PROFILE value —
+    the runtime, not the ctor default, decides what a deployed agent runs."""
+    pilot = build_pilot(Strategy(), [1] * 60, **_raw_seams())
+    for flag, shipped in PROFILE.items():
+        if flag == "value_model":
+            assert pilot.value_model is None    # armed-off gate False -> no model loaded
+            continue
+        assert getattr(pilot, flag) == shipped, f"{flag} != PROFILE value {shipped}"
+
+
+@pytest.mark.req("REQ-WIRE-0003")
+def test_params_beat_the_profile():
+    """REQ-WIRE-0003: a Strategy param (or overlay param — merged upstream by
+    load_overrides_and_params) overrides the profile per flag, so the battle.py A/B lever
+    (AGENT_OVERLAY) and a deck's own params keep forcing any switch."""
+    strategy = Strategy(params={"posture": False, "search_budget": 50})
+    pilot = build_pilot(strategy, [1] * 60, **_raw_seams())
+    assert pilot.posture is False               # forced OFF through params
+    assert pilot.search_budget == 50            # scalar param overrides the profile's 0
+    assert pilot.lethal_family is True          # untouched flags still ship from the profile
+
+
+@pytest.mark.req("REQ-WIRE-0003")
+def test_explicit_params_argument_beats_strategy_params():
+    """REQ-WIRE-0003: the ``params=`` argument (the already-merged Strategy+overlay dict the
+    shell resolves) wins over ``strategy.params`` when both are given."""
+    strategy = Strategy(params={"posture": False})
+    pilot = build_pilot(strategy, [1] * 60, params={"posture": True}, **_raw_seams())
+    assert pilot.posture is True
+
+
+# --- make_agent: the whole shell, exercised from a real bundle-shaped dir (cwd = agent dir,
+# deck.csv + tuned.json beside it), engine-backed exactly like the grader loads it.
+
+@pytest.mark.req("REQ-WIRE-0004")
+def test_make_agent_builds_the_deployed_agent(monkeypatch):
+    """REQ-WIRE-0004: make_agent(STRATEGY) is the whole pre-0055 main.py shell — deck read
+    from cwd, tuned.json applied, knowledge seams wired, provider warmed in the pregame
+    window, profile flags ON — and returns the harness contract: a 1-arg ``agent(obs)``
+    callable (with the pilot reachable for probes/tools as ``agent.pilot``)."""
+    monkeypatch.chdir(FIXTURE)
+    monkeypatch.setenv("AGENT_NO_TELEMETRY", "1")
+    agent = make_agent(_fixture_strategy())
+
+    pilot = agent.pilot
+    assert len(pilot.deck) == 60                     # deck.csv read from cwd
+    assert pilot.overrides                           # fixture tuned.json reached the Pilot
+    assert pilot.lethal_family is True               # profile applied (spot: ADR-0037 rung)
+    assert pilot.scout is not None and pilot.briefs  # recognition + Briefs wired
+    assert pilot.stats._cache is not None            # provider warmed at build (pregame
+    #                                                  window), not lazily on turn 1
+
+    select = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
+                         current=state(hand=[1086, 1030]))
+    chosen = agent(select)                           # the module-level agent(obs) contract
+    assert isinstance(chosen, list) and all(isinstance(i, int) for i in chosen)
+
+
+@pytest.mark.req("REQ-WIRE-0004")
+def test_make_agent_overlay_forces_a_flag(monkeypatch, tmp_path):
+    """REQ-WIRE-0004: AGENT_OVERLAY params reach the built Pilot through make_agent — the
+    battle.py A/B lever (ADR-0021) can force any profile flag off (or on)."""
+    overlay = tmp_path / "exp.json"
+    overlay.write_text(json.dumps({"params": {"posture": False}}), encoding="utf-8")
+    monkeypatch.chdir(FIXTURE)
+    monkeypatch.setenv("AGENT_OVERLAY", str(overlay))
+    monkeypatch.setenv("AGENT_NO_TELEMETRY", "1")
+    agent = make_agent(_fixture_strategy())
+    assert agent.pilot.posture is False
+
+
+@pytest.mark.req("REQ-WIRE-0004")
+def test_make_agent_emits_telemetry_unless_silenced(monkeypatch):
+    """REQ-WIRE-0004: the shell emits Decision Telemetry (ADR-0019) per decision — tier 0
+    for a searchless profile — and AGENT_NO_TELEMETRY=1 silences it (the battle protocol
+    channel depends on that)."""
+    from common import telemetry
+    emitted = []
+    monkeypatch.chdir(FIXTURE)
+    monkeypatch.delenv("AGENT_NO_TELEMETRY", raising=False)
+    monkeypatch.setattr(telemetry, "emit", lambda decision, tier: emitted.append(tier))
+    agent = make_agent(_fixture_strategy())
+    select = make_select([opt(PLAY, area=HAND, index=0)], current=state(hand=[1030]))
+    agent(select)
+    assert emitted == [0]                            # emitted once, tier 0 (search_budget 0)

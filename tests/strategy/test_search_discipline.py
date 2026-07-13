@@ -12,7 +12,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Ready, Strategy
 from pilot_helpers import (
     ATTACH, BENCH, DAMAGE, DECK, DISCARD, HAND, MAIN, PLAY, TO_HAND,
@@ -155,9 +155,10 @@ def test_prefer_bench_fill_first_stands_down_on_a_full_bench():
 @pytest.mark.req("REQ-GEN-0016")
 def test_development_still_beats_a_weak_chip_via_attack_last():
     stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30),
-                                  900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)})
+                                  900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)},
+                                 attacks={11: AttackStat(11, damage=50)})
     strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])  # active=payoff -> RACE
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, attacks={11: 50})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([attack_opt(11), opt(ATTACH)], context=MAIN,
                       current=state(active=poke(700, energy=1, hp=30), opp_active=poke(900, hp=200)))
     assert pilot.decide(obs) == [1]            # attack-last: develop (attach) ahead of the weak chip
@@ -168,9 +169,10 @@ def test_development_still_beats_a_weak_chip_via_attack_last():
 def test_a_weak_chip_is_taken_when_no_development_is_available():
     # point of the removal: nothing better to do -> chip, don't end turn doing nothing
     stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30),
-                                  900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)})
+                                  900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)},
+                                 attacks={11: AttackStat(11, damage=50)})
     strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, attacks={11: 50})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([attack_opt(11), opt(14)], context=MAIN,      # only a weak chip and End
                       current=state(active=poke(700, energy=1, hp=30), opp_active=poke(900, hp=200)))
     assert pilot.decide(obs) == [0]            # take the chip (19.9-ish), not End
@@ -195,9 +197,10 @@ def test_board_intent_rules_do_not_leak_onto_search_options():
 def test_attack_last_sequences_development_before_the_turn_ending_attack():
     """A KO attack co-exists with a beneficial development (a +30 play). Attacking ends the turn,
     but the KO survives the play — so develop first and keep the attack for last (same turn)."""
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40)})
+    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40)},
+                                 attacks={11: AttackStat(11, damage=50)})
     dev = Hypothesis(id="dev", rationale="", when=lambda c: c.option_type == PLAY, weight=30)
-    pilot = Pilot(Strategy(hypotheses=[dev]), deck=[1] * 60, stats=stats, attacks={11: 50})
+    pilot = Pilot(Strategy(hypotheses=[dev]), deck=[1] * 60, stats=stats)
     obs = make_select([attack_opt(11), opt(PLAY)], context=MAIN,
                       current=state(active=poke(700, energy=1), opp_active=poke(900, hp=40)))
     d = pilot.explain(obs)
@@ -208,8 +211,9 @@ def test_attack_last_sequences_development_before_the_turn_ending_attack():
 
 @pytest.mark.req("REQ-GEN-0017")
 def test_attack_last_takes_the_attack_once_no_beneficial_development_remains():
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats, attacks={11: 50})
+    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40)},
+                                 attacks={11: AttackStat(11, damage=50)})
+    pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats)
     obs = make_select([attack_opt(11), opt(14)], context=MAIN,    # only the KO and End (score 0)
                       current=state(active=poke(700, energy=1), opp_active=poke(900, hp=40)))
     assert pilot.decide(obs) == [0]                   # nothing beneficial pending -> take the KO
@@ -221,9 +225,10 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
     knockout (that would forfeit the KO) — but with no KO on the menu it is normal development."""
     EVOLVE, ACTIVE_AREA = 9, 4
     stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40),
-                                  901: CardStat(901, hp=200)})
+                                  901: CardStat(901, hp=200)},
+                                 attacks={11: AttackStat(11, damage=50)})
     ev = Hypothesis(id="ev", rationale="", when=lambda c: c.option_type == EVOLVE, weight=40)
-    pilot = Pilot(Strategy(hypotheses=[ev]), deck=[1] * 60, stats=stats, attacks={11: 50})
+    pilot = Pilot(Strategy(hypotheses=[ev]), deck=[1] * 60, stats=stats)
     ko = make_select([attack_opt(11), opt(EVOLVE, inPlayArea=ACTIVE_AREA)], context=MAIN,
                      current=state(active=poke(700, energy=1), opp_active=poke(900, hp=40)))
     assert pilot.decide(ko) == [0]                    # KO present -> don't evolve the Active away
@@ -237,9 +242,9 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
 def test_snipe_for_the_ko_prefers_the_killable_bench_target():
     # Active's snipe rider is 50 (attack id 11). 50-HP body dies to it (a prize); 140/300
     # bodies only chip. snipe-for-the-ko outranks every positional priority -> take the knockout
-    stats = DictCardStatProvider({700: CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  stats=stats, attacks={11: 120}, bench_snipe={11: 50})
+    stats = DictCardStatProvider({700: CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))},
+                                 attacks={11: AttackStat(11, damage=120, benchSnipe=50)})
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1),
                        card_opt(BENCH, 2, player=1)], context=DAMAGE,
                       current=state(active=poke(700, energy=1),
@@ -252,7 +257,7 @@ def test_snipe_for_the_ko_prefers_the_killable_bench_target():
 @pytest.mark.req("REQ-GEN-0018")
 def test_snipe_the_threat_outranks_the_weakest():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  stats=DictCardStatProvider({}), attacks={11: 50})
+                  stats=DictCardStatProvider({}, attacks={11: AttackStat(11, damage=50)}))
     # idx0 carries Energy (live threat, high HP); idx1 is weakest. threat (20) > weakest (15)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700, energy=1),
@@ -306,10 +311,11 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
 # --- retreat-to-ready-attacker: bring a powered benched win-condition to the front ----------------
 @pytest.mark.req("REQ-GEN-0020")
 def test_retreat_to_a_ready_benched_wincon_over_a_weak_chip():
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=60), MEGA: CardStat(MEGA, megaEx=True, hp=330)})
+    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=60), MEGA: CardStat(MEGA, megaEx=True, hp=330)},
+                                 attacks={11: AttackStat(11, damage=50)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, attacks={11: 50})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([attack_opt(11), opt(12)], context=MAIN,        # opt(12) = RETREAT
                       current=state(active=poke(CINDERACE, energy=2, hp=60),
                                     bench=[poke(MEGA, energy=3, hp=330)], opp_active=poke(900, hp=200)))
@@ -320,10 +326,11 @@ def test_retreat_to_a_ready_benched_wincon_over_a_weak_chip():
 
 @pytest.mark.req("REQ-GEN-0020")
 def test_retreat_to_ready_attacker_never_overrides_a_knockout():
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=60), MEGA: CardStat(MEGA, megaEx=True, hp=330)})
+    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=60), MEGA: CardStat(MEGA, megaEx=True, hp=330)},
+                                 attacks={11: AttackStat(11, damage=50)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, attacks={11: 50})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([attack_opt(11), opt(12)], context=MAIN,
                       current=state(active=poke(CINDERACE, energy=2, hp=60),
                                     bench=[poke(MEGA, energy=3, hp=330)], opp_active=poke(900, hp=40)))
@@ -351,12 +358,12 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
     THEN retreat the staller into the now-ready win-condition — emergent across one turn's two
     decisions (evolve-into-wincon + attack-last, then the SETUP->RACE flip + retreat-to-ready-attacker)."""
     stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=120), STARYU: CardStat(STARYU, hp=70),
-                                  MEGA: CardStat(MEGA, megaEx=True, hp=330)})
+                                  MEGA: CardStat(MEGA, megaEx=True, hp=330)},
+                                 attacks={11: AttackStat(11, damage=30)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
     funcs = CardFunctions({CINDERACE: ["opener"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
-                  attacks={11: 30})
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     # step 1: drew Mega; Active is the staller Cinderace, benched Staryu(e1) -> evolve Staryu first
     evolve = {"type": 9, "area": HAND, "index": 0, "inPlayArea": BENCH, "inPlayIndex": 0}
     obs1 = make_select([evolve, opt(12), attack_opt(11), opt(14)], context=MAIN,

@@ -3,8 +3,9 @@
 - **Status:** accepted (2026-07-13)
 - **Input:** `docs/research/ml-training-system.md` (deep-research report, 2026-07-11)
 - **Operational plan:** `docs/plans/ml-training-build.md` (per-session playbook + status ledger)
-- **Numbering note:** 0051 (Stat Provider seam) and 0052 (KO Oracle) are taken on an unpushed
-  arch-review worktree branch; this ADR takes 0053 to avoid another numbering collision.
+- **Numbering note:** 0052 (KO Oracle) and 0056 (Stat Provider seam, renumbered from a 0051 that
+  collided with the MatchupPlan spine) are taken on an unpushed arch-review worktree branch; this
+  ADR took 0053 to avoid a numbering collision.
 
 ## Context
 

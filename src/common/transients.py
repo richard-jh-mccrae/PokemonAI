@@ -128,7 +128,7 @@ class TurnBoostTracker:
                     # Trainers only (hp 0), and never a Tool (cardType 2): a Tool's boost lives
                     # while ATTACHED — visible board state, priced off the holder directly.
                     if (st is not None and getattr(st, "damageBoost", 0)
-                            and getattr(st, "hp", 0) == 0 and getattr(st, "cardType", None) != 2):
+                            and not st.is_pokemon and not st.is_tool):
                         self._by_side.setdefault(side, []).append(
                             (st.damageBoost, st.damageBoostType, st.damageBoostVsEx))
         except Exception:

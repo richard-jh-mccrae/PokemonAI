@@ -4,7 +4,7 @@ both in the Pilot's Tactical layer (`_tactical`). Lib-free: per-attackId maps ar
 import pytest
 
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from pilot_helpers import ACTIVE, BENCH, attack_opt, card_opt, make_select, opt, poke, state
 
@@ -21,7 +21,7 @@ EX_BENCHIE = 702    # a benched 2-prize ex (spread-placement prize-preference te
 A_PLAIN, A_SNIPE, A_RECOIL, A_FLAT, A_SPREAD = 101, 102, 110, 103, 104   # attack ids
 WATER, FIGHTING = 3, 6
 
-_STATS = DictCardStatProvider({
+_CARDS = {
     MY_ATK: CardStat(MY_ATK, energyType=WATER),
     MY_EX: CardStat(MY_EX, energyType=WATER, ex=True, hp=200),
     FIGHT_ATK: CardStat(FIGHT_ATK, energyType=FIGHTING),
@@ -32,18 +32,21 @@ _STATS = DictCardStatProvider({
     OPP_BENCH: CardStat(OPP_BENCH, hp=60),
     OPP_BENCH2: CardStat(OPP_BENCH2, hp=60),
     EX_BENCHIE: CardStat(EX_BENCHIE, hp=200, ex=True),   # 2-prize benched ex
-})
+}
 
 
-def _pilot(**kw):
-    return Pilot(Strategy(), deck=[1] * 60, stats=_STATS, **kw)
+def _pilot(attacks=None, **kw):
+    """`attacks` = {attackId: AttackStat} — the per-test attack-record table, carried by the provider."""
+    return Pilot(Strategy(), deck=[1] * 60,
+                 stats=DictCardStatProvider(_CARDS, attacks=attacks or {}), **kw)
 
 
 def _gpilot(**kw):
     """Pilot WITH the general strategy loaded — so baseline Hypotheses (e.g. `place-counter-to-convert`)
     actually fire (the tactical-only `_pilot` above doesn't load them)."""
     from common.strategy.general_strategy import GENERAL_STRATEGY
-    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_STATS, **kw)
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                 stats=DictCardStatProvider(_CARDS), **kw)
 
 
 # --- #14 bench-snipe bonus: prefer the equal-cost KO that also snipes a benched target -------------
@@ -52,8 +55,8 @@ def _gpilot(**kw):
 def test_equal_cost_ko_prefers_the_attack_with_a_bench_snipe():
     """Two equal-cost KO attacks; one ALSO snipes a benched Pokémon → it scores higher (best total
     board value), so the agent picks the sniping attack."""
-    p = _pilot(attacks={A_PLAIN: 120, A_SNIPE: 120}, attack_costs={A_PLAIN: 1, A_SNIPE: 1},
-               bench_snipe={A_SNIPE: 50})
+    p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=120, cost=1),
+                A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=100),
@@ -67,8 +70,8 @@ def test_equal_cost_ko_prefers_the_attack_with_a_bench_snipe():
 @pytest.mark.req("REQ-GUST-0007")
 def test_bench_snipe_bonus_is_silent_with_no_benched_target():
     """No benched target → the rider hits nothing, so it adds no value and the two KO attacks tie."""
-    p = _pilot(attacks={A_PLAIN: 120, A_SNIPE: 120}, attack_costs={A_PLAIN: 1, A_SNIPE: 1},
-               bench_snipe={A_SNIPE: 50})
+    p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=120, cost=1),
+                A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=100), opp_bench=[]))
@@ -80,7 +83,7 @@ def test_bench_snipe_bonus_is_silent_with_no_benched_target():
 def test_bench_snipe_chip_bonus_never_overrides_a_prize():
     """A snipe that only CHIPS (rider < the benched HP) is a sub-prize tiebreak: even a big (120) chip
     on a 1-prize KO stays BELOW a 2-prize KO's floor, so it can never override real prize value."""
-    p = _pilot(attacks={A_SNIPE: 120}, attack_costs={A_SNIPE: 1}, bench_snipe={A_SNIPE: 120})
+    p = _pilot({A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=120)})
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=100),        # 1-prize Active
@@ -94,8 +97,8 @@ def test_snipe_ko_of_a_bench_pokemon_banks_a_full_prize():
     """A bench-snipe rider that KNOCKS OUT a benched Pokémon banks a PRIZE — it is a knockout, scored
     KO_SCORE-class — so it beats a bigger chip that KOs nothing (ep82749168 f62: Jetting Blow 120 + 50
     snipe finishes a 20-HP Dreepy, over a 210 Nebula Beam that only chips an un-KO-able 320-HP Active)."""
-    p = _pilot(attacks={A_PLAIN: 210, A_SNIPE: 120}, attack_costs={A_PLAIN: 3, A_SNIPE: 1},
-               bench_snipe={A_SNIPE: 50})
+    p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=210, cost=3),
+                A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=3),
                                     opp_active=poke(OPP, hp=320),         # neither attack KOs the Active
@@ -110,7 +113,7 @@ def test_snipe_ko_of_a_bench_pokemon_banks_a_full_prize():
 def test_snipe_that_only_chips_a_survivor_is_not_a_ko():
     """Control: the rider does NOT reach the benched HP (50 < 60) → a chip, not a knockout → with no
     KO of the Active either, the attack stays a plain chip (well below KO_SCORE)."""
-    p = _pilot(attacks={A_SNIPE: 120}, attack_costs={A_SNIPE: 1}, bench_snipe={A_SNIPE: 50})
+    p = _pilot({A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
                                     opp_active=poke(OPP, hp=320),         # not a KO of the Active
@@ -125,7 +128,7 @@ def test_spread_kos_a_softened_bench_pokemon_banks_a_prize():
     """A distributable bench spread (Phantom Dive benchSpread=60) that KOs a softened benched Pokémon
     (remaining HP <= spread) banks a PRIZE this turn — scored KO_SCORE-class — even when the Active
     survives (200-to-Active here is only a chip vs a 320-HP wall)."""
-    p = _pilot(attacks={A_SPREAD: 200}, attack_costs={A_SPREAD: 2}, bench_spread={A_SPREAD: 60})
+    p = _pilot({A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     obs = make_select([attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2),
                                     opp_active=poke(OPP, hp=320),         # 200 doesn't KO the Active
@@ -137,7 +140,7 @@ def test_spread_kos_a_softened_bench_pokemon_banks_a_prize():
 def test_spread_can_ko_multiple_bench_mons_within_its_total():
     """The spread is DISTRIBUTABLE: 60 splits to KO two 30-remaining bench mons (30+30 <= 60) → two
     prizes, worth more than KOing a single one."""
-    p = _pilot(attacks={A_SPREAD: 200}, attack_costs={A_SPREAD: 2}, bench_spread={A_SPREAD: 60})
+    p = _pilot({A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     two = make_select([attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
                                     opp_bench=[poke(OPP_BENCH, hp=30), poke(OPP_BENCH2, hp=30)]))
@@ -151,7 +154,7 @@ def test_spread_can_ko_multiple_bench_mons_within_its_total():
 def test_spread_that_only_chips_is_a_subprize_bonus_not_a_ko():
     """A spread too small to KO any bench mon (all HP > 60) is a sub-prize chip tiebreak — with no KO of
     the Active either, the attack stays below KO_SCORE (never invents a prize)."""
-    p = _pilot(attacks={A_SPREAD: 200}, attack_costs={A_SPREAD: 2}, bench_spread={A_SPREAD: 60})
+    p = _pilot({A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     obs = make_select([attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
                                     opp_bench=[poke(OPP_BENCH, hp=200)]))  # 200 > 60 -> chip, no bench KO
@@ -161,8 +164,8 @@ def test_spread_that_only_chips_is_a_subprize_bonus_not_a_ko():
 @pytest.mark.req("REQ-GEN-0050")
 def test_spread_silent_with_no_bench():
     """No benched target → the spread hits nothing, adds no value."""
-    p = _pilot(attacks={A_PLAIN: 200, A_SPREAD: 200}, attack_costs={A_PLAIN: 2, A_SPREAD: 2},
-               bench_spread={A_SPREAD: 60})
+    p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=200, cost=2),
+                A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
                                     opp_bench=[]))
@@ -265,7 +268,7 @@ def test_lethal_with_recoil_double_ko_is_not_scored_as_a_win():
     """My 2-prize ex's attack KOs the opponent's Active for my LAST prize — but its forced recoil also
     KOs my ex, handing the opponent their LAST 2 prizes simultaneously. That is a DRAW, not a win, so the
     attack must NOT be scored KO_SCORE-class."""
-    p = _pilot(attacks={A_RECOIL: 300}, attack_costs={A_RECOIL: 2}, recoil={A_RECOIL: 200})
+    p = _pilot({A_RECOIL: AttackStat(A_RECOIL, damage=300, cost=2, recoil=200)})
     obs = make_select([attack_opt(A_RECOIL)],
                       current=state(active=poke(MY_EX, hp=200),
                                     opp_active=poke(OPP, hp=100),
@@ -276,7 +279,7 @@ def test_lethal_with_recoil_double_ko_is_not_scored_as_a_win():
 @pytest.mark.req("REQ-GUST-0008")
 def test_lethal_without_recoil_is_a_real_win():
     """Control: same winning KO but the attack has NO recoil → my ex survives → a real win (KO_SCORE)."""
-    p = _pilot(attacks={A_RECOIL: 300}, attack_costs={A_RECOIL: 2})   # no recoil map
+    p = _pilot({A_RECOIL: AttackStat(A_RECOIL, damage=300, cost=2)})   # no recoil
     obs = make_select([attack_opt(A_RECOIL)],
                       current=state(active=poke(MY_EX, hp=200),
                                     opp_active=poke(OPP, hp=100),
@@ -288,7 +291,7 @@ def test_lethal_without_recoil_is_a_real_win():
 def test_recoil_double_ko_is_a_win_when_it_does_not_empty_the_opponent():
     """Control: the recoil self-KO hands the opponent only 2 of their 3 remaining prizes — they don't
     reach 0, so I win on my last prize before they finish. Not simultaneous → a real win."""
-    p = _pilot(attacks={A_RECOIL: 300}, attack_costs={A_RECOIL: 2}, recoil={A_RECOIL: 200})
+    p = _pilot({A_RECOIL: AttackStat(A_RECOIL, damage=300, cost=2, recoil=200)})
     obs = make_select([attack_opt(A_RECOIL)],
                       current=state(active=poke(MY_EX, hp=200),
                                     opp_active=poke(OPP, hp=100),
@@ -303,7 +306,7 @@ def test_resistance_turns_a_false_ko_into_a_chip():
     """A 120 Fighting attack would KO a 100-HP Active at face value, but the defender RESISTS Fighting
     (120 - 30 = 90 < 100) → it is NOT a knockout. Without the resistance subtraction this is a false KO
     (and gusting it would be a gift)."""
-    p = _pilot(attacks={A_FLAT: 120}, attack_costs={A_FLAT: 1})
+    p = _pilot({A_FLAT: AttackStat(A_FLAT, damage=120, cost=1)})
     obs = make_select([attack_opt(A_FLAT)],
                       current=state(active=poke(FIGHT_ATK, energy=1), opp_active=poke(RESISTER, hp=100)))
     assert p.explain(obs).options[0].tactical < KO_SCORE       # 90 < 100 → chip, not a KO
@@ -312,7 +315,7 @@ def test_resistance_turns_a_false_ko_into_a_chip():
 @pytest.mark.req("REQ-GUST-0009")
 def test_no_resistance_same_attack_is_a_real_ko():
     """Control: the same 120 attack on a 100-HP Active with NO resistance to my type is a real KO."""
-    p = _pilot(attacks={A_FLAT: 120}, attack_costs={A_FLAT: 1})
+    p = _pilot({A_FLAT: AttackStat(A_FLAT, damage=120, cost=1)})
     obs = make_select([attack_opt(A_FLAT)],
                       current=state(active=poke(FIGHT_ATK, energy=1), opp_active=poke(OPP, hp=100)))
     assert p.explain(obs).options[0].tactical >= KO_SCORE

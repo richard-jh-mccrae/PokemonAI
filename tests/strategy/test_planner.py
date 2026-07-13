@@ -12,7 +12,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
@@ -55,16 +55,17 @@ def _stats():
         THREAT: CardStat(THREAT, name="glass cannon", hp=70, energyType=7, minAttackCost=1,
                          minCostDamage=210, maxDamage=210),   # KO-able now, dooms my Active next turn
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
-    })
+    }, attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
+                NEBULA: AttackStat(NEBULA, damage=210, cost=3),
+                STARYU: AttackStat(STARYU, damage=20, cost=1),
+                OPEN_ATK: AttackStat(OPEN_ATK, damage=30, cost=1)})
 
 
 def _pilot(functions=None, **kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     default = CardFunctions({WALLYS: ["heal", "clutch_heal"], HILDA: ["search", "tutor_energy"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=default if functions is None else functions,
-                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, OPEN_ATK: 30},
-                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, OPEN_ATK: 1}, **kw)
+                 functions=default if functions is None else functions, **kw)
 
 
 @pytest.mark.req("REQ-PLANNER-0001")
@@ -597,16 +598,17 @@ def _snipe_stats():
                           minAttackCost=1, minCostDamage=340, maxDamage=340),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
     }
-    return DictCardStatProvider(base)
+    return DictCardStatProvider(base, attacks={
+        JETTING: AttackStat(JETTING, damage=120, cost=1),
+        NEBULA: AttackStat(NEBULA, damage=210, cost=3),
+        SNIPE: AttackStat(SNIPE, damage=50, cost=1, benchSnipe=100),
+        OPEN_ATK: AttackStat(OPEN_ATK, damage=30, cost=1)})
 
 
 def _snipe_pilot(**kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_snipe_stats(),
-                 functions=CardFunctions({}),
-                 attacks={JETTING: 120, NEBULA: 210, SNIPE: 50, OPEN_ATK: 30},
-                 attack_costs={JETTING: 1, NEBULA: 3, SNIPE: 1, OPEN_ATK: 1},
-                 bench_snipe={SNIPE: 100}, **kw)
+                 functions=CardFunctions({}), **kw)
 
 
 def _key_threat_obs():
@@ -728,8 +730,7 @@ def _ignition_pilot(**kw):
                                      minAttackCost=1, minCostDamage=210, maxDamage=210)
     fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=fns,
-                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, OPEN_ATK: 30},
-                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, OPEN_ATK: 1}, **kw)
+                 **kw)
 
 
 @pytest.mark.req("REQ-PLANNER-0036")
@@ -773,9 +774,7 @@ def _salvatore_pilot(deck=None, stats=None, **kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     fns = CardFunctions({SALV: ["search", "rush_evolve"]})
     return Pilot(strat, deck=deck or ([WINCON] * 3 + [1] * 57), general_strategy=GENERAL_STRATEGY,
-                 stats=stats or _stats(), functions=fns,
-                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, OPEN_ATK: 30},
-                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, OPEN_ATK: 1}, **kw)
+                 stats=stats or _stats(), functions=fns, **kw)
 
 
 def _salvatore_obs(options=None, *, anchored=False):

@@ -206,7 +206,7 @@ class ObjectivesMixin:
         bench_pool = sum(h for _cid, h in board.opp_bench if h)
         table = {}
         for aid in (stat.attacks or ()):
-            if self.attack_costs.get(aid, 99) > board.my_active_energy:
+            if self._attack_cost(aid) > board.my_active_energy:
                 continue
             d = self.predicted_damage(board.my_active_id, aid, opp, context=dmg_ctx)
             if d <= 0:
@@ -227,18 +227,7 @@ class ObjectivesMixin:
         """My feasibility turns to fell opponent ``body``: hp over my Active's best affordable
         per-turn damage vs THAT defender (weakness/riders per the oracle), plus the bench
         surcharge when it isn't their Active. None when I deal it no damage (infeasible)."""
-        hp = (body or {}).get("hp", 0)
-        stat = self.stats.get(my_active_id) if (self.stats and my_active_id) else None
-        if not (hp and stat):
-            return None
-        best = 0
-        for aid in (stat.attacks or ()):
-            if self.attack_costs.get(aid, 99) > energy:
-                continue
-            best = max(best, self.predicted_damage(my_active_id, aid, body))
-        if best <= 0:
-            return None
-        return float(math.ceil(hp / best))
+        return self.combat.turns_to_ko(my_active_id, energy, body)
 
     def _their_turns_to_ko(self, opp: dict, body: dict, read=None, gamma: float = 0.0) -> float | None:
         """Their feasibility turns to fell MY ``body``: hp over the biggest per-turn damage any of
@@ -315,7 +304,7 @@ class ObjectivesMixin:
                 aids = tuple(stat.attacks or ())
                 if aids and all(self._attack_stat(a) is not None for a in aids):
                     for aid in aids:
-                        yield (self.attack_costs.get(aid, 99),
+                        yield (self._attack_cost(aid),
                                self.predicted_damage(cid, aid, my_body, bound="max", context=ctx),
                                energy, evo_hops, promo)
                     continue
@@ -324,7 +313,8 @@ class ObjectivesMixin:
                     hand = max(0, hc - (1 if evo_hops else 0))      # a card is spent to evolve
                     dmg = (getattr(stat, "handSizeDamage", 0) or 0) * hand   # counters ignore W/R
                 else:
-                    dmg = self._wr_adjusted(stat, d_stat, getattr(stat, "maxDamage", 0) or 0)
+                    from common.strategy.damage import wr_adjust
+                    dmg = wr_adjust(stat, d_stat, getattr(stat, "maxDamage", 0) or 0)
                 yield (cost, dmg, energy, evo_hops, promo)
 
     def _promotion_surcharge(self, opp: dict) -> int:

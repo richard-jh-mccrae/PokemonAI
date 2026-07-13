@@ -51,8 +51,7 @@ def _pilot(deck_has_basic=True):
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})
     deck = ([WATER_ENERGY] * 8 + [1] * 52) if deck_has_basic else [1] * 60
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({CINDERACE: ["opener"], BOSS_ORDERS: ["gust"]}),
-                 attacks={}, attack_costs={})
+                 functions=CardFunctions({CINDERACE: ["opener"], BOSS_ORDERS: ["gust"]}))
 
 
 def _obs(bench, opp_active, opp_prizes, opp_discard=()):

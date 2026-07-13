@@ -9,7 +9,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from pilot_helpers import BENCH, card_opt, make_select, poke, state
@@ -19,12 +19,13 @@ def _fired(trace):
     return {h.id for h, _ in trace.fired}
 
 
-def _pilot(stats, functions=None, snipe=50):
+def _pilot(stats, functions=None):
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=functions, attacks={11: 120}, bench_snipe={11: snipe})
+                 functions=functions)
 
 
 _SNIPER = CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))   # my Active: a 50-snipe rider
+_ATTACKS = {11: AttackStat(11, damage=120, benchSnipe=50)}             # its attack record
 
 
 @pytest.mark.req("REQ-GEN-0028")
@@ -35,7 +36,7 @@ def test_already_evolved_ex_outranks_a_low_hp_support_body():
         700: _SNIPER,
         121: CardStat(121, name="Dragapult ex", hp=320, ex=True, maxDamage=200, evolvesFrom="Drakloak"),
         64: CardStat(64, name="Hoothoot", hp=70, maxDamage=20),     # support; lower HP
-    })
+    }, attacks=_ATTACKS)
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,  # DAMAGE
                       current=state(active=poke(700), opp_bench=[poke(121, hp=320), poke(64, hp=70)]))
@@ -56,7 +57,7 @@ def test_a_line_that_reaches_a_hand_size_attacker_outranks_a_bigger_raw_damage_l
         743: CardStat(743, name="Alakazam", hp=140, maxDamage=10, evolvesFrom="Kadabra"),
         305: CardStat(305, name="Dunsparce", hp=70, maxDamage=20),
         66: CardStat(66, name="Dudunsparce", hp=140, maxDamage=90, evolvesFrom="Dunsparce"),
-    })
+    }, attacks=_ATTACKS)
     funcs = CardFunctions({743: ["hand_size_attacker"]})
     pilot = _pilot(stats, functions=funcs)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
@@ -75,7 +76,7 @@ def test_a_benched_knockout_outranks_a_scarier_chip():
         700: _SNIPER,
         121: CardStat(121, name="Dragapult ex", hp=320, ex=True, maxDamage=200, evolvesFrom="Drakloak"),
         99: CardStat(99, name="Frail", hp=50, maxDamage=10),
-    })
+    }, attacks=_ATTACKS)
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
                       current=state(active=poke(700), opp_bench=[poke(121, hp=320), poke(99, hp=50)]))

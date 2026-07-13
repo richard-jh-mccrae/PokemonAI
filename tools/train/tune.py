@@ -28,19 +28,15 @@ from train.tuner.run import tune  # noqa: E402
 
 
 def _build_pilot(agent: str):
-    """The agent's real (engine-backed) Pilot + its authored seed weights, mirroring main.py."""
-    from cg.api import all_attack
-    from common.cards import CardFunctions
-    from common.effects import CardEffects
+    """The agent's real (engine-backed) Pilot + its authored seed weights.
+
+    Built by the shared runtime (ADR-0055). The hand-maintained kill-switch mirror this
+    function used to carry HAD drifted — promote_ko_aware / boost_lethal / brief_preevo ran
+    OFF here while shipping ON, so retests and score_diff decided with different backstops
+    than the live agent. ``common.runtime.build_pilot`` resolves the one deployment PROFILE
+    through the deck's own params; the mirror class is structurally dead."""
+    from common.runtime import build_pilot
     from common.strategy.general_strategy import GENERAL_STRATEGY
-    from common.pilot import Pilot
-    from common.value import ValueModel
-    from common.scouting.provider import (
-        EngineCardStatProvider, build_attack_stats, load_attack_overrides,
-        parse_attack_bench_snipe, parse_attack_ignores_active_effects, parse_attack_recoil)
-    from common.scouting.artifact import load_artifact
-    from common.scouting.briefs import load_briefs
-    from common.scouting.scout import Scout
 
     agent_dir = REPO / "src" / "agents" / agent
     spec = importlib.util.spec_from_file_location(f"{agent}_strategy", agent_dir / "strategy.py")
@@ -48,43 +44,8 @@ def _build_pilot(agent: str):
     spec.loader.exec_module(mod)
     strategy = mod.STRATEGY
     deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
-    attacks = all_attack()
     seeds = authored_seeds(GENERAL_STRATEGY, strategy)   # incl. weight_overrides (ADR-0035)
-    provider = EngineCardStatProvider()            # shared by Pilot stats + Scout, exactly as main.py
-    pilot = Pilot(                                 # mirror main.py EXACTLY -- incl. recoil + bench_snipe,
-        strategy, deck, general_strategy=GENERAL_STRATEGY,   # else W-route featurizes a pilot whose
-        stats=provider, functions=CardFunctions.load(),  # snipe rider / draw-guard differ
-        attacks={a.attackId: a.damage for a in attacks},     # from runtime (snipe-for-the-ko never fires)
-        attack_costs={a.attackId: len(a.energies) for a in attacks},
-        recoil={a.attackId: parse_attack_recoil(a.text) for a in attacks},
-        bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in attacks},
-        ignores_active_effects={a.attackId: parse_attack_ignores_active_effects(a.text) for a in attacks},
-        effects=CardEffects.load(),                            # ADR-0032 Effect Clauses (mirror main.py)
-        attack_stats=build_attack_stats(attacks, load_attack_overrides()),  # ADR-0032 per-attack records
-                                                              # incl. energyTypes — the type-aware attach reads them
-        # the wiring-pass kill-switches at main.py's shipped defaults (A/B-cleared 2026-07-02) — a
-        # retest must decide with the same backstops the live agent runs
-        lethal_verify=strategy.params.get("lethal_verify", True),
-        planner_engine_rank=strategy.params.get("planner_engine_rank", True),
-        planner_key_threat=strategy.params.get("planner_key_threat", True),
-        lethal_family=strategy.params.get("lethal_family", True),
-        lethal_veto=strategy.params.get("lethal_veto", True),
-        objectives_race=strategy.params.get("objectives_race", True),  # ADR-0040 Tier-3 KO Race
-        objectives_path=strategy.params.get("objectives_path", True),  # ADR-0040 Prize-Path consumers
-        objectives_phases=strategy.params.get("objectives_phases", True),  # ADR-0040 derived phases
-        gamble_lines=strategy.params.get("gamble_lines", True),  # ADR-0039 Tier-2 Gamble rung
-        snipe_prize_redundant=strategy.params.get("snipe_prize_redundant", True),  # ADR-0044 (DEFAULT ON 2026-07-06)
-        forced_promotion=strategy.params.get("forced_promotion", True),  # ADR-0044 (DEFAULT ON 2026-07-06)
-        match_planner_steer=strategy.params.get("match_planner_steer", True),  # ADR-0045 S3 (DEFAULT ON 2026-07-07)
-        forgo_ko=strategy.params.get("forgo_ko", True),  # ADR-0045 S4 forgo-KO (DEFAULT ON 2026-07-07, ladder-matured)
-        value_model=(ValueModel.load() if strategy.params.get("value_model", False) else None),  # ADR-0042
-        escalation=strategy.params.get("escalation", False),  # ADR-0043 Tier-6 (needs search_budget>0)
-        search_budget=strategy.params.get("search_budget", 0),
-        scout=Scout(load_artifact(), provider=provider),  # the Read — main.py wires it; without it
-        briefs=load_briefs(),                             # favorability/γ are dead in every retest AND in
-        posture=strategy.params.get("posture", True),     # value-feature extraction (fixed 2026-07-05)
-    )
-    return pilot, seeds
+    return build_pilot(strategy, deck), seeds
 
 
 def _layer_tag(planner: bool, lethal: bool) -> str:

@@ -73,7 +73,7 @@ class GustMixin:
         my_stat = self.stats.get(board.my_active_id) if self.stats else None
         payable = board.my_active_energy + (0 if board.energy_attached
                                             else self._best_hand_attach_units(board.hand_ids, my_stat))
-        if my_stat and (my_stat.minAttackCost or 99) > payable:
+        if my_stat and not my_stat.can_pay_cheapest(payable):
             return 0                                     # the KO premise is unpayable this turn (f31)
         if not self._can_ko(my_stat, target):
             return 0
@@ -202,7 +202,7 @@ class GustMixin:
         if not (self.stats and ma and oa):
             return 0
         my_stat = self.stats.get(ma.get("id"))
-        if my_stat and (my_stat.minAttackCost or 99) > payable:
+        if my_stat and not my_stat.can_pay_cheapest(payable):
             return 0                                     # can't afford ANY attack this turn
         # KO via the cheapest attack (`_can_ko`, minCostDamage) OR the best AFFORDABLE attack
         # (`_active_can_ko`, per-attack oracle) — the latter catches an EXPENSIVE menu KO the cheap
@@ -242,7 +242,7 @@ class GustMixin:
         if not (self.stats and ma and opp):
             return 0
         my_stat = self.stats.get(ma.get("id"))
-        if my_stat and (my_stat.minAttackCost or 99) > payable:
+        if my_stat and not my_stat.can_pay_cheapest(payable):
             return 0                                     # cheapest attack unpayable this turn
         best = 0
         for b in (opp.get("bench") or []):
@@ -277,7 +277,7 @@ class GustMixin:
             if not b or (b.get("energies") or []):
                 continue
             stat = self.stats.get(b.get("id"))
-            if stat and stat.retreatCost >= _STALL_RETREAT and (stat.ex or stat.megaEx):
+            if stat and stat.retreatCost >= _STALL_RETREAT and stat.is_ex_body:
                 return True
         return False
 
@@ -295,7 +295,7 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.gust_best_ko_prizes > max(c.board.active_ko_prizes,
                                               c.board.active_condition_ko_prizes)
-        and not (getattr(c.stat, "cardType", None) == _SUPPORTER       # Supporter-economy damping only
+        and not (getattr(c.stat, "is_supporter", False)                # Supporter-economy damping only
                  and not c.board.line_ready and not c.board.wincon_in_play),
         weight=50, status="assumed"),
     Hypothesis(
