@@ -49,4 +49,5 @@ htmlcov/
 # fetched card scans (tools/arena/images.py) — per-host, never committed
 /tools/arena/static/cards/
 *.pdf
-.claude/settings.local.json
+.claude/settings.local.json# regenerable parity-trace corpus (ADR-0050) - curated fixtures live in tests/fixtures/parity/
+/data/parity/

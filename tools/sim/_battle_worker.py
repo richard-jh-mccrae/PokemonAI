@@ -10,11 +10,16 @@ not per Match), and the engine's per-process global state stays private to this 
 `run_battle` so the whole run stays seat-balanced even when a worker's share is odd.
 """
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]),          # tools/ -> import sim.battle
                 str(Path(__file__).resolve().parents[2] / "src")]  # src/  -> cg for driver
+
+if os.environ.get("CG_ENGINE") == "py":                # ADR-0050 M3: drive the cgpy twin
+    from cgpy.alias import install
+    install()
 
 from sim.battle import AgentServer, _play_seated, read_deck  # noqa: E402
 

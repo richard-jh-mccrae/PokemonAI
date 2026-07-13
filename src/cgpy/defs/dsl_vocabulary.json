@@ -1,0 +1,1034 @@
+{
+ "schema": "dsl-vocabulary/1",
+ "source": {
+  "file": "src/cg/libcg.so",
+  "sha256": "75d7d619b56e5ad4c5caeadc698e61faecc650678dceab52ad687f08d5676beb"
+ },
+ "chain_ops": {
+  "ability": [
+   {
+    "params": [
+     "int",
+     "char8_t const*",
+     "char8_t const*",
+     "AreaType",
+     "AreaType"
+    ],
+    "arity": 5
+   }
+  ],
+  "abilityEvolve": [
+   {
+    "params": [
+     "int",
+     "char8_t const*",
+     "char8_t const*"
+    ],
+    "arity": 3
+   }
+  ],
+  "abilityPlay": [
+   {
+    "params": [
+     "int",
+     "char8_t const*",
+     "char8_t const*"
+    ],
+    "arity": 3
+   }
+  ],
+  "attack": [
+   {
+    "params": [
+     "int",
+     "char8_t const*",
+     "char8_t const*",
+     "char const*",
+     "std::initializer_list<EnergyType>"
+    ],
+    "arity": 5
+   }
+  ],
+  "canHandToDeckAndShuffle": [
+   {
+    "params": [
+     "TargetPlayer"
+    ],
+    "arity": 1
+   }
+  ],
+  "condition": [
+   {
+    "params": [
+     "ConditionType",
+     "int",
+     "ComparatorType"
+    ],
+    "arity": 3
+   }
+  ],
+  "conditionAttachEnergyMe": [
+   {
+    "params": [
+     "EnergyType"
+    ],
+    "arity": 1
+   }
+  ],
+  "conditionPrizeCountGreater": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "costHandTrash": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "costHandTrashLimited": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "currentEffects": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "effectBasicEnergySwitch": [
+   {
+    "params": [
+     "TargetPlayer"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckAttachEnergyAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckAttachEnergyMeAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckSelectBasicEnergyNotSameType": [
+   {
+    "params": [
+     "int",
+     "SelectContext"
+    ],
+    "arity": 2
+   }
+  ],
+  "effectDeckToBenchAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckToHandAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckToHandNoShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckToHandReverseAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDeckToTrashAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDraw": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectDrawUntil": [
+   {
+    "params": [
+     "int",
+     "TargetPlayer"
+    ],
+    "arity": 2
+   }
+  ],
+  "effectEvolvesToEach": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "effectFestivalLead": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "effectHandAttachEnergyMe": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectHealSingle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectInit": [
+   {
+    "params": [
+     "EffectType",
+     "TargetPlayer"
+    ],
+    "arity": 2
+   }
+  ],
+  "effectLookAndToBenchRestDeckAndShuffle": [
+   {
+    "params": [
+     "int",
+     "TargetPlayer"
+    ],
+    "arity": 2
+   }
+  ],
+  "effectLookAndToHandRestDeckAndShuffle": [
+   {
+    "params": [
+     "int",
+     "int"
+    ],
+    "arity": 2
+   }
+  ],
+  "effectLookEnemyhand": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "effectMe": [
+   {
+    "params": [
+     "EffectType"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectSelectAttachBasicEnergyDeck": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectSelectAttachBasicEnergyHand": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectSelectAttachBasicEnergyTrash": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectSelectAttachEnergyHand": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectSwitch": [
+   {
+    "params": [
+     "TargetPlayer"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectTrashAttachEnergyMe": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectTrashEnergy": [
+   {
+    "params": [
+     "int",
+     "TargetPlayer"
+    ],
+    "arity": 2
+   }
+  ],
+  "effectTrashStadium": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "effectTrashToDeckAndShuffle": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectTrashToHand": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "exist": [
+   {
+    "params": [
+     "AreaType",
+     "TargetPlayer"
+    ],
+    "arity": 2
+   }
+  ],
+  "existDamaged": [
+   {
+    "params": [
+     "TargetPlayer"
+    ],
+    "arity": 1
+   }
+  ],
+  "existPokemon": [
+   {
+    "params": [
+     "TargetPlayer"
+    ],
+    "arity": 1
+   }
+  ],
+  "fossil": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "initSkill": [
+   {
+    "params": [
+     "int",
+     "char8_t const*",
+     "char8_t const*"
+    ],
+    "arity": 3
+   }
+  ],
+  "notOpen4Card": [
+   {
+    "params": [
+     "char8_t const*"
+    ],
+    "arity": 1
+   }
+  ],
+  "postEffectActiveEnemy": [
+   {
+    "params": [
+     "EffectType"
+    ],
+    "arity": 1
+   }
+  ],
+  "postEffectActiveEnemyEnergyTrashIfCoinHead": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "postEffectDamageBench": [
+   {
+    "params": [
+     "int",
+     "int"
+    ],
+    "arity": 2
+   }
+  ],
+  "postEffectDamagePokemon": [
+   {
+    "params": [
+     "int",
+     "int"
+    ],
+    "arity": 2
+   }
+  ],
+  "postEffectDeckToTrash": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "postEffectMe": [
+   {
+    "params": [
+     "EffectType"
+    ],
+    "arity": 1
+   }
+  ],
+  "postEffectNoDamageAndEffectIfCoinHead": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "postEffectParalyzeIfCoinHead": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "postEffectTrashEnergyMe": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "postEffectTrashEnergyMeAll": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "preEffectFailAttackCoinTail": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "preEffectRound": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "separator": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "setEffect": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "target": [
+   {
+    "params": [
+     "AreaType"
+    ],
+    "arity": 1
+   }
+  ],
+  "targetCondition": [
+   {
+    "params": [
+     "TargetType",
+     "int",
+     "ComparatorType"
+    ],
+    "arity": 3
+   }
+  ],
+  "targetCondition2": [
+   {
+    "params": [
+     "TargetType",
+     "int",
+     "int",
+     "ComparatorType"
+    ],
+    "arity": 4
+   }
+  ],
+  "targetEnergyCardMe": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "targetNameCondition": [
+   {
+    "params": [
+     "TargetType",
+     "char8_t const*",
+     "ComparatorType"
+    ],
+    "arity": 3
+   }
+  ],
+  "targetPokemon": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "textEn": [
+   {
+    "params": [
+     "char8_t const*",
+     "char8_t const*"
+    ],
+    "arity": 2
+   }
+  ],
+  "trigger": [
+   {
+    "params": [
+     "TriggerType"
+    ],
+    "arity": 1
+   }
+  ],
+  "triggerAttachedCard": [
+   {
+    "params": [
+     "TriggerType"
+    ],
+    "arity": 1
+   }
+  ],
+  "triggerMe": [
+   {
+    "params": [
+     "TriggerType"
+    ],
+    "arity": 1
+   }
+  ]
+ },
+ "state_ops": {
+  "addOption": [
+   {
+    "params": [
+     "SelectOptionType"
+    ],
+    "arity": 1
+   }
+  ],
+  "attachedCardPosition": [
+   {
+    "params": [
+     "Card const&"
+    ],
+    "arity": 1
+   }
+  ],
+  "callFunction": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "canEvolveEffect": [
+   {
+    "params": [
+     "State const&",
+     "Card const&",
+     "CardMaster const&",
+     "CardRef"
+    ],
+    "arity": 4
+   }
+  ],
+  "cardMoved": [
+   {
+    "params": [
+     "CardRef",
+     "AreaType",
+     "bool"
+    ],
+    "arity": 3
+   }
+  ],
+  "checkGetCard": [
+   {
+    "params": [
+     "AreaRef"
+    ],
+    "arity": 1
+   }
+  ],
+  "checkGetCardNotPreventEffect": [
+   {
+    "params": [
+     "AreaRef"
+    ],
+    "arity": 1
+   }
+  ],
+  "checkPlayerSelect": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "currentAreaIndex": [
+   {
+    "params": [
+     "int",
+     "AreaType",
+     "CardRef"
+    ],
+    "arity": 3
+   }
+  ],
+  "currentCardPosition": [
+   {
+    "params": [
+     "AreaRef"
+    ],
+    "arity": 1
+   },
+   {
+    "params": [
+     "CardRef"
+    ],
+    "arity": 1
+   }
+  ],
+  "deserialize": [
+   {
+    "params": [
+     "BinaryReader&"
+    ],
+    "arity": 1
+   }
+  ],
+  "effectTargetPlayerContinual": [
+   {
+    "params": [
+     "Effect const&",
+     "int"
+    ],
+    "arity": 2
+   }
+  ],
+  "finishCheck": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "getAttachedList": [
+   {
+    "params": [
+     "PlayerState const&",
+     "FixedListBase<int, CardRef, 61> const&"
+    ],
+    "arity": 2
+   }
+  ],
+  "getAttachedToolRef": [
+   {
+    "params": [
+     "Card const&"
+    ],
+    "arity": 1
+   }
+  ],
+  "getCardRef": [
+   {
+    "params": [
+     "AreaType",
+     "int",
+     "int"
+    ],
+    "arity": 3
+   }
+  ],
+  "getEffect": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "getEffectValue": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "getEnergies": [
+   {
+    "params": [
+     "int",
+     "CardRef",
+     "std::vector<EnergyType, std::allocator<EnergyType> >&"
+    ],
+    "arity": 3
+   }
+  ],
+  "getEnergyCards": [
+   {
+    "params": [
+     "CardRef",
+     "std::vector<CardRef, std::allocator<CardRef> >&"
+    ],
+    "arity": 2
+   }
+  ],
+  "getEnergyInfo": [
+   {
+    "params": [
+     "Card const&",
+     "CardRef"
+    ],
+    "arity": 2
+   }
+  ],
+  "getSecondEffectValue": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "getValuesByEffect": [
+   {
+    "params": [
+     "Effect const&"
+    ],
+    "arity": 1
+   }
+  ],
+  "isEvolved": [
+   {
+    "params": [
+     "CardRef"
+    ],
+    "arity": 1
+   }
+  ],
+  "isPreventDamageCounter": [
+   {
+    "params": [
+     "Card const&"
+    ],
+    "arity": 1
+   }
+  ],
+  "isPreventEffect": [
+   {
+    "params": [
+     "Card const&"
+    ],
+    "arity": 1
+   }
+  ],
+  "isPreventEffectActive": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "pushCardRef": [
+   {
+    "params": [
+     "AreaType",
+     "int",
+     "CardRef"
+    ],
+    "arity": 3
+   }
+  ],
+  "pushFunction": [
+   {
+    "params": [
+     "void (*)(State&)"
+    ],
+    "arity": 1
+   },
+   {
+    "params": [
+     "void (*)(State&, int)",
+     "int"
+    ],
+    "arity": 2
+   },
+   {
+    "params": [
+     "void (*)(State&, int, int)",
+     "int",
+     "int"
+    ],
+    "arity": 3
+   }
+  ],
+  "removeCardRef": [
+   {
+    "params": [
+     "AreaType",
+     "int",
+     "int"
+    ],
+    "arity": 3
+   }
+  ],
+  "retreatCost": [
+   {
+    "params": [
+     "Card const&"
+    ],
+    "arity": 1
+   }
+  ],
+  "satisfyAttackCondition": [
+   {
+    "params": [
+     "Card const&",
+     "Attack const&",
+     "int"
+    ],
+    "arity": 3
+   }
+  ],
+  "selectedOption": [
+   {
+    "params": [
+     "int"
+    ],
+    "arity": 1
+   }
+  ],
+  "setSelect": [
+   {
+    "params": [
+     "SelectType",
+     "SelectContext",
+     "int",
+     "int",
+     "int"
+    ],
+    "arity": 5
+   }
+  ],
+  "setSelectedCardTarget": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "step": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "targetListEnergyCount": [
+   {
+    "params": [],
+    "arity": 0
+   }
+  ],
+  "targetListTypeEnergyCount": [
+   {
+    "params": [
+     "EnergyType"
+    ],
+    "arity": 1
+   }
+  ],
+  "typeEnergyCount": [
+   {
+    "params": [
+     "int",
+     "CardRef",
+     "EnergyType"
+    ],
+    "arity": 3
+   }
+  ]
+ },
+ "free_functions": {
+  "AfterAbility": [
+   {
+    "params": [
+     "State&"
+    ],
+    "arity": 1
+   }
+  ],
+  "AfterAttackDamageChangeCoin": [
+   {
+    "params": [
+     "State&"
+    ],
+    "arity": 1
+   }
+  ],
+  "AfterAttackDamageChangeCoinUntilTail": [
+   {
+    "params": [
+     "State&"
+    ],
+    "arity": 1
+   }
+  ],
+  "AfterAttackDamageChangeTargetCountEnemyCoin": [
+   {
+    "params": [
+     "State&"
+    ],
+    "arity": 1
+   }
+  ],
+  "AfterDamage": [
+   {
+    "params": [
+     "State&",
+     "CardRef",
+     "Card&",
+     "CardRef",
+     "Card const&"
+    ],
+    "arity": 5
+   }
+  ],
+  "AfterEffect": [
+   {
+    "params": [
+     "State&"
+    ],
+    "arity": 1
+   }
+  ],
+  "CalcDamage": [
+   {
+    "params": [
+     "State const&",
+     "int",
+     "CardRef",
+     "Card const&",
+     "CardRef",
+     "Card const&",
+     "bool",
+     "Attack const*"
+    ],
+    "arity": 8
+   }
+  ],
+  "PullTrigger": [
+   {
+    "params": [
+     "State&",
+     "TriggerType",
+     "CardRef",
+     "CardRef",
+     "int"
+    ],
+    "arity": 5
+   }
+  ],
+  "SelectedDisableAttack": [
+   {
+    "params": [
+     "State&",
+     "int"
+    ],
+    "arity": 2
+   }
+  ],
+  "SelectedFirstEffect": [
+   {
+    "params": [
+     "State&"
+    ],
+    "arity": 1
+   }
+  ]
+ },
+ "enums_referenced": [
+  "AreaType",
+  "ComparatorType",
+  "ConditionType",
+  "EffectType",
+  "EnergyType",
+  "SelectOptionType",
+  "SelectType",
+  "TargetPlayer",
+  "TargetType",
+  "TriggerType"
+ ]
+}

@@ -15,8 +15,12 @@ full:
   - 'tests/pilot_helpers.py'
   - 'tests/scouting_helpers.py'
   - 'tests/lethal_helpers.py'
+  # Fixtures + committed data trigger the full suite EXCEPT the cgpy-only ones, which route
+  # to the self-contained `parity` filter below (negation = "match all but these").
   - 'tests/fixtures/**'
+  - '!tests/fixtures/parity/**'
   - 'data/**'
+  - '!data/engine/coverage.json'
   - 'tools/build_card_functions.py'
   - 'tools/build_card_effects.py'
   - 'tools/audit_card_functions.py'
@@ -59,6 +63,16 @@ blunder:
   - 'tests/blunder/**'
 value:
   - 'tests/value/**'
+
+# cgpy pure-Python engine twin + its trace-replay parity gate (ADR-0050). Self-contained:
+# nothing else imports src/cgpy, so a cgpy/parity change runs ONLY tests/parity (and,
+# conversely, an unrelated PR never pays for the heavy parity suite). The committed coverage
+# ledger + the parity micro-trace corpus live here too (carved out of `full` above).
+parity:
+  - 'src/cgpy/**'
+  - 'tests/parity/**'
+  - 'tests/fixtures/parity/**'
+  - 'data/engine/coverage.json'
 
 # Ignorable (no runtime surface) and a catch-all for the fail-safe in the plan step.
 docs:

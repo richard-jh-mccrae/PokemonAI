@@ -125,16 +125,25 @@ def main(argv=None):
     import argparse
     import json
 
-    from cg.api import all_card_data
-
     ap = argparse.ArgumentParser(description="Probe a seeded fixture's follow-up selects (ADR-0050)")
     ap.add_argument("fixture", help="tests/fixtures/corrections/<name>.json (must carry a seed)")
     ap.add_argument("--agent", default="mega_lucario")
     ap.add_argument("--step", type=int, nargs="+", default=[0], help="first-step option index/indices")
+    ap.add_argument("--engine", choices=["native", "py"], default="native",
+                    help="py: probe on the cgpy twin (ADR-0050 M3) — DLL-free, and the "
+                         "fixture needs no search_begin_input (structured seeding)")
     args = ap.parse_args(argv)
+
+    if args.engine == "py":
+        from cgpy.alias import install
+        install()
+
+    from cg.api import all_card_data      # after the alias decision: py never loads the DLL
 
     names = {c.cardId: c.name for c in all_card_data()}
     obs = json.loads(Path(args.fixture).read_text(encoding="utf-8"))["obs"]
+    if args.engine == "py" and not obs.get("search_begin_input"):
+        obs["search_begin_input"] = "cgpy"        # presence-gate marker; state is structured
     pilot = _build_pilot(args.agent)
     for rec in probe_follow_ups(pilot, obs, list(args.step)):
         print(f"[{rec['step']}] ctx={rec['context']} type={rec['type']} max={rec['maxCount']} "

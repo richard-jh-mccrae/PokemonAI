@@ -711,6 +711,12 @@ def _covered(attack_id: int, existing: list[dict]) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    import os
+    if os.environ.get("CG_ENGINE") == "py":     # ADR-0050 M4: measure the cgpy twin —
+        _cg_on_path()                           # same harness, engine swapped via alias
+        from cgpy.alias import install
+        install()
+
     ap = argparse.ArgumentParser(description="Attack-audit measurement harness (ADR-0032 item 5)")
     ap.add_argument("--attack", type=int, help="measure one attackId across the panel")
     ap.add_argument("--all", action="store_true", help="batch every attack (resumable)")

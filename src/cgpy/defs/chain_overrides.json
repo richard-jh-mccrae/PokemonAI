@@ -1,0 +1,1664 @@
+{
+  "_comment": "Hand-authored ChainDefs (ADR-0050 M2): per-card programs over the chain-op vocabulary. Replaced piecewise by generated_chains.json in the pool-wide fan-out. Provenance: card texts in defs/card_data.json + trace divergences.",
+  "1121": {
+    "name": "Ultra Ball",
+    "legal": [
+      {
+        "op": "handOthers",
+        "n": 2
+      },
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "costHandTrash",
+        "n": 2
+      },
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "pokemon": true
+        }
+      }
+    ]
+  },
+  "1086": {
+    "name": "Buddy-Buddy Poffin",
+    "legal": [
+      {
+        "op": "benchSpace"
+      },
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToBenchAndShuffle",
+        "min": 0,
+        "max": 2,
+        "filter": {
+          "basic": true,
+          "pokemon": true,
+          "hpMax": 70
+        }
+      }
+    ]
+  },
+  "1123": {
+    "name": "Switch",
+    "legal": [
+      {
+        "op": "benchExists"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectSwitchMe"
+      }
+    ]
+  },
+  "1120": {
+    "name": "Crushing Hammer",
+    "legal": [
+      {
+        "op": "oppEnergyExists"
+      }
+    ],
+    "play": [
+      {
+        "op": "coin"
+      },
+      {
+        "op": "ifHeads",
+        "skip": 1
+      },
+      {
+        "op": "trashEnergyEnemy"
+      }
+    ]
+  },
+  "1097": {
+    "name": "Night Stretcher",
+    "legal": [
+      {
+        "op": "discardHas",
+        "filter": {
+          "pokemonOrBasicEnergy": true
+        }
+      }
+    ],
+    "play": [
+      {
+        "op": "effectTrashToHand",
+        "min": 1,
+        "max": 1,
+        "filter": {
+          "pokemonOrBasicEnergy": true
+        }
+      }
+    ]
+  },
+  "1213": {
+    "name": "Judge",
+    "legal": [],
+    "play": [
+      {
+        "op": "xBothShuffleHandDraw",
+        "n": 4
+      }
+    ]
+  },
+  "1227": {
+    "name": "Lillie's Determination",
+    "legal": [],
+    "play": [
+      {
+        "op": "xOwnShuffleHandDraw",
+        "n": 6,
+        "nIfExactPrizes": {
+          "6": 8
+        }
+      }
+    ]
+  },
+  "1182": {
+    "name": "Boss's Orders",
+    "legal": [
+      {
+        "op": "oppBenchExists"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectSwitchEnemy"
+      }
+    ]
+  },
+  "1145": {
+    "name": "Mega Signal",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "megaEx": true
+        }
+      }
+    ]
+  },
+  "1122": {
+    "name": "Pokégear 3.0",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xLookTopMayTakeThenShuffle",
+        "n": 7,
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "cardType": [
+            3
+          ]
+        }
+      }
+    ]
+  },
+  "1189": {
+    "name": "Salvatore",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckEvolveInPlayAndShuffle"
+      }
+    ]
+  },
+  "17": {
+    "name": "Ignition Energy",
+    "eotSelfDiscard": true,
+    "provides": [
+      0
+    ],
+    "providesOnEvolution": [
+      0,
+      0,
+      0
+    ]
+  },
+  "1159": {
+    "name": "Hero's Cape",
+    "tool": {
+      "hpBonus": 100
+    }
+  },
+  "1174": {
+    "name": "Air Balloon",
+    "tool": {
+      "retreatBonus": -2
+    }
+  },
+  "1142": {
+    "name": "Fighting Gong",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "anyOf": [
+            {
+              "cardType": [
+                5
+              ],
+              "energyType": [
+                6
+              ]
+            },
+            {
+              "pokemon": true,
+              "basic": true,
+              "energyType": [
+                6
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "1141": {
+    "name": "Premium Power Pro",
+    "legal": [],
+    "play": [
+      {
+        "op": "xTurnDamageBonus",
+        "bonus": 30,
+        "attackerEnergyType": 6
+      }
+    ]
+  },
+  "1211": {
+    "name": "Black Belt's Training",
+    "legal": [],
+    "play": [
+      {
+        "op": "xTurnDamageBonus",
+        "bonus": 40,
+        "defenderExOnly": true
+      }
+    ]
+  },
+  "1152": {
+    "name": "Poké Pad",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "pokemon": true,
+          "noRuleBox": true
+        }
+      }
+    ]
+  },
+  "1219": {
+    "name": "Team Rocket's Petrel",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 1,
+        "filter": {
+          "cardType": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      }
+    ]
+  },
+  "1225": {
+    "name": "Hilda",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckTakeSequenceAndShuffle",
+        "picks": [
+          {
+            "min": 0,
+            "max": 1,
+            "filter": {
+              "evolution": true
+            }
+          },
+          {
+            "min": 0,
+            "max": 1,
+            "filter": {
+              "energy": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "1198": {
+    "name": "Crispin",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckDistinctBasicEnergyTakeAttach"
+      }
+    ]
+  },
+  "1229": {
+    "name": "Wally's Compassion",
+    "legal": [
+      {
+        "op": "megaExDamagedInPlay"
+      }
+    ],
+    "play": [
+      {
+        "op": "xHealMegaBounceEnergy"
+      }
+    ]
+  },
+  "1240": {
+    "name": "Rosa's Encouragement",
+    "legal": [
+      {
+        "op": "prizesMoreThanOpp"
+      },
+      {
+        "op": "discardHas",
+        "filter": {
+          "cardType": [
+            5
+          ]
+        }
+      },
+      {
+        "op": "inPlayHas",
+        "filter": {
+          "stage2": true
+        }
+      }
+    ],
+    "play": [
+      {
+        "op": "xDiscardEnergyAttachOneTarget",
+        "min": 1,
+        "max": 2,
+        "filter": {
+          "cardType": [
+            5
+          ]
+        },
+        "targetFilter": {
+          "stage2": true
+        }
+      }
+    ]
+  },
+  "1080": {
+    "name": "Unfair Stamp",
+    "legal": [
+      {
+        "op": "koLastTurn"
+      }
+    ],
+    "play": [
+      {
+        "op": "xBothShuffleHandDraw",
+        "n": 5,
+        "nOpp": 2
+      }
+    ]
+  },
+  "1223": {
+    "name": "Harlequin",
+    "legal": [],
+    "play": [
+      {
+        "op": "xBothShuffleCoinDraw",
+        "heads": [
+          5,
+          3
+        ],
+        "tails": [
+          3,
+          5
+        ]
+      }
+    ]
+  },
+  "1260": {
+    "name": "Risky Ruins",
+    "stadium": {
+      "onBench": {
+        "damage": 20,
+        "unlessEnergyType": [
+          7
+        ]
+      }
+    }
+  },
+  "1252": {
+    "name": "Gravity Mountain",
+    "stadium": {
+      "stage2HpDelta": -30
+    }
+  },
+  "120": {
+    "name": "Drakloak",
+    "ability": {
+      "program": [
+        {
+          "op": "xLookTopTakeRestBottom",
+          "n": 2,
+          "take": 1
+        }
+      ],
+      "legal": [
+        {
+          "op": "deckNotEmpty"
+        }
+      ]
+    }
+  },
+  "674": {
+    "name": "Hariyama",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "effectSwitchEnemy"
+        }
+      ]
+    }
+  },
+  "1254": {
+    "name": "Levincia",
+    "_provenance": "per-turn stadium ability: MAIN option {type10, area7}, ctx TO_HAND pick over discard {L} basics min1 max2, DISC->HAND both-visible (pinned lev_9000 f51-f53, lev_9002 f34 single-target max1)",
+    "stadium": {},
+    "stadiumAbility": {
+      "legal": [
+        {
+          "op": "discardHas",
+          "filter": {
+            "basicEnergy": true,
+            "energyType": [
+              4
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "effectTrashToHand",
+          "min": 1,
+          "max": 2,
+          "filter": {
+            "basicEnergy": true,
+            "energyType": [
+              4
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "1079": {
+    "name": "Rare Candy",
+    "_provenance": "skip-evolve: ctx37 EVOLVE select in the MAIN-menu option encoding, menu-gated on a legal pair (pinned trcx_9100 f13-f14 / trc_9000 never offered)",
+    "legal": [
+      {
+        "op": "rareCandyPairExists"
+      }
+    ],
+    "play": [
+      {
+        "op": "xRareCandyEvolve"
+      }
+    ]
+  },
+  "1087": {
+    "name": "Hand Trimmer",
+    "_provenance": "both players discard to 5, opponent first, own-choice ctx8 one-at-a-time picks (pinned trh_9000 f68-f69); opp exits drain the hand-pick FIFO; hidden unless someone holds >5 (f75)",
+    "legal": [
+      {
+        "op": "anyHandAbove",
+        "n": 5
+      }
+    ],
+    "play": [
+      {
+        "op": "xBothHandTrimTo",
+        "n": 5
+      }
+    ]
+  },
+  "851": {
+    "name": "Silcoon",
+    "_provenance": "Multiplying Cocoon on-evolve ask -> deck-to-bench Silcoon/Cascoon (pinned rvl1230_9000 f7-f9: ctx43 YES_NO then ctx TO_BENCH min0 max1 with listing)",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "effectDeckToBenchAndShuffle",
+          "min": 0,
+          "max": 1,
+          "filter": {
+            "anyOf": [
+              {
+                "pokemon": true,
+                "nameContains": "Silcoon"
+              },
+              {
+                "pokemon": true,
+                "nameContains": "Cascoon"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "1036": {
+    "name": "Luxio",
+    "_provenance": "Fighting Roar passive: can evolve on the first turn / the turn it entered if the opponent's Active is a Pokemon {ex} — megaEx counts (pinned rvl1371_9000 f8: Luxray ex EVOLVE offered onto a this-turn Luxio vs Mega Latias ex)",
+    "evolve": {
+      "immediateIfOppActiveEx": true
+    }
+  },
+  "66": {
+    "name": "Dudunsparce",
+    "ability": {
+      "program": [
+        {
+          "op": "xDrawThenShuffleSelfIn",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "112": {
+    "name": "Munkidori",
+    "ability": {
+      "legal": [
+        {
+          "op": "selfHasEnergyType",
+          "energyType": 7
+        },
+        {
+          "op": "selfDamaged"
+        }
+      ],
+      "program": [
+        {
+          "op": "xMoveDamageCounters",
+          "max": 3
+        }
+      ]
+    }
+  },
+  "140": {
+    "name": "Fezandipiti ex",
+    "ability": {
+      "oncePerTurnGlobal": true,
+      "legal": [
+        {
+          "op": "koLastTurn"
+        }
+      ],
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "675": {
+    "name": "Lunatone",
+    "ability": {
+      "oncePerTurnGlobal": true,
+      "legal": [
+        {
+          "op": "inPlayNamed",
+          "name": "Solrock"
+        },
+        {
+          "op": "handHas",
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              6
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "costHandTrash",
+          "n": 1,
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              6
+            ]
+          }
+        },
+        {
+          "op": "effectDraw",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "1071": {
+    "name": "Meowth ex",
+    "onBench": {
+      "program": [
+        {
+          "op": "effectDeckToHandAndShuffle",
+          "min": 0,
+          "max": 1,
+          "filter": {
+            "cardType": [
+              3
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "attack:1487": {
+    "name": "Jetting Blow",
+    "rider": [
+      {
+        "op": "xChooseBenchDamage",
+        "damage": 50
+      }
+    ]
+  },
+  "attack:982": {
+    "name": "Aura Jab",
+    "rider": [
+      {
+        "op": "xDiscardEnergyAttachBench",
+        "max": 3,
+        "filter": {
+          "cardType": [
+            5
+          ],
+          "energyType": [
+            6
+          ]
+        }
+      }
+    ]
+  },
+  "attack:981": {
+    "name": "Accelerating Stab",
+    "selfLockNextTurn": true
+  },
+  "attack:983": {
+    "name": "Mega Brave",
+    "selfLockNextTurn": true
+  },
+  "attack:980": {
+    "name": "Cosmic Beam",
+    "requiresBenchNamed": "Lunatone",
+    "ignoreWeaknessResistance": true
+  },
+  "attack:1488": {
+    "name": "Nebula Beam",
+    "ignoreWeaknessResistance": true,
+    "ignoreDefenderEffects": true
+  },
+  "345": {
+    "name": "Crustle",
+    "defense": {
+      "preventDamageFromEx": true
+    }
+  },
+  "356": {
+    "name": "Ethan's Magcargo",
+    "retreat": {
+      "freeIfNoEnergy": true
+    }
+  },
+  "788": {
+    "name": "Charmander",
+    "retreat": {
+      "freeIfNoEnergy": true
+    }
+  },
+  "attack:141": {
+    "name": "Mind Bend",
+    "rider": [
+      {
+        "op": "xInflictConditionActive",
+        "condition": 4
+      }
+    ]
+  },
+  "attack:423": {
+    "name": "Trading Places",
+    "rider": [
+      {
+        "op": "effectSwitchMe"
+      }
+    ]
+  },
+  "attack:183": {
+    "name": "Cruel Arrow",
+    "rider": [
+      {
+        "op": "xChooseAnyDamage",
+        "damage": 100
+      }
+    ]
+  },
+  "125": {
+    "name": "Blissey ex",
+    "ability": {
+      "legal": [
+        {
+          "op": "ownBasicEnergyExists"
+        },
+        {
+          "op": "benchExists"
+        }
+      ],
+      "program": [
+        {
+          "op": "xMoveEnergyOwn"
+        }
+      ]
+    }
+  },
+  "269": {
+    "name": "Iono’s Bellibolt ex",
+    "_provenance": "Electric Streamer: repeatable hand->Iono-family L-basic attach. Pinned estream_9000: f61-f63 select shapes (ctx22 hand pick then ctx21 holder, contextCard None), f111/f113 per-mon options + family-filtered targets (Latias/Zygarde unlisted), t85 3 uses in one turn; match-replay f34-f38 menu gate = hand holds a Basic {L}",
+    "ability": {
+      "repeatable": true,
+      "legal": [
+        {
+          "op": "handHas",
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              4
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "xHandEnergyAttachChoose",
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              4
+            ]
+          },
+          "targetFilter": {
+            "nameContains": "Iono’s"
+          },
+          "targetContextCard": false
+        }
+      ]
+    }
+  },
+  "271": {
+    "name": "Iono’s Kilowattrel",
+    "_provenance": "Flashing Draw: cost = discard one attached Basic {L} (ctx26 ATTACHED_CARD min1 max1, holder-scoped ENERGY_CARD options energyIndex-ascending, pinned flashdraw_9000 f33 / 9001 f162 bench holder / 9002 f77 six candidates), then silent draw-to-6. Menu gate = L-basic attached AND hand<6 (139 hand>=6 frames all unoffered) + default once-per-turn (9002 same-turn re-offer absent). Deck-empty gating UNPINNED (no deck gate authored, Lunar-Cycle precedent).",
+    "ability": {
+      "legal": [
+        {
+          "op": "selfHasEnergyType",
+          "energyType": 4,
+          "basic": true
+        },
+        {
+          "op": "handBelow",
+          "n": 6
+        }
+      ],
+      "program": [
+        {
+          "op": "xDiscardEnergyCountScaled",
+          "scope": "holder",
+          "min": 1,
+          "max": 1,
+          "filter": {
+            "cardType": [
+              5
+            ],
+            "energyType": [
+              4
+            ]
+          }
+        },
+        {
+          "op": "effectDrawUntil",
+          "n": 6
+        }
+      ]
+    }
+  },
+  "1102": {
+    "name": "Dusk Ball",
+    "_provenance": "bottom-7 look (moves == god deck[:7] bottom-first, pinned duskball_9000 f6), ctx TO_HAND min0 max1 over Pokemon matches (9001 f113 two options + declined choice []), pick exits LOOKING->HAND revealed, rest back then shuffle — the Pokegear op with fromBottom",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xLookTopMayTakeThenShuffle",
+        "n": 7,
+        "min": 0,
+        "max": 1,
+        "fromBottom": true,
+        "filter": {
+          "pokemon": true
+        }
+      }
+    ]
+  },
+  "1192": {
+    "name": "Carmine",
+    "_provenance": "discard-hand-draw-5, no selects (no effect=1192 select in any capture); allowedFirstTurn waives the first-player T1 supporter ban (pinned carmine_9000 f4 / 9002 f5: PLAY offered and taken at t1, supporterPlayed flips after)",
+    "allowedFirstTurn": true,
+    "legal": [],
+    "play": [
+      {
+        "op": "xDiscardHandDraw",
+        "n": 5
+      }
+    ]
+  },
+  "1244": {
+    "name": "Full Metal Lab",
+    "_provenance": "passive: {M} defenders take 30 less from opposing attacks post-W/R, both sides, Active or benched (damage.py takeLess hook; ignoreDefenderEffects does NOT pierce — a stadium is field-wide, not an effect ON the mon; UNPINNED reading, kaggle episodes verify). Play flow = generic stadium.",
+    "stadium": {
+      "takeLess": {
+        "defenderType": 8,
+        "n": 30
+      }
+    }
+  },
+  "1255": {
+    "name": "Postwick",
+    "_provenance": "passive: Hop-family attackers do +30 to the opposing ACTIVE pre-W/R, both players (damage.py activeBonus hook; UNPINNED reading, kaggle episodes verify).",
+    "stadium": {
+      "activeBonus": {
+        "attackerNameContains": "Hop’s",
+        "n": 30
+      }
+    }
+  },
+  "1256": {
+    "name": "Team Rocket's Watchtower",
+    "_provenance": "passive: {C} mons in play have no Abilities — MAIN ability options suppressed both sides (options.py suppressAbilitiesType; triggered/passive abilities of {C} mons NOT yet suppressed — UNPINNED, fail-loud).",
+    "stadium": {
+      "suppressAbilitiesType": 0
+    }
+  },
+  "1259": {
+    "name": "Spikemuth Gym",
+    "_provenance": "per-turn stadium ability (Levincia machinery): ctx TO_HAND min0 max1 with deck listing over Marnie-family Pokemon, declinable (pinned spikemuth_9001 f162 choice [] / f168 pick), reveal-to-hand + shuffle.",
+    "stadium": {},
+    "stadiumAbility": {
+      "legal": [
+        {
+          "op": "deckNotEmpty"
+        }
+      ],
+      "program": [
+        {
+          "op": "effectDeckToHandAndShuffle",
+          "min": 0,
+          "max": 1,
+          "filter": {
+            "pokemon": true,
+            "nameContains": "Marnie's"
+          }
+        }
+      ]
+    }
+  },
+  "1261": {
+    "name": "Forest of Vitality",
+    "_provenance": "passive: {G} mons may evolve into {G} evolutions the turn they entered (options.py evolveImmediateType waives entered_turn, NOT the turn<=2 first-turn ban; UNPINNED shape, kaggle episodes verify).",
+    "stadium": {
+      "evolveImmediateType": 1
+    }
+  },
+  "1262": {
+    "name": "Surfing Beach",
+    "_provenance": "per-turn stadium ability (Levincia machinery): switch Active {W} with a benched {W} — ctx SWITCH min1 max1 over {W} benched only (pinned surfbeach_9002 f65: one option, non-W benched excluded); gate = Active is {W} AND a benched {W} exists (activeIs + benchHas).",
+    "stadium": {},
+    "stadiumAbility": {
+      "legal": [
+        {
+          "op": "activeIs",
+          "filter": {
+            "pokemon": true,
+            "energyType": [
+              3
+            ]
+          }
+        },
+        {
+          "op": "benchHas",
+          "filter": {
+            "pokemon": true,
+            "energyType": [
+              3
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "effectSwitchMe",
+          "filter": {
+            "pokemon": true,
+            "energyType": [
+              3
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "1264": {
+    "name": "Battle Cage",
+    "_provenance": "passive: damage counters from opposing attack/ability effects cannot land on benched mons — distribute-counter ops skip entirely, counter-move dest selects exclude bench (benchCounterShield; UNPINNED shapes, kaggle episodes verify). Attack DAMAGE to bench unaffected; Risky-Ruins-class stadium-sourced counters unaffected (not from a Pokemon).",
+    "stadium": {
+      "benchCounterShield": true
+    }
+  },
+  "1231": {
+    "name": "Dawn",
+    "_provenance": "sequential per-category to-hand picks (Basic / Stage 1 / Stage 2), each ctx TO_HAND min0 max1 with listing (pinned dawn_9000 f96 bucket-1; buckets 2-3 UNPINNED — capture decks held no evolutions; ladder verifies), empty bucket skips with tac bump, one shuffle.",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckToHandBuckets",
+        "buckets": [
+          {
+            "filter": {
+              "pokemon": true,
+              "basic": true
+            }
+          },
+          {
+            "filter": {
+              "pokemon": true,
+              "stage1": true
+            }
+          },
+          {
+            "filter": {
+              "pokemon": true,
+              "stage2": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "1185": {
+    "name": "Explorer’s Guidance",
+    "_provenance": "look top 6, take EXACTLY 2 (min2 max2, unfiltered — energies listed, pinned explguid_9000 f17), rest DISCARDED in looking order (f18), no shuffle.",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xLookTopTakeRestBottom",
+        "n": 6,
+        "take": 2,
+        "rest": "discard"
+      }
+    ]
+  },
+  "1210": {
+    "name": "Brock’s Scouting",
+    "_provenance": "either-or search: up to 2 Basics OR 1 Evolution — sequential min0 max1 picks (pinned brockscout_9000 f131-f132 basic-basic; Evolution branch UNPINNED, ladder verifies), revealed, one shuffle.",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xDeckToHandEitherOr",
+        "a": {
+          "filter": {
+            "pokemon": true,
+            "basic": true
+          },
+          "n": 2
+        },
+        "b": {
+          "filter": {
+            "pokemon": true,
+            "evolution": true
+          },
+          "n": 1
+        }
+      }
+    ]
+  },
+  "1235": {
+    "name": "Waitress",
+    "_provenance": "look top 6, ctx ATTACH_TO min0 max1 over the Basic Energies among them (pinned waitress_9000 f10, declinable 9001 f138), then ctx ATTACH_FROM min1 max1 contextCard=energy (f11), rest to deck + shuffle (f12).",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "xLookEnergyAttachChoose",
+        "n": 6,
+        "filter": {
+          "basicEnergy": true
+        }
+      }
+    ]
+  },
+  "1205": {
+    "name": "Cyrano",
+    "_provenance": "single multi-pick search: ctx TO_HAND min0 max=min(3, matches) over Pokemon {ex} incl. megaEx (pinned cyrano_9000 f11 max3 / f38 max2 clamp; declinable f57), revealed, shuffle.",
+    "legal": [
+      {
+        "op": "deckNotEmpty"
+      }
+    ],
+    "play": [
+      {
+        "op": "effectDeckToHandAndShuffle",
+        "min": 0,
+        "max": 3,
+        "filter": {
+          "pokemon": true,
+          "ex": true
+        }
+      }
+    ]
+  },
+  "742": {
+    "name": "Kadabra",
+    "_provenance": "Psychic Draw onEvolve ask -> silent draw 2 (pinned alakazam_9000 f123: ctx43 ask, no further selects)",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 2
+        }
+      ]
+    }
+  },
+  "743": {
+    "name": "Alakazam",
+    "_provenance": "Psychic Draw onEvolve ask -> silent draw 3 (pinned alakazam_9000 f128)",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "190": {
+    "name": "Archaludon ex",
+    "_provenance": "Assemble Alloy onEvolve ask -> attach up to 2 Basic {M} from DISCARD to {M} mons any way (pinned archala_9002 f243: ctx22 over discard positions, NO listing, min1 max2; f244: per-energy ctx21 cc=energy, {M} targets only) — the distribute op source:\"discard\", no end shuffle",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "xDeckEnergyAttachDistribute",
+          "source": "discard",
+          "mode": "anyWay",
+          "buckets": [
+            {
+              "filter": {
+                "basicEnergy": true,
+                "energyType": [
+                  8
+                ]
+              },
+              "max": 2
+            }
+          ],
+          "targets": {
+            "pokemon": true,
+            "energyType": [
+              8
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "648": {
+    "name": "Marnie's Grimmsnarl ex",
+    "_provenance": "Punk Up onEvolve ask -> search deck up to 5 Basic {D}, attach to Marnie family any way, shuffle (pinned grimm_9000 f102: ctx22 min0 max5 listing; f103: per-energy ctx21 cc=energy, family targets) — the existing deck distribute op",
+    "onEvolve": {
+      "program": [
+        {
+          "op": "xDeckEnergyAttachDistribute",
+          "mode": "anyWay",
+          "buckets": [
+            {
+              "filter": {
+                "basicEnergy": true,
+                "energyType": [
+                  7
+                ]
+              },
+              "max": 5
+            }
+          ],
+          "targets": {
+            "pokemon": true,
+            "nameContains": "Marnie's"
+          },
+          "targetListing": false
+        }
+      ]
+    }
+  },
+  "173": {
+    "name": "Noctowl",
+    "_provenance": "Jewel Seeker onEvolve ask GATED on own Tera in play (pinned by absence: 8 evolves across noctowl_9001/9002, no Tera, no ask) -> search up to 2 Trainers, reveal, to hand, shuffle (yes-path UNPINNED, ladder verifies)",
+    "onEvolve": {
+      "legal": [
+        {
+          "op": "inPlayHas",
+          "filter": {
+            "tera": true
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "effectDeckToHandAndShuffle",
+          "min": 0,
+          "max": 2,
+          "filter": {
+            "cardType": [
+              1,
+              2,
+              3,
+              4
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "109": {
+    "name": "Abra",
+    "_provenance": "Teleporter: Active-only once-per-turn shuffle-self-in (Run Away Draw machinery, n=0 = no draw; alakazam_9001 f4 pins the MAIN option presence; shuffle-in + promotion shapes = the Dudunsparce pins)",
+    "ability": {
+      "legal": [
+        {
+          "op": "selfIsActive"
+        }
+      ],
+      "program": [
+        {
+          "op": "xDrawThenShuffleSelfIn",
+          "n": 0
+        }
+      ]
+    }
+  },
+  "attack:253": {
+    "name": "Metal Defender",
+    "_provenance": "self no-Weakness transient next opp turn (UNPINNED shape, from text; archala replays verify)",
+    "rider": [
+      {
+        "op": "xSelfNoWeaknessNextTurn"
+      }
+    ]
+  },
+  "attack:1072": {
+    "name": "Powerful Hand",
+    "_provenance": "counters = 2 x own hand on opp Active, silent HP_CHANGE putDamageCounter (UNPINNED shape, from text; alakazam replays verify)",
+    "rider": [
+      {
+        "op": "xCounterOppActiveScaled",
+        "per": 2
+      }
+    ]
+  },
+  "19": {
+    "name": "Telepath Psychic Energy",
+    "_provenance": "onAttach-from-hand to a {P} holder -> search up to 2 Basic {P} to bench + shuffle (telepath_9000 attach fires the deck-to-bench). Provides {P} from the table.",
+    "energy": true,
+    "onAttach": {
+      "holder": {
+        "pokemon": true,
+        "energyType": [
+          5
+        ]
+      },
+      "program": [
+        {
+          "op": "effectDeckToBenchAndShuffle",
+          "min": 0,
+          "max": 2,
+          "filter": {
+            "pokemon": true,
+            "basic": true,
+            "energyType": [
+              5
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "13": {
+    "name": "Enriching Energy",
+    "_provenance": "onAttach-from-hand (any holder) -> draw 4. Provides {C} from the table.",
+    "energy": true,
+    "onAttach": {
+      "holder": {},
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 4
+        }
+      ]
+    }
+  },
+  "18": {
+    "name": "Grow Grass Energy",
+    "_provenance": "+20 HP passive on a {G} holder (mutate-model like Hero’s Cape, hpBonusFilter type-gated; growgrass_9000 attached to a non-{G} mon = no bonus). Provides {G} from the table.",
+    "energy": true,
+    "hpBonus": 20,
+    "hpBonusFilter": {
+      "pokemon": true,
+      "energyType": [
+        1
+      ]
+    }
+  },
+  "10": {
+    "name": "Neo Upper Energy",
+    "_provenance": "provides {C}; on a Stage 2 holder provides 2 all-type units (providesOnStage2 = 2x RAINBOW). Secondary is the only clause.",
+    "energy": true,
+    "providesOnStage2": [
+      10,
+      10
+    ]
+  },
+  "12": {
+    "name": "Legacy Energy",
+    "_provenance": "provides 1 all-type unit (energyType 10=RAINBOW from the table). On-KO prize reduction (once per game) DEFERRED interior — the prize-claim hook is not yet wired; attach + provide live, ladder names it if exercised.",
+    "energy": true,
+    "legacyPrizeReduction": true
+  },
+  "14": {
+    "name": "Spiky Energy",
+    "_provenance": "provides {C}. Active-holder damaged-by-opp-attack -> 2 counters on the attacker: DEFERRED combat interior (not wired); attach + provide live, ladder names it if exercised.",
+    "energy": true,
+    "spikyCounter": 2
+  },
+  "11": {
+    "name": "Mist Energy",
+    "_provenance": "provides {C}. Prevent all opp-attack EFFECTS on the holder (damage still applies): DEFERRED broad interior; attach + provide live, ladder names it if exercised.",
+    "energy": true,
+    "preventOppEffects": true
+  },
+  "20": {
+    "name": "Rock Fighting Energy",
+    "_provenance": "provides {F}. Prevent all opp-attack EFFECTS on a {F} holder: DEFERRED broad interior; attach + provide live, ladder names it if exercised.",
+    "energy": true,
+    "preventOppEffects": true,
+    "preventFilter": {
+      "energyType": [
+        6
+      ]
+    }
+  },
+  "9": {
+    "name": "Boomerang Energy",
+    "_provenance": "provides {C}. If discarded by an effect of THIS mon’s attack, re-attach after attacking: DEFERRED recovery interior; attach + provide live, ladder names it if exercised.",
+    "energy": true,
+    "recoverOnAttackDiscard": true
+  },
+  "1158": {
+    "name": "Maximum Belt",
+    "tool": {
+      "attackBonus": {
+        "n": 50,
+        "defenderEx": true
+      }
+    }
+  },
+  "1171": {
+    "name": "Hop’s Choice Band",
+    "tool": {
+      "attackBonus": {
+        "n": 30,
+        "holder": {
+          "nameFamily": "Hop's"
+        }
+      },
+      "attackCostReduceColorless": 1,
+      "attackCostHolder": {
+        "nameFamily": "Hop's"
+      }
+    }
+  },
+  "1173": {
+    "name": "Cynthia's Power Weight",
+    "tool": {
+      "hpBonus": 70,
+      "hpBonusHolder": {
+        "nameFamily": "Cynthia's"
+      }
+    }
+  },
+  "1175": {
+    "name": "Brave Bangle",
+    "tool": {
+      "attackBonus": {
+        "n": 30,
+        "holder": {
+          "noRuleBox": true
+        }
+      }
+    }
+  },
+  "1156": {
+    "name": "Lucky Helmet",
+    "tool": {
+      "onDamagedActive": {
+        "draw": 2
+      }
+    }
+  },
+  "1167": {
+    "name": "Deluxe Bomb",
+    "tool": {
+      "onDamagedActive": {
+        "counterAttacker": 12,
+        "discardSelf": true
+      }
+    }
+  },
+  "1166": {
+    "name": "Gravity Gemstone",
+    "tool": {
+      "retreatBonusBothActive": 1
+    }
+  },
+  "1165": {
+    "name": "Sparkling Crystal",
+    "tool": {
+      "attackCostReduce": 1,
+      "attackCostHolder": {
+        "tera": true
+      }
+    }
+  },
+  "57": {
+    "name": "Relicanth",
+    "grantsPreEvoAttacks": true
+  },
+  "184": {
+    "name": "Latias ex",
+    "zeroRetreatBasics": true
+  },
+  "104": {
+    "name": "Froslass",
+    "checkupFieldCounters": {
+      "targetHasAbility": true,
+      "exceptName": "Froslass"
+    }
+  },
+  "1197": {
+    "name": "Xerosic’s Machinations",
+    "play": [
+      {
+        "op": "xOppHandTrimTo",
+        "n": 3
+      }
+    ],
+    "legal": [
+      {
+        "op": "oppHandAbove",
+        "n": 3
+      }
+    ]
+  },
+  "1194": {
+    "name": "Colress’s Tenacity",
+    "play": [
+      {
+        "op": "xDeckToHandBuckets",
+        "buckets": [
+          {
+            "filter": {
+              "cardType": [
+                4
+              ]
+            }
+          },
+          {
+            "filter": {
+              "energy": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "1129": {
+    "name": "Sacred Ash",
+    "play": [
+      {
+        "op": "xPickDiscard",
+        "dest": "deck",
+        "n": 5,
+        "filter": {
+          "pokemon": true
+        }
+      }
+    ],
+    "legal": [
+      {
+        "op": "discardHas",
+        "filter": {
+          "pokemon": true
+        }
+      }
+    ]
+  },
+  "1184": {
+    "name": "Lana’s Aid",
+    "play": [
+      {
+        "op": "xPickDiscard",
+        "dest": "hand",
+        "n": 3,
+        "filter": {
+          "anyOf": [
+            {
+              "pokemon": true,
+              "noRuleBox": true
+            },
+            {
+              "basicEnergy": true
+            }
+          ]
+        }
+      }
+    ],
+    "legal": [
+      {
+        "op": "discardHas",
+        "filter": {
+          "anyOf": [
+            {
+              "pokemon": true,
+              "noRuleBox": true
+            },
+            {
+              "basicEnergy": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "attack:371": {
+    "name": "Full Moon Rondo",
+    "scale": {
+      "var": "all_bench",
+      "per": 20,
+      "add": true
+    }
+  },
+  "756": {
+    "name": "Mega Kangaskhan ex",
+    "ability": {
+      "legal": [
+        {
+          "op": "selfIsActive"
+        }
+      ],
+      "oncePerTurnGlobal": true,
+      "program": [
+        {
+          "op": "effectDraw",
+          "n": 2
+        }
+      ]
+    }
+  },
+  "attack:1042": {
+    "name": "Riptide",
+    "scale": {
+      "var": "atk_discard_basic_energy",
+      "energyType": 3,
+      "per": 20,
+      "add": false
+    },
+    "rider": [
+      {
+        "op": "xShuffleDiscardEnergyToDeck",
+        "filter": {
+          "basicEnergy": true,
+          "energyType": [
+            3
+          ]
+        }
+      }
+    ]
+  },
+  "96": {
+    "name": "Teal Mask Ogerpon ex",
+    "ability": {
+      "legal": [
+        {
+          "op": "handHas",
+          "filter": {
+            "basicEnergy": true,
+            "energyType": [
+              1
+            ]
+          }
+        }
+      ],
+      "program": [
+        {
+          "op": "xHandEnergyAttachChoose",
+          "filter": {
+            "basicEnergy": true,
+            "energyType": [
+              1
+            ]
+          },
+          "holderSelf": true,
+          "thenDraw": 1
+        }
+      ]
+    }
+  },
+  "16": {
+    "name": "Prism Energy",
+    "providesOnBasic": [
+      10
+    ]
+  },
+  "1139": {
+    "name": "Energy Recycler",
+    "legal": [
+      {
+        "op": "discardHas",
+        "filter": {
+          "basicEnergy": true
+        }
+      }
+    ],
+    "play": [
+      {
+        "op": "xPickDiscard",
+        "dest": "deck",
+        "n": 5,
+        "filter": {
+          "basicEnergy": true
+        }
+      }
+    ]
+  },
+  "1134": {
+    "name": "Team Rocket's Transceiver",
+    "play": [
+      {
+        "op": "xDeckToHandBuckets",
+        "buckets": [
+          {
+            "filter": {
+              "cardType": [
+                3
+              ],
+              "nameContains": "Team Rocket"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

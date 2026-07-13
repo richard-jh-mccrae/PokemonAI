@@ -10,6 +10,7 @@
 - [Arena](./tools/arena/CONTEXT.md) — public web app (`tools/arena/`) where a **Visitor** plays a live **PvC Match** against an agent on the real cabt engine and leaves a **Rating**; every game is captured as a Tuner-usable replay under `data/replays/PvC/`.
 - [Strategy Ingestion](./.claude/skills/strategy-ingest/CONTEXT.md) — the `strategy-ingest` skill: a **Source Adapter** fetches an external human-authored source (paid note.com articles now, video transcripts next) into a source-agnostic **Fetched Article**, which Synthesis distils into a committed, scope-tagged **Strategy Digest** (`data/strategy/*_strategy.md`) that a downstream grill turns into weighted Hypotheses.
 - [Strategy Application](./.claude/skills/update-strategy/CONTEXT.md) — the analysis/application split (ADR-0046): five **Analysis skills** (`strategy-ingest`, `blunder-buster`, `deck-genie`, `matchup-genie`, `deck-align`) each end at a **Strategy Proposal** (structured-markdown fodder in `data/strategy/proposals/`); the one **Applier** (`update-strategy`) authors each proposal into its **target layer**, runs its **verification contract**, and the human commits.
+- [cgpy Engine](./src/cgpy/CONTEXT.md) — the pure-Python twin of the native engine (`src/cgpy/`, ADR-0050): plays local games with no DLL and doubles as a clone/seed/step verification engine; pinned to the binary by **Trace replay** (the parity gate in `tests/parity/`, DLL-free) with capture/diff tooling in `tools/parity/`.
 
 ## Relationships
 

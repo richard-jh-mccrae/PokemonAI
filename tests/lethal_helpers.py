@@ -54,3 +54,24 @@ def engine_confirms(fixture: dict, pilot, *, line=None, max_cascade: int = 40):
         return None
     line_steps = list(step) if isinstance(step[0], (list, tuple)) else [list(step)]
     return pilot._engine_confirms_win(obs, line_steps, max_cascade=max_cascade)
+
+
+def engine_confirms_py(fixture: dict, pilot, *, line=None, max_cascade: int = 40):
+    """``engine_confirms`` on the cgpy twin — DLL-free (ADR-0050 M3).
+
+    Same verdict contract, driven through `cgpy.alias` for the duration of the call (any
+    displaced native ``cg`` modules are restored after). Structured seeding needs no engine
+    blob: a fixture with NO ``search_begin_input`` is still driven, by injecting the bare
+    cgpy marker (the planner and the gate only test for presence; `cgpy.compat` rebuilds
+    the state from the observation itself). A fixture whose state cgpy cannot reconstruct
+    (an ambiguous mid-effect select) comes back ``None`` — undetermined, never a lie."""
+    from cgpy import alias
+
+    obs = (fixture or {}).get("obs") or {}
+    fx = dict(fixture,
+              obs=dict(obs, search_begin_input=obs.get("search_begin_input") or "cgpy"))
+    alias.install()
+    try:
+        return engine_confirms(fx, pilot, line=line, max_cascade=max_cascade)
+    finally:
+        alias.uninstall()
