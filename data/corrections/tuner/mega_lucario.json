@@ -1,6 +1,6 @@
 {
   "deck": "mega_lucario",
-  "generated_at": "2026-07-11T08:54:12",
+  "generated_at": "2026-07-13T17:18:32",
   "open": [],
   "skipped": [
     {
@@ -118,6 +118,22 @@
       "frame": 109,
       "disposition": "covered",
       "reason": "dragapult_ex Brief already ships this f109 doctrine (race the fragile Drakloak pre-evos; do NOT chip the un-KO-able 320HP Tera Dragapult; gust the non-Tera support ex) via the APPLIED proposal blunder-20260710-round.md#dragapult-matchup-plan-the-drakloaks-are-the-target. Read fires at gamma=1.0; decide()==correct==[9] degenerate (chosen==correct match-planner note). The residual MULTI-TURN execution (gust both Drakloaks over turns, then Meowth->Boss's finish on Fezandipiti) is the designed-but-unbuilt M3/M4 layer, already parked in docs/todo/deferred-multi-turn-criticals.md + fixture ml_dragapult_matchup_plan_note_f109.json. Single-frame doctrine covered; multi-turn line is a documented capability-gap."
+    },
+    {
+      "key": "85709280-t2s1",
+      "scope": "turn",
+      "episode_id": 85709280,
+      "frame": 17,
+      "disposition": "covered",
+      "reason": "phantom Cosmic Beam KO killed by applied honor-requiresbench-in-attach-lethal (pilot.py _attach_lethal_tactical now passes atk_bench_names): f17 opt[3] tac 1001->0, decide()=[0] develop. See data/strategy/proposals/blunder-20260713-mega_lucario.md"
+    },
+    {
+      "key": "85709280-m1",
+      "scope": "match",
+      "episode_id": 85709280,
+      "frame": 51,
+      "disposition": "covered",
+      "reason": "redundant 2nd Solrock suppressed by applied dont-bench-a-redundant-engine-piece (mega_lucario strategy.py): f51 opt[2] 25->0, decide() [2]->[0] keeps the bench slot for the Makuhita line. See data/strategy/proposals/blunder-20260713-mega_lucario.md"
     }
   ]
 }

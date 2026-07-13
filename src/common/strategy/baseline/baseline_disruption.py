@@ -12,6 +12,9 @@ _POSTURE_MIN_COVERAGE = 0.25  # min matchup coverage to trust the favorability p
 _STACKED_HAND = 6             # opponent hand size at/above which a `draw` engine has visibly STACKED
                               # resources (opening hand 7, +1/turn) — worth a hand_disruption Supporter
                               # to strip; below it HOLD (don't gift a fresh hand). ADR-0051 Phase 3b, ladder-tunable
+_REFRESH_HAND_FLOOR = 5       # my hand size at/above which a SYMMETRIC redraw (Judge → 4) is a net card
+                              # LOSS for me — below it a symmetric refresh is a fine small-hand dig. Pairs
+                              # with the (mine > theirs) gift test. ml 85709280 f111 (my 8 vs opp 1), ladder-tunable
 
 HYPOTHESES = [
     Hypothesis(
@@ -94,4 +97,25 @@ HYPOTHESES = [
         and (c.board.opp_hand_size > c.board.my_hand_size   # symmetric refresh: only when net-positive
              or "shuffle_hand" not in c.tags),              # one-sided strip: no gift, fire regardless
         weight=22, status="testing"),
+    Hypothesis(
+        id="dont-shuffle-away-the-bigger-hand",
+        rationale="The card-mechanical sibling of `dont-gift-a-refresh-when-favored` (which is keyed on "
+                  "matchup POSTURE): a SYMMETRIC hand refresh — both players shuffle their hand into the "
+                  "deck and redraw to a fixed count (Judge → 4; `shuffle_hand`+`hand_disruption`) — is "
+                  "card-NEGATIVE for me whenever my hand is large AND bigger than the opponent's, "
+                  "regardless of who is favored. Playing it then discards my good cards and REFILLS the "
+                  "opponent's smaller hand (ml 85709280 f111, CRITICAL: Judge with my hand 8 vs opp 1 = I "
+                  "net −4 and gift them +3; the attack-last resequencer masked it because the KO still "
+                  "landed after the wasteful Judge). Fires only when net-negative: my hand ≥ "
+                  "`_REFRESH_HAND_FLOOR` (a redraw-to-4 is a real loss) AND my hand > the opponent's (I "
+                  "gift more than I strip). Structurally EXCLUSIVE with the disruptive uses that require "
+                  "opp_hand > my_hand — `strip-the-stacked-engine-hand` (+22) and `play-harlequin-vs-hand-"
+                  "size` (+25, keyed on a hand_size_attacker) — so it never suppresses a net-positive "
+                  "strip. −25 sinks Judge's +20 dig below End (don't play it), a soft demotion, never "
+                  "overrides a KO (`_finish_turn_last`). Deck-agnostic (the human's own framing).",
+        when=lambda c: c.option_type == _PLAY
+        and "hand_disruption" in c.tags and "shuffle_hand" in c.tags
+        and c.board.my_hand_size >= _REFRESH_HAND_FLOOR
+        and c.board.my_hand_size > c.board.opp_hand_size,
+        weight=-25, status="assumed"),
 ]
