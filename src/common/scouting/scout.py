@@ -98,7 +98,7 @@ class Scout:
 
     @staticmethod
     def _target_role(st) -> str:
-        if st and (st.ex or st.megaEx):
+        if st and st.is_ex_body:
             return "prize_liability"   # KO yields extra prizes
         if st and st.maxDamage > 0:
             return "attacker"

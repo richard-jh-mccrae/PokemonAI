@@ -8,7 +8,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Plan, Strategy
 from pilot_helpers import (
     ACTIVE, BENCH, CARD, DAMAGE, HAND, PLAY, attack_opt, card_opt, make_select, opt, poke, state)
@@ -28,7 +28,7 @@ def _fired(o):
     return {h.id for h, _ in o.fired}
 
 
-def _stats():
+def _stats(attacks=None):
     return DictCardStatProvider({
         WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
@@ -37,15 +37,21 @@ def _stats():
                          minAttackCost=1, attacks=(12,), evolvesFrom=None),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
-    })
+    }, attacks=attacks)
+
+
+# Attack records (ADR-0051): the facts the legacy attacks=/attack_costs= Pilot dicts used to carry.
+_ATTACK_STATS = {10: AttackStat(10, damage=210, cost=3),      # Nebula Beam
+                 11: AttackStat(11, damage=120, cost=1),      # Jetting Blow
+                 12: AttackStat(12, damage=20, cost=1)}       # Staryu chip
 
 
 def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
-                 general_strategy=GENERAL_STRATEGY, stats=_stats(),
+                 general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
                  functions=CardFunctions({IGNITION: ["discard_eot"], 1223: ["draw", "shuffle_hand"],
                                           1227: ["draw", "shuffle_hand"], 1189: ["search", "rush_evolve"]}),
-                 attacks={10: 210, 11: 120, 12: 20}, attack_costs={10: 3, 11: 1, 12: 1}, **kw)
+                 **kw)
 
 
 # ---------------------------------------------------------------- build-active-wincon
@@ -228,13 +234,11 @@ def _denial_pilot(**kw):
         CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0),
         OPP: CardStat(OPP, name="Mega Lucario ex", hp=440, megaEx=True, maxDamage=270, energyType=7,
                       attacks=(13,)),                    # Aura Jab {F} 130 — an affordable threat at 1 Energy
-    })
+    }, attacks={**_ATTACK_STATS, 13: AttackStat(13, damage=130, cost=1)})   # + Aura Jab
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({CRUSH: ["energy_denial"]}),
-                 attacks={10: 210, 11: 120, 12: 20, 13: 130},
-                 attack_costs={10: 3, 11: 1, 12: 1, 13: 1}, **kw)
+                 functions=CardFunctions({CRUSH: ["energy_denial"]}), **kw)
 
 
 @pytest.mark.req("REQ-GEN-0031")
@@ -332,8 +336,8 @@ def _search_pilot(deck):
     """A Pilot over `deck` knowing the deck's searches' fetch-filters (PREEVO is the only Basic;
     WINCON the only Mega ex)."""
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}), deck=deck,
-                 general_strategy=GENERAL_STRATEGY, stats=_stats(), functions=CardFunctions(_FNS),
-                 attacks={10: 210, 11: 120, 12: 20}, attack_costs={10: 3, 11: 1, 12: 1})
+                 general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
+                 functions=CardFunctions(_FNS))
 
 
 def _board_of(pilot, current):
@@ -454,8 +458,8 @@ def _endorse_ultra_pilot():
                      hypotheses=[Hypothesis(id="t-endorse-ultra", rationale="test", weight=50,
                                             when=lambda c: c.card_id == ULTRA_BALL)])
     return Pilot(strat, deck=[WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54,
-                 general_strategy=GENERAL_STRATEGY, stats=_stats(), functions=CardFunctions(_FNS),
-                 attacks={10: 210, 11: 120, 12: 20}, attack_costs={10: 3, 11: 1, 12: 1})
+                 general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
+                 functions=CardFunctions(_FNS))
 
 
 @pytest.mark.req("REQ-GEN-0033")

@@ -16,13 +16,10 @@ import pytest
 
 pytest.importorskip("cg")
 
-from cg.api import all_attack                                    # noqa: E402
 from common.cards import CardFunctions                           # noqa: E402
 from common.effects import CardEffects                           # noqa: E402
 from common.pilot import Pilot                                   # noqa: E402
-from common.scouting.provider import (                           # noqa: E402
-    EngineCardStatProvider, build_attack_stats, load_attack_overrides,
-    parse_attack_bench_snipe, parse_attack_recoil)
+from common.scouting.provider import EngineCardStatProvider      # noqa: E402
 from common.strategy import Strategy                             # noqa: E402
 from common.strategy.general_strategy import GENERAL_STRATEGY    # noqa: E402
 from lethal_helpers import engine_confirms                       # noqa: E402
@@ -57,18 +54,14 @@ def _fixture(name):
 
 
 def _pilot(deck):
-    atk = all_attack()
     try:
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
+    # attack facts flow through the provider (ADR-0051); it lazily builds off whichever engine
+    # the cgpy alias maps at call time, so native/twin parity is preserved.
     return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY,
                  stats=EngineCardStatProvider(), functions=fns, effects=CardEffects.load(),
-                 attacks={a.attackId: a.damage for a in atk},
-                 attack_costs={a.attackId: len(a.energies) for a in atk},
-                 recoil={a.attackId: parse_attack_recoil(a.text) for a in atk},
-                 bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in atk},
-                 attack_stats=build_attack_stats(atk, load_attack_overrides()),
                  lethal_verify=True, lethal_family=True, lethal_veto=True)
 
 

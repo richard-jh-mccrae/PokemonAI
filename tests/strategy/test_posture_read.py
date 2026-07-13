@@ -8,7 +8,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.pilot import Board, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.scouting.briefs import Brief
 from common.scouting.matchup_plan import build_matchup_plan
 from common.scouting.read import EvoPath, Read
@@ -26,7 +26,7 @@ def _stats():
     return DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True,
                        minAttackCost=1, minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
-    })
+    }, attacks={11: AttackStat(11, damage=120, cost=1)})
 
 
 def _pilot(scout=None, my_archetype=None, briefs=None, posture=True):
@@ -34,7 +34,7 @@ def _pilot(scout=None, my_archetype=None, briefs=None, posture=True):
                      roles={MEGA: ["win_condition", "primary_attacker"]},
                      params={"my_archetype": my_archetype} if my_archetype else {})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 attacks={11: 120}, attack_costs={11: 1}, scout=scout, briefs=briefs, posture=posture)
+                 scout=scout, briefs=briefs, posture=posture)
 
 
 def _obs_facing_mega_lucario():
@@ -144,8 +144,7 @@ SNIPER = 700
 
 
 def _snipe_pilot(stats):
-    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 attacks={11: 120}, bench_snipe={11: 50})
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
 
 
 @pytest.mark.req("REQ-POSTURE-0003")
@@ -158,7 +157,7 @@ def test_lever_c_suppresses_a_denied_evolving_threats_forward_rank():
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=220, megaEx=True,
                                maxDamage=270, evolvesFrom="Riolu"),
-    })
+    }, attacks={11: AttackStat(11, damage=120, benchSnipe=50)})
     pilot = _snipe_pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1)], context=15,
                       current=state(active=poke(SNIPER), opp_bench=[poke(RIOLU, hp=70)]))
@@ -186,10 +185,10 @@ def _unfavored_pilot(win_rate, funcs):
     # empty stat provider would mask that (2026-07-09).
     stats = DictCardStatProvider({
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True, attacks=(11,)),
-    })
+    }, attacks={11: AttackStat(11, damage=130, cost=1)})
     return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=funcs, attacks={11: 130}, attack_costs={11: 1}, scout=Scout(art))
+                 functions=funcs, scout=Scout(art))
 
 
 def _obs_hammer_vs_energized_mega_lucario():
@@ -239,7 +238,7 @@ def _favored_pilot(win_rate, funcs):
     art.dossiers["MyDeck"] = {"matchups": {"Mega Lucario ex": {"win_rate": win_rate, "n": 30.0}}}
     return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[77] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=DictCardStatProvider({77: CardStat(77, hp=70)}),
-                 functions=funcs, attacks={}, scout=Scout(art))
+                 functions=funcs, scout=Scout(art))
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
@@ -330,14 +329,13 @@ def _mp_pilot(matchup_targeting=True, posture=True):
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=280, megaEx=True),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
-    })
+    }, attacks={11: AttackStat(11, damage=120, cost=1)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition"]}, params={})
     brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"]}),
-                 attacks={11: 120}, attack_costs={11: 1},
                  scout=Scout(tiny_artifact()), briefs=[brief],
                  posture=posture, matchup_targeting=matchup_targeting)
 
@@ -373,12 +371,11 @@ def _mp_snipe_pilot(matchup_targeting=True):
                                maxDamage=270, evolvesFrom="Riolu"),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
-    })
+    }, attacks={11: AttackStat(11, damage=120, cost=1, benchSnipe=50)})
     brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"]}),
-                 attacks={11: 120}, attack_costs={11: 1}, bench_snipe={11: 50},
                  scout=Scout(tiny_artifact()), briefs=[brief],
                  posture=True, matchup_targeting=matchup_targeting)
 
@@ -452,7 +449,7 @@ def _ml_stats():
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=80, evolvesFrom=None),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110),
-    })
+    }, attacks={11: AttackStat(11, damage=120, cost=1)})
 
 
 def _ml_brief_full():
@@ -469,8 +466,7 @@ def _ml_pilot(briefs):
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_ml_stats(),
-                 attacks={11: 120}, attack_costs={11: 1}, scout=Scout(tiny_artifact()),
-                 briefs=briefs, posture=True)
+                 scout=Scout(tiny_artifact()), briefs=briefs, posture=True)
 
 
 @pytest.mark.req("REQ-POSTURE-0005")
@@ -502,7 +498,7 @@ BRUISER = 720   # a plain 120-damage attacker body (the energized competitor in 
 EX_INERT = 721  # a 2-prize ex body with no Energy — the "bigger inert prize" the wincon-denial bump beats
 
 
-def _lever_stats():
+def _lever_stats(attacks=None):
     """Provider for the ADR-0038 lever tests: the Mega Lucario line (Riolu's forward-evo damage =
     270), the Solrock engine body, a Gardevoir line (a NON-briefed evolving pre-evolution, for
     denial parity in gust tests) and a plain bruiser."""
@@ -518,12 +514,13 @@ def _lever_stats():
                             evolvesFrom="Kirlia"),
         BRUISER: CardStat(BRUISER, name="Bruiser", hp=120, maxDamage=120),
         EX_INERT: CardStat(EX_INERT, name="Inert ex", hp=80, ex=True, maxDamage=120),
-    })
+    }, attacks=attacks)
 
 
-def _lever_pilot(**kw):
+def _lever_pilot(attack_table=None, **kw):
+    table = attack_table or {11: AttackStat(11, damage=120, cost=1)}
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=_lever_stats(), attacks={11: 120}, attack_costs={11: 1}, **kw)
+                 stats=_lever_stats(table), **kw)
 
 
 @pytest.mark.req("REQ-POSTURE-0007")
@@ -553,7 +550,8 @@ def test_briefed_preevo_boost_never_overrides_a_ko():
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
                                     opp_bench=bench))
-    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], bench_snipe={11: 50})
+    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief],
+                      attack_table={11: AttackStat(11, damage=120, cost=1, benchSnipe=50)})
     assert on.decide(obs) == [1]                           # take the prize, boost notwithstanding
 
 
@@ -644,14 +642,13 @@ def _mp_disruption_pilot():
         OPP_WALL: CardStat(OPP_WALL, name="Wall", hp=200),
         JUDGE_CARD: CardStat(JUDGE_CARD, name="Judge", cardType=3),
         PROBE_CARD: CardStat(PROBE_CARD, name="Probe", cardType=3),
-    })
+    }, attacks={11: AttackStat(11, damage=120, cost=1)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition"]}, params={})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"],
                                           JUDGE_CARD: ["draw", "hand_disruption", "shuffle_hand"],
-                                          PROBE_CARD: ["hand_disruption"]}),   # one-sided: no shuffle_hand
-                 attacks={11: 120}, attack_costs={11: 1})
+                                          PROBE_CARD: ["hand_disruption"]}))   # one-sided: no shuffle_hand
 
 
 def _disruption_obs(opp_hand, my_extra=0, draw_engine=True, card=JUDGE_CARD):

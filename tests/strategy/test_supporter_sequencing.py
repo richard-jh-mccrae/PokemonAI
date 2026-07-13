@@ -10,7 +10,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Strategy
 from pilot_helpers import ACTIVE, HAND, PLAY, make_select, opt, poke, state
 
@@ -37,7 +37,9 @@ def _stats():
         SALVATORE: CardStat(SALVATORE, name="Salvatore", hp=0, cardType=SUPPORTER),
         DRAWSUP: CardStat(DRAWSUP, name="Cheren", hp=0, cardType=SUPPORTER),
         LILLIES: CardStat(LILLIES, name="Lillie's Determination", hp=0, cardType=SUPPORTER),
-    })
+    }, attacks={10: AttackStat(10, damage=210, cost=3),
+                11: AttackStat(11, damage=120, cost=1),
+                12: AttackStat(12, damage=20, cost=1)})
 
 
 def _funcs():
@@ -49,8 +51,7 @@ def _pilot(strat=None, **kw):
     strat = strat or Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                               lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)])
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=_funcs(), attacks={10: 210, 11: 120, 12: 20},
-                 attack_costs={10: 3, 11: 1, 12: 1}, **kw)
+                 functions=_funcs(), **kw)
 
 
 # ---------------------------------------------------------------- (a) free Item dig before Supporter

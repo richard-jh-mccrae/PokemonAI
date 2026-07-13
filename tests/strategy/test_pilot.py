@@ -2,7 +2,7 @@
 import pytest
 
 from common.pilot import KO_SCORE, Pilot, choose_plan
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Plan, Ready, Strategy
 from pilot_helpers import (
     BENCH, DAMAGE, HAND, MAIN, PLAY, SETUP_ACTIVE, attack_opt, card_opt, make_select, opt,
@@ -10,6 +10,36 @@ from pilot_helpers import (
 )
 
 MEGA_STARMIE, STARYU, CINDERACE = 1031, 1030, 666
+
+
+@pytest.mark.req("REQ-STAT-0002")
+def test_attack_facts_resolve_through_the_stat_provider_alone():
+    # The Stat Provider is the ONE card-knowledge seam (ADR-0051): a Pilot wired with a
+    # provider that carries the attack records — and NO attacks=/attack_stats= ctor args —
+    # still sees damage/cost, so a KO scores as a KO.
+    jetting = 11
+    stats = DictCardStatProvider(
+        {MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
+                                energyType=3, attacks=(jetting,), minAttackCost=1),
+         CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, energyType=2, weakness=3)},
+        attacks={jetting: AttackStat(jetting, damage=120, cost=1)})
+    pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats)
+    obs = make_select([attack_opt(jetting)], context=MAIN,
+                      current=state(active=poke(MEGA_STARMIE, energy=3),
+                                    opp_active=poke(CINDERACE, hp=160)))
+    # 120 x2 (Cinderace weak to Water) = 240 >= 160 -> the KO band, provider-only wiring
+    assert pilot.explain(obs).options[0].score >= KO_SCORE
+
+
+@pytest.mark.req("REQ-STAT-0002")
+def test_legacy_attack_kwargs_are_retired():
+    # ADR-0051: the per-mechanic dicts and the prebuilt attack_stats table are gone from the
+    # ctor — attack facts have exactly ONE entrance (stats.attack). A resurrected kwarg must
+    # fail loudly, not silently feed a second fact path.
+    for kwarg in ("attacks", "attack_costs", "recoil", "bench_snipe", "bench_spread",
+                  "ignores_active_effects", "attack_stats"):
+        with pytest.raises(TypeError):
+            Pilot(Strategy(), deck=[1] * 60, **{kwarg: {}})
 
 
 @pytest.mark.req("REQ-PILOT-0001")
@@ -64,8 +94,9 @@ def test_among_knockouts_the_cheaper_attack_is_preferred():
     # Both attacks KO the 100-HP target; prefer cheaper cost so finisher's Energy stays in
     # reserve. Pricey KO is option 0, so only an efficiency tiebreak can choose opt1.
     CHEAP, PRICEY = 11, 12
-    pilot = Pilot(Strategy(), deck=[1] * 60, attacks={CHEAP: 120, PRICEY: 210},
-                  attack_costs={CHEAP: 1, PRICEY: 3})
+    pilot = Pilot(Strategy(), deck=[1] * 60, stats=DictCardStatProvider({}, attacks={
+        CHEAP: AttackStat(CHEAP, damage=120, cost=1),
+        PRICEY: AttackStat(PRICEY, damage=210, cost=3)}))
     obs = make_select([attack_opt(PRICEY), attack_opt(CHEAP)], context=MAIN,
                       current=state(active=poke(700), opp_active=poke(900, hp=100)))
     assert pilot.decide(obs) == [1]
@@ -93,7 +124,8 @@ def test_hypothesis_biases_its_choice():
 @pytest.mark.req("REQ-PILOT-0005")
 def test_tactical_evaluator_prefers_a_ko():
     JETTING, NEBULA = 11, 12  # attack ids
-    pilot = Pilot(Strategy(), deck=[1] * 60, attacks={JETTING: 50, NEBULA: 210})
+    pilot = Pilot(Strategy(), deck=[1] * 60, stats=DictCardStatProvider({}, attacks={
+        JETTING: AttackStat(JETTING, damage=50), NEBULA: AttackStat(NEBULA, damage=210)}))
 
     # Opponent active has 200 HP: Nebula (210) KOs it, Jetting (50) doesn't. KO
     # attack is option 1, so only outcome-aware scoring can choose it.
@@ -221,10 +253,10 @@ def test_weakness_doubles_tactical_damage_and_can_flip_the_choice():
         700: CardStat(700, energyType=WATER),                           # my Water attacker
         800: CardStat(800, energyType=FIRE, weakness=WATER, hp=160),    # weak to Water
         900: CardStat(900, energyType=FIRE, weakness=None, hp=160),     # not weak
-    })
+    }, attacks={ATK: AttackStat(ATK, damage=90)})
     # positional rule lifts non-attack play to 100; attack prints 90
     prefer_play = Hypothesis(id="prefer-play", rationale="", when=lambda c: c.option_type == PLAY, weight=100)
-    pilot = Pilot(Strategy(hypotheses=[prefer_play]), deck=[1] * 60, stats=stats, attacks={ATK: 90})
+    pilot = Pilot(Strategy(hypotheses=[prefer_play]), deck=[1] * 60, stats=stats)
 
     def vs(defender):   # opt0 = a play (100 via hypothesis), opt1 = the 90-damage attack
         return make_select([opt(PLAY), attack_opt(ATK)], context=MAIN,
@@ -380,9 +412,10 @@ def test_context_exposes_target_forward_damage_and_is_fail_closed():
 
 @pytest.mark.req("REQ-PILOT-0017")
 def test_tactical_values_a_ko_by_the_defenders_prize_count():
-    stats = DictCardStatProvider({800: CardStat(800, megaEx=True), 900: CardStat(900)})
     ATK = 11
-    pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats, attacks={ATK: 150})  # 150 KOs 100 hp
+    stats = DictCardStatProvider({800: CardStat(800, megaEx=True), 900: CardStat(900)},
+                                 attacks={ATK: AttackStat(ATK, damage=150)})   # 150 KOs 100 hp
+    pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats)
 
     def ko_score(defender):
         obs = make_select([attack_opt(ATK)], context=MAIN,

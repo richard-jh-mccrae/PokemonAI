@@ -10,7 +10,7 @@ from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Board, Pilot
 from common.scouting.matchup_plan import build_matchup_plan
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from pilot_helpers import (
     BENCH, HAND, MAIN, PLAY, SWITCH, attack_opt, card_opt, make_select, opt, poke, state)
@@ -42,6 +42,9 @@ DWEB_HI = 720      # opp benched, KO-able, removal lets my snipe finish DWEB_LO 
 DWEB_LO = 721      # opp benched, KO-able, low HP — finished by 50 snipe only if DWEB_HI gusted
 A_SNIPE_G = 104    # my Active's snipe attack id (120 damage + 50 bench rider)
 DOOM_ATK, KADA_ATK = 8100, 8110   # per-attack ids: the doom Actives DO damage us now (register `opp_active_can_damage_us`)
+# my-side cheapest-attack ids (ADR-0052: the card-level minCostDamage fallback is retired, so every
+# attacker's cheapest attack is a real record — same damage/cost the old fallback read)
+A_WIN, A_OFF, A_MEGA, A_FIGHT, A_WEAK, A_FRAG = 9010, 9020, 9040, 9060, 9050, 9080
 MY_FRAGILE = 908   # my Active: 130 HP — KO'd by opp's FORWARD hand-size evolution, not now
 KADA = 911         # opp Active: weak pre-evo (30 dmg) that EVOLVES into a hand-size attacker
 ALAK = 912         # hand_size_attacker KADA evolves into (Alakazam: 20 dmg/card via handSizeDamage)
@@ -50,47 +53,63 @@ PSYCHIC = 7        # energy type for the opp pre-evo
 WATER, LIGHTNING, FIRE, FIGHTING = 3, 4, 2, 6
 SUPPORTER, ITEM = 3, 1   # CardType values (cg/api.py)
 
-_STATS = DictCardStatProvider({
+_CARDS = {
     BOSS: CardStat(BOSS, hp=0, cardType=SUPPORTER),
     ITEM_GUST: CardStat(ITEM_GUST, hp=0, cardType=ITEM),
-    WINCON: CardStat(WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120),
+    WINCON: CardStat(WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120,
+                     attacks=(A_WIN,)),
     WALL: CardStat(WALL, hp=330),
     BENCHIE: CardStat(BENCHIE, hp=60),
     KOABLE_ACTIVE: CardStat(KOABLE_ACTIVE, hp=100),
     EX_BENCHIE: CardStat(EX_BENCHIE, hp=60, ex=True),
-    OFF_WINCON: CardStat(OFF_WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120),
+    OFF_WINCON: CardStat(OFF_WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120,
+                         attacks=(A_OFF,)),
     TUTOR: CardStat(TUTOR, hp=0),
     BIG_BENCHIE: CardStat(BIG_BENCHIE, hp=200),
     MEGA_WINCON: CardStat(MEGA_WINCON, energyType=WATER, weakness=LIGHTNING, megaEx=True,
-                          minAttackCost=1, minCostDamage=120),
+                          minAttackCost=1, minCostDamage=120, attacks=(A_MEGA,)),
     LIVE_ATTACKER: CardStat(LIVE_ATTACKER, energyType=WATER, maxDamage=200),
     DOOM_ACTIVE: CardStat(DOOM_ACTIVE, energyType=FIRE, hp=330, maxDamage=200, attacks=(DOOM_ATK,)),
     STALL_TARGET: CardStat(STALL_TARGET, hp=200, retreatCost=2),
     PREEVO_THREAT: CardStat(PREEVO_THREAT, name="Riolu", hp=60),
     EVO_FORM: CardStat(EVO_FORM, name="MegaLucario", evolvesFrom="Riolu", maxDamage=270),
     DEAD_END: CardStat(DEAD_END, name="Ditto", hp=60),
-    WEAK_ATTACKER: CardStat(WEAK_ATTACKER, energyType=WATER, minAttackCost=1, minCostDamage=10),
-    FIGHT_GUST: CardStat(FIGHT_GUST, energyType=FIGHTING, minAttackCost=1, minCostDamage=120),
+    WEAK_ATTACKER: CardStat(WEAK_ATTACKER, energyType=WATER, minAttackCost=1, minCostDamage=10,
+                            attacks=(A_WEAK,)),
+    FIGHT_GUST: CardStat(FIGHT_GUST, energyType=FIGHTING, minAttackCost=1, minCostDamage=120,
+                         attacks=(A_FIGHT,)),
     RESIST_BENCHIE: CardStat(RESIST_BENCHIE, hp=100, resistance=FIGHTING),
     SNIPER_WINCON: CardStat(SNIPER_WINCON, energyType=WATER, minAttackCost=1, minCostDamage=120,
                             attacks=(A_SNIPE_G,)),
     DWEB_HI: CardStat(DWEB_HI, hp=70),
     DWEB_LO: CardStat(DWEB_LO, hp=20),
-    MY_FRAGILE: CardStat(MY_FRAGILE, energyType=WATER, hp=130, minAttackCost=1, minCostDamage=50),
+    MY_FRAGILE: CardStat(MY_FRAGILE, energyType=WATER, hp=130, minAttackCost=1, minCostDamage=50,
+                         attacks=(A_FRAG,)),
     KADA: CardStat(KADA, name="TKadabra", hp=80, energyType=PSYCHIC, maxDamage=30,
                    minAttackCost=1, minCostDamage=30, attacks=(KADA_ATK,)),  # opp Active: weak pre-evo…
     ALAK: CardStat(ALAK, name="TAlakazam", evolvesFrom="TKadabra", hp=140, minAttackCost=1,
                    handSizeDamage=20),                                  # …evolves into hand-size KO
     STALL1: CardStat(STALL1, hp=70, retreatCost=1),                     # energyless retreat-1 stall body
-})
+}
+_ATTACKS = {   # every attacker's cheapest attack as a real record (fallback retired, ADR-0052)
+    A_WIN: AttackStat(A_WIN, damage=120, cost=1),
+    A_OFF: AttackStat(A_OFF, damage=120, cost=1),
+    A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),
+    A_FIGHT: AttackStat(A_FIGHT, damage=120, cost=1),
+    A_WEAK: AttackStat(A_WEAK, damage=10, cost=1),
+    A_FRAG: AttackStat(A_FRAG, damage=50, cost=1),
+    A_SNIPE_G: AttackStat(A_SNIPE_G, damage=120, cost=1, benchSnipe=50),
+    DOOM_ATK: AttackStat(DOOM_ATK, damage=200, cost=1),
+    KADA_ATK: AttackStat(KADA_ATK, damage=30, cost=1),
+}
+_STATS = DictCardStatProvider(_CARDS, attacks=_ATTACKS)
 _TAGS = CardFunctions({BOSS: ["gust"], ITEM_GUST: ["gust"], TUTOR: ["search"],
                        ALAK: ["hand_size_attacker"]})
 
 
 def _pilot():
     return Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
-                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS,
-                 attacks={DOOM_ATK: 200, KADA_ATK: 30}, attack_costs={DOOM_ATK: 1, KADA_ATK: 1})
+                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
 
 
 def _fired(option_trace):
@@ -122,7 +141,7 @@ def test_gust_for_the_ko_needs_a_payable_attack_this_turn():
     pay this turn (attached + the best unspent hand attach): with none the gust is silent; hand
     the Active a {W} Energy and the same board endorses it again."""
     WATER_CARD = 3
-    stats = DictCardStatProvider(dict(_STATS._stats))
+    stats = DictCardStatProvider(dict(_STATS._stats), attacks=_ATTACKS)
     stats._stats[WATER_CARD] = CardStat(WATER_CARD, name="Basic {W} Energy", hp=0, energyType=WATER)
 
     def _obs(hand):
@@ -428,8 +447,9 @@ def test_gust_target_prefers_the_two_prize_snipe_synergy():
         current=state(active=poke(SNIPER_WINCON, energy=1),
                       opp_bench=[poke(DWEB_HI, hp=70), poke(DWEB_LO, hp=20)]))
     p = Pilot(Strategy(roles={SNIPER_WINCON: ["win_condition"]}), deck=[1] * 60,
-              general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS,
-              attacks={A_SNIPE_G: 120}, attack_costs={A_SNIPE_G: 1}, bench_snipe={A_SNIPE_G: 50})
+              general_strategy=GENERAL_STRATEGY,
+              stats=_STATS,
+              functions=_TAGS)
     opts = p.explain(obs).options
     assert opts[0].tactical > opts[1].tactical   # 70-HP gust enables the 2-prize snipe synergy
     assert p.decide(obs) == [0]
@@ -478,7 +498,7 @@ def test_starved_stall_gust_outranks_development_only_under_the_energy_famine():
     (0 attached, none in hand — no attack payable), so `stall-gust-over-dev-when-starved` lifts
     Boss's over a strongly-endorsed tutor. Hand the Active one {W} Energy (attack payable again) and
     the rule stands down — normal development resumes."""
-    stats = DictCardStatProvider(dict(_STATS._stats))
+    stats = DictCardStatProvider(dict(_STATS._stats), attacks=_ATTACKS)
     stats._stats[3] = CardStat(3, name="Basic {W} Energy", hp=0, energyType=WATER)
     p = Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
               general_strategy=GENERAL_STRATEGY, stats=stats, functions=_TAGS)

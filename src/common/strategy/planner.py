@@ -1022,7 +1022,7 @@ class PlannerMixin:
             # an Energy card: a typed Energy, a Basic/Special by cardType, or the colourless
             # discard-burst special (engine reports Ignition's energyType as 0 — cf `_has_reusable_energy`)
             if not (getattr(st, "energyType", 0) not in (None, 0)
-                    or getattr(st, "cardType", None) in (_BASIC_ENERGY, _SPECIAL_ENERGY)
+                    or st.is_energy
                     or "discard_eot" in tags):
                 continue
             best = max(best, 3 if ("discard_eot" in tags and is_evo) else 1)
@@ -1289,12 +1289,12 @@ class PlannerMixin:
         attached = self._attached_type_counts(ma)
         hand_ids = [c.get("id") for c in hand]
         for aid in (stat.attacks or ()):
-            cost = self.attack_costs.get(aid, 99)
+            cost = self._attack_cost(aid)
             if cost != board.my_active_energy + 1:            # exactly one attach short
                 continue
             if self.predicted_damage(board.my_active_id, aid, opp) < hp:
                 continue
-            ast = self.attack_stats.get(aid) if self.attack_stats else None
+            ast = self._attack_stat(aid)
             types = getattr(ast, "energyTypes", ()) if ast else ()
             from collections import Counter
             need = Counter(t for t in types if t not in (0, None))
@@ -1305,9 +1305,9 @@ class PlannerMixin:
 
             def _enables(cid) -> bool:
                 est = self.stats.get(cid) if self.stats else None
-                if not est or getattr(est, "hp", 1) != 0:
+                if not est or est.is_pokemon:
                     return False
-                if getattr(est, "cardType", None) not in (_BASIC_ENERGY,):
+                if not est.is_basic_energy:
                     return False                              # Basics only (a special Energy pays
                 et = getattr(est, "energyType", None)         # colourless slots — under-counted, safe)
                 return (et == want) if want is not None else True
@@ -1329,7 +1329,7 @@ class PlannerMixin:
         units = self._best_hand_attach_units(hand_ids, stat)
         energy_after = board.my_active_energy + units
         for aid in (stat.attacks or ()):
-            if (self.attack_costs.get(aid, 99) <= energy_after
+            if (self._attack_cost(aid) <= energy_after
                     and self._attack_type_payable(aid, ma, extra_type=0, extra_units=units)):
                 det = max(det, self.predicted_damage(board.my_active_id, aid, opp))
                 # extra_type=0: the held attach is priced as colourless — funds {C} slots only, the
@@ -1359,7 +1359,7 @@ class PlannerMixin:
         stat = self.stats.get(body_id) if (self.stats and body_id is not None) else None
         if not (stat and target_hp):
             return False
-        return any(self.attack_costs.get(aid, 99) <= energy and self._rider_snipe(aid) >= target_hp
+        return any(self._attack_cost(aid) <= energy and self._rider_snipe(aid) >= target_hp
                    for aid in (stat.attacks or ()))
 
     def _is_energy_tutor(self, obs, select, option) -> bool:
@@ -1565,7 +1565,7 @@ class PlannerMixin:
             if not pstat:
                 continue
             energy = len(p.get("energies") or []) + 1          # allow one attach next turn
-            if (pstat.minAttackCost or 99) <= energy:
+            if pstat.can_pay_cheapest(energy):
                 worst = max(worst, int(self._predicted_max_damage(pstat, {"id": my_id})))
         return worst
 

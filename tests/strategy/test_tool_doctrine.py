@@ -11,7 +11,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from pilot_helpers import (ACTIVE, ATTACH, BENCH, HAND, MAIN, PLAY, attack_opt, make_select, opt,
                            poke, state)
@@ -304,10 +304,10 @@ def test_cape_deploy_never_forgoes_a_lethal_ko():
         CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         FRAGILE: CardStat(FRAGILE, energyType=WATER, maxDamage=100),
-    })
+    }, attacks={1: AttackStat(1, damage=200)})    # attack 1 does 200 -> KOs a 60-HP Active
     funcs = CardFunctions({CAPE: ["tool"]})
     pilot = Pilot(_line_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  stats=stats, functions=funcs, attacks={1: 200})    # attack 1 does 200 -> KOs a 60-HP Active
+                  stats=stats, functions=funcs)
     obs = make_select(
         [attack_opt(1), opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)],
         context=MAIN, current=state(active=poke(WINC, hp=330, energy=1),

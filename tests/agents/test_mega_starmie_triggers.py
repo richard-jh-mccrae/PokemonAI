@@ -13,7 +13,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from pilot_helpers import (
     ACTIVE, ATTACH, ATTACK, DECK, HAND, NO, PLAY, SETUP_ACTIVE, TO_HAND, YES,
     attack_opt, card_opt, make_select, opt, poke, state,
@@ -85,13 +85,15 @@ def test_never_fetch_cinderace_silent_when_choosing_the_opening_active():
 
 # --- conserve-discard-energy-prefer-basic (needs the minCostDamage + active_cheap_attack_kos signals) ---
 WATER_ENERGY, IGNITION = 3, 17
+_A_JET_IGN = 51   # Jetting Blow as a real record (the minCostDamage fallback is retired, ADR-0052)
 _IGN_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
-                           hp=330, minCostDamage=120),   # Jetting Blow (cheap) prints 120
+                           hp=330, minAttackCost=1, minCostDamage=120,   # Jetting Blow (cheap) prints 120
+                           attacks=(_A_JET_IGN,)),
     WATER_ENERGY: CardStat(WATER_ENERGY, hp=0, energyType=WATER),   # reusable Basic
     IGNITION: CardStat(IGNITION, hp=0, energyType=0),              # special discard-EOT Energy
     9999: CardStat(9999),                                          # generic opp body (HP set via poke)
-})
+}, attacks={_A_JET_IGN: AttackStat(_A_JET_IGN, damage=120, cost=1)})
 _IGN_TAGS = CardFunctions({IGNITION: ["discard_eot"], CINDERACE: ["opener"]})
 
 
@@ -239,13 +241,15 @@ def test_develop_recipient_stands_down_when_active_is_not_the_accelerator():
 # `_can_ko` oracle, and SWITCH target-select.
 BOSS_ORDERS = 1182
 WALL_810, KO_BENCH_811 = 810, 811
+_A_JET_GUST = 52   # Jetting Blow as a real record (the minCostDamage fallback is retired, ADR-0052)
 _GUST_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
-                           hp=330, minAttackCost=1, minCostDamage=120),   # Jetting Blow 120 at 1 W
+                           hp=330, minAttackCost=1, minCostDamage=120,   # Jetting Blow 120 at 1 W
+                           attacks=(_A_JET_GUST,)),
     BOSS_ORDERS: CardStat(BOSS_ORDERS, hp=0),
     WALL_810: CardStat(WALL_810, hp=330),       # opp Active wall -- Jetting Blow can't KO it
     KO_BENCH_811: CardStat(KO_BENCH_811, hp=60),  # opp benched mon -- Jetting Blow KOs it after gust
-})
+}, attacks={_A_JET_GUST: AttackStat(_A_JET_GUST, damage=120, cost=1)})
 _GUST_TAGS = CardFunctions({BOSS_ORDERS: ["gust"], CINDERACE: ["opener"]})
 
 

@@ -9,7 +9,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
@@ -23,18 +23,26 @@ def _fired(t):
 
 
 def _pilot(hand_ids=()):
+    # Every attacker's cheapest attack is a real record (the card-level minCostDamage KO
+    # fallback is retired, ADR-0052) — same damage/cost the fallback used to read.
+    A_MEGA, A_STAR, A_CIND = 31, 32, 33
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
-                       minCostDamage=120, maxDamageCost=3, evolvesFrom="Staryu"),
-        STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, minCostDamage=20),
-        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50),
+                       minCostDamage=120, maxDamageCost=3, evolvesFrom="Staryu",
+                       attacks=(A_MEGA,)),
+        STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, minCostDamage=20,
+                         attacks=(A_STAR,)),
+        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50,
+                            attacks=(A_CIND,)),
         678: CardStat(678, name="Mega Lucario ex", hp=340, megaEx=True),
-    })
+    }, attacks={A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),
+                A_STAR: AttackStat(A_STAR, damage=20, cost=1),
+                A_CIND: AttackStat(A_CIND, damage=50, cost=1)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"],
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({CINDERACE: ["opener"]}), attacks={}, attack_costs={})
+                 functions=CardFunctions({CINDERACE: ["opener"]}))
 
 
 def _obs(bench, opp_active, hand=(), ctx=TO_ACTIVE, active=None):

@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from cg.api import all_attack
 from cg.game import battle_finish, battle_select, battle_start
 from common.cards import CardFunctions
 from common.pilot import Pilot
@@ -27,14 +26,13 @@ def _deck():
 
 
 def _engine_pilot(deck, **kw):
-    atk = all_attack()
     try:
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
+    # attack facts flow through the provider's audit-overridden table (ADR-0051)
     return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
-                 functions=fns, attacks={a.attackId: a.damage for a in atk},
-                 attack_costs={a.attackId: len(a.energies) for a in atk}, **kw)
+                 functions=fns, **kw)
 
 
 def _first_open_menu(pilot, obs, limit=80):

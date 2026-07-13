@@ -15,7 +15,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from common.strategy.doctrines.doctrine_fetch import _FETCH_FILTERS
 from pilot_helpers import HAND, PLAY, make_select, opt, poke, state
@@ -41,16 +41,15 @@ def _stats():
                            minAttackCost=1, attacks=(12,), evolvesFrom="Raboot", hasAbility=True),
         PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, attacks=(13,), evolvesFrom=None, hasAbility=False),
-    })
+    }, attacks={10: AttackStat(10, damage=210, cost=3), 11: AttackStat(11, damage=120, cost=1),
+                12: AttackStat(12, damage=50, cost=1), 13: AttackStat(13, damage=20, cost=1)})
 
 
 def _pilot(deck):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON, role="win_condition")]),
                  deck=deck, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({SALVATORE: ["search", "rush_evolve"]}),
-                 attacks={10: 210, 11: 120, 12: 50, 13: 20},
-                 attack_costs={10: 3, 11: 1, 12: 1, 13: 1})
+                 functions=CardFunctions({SALVATORE: ["search", "rush_evolve"]}))
 
 
 def _ctx(pilot, obs, i):

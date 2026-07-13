@@ -95,29 +95,20 @@ def probe_follow_ups(pilot, obs, first_step, *, max_selects: int = 24) -> list[d
 
 
 def _build_pilot(agent: str):
-    from cg.api import all_attack
     from common.cards import CardFunctions
     from common.effects import CardEffects
     from common.pilot import Pilot
-    from common.scouting.provider import (
-        EngineCardStatProvider, build_attack_stats, load_attack_overrides,
-        parse_attack_bench_snipe, parse_attack_recoil)
+    from common.scouting.provider import EngineCardStatProvider
     from common.strategy import Strategy
     from common.strategy.general_strategy import GENERAL_STRATEGY
     deck = [int(x) for x in (REPO / "src" / "agents" / agent / "deck.csv")
             .read_text(encoding="utf-8").split("\n")[:60]]
-    atk = all_attack()
     try:
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
     return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
-                 functions=fns, effects=CardEffects.load(),
-                 attacks={a.attackId: a.damage for a in atk},
-                 attack_costs={a.attackId: len(a.energies) for a in atk},
-                 recoil={a.attackId: parse_attack_recoil(a.text) for a in atk},
-                 bench_snipe={a.attackId: parse_attack_bench_snipe(a.text) for a in atk},
-                 attack_stats=build_attack_stats(atk, load_attack_overrides()),
+                 functions=fns, effects=CardEffects.load(),   # attack facts via the provider (ADR-0056)
                  lethal_verify=True, lethal_family=True, lethal_veto=True)
 
 

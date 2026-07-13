@@ -47,6 +47,19 @@ TO_ACTIVE = 4   # SelectContext.TO_ACTIVE — forced promote
 ATTACH_FROM = 21  # SelectContext.ATTACH_FROM — an attack/ability's attach-recipient pick (Aura Jab)
 EVOLVE, ABILITY, RETREAT, END = 9, 10, 12, 14   # OptionTypes
 
+_ATTACK_STATS = {
+    STAB: AttackStat(STAB, damage=30, cost=1, nextTurnSameAttackLock=True),
+    AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1,
+                         recoverN=3, recoverEnergyType=FIGHTING, recoverTarget="bench"),
+    MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, nextTurnSameAttackLock=True),
+    COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, ignoresWeakness=True,
+                            ignoresResistance=True, damageMin=0, damageMax=70,
+                            requiresBench=("Lunatone",)),
+    WILD_PRESS: AttackStat(WILD_PRESS, damage=210, cost=3, recoil=70),
+    WALL_HIT: AttackStat(WALL_HIT, damage=100, cost=1),
+    BIG_HIT: AttackStat(BIG_HIT, damage=200, cost=1),
+    TUCK_TAIL: AttackStat(TUCK_TAIL, damage=60, cost=3, selfReturn=True),
+}
 _STATS = DictCardStatProvider({
     RIOLU: CardStat(RIOLU, name="Riolu", energyType=FIGHTING, hp=80, attacks=(STAB,),
                     minAttackCost=1, maxDamage=30, maxDamageCost=1, minCostDamage=30),
@@ -78,29 +91,13 @@ _STATS = DictCardStatProvider({
     MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", energyType=0, hp=170, ex=True, retreatCost=1,
                         attacks=(TUCK_TAIL,), minAttackCost=3, maxDamage=60, maxDamageCost=3,
                         minCostDamage=60),
-})
-_ATTACK_STATS = {
-    STAB: AttackStat(STAB, damage=30, cost=1, nextTurnSameAttackLock=True),
-    AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1,
-                         recoverN=3, recoverEnergyType=FIGHTING, recoverTarget="bench"),
-    MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, nextTurnSameAttackLock=True),
-    COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, ignoresWeakness=True,
-                            ignoresResistance=True, damageMin=0, damageMax=70,
-                            requiresBench=("Lunatone",)),
-    WILD_PRESS: AttackStat(WILD_PRESS, damage=210, cost=3, recoil=70),
-    WALL_HIT: AttackStat(WALL_HIT, damage=100, cost=1),
-    BIG_HIT: AttackStat(BIG_HIT, damage=200, cost=1),
-    TUCK_TAIL: AttackStat(TUCK_TAIL, damage=60, cost=3, selfReturn=True),
-}
-_ATTACKS = {aid: st.damage for aid, st in _ATTACK_STATS.items()}
-_COSTS = {aid: st.cost for aid, st in _ATTACK_STATS.items()}
+}, attacks=_ATTACK_STATS)
 
 
 def _pilot():
     return Pilot(STRATEGY, deck=[RIOLU] * 3 + [MEGA_LUCARIO] * 3 + [SOLROCK] * 3 + [LUNATONE] * 2
                  + [MAKUHITA] * 2 + [HARIYAMA] * 2 + [F_ENERGY] * 12 + [1] * 33,
-                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=CardFunctions({}),
-                 attacks=_ATTACKS, attack_costs=_COSTS, attack_stats=_ATTACK_STATS)
+                 general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=CardFunctions({}))
 
 
 def _fired(option_trace):
@@ -131,8 +128,7 @@ def _tagged_pilot():
                  + [MAKUHITA] * 2 + [HARIYAMA] * 2 + [F_ENERGY] * 11 + [1] * 34,
                  general_strategy=GENERAL_STRATEGY, stats=_STATS,
                  functions=CardFunctions({MEOWTH_EX: ["search", "supporter_tutor"],
-                                          BOSS_ORDERS: ["gust"], LILLIES: ["draw"]}),
-                 attacks=_ATTACKS, attack_costs=_COSTS, attack_stats=_ATTACK_STATS)
+                                          BOSS_ORDERS: ["gust"], LILLIES: ["draw"]}))
 
 
 @pytest.mark.req("REQ-ML-0015")

@@ -30,10 +30,11 @@ pytestmark = pytest.mark.skipif(
 
 _PROBE = (
     "import json, main\n"
-    "hs = (*main._pilot.general.hypotheses, *main._pilot.strategy.hypotheses)\n"
+    "pilot = main.agent.pilot\n"    # the runtime exposes the built Pilot on the callable (ADR-0055)
+    "hs = (*pilot.general.hypotheses, *pilot.strategy.hypotheses)\n"
     f"h = next(h for h in hs if h.id == {TARGET!r})\n"
-    "print('RESULT' + json.dumps({'overrides': main._pilot.overrides, "
-    "'w': main._pilot._weight(h)}))\n"
+    "print('RESULT' + json.dumps({'overrides': pilot.overrides, "
+    "'w': pilot._weight(h)}))\n"
 )
 
 

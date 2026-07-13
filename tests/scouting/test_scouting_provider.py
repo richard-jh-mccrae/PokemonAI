@@ -3,7 +3,48 @@ from types import SimpleNamespace
 
 import pytest
 
-from common.scouting.provider import CardStat, DictCardStatProvider, _build_cache
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider, _build_cache
+
+
+# --- the attack-record half of the Stat Provider seam (ADR-0051) ------------------------
+
+@pytest.mark.req("REQ-STAT-0002")
+def test_dict_provider_serves_injected_attack_records_or_none():
+    p = DictCardStatProvider({}, attacks={10: AttackStat(10, damage=120, cost=1)})
+    assert p.attack(10).damage == 120
+    assert p.attack(999) is None
+    assert DictCardStatProvider({}).attack(10) is None    # no attack table injected
+
+
+@pytest.mark.req("REQ-STAT-0002")
+def test_dict_provider_warm_is_a_safe_no_op():
+    # warm() is the explicit pregame-window build hook; adapters stay interchangeable,
+    # so the lib-free one must accept the call.
+    DictCardStatProvider({}).warm()
+
+
+@pytest.mark.req("REQ-STAT-0002")
+def test_engine_provider_serves_attack_records_with_the_audited_facts():
+    # Nebula Beam (1488): the documented full-ignore triple — pierces Crustle's ex-damage
+    # immunity (repo CLAUDE.md worked example; tests/test_attack_stats.py header).
+    pytest.importorskip("cg")
+    from common.scouting.provider import EngineCardStatProvider
+    p = EngineCardStatProvider()
+    nebula = p.attack(1488)               # first call ever — must self-build (lazy guard)
+    assert (nebula.ignoresWeakness, nebula.ignoresResistance, nebula.ignoresEffects) \
+        == (True, True, True)
+    assert p.attack(-1) is None           # unknown attack id -> None, never a crash
+    assert p.get(333).name == "Riolu"     # cache shared with the card half
+
+
+@pytest.mark.req("REQ-STAT-0002")
+def test_engine_provider_warm_prebuilds_and_is_idempotent():
+    pytest.importorskip("cg")
+    from common.scouting.provider import EngineCardStatProvider
+    p = EngineCardStatProvider()
+    p.warm()
+    p.warm()                              # idempotent — second call must not rebuild/crash
+    assert p.attack(1488) is not None
 
 
 @pytest.mark.req("REQ-SCOUT-0008")

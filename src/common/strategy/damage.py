@@ -19,6 +19,22 @@ _RESISTANCE = 30       # flat S&V Resistance reduction — engine-verified (tool
 _PREVENT_EX_TAG = "prevent_ex_damage"
 
 
+def wr_adjust(attacker, defender, dmg: float) -> float:
+    """The card-level Weakness/Resistance rule (ADR-0052): x2 on the defender's Weakness, then a
+    flat -30 Resistance floored at 0, vs the ATTACKER's type — rules order (rules.md §5). The
+    attack-BLIND variant for worst-case fallbacks where no attack record resolves (a partially
+    known table must never shrink a worst case); ``compute_active_damage`` below applies the same
+    two rules attack-gated (the ignore-flag family) — both live in THIS module, the one W/R home.
+    Unknown attacker/defender/type → unadjusted."""
+    if not (dmg and attacker and defender and attacker.energyType is not None):
+        return dmg
+    if defender.weakness is not None and defender.weakness == attacker.energyType:
+        dmg *= 2
+    if defender.resistance is not None and defender.resistance == attacker.energyType:
+        dmg = max(0, dmg - _RESISTANCE)
+    return dmg
+
+
 def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(), *,
                           bound: str = "exact", context: dict | None = None,
                           defender_transient: dict | None = None) -> float:
@@ -104,7 +120,7 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
         # rulebook.txt:337).
         if atype is not None and (attacker is None or attacker.energyType != atype):
             continue
-        if vs_ex and not (defender is not None and (defender.ex or defender.megaEx)):
+        if vs_ex and not (defender is not None and defender.is_ex_body):
             continue
         dmg += amount
     if not attack.ignoresEffects and _prevented(attacker, defender, defender_tags):
@@ -139,7 +155,7 @@ def _prevented(attacker, defender, defender_tags) -> bool:
     `prevent_ex_damage` Function Tag OR the parsed ``CardStat.preventsDamageFrom`` field
     ("ex" — Crustle/Sylveon (the tag misses Sylveon); "basic_ex" — Farigiraf ex, where the
     attacker must also be Basic, i.e. carry no ``evolvesFrom``). False on missing stats."""
-    if attacker is None or not (attacker.ex or attacker.megaEx):
+    if attacker is None or not attacker.is_ex_body:
         return False
     if _PREVENT_EX_TAG in (defender_tags or frozenset()):
         return True

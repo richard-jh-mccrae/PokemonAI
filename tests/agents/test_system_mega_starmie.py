@@ -14,7 +14,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from pilot_helpers import (
     ATTACH, HAND, MAIN, MULLIGAN, NO, PLAY, SETUP_ACTIVE, YES,
     attack_opt, card_opt, make_select, opt, poke, state,
@@ -38,13 +38,13 @@ _STATS = DictCardStatProvider({
     CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160),
     BUDDY_POFFIN: CardStat(BUDDY_POFFIN, hp=0),
     MEGA_SIGNAL: CardStat(MEGA_SIGNAL, hp=0),
-})
+}, attacks={JETTING: AttackStat(JETTING, damage=120)})
 _TAGS = CardFunctions({BUDDY_POFFIN: ["search"], MEGA_SIGNAL: ["search"], CINDERACE: ["opener"]})
 
 
 def _pilot(functions=_TAGS, stats=_STATS):
     return Pilot(STRATEGY, deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=stats, functions=functions, attacks={JETTING: 120})
+                 stats=stats, functions=functions)
 
 
 # --- the scripted match ---------------------------------------------------

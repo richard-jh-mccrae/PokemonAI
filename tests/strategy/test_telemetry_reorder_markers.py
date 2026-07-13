@@ -20,7 +20,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.pilot import Decision, OptionTrace, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Plan, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.telemetry import to_record
@@ -43,10 +43,9 @@ def _pilot(**kw):
                            minCostDamage=100, maxDamage=100, attacks=(ATK,)),
         OPPA: CardStat(OPPA, name="opp active", hp=200, energyType=7),
         BASIC: CardStat(BASIC, name="benchie", hp=60, energyType=3),
-    })
+    }, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
     return Pilot(Strategy(roles={ATTACKER: ["primary_attacker"]}), deck=[1] * 60,
-                 general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}),
-                 attacks={ATK: 100}, attack_costs={ATK: 1}, **kw)
+                 general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}), **kw)
 
 
 @pytest.mark.req("REQ-SUB-0006")

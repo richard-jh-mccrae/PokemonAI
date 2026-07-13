@@ -10,7 +10,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
@@ -44,16 +44,17 @@ def _stats():
         EXOPP: CardStat(EXOPP, name="opp ex", hp=330, energyType=7, ex=True),
         BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
-    })
+    }, attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
+                NEBULA: AttackStat(NEBULA, damage=210, cost=3),
+                STARYU: AttackStat(STARYU, damage=20, cost=1),
+                SNIPE: AttackStat(SNIPE, damage=50, cost=1, benchSnipe=100)})
 
 
 def _pilot(**kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=_stats(), functions=CardFunctions({WALLYS: ["heal", "clutch_heal"], BOSS: ["gust"]}),
-                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, SNIPE: 50},
-                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, SNIPE: 1},
-                 bench_snipe={SNIPE: 100}, **kw)
+                 **kw)
 
 
 def _win(decision):
@@ -178,10 +179,9 @@ def test_simultaneous_double_ko_is_a_draw_not_a_locked_win():
         RECOILER: CardStat(RECOILER, name="recoiler", hp=70, energyType=3, minAttackCost=1,
                            minCostDamage=210, maxDamage=210, attacks=(RECOIL_ATK,)),
         ROPP: CardStat(ROPP, name="ropp", hp=200, energyType=7),
-    })
+    }, attacks={RECOIL_ATK: AttackStat(RECOIL_ATK, damage=210, cost=1, recoil=400)})
     pilot = Pilot(Strategy(roles={RECOILER: ["win_condition"]}), deck=[1] * 60,
-                  general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}),
-                  attacks={RECOIL_ATK: 210}, attack_costs={RECOIL_ATK: 1}, recoil={RECOIL_ATK: 400})
+                  general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}))
     # recoil 400 self-KOs my 70-HP Active; both players take their last prize at once -> a draw.
     draw = state(active=poke(RECOILER, energy=1, hp=70), opp_active=poke(ROPP, hp=200),
                  opp_bench=[poke(ROPP, hp=200)], prizes=1, opp_prizes=1)
@@ -480,9 +480,7 @@ def _tutor_pilot(deck):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=CardFunctions({HILDA: ["search", "tutor_energy"]}),
-                 attacks={JETTING: 120, NEBULA: 210, STARYU: 20, SNIPE: 50},
-                 attack_costs={JETTING: 1, NEBULA: 3, STARYU: 1, SNIPE: 1},
-                 bench_snipe={SNIPE: 100}, lethal_family=True)
+                 lethal_family=True)
 
 
 @pytest.mark.req("REQ-LETHAL-0018")
@@ -732,19 +730,22 @@ def test_ignore_effects_attack_bypasses_a_prevent_damage_ability_for_the_win():
     The Solver must see it ONLY because Nebula Beam carries `ignores_active_effects`; without the signal
     both ex attacks read as walled and the win is invisible (the missed-win blunder)."""
     EX_ATTACKER, CRUSTLE = 901, 345
-    stats = DictCardStatProvider({
+    cards = {
         EX_ATTACKER: CardStat(EX_ATTACKER, name="Mega Starmie ex", hp=330, energyType=3, ex=True,
                               megaEx=True, minAttackCost=1, minCostDamage=120, maxDamage=210,
                               maxDamageCost=3, attacks=(JETTING, NEBULA)),
         CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, energyType=7),
-    })
+    }
     funcs = CardFunctions({CRUSTLE: ["prevent_ex_damage"]})
 
     def build(ignore):
+        recs = {JETTING: AttackStat(JETTING, damage=120, cost=1,
+                                    ignoresEffects=bool(ignore.get(JETTING))),
+                NEBULA: AttackStat(NEBULA, damage=210, cost=3,
+                                   ignoresEffects=bool(ignore.get(NEBULA)))}
         return Pilot(Strategy(roles={EX_ATTACKER: ["win_condition", "primary_attacker"]}),
-                     deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
-                     attacks={JETTING: 120, NEBULA: 210}, attack_costs={JETTING: 1, NEBULA: 3},
-                     ignores_active_effects=ignore)
+                     deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                     stats=DictCardStatProvider(cards, attacks=recs), functions=funcs)
 
     # 4 Energy -> both attacks affordable; opp Crustle 150 HP, empty Bench (KO = win); prizes not last.
     won = state(active=poke(EX_ATTACKER, energy=4, hp=330), opp_active=poke(CRUSTLE, hp=150),

@@ -535,7 +535,7 @@ HYPOTHESES = [
                   "multi-prizer (ex/Mega ex) and stands down once the Bench is full.",
         when=lambda c: c.select_context in (_TO_BENCH, _SETUP_BENCH) and c.card_is_starter
         and c.board.my_bench < _BENCH_MAX
-        and not (c.stat and (getattr(c.stat, "ex", False) or getattr(c.stat, "megaEx", False))),
+        and not (c.stat and getattr(c.stat, "is_ex_body", False)),
         weight=12, status="testing"),
     Hypothesis(
         id="dont-fetch-the-setup-only-opener",
@@ -660,7 +660,7 @@ HYPOTHESES = [
                   "draw Supporter to fetch — that mis-fire made a dead mid-line Drakloak out-grab a live "
                   "Basic (ep83686860 f33).",
         when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "draw" in c.tags
-        and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),
+        and bool(c.stat and getattr(c.stat, "is_supporter", False)),
         weight=10, status="assumed"),
     Hypothesis(
         id="dont-grab-a-card-already-in-hand",
@@ -783,7 +783,7 @@ HYPOTHESES = [
                   "tests/strategy/test_setup_resource_discipline.py, not just the weight fit.",
         when=lambda c: not c.board.line_ready and c.option_type == _PLAY   # pre-payoff (ADR-0040
         and "search" in c.tags and not c.fetch_fills_a_need                # gate-ban migration:
-        and bool(c.stat and getattr(c.stat, "cardType", None) == _SUPPORTER),  # was plan==SETUP)
+        and bool(c.stat and getattr(c.stat, "is_supporter", False)),      # was plan==SETUP)
         weight=-20, status="assumed"),
     Hypothesis(
         id="fetch-deck-priority",
@@ -925,7 +925,7 @@ HYPOTHESES = [
                   "that keeps the deck running. Small negative, so junk rules (dead opener/redundant tutor) still "
                   "out-pitch it; only protects the engine over filler.",
         when=lambda c: c.select_context == _DISCARD and c.stat is not None
-        and getattr(c.stat, "cardType", None) == _SUPPORTER
+        and getattr(c.stat, "is_supporter", False)
         and bool(_KEEP_ENGINE_TAGS & set(c.tags)) and "hand_disruption" not in c.tags,
         weight=-8, status="testing"),
 ]

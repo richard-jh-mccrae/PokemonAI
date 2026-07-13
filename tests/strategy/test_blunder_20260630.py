@@ -16,7 +16,7 @@ import pytest
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from pilot_helpers import (
     ACTIVE, ATTACH_FROM, BENCH, HAND, attack_opt, card_opt, make_select, opt, poke, state)
@@ -49,6 +49,12 @@ def _stats():
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
         OPP: CardStat(OPP, name="opp", hp=60, weakness=2),  # weak to {R} -> Cinderace doubles into it
+    }, attacks={
+        # Jetting Blow (11) carries a 50-dmg bench-snipe rider; Nebula (10) doesn't.
+        10: AttackStat(10, damage=210, cost=3),
+        11: AttackStat(11, damage=120, cost=1, benchSnipe=50),
+        12: AttackStat(12, damage=20, cost=1),
+        20: AttackStat(20, damage=50, cost=1),
     })
 
 
@@ -56,11 +62,7 @@ def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}),
-                 # Jetting Blow (11) carries a 50-dmg bench-snipe rider; Nebula (10) doesn't.
-                 attacks={10: 210, 11: 120, 12: 20, 20: 50},
-                 attack_costs={10: 3, 11: 1, 12: 1, 20: 1},
-                 bench_snipe={11: 50}, **kw)
+                 functions=CardFunctions({IGNITION: ["discard_eot"]}), **kw)
 
 
 # ----------------------------------------------- dont-waste-discard-energy: already-powered non-wincon

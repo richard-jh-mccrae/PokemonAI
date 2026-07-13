@@ -41,7 +41,7 @@ def _pilot():
     funcs = CardFunctions({IGNITION: ["discard_eot"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=funcs, attacks={}, attack_costs={})
+                 functions=funcs)
 
 
 def _obs(bench, hand, options):
@@ -97,8 +97,7 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
         WATER: CardStat(WATER, name="Water", energyType=2)})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], CINDERACE: ["accel_source"]},
                      lines=[Line(path=[STARYU, MEGA], payoff=MEGA)])
-    p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
-              attacks={}, attack_costs={})
+    p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     # bench: off-line Cinderace at LOWER index, Line base Staryu after — both bare/needy
     bench = [{"id": CINDERACE, "energies": [], "hp": 160}, {"id": STARYU, "energies": [], "hp": 70}]
     obs = _obs(bench, [{"id": WATER}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])   # ->Cinderace, ->Staryu
