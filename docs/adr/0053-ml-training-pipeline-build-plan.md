@@ -1,10 +1,10 @@
-# ADR-0052: ML Training Pipeline — Build Plan
+# ADR-0053: ML Training Pipeline — Build Plan
 
 - **Status:** accepted (2026-07-13)
 - **Input:** `docs/research/ml-training-system.md` (deep-research report, 2026-07-11)
 - **Operational plan:** `docs/plans/ml-training-build.md` (per-session playbook + status ledger)
-- **Numbering note:** 0051 is taken by the Stat Provider seam on an unpushed worktree branch;
-  this ADR takes 0052 to avoid a third numbering collision.
+- **Numbering note:** 0051 (Stat Provider seam) and 0052 (KO Oracle) are taken on an unpushed
+  arch-review worktree branch; this ADR takes 0053 to avoid another numbering collision.
 
 ## Context
 
