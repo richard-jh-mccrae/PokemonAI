@@ -677,5 +677,15 @@
     "disposition": "refuted",
     "reason": "correct=[0] snipes the benched Dragapult ex, a [Tera] ex that takes NO attack damage while Benched (data/EN_Card_Data.csv id121; docs/rulebook.txt Tera rule) -- the 50 Jetting Blow bench rider does literally 0 there. dont-snipe-a-benched-tera (-60) already ranks it below the real 50-dmg Hoothoot snipe; retest 82749168-38: [0]=-18 vs chosen [1]=12. The correction forgoes the attack's entire snipe effect on a damage-immune body.",
     "round": "2026-07-11"
+  },
+  "85709280-t2s1": {
+    "disposition": "covered",
+    "reason": "phantom Cosmic Beam KO killed by applied honor-requiresbench-in-attach-lethal (pilot.py _attach_lethal_tactical now passes atk_bench_names): f17 opt[3] tac 1001->0, decide()=[0] develop. See data/strategy/proposals/blunder-20260713-mega_lucario.md",
+    "round": "2026-07-13"
+  },
+  "85709280-m1": {
+    "disposition": "covered",
+    "reason": "redundant 2nd Solrock suppressed by applied dont-bench-a-redundant-engine-piece (mega_lucario strategy.py): f51 opt[2] 25->0, decide() [2]->[0] keeps the bench slot for the Makuhita line. See data/strategy/proposals/blunder-20260713-mega_lucario.md",
+    "round": "2026-07-13"
   }
 }

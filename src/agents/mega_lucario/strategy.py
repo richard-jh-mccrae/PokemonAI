@@ -195,6 +195,22 @@ HYPOTHESES = [
         and c.card_id not in c.board.in_play_ids and not _reachable(c.board, _partner(c.card_id)),
         weight=-20, status="assumed"),
     Hypothesis(
+        id="dont-bench-a-redundant-engine-piece",
+        rationale="Don't PLAY (bench from hand) a redundant engine half — a 2nd Solrock (or 2nd Lunatone) "
+                  "when the Solrock<->Lunatone engine is ALREADY complete in play (both halves down). One "
+                  "of each is all the co-dependent engine needs (Lunar Cycle needs one Solrock in play; "
+                  "Cosmic Beam attacks from the Active), so a duplicate does nothing extra and clogs the "
+                  "scarce Bench the Makuhita->Hariyama finisher line wants (ml 85709280 f51/m1, CRITICAL: "
+                  "played a 2nd Solrock into the last Bench slot — 'we dont need two Solrocks down, reserve "
+                  "this spot for a Makuhita'). This is the PLAY-side complement of `dont-fetch-the-redundant"
+                  "-piece` (the _TO_HAND/search side). Soft −25 cancels `pre-position-attacker` (+25) so the "
+                  "redundant bench-play drops below any real develop/dig, but never hard-vetoes it (a lone "
+                  "surviving backup can still be benched if nothing better exists).",
+        when=lambda c: c.option_type == _PLAY and c.card_id in _ENGINE_IDS
+        and c.card_id in c.board.in_play_ids
+        and _partner(c.card_id) in c.board.in_play_ids,
+        weight=-25, status="assumed"),
+    Hypothesis(
         id="spring-heave-ho-when-it-pays",
         rationale="Evolve Makuhita into Hariyama the turn its Heave-Ho Catcher gust PAYS: a benched "
                   "body my Active can KO after the drag (`gust_best_ko_prizes > 0` — the drag-and-KO, "

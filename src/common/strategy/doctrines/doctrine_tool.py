@@ -216,10 +216,16 @@ HYPOTHESES = [
                   "spend it on an off-role Pokémon; hold it for the win-condition/primary attacker. "
                   "RE-SCOPED (ADR-0028): stands down on the picker's chosen deploy target "
                   "(`attach_is_tool_deploy_target`, incl. a wincon LINE pre-evolution), firing only on a "
-                  "picker-rejected off-line body.",
+                  "picker-rejected off-line body. EXEMPTS a RETREAT tool (`CardStat.retreatReduction` > 0 — "
+                  "Air Balloon): its home is the body you RETREAT, so it belongs on the Active even when "
+                  "that Active is a non-attacker pivot (ml 85709280 f42/f55, CRITICAL: penalising "
+                  "Air-Balloon→Active-Meowth-ex −15 let it sit on a benched Mega Lucario, a wincon role the "
+                  "guard already exempts, for 0 — beating the correct active attach). Retreat tools are "
+                  "governed by `equip-the-retreat-tool-on-the-active` / `hold-the-retreat-tool-with-no-retreat`.",
         when=lambda c: c.option_type == _ATTACH and "tool" in c.tags
         and not (_WINCON_ROLES & set(c.attach_target_roles))
-        and not c.attach_is_tool_deploy_target,
+        and not c.attach_is_tool_deploy_target
+        and not (c.stat is not None and getattr(c.stat, "retreatReduction", 0) > 0),
         weight=-15, status="testing"),
     # ── the SECOND Tool class (ml f87/f4): a retreat-cost reducer, which ADR-0028's +HP machinery
     #    never modelled. `_is_hp_tool` rejects it (hpBonus == 0), so `tool_deploy_slot` stays None and

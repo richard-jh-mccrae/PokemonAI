@@ -1559,13 +1559,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                             # fund Jetting Blow's {W})
         me = self._my_player(obs)
         ma = next((p for p in (me.get("active") or []) if p), None)
+        bench_names = tuple(                                     # requiresBench partner check: an attack
+            (self.stats.get(b.get("id")).name if self.stats and self.stats.get(b.get("id")) else "")
+            for b in (me.get("bench") or []) if b)               # that "does nothing" w/o a benched
+        #                                                          partner (Cosmic Beam needs Lunatone) must
+        # not phantom-KO here. The attach is to the ACTIVE, so the Bench is unchanged by it — the current
+        # bench IS the partner set the unlocked attack fires under (ml 85709280 f17, CRITICAL: attach→Solrock
+        # scored a 1001 phantom KO on an EMPTY bench because no context reached the requiresBench gate).
 
         def best_affordable(energy: int, extra_units: int = 0) -> float:
             # per-attack oracle (ADR-0032): adjust-then-max, so an ignore-flag attack is seen and a
             # prevented (ex-locked) defender correctly yields 0 — no lethal-attach onto a whiff.
             # Type-guarded (sound-or-silent): a specific-type slot the attach can't fund fails the
-            # attack even when the COUNT suffices.
-            return max((self.predicted_damage(board.my_active_id, aid, opp)
+            # attack even when the COUNT suffices. Passes `atk_bench_names` (exact bound) so a
+            # requiresBench attack with its partner absent is zeroed, not credited a phantom KO.
+            return max((self.predicted_damage(board.my_active_id, aid, opp,
+                                              context={"atk_bench_names": bench_names})
                         for aid in (active_stat.attacks or ())
                         if self.attack_costs.get(aid, 99) <= energy
                         and self._attack_type_payable(aid, ma, extra_type=etype,
