@@ -87,6 +87,14 @@ class Correction:
     category: str               # closed human vocab (mandatory)
     attribution: str | None     # learning-surface link (derived by Tuner; ADR-0017)
     rationale: str              # free prose
+    provenance: str = "human"   # who TAGGED this: "human" (blunder-inspector) | "machine" (the ML
+                                # labeler, ADR-0053 WP3). Orthogonal to `source` (whose GAME it was —
+                                # still "own"/"peer"): a machine label of our own game is
+                                # source="own", provenance="machine". Old records lack the key ->
+                                # default "human", so every existing filter/consumer is unchanged.
+                                # Fit rule (S3b): a machine record whose identity_key collides with a
+                                # human record is dropped from the fit — human wins. See
+                                # docs/plans/ml-training-contracts.md (C2).
     obs: dict | None = None     # agent observation (int-enum) so Tuner can replay Pilot
     agent_build: str | None = None  # submission-folder stem of build that played (traceability)
     built_at: str | None = None     # that build's timestamp (ISO), parsed from stem
@@ -142,6 +150,7 @@ def build_correction(
     episode_time: str | None = None,
     tagged_at: str | None = None,
     attribution: str | None = None,
+    provenance: str = "human",
     chosen_label: str = "",
     correct_label: str = "",
     obs: dict | None = None,
@@ -199,6 +208,7 @@ def build_correction(
         category=category,
         attribution=attribution,
         rationale=rationale,
+        provenance=provenance,
         obs=obs if obs is not None else getattr(decision, "obs", None),
         agent_build=agent_build,
         built_at=built_at,

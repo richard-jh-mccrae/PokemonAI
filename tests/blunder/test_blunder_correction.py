@@ -111,6 +111,22 @@ def test_posture_mismatch_flag_roundtrips_and_defaults_false():
     assert Correction.from_dict(legacy).posture_mismatch is False
 
 
+def test_provenance_distinguishes_machine_labels_and_defaults_human():
+    """Contract C2 (ADR-0053 WP3, docs/plans/ml-training-contracts.md): the ML labeler tags a
+    Correction ``provenance="machine"``; `source` stays "own"/"peer" (whose GAME it was), so every
+    existing filter is unchanged. The field round-trips, and a record saved before it defaults to
+    "human" — the backward-compatibility guarantee the whole encoding rests on."""
+    d = _a_main_decision()
+    machine = build_correction(d, source="own", agent="mega_starmie", correct=[4],
+                               category="missed_win", rationale="ΔP(win) 0.31", provenance="machine")
+    assert machine.provenance == "machine" and machine.source == "own"        # orthogonal axes
+    assert Correction.from_dict(machine.to_dict()).provenance == "machine"     # survives the round-trip
+    human = build_correction(d, source="own", agent="x", correct=[4], category="missed_win", rationale="r")
+    assert human.provenance == "human"                                        # default
+    legacy = human.to_dict(); legacy.pop("provenance")                        # pre-field record
+    assert Correction.from_dict(legacy).provenance == "human"                 # old JSONL loads unchanged
+
+
 def test_corrections_have_unique_ids_and_legacy_records_get_stable_ids():
     """REQ-BLUNDER-0013: every Correction has a unique id; records saved before ids
     existed get a stable, deterministic id on load (so they can be edited/removed)."""
