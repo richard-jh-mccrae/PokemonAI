@@ -129,8 +129,15 @@ seam, one branch at a time, resolve: the **weakness** (tempo window, engine depe
 prize liability, donk vulnerability, dead-draw lines, bad type matchup) and the concrete **exploit**.
 Every seam must resolve to something a future Board lever or a threat/target could read — if it can't,
 flag it. In parallel, lock the **threats** (its attackers we must respect) and the **targets** (what to
-disrupt/snipe), using the Dossier role vocab: `fragile_preevo`, `prize_liability`, `engine` (attackers
-go in `threats`).
+disrupt/snipe), using the role vocab (all five feed the ONE MatchupPlan target-priority spine, ADR-0051):
+`prize_liability` (the wincon body — KO/gust it) · `fragile_preevo` (its pre-evo — deny the line before
+it comes online) · `disruption_target` (their key supporter/enabler to REMOVE — the **explicit** "hunt an
+engine" role; use THIS when you want an agent to target it) · `engine` (a plain accelerant — now
+**NEUTRAL**, informational only, NOT targeted; use `disruption_target` to actually hunt one) · `avoid` (a
+matchup-specific decoy / untouchable body — a benched Tera-ex, a self-shuffler — never sink removal here).
+Attackers go in `threats`. **Don't** author a generic draw engine (Dudunsparce / Budew) as `avoid` — the
+general `draw`-tag tier de-prioritizes those matchup-agnostically already; reserve `avoid` for deck-specific
+decoys.
 
 ### Phase 4 · Brief-field reconciliation (interleaved with Phase 3)
 
@@ -146,7 +153,9 @@ As each seam locks, map it to the machine Brief:
   small, growing vocabulary (like Function Tags / Roles); the discipline is "reuse first," not "mint rarely."
   Two hard limits keep this safe: (a) never *build the consumer* speculatively — that's evidence-gated
   (ADR-0026); the key is a bookmark, and (b) asserting a **wired** key (check the registry `consumer`
-  field, e.g. `opp_is_engine_dependent`) stays a high-bar, evidence-backed call.
+  field — assert only a key whose consumer is actually live, since a wrong assertion changes real play)
+  stays a high-bar, evidence-backed call. (Note: `opp_is_engine_dependent` is now UNWIRED — an engine is
+  hunted via the explicit `disruption_target` target role, ADR-0051, not a property gate.)
 - **`threats` / `targets`** — objective card-level intel, each with a one-line `why`.
 
 ### Phase 5 · Lock & sign-off (the gate)

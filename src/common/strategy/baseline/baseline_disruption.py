@@ -83,11 +83,15 @@ HYPOTHESES = [
                   "attacker is the separate `play-harlequin-vs-hand-size` trigger. Rides "
                   "`hold-wincon-dont-shuffle` (a `shuffle_hand` refresh is suppressed while my own "
                   "win-condition is in hand) and `_finish_turn_last` tier 3 (shuffle sequences AFTER "
-                  "the attach), so it never overrides a KO or buries my setup.",
+                  "the attach), so it never overrides a KO or buries my setup. The don't-gift guard "
+                  "(theirs > mine) applies ONLY to a SYMMETRIC `shuffle_hand` refresh (Judge / Iono — "
+                  "refills both hands); a ONE-SIDED disruption (strips the opponent only, no "
+                  "`shuffle_hand`) can't gift a fresh hand, so it fires regardless of my hand size.",
         when=lambda c: c.option_type == _PLAY
         and "hand_disruption" in c.tags
         and c.board.opp_draw_engine_in_play
         and c.board.opp_hand_size >= _STACKED_HAND
-        and c.board.opp_hand_size > c.board.my_hand_size,
+        and (c.board.opp_hand_size > c.board.my_hand_size   # symmetric refresh: only when net-positive
+             or "shuffle_hand" not in c.tags),              # one-sided strip: no gift, fire regardless
         weight=22, status="testing"),
 ]

@@ -627,7 +627,8 @@ def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
 
 # ---- ADR-0051 Phase 3b: hold hand-disruption for the draw-engine's swing turn ----
 
-JUDGE_CARD = 1250   # a hand_disruption + shuffle_hand Supporter (Judge / Iono class)
+JUDGE_CARD = 1250   # a SYMMETRIC hand_disruption (shuffle_hand — refreshes BOTH hands; Judge / Iono class)
+PROBE_CARD = 1251   # a ONE-SIDED hand_disruption (strips the opponent only — no shuffle_hand, no self-refill)
 OPP_WALL = 810      # opponent's benign Active in the disruption scenarios
 
 
@@ -642,19 +643,21 @@ def _mp_disruption_pilot():
         SOLROCK: CardStat(SOLROCK, name="Dudunsparce", hp=120, maxDamage=30),   # stands in as draw engine
         OPP_WALL: CardStat(OPP_WALL, name="Wall", hp=200),
         JUDGE_CARD: CardStat(JUDGE_CARD, name="Judge", cardType=3),
+        PROBE_CARD: CardStat(PROBE_CARD, name="Probe", cardType=3),
     })
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition"]}, params={})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"],
-                                          JUDGE_CARD: ["draw", "hand_disruption", "shuffle_hand"]}),
+                                          JUDGE_CARD: ["draw", "hand_disruption", "shuffle_hand"],
+                                          PROBE_CARD: ["hand_disruption"]}),   # one-sided: no shuffle_hand
                  attacks={11: 120}, attack_costs={11: 1})
 
 
-def _disruption_obs(opp_hand, my_extra=0, draw_engine=True):
+def _disruption_obs(opp_hand, my_extra=0, draw_engine=True, card=JUDGE_CARD):
     opp_bench = [{"id": SOLROCK, "energies": []}] if draw_engine else []
     me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
-          "hand": [{"id": JUDGE_CARD}] + [{"id": 1}] * my_extra, "discard": [], "prize": []}
+          "hand": [{"id": card}] + [{"id": 1}] * my_extra, "discard": [], "prize": []}
     opp = {"active": [{"id": OPP_WALL, "energies": []}], "bench": opp_bench,
            "handCount": opp_hand, "discard": [], "prize": []}
     return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
@@ -683,6 +686,20 @@ def test_strip_the_stacked_engine_hand_holds_below_the_threshold_or_when_it_woul
     assert "strip-the-stacked-engine-hand" not in fired(opp_hand=4)                    # not stacked
     assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, my_extra=7)        # would gift a refresh
     assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, draw_engine=False)  # no engine in play
+
+
+@pytest.mark.req("REQ-POSTURE-0010")
+def test_strip_fires_for_one_sided_disruption_even_when_my_hand_is_large():
+    # The don't-gift guard only matters for a SYMMETRIC shuffle-refresh (Judge — refills BOTH hands).
+    # A ONE-SIDED hand_disruption (Probe — strips the opponent only, no shuffle_hand, doesn't refill me)
+    # can't gift a fresh hand, so it fires on a stacked engine hand regardless of my own hand size.
+    p = _mp_disruption_pilot()
+    # symmetric Judge, my hand >= theirs → holds (a refresh would gift them a fresh hand)
+    assert "strip-the-stacked-engine-hand" not in _fired(
+        p.explain(_disruption_obs(opp_hand=7, my_extra=7, card=JUDGE_CARD)).options[0])
+    # one-sided Probe, same board → still fires (no self-refill, so nothing to gift)
+    assert "strip-the-stacked-engine-hand" in _fired(
+        p.explain(_disruption_obs(opp_hand=7, my_extra=7, card=PROBE_CARD)).options[0])
 
 
 # ---- ADR-0041: the posture record on the Decision -> Decision Telemetry (stderr) ----

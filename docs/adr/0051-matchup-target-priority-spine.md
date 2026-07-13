@@ -101,8 +101,25 @@ feedback, not gauntlet A/B.
     won by denying the line, not prize count — the user's call). A moderate small-integer-band bump, NOT
     the ×5 snipe override: it sits above a plain prize gap but below the live-threat denial term
     (`_gust_target_denial`, a full prize) and any lethal KO. γ=0 ⇒ silent (prize-first restored).
-- Phase 4: build/fetch priors biased by the anticipated opponent.
+- **Phase 4 (assessed premature — deferred; instead enriched the Brief vocabulary).** The originally
+  sketched fetch/keep priors are thin for the current roster: opening/keep priors *can't fire* (mulligan /
+  coin-toss / set-up all resolve at γ≈0, before recognition), and weakness-aware "which line to build" is
+  *inert* (every current deck is a mono-type attacker — no off-type line to prefer). The proactive
+  counter-fetch is a marginal 1-turn-lookahead over the existing `grab-a-gust-supporter-for-the-ko`. So
+  rather than build low-value priors, this round made the ALREADY-built spine act on more matchups:
+  - **`/matchup-genie` now emits the full role vocab** — `avoid` (matchup-specific decoy / untouchable
+    body) and `disruption_target` (the explicit "hunt this enabler" role), with plain `engine` reframed as
+    NEUTRAL and the retired `brief_preevo` / `brief_engine` / `opp_is_engine_dependent` references fixed
+    across SKILL.md / authoring.md / counterplay-playbook.md / the template.
+  - **Brief-validator role drift fixed** — `validate_brief.py`'s hardcoded `_TARGET_ROLES` had never
+    gained the Phase-1 `avoid` / `disruption_target` and would have *rejected* an enriched Brief; it now
+    derives the legal set from the schema enum, so it can't drift again.
+  - **One-sided disruption guard relaxed** (Phase-3b follow-up) — `strip-the-stacked-engine-hand`'s
+    don't-gift comparison now applies only to a symmetric `shuffle_hand` refresh; a one-sided disruption
+    (no self-refill) fires regardless of my hand size.
+  Revisit fetch/keep priors once a type-diverse deck lands or the ladder shows the need.
 
 Open follow-ups: the general tier flags only *direct* `draw`-tag bodies; a draw-engine *pre-evo*
-(Dunsparce→Dudunsparce) is disambiguated by the Read/dossier tier, not the general tier. `matchup-genie`
-prompt + existing Briefs to adopt `avoid`/`disruption_target` where curated (schema already allows it).
+(Dunsparce→Dudunsparce) is disambiguated by the Read/dossier tier, not the general tier. Existing shipped
+Briefs may be revisited to add `avoid`/`disruption_target` where curated (the vocab + validator now
+support it).

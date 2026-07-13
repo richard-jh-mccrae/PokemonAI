@@ -52,10 +52,12 @@ One block per seam. Each must resolve to a Brief field (an `opponent_properties`
 ## 4 · Threats & targets (objective card-level intel)
 
 - **Threats** (attackers to respect): `<Card>` — <why it's dangerous / what it OHKOs>
-- **Targets** (what to disrupt or snipe), by role:
+- **Targets** (what to disrupt or snipe), by role (all feed the ADR-0051 MatchupPlan):
+  - `prize_liability`: `<Card>` — <the wincon body / ex / Mega-ex; KO or gust it>
   - `fragile_preevo`: `<Card>` — <low-HP pre-evo of the wincon; snipe before it evolves>
-  - `prize_liability`: `<Card>` — <ex/Mega-ex; denies/gives multiple prizes>
-  - `engine`: `<Card>` — <consistency Pokémon; gust+KO to strangle setup>
+  - `disruption_target`: `<Card>` — <key supporter/enabler to REMOVE; the explicit "hunt this" role>
+  - `engine`: `<Card>` — <plain accelerant; NEUTRAL/informational, not targeted — omit unless noting it>
+  - `avoid`: `<Card>` — <matchup-specific decoy / untouchable body; never sink removal here (NOT generic draw engines)>
 
 ## 5 · Objective counterplay summary
 
@@ -67,7 +69,7 @@ disrupt its engine / deny the donk. This is what each of our agents relativizes 
 ```
 opponent_properties = { "<key>": <value>, ... }   # each from src/common/scouting/opponent_properties.json (flag new keys)
 threats             = [ { "card": "<name>", "why": "<…>" }, ... ]
-targets             = [ { "card": "<name>", "role": "<fragile_preevo|prize_liability|engine>", "why": "<…>" }, ... ]
+targets             = [ { "card": "<name>", "role": "<prize_liability|fragile_preevo|disruption_target|engine|avoid>", "why": "<…>" }, ... ]
 ```
 
 ## 7 · Open questions / deferred
