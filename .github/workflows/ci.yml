@@ -77,6 +77,7 @@ jobs:
           F_tuner: ${{ steps.changes.outputs.tuner }}
           F_blunder: ${{ steps.changes.outputs.blunder }}
           F_value: ${{ steps.changes.outputs.value }}
+          F_parity: ${{ steps.changes.outputs.parity }}
           F_docs: ${{ steps.changes.outputs.docs }}
           F_any: ${{ steps.changes.outputs.any }}
         run: |
@@ -100,11 +101,13 @@ jobs:
             if [ "$F_tuner"    = "true" ]; then add tests/tuner; fi
             if [ "$F_blunder"  = "true" ]; then add tests/blunder; fi
             if [ "$F_value"    = "true" ]; then add tests/value; fi
+            if [ "$F_parity"   = "true" ]; then add tests/parity; fi
 
             # Something changed but nothing recognised (and not docs-only) => full suite.
             matched=false
             for v in "$F_full" "$F_agents" "$F_arena" "$F_sim" "$F_submit" "$F_train" "$F_meta" \
-                     "$F_scouting" "$F_strategy" "$F_cards" "$F_tuner" "$F_blunder" "$F_value" "$F_docs"; do
+                     "$F_scouting" "$F_strategy" "$F_cards" "$F_tuner" "$F_blunder" "$F_value" \
+                     "$F_parity" "$F_docs"; do
               if [ "$v" = "true" ]; then matched=true; fi
             done
             if [ "$F_any" = "true" ] && [ "$matched" = "false" ]; then run_all=true; fi
@@ -180,11 +183,10 @@ jobs:
         if: steps.plan.outputs.audit == 'true'
         run: python tools/sim/ci_audit_gate.py
 
-      # ADR-0050 parity gate: every committed parity trace replays through the pure-Python
-      # engine (src/cgpy) divergence-free. DLL-free by construction (the trace IS the native
-      # side); also runs inside the suite — this named step pins failure attribution.
-      - name: cgpy parity gate
-        run: python -m pytest tests/parity -q
+      # ADR-0050 cgpy parity gate (every committed trace replays through src/cgpy divergence-
+      # free) runs as part of the pytest selection above: the `parity` filter adds tests/parity
+      # to the plan when cgpy files change, and a full run includes it. No separate step — an
+      # unrelated PR no longer pays for the heavy parity suite.
 
       - name: Upload test & coverage reports
         if: ${{ !cancelled() && steps.plan.outputs.empty != 'true' }}
