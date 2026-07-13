@@ -1,10 +1,10 @@
 # ML Training Pipeline — Build Plan (living playbook)
 
-**Governing docs:** [ADR-0052](../adr/0052-ml-training-pipeline-build-plan.md) (decisions —
+**Governing docs:** [ADR-0053](../adr/0053-ml-training-pipeline-build-plan.md) (decisions —
 read first) · [research report](../research/ml-training-system.md) (evidence base).
 This doc is the operational plan: per-session scopes, gate checklists, and the status ledger.
 
-**How a fresh session uses this doc:** read ADR-0052 + this file; check the status ledger;
+**How a fresh session uses this doc:** read ADR-0053 + this file; check the status ledger;
 take the next unblocked session (respect the gates); work in a worktree owning only that
 track's files; at session end update the ledger below, tick deliverables, and record gotchas
 in the session-notes column and auto-memory. Parallel-phase sessions (P2a∥P2b, P3a∥P3b) run
@@ -77,7 +77,7 @@ entry, contracts doc, background generation running, ledger updated.
    runtime = the Read's belief (γ-weighted archetype), so choose an encoding that degrades
    with Read uncertainty (candidates: archetype one-hots × γ, favorability-style scalars).
    Keep the fail-open property.
-2. **Trainer v2** (offline numpy/torch per ADR-0052 D5): logistic baseline first on the new
+2. **Trainer v2** (offline numpy/torch per ADR-0053 D5): logistic baseline first on the new
    corpus, then the 2×64 MLP. Label = terminal win/loss, γ=1.0. Export weights to
    `value_model.json` (versioned format); runtime forward pass stays hand-rolled stdlib in
    `src/common/value/model.py`.
@@ -204,5 +204,6 @@ the WP2 checkpoint pool is the stand-in.
   model + learned weights, which flip default at **G2**, not before.
 - Rules/card facts for any strategy reasoning: verify at `docs/rules.md` /
   `docs/rulebook.txt`, never from memory.
-- ADR numbering: 0051 is taken on an unpushed branch; **next free is 0053**.
+- ADR numbering: 0051–0052 are taken on an unpushed arch-review branch (Stat Provider seam,
+  KO Oracle); **next free is 0054**.
 - End of every session: update the status ledger + notes here, and auto-memory.
