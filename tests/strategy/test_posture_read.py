@@ -10,6 +10,7 @@ from common.cards import CardFunctions
 from common.pilot import Board, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.scouting.briefs import Brief
+from common.scouting.matchup_plan import build_matchup_plan
 from common.scouting.read import EvoPath, Read
 from common.scouting.scout import Scout
 from common.strategy import Line, Strategy
@@ -320,6 +321,106 @@ def test_opp_property_safe_when_no_brief():
     assert Board().opp_property("opp_tempo", "x") == "x"
 
 
+# ---- ADR-0051: the MatchupPlan target-priority spine, built onto the Board ----
+
+def _mp_pilot(matchup_targeting=True, posture=True):
+    prov = DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True,
+                       minAttackCost=1, minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=280, megaEx=True),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=70),
+        SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
+    })
+    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
+                     roles={MEGA: ["win_condition"]}, params={})
+    brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
+                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
+                 functions=CardFunctions({SOLROCK: ["draw"]}),
+                 attacks={11: 120}, attack_costs={11: 1},
+                 scout=Scout(tiny_artifact()), briefs=[brief],
+                 posture=posture, matchup_targeting=matchup_targeting)
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_board_carries_a_matchup_plan_from_brief_and_general_tiers():
+    # A recognized opponent composes the spine onto the Board: the Brief names Riolu a
+    # fragile_preevo (positive target), and Solrock's general `draw`-engine card fact
+    # de-prioritizes it (avoid) with no Brief entry needed.
+    board = _board_of(_mp_pilot(), _obs_facing_mega_lucario())
+    assert board.matchup_plan.priority(RIOLU) > 0
+    assert board.matchup_plan.priority(SOLROCK) < 0
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_matchup_plan_is_inert_when_the_kill_switch_is_off():
+    # matchup_targeting=False -> an empty plan, every priority 0 (clean A/B off-switch).
+    board = _board_of(_mp_pilot(matchup_targeting=False), _obs_facing_mega_lucario())
+    assert board.matchup_plan.priority(RIOLU) == 0.0
+    assert board.matchup_plan.priority(SOLROCK) == 0.0
+
+
+# ---- ADR-0051 consumption: the snipe pick reads the MatchupPlan ----
+
+SNIPER = 700
+
+
+def _mp_snipe_pilot(matchup_targeting=True):
+    prov = DictCardStatProvider({
+        SNIPER: CardStat(SNIPER, name="Sniper", maxDamage=120, minAttackCost=1, minCostDamage=120,
+                         attacks=(11,)),
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=280, megaEx=True,
+                               maxDamage=270, evolvesFrom="Riolu"),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
+        SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
+    })
+    brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
+                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
+                 functions=CardFunctions({SOLROCK: ["draw"]}),
+                 attacks={11: 120}, attack_costs={11: 1}, bench_snipe={11: 50},
+                 scout=Scout(tiny_artifact()), briefs=[brief],
+                 posture=True, matchup_targeting=matchup_targeting)
+
+
+def _damage_select_over_ml_bench():
+    # A bench-snipe (DAMAGE) select vs the recognized Mega Lucario ex board. Rider 50 KOs neither
+    # bench body (Solrock 90 / Riolu 70) -> no snipe-KO, so the positional/matchup steer decides.
+    cur = state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=280),
+                opp_bench=[poke(SOLROCK, hp=90, max_hp=90), poke(RIOLU, hp=70, max_hp=70)], turn=4)
+    return make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                       context=DAMAGE, current=cur)
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
+    dec = _mp_snipe_pilot().explain(_damage_select_over_ml_bench())
+    # Solrock's general draw-engine fact -> negative matchup contribution; Riolu (Brief
+    # fragile_preevo) -> positive. The pick lands on the wincon line, not the engine.
+    assert dec.options[1].tactical > 0 > dec.options[0].tactical
+    assert dec.chosen == [1]
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_snipe_matchup_term_silent_under_kill_switch():
+    dec = _mp_snipe_pilot(matchup_targeting=False).explain(_damage_select_over_ml_bench())
+    assert dec.options[0].tactical == 0.0 and dec.options[1].tactical == 0.0
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+def test_gust_target_drags_up_the_briefed_preevo_over_the_draw_engine():
+    # Phase 2: the gust target-select reads the SAME MatchupPlan. Two 1-prize KO-able bench bodies;
+    # my Active (120 dmg, 1 energy) KOs either → the sub-prize tie-break drags up the briefed Riolu
+    # (fragile_preevo), not the draw-engine Solrock.
+    cur = state(active=poke(SNIPER, energy=1), opp_active=poke(MEGA_LUCARIO, hp=280),
+                opp_bench=[poke(SOLROCK, hp=90, max_hp=90), poke(RIOLU, hp=70, max_hp=70)], turn=4)
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+                      context=SWITCH, current=cur)
+    dec = _mp_snipe_pilot().explain(obs)
+    assert dec.options[1].tactical > dec.options[0].tactical   # Riolu edges Solrock on the tie-break
+    assert dec.chosen == [1]
+
+
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_brief_target_and_threat_accessors_read_resolved_ids():
     # Surface B: the Brief's threats/targets, resolved to ids, are queryable off the Board by id/role.
@@ -386,9 +487,9 @@ def test_board_resolves_the_matched_briefs_threats_and_targets_to_ids():
 
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_resolving_the_brief_changes_no_decision_or_score():
-    # Kill-switch-OFF neutrality (ADR-0038): the Pilot ctor defaults brief_preevo/brief_engine False,
-    # so a resolved Brief on the Board must yield byte-identical choices AND scores vs a Pilot with
-    # no Brief — the levers move play only when an agent's main.py opts in.
+    # Scope containment: the MatchupPlan steers only bench snipe (DAMAGE) and gust (SWITCH), so a
+    # resolved Brief on the Board must yield byte-identical choices AND scores at a MAIN play menu vs
+    # a Pilot with no Brief — the spine never leaks into a decision it doesn't own.
     obs = _obs_two_option_menu()
     on, off = _ml_pilot([_ml_brief_full()]), _ml_pilot(None)
     assert on.decide(obs) == off.decide(obs)
@@ -398,6 +499,7 @@ def test_resolving_the_brief_changes_no_decision_or_score():
 # ---- ADR-0038 Brief levers: Brief intel sharpens the owning Tactical signal (γ-scaled) ----
 
 BRUISER = 720   # a plain 120-damage attacker body (the energized competitor in rank tests)
+EX_INERT = 721  # a 2-prize ex body with no Energy — the "bigger inert prize" the wincon-denial bump beats
 
 
 def _lever_stats():
@@ -415,6 +517,7 @@ def _lever_stats():
         GARDEVOIR: CardStat(GARDEVOIR, name="Gardevoir ex", hp=310, maxDamage=190,
                             evolvesFrom="Kirlia"),
         BRUISER: CardStat(BRUISER, name="Bruiser", hp=120, maxDamage=120),
+        EX_INERT: CardStat(EX_INERT, name="Inert ex", hp=80, ex=True, maxDamage=120),
     })
 
 
@@ -423,72 +526,34 @@ def _lever_pilot(**kw):
                  stats=_lever_stats(), attacks={11: 120}, attack_costs={11: 1}, **kw)
 
 
-def _rank_obs(*bench):
-    obs = make_select([card_opt(BENCH, i, player=1) for i in range(len(bench))], context=DAMAGE,
-                      current=state(active=poke(SNIPER), opp_bench=list(bench)))
-    return obs, obs["select"]
-
-
-@pytest.mark.req("REQ-POSTURE-0007")
-def test_briefed_preevo_overtakes_an_energized_attacker_at_full_gamma():
-    # The tier-crossing preevo boost (ADR-0038): a bare briefed pre-evolution (Riolu) outranks an
-    # ENERGIZED attacker once γ is high — authored payoff-denial beats the generic imminence tier.
-    pilot = _lever_pilot(brief_preevo=True)
-    obs, select = _rank_obs(poke(RIOLU, hp=80), poke(BRUISER, energy=2, hp=120))
-    roles = {RIOLU: "fragile_preevo"}
-    riolu = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles)
-    energized = pilot._target_threat_rank(obs, select, select["option"][1], gamma=1.0, brief_roles=roles)
-    assert riolu > energized
-    # baseline sanity: without the Brief the energized body owns the tier
-    base_r = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0)
-    base_e = pilot._target_threat_rank(obs, select, select["option"][1], gamma=1.0)
-    assert base_e > base_r
-
-
-@pytest.mark.req("REQ-POSTURE-0007")
-def test_preevo_boost_is_gamma_scaled_and_dies_with_the_switch():
-    # γ scales the boost continuously (ADR-0026 no-regression is structural: γ=0 → generic rank);
-    # the brief_preevo kill-switch (ctor default False) zeroes it outright.
-    obs, select = _rank_obs(poke(RIOLU, hp=80))
-    opt, roles = select["option"][0], {RIOLU: "fragile_preevo"}
-    on = _lever_pilot(brief_preevo=True)
-    generic = on._target_threat_rank(obs, select, opt, gamma=0.0)
-    assert on._target_threat_rank(obs, select, opt, gamma=0.0, brief_roles=roles) == generic
-    mid = on._target_threat_rank(obs, select, opt, gamma=0.5, brief_roles=roles)
-    full = on._target_threat_rank(obs, select, opt, gamma=1.0, brief_roles=roles)
-    assert full > mid > generic
-    off = _lever_pilot()                                   # ctor default: lever OFF
-    assert off._target_threat_rank(obs, select, opt, gamma=1.0, brief_roles=roles) == generic
-
-
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
     # Threading proof: recognized opponent → matched Brief resolves Riolu → _board() threads the
-    # roles into strongest_threat_rank → the snipe pick flips to the briefed preevo (lever ON only).
+    # roles into the MatchupPlan → the snipe pick flips to the briefed preevo. The ADR-0051 spine
+    # (`matchup_targeting`, default ON) is now the switch; OFF reverts to generic order.
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=2, hp=110)]
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
                                     opp_bench=bench))
-    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], brief_preevo=True)
-    off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])
-    assert on.decide(obs) == [0]                           # the bare briefed Riolu
+    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])                       # default ON
+    off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], matchup_targeting=False)
+    assert on.decide(obs) == [0]                           # the bare briefed Riolu (fragile_preevo)
     assert off.decide(obs) == [1]                          # generic order: the energized Solrock
 
 
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_briefed_preevo_boost_never_overrides_a_ko():
-    # KO supremacy is structural: a KO-able target (snipe-for-the-ko, +60) still beats the boosted
-    # non-KO-able briefed preevo (snipe-the-top-threat +30 / snipe-the-threat +20).
+    # KO supremacy is structural: a KO-able target (snipe-for-the-ko, +60) still beats the MatchupPlan
+    # boost on the non-KO-able briefed preevo — the matchup term stands down while a snipe-KO is on offer.
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=1, hp=40)]     # Solrock dies to the 50 rider
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
                                     opp_bench=bench))
-    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], brief_preevo=True,
-                      bench_snipe={11: 50})
+    on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], bench_snipe={11: 50})
     assert on.decide(obs) == [1]                           # take the prize, boost notwithstanding
 
 
@@ -499,86 +564,142 @@ def _gust_obs(*bench):
 
 
 @pytest.mark.req("REQ-POSTURE-0007")
-def test_gust_target_prefers_the_briefed_preevo_sub_prize():
-    # The matching γ-scaled gust tie-break: among equal-prize KO-able evolving preevos, drag up the
-    # BRIEFED one (Riolu over Kirlia); sub-prize, so it never overrides a real prize difference.
+def test_gust_target_prefers_the_briefed_wincon_preevo():
+    # ADR-0051: among equal-prize KO-able evolving pre-evos, the gust drags up the briefed WINCON-line
+    # pre-evo (Riolu, fragile_preevo) over a non-wincon one (Kirlia). Phase 3b gives a wincon-line role
+    # the denial bump, so this preference is deliberate and above the bare sub-prize tie-break that a
+    # non-wincon role gets (that pure-sub-prize path is covered by the disruption-target test). Sourced
+    # from the one spine, not the retired _gust_brief_denial lever; γ=0 → inert plan, perfectly neutral.
     obs, select = _gust_obs(poke(RIOLU, hp=80), poke(KIRLIA, hp=80))
     board = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
-                  opp_bench=((RIOLU, 80), (KIRLIA, 80)), posture_confidence=1.0,
-                  brief_target_roles={RIOLU: "fragile_preevo"})
-    on = _lever_pilot(brief_preevo=True)
-    riolu = on._gust_target_tactical(obs, select, board, select["option"][0])
-    kirlia = on._gust_target_tactical(obs, select, board, select["option"][1])
-    assert riolu > kirlia
-    assert riolu - kirlia < 1                              # sub-prize tie-break
-    off = _lever_pilot()                                   # switch off → parity restored
-    assert (off._gust_target_tactical(obs, select, board, select["option"][0])
-            == off._gust_target_tactical(obs, select, board, select["option"][1]))
-    cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
-                 opp_bench=((RIOLU, 80), (KIRLIA, 80)), posture_confidence=0.0,
-                 brief_target_roles={RIOLU: "fragile_preevo"})
-    assert (on._gust_target_tactical(obs, select, cold, select["option"][0])
-            == on._gust_target_tactical(obs, select, cold, select["option"][1]))
+                  opp_bench=((RIOLU, 80), (KIRLIA, 80)),
+                  matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=1.0))
+    p = _lever_pilot()
+    riolu = p._gust_target_tactical(obs, select, board, select["option"][0])
+    kirlia = p._gust_target_tactical(obs, select, board, select["option"][1])
+    assert riolu > kirlia                                  # briefed wincon-line pre-evo preferred
+    cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,   # γ=0 → inert plan
+                 opp_bench=((RIOLU, 80), (KIRLIA, 80)),
+                 matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=0.0))
+    assert (p._gust_target_tactical(obs, select, cold, select["option"][0])
+            == p._gust_target_tactical(obs, select, cold, select["option"][1]))
 
 
 @pytest.mark.req("REQ-POSTURE-0008")
-def test_engine_boost_needs_the_dependence_property_and_stays_sub_tier():
-    # The engine lever is HARD-GATED on opp_is_engine_dependent (the shipped Lucario Brief judged it
-    # FALSE → must not fire) and sub-tier (an energized live attacker still outranks the engine).
-    pilot = _lever_pilot(brief_engine=True)
-    obs, select = _rank_obs(poke(SOLROCK, hp=110), poke(BRUISER, energy=2, hp=120))
-    roles = {SOLROCK: "engine"}
-    base = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles)
-    gated = pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles,
-                                      engine_dependent=True)
-    assert base == pilot._target_threat_rank(obs, select, select["option"][0], gamma=1.0)  # bool absent → silent
-    assert gated > base                                    # gate open → boost
-    energized = pilot._target_threat_rank(obs, select, select["option"][1], gamma=1.0,
-                                          brief_roles=roles, engine_dependent=True)
-    assert energized > gated                               # sub-tier: imminence keeps priority
-    off = _lever_pilot()
-    assert (off._target_threat_rank(obs, select, select["option"][0], gamma=1.0, brief_roles=roles,
-                                    engine_dependent=True) == base)
-
-
-@pytest.mark.req("REQ-POSTURE-0008")
-def test_engine_dependence_threads_from_the_brief_to_the_board_rank():
-    # Construction threading: a matched Brief ASSERTING opp_is_engine_dependent lifts the engine
-    # body's strongest_threat_rank; the shipped assert-true-only Lucario Brief (property omitted)
-    # leaves the rank byte-identical to a no-Brief Pilot.
-    dependent = Brief(slug="dep", label="DEP", covers=["Mega Lucario ex"],
-                      opponent_properties={"opp_is_engine_dependent": True},
-                      targets=[{"card": "Solrock", "role": "engine", "why": "draw"}])
-    lucario_like = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
-                         targets=[{"card": "Solrock", "role": "engine", "why": "draw"}])
-    bench = [poke(SOLROCK, hp=110)]
-    obs = make_select([card_opt(BENCH, 0, player=1)], context=DAMAGE,
-                      current=state(active=poke(MEGA_LUCARIO), opp_active=poke(MEGA_LUCARIO, hp=340),
-                                    opp_bench=bench))
-    rank = lambda briefs: _lever_pilot(scout=Scout(tiny_artifact()), briefs=briefs,
-                                       brief_engine=True)._board(obs, obs["select"]).strongest_threat_rank
-    assert rank([dependent]) > rank(None)                  # asserted → boost reaches the Board rank
-    assert rank([lucario_like]) == rank(None)              # omitted (assert-true-only) → silent
-
-
-@pytest.mark.req("REQ-POSTURE-0008")
-def test_gust_target_prefers_the_dependent_engine_sub_prize():
-    # The engine half of the gust tie-break: same gate, same sub-prize ceiling.
+def test_gust_target_prefers_a_disruption_target_sub_prize():
+    # ADR-0051 replaces the old engine+dependence gate: a curated `disruption_target` gets the gust
+    # sub-prize tie-break directly, while a plain `engine` role stays NEUTRAL (a poor gust target).
     obs, select = _gust_obs(poke(SOLROCK, hp=110), poke(BRUISER, hp=120))
-    dep = Brief(slug="dep", label="DEP", covers=["X"],
-                opponent_properties={"opp_is_engine_dependent": True})
-    board = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
-                  opp_bench=((SOLROCK, 110), (BRUISER, 120)), posture_confidence=1.0,
-                  brief=dep, brief_target_roles={SOLROCK: "engine"})
-    on = _lever_pilot(brief_engine=True)
-    solrock = on._gust_target_tactical(obs, select, board, select["option"][0])
-    bruiser = on._gust_target_tactical(obs, select, board, select["option"][1])
+    p = _lever_pilot()
+    dis = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
+                opp_bench=((SOLROCK, 110), (BRUISER, 120)),
+                matchup_plan=build_matchup_plan(brief_roles={SOLROCK: "disruption_target"}, gamma=1.0))
+    solrock = p._gust_target_tactical(obs, select, dis, select["option"][0])
+    bruiser = p._gust_target_tactical(obs, select, dis, select["option"][1])
     assert solrock > bruiser and solrock - bruiser < 1
-    ungated = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
-                    opp_bench=((SOLROCK, 110), (BRUISER, 120)), posture_confidence=1.0,
-                    brief_target_roles={SOLROCK: "engine"})   # no property asserted
-    assert (on._gust_target_tactical(obs, select, ungated, select["option"][0])
-            == on._gust_target_tactical(obs, select, ungated, select["option"][1]))
+    eng = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,   # plain engine → neutral
+                opp_bench=((SOLROCK, 110), (BRUISER, 120)),
+                matchup_plan=build_matchup_plan(brief_roles={SOLROCK: "engine"}, gamma=1.0))
+    assert (p._gust_target_tactical(obs, select, eng, select["option"][0])
+            == p._gust_target_tactical(obs, select, eng, select["option"][1]))
+
+
+@pytest.mark.req("REQ-POSTURE-0011")
+def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
+    # ADR-0051 Phase 3b: a fragile-wincon matchup is won by denying the LINE, not prize count. The
+    # denial bump lifts a 1-prize wincon pre-evo (fragile_preevo) ABOVE a 2-prize inert ex in the gust
+    # target pick — drag up the crib wincon over the fatter inert prize. γ-scaled and role-scoped; a
+    # moderate ~1.5-prize nudge (not the ×5 snipe override), so it stays below the live-threat term.
+    obs, select = _gust_obs(poke(RIOLU, hp=80), poke(EX_INERT, hp=80))
+    p = _lever_pilot()
+    hot = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
+                opp_bench=((RIOLU, 80), (EX_INERT, 80)),
+                matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=1.0))
+    preevo = p._gust_target_tactical(obs, select, hot, select["option"][0])
+    inert_ex = p._gust_target_tactical(obs, select, hot, select["option"][1])
+    assert preevo > inert_ex                                   # denial bump overrides the +1 prize gap
+    cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,   # γ=0 → bump vanishes
+                 opp_bench=((RIOLU, 80), (EX_INERT, 80)),
+                 matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=0.0))
+    assert (p._gust_target_tactical(obs, select, cold, select["option"][1])         # prize-first restored:
+            > p._gust_target_tactical(obs, select, cold, select["option"][0]))       # the 2-prize ex wins
+
+
+# ---- ADR-0051 Phase 3b: hold hand-disruption for the draw-engine's swing turn ----
+
+JUDGE_CARD = 1250   # a SYMMETRIC hand_disruption (shuffle_hand — refreshes BOTH hands; Judge / Iono class)
+PROBE_CARD = 1251   # a ONE-SIDED hand_disruption (strips the opponent only — no shuffle_hand, no self-refill)
+OPP_WALL = 810      # opponent's benign Active in the disruption scenarios
+
+
+def _fired(trace):
+    return {h.id for h, _ in trace.fired}
+
+
+def _mp_disruption_pilot():
+    prov = DictCardStatProvider({
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
+                       minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
+        SOLROCK: CardStat(SOLROCK, name="Dudunsparce", hp=120, maxDamage=30),   # stands in as draw engine
+        OPP_WALL: CardStat(OPP_WALL, name="Wall", hp=200),
+        JUDGE_CARD: CardStat(JUDGE_CARD, name="Judge", cardType=3),
+        PROBE_CARD: CardStat(PROBE_CARD, name="Probe", cardType=3),
+    })
+    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
+                     roles={MEGA: ["win_condition"]}, params={})
+    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
+                 functions=CardFunctions({SOLROCK: ["draw"],
+                                          JUDGE_CARD: ["draw", "hand_disruption", "shuffle_hand"],
+                                          PROBE_CARD: ["hand_disruption"]}),   # one-sided: no shuffle_hand
+                 attacks={11: 120}, attack_costs={11: 1})
+
+
+def _disruption_obs(opp_hand, my_extra=0, draw_engine=True, card=JUDGE_CARD):
+    opp_bench = [{"id": SOLROCK, "energies": []}] if draw_engine else []
+    me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
+          "hand": [{"id": card}] + [{"id": 1}] * my_extra, "discard": [], "prize": []}
+    opp = {"active": [{"id": OPP_WALL, "energies": []}], "bench": opp_bench,
+           "handCount": opp_hand, "discard": [], "prize": []}
+    return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
+            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                       "option": [{"type": PLAY, "index": 0}], "deck": None}, "logs": []}
+
+
+@pytest.mark.req("REQ-POSTURE-0010")
+def test_strip_the_stacked_engine_hand_fires_on_a_stacked_draw_engine():
+    # A `draw` engine (Dudunsparce) is in play AND the opponent's hand has stacked to 7 (> my 1):
+    # play the hand_disruption Supporter to strip the engine's swing-turn resources.
+    p = _mp_disruption_pilot()
+    assert "strip-the-stacked-engine-hand" in _fired(p.explain(_disruption_obs(opp_hand=7)).options[0])
+
+
+@pytest.mark.req("REQ-POSTURE-0010")
+def test_strip_the_stacked_engine_hand_holds_below_the_threshold_or_when_it_would_gift():
+    # The HOLD side: silent when the hand is small (nothing stacked to strip), when our own hand is
+    # as large (a symmetric refresh gifts them a fresh hand for no net), and when NO draw engine is
+    # in play (a non-engine deck has no swing turn to hold for — that's play-harlequin's job).
+    p = _mp_disruption_pilot()
+
+    def fired(**kw):
+        return _fired(p.explain(_disruption_obs(**kw)).options[0])
+
+    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=4)                    # not stacked
+    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, my_extra=7)        # would gift a refresh
+    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, draw_engine=False)  # no engine in play
+
+
+@pytest.mark.req("REQ-POSTURE-0010")
+def test_strip_fires_for_one_sided_disruption_even_when_my_hand_is_large():
+    # The don't-gift guard only matters for a SYMMETRIC shuffle-refresh (Judge — refills BOTH hands).
+    # A ONE-SIDED hand_disruption (Probe — strips the opponent only, no shuffle_hand, doesn't refill me)
+    # can't gift a fresh hand, so it fires on a stacked engine hand regardless of my own hand size.
+    p = _mp_disruption_pilot()
+    # symmetric Judge, my hand >= theirs → holds (a refresh would gift them a fresh hand)
+    assert "strip-the-stacked-engine-hand" not in _fired(
+        p.explain(_disruption_obs(opp_hand=7, my_extra=7, card=JUDGE_CARD)).options[0])
+    # one-sided Probe, same board → still fires (no self-refill, so nothing to gift)
+    assert "strip-the-stacked-engine-hand" in _fired(
+        p.explain(_disruption_obs(opp_hand=7, my_extra=7, card=PROBE_CARD)).options[0])
 
 
 # ---- ADR-0041: the posture record on the Decision -> Decision Telemetry (stderr) ----

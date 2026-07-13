@@ -64,7 +64,7 @@ CLUSTERS = {
                                            "use-the-draw-engine-ability"}),
     "disruption": (DISRUPTION_HYPOTHESES, {
         "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored",
-        "dont-gift-a-refresh-when-favored"}),
+        "dont-gift-a-refresh-when-favored", "strip-the-stacked-engine-hand"}),
     "phases": (PHASES_HYPOTHESES, {   # ADR-0040 advisory bands — the one c.board.phase consumer
         "phase-stabilize-prefer-heal", "phase-close-stop-developing"}),
 }

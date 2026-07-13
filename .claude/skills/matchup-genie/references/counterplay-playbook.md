@@ -35,9 +35,14 @@ runtime's language:
 | **Threat** | which of their Pokémon do we have to *respect / answer*? | `threats[]` |
 | **Target** | which of their Pokémon do we *disrupt / snipe*, and why? | `targets[]` with a `role` |
 
-Target roles (exactly these): **`fragile_preevo`** (low-HP pre-evo of the wincon — snipe before it
-evolves), **`prize_liability`** (ex / Mega-ex — a multi-prize body), **`engine`** (a consistency/draw
-Pokémon whose removal strangles setup). Attackers go in `threats`, not `targets`.
+Target roles (exactly these five, all feeding the ADR-0051 MatchupPlan): **`prize_liability`** (the
+wincon body / ex / Mega-ex — KO or gust it), **`fragile_preevo`** (low-HP pre-evo of the wincon — snipe
+before it evolves), **`disruption_target`** (their key supporter/enabler whose removal strangles setup —
+the **explicit "hunt this" role**; use it, not `engine`, when you want an agent to target it),
+**`engine`** (a plain accelerant — **NEUTRAL** / informational, NOT targeted), **`avoid`** (a
+matchup-specific decoy or untouchable body — a benched Tera-ex, a self-shuffler — never sink removal
+here; do NOT use it for generic draw engines, which the general `draw`-tag tier already handles).
+Attackers go in `threats`, not `targets`.
 
 ## Weakness question banks
 
@@ -51,7 +56,8 @@ Walk these seams. Each resolved seam → a §3 block in `MATCHUP.md` + a Brief f
 
 ### Engine dependence (the disruption seam)
 - What's the **consistency core** (the draw/search Pokémon it can't function without)? If we gust + KO
-  it, does the deck stall? → `opp_is_engine_dependent` + a `target` role `engine`.
+  it, does the deck stall? → a `target` role `disruption_target` (the explicit "hunt this enabler" role;
+  `engine` is now neutral, and `opp_is_engine_dependent` is retired/unwired — ADR-0051).
 - Does it lean on a **single Supporter / Item / Stadium**? Is that answerable (hammer, stadium war, item
   lock)?
 - What's its **recovery** — can it rebuild the engine after we remove it, or is removal permanent?

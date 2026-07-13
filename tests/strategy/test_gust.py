@@ -8,7 +8,8 @@ import pytest
 
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
-from common.pilot import KO_SCORE, Pilot
+from common.pilot import KO_SCORE, Board, Pilot
+from common.scouting.matchup_plan import build_matchup_plan
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from pilot_helpers import (
@@ -369,6 +370,22 @@ def test_gust_target_breaks_ties_toward_an_evolving_threat():
     opts = p.explain(obs).options
     assert opts[1].tactical > opts[0].tactical    # evolving-threat pre-evo edges the dead-end
     assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0013")
+def test_gust_matchup_priority_is_a_subprize_tiebreak_over_the_plan():
+    # ADR-0051: the gust target tie-break reads the unified MatchupPlan — prefer dragging up the
+    # higher-priority body (wincon > its pre-evo), sub-prize (never overrides a real prize gap), and
+    # clamped to POSITIVE so a KO-able draw engine (`avoid`) is still worth its prize (0, not negative).
+    plan = build_matchup_plan(brief_roles={WINCON: "prize_liability", PREEVO_THREAT: "fragile_preevo"},
+                              draw_engine_ids={DEAD_END}, gamma=1.0)
+    board = Board(matchup_plan=plan)
+    p = _pilot()
+    pl = p._gust_matchup_priority(board, {"id": WINCON})
+    pe = p._gust_matchup_priority(board, {"id": PREEVO_THREAT})
+    assert 0 < pe < pl < 1                                          # ordered, both sub-prize
+    assert p._gust_matchup_priority(board, {"id": DEAD_END}) == 0   # avoid clamps to 0 (a KO is a KO)
+    assert p._gust_matchup_priority(board, {"id": 999}) == 0        # unroled body
 
 
 @pytest.mark.req("REQ-GUST-0002")

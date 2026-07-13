@@ -16,8 +16,21 @@ import json
 import sys
 from pathlib import Path
 
-_TARGET_ROLES = {"fragile_preevo", "prize_liability", "engine"}
+_TARGET_ROLES_FALLBACK = {"fragile_preevo", "prize_liability", "disruption_target", "engine", "avoid"}
 _REQUIRED = ("slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets")
+
+
+def _target_roles(repo: Path) -> set[str]:
+    """Legal `target` roles, sourced from the Brief schema's role enum so this list can never drift
+    from src/common/scouting/brief.schema.json (ADR-0051 added `disruption_target` / `avoid` there but
+    this hardcoded set was missed — the drift that would have rejected an enriched Brief). Falls back
+    to the known set if the schema can't be read."""
+    try:
+        schema = json.loads((repo / "src" / "common" / "scouting" / "brief.schema.json").read_text(encoding="utf-8"))
+        enum = schema["properties"]["targets"]["items"]["properties"]["role"]["enum"]
+        return set(enum) or set(_TARGET_ROLES_FALLBACK)
+    except (OSError, KeyError, json.JSONDecodeError):
+        return set(_TARGET_ROLES_FALLBACK)
 
 
 def _find_repo(start: Path) -> Path:
@@ -54,6 +67,7 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
     """Return (hard_problems, warnings)."""
     problems: list[str] = []
     warnings: list[str] = []
+    target_roles = _target_roles(repo)
 
     if not brief_path.exists():
         return ([f"brief not found: {brief_path}"], warnings)
@@ -118,8 +132,8 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
     for t in brief.get("targets", []) or []:
         if not isinstance(t, dict) or not {"card", "role", "why"} <= set(t):
             problems.append(f"target entry must have card+role+why: {t!r}"); continue
-        if t["role"] not in _TARGET_ROLES:
-            problems.append(f"target {t['card']!r} role {t['role']!r} not in {sorted(_TARGET_ROLES)}")
+        if t["role"] not in target_roles:
+            problems.append(f"target {t['card']!r} role {t['role']!r} not in {sorted(target_roles)}")
         if names is not None and _norm(t["card"]) not in names:
             problems.append(f"target card not in the deck: {t['card']!r}")
 

@@ -9,6 +9,9 @@ _POSTURE_UNFAVORED = 0.45     # matchup favorability at/below which a straight r
 _POSTURE_FAVORED = 0.55       # ...at/above which deny the opponent outs (the favored half's mirror
                               # constant; 0.45-0.55 = the noise band around the 0.5 prior)
 _POSTURE_MIN_COVERAGE = 0.25  # min matchup coverage to trust the favorability prior
+_STACKED_HAND = 6             # opponent hand size at/above which a `draw` engine has visibly STACKED
+                              # resources (opening hand 7, +1/turn) — worth a hand_disruption Supporter
+                              # to strip; below it HOLD (don't gift a fresh hand). ADR-0051 Phase 3b, ladder-tunable
 
 HYPOTHESES = [
     Hypothesis(
@@ -68,4 +71,27 @@ HYPOTHESES = [
         and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
         and c.board.favorability >= _POSTURE_FAVORED,
         weight=-15, status="testing"),
+    Hypothesis(
+        id="strip-the-stacked-engine-hand",
+        rationale="ADR-0051 Phase 3b (proactive disruption): play a `hand_disruption` Supporter "
+                  "(Judge / Iono / Harlequin) to strip the opponent's stacked hand on their draw "
+                  "ENGINE's swing turn — when a `draw`-tagged engine is in play "
+                  "(`opp_draw_engine_in_play`, Dudunsparce / Budew class) AND their hand has stacked "
+                  "to `_STACKED_HAND`+ cards AND it exceeds mine (the don't-gift-a-refresh guard: we "
+                  "net-strip resources instead of handing them a fresh hand). Below the threshold the "
+                  "rule stays silent — that IS the HOLD. Scoped to draw-engine decks: a hand-size "
+                  "attacker is the separate `play-harlequin-vs-hand-size` trigger. Rides "
+                  "`hold-wincon-dont-shuffle` (a `shuffle_hand` refresh is suppressed while my own "
+                  "win-condition is in hand) and `_finish_turn_last` tier 3 (shuffle sequences AFTER "
+                  "the attach), so it never overrides a KO or buries my setup. The don't-gift guard "
+                  "(theirs > mine) applies ONLY to a SYMMETRIC `shuffle_hand` refresh (Judge / Iono — "
+                  "refills both hands); a ONE-SIDED disruption (strips the opponent only, no "
+                  "`shuffle_hand`) can't gift a fresh hand, so it fires regardless of my hand size.",
+        when=lambda c: c.option_type == _PLAY
+        and "hand_disruption" in c.tags
+        and c.board.opp_draw_engine_in_play
+        and c.board.opp_hand_size >= _STACKED_HAND
+        and (c.board.opp_hand_size > c.board.my_hand_size   # symmetric refresh: only when net-positive
+             or "shuffle_hand" not in c.tags),              # one-sided strip: no gift, fire regardless
+        weight=22, status="testing"),
 ]

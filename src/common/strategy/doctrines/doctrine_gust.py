@@ -19,10 +19,16 @@ _STALL_RETREAT = 1           # min retreat cost of a STRANDABLE energyless body:
                              # spend a turn's attach to retreat it — real tempo cost even at 1 (ep82754875)
 _EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so
                              # never overrides a real prize difference)
-_BRIEF_GUST_DENIAL = 0.4     # γ-scaled sub-prize tie-break for gusting a Brief target (ADR-0038):
-                             # fragile_preevo, or engine gated on opp_is_engine_dependent. 0.4 so the
-                             # worst stack (0.5 evolving + 0.4γ brief) stays < 1 prize — the Brief
-                             # aligns the gust pick with the snipe order, never beats a prize difference
+_MATCHUP_GUST_SCALE = 0.004  # ADR-0051: scale a MatchupPlan role priority (base ≤100, γ-pre-scaled) into
+                             # the gust sub-prize tie-break band — prize_liability 100 → 0.4, so the worst
+                             # stack (0.5 evolving + 0.4 matchup) stays < 1 prize and never overrides a
+                             # real prize difference. Aligns the gust target pick with the snipe order.
+_WINCON_DENIAL_PRIZES = 1.5  # ADR-0051 Phase 3b: extra effective prizes for gusting the opponent's
+                             # WIN-CONDITION line (its body or its pre-evo) — a fragile-wincon matchup is
+                             # won by denying the line, not prize count, so value the crib wincon as ~2
+                             # prizes not 1. Sits ABOVE a +1 prize gap (drag the pre-evo over a bigger inert
+                             # body) but BELOW the live-threat denial (`_gust_target_denial`, a full prize)
+                             # and any lethal KO. γ-scaled + role-scoped; ladder-tunable.
 
 
 class GustMixin:
@@ -72,7 +78,8 @@ class GustMixin:
         if not self._can_ko(my_stat, target):
             return 0
         return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
-                + self._gust_forward_denial(target) + self._gust_brief_denial(board, target)
+                + self._gust_forward_denial(target) + self._gust_matchup_priority(board, target)
+                + self._gust_wincon_denial(board, target)
                 + self._gust_snipe_synergy(board, my_stat, target))
 
     def _gust_snipe_synergy(self, board, my_stat, target: dict) -> int:
@@ -120,23 +127,33 @@ class GustMixin:
             return 0
         return _EVOLVING_GUST_DENIAL if (fwd(cid) or 0) >= _EVOLVING_THREAT_DMG else 0
 
-    def _gust_brief_denial(self, board, target: dict) -> float:
-        """γ-scaled sub-prize tie-break for gusting a Matchup-Brief target (ADR-0038): a
-        `fragile_preevo` (payoff-denial — the gust+KO the Brief doctrine names), or an `engine` body
-        when the Brief asserts `opp_is_engine_dependent`. Keyed on the Brief's resolved role ids so
-        the gust pick agrees with the sharpened snipe order; γ and the per-lever kill-switches keep
-        it silent vs an unrecognized opponent or an unwired agent. 0 otherwise."""
+    def _gust_matchup_priority(self, board, target: dict) -> float:
+        """ADR-0051 sub-prize tie-break for a gust TARGET: among equal-value KO-able bodies, prefer
+        dragging up the MatchupPlan's highest-priority one (the wincon, its pre-evo, or a curated
+        disruption target), so the gust pick agrees with the snipe order. Only POSITIVE priorities
+        apply — a KO-able body is worth its prize regardless of any `avoid` — and the scale keeps it
+        << 1 prize, so it never overrides a real prize difference. 0 when the plan is inert
+        (`matchup_targeting` off / unrecognized opponent). Supersedes the ADR-0038 `_gust_brief_denial`
+        (fragile_preevo/engine only), now covering every role via the one spine."""
         cid = (target or {}).get("id")
-        gamma = getattr(board, "posture_confidence", 0.0)
-        if cid is None or not gamma:
-            return 0
-        role = board.brief_target_role(cid)
-        if self.brief_preevo and role == "fragile_preevo":
-            return gamma * _BRIEF_GUST_DENIAL
-        if (self.brief_engine and role == "engine"
-                and bool(board.opp_property("opp_is_engine_dependent", False))):
-            return gamma * _BRIEF_GUST_DENIAL
-        return 0
+        if cid is None:
+            return 0.0
+        return max(0.0, board.matchup_plan.priority(cid)) * _MATCHUP_GUST_SCALE
+
+    def _gust_wincon_denial(self, board, target: dict) -> float:
+        """ADR-0051 Phase 3b: value gusting the opponent's WIN-CONDITION line — its body
+        (`prize_liability`) or its pre-evolution (`fragile_preevo`) — above a plain prize. A
+        fragile-wincon matchup is won by denying that line, not by prize count, so a wincon-line gust
+        target is worth ~`_WINCON_DENIAL_PRIZES` extra effective prizes: enough to drag the 1-prize
+        crib pre-evo up over a bigger INERT body, while still yielding to the live-threat denial term
+        (a full prize) and any lethal KO. γ-scaled (silent on an unrecognized opponent — those roles
+        only come from the γ-gated Read/Brief tiers) and role-scoped to the two wincon-line roles, so a
+        plain engine / disruption target / draw engine gets none of it. 0 when the plan is inert."""
+        cid = (target or {}).get("id")
+        role = board.matchup_plan.role(cid) if cid is not None else None
+        if role not in ("prize_liability", "fragile_preevo"):
+            return 0.0
+        return _WINCON_DENIAL_PRIZES * board.matchup_plan.gamma
 
     def _gust_stall_target_tactical(self, obs: dict, select: dict, board, option: dict) -> float:
         """Small value for a defensive stall-gust TARGET — at a SWITCH select, an ENERGYLESS,

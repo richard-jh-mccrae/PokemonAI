@@ -23,7 +23,7 @@ a deterministic validator, not per-Hypothesis trigger checks.
 | §1 how-it-wins tempo | `tempo` (`fast`/`midrange`/`slow`) + `summary` |
 | §3 seam → `opponent_properties` | `opponent_properties: { "<key>": <value> }` — each key registered |
 | §4 threats | `threats: [ { card, why } ]` |
-| §4 targets | `targets: [ { card, role, why } ]` — role ∈ `fragile_preevo` / `prize_liability` / `engine` |
+| §4 targets | `targets: [ { card, role, why } ]` — role ∈ `prize_liability` / `fragile_preevo` / `disruption_target` / `engine` (neutral) / `avoid` (see SKILL.md for the semantics; all feed the ADR-0051 MatchupPlan) |
 | index.json | `slug`, `label`, `covers` (verbatim) |
 | §2 sources | `sources: [ "name — url" ]` |
 
@@ -33,9 +33,11 @@ describing the lever it *will* drive, and **call it out in the diff**. A minted 
 (a forward contract) — the consumer must wire it before it does anything, so until then it changes no
 play. Prefer reusing an existing key first; the vocabulary stays small on purpose (reuse-first, not
 mint-rarely). Do **not** build the consumer here — that's evidence-gated downstream (ADR-0026).
-**Asserting a WIRED key is a high-bar call** — check the registry's `consumer` field: e.g.
-`opp_is_engine_dependent` drives the ADR-0038 engine lever, and the stress A/B priced a wrong assertion
-at ~4% win-rate. Assert only what the weakness grill actually established.
+**Asserting a WIRED key is a high-bar call** — check the registry's `consumer` field and assert only a
+key whose consumer is actually live, since a wrong assertion changes real play (a stress A/B once priced
+a wrong assertion at ~4% win-rate). Assert only what the weakness grill actually established. (Historical
+note: `opp_is_engine_dependent` drove the old ADR-0038 engine lever, now RETIRED — engines are hunted via
+the `disruption_target` target role, ADR-0051; that key is UNWIRED again.)
 
 ## 3 · Gate — the deterministic validator
 
@@ -53,19 +55,21 @@ Fix every hard failure; resolve every warning consciously.
 
 ## 4 · Suite-green (cheap safety)
 
-`python -m pytest tests/ -q` should stay green. A Brief is LIVE data since ADR-0038 — the Pilot's
-`brief_preevo`/`brief_engine` levers score off its `fragile_preevo`/`engine` targets and
-`opp_is_engine_dependent` (see docs/scouting.md's consumer table) — and the suite pins the shipped
-dir's covers-collision freedom, so run it, don't assume.
+`python -m pytest tests/ -q` should stay green. A Brief is LIVE data — the Pilot resolves its
+`targets` roles into the ADR-0051 **MatchupPlan** spine, consumed by the bench snipe
+(`_snipe_matchup_tactical`), the gust target pick (`_gust_matchup_priority`), and the wincon-denial gust
+(`_gust_wincon_denial`), all γ-gated under the single `matchup_targeting` kill-switch (the old
+ADR-0038 `brief_preevo`/`brief_engine`/`opp_is_engine_dependent` levers are retired). The suite also pins
+the shipped dir's covers-collision freedom, so run it, don't assume.
 
 ## 5 · Present the diff — the human commits
 
 Show `src/common/scouting/briefs/<slug>.json` (+ any `src/common/scouting/opponent_properties.json` additions) as a
 diff, with a one-line note: the archetype, its `covers` count, the seams it encodes (`opponent_properties`
 keys), and the validator result. Note any newly-minted key as "needs consumer wiring." The human reviews
-and commits. The Brief's effect on play is confirmed later by A/B (ADR-0038's evidence gate) — the wired
-levers (`fragile_preevo`/`engine` targets, `opp_is_engine_dependent`) act as soon as the Brief ships;
-the skill never self-validates gameplay impact.
+and commits. The Brief's effect on play is validated later on the ladder (ship-and-refine) — the
+MatchupPlan spine acts on its `targets` roles as soon as the Brief ships (`matchup_targeting` default ON,
+γ-gated); the skill never self-validates gameplay impact.
 
 **Commit-message convention:** every matchup-genie commit message **begins with `matchup: `** (e.g.
 `matchup: Cinderace / Mega Starmie ex counterplay doctrine`). This applies whether the human commits or
