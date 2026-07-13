@@ -1,5 +1,13 @@
 # Deferred: the retreat-Tool-enabled lethal (`lethal-retreat-enabler`)
 
+> **BUILT 2026-07-13 (`retreat_enabler_lethal`, default ON, kill-switched).** `_family_win_candidates`
+> tier 6 recognizes the win (a benched attacker wins if promoted + the Active can't retreat now + a
+> `retreatReduction` Tool the deck definitely holds frees it); `_grab_retreat_tool_lethal_tactical` +
+> `_attach_retreat_tool_lethal_tactical` (both KO_SCORE) steer the cascade (Petrel search → Air Balloon,
+> attach → Active); `_can_retreat` now credits an attached retreat Tool (DoD #2). Fixture re-tagged
+> `correct=[0]`, category `missed_win` (DoD #1). decide() LOCKS the engine-verified win; `engine_confirms(f15)=True`;
+> counter-fixtures don't regress (DoD #4). Tests: `tests/strategy/test_planner_boost_promote.py`.
+
 **Status:** deferred at apply time, 2026-07-10 (`/update-strategy`). Proposal:
 `data/strategy/proposals/blunder-20260709-mega_lucario.md#lethal-retreat-enabler`.
 Correction: `84071010:f15`. Fixture: `tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json`.

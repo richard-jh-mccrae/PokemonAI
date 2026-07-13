@@ -161,3 +161,43 @@ def test_boost_lethal_inert_on_mega_starmie_f110():
     fx = _fixture("ms_lethal_recover_energy_to_win_f110")
     pilot = _pilot("mega_starmie", promote_ko_aware=True, boost_lethal=True)
     assert pilot._engine_confirms_win(fx["obs"], [fx["correct"]], max_cascade=40) is True
+
+
+# ─────────────────── retreat-enabler lethal (ml f15, retreat_enabler_lethal) ───────────────────
+
+@pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
+def test_retreat_enabler_lethal_f15_locks_and_wins_end_to_end_when_flag_on():
+    """ml f15 (a thrown turn-3 WIN): Team Rocket's Petrel -> tutor Air Balloon -> attach it to the Active
+    Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80,
+    opp bench empty -> WIN. With ``retreat_enabler_lethal`` ON the tier LOCKS the win (planned.goal=='win',
+    next_step==[0]) and the grab/attach steering drives the full cascade to a real engine WIN."""
+    fx = _fixture("ml_dead_hand_full_refresh_f15")
+    pilot = _pilot("mega_lucario", promote_ko_aware=True, retreat_enabler_lethal=True)
+    d = pilot.explain(fx["obs"])
+    assert d.chosen == [0]
+    assert d.planned is not None and d.planned.goal == "win" and d.planned.verified is True
+    assert engine_confirms(fx, pilot) is True
+
+
+@pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
+def test_retreat_enabler_lethal_off_does_not_lock_f15():
+    """Soundness bookend: with the flag OFF (default) the tier is inert — no win LOCK, and the
+    ``[correct]``-only cascade REFUTES (closed-form recognition alone never composes the Petrel ->
+    Air Balloon -> retreat -> promote steering)."""
+    fx = _fixture("ml_dead_hand_full_refresh_f15")
+    pilot = _pilot("mega_lucario", promote_ko_aware=True)   # retreat_enabler_lethal defaults False
+    d = pilot.explain(fx["obs"])
+    assert d.planned is None or d.planned.goal != "win"
+    assert engine_confirms(fx, pilot, line=[0]) is False
+
+
+@pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
+def test_retreat_enabler_lethal_counter_fixtures_do_not_regress():
+    """The three shipped lethal counter-fixtures still behave with the tier ON: f24/f110 confirm a WIN,
+    f26/f48 stay KO-not-win (engine_confirms is a WIN gate, so it correctly refutes them by category —
+    they ship via promote_ko_aware, not this gate)."""
+    on = dict(promote_ko_aware=True, boost_lethal=True, retreat_enabler_lethal=True)
+    assert engine_confirms(_fixture("ml_lethal_retreat_boost_to_ko_f24"), _pilot("mega_lucario", **on)) is True
+    assert engine_confirms(_fixture("ms_lethal_recover_energy_to_win_f110"), _pilot("mega_starmie", **on)) is True
+    assert engine_confirms(_fixture("ml_lethal_recover_energy_retreat_ko_f26"), _pilot("mega_lucario", **on)) is False
+    assert engine_confirms(_fixture("ml_lethal_recover_energy_via_gong_f48"), _pilot("mega_lucario", **on)) is False

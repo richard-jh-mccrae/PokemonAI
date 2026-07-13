@@ -140,6 +140,20 @@ HYPOTHESES = [
                 and not c.attach_feeds_firing_accel)),   # firing accelerator isn't "spent" — feed it
         weight=-30, status="assumed"),
     Hypothesis(
+        id="feed-the-line-for-disruptor-lock",
+        rationale="Step 1 of the OFFENSIVE item-lock maneuver (dragapult f20): attach the turn's Energy "
+                  "to the fragile line-preevo ACTIVE so it can retreat into a benched item_lock opener "
+                  "(Budew) and Itchy-Pollen the opponent's Item turn (`can_lock_line_with_disruptor`). "
+                  "The energy is DELIBERATELY spent to pay the enabling retreat, so this overcomes "
+                  "`dont-feed-the-doomed` (which reads the early line-preevo Active as doomed) — same as "
+                  "`retreat-to-wall-the-line` positively endorses the retreat step. +20 nets the Active "
+                  "above a bench recipient (+15) despite the −30 doom penalty. Silent for decks with no "
+                  "benched item-lock opener; kill-switched via the signal (`disruptor_lock_maneuver`).",
+        when=lambda c: c.board.can_lock_line_with_disruptor and (
+            (c.select_context == _ATTACH_FROM and c.option_area == _ACTIVE)
+            or (c.option_type == _ATTACH and c.attach_target_area == _ACTIVE)),
+        weight=20, status="testing"),
+    Hypothesis(
         id="dont-waste-discard-energy",
         rationale="A `discard_eot` Energy (e.g. Ignition) is wasted unless the recipient attacks THIS "
                   "turn and actually needs the burst — don't attach to a benched Pokémon, turn-1-going-"

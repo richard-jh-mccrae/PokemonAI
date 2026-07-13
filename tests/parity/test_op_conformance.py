@@ -25,6 +25,23 @@ UNPINNED: set[str] = {
     # Pinned instead by the committed green cabt fixture episode-83970983 (Riptide clean,
     # the op fires) in test_cabt_replays.py.
     "xShuffleDiscardEnergyToDeck",
+    # Powerglass's end-of-turn attach-from-discard is a between-turns tool passive
+    # capture_card can't stage (needs an Active Powerglass holder + a Basic Energy in
+    # the discard at the owner's end of turn). Pinned by the committed green cabt fixture
+    # episode-83119861 (Powerglass clean, the op fires) in test_cabt_replays.py.
+    "xEotAttachEnergyFromDiscard",
+    # The 2026-07-13 fan-out ops — each is verified by a committed cabt fixture in
+    # test_cabt_replays.py (clean end-to-end for the CLEAN cards; a partial-replay
+    # _guard for the ADVANCED cards whose episode has a later unrelated blocker).
+    # capture_card can't easily stage most (a specific board/hand/discard state).
+    "xDiscardEnergyAttachChoose",   # Blaziken ex Seething Spirit — fixture 83486999 (clean)
+    "xDiscardToolsInPlay",          # Tool Scrapper — fixture 83665798 (clean)
+    "xFirstEffectChoose",           # Kieran "Choose 1" — fixture 83457493 (clean)
+    "xCurseBlast",                  # Dusclops/Dusknoir Cursed Blast — offer fixture 85605555
+                                    # (clean) + self-KO guard 83689598
+    "xOppHandRevealDiscardMulti",   # Eri — guard 82225138 (advanced)
+    "xBothBottomHandCoinDraw",      # Lucian — guard 85687339 (advanced)
+    "xOppHandRevealChooseFiltered", # Energy Swatter — guard 82006648 (advanced)
 }
 
 

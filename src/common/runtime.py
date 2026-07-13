@@ -36,6 +36,10 @@ PROFILE = {
     "lethal_veto": True,            # ADR-0037 replay the verified cascade
     "promote_ko_aware": True,       # Proposal C: KO-aware, boost-inclusive promote pick
     "boost_lethal": True,           # Proposal B: promote-+-damage-boost-Item win tier
+    "retreat_enabler_lethal": True,  # ml f15: tutor/attach a retreat Tool to free a winning
+                                    # retreat into a benched attacker (engine-confirmed on lock)
+    "disruptor_lock_maneuver": True,  # dragapult f20: offensive T2 item-lock retreat-into-Budew
+                                    # (ship-and-refine — kill-switch if its ladder value is weak)
     "matchup_targeting": True,      # ADR-0051 MatchupPlan target-priority spine (supersedes the
                                     # retired ADR-0038 brief_preevo/brief_engine levers)
     "objectives_race": True,        # ADR-0040 Tier-3 KO Race

@@ -418,6 +418,63 @@ class PlannerMixin:
                         yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                        rationale="lethal (boost): retreat into the boosted KO attacker wins")
                         break
+        # tier 6 (`retreat_enabler_lethal`): a benched attacker ALREADY wins if promoted, but the Active
+        # can't retreat now — a retreat-reduction Tool (Air Balloon: {C}{C} less) frees the retreat. Drive
+        # the Tool play (already in hand), else a Trainer-tutor Supporter (Petrel: "search a Trainer") whose
+        # deck DEFINITELY still holds a covering Tool (ml f15: Petrel -> Air Balloon -> onto Makuhita -> free
+        # retreat -> promote Mega Lucario ex -> Aura Jab 130 >= Riolu 80, opp bench empty). The tutor pick ->
+        # Tool -> Active attach -> retreat -> promote cascade rides re-planning + the steering hooks; SOUND on
+        # the tracker's positive deck certainty, and engine-verified on lock (a phantom is dropped).
+        if (self.retreat_enabler_lethal and ma is not None and not self._can_retreat(ma)
+                and self._bench_body_wins_if_promoted(obs, board, opp, me, ma)):
+            need = self._retreat_shortfall(ma)
+            for i, o in enumerate(options):
+                if i in seen or o.get("type") != _PLAY or need <= 0:
+                    continue
+                cid = self._option_card_id(obs, select, o)
+                st = self.stats.get(cid) if (self.stats and cid is not None) else None
+                tool_in_hand = st is not None and getattr(st, "retreatReduction", 0) >= need
+                tutorable = (self._is_trainer_tutor(obs, select, o)
+                             and self._deck_has_retreat_tool(board, need))
+                if tool_in_hand or tutorable:
+                    seen.add(i)
+                    yield TurnLine(next_step=[i], goal="win", kind="unlock",
+                                   rationale="lethal (unlock): the retreat Tool frees the retreat into the winning KO body")
+
+    def _bench_body_wins_if_promoted(self, obs, board, opp, me, ma) -> bool:
+        """SOUND: some benched body, promoted with its CURRENT Energy (a freed retreat brings it Active),
+        takes a min-bound winning KO of the opponent's Active. The retreat-enabler tier's win test — the
+        retreat itself is supplied by a Tool, not modeled here (``_develop_wins`` values the body as if
+        already Active, the retreated Active provably benched via ``_promote_bench_names``)."""
+        return any(self._develop_wins(obs, board, opp, p.get("id"), len(p.get("energies") or []),
+                                      body=p, promote_bench_names=self._promote_bench_names(me, j, ma))
+                   for j, p in enumerate(me.get("bench") or []) if p)
+
+    def _retreat_shortfall(self, ma) -> int:
+        """Energy the Active is SHORT of paying its printed Retreat Cost this turn (>0 iff it can't retreat
+        now). A retreat-reduction Tool whose reduction covers this frees the retreat (Air Balloon −2 on a
+        retreat-2 Makuhita with 0 attached -> shortfall 2 -> free)."""
+        if not (ma and self.stats):
+            return 0
+        st = self.stats.get(ma.get("id"))
+        if st is None:
+            return 0
+        return max(0, getattr(st, "retreatCost", 0) - len(ma.get("energies") or []))
+
+    def _is_trainer_tutor(self, obs, select, option) -> bool:
+        """This PLAY option is a `tutor_trainer` Supporter (Petrel class) — it searches ANY Trainer card
+        into hand, so it can certainly fetch a specific retreat Tool the deck definitely still holds."""
+        cid = self._option_card_id(obs, select, option)
+        return bool(cid is not None and self.functions and "tutor_trainer" in self.functions.tags(cid))
+
+    def _deck_has_retreat_tool(self, board, need: int) -> bool:
+        """SOUND: a retreat-reduction Tool whose reduction covers ``need`` is PROVABLY still in my deck
+        (the match tracker's positive certainty, `Board.deck_definitely_has`) — never a probable fetch."""
+        if not self.stats:
+            return False
+        return any(st is not None and getattr(st, "retreatReduction", 0) >= need
+                   and board.deck_definitely_has(cid)
+                   for cid in set(self.deck) for st in (self.stats.get(cid),))
 
     def _develop_wins(self, obs, board, opp, attacker_id, energy, body=None,
                       extra_type=None, extra_units: int = 0,

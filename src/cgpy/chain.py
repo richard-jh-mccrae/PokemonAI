@@ -165,7 +165,8 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
     for c in conds:
         op = c["op"]
         if op == "benchSpace":
-            if len(b.bench) >= b.bench_max:
+            from .options import effective_bench_max
+            if len(b.bench) >= effective_bench_max(gs, seat):
                 return False
         elif op == "benchExists":                  # Switch: needs a benched Pokémon
             if not b.bench:                        # (pinned v2_ml_mirror_5101 f22)
@@ -178,6 +179,9 @@ def check_legal(gs: GameState, seat: int, conds: list, pokemon=None) -> bool:
                 return False
         elif op == "oppBenchExists":
             if not gs.players[1 - seat].bench:
+                return False
+        elif op == "toolInPlay":                    # Tool Scrapper: a tool anywhere in play
+            if not any(p.tools for s2 in (seat, 1 - seat) for p in gs.in_play(s2)):
                 return False
         elif op == "oppEnergyExists":
             if not any(p.energy for p in gs.in_play(1 - seat)):
@@ -308,6 +312,9 @@ def _after_program(gs: GameState, fr: EffectFrame) -> None:
     elif fr.kind == "attack_pre":
         from .turn import _attack_damage_apply
         _attack_damage_apply(gs, fr.seat, fr.vars["attack_id"], fr.vars)
+    elif fr.kind == "eot_tool":
+        from .turn import _post_end_turn
+        _post_end_turn(gs, fr.seat)
     elif fr.kind in ("play", "ability"):
         from .turn import flush_triggers
         flush_triggers(gs, fr.seat)
@@ -431,7 +438,8 @@ def op_deck_to_hand_and_shuffle(gs, fr, args) -> bool:
 def op_deck_to_bench_and_shuffle(gs, fr, args) -> bool:
     seat = fr.seat
     b = gs.players[seat]
-    room = b.bench_max - len(b.bench)
+    from .options import effective_bench_max
+    room = effective_bench_max(gs, seat) - len(b.bench)
     args = dict(args, max=min(args.get("max", 1), room))   # maxCount clamps by bench
     if not _select_from_deck(gs, fr, args, SelectContext.TO_BENCH):   # room (pinned
         return False                                                  # v2_ml_dx_5501 f14)
@@ -1030,16 +1038,24 @@ def op_opponent_switches(gs, fr, args) -> bool:
 
 def op_mill(gs, fr, args) -> bool:
     """"Discard the top N cards of your/your opponent's deck." — top of deck = list
-    end. ``nVar: "heads_count"``: one per recorded heads (Wreak Havoc class)."""
+    end. ``nVar: "heads_count"``: one per recorded heads (Wreak Havoc class). The
+    discarded serials/order bind from the recorded DECK->DISCARD reveal (rng.mill_bind)
+    so a god-free replay mills native's true top-N, not cgpy's post-shuffle order.
+    ``record: "<var>"``: stash the milled serials in a frame var for a downstream damage
+    scale ("... for each Basic {W} Energy card you discarded" — Hammer-lanche)."""
     seat = fr.seat if args.get("who", "self") == "self" else 1 - fr.seat
     b = gs.players[seat]
     if args.get("nVar") == "heads_count":
         args = dict(args, n=fr.vars.get("heads_count", 0))
-    for _ in range(min(args.get("n", 1), len(b.deck))):
-        serial = b.deck.pop()
+    n = min(args.get("n", 1), len(b.deck))
+    milled = gs.rng.mill_bind(seat, b.deck, b.prize, n)
+    for serial in milled:
+        b.deck.remove(serial)
         b.discard.append(serial)
         gs.move_card(serial, AreaType.DECK, AreaType.DISCARD, seat=seat,
                      visible_to_owner=True, visible_to_opponent=True)
+    if args.get("record"):
+        fr.vars[args["record"]] = list(milled)
     return True
 
 
@@ -1225,6 +1241,30 @@ def _attach_from_deck(gs, seat, energy, target, *, zone=None) -> None:
     gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
              "cardId": gs.card_id(energy), "serial": energy,
              "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+
+
+def op_eot_attach_energy_from_discard(gs, fr, args) -> bool:
+    """Powerglass end-of-turn tool: "you may attach a Basic Energy card from your
+    discard pile to this (Active) holder." Optional (ctx ATTACH_TO, min 0 / max 1,
+    effect = the tool card — pinned episode-82845418 f11). No matching discard energy
+    (or no Active) → no pose. fr.source = the tool serial; the holder is the seat's
+    Active Pokémon (this tool only runs when its holder is Active)."""
+    seat = fr.seat
+    b = gs.players[seat]
+    holder = b.active
+    if "answer" not in fr.vars:
+        opts = [opt_card(AreaType.DISCARD, i, seat) for i, s in enumerate(b.discard)
+                if _card_matches(gs, s, args.get("filter", {}))]
+        if not opts or holder is None:
+            return True
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+             options=opts, min_count=0, max_count=1, effect_card=fr.source)
+        return False
+    ans = fr.vars.pop("answered_options")
+    fr.vars.pop("answer")
+    if ans and holder is not None:
+        _attach_from_deck(gs, seat, b.discard[ans[0]["index"]], holder, zone=b.discard)
+    return True
 
 
 def op_deck_energy_attach_distribute(gs, fr, args) -> bool:
@@ -2246,6 +2286,16 @@ def op_rare_candy_evolve(gs, fr, args) -> bool:
     target = _target_of(gs, seat, o["inPlayArea"], o["inPlayIndex"])
     b.hand.remove(serial)
     _apply_evolution(gs, seat, serial, target)
+    # A skip-evolve still "plays this Pokémon from your hand to evolve", so the Stage 2's
+    # onEvolve triggered ability fires (Alakazam Psychic Draw, Marnie's Grimmsnarl ex Punk
+    # Up) — same trigger the MAIN evolve path queues. Posed by _after_program's flush after
+    # the Candy silently discards (pinned ep-83688805 f16: EVOLVE then ctx43 ask, no
+    # Candy-discard log).
+    hook = (def_for(gs.card_id(serial)) or {}).get("onEvolve")
+    if hook and check_legal(gs, seat, hook.get("legal", [])):
+        gs.pending_triggers.append({
+            "cardId": gs.card_id(serial), "serial": serial, "source": serial,
+            "ops": [{"op": "xActivateAsk", "program": hook["program"]}]})
     return True
 
 
@@ -3200,7 +3250,352 @@ def op_move_energy_own(gs, fr, args) -> bool:
     return True
 
 
+def op_discard_energy_attach_choose(gs, fr, args) -> bool:
+    """Seething Spirit (Blaziken ex 326, pinned episode-83486999 f80-f81 /
+    episode-83487181 f65-f66): "attach a Basic Energy card from your discard pile to 1
+    of your Pokemon." Mirrors op_hand_energy_attach_choose but the source zone is the
+    DISCARD pile. Two selects: the discard energy (ctx ATTACH_TO, type CARD, matching
+    DISCARD indices ascending, effect = the ability holder / fr.source), then the holder
+    (ctx ATTACH_FROM, in-play order via _targets, contextCard = the picked energy). One
+    ATTACH log. Silently no-ops when the discard has no matching Basic Energy."""
+    from .options import _targets
+    seat = fr.seat
+    b = gs.players[seat]
+    if "picked" not in fr.vars:
+        if "answer" not in fr.vars:
+            opts = _zone_options(gs, seat, b.discard, AreaType.DISCARD,
+                                 args.get("filter", {}))
+            if not opts:
+                return True
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
+                 options=opts, min_count=1, max_count=1, effect_card=fr.source)
+            return False
+        fr.vars["picked"] = b.discard[fr.vars.pop("answered_options")[0]["index"]]
+        fr.vars.pop("answer")
+    energy = fr.vars["picked"]
+    if "answer" not in fr.vars:
+        opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
+                if _card_matches(gs, p.top, args.get("targetFilter", {}))]
+        if not opts:
+            return True
+        pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
+             options=opts, min_count=1, max_count=1,
+             context_card=energy, effect_card=fr.source)
+        return False
+    t_o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    fr.vars.pop("picked")
+    from .turn import _target_of
+    target = _target_of(gs, seat, t_o["area"], t_o["index"])
+    b.discard.remove(energy)
+    target.energy.append(energy)
+    gs.note_attach(energy)
+    gs.emit({"type": int(LogType.ATTACH), "playerIndex": seat,
+             "cardId": gs.card_id(energy), "serial": energy,
+             "cardIdTarget": gs.card_id(target.top), "serialTarget": target.top})
+    return True
+
+def op_discard_tools_in_play(gs, fr, args) -> bool:
+    """Tool Scrapper: choose up to 2 Pokemon Tools attached to Pokemon in play (yours or
+    the opponent's) and discard them. Options enumerate own mons first (Active then bench),
+    then the opponent's, each holder's tools in attach order; option type TOOL_CARD carries
+    {area,index,playerIndex,toolIndex}. One pose: ctx DISCARD_TOOL_CARD(27), type
+    ATTACHED_CARD(2), min 1, max min(2, tool_count) (pinned ms 83665798 f29 / 83239925 f21:
+    single tool -> min1 max1, effect = the played card). Each pick moves the tool
+    TOOL->its OWNER's DISCARD (MOVE_CARD, playerIndex=owner, pinned f30/f22); an HP-bonus
+    tool reverses its holder bonus, exactly inverting the attach (Hero's Cape -100, damage
+    preserved). Menu-gated on >=1 tool in play (check_legal 'toolInPlay')."""
+    seat = fr.seat
+    entries = []                                   # (owner, area, index, toolIndex)
+    for owner in (seat, 1 - seat):
+        b = gs.players[owner]
+        rows = ([(int(AreaType.ACTIVE), 0, b.active)] if b.active is not None else []) + \
+            [(int(AreaType.BENCH), i, p) for i, p in enumerate(b.bench)]
+        for area, idx, p in rows:
+            for ti in range(len(p.tools)):
+                entries.append((owner, area, idx, ti))
+    if not entries:                                # no tools -> silent no-op
+        return True
+    if "answer" not in fr.vars:
+        options = [{"type": int(OptionType.TOOL_CARD), "area": area, "index": idx,
+                    "playerIndex": owner, "toolIndex": ti}
+                   for owner, area, idx, ti in entries]
+        pose(gs, seat, type=SelectType.ATTACHED_CARD,
+             context=SelectContext.DISCARD_TOOL_CARD, options=options,
+             effect_card=fr.source, min_count=1, max_count=min(2, len(options)))
+        return False
+    answered = fr.vars.pop("answered_options")
+    fr.vars.pop("answer")
+    picks = []                                     # resolve serials before mutating
+    for o in answered:
+        b = gs.players[o["playerIndex"]]
+        p = b.active if o["area"] == int(AreaType.ACTIVE) else b.bench[o["index"]]
+        picks.append((o["playerIndex"], p, p.tools[o["toolIndex"]]))
+    for owner, p, s in picks:
+        tdef = (def_for(gs.card_id(s)) or {}).get("tool", {})
+        bonus = tdef.get("hpBonus", 0)
+        hb_flt = tdef.get("hpBonusHolder")
+        if bonus and (hb_flt is None or _card_matches(gs, p.top, hb_flt)):
+            p.max_hp -= bonus                      # exact inverse of the attach bonus
+            p.hp -= bonus                          # (turn.py); preserves current damage
+        p.tools.remove(s)
+        gs.players[owner].discard.append(s)
+        gs.move_card(s, AreaType.TOOL, AreaType.DISCARD, seat=owner,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+def op_first_effect_choose(gs, fr, args) -> bool:
+    """"Choose 1" trainer branch (Kieran class): a FIRST_EFFECT YesNo (ctx 44 —
+    api.py: "Would you like to select the first effect?"). YES splices the `first`
+    sub-program, NO the `second` (mirrors op_may_ask's splice). UNPINNED: no capture
+    deck played a Choose-1 supporter; the kaggle ladder verifies."""
+    if "answer" not in fr.vars:
+        pose(gs, fr.seat, type=SelectType.YES_NO, context=SelectContext.FIRST_EFFECT,
+             options=yes_no(), effect_card=fr.source)
+        return False
+    o = fr.vars.pop("answered_options")[0]
+    fr.vars.pop("answer")
+    branch = args["first"] if o["type"] == int(OptionType.YES) else args["second"]
+    fr.program = fr.program[:fr.pc + 1] + list(branch) + fr.program[fr.pc + 1:]
+    return True
+
+def op_opp_hand_reveal_discard_multi(gs, fr, args) -> bool:
+    """Eri: "Your opponent reveals their hand, and you discard up to N <filter> cards
+    you find there." The full hand round-trips through LOOKING (reveal), then ONE
+    filtered multi-pick DISCARD select over the matching cards.
+
+    Options are one CARD per match in hand order (ctx DISCARD, playerIndex = victim,
+    area LOOKING), min 1, max = min(N, matches). The chosen matches exit
+    LOOKING->DISCARD first in pick order, then every remaining looking card returns
+    LOOKING->HAND in original order. No match -> reveal-only, whole hand returns and
+    no select is posed; an empty opp hand is a straight no-op.
+
+    Pinned kaggle ep-85627347 f10 (1 Item -> min1 max1, chosen exits then rest back at
+    f11) / ep-83038849 f87 (2 Items -> min1 max2, chose 1). Filter counts Item cards
+    only (cardType [1]); Tools (cardType 2) are NOT items here.
+
+    Args:
+        filter: _card_matches spec for the discardable cards (Eri: {"cardType":[1]}).
+        max: the "up to" cap (Eri: 2).
+    """
+    victim = 1 - fr.seat
+    vb = gs.players[victim]
+    flt = args.get("filter", {})
+    n = args.get("max", 2)
+    if "answer" not in fr.vars:
+        serials = list(vb.hand)
+        if not serials:
+            return True
+        for s in serials:
+            gs.move_card(s, AreaType.HAND, AreaType.LOOKING, seat=victim,
+                         visible_to_owner=False, visible_to_opponent=True)
+        gs.rng.hand_pick_expect(victim, serials)
+        vb.hand.clear()
+        gs.looking = list(serials)
+        gs.looking_owner = fr.seat
+        match_idx = [i for i, s in enumerate(serials) if _card_matches(gs, s, flt)]
+        if match_idx:
+            cap = min(n, len(match_idx))
+            pose(gs, fr.seat, type=SelectType.CARD, context=SelectContext.DISCARD,
+                 options=[opt_card(AreaType.LOOKING, i, victim) for i in match_idx],
+                 min_count=1, max_count=cap, effect_card=fr.source)
+            return False
+        gs.looking = None
+        gs.looking_owner = -1
+        for s in serials:
+            vb.hand.append(s)
+            gs.move_card(s, AreaType.LOOKING, AreaType.HAND, seat=victim,
+                         visible_to_owner=True, visible_to_opponent=True)
+        return True
+    idxs = [o["index"] for o in fr.vars.pop("answered_options")]
+    fr.vars.pop("answer")
+    serials = list(gs.looking or [])
+    chosen = [serials[i] for i in idxs]
+    gs.looking = None
+    gs.looking_owner = -1
+    for s in chosen:
+        vb.discard.append(s)
+        gs.move_card(s, AreaType.LOOKING, AreaType.DISCARD, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in serials:
+        if s in chosen:
+            continue
+        vb.hand.append(s)
+        gs.move_card(s, AreaType.LOOKING, AreaType.HAND, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+def op_both_bottom_hand_coin_draw(gs, fr, args) -> bool:
+    """Lucian: each player shuffles their hand and puts it on the BOTTOM of their deck
+    (hidden even to the owner -> MOVE_CARD_REVERSE hand->deck-bottom, no SHUFFLE log),
+    actor first then opponent. If EITHER player bottomed any cards, each player flips
+    their OWN coin (actor first) and draws `heads` (6) on heads / `tails` (3) on tails.
+    Coins bind PER OWNER (gs.coin_flip(seat)); the opponent's coin+draws are recorded in
+    the opponent's OWN window (pinned kaggle 85687339 f28/f31) so the replayer's per-seat
+    queues feed them. Two phases: both bottom their hands, THEN both coin+draw."""
+    if not fr.vars.get("bottomed"):
+        moved = 0
+        for seat in (fr.seat, 1 - fr.seat):
+            b = gs.players[seat]
+            for s in list(b.hand):
+                b.hand.remove(s)
+                b.deck.insert(0, s)
+                gs.move_card(s, AreaType.HAND, AREA_DECK_BOTTOM, seat=seat,
+                             visible_to_owner=False, visible_to_opponent=False)
+                moved += 1
+        fr.vars["bottomed"] = True
+        fr.vars["any_moved"] = moved > 0
+    if not fr.vars.get("any_moved"):
+        return True
+    heads_n = args.get("heads", 6)
+    tails_n = args.get("tails", 3)
+    for seat in (fr.seat, 1 - fr.seat):
+        head = gs.coin_flip(seat)
+        for _ in range(heads_n if head else tails_n):
+            gs.draw(seat)
+    return True
+
+def op_opp_hand_reveal_choose_filtered(gs, fr, args) -> bool:
+    """Energy Swatter class: reveal the opponent's hand, choose a filter-matching card
+    (an Energy card), put it on the bottom of their deck. Reveal round-trips through
+    LOOKING (visible to the attacker). Options are the filter-matching revealed cards
+    only, ctx TO_DECK_BOTTOM, min1 max1, index = LOOKING position (mirrors the pinned
+    Thieving-Swipe deckBottom shape, rvl401_9000 f13/f14). With NO matching card the
+    choose ask is SKIPPED but still bumps tac (pinned episode-82006648 f5: the play
+    bumps turnActionCount 1->3 = the skipped energy-choose ask + the next MAIN pose)
+    and every card returns to hand in original order. ``filter`` defaults to Energy;
+    ``to`` defaults to deckBottom (else DISCARD)."""
+    victim = 1 - fr.seat
+    vb = gs.players[victim]
+    flt = args.get("filter", {"energy": True})
+    to_bottom = args.get("to", "deckBottom") == "deckBottom"
+    if "answer" not in fr.vars:
+        serials = list(vb.hand)
+        for s in serials:
+            gs.move_card(s, AreaType.HAND, AreaType.LOOKING, seat=victim,
+                         visible_to_owner=False, visible_to_opponent=True)
+        gs.rng.hand_pick_expect(victim, serials)
+        matches = [i for i, s in enumerate(serials) if _card_matches(gs, s, flt)]
+        if not matches:                       # skipped ask still bumps tac; round-trip back
+            for s in serials:
+                gs.move_card(s, AreaType.LOOKING, AreaType.HAND, seat=victim,
+                             visible_to_owner=True, visible_to_opponent=True)
+            gs.turn_action_count += 1
+            return True
+        vb.hand.clear()
+        gs.looking = list(serials)
+        gs.looking_owner = fr.seat
+        ctx = SelectContext.TO_DECK_BOTTOM if to_bottom else SelectContext.DISCARD
+        pose(gs, fr.seat, type=SelectType.CARD, context=ctx,
+             options=[opt_card(AreaType.LOOKING, i, victim) for i in matches],
+             effect_card=fr.source)
+        return False
+    idx = fr.vars.pop("answered_options")[0]["index"]
+    fr.vars.pop("answer")
+    serials = list(gs.looking or [])
+    chosen = serials[idx]
+    gs.looking = None
+    gs.looking_owner = -1
+    if to_bottom:
+        vb.deck.insert(0, chosen)             # deck lists bottom-first: bottom = index 0
+        gs.move_card(chosen, AreaType.LOOKING, _AREA_DECK_BOTTOM, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    else:
+        vb.discard.append(chosen)
+        gs.move_card(chosen, AreaType.LOOKING, AreaType.DISCARD, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    for s in serials:
+        if s == chosen:
+            continue
+        vb.hand.append(s)
+        gs.move_card(s, AreaType.LOOKING, AreaType.HAND, seat=victim,
+                     visible_to_owner=True, visible_to_opponent=True)
+    return True
+
+def op_curse_blast(gs, fr, args) -> bool:
+    """Cursed Blast (Dusknoir 133 ability): "put 13 damage counters on 1 of your
+    opponent's Pokemon. If you use this Ability, this Pokemon is Knocked Out." On
+    activation the source is Knocked Out -> hp 0 SILENTLY (no HP_CHANGE; the obs shows it
+    at 0 on its bench slot during the target select), then a single CARD select (ctx
+    DAMAGE_COUNTER, min1 max1, opponent active first then bench) puts `counters` damage
+    counters (x10, putDamageCounter=true, no W/R) on the chosen mon. The source stack is
+    then discarded (top-first, pre-evos via PRE_EVOLUTION) and the OPPONENT claims its
+    prize inline. The ability frame is kept alive across that prize pick so that on
+    completion _after_program's flush_triggers -> pose_main returns control to the acting
+    player's MAIN (a mid-turn ability self-KO is not covered by the attack-only KO sweep;
+    pinned kaggle 83689598 f28-f31)."""
+    from .options import _targets
+    from .turn import _discard_in_play, _prize_value
+    from .schema import ResultReason
+    seat = fr.seat
+    opp = 1 - seat
+    ob = gs.players[opp]
+    # phase 2: the opponent's prize pick for the self-KO (frame stays alive -> MAIN resumes)
+    if fr.vars.get("await_prize"):
+        o = fr.vars.pop("answered_options")[0]
+        fr.vars.pop("answer")
+        serial = ob.prize[o["index"]]
+        take = getattr(gs.rng, "prize_take", None)
+        if take is not None:
+            live = serial if serial in ob.prize else ob.prize[0]
+            serial = take(opp, live, deck=ob.deck, prize=ob.prize)
+        ob.prize.remove(serial)
+        ob.hand.append(serial)
+        gs.move_card(serial, AreaType.PRIZE, AreaType.HAND, seat=opp,
+                     visible_to_owner=True, visible_to_opponent=False)
+        if not ob.prize:
+            gs.set_result(opp, ResultReason.PRIZES)
+        return True
+    # phase 1: this Pokemon is Knocked Out on activation -> hp 0 (silent), then choose the
+    # counter target (opponent active first, then bench)
+    if "answer" not in fr.vars:
+        src = next(p for p in gs.in_play(seat) if p.top == fr.source)
+        src.hp = 0
+        opts = [opt_card(area, idx, opp) for area, idx, _p in _targets(gs, opp)]
+        if opts:
+            pose(gs, seat, type=SelectType.CARD, context=SelectContext.DAMAGE_COUNTER,
+                 options=opts, min_count=1, max_count=1, effect_card=fr.source)
+            return False
+        fr.vars["answer"] = []
+        fr.vars["answered_options"] = []
+    o_list = fr.vars.pop("answered_options")
+    fr.vars.pop("answer")
+    if o_list:
+        o = o_list[0]
+        n = args.get("counters", 1) * 10
+        dest = ob.active if o["area"] == int(AreaType.ACTIVE) else ob.bench[o["index"]]
+        dest.hp = max(0, dest.hp - n)
+        gs.emit({"type": int(LogType.HP_CHANGE), "playerIndex": opp,
+                 "cardId": gs.card_id(dest.top), "serial": dest.top,
+                 "value": -n, "putDamageCounter": True})
+    # self-KO: discard the source stack; the opponent claims its prize inline
+    src = next(p for p in gs.in_play(seat) if p.top == fr.source)
+    sb = gs.players[seat]
+    from_bench = src is not sb.active
+    pv = _prize_value(gs, src)
+    _discard_in_play(gs, seat, src)
+    if from_bench:
+        sb.bench.remove(src)
+    else:
+        sb.active = None
+    if ob.prize:
+        nprize = min(pv, len(ob.prize))
+        opts = [opt_card(AreaType.PRIZE, i, opp) for i in range(len(ob.prize))]
+        fr.vars["await_prize"] = True
+        pose(gs, opp, type=SelectType.CARD, context=SelectContext.TO_HAND,
+             options=opts, min_count=nprize, max_count=nprize)
+        return False
+    return True
+
+
 OPS = {
+    "xDiscardEnergyAttachChoose": op_discard_energy_attach_choose,
+    "xDiscardToolsInPlay": op_discard_tools_in_play,
+    "xFirstEffectChoose": op_first_effect_choose,
+    "xOppHandRevealDiscardMulti": op_opp_hand_reveal_discard_multi,
+    "xBothBottomHandCoinDraw": op_both_bottom_hand_coin_draw,
+    "xOppHandRevealChooseFiltered": op_opp_hand_reveal_choose_filtered,
+    "xCurseBlast": op_curse_blast,
     "effectDraw": op_effect_draw,
     "effectDrawUntil": op_effect_draw_until,
     "costHandTrash": op_cost_hand_trash,
@@ -3248,6 +3643,7 @@ OPS = {
     "xInflictConditionSelf": op_inflict_condition_self,
     "xOpponentSwitches": op_opponent_switches,
     "xMill": op_mill,
+    "xEotAttachEnergyFromDiscard": op_eot_attach_energy_from_discard,
     "xShuffleDiscardEnergyToDeck": op_shuffle_discard_energy_to_deck,
     "xDiscardHandDraw": op_discard_hand_draw,
     "xTakeLessNextTurn": op_take_less_next_turn,

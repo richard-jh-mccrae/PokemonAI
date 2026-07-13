@@ -17,7 +17,7 @@ routed it into the queue. -->
 - candidate_signal: needs a new signal — a Turn Planner generator (planner.py) keyed on a benched `item_lock` opener behind a retreatable, non-attacking Active, gated by an opponent-item-reliance / disruption-value read. DEPENDENCY: the `item_lock` behavioral tag on Budew (card id 235) — currently untagged; also proposed by `open-the-item-lock-starter` in data/strategy/proposals/deck-genie-20260709-dragapult_ex.md.
 - verification_contract: verifier
 - provenance: docs/todo/retreat-to-item-lock-maneuver.md | correction 85046350:f20 (reviewed.json "85046350-20", deferred) | fixture tests/fixtures/corrections/dragapult_retreat_to_item_lock_f20.json | [[dragapult-ex-built]] | related [[m2-posture-plan]] (opponent-filtered disruption)
-- status: deferred
+- status: applied (2026-07-13 — `disruptor_lock_maneuver`, the OFFENSIVE item-lock variant; see docs/todo/retreat-to-item-lock-maneuver.md)
 
 **Spec (authoring spec — thin fodder, not finished code):**
 The closed-form Turn Planner (ADR-0031/0037) has no rung that generates a single-turn

@@ -508,6 +508,121 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   delta-adjusted hp is negative (a floor native also applies) — raw counter
   overkill (delta 0) is untouched, so both pins coexist.
 
+### 9i. End-of-turn tool pins (2026-07-13, kaggle-episode-verified)
+
+- **End-of-turn Active tools fire AFTER TURN_END** (`_end_turn` → `_start_eot_tool_active`
+  → `_post_end_turn`). Powerglass (1163, "at the end of your turn, if this holder is
+  Active, you may attach a Basic Energy from your discard to it"): pinned
+  episode-82845418 f11 — TURN_END is logged, THEN the ctx-22 ATTACH_TO select (min 0 /
+  max 1, effect = the tool card) over the discard's Basic Energy, then the ATTACH lands
+  (f12, after TURN_END). Modeled as a suspendable between-turns program (frame kind
+  `eot_tool`, op `xEotAttachEnergyFromDiscard`); its completion resumes `_post_end_turn`
+  (Ignition discards → Checkup → next turn). At most one tool per Pokémon and only the
+  Active holder fires, so no multi-tool sequencing. A no-matching-discard-energy case
+  poses nothing.
+- **`energyAttached` resets AFTER the end-of-turn tool, not at TURN_END**: it is still
+  True during the Powerglass select (episode-82845418 f11 — the mover is still the
+  ending player, who attached this turn) yet observably False during a between-turns
+  *promotion* select (micro_onboard780a1128 f54). The reset therefore lives at the top
+  of `_post_end_turn` (after the tool, before the Checkup), reconciling both pins.
+
+### 9j. Fan-out batch pins (2026-07-13, kaggle-episode-verified)
+
+A parallel multi-agent sweep modeled 17 deferred MISS-play/ability cards (ladder
+247→262/434, zero regressions). Each agent pinned the native shape, reused an existing op
+where possible, and self-verified by runtime injection; the orchestrator merged + ran the
+single regression ladder + gate. Reused-op cards (Wave A): Prime Catcher / Surfer (gust
+`effectSwitchEnemy`/`effectSwitchMe` + `effectDrawUntil`), Wondrous Patch / N's PP Up
+(`xDeckEnergyAttachDistribute` **source:"discard"** into a benched typed/family target),
+Cynthia's Gabite / Ethan's Quilava / Team Rocket's Proton (`effectDeckToHandAndShuffle` in
+an ability program / family-search + `allowedFirstTurn`), Hassel (`xLookTopMayTakeThenShuffle`
+gated `koLastTurn`), Barbaracle (`xHandEnergyAttachChoose`). Seven NEW ops (all
+cabt-fixture-pinned, in test_op_conformance UNPINNED): `xDiscardEnergyAttachChoose` (Blaziken
+ex Seething Spirit — discard→any-own-Pokémon, the `_attach_from_deck`-from-discard twin of
+`xHandEnergyAttachChoose`), `xDiscardToolsInPlay` (Tool Scrapper — ctx-27 ATTACHED_CARD
+multi-pick over BOTH sides' tools, reverses an hpBonus tool's holder bonus on discard;
+new `toolInPlay` legal cond), `xFirstEffectChoose` (Kieran "Choose 1" — ctx-44 FIRST_EFFECT
+YesNo that splices the picked sub-program, like `op_may_ask`), `xCurseBlast` (Dusclops **5** /
+Dusknoir **13** counters then a mid-turn ability SELF-KO — the frame stays alive across the
+opponent's inline prize claim so MAIN resumes after; the attack-only KO sweep does not cover
+it), `xOppHandRevealDiscardMulti` (Eri — reveal opp hand via LOOKING, one filtered multi-pick
+discard, rest return), `xBothBottomHandCoinDraw` (Lucian — both bottom hands hidden, then
+per-owner coin → draw 6/3), `xOppHandRevealChooseFiltered` (Energy Swatter — reveal, choose an
+Energy, put on deck bottom; a no-match ask still bumps tac). GOTCHA reconfirmed: every deferred
+trainer needs its menu-gate `legal` (over-offer index-shifts a clean episode → regression); a
+"you may" ability with an UNPINNED effect is safe to ship OFFER-only iff no episode uses the
+effect (verify at source — Cursed Blast counts differ per card).
+
+The two cards the fan-out agents mis-modeled (wrong `_seed` text) were finished by hand,
+reusing existing ops (247→266 total, zero regressions): **Secret Box** 1092 (ACE SPEC) is
+NOT just a 4-category search — its real text is "you can use this only if you **discard 3
+other cards from your hand**", so it is `costHandTrash n:3` (legal `handOthers n:3`, the
+Ultra Ball precedent) THEN `xDeckToHandBuckets` over Item/Tool/Supporter/Stadium (cardType
+1/2/3/4), pinned episode-82845418 f24-f30. **Larry's Skill** 1206 = discard the WHOLE hand
+(`xDiscardHandDraw n:0` — discard, draw nothing) THEN `xDeckToHandBuckets` over
+Pokémon/Supporter/Basic-Energy, pinned episode-83459752 f31-f35. LESSON: the fan-out
+worklist's card text came from the generated `_seed.unparsed` (often a single clause) — an
+agent MUST re-verify at `data/EN_Card_Data.csv` (the discard-3 cost was absent from the seed).
+
+### 9k. onEvolve triggered-ability batch pins (2026-07-13, kaggle-episode-verified)
+
+Two fixes to the onEvolve/onBench triggered-ability ask (ctx `ACTIVATE`=43), ladder 266→289/434,
+zero regressions.
+
+- **Rare Candy fires the Stage-2's onEvolve ability (+12).** A skip-evolve (`op_rare_candy_evolve`)
+  still "plays this Pokémon from your hand to evolve", so the Stage-2's onEvolve triggered ability
+  fires — the SAME trigger the MAIN `OptionType.EVOLVE` path queues, which the chain-op path was
+  skipping. The op now appends the `xActivateAsk` trigger to `gs.pending_triggers`; `_after_program`
+  discards the Candy (silently) then flushes it, so the ctx43 ask poses AFTER the Candy leaves the
+  hand. Pinned **episode-85711162 f16** (EVOLVE Alakazam via Rare Candy → ctx43 Psychic Draw ask,
+  no Candy-discard log). The two Rare-Candyable Stage-2s with an onEvolve ability in the corpus:
+  Alakazam 743 (Psychic Draw, draw 3) and Marnie's Grimmsnarl ex 648 (Punk Up).
+
+- **onEvolve ask needs a no-target `legal` gate (+11).** The ask is posed only when the effect has a
+  legal target — cgpy was OVER-asking (native at MAIN, ours at ctx43). Gates added: **Hariyama 674**
+  Heave-Ho Catcher (gust) → `oppBenchExists` (no ask when the opponent has 0 benched, pinned
+  ep-82720212 f34 / ep-83250428 f20); **Archaludon ex 190** Assemble Alloy (attach ≤2 Basic {M} from
+  discard) → `discardHas {basicEnergy, energyType:[8]}` (no ask when the discard holds no {M},
+  pinned ep-84895049 f19). Fixture **episode-83971785** pins the Hariyama suppression clean.
+
+- **Meowth ex 1071 Last-Ditch Catch DEFERRED (hidden-zone-blocked).** Its onBench ask is gated on
+  the deck still holding a Supporter, but a `deckHas` peek is UNRELIABLE in god-free replay: a
+  Supporter that is really in the deck can be provisionally parked in the prize row (and vice
+  versa). The gate both failed to suppress its 2 target over-asks (deckHas wrongly True) AND
+  regressed ep-85050368 f157 (native asks, deckHas wrongly False → cgpy skipped the ask). Reverted;
+  it needs the §5 hidden-zone reconciliation keystone. The onBench hook still ignores `legal`
+  (only Meowth would use one).
+
+### 9l. Stadium play-enable batch (2026-07-13, kaggle-episode-verified)
+
+A stadium play is offered only when its def carries a `stadium` key (options.py — a deferred
+stadium's PLAY option is absent → MISS-play divergence). These were first-divergence MISS-plays,
+so the episode continues PAST the stadium play — the passive, if it fires, shows up as a later
+divergence (verifiable). Probing all 10 deferred stadiums with a bare `stadium: {}` (play + generic
+placement, NO passive) and keeping only the ones with ≥1 clean episode: **Jamming Tower 1246** (+5),
+**Area Zero Underdepths 1250** (+1), **Dizzying Valley 1265** (+1) — ladder 289→296, zero
+regressions. (Area Zero's bench_max=8 was then modeled — see §9m — for +2 more.) The passive is
+UNMODELED in each (Jamming's tools-inert retro-toggle; Dizzying's confused-no-recover): it is a
+verified no-op in every clean episode and would DIVERGE (caught — never a silent wrong pass) where it
+matters, at which point it gets modeled. The Jamming diverge cases are unrelated KO/promotion-timing
+residuals (`active[0]` absent-vs-hp0), NOT tool-HP — so the tool passive isn't exercised anywhere in
+the corpus. The other 7 stadiums gained nothing (episodes block on unrelated cards — Thwackey, TR
+supporters — or need the stadium's activated ability, e.g. Grand Tree 1249 `MISS stadium-ability`);
+left deferred. RULE reaffirmed: ship the play-enable when a clean episode verifies it; never ship an
+unverifiable passive (the NZ-revert reason still holds for a passive, not for a bare play-enable).
+
+### 9m. Area Zero bench_max=8 (2026-07-13, kaggle-episode-verified)
+
+Area Zero Underdepths 1250: "each player who has any Tera Pokémon in play can have up to 8 on their
+Bench." Modeled as a DYNAMIC bench_max (not a stored field): `options.effective_bench_max(gs, seat)`
+= the stadium def's `benchMaxIfTera` (8) when that seat has ≥1 Tera in play, else the base
+`b.bench_max` (5). Applied at every bench-capacity site — render (`benchMax` field), the `benchSpace`
+legal cond, the MAIN play-a-Basic option gen, and `op_deck_to_bench_and_shuffle`'s room clamp (NOT
+setup-bench: no stadium is in play then). +2 (ep-82871704, ep-85609929; ladder 296→298, zero
+regressions). The discard-to-5 when the last Tera or the stadium leaves is still deferred — it
+diverges (caught) if it fires. A currently-clean episode can't hold Area Zero + a Tera (it would
+already diverge on `benchMax`), so making the value dynamic cannot regress a clean episode.
+
 ## 10. Cross-engine audit + god-free replay (M4)
 
 - The ADR-0032 measurement harness (`tools/sim/audit_attacks.py`) runs unchanged on
@@ -541,6 +656,16 @@ Established by per-card micro-traces (`tools/parity/capture_card.py`, committed 
   CURRENT select is itself deck-indexed); NEXT-frame DECK→LOOKING move logs pre-feed
   `rng.look_feed`, consumed by `look_bind` in recorded order whichever deck end the
   op reads (Pokégear top / Dusk Ball bottom), cleared after one step.
+- Mill-output binding (2026-07-13): a top-of-deck mill (`op_mill`) that discards
+  N cards to the discard pile binds its output from the NEXT-frame DECK→DISCARD move
+  logs, pre-fed per deck-owner into `rng.mill_feed` and consumed by `mill_bind` in
+  discard order (a provisionally prize-parked serial swaps back into the deck, like
+  `draw_bind`), cleared after one step. This makes **Hammer-lanche** (attack 1046:
+  "discard top 6, 100 damage per Basic {W} discarded") replay exactly — the mill hits
+  native's true top-6 despite a god-free shuffle leaving cgpy's own order, and the
+  `milled_basic_energy` damage scale counts the truly-discarded energy (`op_mill`
+  records the milled serials in a frame var read by `damage.attack_damage`). Pinned
+  episode-83690879 f16→f17 (6 Basic {W} milled → 600, KO). Ladder 227→246/434.
 - The kaggle-episode ladder: every `data/replays/*/episode-*-replay.json` under the
   MAIN checkout converts and replays; the first divergence per episode, attributed
   back to the option it misses (ability slot → board mon, play/attach → hand card,

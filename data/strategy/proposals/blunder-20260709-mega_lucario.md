@@ -186,8 +186,8 @@ dig-before-commit.)
   data/handoffs/ownside.md §3) | fixture tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json
   (state re-verify at source on build; the fixture is named for the retired dead-hand framing) |
   reframes the refuted `revive-the-dead-hand-full-refresh` above | see [[lethal-solver-plan]]
-- status: deferred
-- applied_note: 2026-07-10. NOT BUILT -- a sound lock is impossible on the stored state: deck_definitely_has(Air Balloon) is False (P=0.9877, own_prizes absent so the deck tracker never anchors), and the Lethal Solver's contract is 'a probable fetch is never a win'. The fixture also records the REFUTED dead-hand framing (correct=[1] Lillie's), so the proposal has no verifier gate as stored. Four artifacts + definition-of-done: docs/todo/lethal-retreat-tool-enabler.md.
+- status: applied
+- applied_note: 2026-07-10 deferred, BUILT 2026-07-13 (`retreat_enabler_lethal`). The 2026-07-10 objection is retired: the fixture now carries own_prizes + search_begin_input so the tracker anchors and deck_definitely_has(Air Balloon)=True. `_family_win_candidates` tier 6 recognizes the win + two KO_SCORE grab/attach tacticals steer the cascade (Petrel search -> Air Balloon, attach -> Active) + `_can_retreat` credits an attached retreat Tool. Fixture re-tagged correct=[0], category missed_win. decide() LOCKS the engine-verified win; engine_confirms(f15)=True; counter-fixtures don't regress. See docs/todo/lethal-retreat-tool-enabler.md.
 - for: general
 
 **Spec (authoring spec — thin fodder):**
