@@ -47,6 +47,8 @@ EPISODES = [
     ("episode-83695982-replay.json.gz", 183),  # Energy Recycler: shuffle Basic Energy
                                                # from discard to deck (xPickDiscard)
     ("episode-85687852-replay.json.gz", 14),   # Prism Energy attach un-deferred
+    ("episode-82229613-replay.json.gz", 40),   # Team Rocket's Transceiver: deck-search a
+                                               # "Team Rocket" Supporter to hand
 ]
 
 

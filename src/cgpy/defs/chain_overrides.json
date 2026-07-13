@@ -1642,5 +1642,23 @@
         }
       }
     ]
+  },
+  "1134": {
+    "name": "Team Rocket's Transceiver",
+    "play": [
+      {
+        "op": "xDeckToHandBuckets",
+        "buckets": [
+          {
+            "filter": {
+              "cardType": [
+                3
+              ],
+              "nameContains": "Team Rocket"
+            }
+          }
+        ]
+      }
+    ]
   }
 }
