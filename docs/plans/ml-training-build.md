@@ -15,12 +15,12 @@ as separate concurrent worktree sessions.
 | Session | WP | Scope | Status | Notes |
 |---------|----|-------|--------|-------|
 | S1 | WP0 | Corpus v2 + contract freeze + background gen | ☐ not started | |
-| S2a | WP1 | Value net v2 | ☐ blocked on S1 | |
+| S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
 | S2b | WP2 | Eval harness | ☐ blocked on S1 | |
-| — | G1 | Value-net gate | ☐ | |
-| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | |
-| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | |
-| S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | |
+| — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
+| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
+| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
+| S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | design LOCKED → same doc, D3/D4 |
 | — | G2 | Adoption gate | ☐ | |
 | S4 | WP6 | Rotation-loop glue + orchestration | ☐ blocked on G2 | |
 | — | WP5 | League/exploiter | ☐ deferred (unlock: WP4 checkpoints shipped) | |
@@ -70,6 +70,11 @@ entry, contracts doc, background generation running, ledger updated.
 ## S2a — WP1: value net v2 (parallel with S2b)
 
 **Owns:** `tools/train/value/`, `src/common/value/`, `requirements-train.txt` (new).
+
+> **Design is LOCKED in [ml-training-design-s2a.md](ml-training-design-s2a.md)** (Fable design
+> grill, 2026-07-13): matchup encoding = replayed-Read posterior block; capacity =
+> measure-then-ship-MLP with distill fallback; episode-level holdout split. Execute it — the
+> scope below is the summary, the design doc is the specification.
 
 **Scope:**
 1. **Features:** grow past the 17-name vector (`src/common/value/features.py`) and add
@@ -148,6 +153,11 @@ played-well-lost report produced.
 
 **Owns:** `tools/train/tuner/`.
 
+> **Design is LOCKED in [ml-training-design-s3b.md](ml-training-design-s3b.md)** (Fable design
+> grill, 2026-07-13): expert = one-step fork lookahead + G1 net with terminal override; loss =
+> disagreement constraints through the existing `fit.py` rails (unifies WP3+WP4); matchup
+> tables = γ-scaled per-archetype deltas, ±30 clamp, `γ_min` shared train/runtime. Execute it.
+
 **S3b-1 — plumbing:**
 - Expert = Turn Planner + value-net one-step lookahead over each logged decision's legal
   options (offline; engine fork where the planner needs it).
@@ -222,6 +232,7 @@ compensations:
 - **Spend the price gap on verification** (Opus ≈ half Fable per token): run `/code-review`
   at the end of S2a and S3b before marking the ledger; hold G1/G2 strictly — the gates are
   the quality backstop for the builder tier.
-- **Remaining Fable 5 budget, if any, goes to design, not plumbing:** short design-grill
-  sessions for S2a's feature/matchup encoding and S3b's expert-target loss — lock the
-  decisions into this doc's session notes; Opus executes the locked designs.
+- **Remaining Fable 5 budget, if any, goes to design, not plumbing:** ✅ DONE 2026-07-13 —
+  both design grills ran on Fable 5; decisions locked in
+  [ml-training-design-s2a.md](ml-training-design-s2a.md) and
+  [ml-training-design-s3b.md](ml-training-design-s3b.md). Opus executes the locked designs.
