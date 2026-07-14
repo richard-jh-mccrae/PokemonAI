@@ -69,7 +69,7 @@
     },
     "opp_deckout_vulnerable": {
       "type": "bool",
-      "consumer": "unwired",
+      "consumer": "unwired-as-a-property, but achieved-elsewhere (2026-07-14): the core 'grind the self-mill toward a resource/deck-out loss' doctrine this key describes now ships via the CALIBRATED Resources path, not this asserted prior — the opp_resource_reads flag gates a deck-out grind nudge off board.opp_deckout_in_turns (derived from the opponent's tracked deck_count), which nudges sub-prize KO/grind lines when the opponent nears deck-out. That path is sound (measured deck-count, not an authored guess), so this property is a redundant forward contract kept only as author-side vocabulary; wiring it would double-count. A future consumer would only add value for the ASSERTED-ahead-of-evidence case (recognize the self-mill archetype before its deck-count is observably low).",
       "note": "the deck self-mills its own library with no (or negligible) Pokemon/Trainer recovery, so a long game drifts it toward deck-out and an attacker/resource drought — its own damage engine becomes a liability over time. Lever (future): in a non-losing board state, prefer to GRIND / trade evenly and deny fast KOs rather than race, converting the opp's self-mill into a resource/deck-out loss; deprioritise plans that end the game before the mill bites. First minted for kyogre_mega_abomasnow_ex (Mega Abomasnow ex Hammer-lanche discards the top 6 every use; Kyogre recycles ONLY Basic Water Energy, so milled Pokemon/Trainers are gone for good). Reusable for any self-mill deck lacking recovery."
     },
     "opp_spreads_bench": {
