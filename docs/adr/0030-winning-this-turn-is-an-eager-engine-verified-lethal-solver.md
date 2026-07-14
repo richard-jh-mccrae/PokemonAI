@@ -4,8 +4,8 @@
 [ADR-0037](0037-lethal-solver-is-the-turn-planners-top-rung.md) (2026-07-03): the Solver becomes the
 Turn Planner's sound top rung — one entry point, one generator family; 0037 also closes this ADR's
 two deferred TODOs (multi-step drive, strict execute-only) and the four-hook lethal collapse.** **Closed-form layer implemented
-2026-07-01** (`/tdd`, TDD): the **Lethal Solver** ([lethal.py](../../src/common/strategy/lethal.py),
-`LethalMixin` composed into the Pilot) — prize-out + empty-bench wins, attach / retreat / evolve
+2026-07-01** (`/tdd`, TDD): the **Lethal Solver** (then `lethal.py` / `LethalMixin` composed into
+the Pilot; **folded into the Turn Planner's `PlannerMixin` — [planner.py](../../src/common/strategy/planner.py) — by ADR-0037 stage 1, and both `lethal.py`/`LethalMixin` deleted**) — prize-out + empty-bench wins, attach / retreat / evolve
 unlocks, shortest-first, with a **sound per-attack yield** check (`_attack_wins`, which caught and
 fixed a real false-lethal: a snipe taking 1 of 2 needed prizes was locking). The three in-scope
 CRITICALs (`040c`, `c1e0`, `fd5c`) are gated as regressions ([tests/strategy/test_lethal.py](../../tests/strategy/test_lethal.py),
