@@ -32,9 +32,14 @@
   ],
   "targets": [
     {
+      "card": "Hop's Trevenant",
+      "role": "prize_liability",
+      "why": "THE win-condition body — the top-priority target (ADR-0051 `prize_liability` = 'the payoff to remove'; it is 1 prize, the role is not about prize count). 140 HP, Darkness x2 -> a 70-base hit OHKOs it THROUGH the +90 Extra-Helpings/Choice-Band/Postwick buffer AND ignores Mist. Removing the Trevenant is the game: it is the only body that carries Corner (no-retreat trap) and Horrifying Revenge. Not immune and not Tera — unlike a Crustle-class wall, this payoff IS targetable, so it must carry a role or the agent rides only its under-read printed 90 (real boosted output ~180-220)."
+    },
+    {
       "card": "Hop's Phantump",
       "role": "fragile_preevo",
-      "why": "70 HP, 1 prize, Darkness x2; base of the ONLY wincon line. Snipe/gust in the evolution window to deny a Trevenant prize-free. This is the sole target row (the fragile_preevo target the MatchupPlan prioritizes, ADR-0051)."
+      "why": "70 HP, 1 prize, Darkness x2; base of the ONLY wincon line. Snipe/gust in the evolution window to deny a Trevenant prize-free."
     }
   ],
   "sources": [

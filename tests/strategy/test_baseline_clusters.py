@@ -40,7 +40,6 @@ CLUSTERS = {
         "snipe-the-forced-promotion",           # ADR-0044 Forced-Promotion Read
         "snipe-the-evolving-threat",            # restored 2026-07-09 (forward-wincon pre-evo, form-absent gated)
         # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
-        "dont-snipe-a-benched-tera",             # Tera: takes no damage while Benched (card fact)
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
                                  "develop-the-accel-recipient", "develop-a-basic-in-setup",

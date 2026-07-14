@@ -39,6 +39,11 @@
   ],
   "targets": [
     {
+      "card": "Dragapult ex",
+      "role": "prize_liability",
+      "why": "THE win-condition body (ADR-0051 `prize_liability` = the payoff to remove) — it MUST out-rank the 2-prize support ex's below, or the gust drags up a support body over the one whose loss ends their game. Previously left un-roled as a WORKAROUND: it is Tera (320 HP), and roling it would have made the bench snipe chip an immune body. `Pilot._snipe_tera_veto` now stands the snipe down on a benched Tera STRUCTURALLY, so the role is safe and acts through the GUST only — dragging a Tera Active REMOVES its immunity (bench-only), and the gust is KO-gated, so this fires exactly when the wall is finally finishable (damaged below our reach; 320 is above our best 270 at full HP) and stays silent otherwise. Do NOT expect a snipe to reach it."
+    },
+    {
       "card": "Dreepy",
       "role": "fragile_preevo",
       "why": "70-HP Basic base of the wincon line, 1 prize, NOT Tera (valid target). KO/snipe it while still a Basic before Rare Candy/evolution turns it into the 320 wall -- tempo denial, not prize value. Clear multiples to beat the 4-4-3 redundancy; 70 HP dies to most single hits and to spread."
@@ -50,18 +55,18 @@
     },
     {
       "card": "Fezandipiti ex",
-      "role": "prize_liability",
-      "why": "Benched 2-prize ex, 210 HP, FIGHTING weak, NOT Tera. Gust it Active and KO (doubled by Fighting) to bank 2 cheap prizes AND delete the recovery draw-3 + Cruel Arrow finisher at once. Not disabled by their own Watchtower (it's Darkness, not Colorless)."
+      "role": "disruption_target",
+      "why": "An ENABLER to remove, NOT the payoff — ranks BELOW the Dragapult ex wincon so the gust never drags a support body up over the win-condition (all four are 2-prize, so prize value alone would tie them). It stays a fine gust target on its own prize value regardless of role. Benched 2-prize ex, 210 HP, FIGHTING weak, NOT Tera. Gust it Active and KO (doubled by Fighting) to bank 2 cheap prizes AND delete the recovery draw-3 + Cruel Arrow finisher at once. Not disabled by their own Watchtower (it's Darkness, not Colorless)."
     },
     {
       "card": "Latias ex",
-      "role": "prize_liability",
-      "why": "Passive 2-prize bench-sitter (Skyliner enabler), 210 HP, DARKNESS weak, NOT Tera. Gust+KO costs them nothing defensively while banking 2 prizes and stripping their pivot mobility. Skyliner is Psychic, so Colorless-only ability locks (incl. their own Watchtower) don't stop it -- you must remove the body."
+      "role": "disruption_target",
+      "why": "An ENABLER to remove, NOT the payoff — ranks BELOW the Dragapult ex wincon (card facts CANNOT make this call: Latias ex's Eon Blade hits for 200, exactly as hard as the wincon, so only the Brief knows which body is the payoff). Passive 2-prize bench-sitter (Skyliner enabler), 210 HP, DARKNESS weak, NOT Tera. Gust+KO costs them nothing defensively while banking 2 prizes and stripping their pivot mobility. Skyliner is Psychic, so Colorless-only ability locks (incl. their own Watchtower) don't stop it -- you must remove the body."
     },
     {
       "card": "Meowth ex",
-      "role": "prize_liability",
-      "why": "170-HP 2-prize ex, FIGHTING weak, Colorless. Last-Ditch Catch tutors a Supporter on entry but the value is banked on entry (can't be denied after it lands), so don't treat it as a strangleable engine -- punish the soft 170-HP body: gust/snipe and KO in one turn (before Tuck Tail CCC bounces it to hand to re-use). Its own ability is shut off by their Watchtower (Colorless)."
+      "role": "disruption_target",
+      "why": "Ranks BELOW the Dragapult ex wincon (a 2-prize support body, not the payoff); KOing it before Tuck Tail bounces it back to hand denies the Supporter tutor a second use. Its gust value is its 2 prizes, which apply regardless of role. 170-HP 2-prize ex, FIGHTING weak, Colorless. Last-Ditch Catch tutors a Supporter on entry but the value is banked on entry (can't be denied after it lands), so don't treat it as a strangleable engine -- punish the soft 170-HP body: gust/snipe and KO in one turn (before Tuck Tail CCC bounces it to hand to re-use). Its own ability is shut off by their Watchtower (Colorless)."
     }
   ],
   "sources": [

@@ -44,6 +44,30 @@ matchup-specific decoy or untouchable body — a benched Tera-ex, a self-shuffle
 here; do NOT use it for generic draw engines, which the general `draw`-tag tier already handles).
 Attackers go in `threats`, not `targets`.
 
+**`prize_liability` means THE WINCON — not "any fat multi-prize body".** It is the top priority (100) and
+carries the gust's wincon-denial bump. A 2-prize SUPPORT ex (a draw engine, a tutor, a pivot) is **not**
+the payoff — role it `disruption_target` (60) so it ranks BELOW the win-condition. It remains a fine gust
+target regardless: the gust already values it at its 2 prizes. Get this wrong and the agent drags a
+support body up over the body whose loss actually ends the game (all of them are 2 prizes, so prize value
+alone TIES them and the role is the only tiebreak).
+
+⚠️ **Card facts cannot make this call for you.** In the Dragapult deck the support **Latias ex** hits for
+200 — *exactly as hard as the Dragapult ex wincon*. Nothing in the card data says which is the payoff.
+Only the Brief knows. Name the win-condition explicitly, exactly once.
+
+**Untargetable payoffs — check BEFORE you role a wincon.** Some payoffs cannot be hit where they sit:
+- **Tera Pokémon** (`Category: Tera(<Type>)` in `EN_Card_Data.csv` → engine `CardData.tera` → `CardStat.tera`)
+  take **NO damage from attacks while BENCHED** (rules.md §185). That label is exactly what marks a body
+  **non-snipable**. 32 cards carry it (Dragapult ex, Terapagos ex, the Ogerpon/Eeveelution ex line, …).
+- **Prevent-all-damage walls** — e.g. Crustle blocks ALL damage from Pokémon ex, and every one of our
+  win-conditions is an ex (an `ignoresEffects` attack pierces it — check before writing one off).
+
+You may still role a Tera-ex wincon **`prize_liability`**: the bench-snipe boost auto-stands-down on a
+benched Tera (`_snipe_matchup_tactical`), while the **gust** legitimately drags it Active — where the
+immunity does NOT apply — and KOs it there. But NEVER role a body positively expecting a *snipe* to reach
+it through Tera/prevent-all immunity: the counters land nowhere. If the payoff can only be answered by
+denying its line, role the **pre-evo** `fragile_preevo` and leave the payoff out.
+
 ## Weakness question banks
 
 Walk these seams. Each resolved seam → a §3 block in `MATCHUP.md` + a Brief field.

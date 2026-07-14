@@ -8,6 +8,8 @@ import json
 import pytest
 
 from common.scouting.briefs import Brief, load_briefs, match_brief, resolve_brief_cards
+from common.scouting.matchup_plan import build_matchup_plan
+from common.scouting.provider import EngineCardStatProvider
 from common.scouting.read import Read
 
 
@@ -113,3 +115,84 @@ def test_shipped_briefs_have_no_covers_collision():
                 f"archetype {arch!r} covered by both {seen[arch]!r} and {brief.slug!r} — "
                 f"every archetype string must route to exactly ONE Brief")
             seen[arch] = brief.slug
+
+
+@pytest.mark.req("REQ-BRIEF-0003")
+def test_dragapult_brief_ranks_its_wincon_above_its_support_exes():
+    """The Dragapult ex Brief roled its three NON-Tera 2-prize support ex's (Fezandipiti / Latias /
+    Meowth) `prize_liability` and left the actual win-condition — Dragapult ex — with NO role at all.
+    The `why` texts say why: "NOT Tera (valid target)". It was a WORKAROUND for the missing Tera guard:
+    roling the Tera wincon would have made the snipe chip an immune body.
+
+    `_snipe_tera_veto` removed that constraint (the snipe now stands down on a benched Tera
+    structurally, while the GUST legitimately drags it Active — where the immunity does not apply), so
+    the roles can now say what they mean. The wincon must OUT-RANK the support ex's: they are all worth
+    2 prizes, so without this the gust would drag up a support body over the body whose loss ends the
+    game."""
+    prov = EngineCardStatProvider()
+    brief = next(b for b in load_briefs() if b.slug == "dragapult_ex")
+    _, roles = resolve_brief_cards(brief, prov.ids_for_name)
+    plan = build_matchup_plan(brief_roles=roles, gamma=1.0)
+
+    def _pri(name):
+        return max(plan.priority(i) for i in prov.ids_for_name(name))
+
+    wincon = _pri("Dragapult ex")
+    assert wincon > 0, "the Dragapult ex WINCON must carry a target role (it had none)"
+    for support in ("Fezandipiti ex", "Latias ex", "Meowth ex"):
+        assert wincon > _pri(support), (
+            f"Dragapult ex (the win-condition) must out-rank the support ex {support!r} — all are "
+            f"2-prize bodies, so the gust would otherwise drag up a support body over the wincon")
+
+
+def _ancestor_names(prov, cid: int) -> set[str]:
+    """Every pre-evolution NAME above ``cid`` in its line (walks ``CardStat.evolvesFrom``)."""
+    names: set[str] = set()
+    stat = prov.get(cid)
+    name = getattr(stat, "evolvesFrom", None) if stat else None
+    while name and name not in names:
+        names.add(name)
+        nxt = None
+        for i in (prov.ids_for_name(name) or ()):
+            s = prov.get(i)
+            if s and getattr(s, "evolvesFrom", None):
+                nxt = s.evolvesFrom
+                break
+        name = nxt
+    return names
+
+
+@pytest.mark.req("REQ-BRIEF-0002")
+def test_shipped_briefs_never_neutralize_a_wincon_line_payoff():
+    """ADR-0051: the `engine` role resolves to priority 0 AND — as the top (curated) tier of
+    `build_matchup_plan`, which is last-write-wins — it OVERRIDES whatever the Read would have
+    contributed. So an `engine` row is an ACTIVE suppressor, not merely inert data.
+
+    A Brief that roles a pre-evolution `fragile_preevo` ("snipe it to deny the payoff") and then
+    roles that same line's PAYOFF `engine` contradicts itself and pins the win-condition at
+    priority 0. That was the alakazam bug: Powerful Hand has no printed damage (maxDamage 0), so
+    the GENERIC threat model read the wincon as harmless too — it had zero priority from every
+    path, and the agent never targeted it.
+
+    OMITTING the payoff from `targets` stays legitimate and is NOT pinned here — a payoff can be
+    genuinely UNTARGETABLE: Crustle prevents ALL damage from Pokémon ex (and every one of our
+    win-conditions is an ex), and Dragapult ex is a **Tera** (`Category: Tera(Dragon)`,
+    `CardStat.tera`) — Tera Pokémon take NO damage from attacks while BENCHED (rules.md §185), which
+    is precisely what the Tera label identifies. This pins only the explicit NEUTRALIZATION of a
+    payoff the Brief simultaneously snipes the pre-evo of, which is always a contradiction.
+    """
+    prov = EngineCardStatProvider()
+    for brief in load_briefs():
+        _, target_roles = resolve_brief_cards(brief, prov.ids_for_name)
+        preevo_names = {getattr(prov.get(i), "name", None)
+                        for i, r in target_roles.items() if r == "fragile_preevo"}
+        for cid, role in target_roles.items():
+            if role != "engine":
+                continue
+            clash = _ancestor_names(prov, cid) & preevo_names
+            assert not clash, (
+                f"{brief.slug}: target {getattr(prov.get(cid), 'name', cid)!r} is roled `engine` "
+                f"(priority 0) but it is the PAYOFF of the line whose pre-evolution(s) "
+                f"{sorted(clash)} the SAME Brief roles `fragile_preevo`. The Brief snipes the "
+                f"pre-evo to deny a payoff it then declares neutral — pinning the win-condition at "
+                f"priority 0 (ADR-0051). Role the payoff `prize_liability`, or drop the `engine` row.")

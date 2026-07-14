@@ -30,8 +30,8 @@
   "targets": [
     {
       "card": "Alakazam",
-      "role": "engine",
-      "why": "Sole attacker and payoff; the Psychic line does NOT self-shuffle, so KOing the body is real prize progress AND tempo denial (slow to re-assemble). Darkness x2 (140 -> 70-base OHKO), or any 140 hit. Remove it — do not out-grind its hand size."
+      "role": "prize_liability",
+      "why": "THE win-condition body — the top-priority target (ADR-0051 `prize_liability`, the 'KO/gust this' role; it is 1 prize, but the role means 'the payoff to remove', not 'multi-prize'). Sole attacker and payoff; the Psychic line does NOT self-shuffle, so KOing the body is real prize progress AND tempo denial (slow to re-assemble). Darkness x2 (140 -> 70-base OHKO), or any 140 hit. Remove it — do not out-grind its hand size. MUST NOT be roled `engine`: that resolves to priority 0 and, as the curated top tier, SUPPRESSES the Read — and Powerful Hand has no printed damage (maxDamage 0), so the generic threat model reads this wincon as harmless too. Neutral here = the agent never targets the wincon."
     },
     {
       "card": "Abra",
