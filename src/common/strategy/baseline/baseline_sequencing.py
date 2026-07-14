@@ -47,4 +47,23 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and c.stat is not None
         and getattr(c.stat, "damageBoost", 0) > 0 and not c.board.active_attack_payable,
         weight=-12, status="assumed"),
+    Hypothesis(
+        id="dont-spend-unneeded-supporter",
+        rationale="Playing a draw Supporter is NOT mandatory just because it's in hand (learnthetcg "
+                  "`dont-spend-unneeded-supporter`). When the turn's directed goal is ALREADY met and "
+                  "there is no dig/thinning value left in drawing, HOLD the Supporter — most often save "
+                  "the Boss's Orders (`gust`) or an evolution-tutor (`rush_evolve`) Supporter for a later "
+                  "decisive turn, so the payoff is a preserved scarce future resource, not tempo now. "
+                  "Gated on the new `Board.turn_goal_satisfied` predicate (the directed goal met AND "
+                  "nothing still being searched — fails SAFE to False, so this stays silent unless the "
+                  "goal is provably done). Scoped to a SUPPORTER whose value is draw/gust/positioning "
+                  "(`draw`/`gust`/`rush_evolve`) and NOT a genuine `dig` (looking deeper for a needed "
+                  "piece keeps real value). SEED(ladder): -15 — a demotion below End, never a veto (the "
+                  "tuned layer matures it). Weight 0 = WIRED + INERT until the ladder validates.",
+        when=lambda c: c.option_type == _PLAY and c.stat is not None
+        and getattr(c.stat, "is_supporter", False)
+        and ("draw" in c.tags or "gust" in c.tags or "rush_evolve" in c.tags)
+        and "dig" not in c.tags
+        and getattr(c.board, "turn_goal_satisfied", False),
+        weight=0, status="assumed"),
 ]

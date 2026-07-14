@@ -8,7 +8,8 @@ import pytest
 from common.strategy.baseline import (
     BASELINE_HYPOTHESES, BENCH_HYPOTHESES, DISRUPTION_HYPOTHESES, ENERGY_HYPOTHESES,
     EVOLUTION_HYPOTHESES, HEAL_HYPOTHESES, OPENING_HYPOTHESES, PHASES_HYPOTHESES,
-    PROMOTE_HYPOTHESES, RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES, SNIPE_HYPOTHESES,
+    POSTURE_HYPOTHESES, PROMOTE_HYPOTHESES, RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES,
+    SNIPE_HYPOTHESES,
 )
 from common.strategy.doctrines import (FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRESH_HYPOTHESES,
                                        TOOL_HYPOTHESES as TOOL_DOCTRINE_HYPOTHESES)
@@ -64,13 +65,18 @@ CLUSTERS = {
                                      "open-the-item-lock-starter"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
                                            "dont-play-damage-boost-when-cant-attack",
-                                           "use-the-draw-engine-ability"}),
+                                           "use-the-draw-engine-ability",
+                                           "dont-spend-unneeded-supporter"}),  # BUILD 4 (weight-0, deferred)
     "disruption": (DISRUPTION_HYPOTHESES, {
         "play-energy-denial", "play-harlequin-vs-hand-size", "disrupt-when-unfavored",
         "dont-gift-a-refresh-when-favored", "strip-the-stacked-engine-hand",
-        "dont-shuffle-away-the-bigger-hand"}),
+        "dont-shuffle-away-the-bigger-hand",
+        "disrupt-the-tailored-hand",            # mirror of strip-the-stacked (tailored-DOWN hand); weight-0
+        "unfair-stamp-comeback-posture"}),      # post-KO don't-empty-hand vs Stamp opponent; weight-0
     "phases": (PHASES_HYPOTHESES, {   # ADR-0040 advisory bands — the one c.board.phase consumer
         "phase-stabilize-prefer-heal", "phase-close-stop-developing"}),
+    "posture": (POSTURE_HYPOTHESES, {  # ADR-0026 prize-position posture (learnthetcg risk-scaling); weight-0
+        "play-safe-when-ahead-on-prizes"}),
 }
 
 

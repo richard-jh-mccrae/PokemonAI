@@ -19,7 +19,18 @@ Routing evidence = real-Pilot retests (tools/train/retest_one.py) + card/rule fa
 - candidate_signal: reuses `Board.wincon_base_deployable` (=_payoff_immediate_preevo_available, pilot.py:174/2689) + `Board.wincon_in_hand` (:164) + `Context.search_redundant_wincon` (:614/2251) — all EXIST; the fix widens the signal that the existing veto already keys on. No new infra.
 - verification_contract: verifier
 - provenance: correction 85164605:f6 (mega_starmie) | fixture tests/fixtures/corrections/ms_premature_wincon_tutor_no_base_f6.json | related: the OPEN sibling 85164605:f41 is REFUTED (at turn 5 a Staryu base IS on the bench, so this same signal correctly stays silent there and Salvatore/Mega Signal are productive — the widen does not touch it)
-- status: refuted
+- status: applied (sound rework 2026-07-14; the original −45 widen stays refuted)
+- resolution (2026-07-14, deferred-cleanup): the SOUND rework the refute called for ("turn-1 + accelerator-
+  active + productive-alternative distinction, plus resequencer-aware ≤0 suppression") is now BUILT as a
+  SEPARATE, narrow veto `dont-tutor-the-baseless-wincon-turn-one` (doctrine_fetch.py, −55). It reads a NEW
+  third search signal `search_baseless_wincon` (a wincon-ONLY tutor whose payoff is neither in hand/play NOR
+  has a deployable base — DISTINCT from `search_redundant_wincon`, so the good-case doctrine is untouched) and
+  fires ONLY on `turn<=1 AND reusable_energy_in_hand` (the productive-attach distinguisher). −55 CANCELS the
+  full +53 free-dig stack, driving Mega Signal to score ≤0 → `_finish_turn_last` tier 4 (behind the tier-2
+  attach) — resequencer-aware, exactly as the refute demanded (merely beating the attach on score leaves it
+  tier-0). f6 now FIXED (retest_one + pin test_dont_tutor_the_baseless_wincon_turn_one_f6); the good
+  `play-a-tutor-for-the-unfound-wincon` setup tests stay green. The refuted −45-widen approach below remains
+  refuted — this is a different, sound mechanism.
 - resolution (2026-07-12, update-strategy): REFUTED. The specced −45 widen is unsound on two counts.
   (1) It does NOT flip f6: `decide()` resequences by TIER (`_finish_turn_last`) before score — Mega Signal is a
   tier-0 free dig, so even after the widen drops it 53→8 (below the +18 attach) it still plays before the
@@ -159,7 +170,14 @@ frame where Lunar Cycle is unavailable / the engine is offline; investigate it t
 - candidate_signal: the ko_for_prizes evolution-enabler step in planner.py already commits an evolution tutor (see the covered precedent 83455356:f11, `test_planner_engine.py::test_critical_a212_*`). The missing discrimination = card-cost/type of the enabler: `CardStat.cardType` (Item vs Supporter, EXISTS) + "evolved form already in hand AND pre-evo directly evolvable this turn" (a legal direct-evolve option is present in the select → `appearThisTurn==False` on the pre-evo + the Stage-1 in hand). No new board infra beyond reading the option list the planner already enumerates.
 - verification_contract: verifier
 - provenance: correction 85164605:f41 (mega_starmie) | fixture tests/fixtures/corrections/ms_prefer_cheap_evolution_enabler_f41.json | REVERSES the 2026-07-11 initial refute (human verdict, verified against the match: the Staryu were played a prior turn → evolvable this turn) | do NOT regress the covered precedent 83455356:f11 (Salvatore IS the only enabler there — no Mega in hand → the Supporter tutor is correct)
-- status: applied (free-evolve half) + deferred (item-tutor half)
+- status: applied (both halves — free-evolve 2026-07-12; item-tutor composer 2026-07-14, flag OFF)
+- resolution (2026-07-14, deferred-cleanup): the ITEM-tutor half is now BUILT. `_item_evolve_ko_candidate`
+  (planner.py) composes play-Item(`tutor_mega`/`tutor_pokemon`) → evolve a this-turn-evolvable in-play body
+  (`appearThisTurn==False`, rules.md §4) → attach → KO, requiring the fetched form be provably deck-present
+  (`deck_definitely_has`) and fetchable by the item's class, emitting a COMPOSITE line committed at step[0]=the
+  Item, tiered at the reserved `_PLANNER_ENABLER_ITEM=4`. Behind the `enabler_item_composer` runtime flag
+  DEFAULT OFF (narrowly scoped single-item→single-evolve→attack; broader chains left as TODO). Tests in
+  test_deferred_planner_cluster.py. Enable + ladder-validate to activate.
 - resolution (2026-07-12, update-strategy): PARTIALLY APPLIED. Built the FREE-DIRECT-EVOLVE half in planner.py
   `_ko_for_prizes_lines`: new `_free_evolve_ko_candidate` branch (type-9 EVOLVE onto a bench body, option presence =
   legality, no `appearThisTurn` read) + a sub-prize cost tier on `ln.value` (`_PLANNER_ENABLER_FREE=8` for

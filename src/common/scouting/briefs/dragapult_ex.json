@@ -12,7 +12,8 @@
   "opponent_properties": {
     "opp_tempo": "midrange",
     "opp_spreads_bench": true,
-    "opp_item_locks": true
+    "opp_item_locks": true,
+    "opp_comeback_disruptor": true
   },
   "threats": [
     {

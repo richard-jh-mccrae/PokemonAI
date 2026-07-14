@@ -81,6 +81,11 @@
       "type": "bool",
       "consumer": "unwired (new 2026-07-09, first minted for dragapult_ex). Forward contract — needs a Board field + lever wired before it affects play. Lever (future): vs this opp, sequence our own Item cards BEFORE the lock lands (front-load Ball/search/tool plays), lean on Supporters/Abilities on the locked turn, and don't build a line that depends on an Item on a turn the lock can hit; also flag the lock body as a cheap snipe to stop repeat locks.",
       "note": "the deck runs a repeatable one-turn Item-lock (an attack/ability that denies the opponent playing Item cards during their next turn), taxing item-heavy setup engines. First minted for dragapult_ex (Budew — Itchy Pollen, 30 HP). Reusable for any Item-lock disruptor."
+    },
+    "opp_comeback_disruptor": {
+      "type": "bool",
+      "consumer": "consumed by Board.opp_comeback_disruptor (pilot.py) → the general `unfair-stamp-comeback-posture` hypothesis (baseline_disruption.py), which demotes emptying my hand the turn after I take a KO vs an opponent who can Unfair-Stamp. γ-gated (only fires on a recognized opponent whose Brief asserts this). Ships weight-0/ladder-gated.",
+      "note": "the deck runs a post-KO hand disruptor (Unfair Stamp class): after one of THEIR Pokémon is KO'd on my last turn, they can shuffle both hands and redraw — a comeback swing. Doctrine: when I take a KO on the opponent this turn I have just ENABLED their Unfair Stamp next turn, so don't over-commit / empty my hand and value holding a re-draw out. Unfair Stamp is ACE SPEC Item id 1080 (TWM 165), verified in pool. First minted for dragapult_ex. Reusable for any deck running Unfair Stamp or an equivalent post-KO shuffle-redraw disruptor."
     }
   }
 }

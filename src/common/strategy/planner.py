@@ -62,6 +62,11 @@ _PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Automatic Value Model's 
 _PLANNER_GAMEPLAN_W = 20.0     # ADR-0045 (S3): a candidate line SERVING the Match Planner's directed goal
                                # gets this × the Game Plan's confidence — sub-prize (< one KO_SCORE), ranks
                                # WITHIN a rung, never beats a prize; kill-switch `match_planner_steer`
+_PLANNER_DECKOUT_W = 5.0       # BUILD 2 (`opp_resource_reads`): a sub-prize nudge toward pressing a KO/grind
+                               # line when the opponent is near deck-out. `opp_deckout_in_turns` is SOUND
+                               # (deck count is public); the finer prized-last-copy read is probabilistic
+                               # (opp hand hidden) and deliberately NOT used. Sub-prize — never a reorder.
+_PLANNER_DECKOUT_TURNS = 3     # "near deck-out" horizon: fire only when they exhaust within this many turns
 _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
               "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
@@ -787,6 +792,21 @@ class PlannerMixin:
         return (_PLANNER_GAMEPLAN_W * gp.confidence
                 if line_goal in _GOAL_LINE.get(gp.directed_goal, ()) else 0.0)
 
+    def _deckout_grind_bonus(self, board) -> float:
+        """BUILD 2 (`opp_resource_reads`, DEFAULT OFF): a sub-prize nudge toward pressing a KO/grind line
+        when the opponent is near deck-out. ``board.opp_deckout_in_turns`` is SOUND — the opponent's deck
+        count is public, so the exhaustion horizon is calibrated, not asserted; the finer "deny their
+        LAST prized copy" read is probabilistic (their hand is hidden) and is deliberately NOT used here.
+        Silent unless the flag is on AND a near-term deck-out is known; the bump is sub-prize/sub-survival
+        (< one KO_SCORE), so it only ranks WITHIN a rung and never reorders a real prize/survival delta
+        (ADR-0031 decision 3)."""
+        if not getattr(self, "opp_resource_reads", False):
+            return 0.0
+        t = getattr(board, "opp_deckout_in_turns", None)
+        if t is None or t > _PLANNER_DECKOUT_TURNS:
+            return 0.0
+        return _PLANNER_DECKOUT_W
+
     def _forgo_ko_line(self, obs, select, board, options, traces):
         """The forgo-KO directive (ADR-0045 S4, 'don't wake the giant'): when a NON-winning KO of the opp
         Active is on the menu but the tight sound gate holds, commit the best DEVELOP instead — or END the
@@ -1159,6 +1179,13 @@ class PlannerMixin:
                 cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, extra,
                                                        retreat_on_menu)
                 kind = "evolution tutor"                  # a Supporter — least-preferred enabler (cost 0)
+            elif (o.get("type") == _PLAY and getattr(self, "enabler_item_composer", False)
+                  and self._is_item_pokemon_tutor(obs, select, o)):
+                retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
+                cand = self._item_evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra,
+                                                      retreat_on_menu)
+                kind, cost = "item tutor", _PLANNER_ENABLER_ITEM   # BUILD 3: an Item is cheaper than the
+                #                                     scarce Supporter tutor, dearer than a free direct-evolve
             elif o.get("type") == _PLAY:
                 cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player)
                 kind = "energy tutor"
@@ -1169,6 +1196,7 @@ class PlannerMixin:
             prizes, survives = cand
             value = self._leaf_value(prizes=prizes, active_survives=survives, threat_removed=threat)
             value += self._gameplan_goal_bonus("ko_for_prizes", board)       # ADR-0045 seam (S3)
+            value += self._deckout_grind_bonus(board)                        # BUILD 2 seam (opp_resource_reads)
             value += cost                                 # sub-prize/sub-survival: breaks a same-KO tie
                                                           # among enablers, never over a real prize delta
             lines.append(TurnLine(next_step=[i], goal="ko_for_prizes", value=value,
@@ -1194,7 +1222,14 @@ class PlannerMixin:
             return []
         ranked = [(self._body_threat_rank(obs, p, board.read, board.posture_confidence), p)
                   for p in bench]
-        top_rank, top = max(ranked, key=lambda t: t[0])
+        if getattr(self, "ko_target_whiff", False):
+            # BUILD 1 (DEFAULT OFF): among EQUAL-threat-rank targets prefer the one the opponent is
+            # LEAST able to replace — lowest `copies_left_odds` of its own line. Threat rank stays the
+            # dominant key, so this is a pure tiebreak; it never promotes a lesser threat. Fails OPEN
+            # (`copies_left_odds` → 1.0 for an unrecognized opponent, so all-equal → no reorder).
+            top_rank, top = max(ranked, key=lambda t: (t[0], -self._whiff_odds(board, t[1])))
+        else:
+            top_rank, top = max(ranked, key=lambda t: t[0])
         top_stat = self.stats.get(top.get("id")) if self.stats else None
         own_mag = float(getattr(top_stat, "maxDamage", 0) or 0) if top_stat else 0.0
         fwd_fn = getattr(self.stats, "forward_max_damage", None)
@@ -1239,6 +1274,7 @@ class PlannerMixin:
                     and top.get("id") in board.path_target_ids):  # cheapest Prize Path advances the MATCH
                 value += _PLANNER_PATH_W                          # win — sub-prize bump, ranks within rung
             value += self._gameplan_goal_bonus("ko_key_threat", board)       # ADR-0045 seam (S3)
+            value += self._deckout_grind_bonus(board)                        # BUILD 2 seam (opp_resource_reads)
             lines.append(TurnLine(
                 next_step=[i], goal="ko_key_threat", value=value,
                 rationale=f"plan (ko_key_threat): {kind} unlocks the snipe-KO of the benched key threat"))
@@ -1431,6 +1467,84 @@ class PlannerMixin:
         this-turn bodies (so every in-play body is a legal target)."""
         cid = self._option_card_id(obs, select, option)
         return bool(cid is not None and self.functions and "rush_evolve" in self.functions.tags(cid))
+
+    def _whiff_odds(self, board, body) -> float:
+        """BUILD 1 helper: P(the opponent still holds ≥1 copy of ``body``'s line) via the Opponent Model
+        (`copies_left_odds`). Lower = the opponent is LESS able to replace this body if I KO it — the
+        whiff-maximising target. Fails OPEN to 1.0 ("assume replaceable") when no Opponent Model / no
+        confident Read, so the tiebreak silently no-ops without a confident recognition."""
+        opp_model = getattr(board, "opponent", None)
+        if opp_model is None:
+            return 1.0
+        try:
+            return float(opp_model.copies_left_odds((body or {}).get("id")))
+        except Exception:
+            return 1.0
+
+    def _is_item_pokemon_tutor(self, obs, select, option) -> bool:
+        """BUILD 3 helper: this PLAY option is an ITEM that fetches an evolution-form Pokémon into HAND
+        (Mega Signal: `tutor_mega`; the generic `tutor_pokemon`) — the composer's committed first step.
+        Distinct from `rush_evolve` (evolves straight from the deck — a Supporter) and `tutor_energy`.
+        False when the card / its stat / its tags are unknown (fail-closed)."""
+        cid = self._option_card_id(obs, select, option)
+        if cid is None or not self.functions or not self.stats:
+            return False
+        stat = self.stats.get(cid)
+        if stat is None or not getattr(stat, "is_item", False):
+            return False
+        tags = self.functions.tags(cid)
+        return "tutor_mega" in tags or "tutor_pokemon" in tags
+
+    def _item_evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int,
+                                  retreat_on_menu: bool):
+        """BUILD 3 (`enabler_item_composer`, DEFAULT OFF): ``(prizes, active_survives)`` if an ITEM that
+        fetches an evolution Pokémon into HAND composes an otherwise-missed KO of the opponent's Active.
+        The COMPOSITE line: play the Item (committed step[0]) → fetch the DIRECT evolution of an in-play,
+        THIS-TURN-evolvable body (``appearThisTurn`` False — rules.md §4: a body cannot evolve the turn it
+        was played) → evolve it → the evolved form, carrying the body's Energy plus this turn's one attach,
+        affords a KO. The fetched form must be PROVABLY still in my deck (the tracker's positive certainty,
+        ``Board.deck_definitely_has``) and fetchable by THIS item (a `tutor_mega` item reaches only a Mega
+        ex; `tutor_pokemon` reaches any). A benched body needs the retreat still on the menu to reach the
+        Active. Value reflects the downstream evolve+attach KO; the caller tiers step[0] at the reserved
+        ``_PLANNER_ENABLER_ITEM`` (cheaper than the Supporter tutor, dearer than a free direct-evolve).
+
+        NARROW SCOPE — single Item → single DIRECT evolve → attack. TODO (generality deferred): multi-hop
+        evolution chains, the fetched form deployed onto a DIFFERENT body than the one modelled, chaining a
+        second tutor, and explicit Supporter-vs-Item slot accounting beyond the flat cost tier. None when
+        no such composite reaches a KO."""
+        if not self.stats:
+            return None
+        item_id = self._option_card_id(obs, select, option)
+        tags = self.functions.tags(item_id) if (self.functions and item_id is not None) else ()
+        mega_only = "tutor_mega" in tags and "tutor_pokemon" not in tags   # the item's fetch class
+        me = self._my_player(obs)
+        bodies = [p for p in (me.get("active") or []) if p]
+        if retreat_on_menu:
+            bodies += [p for p in (me.get("bench") or []) if p]
+        best = None
+        for body in bodies:
+            if body.get("appearThisTurn"):
+                continue                                  # can't evolve a body played this turn (rules.md §4)
+            base = self.stats.get(body.get("id"))
+            if base is None or not getattr(base, "name", None):
+                continue
+            energy = len(body.get("energies") or [])
+            for cid in set(self.deck):
+                st = self.stats.get(cid)
+                if st is None or getattr(st, "evolvesFrom", None) != base.name:
+                    continue
+                if mega_only and not getattr(st, "megaEx", False):
+                    continue                              # this item cannot fetch a non-Mega evolution
+                if not board.deck_definitely_has(cid):    # SOUND present-check — never plan on a whiff
+                    continue
+                if self._best_affordable_ko_value(obs, board, opp, cid, energy + extra, body=body) <= 0:
+                    continue
+                my_hp = getattr(st, "hp", 0) or 0
+                cand = (self._prize_value(opp),
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
+                if best is None or cand > best:
+                    best = cand
+        return best
 
     def _tutor_evolution_wins(self, obs, board, opp, body) -> bool:
         """SOUND: some DIRECT evolution of ``body`` (its `evolvesFrom` names the body) is PROVABLY

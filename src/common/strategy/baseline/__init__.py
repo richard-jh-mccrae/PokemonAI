@@ -15,6 +15,7 @@ from common.strategy.baseline.baseline_evolution import HYPOTHESES as EVOLUTION_
 from common.strategy.baseline.baseline_heal import HYPOTHESES as HEAL_HYPOTHESES
 from common.strategy.baseline.baseline_opening import HYPOTHESES as OPENING_HYPOTHESES
 from common.strategy.baseline.baseline_phases import HYPOTHESES as PHASES_HYPOTHESES
+from common.strategy.baseline.baseline_posture import HYPOTHESES as POSTURE_HYPOTHESES
 from common.strategy.baseline.baseline_promote import HYPOTHESES as PROMOTE_HYPOTHESES
 from common.strategy.baseline.baseline_retreat import HYPOTHESES as RETREAT_HYPOTHESES
 from common.strategy.baseline.baseline_sequencing import HYPOTHESES as SEQUENCING_HYPOTHESES
@@ -25,11 +26,13 @@ from common.strategy.baseline.baseline_snipe import HYPOTHESES as SNIPE_HYPOTHES
 BASELINE_HYPOTHESES = (
     ENERGY_HYPOTHESES + SNIPE_HYPOTHESES + BENCH_HYPOTHESES + PROMOTE_HYPOTHESES
     + RETREAT_HYPOTHESES + EVOLUTION_HYPOTHESES + HEAL_HYPOTHESES
-    + OPENING_HYPOTHESES + SEQUENCING_HYPOTHESES + DISRUPTION_HYPOTHESES + PHASES_HYPOTHESES)
+    + OPENING_HYPOTHESES + SEQUENCING_HYPOTHESES + DISRUPTION_HYPOTHESES + PHASES_HYPOTHESES
+    + POSTURE_HYPOTHESES)
 
 __all__ = [
     "BASELINE_HYPOTHESES",
     "ENERGY_HYPOTHESES", "SNIPE_HYPOTHESES", "BENCH_HYPOTHESES", "PROMOTE_HYPOTHESES",
     "RETREAT_HYPOTHESES", "EVOLUTION_HYPOTHESES", "HEAL_HYPOTHESES",
     "OPENING_HYPOTHESES", "SEQUENCING_HYPOTHESES", "DISRUPTION_HYPOTHESES", "PHASES_HYPOTHESES",
+    "POSTURE_HYPOTHESES",
 ]

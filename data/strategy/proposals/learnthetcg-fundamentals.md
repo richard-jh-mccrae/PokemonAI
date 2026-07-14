@@ -28,7 +28,13 @@ play-safe/press-risk mode below.
 - candidate_signal: score_diff / prize-lead board condition; the gamble tier (ADR-0039, "safe line loses → take variance")
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Risk scales with prize position")
-- status: deferred
+- status: applied
+- resolution (2026-07-14, deferred-cleanup): the net-new AHEAD half shipped as `play-safe-when-ahead-on-prizes`
+  (src/common/strategy/baseline/baseline_posture.py, NEW cluster), keyed on `board.opp_prizes_remaining -
+  my_prizes_remaining >= 1`. Ships weight-0 / status=assumed (SEED(ladder): -8) — WIRED + trigger-tested
+  (tests/strategy/test_deferred_posture_cluster.py) but contributes 0 to the argmax until ladder-validated
+  (ADR-0009 by-id override), the conservative default for an opponent-position prior. The BEHIND half stays
+  the existing gamble tier (ADR-0039), not re-authored.
 
 **Spec (authoring spec — thin):**
 Amount of risk taken should correlate with prize position. **Ahead:** minimise whiff — stabilise (extra
@@ -47,7 +53,14 @@ one-out posture) if the gamble tier only covers the behind side.
 - candidate_signal: needs a new signal (opponent rebuild-odds — their outs to a fresh attacker) + Deck-Content-Odds applied to the opponent + KO-Race read (blunder correction #30)
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Pick the KO that maximises the opponent's whiff odds")
-- status: deferred
+- status: applied
+- resolution (2026-07-14, deferred-cleanup): UNBLOCKED by the ADR-0047 opponent Resources model
+  (`OpponentModel.copies_left_odds` — P(opp deck still holds ≥1 copy), the rebuild-odds estimate this
+  proposal called "doesn't exist yet"). Shipped as a KO/snipe-target TIEBREAK in planner.py
+  `_ko_key_threat_lines` (key `(rank, -whiff_odds)`), behind the `ko_target_whiff` runtime flag DEFAULT
+  OFF. Rank stays dominant → only breaks ties among equal-rank targets, preferring the body the opponent is
+  least able to replace. `_whiff_odds` fails OPEN to 1.0 (no confident Read → no reorder). Tests in
+  test_deferred_planner_cluster.py. Enable + ladder-validate to activate.
 
 **Spec (authoring spec — thin):**
 When behind you win by making the opponent **miss** (boss / attack / KO). Choose the KO target that leaves
@@ -66,7 +79,14 @@ then, record as needs-a-new-signal; do not fake a weight.
 - candidate_signal: opponent hand-size delta + last-turn action (needs a new signal); Shuffle-Refresh hand-quality gate (ADR-0024) for the "play it unless hand complete" side
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Disrupt a tailored hand; don't hoard your own Iono")
-- status: deferred
+- status: applied
+- resolution (2026-07-14, deferred-cleanup): UNBLOCKED by the ADR-0047 opponent Resources model
+  (`hand_size_delta` + `last_turn_dumped`, flattened onto Board as `opp_hand_size_delta` / `opp_last_turn_dumped`).
+  Side (1) shipped as `disrupt-the-tailored-hand` (baseline_disruption.py) — value a `hand_disruption`
+  Supporter when the opponent dumped last turn AND is now down to a small hand (`opp_last_turn_dumped and
+  opp_hand_size <= 3`), the MIRROR of the existing `strip-the-stacked-engine-hand` (big-hand). Weight-0 /
+  assumed (SEED(ladder): 22), trigger-tested. Side (2) (don't hoard own Iono) is covered by the
+  Shuffle-Refresh dead-hand gate (ADR-0024). Enable + ladder-validate to activate.
 
 **Spec (authoring spec — thin):**
 Two coupled rules. (1) **Value hand-disruption (Iono) when the opponent has tailored a big hand down to a
@@ -157,7 +177,15 @@ next to the Ignition energy-discipline / `dont-waste-discard-energy` doctrine �
 - candidate_signal: needs a new signal — "turn-goal-already-satisfied" predicate over the Turn Planner directed goal + hand completeness
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Don't spend a draw supporter you don't need")
-- status: deferred
+- status: applied (consumer wired) + deferred (sound predicate derivation)
+- resolution (2026-07-14, deferred-cleanup): the CONSUMER shipped — hypothesis `dont-spend-unneeded-supporter`
+  (baseline_sequencing.py, weight-0 / assumed, SEED(ladder): -15) demotes a draw/gust/rush_evolve Supporter
+  when `board.turn_goal_satisfied`. The new Board predicate `turn_goal_satisfied` (pilot.py) exists but is
+  populated conservatively **False**: a sound "directed-goal-met" oracle is NOT derivable from current Board
+  signals (the Game Plan exposes goal-kind + confidence, not per-mode completion; the "I can attack, so I'm
+  done" proxy over-claims and would lose tempo). Per the fail-safe rule the predicate returns False rather
+  than fake an unsound True — so the rule is inert until a sound goal-met oracle is authored (DoD:
+  a Turn-Planner directed-goal-completion signal). `select` is threaded for that future derivation.
 
 **Spec (authoring spec — thin):**
 Playing a draw supporter is **not** mandatory just because it's in hand. If the hand already accomplishes the
@@ -213,7 +241,14 @@ archetype. Not a general weight — it's a deck-intent knob.
 - candidate_signal: own side — deck_tracker.py / deck_odds.py (built, sound-deck-emptiness-oracle + deck-content-odds); opponent side — needs a new signal (opponent discard/resource + prized-count model)
 - verification_contract: seed-ladder
 - provenance: data/strategy/learnthetcg_fundamentals_strategy.md (general → "Exploit known deck contents on both sides")
-- status: deferred
+- status: applied
+- resolution (2026-07-14, deferred-cleanup): the OPPONENT side (called "doesn't exist" here) is UNBLOCKED by
+  the ADR-0047 opponent Resources model. Shipped `opp_deckout_in_turns` (flattened onto Board from the SOUND
+  deck-count trajectory) consumed by a planner deck-out grind nudge (`_deckout_grind_bonus`, sub-prize
+  `_PLANNER_DECKOUT_W=5`) on both KO rungs, behind the `opp_resource_reads` runtime flag DEFAULT OFF. The
+  finer prized-last-copy read stays probabilistic (opp hand hidden) and is deliberately NOT used — documented
+  in-comment. The OWN side (bottom-tracking / no-shuffle-to-guarantee) is already built (deck_tracker /
+  deck_odds). Enable + ladder-validate the grind nudge to activate.
 
 **Spec (authoring spec — thin):**
 Exploit known contents both ways. **Own deck:** track cards sent to the *bottom* with Iono and the thinned

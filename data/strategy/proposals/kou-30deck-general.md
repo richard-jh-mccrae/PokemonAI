@@ -9,8 +9,17 @@ Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.m
 - candidate_signal: needs a new signal (opponent property "runs Unfair Stamp") + a board condition "I took a KO this turn" + hand-redundancy
 - verification_contract: seed-ladder
 - provenance: data/strategy/articles/pokemon_lover_30-deck-strengths-weaknesses/pokemon_lover_30-deck-strengths-weaknesses_strategy.md (general → "Unfair Stamp is the meta's pivot")
-- status: deferred
+- status: applied
 - for: general
+- resolution (2026-07-14, deferred-cleanup): both blocking signals now exist. (a) The "I took a KO this turn"
+  Board condition = `board.opp_took_ko_this_turn`, flattened from the ADR-0047 Resources tracker
+  (`took_ko_this_turn`). (b) The opponent property `opp_comeback_disruptor` was MINTED in
+  opponent_properties.json and asserted `true` in briefs/dragapult_ex.json (the opponent Dragapult runs
+  Unfair Stamp, ACE SPEC id 1080 — docs/matchups/dragapult_ex.md). Defensive posture shipped as
+  `unfair-stamp-comeback-posture` (baseline_disruption.py, weight-0 / assumed, SEED(ladder): -18): when I
+  took a KO this turn AND the recognized opponent can Unfair-Stamp AND my hand is low, demote further
+  hand-emptying. DOUBLE-inert (weight-0 AND γ-gated on a Brief-asserted property). Offensive/user side was
+  already COVERED. Enable + ladder-validate to activate.
 
 **Spec (authoring spec — thin):**
 Unfair Stamp (ACE SPEC Item #1080, verified in pool) is usable ONLY by a player who had one of their

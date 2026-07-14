@@ -87,27 +87,39 @@ class FetchMixin:
                 live += 1
         return pool > 0 and live == 0
 
-    def _search_signals(self, option: dict, tags: list, board) -> tuple[bool, bool]:
-        """The two deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
-        (every card it can fetch is provably gone from the deck) and whether it is a REDUNDANT
+    def _search_signals(self, option: dict, tags: list, board) -> tuple[bool, bool, bool]:
+        """The three deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
+        (every card it can fetch is provably gone from the deck), whether it is a REDUNDANT
         wincon-tutor (it can fetch ONLY the win-condition, which you can't usefully deploy a second
-        of). Both False off a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`).
+        of), and whether it is a BASELESS wincon-tutor (it can fetch only the win-condition and there
+        is NO base to deploy it onto and it isn't in hand/play — the fetched payoff sits dead). All
+        three False off a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`).
 
         The wincon-tutor is redundant when a copy is already in HAND (a second is a dead dig) OR the
         win-condition is already IN PLAY with no base to evolve another onto (`not
         wincon_base_deployable` — no Line pre-evolution in play or hand): fetching a second Mega you
-        cannot deploy burns the turn while a real need (a Bench body) goes unmet (ep83038055 f40)."""
+        cannot deploy burns the turn while a real need (a Bench body) goes unmet (ep83038055 f40).
+
+        The wincon-tutor is baseless (DISTINCT from redundant — the win-condition is NEITHER in hand
+        NOR in play) when its payoff has no immediate pre-evolution to deploy it onto: the fetched
+        wincon just sits in hand and THIS tutor cannot fetch the missing base either. The turn-1
+        premature-tutor shape (85164605:f6 — tutoring a Mega Starmie ex with no Staryu anywhere);
+        the consuming veto (`dont-tutor-the-baseless-wincon-turn-one`) adds the turn / productive-
+        alternative narrowing so the SOUND `play-a-tutor-for-the-unfound-wincon` setup case stays."""
         if option.get("type") != _PLAY:
-            return False, False
+            return False, False, False
         fetch_set = self._search_deck_set(tags)
         if not fetch_set:
-            return False, False
+            return False, False, False
         exhausted = all(cid in board.deck_empty_ids for cid in fetch_set)
         wincon = self._wincon_set()
+        wincon_only = bool(wincon) and fetch_set <= wincon
         wincon_undeployable_in_play = board.wincon_in_play and not board.wincon_base_deployable
-        redundant = (bool(wincon) and fetch_set <= wincon
+        redundant = (wincon_only
                      and (board.wincon_in_hand or wincon_undeployable_in_play))
-        return exhausted, redundant
+        baseless = (wincon_only and not board.wincon_in_hand
+                    and not board.wincon_in_play and not board.wincon_base_deployable)
+        return exhausted, redundant, baseless
 
     def _search_probable_whiff(self, option: dict, tags: list, board) -> bool:
         """The PROBABILISTIC complement to `_search_signals`' SOUND `search_targets_exhausted`
@@ -493,6 +505,26 @@ HYPOTHESES = [
                   "not ⊆ the wincon).",
         when=lambda c: c.option_type == _PLAY and c.search_redundant_wincon,
         weight=-45, status="testing"),
+    Hypothesis(
+        id="dont-tutor-the-baseless-wincon-turn-one",
+        rationale="Turn-1 premature-wincon-tutor veto (85164605:f6). A wincon-ONLY tutor whose payoff "
+                  "has NO deployable base and isn't already in hand/play (`Context.search_baseless_wincon` "
+                  "— fetch-set ⊆ the wincon, its immediate pre-evo neither in play nor hand, and this tutor "
+                  "can't fetch that base) leaves the fetched Mega sitting DEAD; on turn 1 with a held Energy "
+                  "to attach instead (`reusable_energy_in_hand` — charge the accelerator / develop a body) "
+                  "the tutor is pure tempo waste (ms Mega Signal → Mega Starmie ex with no Staryu anywhere; "
+                  "the human: 'fetching a Mega Starmie here doesn't help us'). Sized to CANCEL the whole "
+                  "free-dig endorsement stack (`dig-before-commit` +20 + `fetch-when-it-fills-a-need` +8 + "
+                  "`play-a-tutor-for-the-unfound-wincon` +25 = +53) and drive the tutor to score ≤0 → "
+                  "`_finish_turn_last` tier 4 (behind the tier-2 attach and End) so the attach wins — merely "
+                  "sinking it below the attach is NOT enough, a free PLAY at score>0 stays tier 0 and plays "
+                  "FIRST. NARROW by design (`turn<=1` + a held Energy) so it never touches the SOUND "
+                  "`play-a-tutor-for-the-unfound-wincon` setup case (tutor the in-deck wincon on a later "
+                  "turn / when nothing more productive is available). Mirrors `dont-tutor-the-held-wincon` "
+                  "(−45) in shape; a hair stronger to clear the +25 the redundant case doesn't stack. Seed; ladder-tuned.",
+        when=lambda c: c.option_type == _PLAY and c.search_baseless_wincon
+        and c.board.turn <= 1 and c.board.reusable_energy_in_hand,
+        weight=-55, status="assumed"),
     Hypothesis(
         id="prefer-wincon-line-piece",
         rationale="At a hand-search, prefer a pre-evolution on a recognized ATTACKER Line over an off-line "
