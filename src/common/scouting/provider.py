@@ -31,6 +31,7 @@ from .card_text import (  # noqa: F401
     parse_attack_scaling,
     parse_attack_self_return,
     parse_attack_transients,
+    parse_card_ability_energy,
     parse_card_damage_boost,
     parse_card_defense,
 )
@@ -73,6 +74,10 @@ class CardStat:
                                        # (e.g. Jetting Blow 120 at 1 energy, not Nebula Beam 210 at CCC)
     attacks: tuple = ()                # (attackId, …) — lethal-attach lookahead reads cost/dmg to ask
                                        # "would attaching this Energy unlock a KO?" (Ignition->CCC->Nebula Beam)
+    abilityEnergyTypes: tuple = ()     # EnergyType codes the card's Ability needs ATTACHED as fuel
+                                       # ("if this Pokémon has any {D} Energy attached" — Munkidori
+                                       # Adrena-Brain -> (7,)). The energy-routing complement to an
+                                       # attack cost: a colour a body needs solely for its Ability
     weakness: int | None = None
     resistance: int | None = None
     energyType: int | None = None
@@ -403,6 +408,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             benchSnipeDamage=int(max((bench_snipe_by_aid.get(aid, 0) for aid in c.attacks), default=0)),
             maxDamage=int(max_dmg), maxDamageCost=max_dmg_cost,
             attacks=tuple(c.attacks),
+            abilityEnergyTypes=parse_card_ability_energy(c),
             minAttackCost=(min(costs) if costs else None), minCostDamage=int(cheap_dmg),
             weakness=(int(c.weakness) if c.weakness is not None else None),
             resistance=(int(c.resistance) if c.resistance is not None else None),

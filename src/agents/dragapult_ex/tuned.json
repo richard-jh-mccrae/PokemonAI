@@ -1,4 +1,17 @@
 {
+  "advance-the-accel-pieces": 33.0,
   "advance-the-evolution-line": 18.0,
-  "play-energy-denial": 17.0
+  "attach-energy-last": -2.0,
+  "demote-needless-search-supporter-in-setup": -17.0,
+  "dig-before-commit": 23.0,
+  "dont-feed-the-doomed": -27.0,
+  "fetch-the-attack-color": 1.33,
+  "gust-for-the-ko": 51.0,
+  "gust-for-the-stall": 7.0,
+  "hold-line-piece-dont-shuffle": -24.0,
+  "play-energy-denial": 17.0,
+  "play-risky-ruins-when-net-positive": 12.0,
+  "power-up-attacker": 18.0,
+  "stall-gust-over-dev-when-starved": 92.0,
+  "use-acceleration": 27.0
 }

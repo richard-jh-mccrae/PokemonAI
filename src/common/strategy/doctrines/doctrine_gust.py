@@ -15,6 +15,9 @@ from common.strategy.context import (KO_SCORE, _BENCH, _CARD, _EVOLVING_THREAT_D
 from common.strategy.strategy import Hypothesis, Plan
 
 _STALL_RETREAT = 1           # min retreat cost of a STRANDABLE energyless body: no Energy of its own
+_STALL_EX_BONUS = 3          # keystone bump: stranding an energyless opponent EX (2-prize, win-condition-
+                             # class body that burns a full turn to retreat) beats a fungible pre-evo by
+                             # more than a point of retreat cost (ml f41); << KO_SCORE so a KO still wins
                              # to discard -> can't pay ANY retreat cost (≥1) -> opponent must first
                              # spend a turn's attach to retreat it — real tempo cost even at 1 (ep82754875)
 _EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so
@@ -171,7 +174,12 @@ class GustMixin:
         if not target or (target.get("energies") or []):       # energized -> not a stall body (gift)
             return 0
         stat = self.stats.get(target.get("id")) if self.stats else None
-        return stat.retreatCost if (stat and stat.retreatCost >= _STALL_RETREAT) else 0
+        if not (stat and stat.retreatCost >= _STALL_RETREAT):
+            return 0
+        # Keystone-aware: an energyless opponent EX is a far better strand than a fungible pre-evo — mirror
+        # the play-side `gust-to-strand-the-key-attacker` keystone read so the target picker agrees with it
+        # (ml f41: strand the 2-prize Meowth ex, weak to our Fighting, over a retreat-2 Riolu pre-evo).
+        return stat.retreatCost + (_STALL_EX_BONUS if stat.is_ex_body else 0)
 
     def _gust_target_denial(self, board, target: dict) -> int:
         """Defensive value of removing `target` via the gust: if it is a LIVE threat — it carries
@@ -319,6 +327,10 @@ HYPOTHESES = [
         and c.board.active_doomed and c.board.opp_active_can_damage_us
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
+        and not (c.board.my_active_energy == 0 and c.board.active_attack_payable)  # go down swinging: an
+        #   UNARMED Active a hand attach would arm this turn should attack, not stall-gust (ml f19); an
+        #   already-armed Active (energy>0) may still legitimately stall (it keeps its attack option).
+        and not c.board.active_attack_payable_via_accel  # …and an accel that can power it this turn (dp f70)
         and not c.board.opp_active_condition_gift,
         weight=10, status="assumed"),
     Hypothesis(
@@ -335,6 +347,7 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
         and not c.board.active_attack_payable
+        and not c.board.active_attack_payable_via_accel  # not a FALSE famine — an accel can power the Active (dp f70)
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
         and not c.board.opp_active_condition_gift,
@@ -349,6 +362,7 @@ HYPOTHESES = [
                   "and a real KO still outranks it on tactical.",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
+        and not c.board.active_attack_payable_via_accel  # an accel that powers the Active beats the stall (dp f70)
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_is_keystone
         and not c.board.opp_active_condition_gift,

@@ -75,3 +75,10 @@ definition-of-done, like blunder-buster's 4th outcome).
   present a fabricated number as validated.
 - **Card claims are the producer's** — the engine + `data/EN_Card_Data.csv` are ground truth; re-verify a
   proposal's card claim before shipping.
+- **Verification is READ-ONLY; never clobber `tuned.json`.** Probe fixes with `retest_one.py <deck>
+  <ep>-<frame>` (re-derives one decision through the real Pilot, writes nothing) — that is the applier's
+  verify tool. If you want the corpus-level fit/`UNSATISFIED` printout, run `tune.py --dry-run` (a bare
+  `tune.py` recompiles + overwrites the committed `tuned.json` + tuner ledger + a report). The apply commit
+  is source + tests + proposal-resolution notes ONLY — a `tuned.json` re-fit is a SEPARATE, deliberately
+  re-verified commit (it moves many weights at once and would un-verify this round's retests); if a stray
+  run wrote it, `git checkout -- src/agents/<deck>/tuned.json tuned.meta.json data/corrections/tuner/<deck>.json`.

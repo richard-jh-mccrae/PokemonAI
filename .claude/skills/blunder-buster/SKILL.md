@@ -50,8 +50,11 @@ is empty for **every** agent.
 agent, rewrites each `data/corrections/tuner/<deck>.json`. Read **all** `open[]` + the printed
 **`UNSATISFIED`** lines → the **worklist**, one item per correction (**no clustering yet** — clustering is
 the join). Partition the **CRITICAL cohort** (any correction whose `rationale` carries the uppercase token
-`CRITICAL`). Refresh the dashboard: `python tools/train/blunder_report.py`. (`tune.py` also rewrites each
-`tuned.json` — deterministic Tier-0 weight deltas, committed via `/update-strategy`.)
+`CRITICAL`). Refresh the dashboard: `python tools/train/blunder_report.py`. (This Enumerate run WRITES —
+it rewrites each `data/corrections/tuner/<deck>.json` ledger, and also each `tuned.json` with a fresh
+deterministic Tier-0 re-fit — committed via `/update-strategy`. Every *other* `tune.py` invocation in this
+skill is a CHECK, so pass **`--dry-run`** there — `tune.py` has no other read-only mode, so a bare re-run
+recompiles + clobbers the committed `tuned.json`.)
 
 **1. Fan out — one agent per correction (Workflow; the barrier).** Spawn one leaf per worklist item.
 Each leaf reads its correction's scope + `live_trace` + fixture, follows
@@ -116,9 +119,11 @@ through.
 
 ## Completion gate
 
-Re-run `python tools/train/tune.py` (no `--agent`): for **every** agent, every open correction is now
-**proposal-routed** (a queued record links its ids), **covered**, **refuted**, or an evidenced
-**capability-gap** (`reviewed (excluded)`). Confirm no agent's block still lists an un-routed
+Re-run `python tools/train/tune.py --dry-run` (no `--agent`) — the completion gate is a **read-only
+CHECK**, so pass `--dry-run` (prints the fit/proposals/`UNSATISFIED` but writes nothing; a plain re-run
+here would recompile + clobber the `tuned.json` the Enumerate step already produced). For **every** agent,
+every open correction is now **proposal-routed** (a queued record links its ids), **covered**, **refuted**,
+or an evidenced **capability-gap** (`reviewed (excluded)`). Confirm no agent's block still lists an un-routed
 `open`/`UNSATISFIED`. Produce a single terminal-outcome ledger spanning all agents — one line per
 correction, its outcome + evidence (proposal id / named Hypothesis / refutation test / four artifacts),
 grouped by agent. Refresh `reports/blunders.html`. Only then report finished. Then `/update-strategy`

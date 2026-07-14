@@ -38,6 +38,21 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _EVOLVE and c.card_is_line_preevo,
         weight=15, status="assumed"),
     Hypothesis(
+        id="advance-the-energized-line-body-first",
+        rationale="When two MID-line pre-evolutions can both advance the line, evolve the one that already "
+                  "carries Energy (`evolve_body_energy > 0`) — the evolved form can ATTACK this turn "
+                  "(dragapult f82: energized Active Dreepy -> Drakloak Dragon Headbutt {R}{P} 70 now, vs a "
+                  "bare bench Dreepy -> a Drakloak that can't attack). The mid-line analogue of "
+                  "`evolve-the-energized-body-first` (which only covers the wincon-Role final evolve); a "
+                  "small +5 WHICH-body tie-break on top of `advance-the-evolution-line` (+15), so the "
+                  "energized body nets 20 vs a bare one at 15. Needed because the decide() secondary sort "
+                  "key `attach_to_needy_line` fires BACKWARDS on an Evolve (it favours the energy-LESS bare "
+                  "body as 'needy'), handing the tie to the bare copy; this rung wins the pick on score "
+                  "outright. A KO still dominates (KO_SCORE).",
+        when=lambda c: c.option_type == _EVOLVE and c.card_is_line_preevo
+        and (c.evolve_body_energy or 0) > 0,
+        weight=5, status="assumed"),
+    Hypothesis(
         id="prefer-rush-evolve-tutor",
         rationale="A `rush_evolve` tutor (e.g. Salvatore: fetch a Pokémon and evolve it the same turn "
                   "its pre-evolution was played) collapses two setup turns into one, so prefer it — "

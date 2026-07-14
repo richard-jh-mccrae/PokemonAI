@@ -1,7 +1,52 @@
 {
   "deck": "mega_lucario",
-  "generated_at": "2026-07-13T17:18:32",
-  "open": [],
+  "generated_at": "2026-07-13T23:12:23",
+  "open": [
+    {
+      "id": "missed-win-85785067-14",
+      "key": "85785067-14",
+      "scope": "decision",
+      "subject": 14,
+      "seat": 0,
+      "span_len": 0,
+      "attribution": null,
+      "category": "missed_win",
+      "episode_id": 85785067,
+      "frame": 14,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='Main' (turn 1) to prefer 'End turn' over 'Play Switch'",
+      "rationale": "CRITICAL: Solrock with an energy as starting active and Lunetone on bench is exactly what we want. dont switch out of that.",
+      "agent_build": "mega_lucario_20260713_2d2a113",
+      "built_at": "2026-07-13T00:00:00",
+      "critical": true,
+      "planner_committed": false,
+      "lethal_locked": false,
+      "posture_mismatch": false,
+      "believed_archetype": "Hariyama / Mega Lucario ex / Solrock"
+    },
+    {
+      "id": "misattachment-85785606-1",
+      "key": "85785606-1",
+      "scope": "decision",
+      "subject": 1,
+      "seat": 0,
+      "span_len": 0,
+      "attribution": null,
+      "category": "misattachment",
+      "episode_id": 85785606,
+      "frame": 1,
+      "seed_weight": 20.0,
+      "trigger_sketch": "fire at SelectContext='SetupActivePokemon' (turn 0) to prefer 'Solrock' over 'Solrock'",
+      "rationale": "CRITICAL: Dont energy Riolu from start if Solrock active and can attack because Lunatone is on bench. we want to start attacking with Solrock whenever able.",
+      "agent_build": "mega_lucario_20260713_2d2a113",
+      "built_at": "2026-07-13T00:00:00",
+      "critical": true,
+      "planner_committed": false,
+      "lethal_locked": false,
+      "posture_mismatch": false,
+      "believed_archetype": "Alakazam"
+    }
+  ],
   "skipped": [
     {
       "key": "84889539-48",
@@ -28,6 +73,19 @@
       "lethal_locked": false,
       "posture_mismatch": false,
       "believed_archetype": "Dragapult ex"
+    },
+    {
+      "key": "85785067-41",
+      "scope": "decision",
+      "subject": 41,
+      "episode_id": 85785067,
+      "frame": 41,
+      "reason": "tactical",
+      "critical": false,
+      "planner_committed": false,
+      "lethal_locked": false,
+      "posture_mismatch": false,
+      "believed_archetype": "Lunatone / Mega Lucario ex / Solrock"
     }
   ],
   "reviewed": [
@@ -84,8 +142,8 @@
       "scope": "decision",
       "episode_id": 84071010,
       "frame": 15,
-      "disposition": "deferred",
-      "reason": "capability-gap: the retreat-Tool-enabled lethal. deck_definitely_has(Air Balloon)=False (P=0.9877; obs carries no own_prizes so the deck tracker never anchors) and the Lethal Solver's contract is 'a probable fetch is never a win' -- locking it would be a phantom. Fixture also stores the REFUTED dead-hand correct=[1]. See docs/todo/lethal-retreat-tool-enabler.md."
+      "disposition": "fixed",
+      "reason": "BUILT 2026-07-13 (retreat_enabler_lethal). The prior phantom objection is retired: the fixture now carries own_prizes + search_begin_input, so the tracker anchors and deck_definitely_has(Air Balloon)=True. New _family_win_candidates tier 6 recognizes the win (a benched attacker wins if promoted, the Active can't retreat now, a retreatReduction Tool the deck definitely holds frees it) + two KO_SCORE grab/attach tacticals steer the cascade (Petrel search -> Air Balloon, attach -> Active) + _can_retreat now credits an attached retreat Tool. Fixture re-tagged correct=[0] (Petrel), category missed_win. decide() LOCKS the engine-verified win (planned.goal='win', verified=True, next_step=[0]); engine_confirms(f15)=True; the three lethal counter-fixtures don't regress. Gated by engine-confirm (a phantom is dropped). Tests in test_planner_boost_promote.py."
     },
     {
       "key": "84071010-30",

@@ -188,7 +188,17 @@ class Board:
                                        # IN-PLAY attackers' attacks require (via AttackStat.energyTypes) — the
                                        # colors a fetched Energy can be USED for now; an off-color one no body
                                        # in play needs (dragapult's {D} while Munkidori is in deck) isn't in it
-                                       # (need already met), keep-value floor `discard-the-redundant`
+    in_play_required_colors: frozenset = field(default_factory=frozenset)  # attack colors UNION ability-fuel
+                                       # colors of my in-play bodies (Munkidori's Adrena-Brain {D}) — the colors
+                                       # SOME in-play body can use. An energy outside it is dead weight regardless
+                                       # of recipient: backs the ATTACH_TO off-color demote (dragapult f86)
+    in_play_unfueled_ability_colors: frozenset = field(default_factory=frozenset)  # ability-fuel colors of
+                                       # in-play bodies that LACK that colour attached now — fetching one switches
+                                       # a dormant Ability ON (grab {D} for a bare Munkidori); backs `fetch-the-ability-fuel-color`
+    setup_placed_ids: frozenset = field(default_factory=frozenset)  # card ids already placed on my Active/Bench
+                                       # during the PREGAME setup, read from MOVE_CARD logs (the just-placed Active
+                                       # shows only in logs, obs still reads active=[None]) — the setup-aware
+                                       # redundancy test `dont-pre-bench-a-redundant-utility` needs (dragapult f4)
     hand_duplicate_ids: frozenset = field(default_factory=frozenset)  # card ids I hold 2+ copies of in
                                        # hand, EXCLUDING fungible Energy — lowest-keep pitch at a forced
                                        # discard (`discard-the-hand-duplicate`); singleton never shed over dup
@@ -383,6 +393,18 @@ class Board:
     active_fully_powered: bool = False    # my Active already carries its HIGHEST-damage attack's cost
                                           # (attached ≥ maxDamageCost) — a burst Energy has no urgent
                                           # job; False when unknown (fail-closed keeps the keep rules)
+    active_attack_payable_via_accel: bool = False  # a PLAYABLE hand energy-accelerator (`tutor_energy`,
+                                          # e.g. Crispin) could fetch+attach ONE Energy and make my Active
+                                          # attack-payable THIS turn — the false famine `active_attack_payable`
+                                          # (attached + hand-attach only) misses; False when unknown, so a
+                                          # PROVABLE famine still fires the stall-gust (dragapult f70)
+    immediate_preevo_in_play: bool = False  # the payoff's immediate pre-evo (e.g. Drakloak) is ALREADY on
+                                          # my board, so a hand copy of it is redundant — refuel over it
+    active_arm_available: bool = False    # go-down-swinging is on the table: the Active is a real ATTACKER
+                                          # (not a utility body) whose biggest attack ONE more Energy would
+                                          # COMPLETE, and no ready benched win-condition to retreat into —
+                                          # arm+attack beats banking/drawing the Energy (ml f21 Solrock),
+                                          # unlike a body one short (f42 Makuhita) or a utility engine (f54)
     no_supporter_in_hand: bool = False   # MY hand holds NO Supporter (cardType 3) — the
                                           # `supporter_tutor` bench trigger (bench Meowth ex to fetch one)
     my_path_turns: float | None = None    # Tier-3 Prize Path (ADR-0040): total feasibility turns of MY
@@ -2365,6 +2387,52 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         out.add(t)
         return frozenset(out)
 
+    def _in_play_ability_fuel_colors(self, me: dict) -> frozenset:
+        """Ability-FUEL colors of my in-play bodies — the union of each Active/Bench body's
+        `CardStat.abilityEnergyTypes` (Munkidori's Adrena-Brain needs {D}). A colour a body needs
+        SOLELY to switch its Ability on, invisible to the attack-cost signal. Unioned with
+        `_in_play_attack_colors` into `in_play_required_colors`. Empty without stats."""
+        if not self.stats:
+            return frozenset()
+        out = set()
+        for p in ((me.get("active") or []) + (me.get("bench") or [])):
+            st = self.stats.get(p.get("id")) if p else None
+            out.update(t for t in (getattr(st, "abilityEnergyTypes", ()) or ()) if t not in (0, None))
+        return frozenset(out)
+
+    def _in_play_unfueled_ability_colors(self, me: dict) -> frozenset:
+        """Ability-fuel colors of in-play bodies that currently LACK that colour attached — the
+        Energy a fetch would use to switch a DORMANT Ability on (grab {D} for a bare Munkidori, not a
+        2nd {D} for one already fuelled). Backs `fetch-the-ability-fuel-color`. Empty without stats."""
+        if not self.stats:
+            return frozenset()
+        out = set()
+        for p in ((me.get("active") or []) + (me.get("bench") or [])):
+            st = self.stats.get(p.get("id")) if p else None
+            fuels = [t for t in (getattr(st, "abilityEnergyTypes", ()) or ()) if t not in (0, None)]
+            if not fuels:
+                continue
+            attached = self._attached_type_counts(p)
+            out.update(t for t in fuels if attached.get(t, 0) == 0)
+        return frozenset(out)
+
+    def _setup_placed_ids(self, obs: dict) -> frozenset:
+        """Card ids I placed on my Active/Bench during the PREGAME setup, recovered from the MOVE_CARD
+        logs. The just-placed Active shows only in the logs (obs still reads `active=[None]`), so the
+        obs-zone `in_play_ids` misses it — the redundancy test at `_SETUP_BENCH` (bench a 2nd copy of
+        something already placed) needs this to see the placement. Scoped to turn 0 so mid-game
+        promote/retreat MOVE_CARD logs never leak in; empty off setup."""
+        state = obs.get("current") or {}
+        if state.get("turn"):                              # 0/None only — pregame setup window
+            return frozenset()
+        yi = state.get("yourIndex", 0)
+        out = set()
+        for lg in (obs.get("logs") or []):
+            if (lg.get("type") == _MOVE_CARD and lg.get("playerIndex") == yi
+                    and lg.get("toArea") in (_ACTIVE, _BENCH) and lg.get("cardId") is not None):
+                out.add(lg["cardId"])
+        return frozenset(out)
+
     def _is_draw_engine_body(self, cid) -> bool:
         """True iff card `cid` is a DRAW-ENGINE body — it carries a `draw`/`stall` Function Tag, OR it
         evolves INTO one (Dunsparce → Dudunsparce: the base is untagged but its payoff IS the engine).
@@ -2456,6 +2524,54 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         have = len((target.get("energies") or []))
         provided = 3 if ("discard_eot" in (tags or []) and getattr(stat, "evolvesFrom", None)) else 1
         return have < cost and (have + provided) >= cost
+
+    def _active_attack_payable_via_accel(self, me: dict, ma: dict | None,
+                                         supporter_played: bool, basic_energy_in_deck: bool) -> bool:
+        """My Active could be made attack-payable THIS turn by a PLAYABLE hand energy-accelerator (a
+        `tutor_energy` card, e.g. Crispin: fetch a Basic Energy from the deck and attach it). The famine
+        stall-gust family reads only `active_attack_payable` (attached + best hand-attach) and misses the
+        deck-fetch accel, so it declares a FALSE famine (dragapult f70: Active Dragapult ex 0e, Crispin in
+        hand → Jet Headbutt {C} payable). Kept SEPARATE from `active_attack_payable` (attached-now truth
+        other consumers need). Fail-CLOSED (False on unknown stats / nothing to fetch / accel one short),
+        so a PROVABLE famine still fires the stall."""
+        if ma is None or not (self.stats and self.functions):
+            return False
+        stat = self.stats.get(ma.get("id"))
+        if stat is None or (stat.minAttackCost or 0) <= 0 or not basic_energy_in_deck:
+            return False
+        if (len(ma.get("energies") or []) + 1) < (stat.minAttackCost or 0):
+            return False                                   # even one accel-attach is short of the cheapest attack
+        for c in (me.get("hand") or []):
+            cid = c.get("id") if c else None
+            if cid is None or "tutor_energy" not in self.functions.tags(cid):
+                continue
+            cstat = self.stats.get(cid)
+            if getattr(cstat, "cardType", None) == 3 and supporter_played:  # 3 = Supporter: only one/turn
+                continue
+            return True
+        return False
+
+    def _active_arm_available(self, ma: dict | None, bench_wincon_ready: bool) -> bool:
+        """Go-down-swinging is available on the Active: it is a real ATTACKER (NOT a utility draw/tutor/stall
+        body) whose HIGHEST-damage attack ONE more Energy would COMPLETE this turn, and there is no ready
+        benched win-condition to retreat into instead. Distinguishes ml f21 (doomed Solrock — Cosmic Beam
+        {F} completed by one {F} → arm + swing for 70) from f42 Makuhita (biggest attack costs 2, one {F}
+        short) / f54 Lunatone (utility engine) and from the retreat-into-a-ready-wincon case (accel f70).
+        Fail-CLOSED. Backs `arm-the-doomed-active`, `dont-feed-the-doomed`'s go-down-swinging stand-down,
+        and the Lunar-Cycle famine's yield-to-arming."""
+        if ma is None or not self.stats or bench_wincon_ready or self._is_utility_body(ma.get("id")):
+            return False
+        return self._attach_completes_biggest_attack(ma, [])
+
+    def _immediate_preevo_in_play(self, me: dict) -> bool:
+        """The payoff's IMMEDIATE pre-evolution (e.g. Drakloak for the Dragapult line) is ALREADY on my
+        board (active/bench). A hand copy of it is then redundant — the shuffle-refresh hold on a line
+        piece should stand down and let the refuel dig for the buried payoff (dragapult f38)."""
+        preevos = self._payoff_immediate_preevo_set()
+        if not preevos:
+            return False
+        return any(p and p.get("id") in preevos
+                   for p in ((me.get("active") or []) + (me.get("bench") or [])))
 
     def _attach_from_target_needs(self, obs: dict, select: dict, option: dict) -> bool:
         """At an ATTACH_FROM target-select (the engine's recipient-pick step for a multi-attach
@@ -2672,6 +2788,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_attack_payable=(self._active_attack_payable(ma, payable)
                                    and not self._attack_impossible_on_menu(
                                        select, me, bool(state.get("energyAttached")))),
+            active_attack_payable_via_accel=self._active_attack_payable_via_accel(
+                me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
+            immediate_preevo_in_play=self._immediate_preevo_in_play(me),
+            active_arm_available=self._active_arm_available(ma, self._bench_wincon_ready(me)),
             active_fully_powered=self._active_fully_powered(ma),
             energy_placeable=self._energy_placeable(me),
             wincon_in_play=self._wincon_in_play(me),
@@ -2686,6 +2806,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             in_play_ids=frozenset(p.get("id") for p in ((me.get("active") or []) + (me.get("bench") or []))
                                   if p and p.get("id") is not None),
             in_play_attack_colors=self._in_play_attack_colors(me),
+            in_play_required_colors=(self._in_play_attack_colors(me) | self._in_play_ability_fuel_colors(me)),
+            in_play_unfueled_ability_colors=self._in_play_unfueled_ability_colors(me),
+            setup_placed_ids=self._setup_placed_ids(obs),
             hand_duplicate_ids=self._hand_duplicate_ids(me),
             top_fetch_priority_id=self._top_fetch_priority_id(select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
@@ -3655,10 +3778,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _can_lock_line_with_disruptor(self, me: dict, ma: dict | None, oa: dict | None,
                                       turn: int) -> bool:
-        """The OFFENSIVE variant of the disruptor maneuver (dragapult f20, `disruptor_lock_maneuver`):
-        early game, my Active is a fragile win-condition LINE pre-evo with nothing better to do, and a
-        benched `item_lock` disruptor (Budew) can be promoted to deny the opponent their Item turn —
-        attach -> retreat the line-preevo into Budew -> promote -> Itchy Pollen. Unlike
+        """The OFFENSIVE variant of the disruptor maneuver (dragapult f20/t2, `disruptor_lock_maneuver`):
+        early game, my Active is a fragile win-condition LINE pre-evo (f20) OR a retreatable support-ex
+        PIVOT (f20's t2 sibling — Fezandipiti ex) with nothing better to do, and a benched `item_lock`
+        disruptor (Budew) can be promoted to deny the opponent their Item turn — attach -> retreat the
+        pivot/line-preevo into Budew -> promote -> Itchy Pollen. Unlike
         `_can_wall_line_with_disruptor` this does NOT require the opponent to threaten damage NOW (their
         Item-reliant SETUP turn is the target). Gated instead on: `turn` <= 2 (the lock bites their
         setup), NO win-condition Line body already carries Energy (nothing is being DEVELOPED — else
@@ -3668,8 +3792,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         zones); silent for decks with no benched item-lock opener. SHIP-AND-REFINE: its ladder value is
         matchup-dependent (a fragile promoted disruptor may concede a prize) — the kill-switch is the
         lever if it underperforms."""
-        if not (getattr(self, "disruptor_lock_maneuver", False) and self.functions and turn <= 2
-                and ma and ma.get("id") in self._line_preevo_set() and self.stats):
+        if not (getattr(self, "disruptor_lock_maneuver", False) and self.functions
+                and turn <= 2 and ma and self.stats):
+            return False
+        ma_id = ma.get("id")
+        # Eligible Active: a fragile win-condition LINE pre-evo (the original trigger, e.g. Dreepy), OR a
+        # retreatable NON-attacking support-ex PIVOT (e.g. Fezandipiti ex, 85786096-t2) — an ex we would
+        # cycle out anyway, NOT a wincon-line body. Both sac into the benched item_lock; the shared guards
+        # below (nothing developed / cheap retreat / can't-KO) keep either variant a sound recovery line.
+        ma_stat = self.stats.get(ma_id)
+        is_support_ex_pivot = (ma_stat is not None and ma_stat.is_ex_body
+                               and ma_id not in self._wincon_set())
+        if not (ma_id in self._line_preevo_set() or is_support_ex_pivot):
             return False
         has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))
                        for b in (me.get("bench") or []))
@@ -3680,8 +3814,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if any((p.get("energies") or []) for p in in_play if p.get("id") in line_ids):
             return False                                  # a wincon Line body is already being energized
                                                           # -> develop it, don't retreat for the lock (f21)
-        stat = self.stats.get(ma.get("id"))
-        if stat is None or getattr(stat, "retreatCost", 0) > len(ma.get("energies") or []) + 1:
+        if ma_stat is None or getattr(ma_stat, "retreatCost", 0) > len(ma.get("energies") or []) + 1:
             return False                                  # the retreat must be reachable this turn
         return not self._active_maxed_kos(ma, oa)         # don't waste a body that could KO instead
 

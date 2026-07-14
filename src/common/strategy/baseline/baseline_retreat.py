@@ -63,20 +63,23 @@ HYPOTHESES = [
         weight=35, status="assumed"),
     Hypothesis(
         id="dont-play-switch-for-no-gain",
-        rationale="Don't play a free `switch` Item (Switch — swap the Active for a benched body) when it "
-                  "yields NO board benefit: the Active is a bare non-doomed body (`my_active_energy == 0`, "
-                  "`not active_doomed`), there is no ready benched win-condition to promote "
-                  "(`not bench_wincon_ready`) and no transient-locked big attacker to swap out "
-                  "(`not active_best_attack_locked`) — so the swap trades one board-equivalent body for "
-                  "another (an unpowered Riolu for an unpowered Riolu, ml f30: CRITICAL), pure tempo "
-                  "waste. Play Switch and End both scored 0, so the option-index tie-break took the "
-                  "wasteful Switch; −8 nets it below End (0). Guarded by the ABSENCE of every sanctioned "
-                  "switch motive (`retreat-to-ready-attacker` / `swap-out-the-locked-attacker` / a "
-                  "doomed-Active interpose or escape) and to a BARE Active, so a beneficial switch "
-                  "(promote a ready attacker, swap a locked nuke, escape/wall a doomed Active) is never "
-                  "suppressed.",
+        rationale="Don't play a free `switch` Item (Switch — swap the Active for a benched body) when there "
+                  "is NO sanctioned switch motive: the Active is not doomed (`not active_doomed`), there is "
+                  "no ready benched win-condition to promote (`not bench_wincon_ready`) and no "
+                  "transient-locked big attacker to swap out (`not active_best_attack_locked`) — so the swap "
+                  "only trades tempo away. Covers BOTH a bare board-equivalent swap (an unpowered Riolu for "
+                  "an unpowered Riolu, ml f30: CRITICAL) AND — the reason the old `my_active_energy == 0` "
+                  "guard was dropped — switching OFF an ENERGIZED Active that is exactly the opener we want "
+                  "(ml f14: CRITICAL — Switch benched an energized Solrock, promoting an unpowered Lunatone "
+                  "and breaking Cosmic Beam's Lunatone-on-Bench requirement). A no-gain switch is wasteful "
+                  "regardless of active energy, more so when energized. Play Switch and End both scored 0, so "
+                  "the option-index tie-break took the wasteful Switch; −8 nets it below End (0). Guarded by "
+                  "the ABSENCE of every sanctioned switch motive (`retreat-to-ready-attacker` / "
+                  "`swap-out-the-locked-attacker` / a doomed-Active interpose or escape), so a beneficial "
+                  "switch (promote a ready attacker, swap a locked nuke, escape/wall a doomed Active) is "
+                  "never suppressed.",
         when=lambda c: c.select_context == _MAIN and c.option_type == _PLAY and "switch" in c.tags
-        and c.board.my_active_energy == 0 and not c.board.active_doomed
+        and not c.board.active_doomed
         and not c.board.bench_wincon_ready and not c.board.active_best_attack_locked,
         weight=-8, status="assumed"),
 ]

@@ -55,7 +55,10 @@ For each **decision-scope** Correction:
 
 Output: `tuned.json` (machine, automatic) + proposed Hypothesis edits (assisted, human-committed) +
 status updates. `tune.py` **defaults to every agent in the log** (`--agent <deck>` narrows to one), so a
-`/blunder-buster` run sweeps *all* decks' open blunders in one pass. It writes a durable, committed
+`/blunder-buster` run sweeps *all* decks' open blunders in one pass. **`--dry-run`** makes it read-only —
+it prints the exact fit / proposals / `UNSATISFIED` but writes NOTHING (no `tuned.json`, `tuned.meta.json`,
+tuner ledger, or report); use it for any verification / completion-gate CHECK, since a bare run recompiles
+and overwrites the committed `tuned.json` from scratch. It writes a durable, committed
 **`data/corrections/tuner/<deck>.json`** snapshot per agent (`open[]` proposals + `skipped[]` + `reviewed[]`,
 each stamped with source `agent_build`/`built_at`) — the `/blunder-buster` cluster source, and a git-tracked
 timeline of how open blunders shrink per build.

@@ -90,14 +90,19 @@ HYPOTHESES = [
         weight=-18, status="assumed"),
     Hypothesis(
         id="play-risky-ruins-when-net-positive",
-        rationale="Play Risky Ruins (bench-chip Stadium) when net-positive: no Stadium is in play (place "
-                  "ours to chip the opponent's Basic non-{D} bench-entries), OR an OPPONENT's Stadium is up "
-                  "(replacing it disrupts them — a second, independent reason). The engine enforces "
-                  "'different from the Stadium in play', so this never re-plays our own Ruins. v1 net gate + "
-                  "stadium-denial; the bench-our-Basics-first sequencing and the skip-vs-{D}-decks refinement "
-                  "are deferred (Read).",
+        rationale="Play Risky Ruins (SYMMETRIC bench-chip Stadium: 20 damage to any Basic non-{D} a player "
+                  "benches) only when net-positive for US: place ours to chip the opponent ONLY once our "
+                  "win-condition is in play (`board.wincon_in_play`). Before the payoff lands we are the "
+                  "bench-heavier side still laying our fragile 70-HP Dreepy line, so the symmetric chip damages "
+                  "US more (f24, CRITICAL: turn 2 vs a thin Cinderace/Mega Starmie set-up with ~no future "
+                  "bench-entries, Risky Ruins only bled our own developing spread). The OPPONENT's Stadium being "
+                  "up is a second, INDEPENDENT reason (replacing it denies them regardless of the chip). The "
+                  "engine enforces 'different from the Stadium in play', so this never re-plays our own Ruins. "
+                  "`wincon_in_play` is the sound board-only floor; the full opp-aware net-value (their remaining "
+                  "benchable non-{D} basics vs ours, via the Read) and the skip-vs-{D}-decks refinement are deferred.",
         when=lambda c: c.option_type == _PLAY and c.card_id == RISKY_RUINS
-        and (c.board.stadium_in_play is None or c.board.opp_stadium_in_play),
+        and ((c.board.stadium_in_play is None and c.board.wincon_in_play)
+             or c.board.opp_stadium_in_play),
         weight=15, status="assumed"),
 ]
 

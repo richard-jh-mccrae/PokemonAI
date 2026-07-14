@@ -54,3 +54,48 @@ beats developing normally. Verify:
 
 Related: [[m2-posture-plan]] (opponent-filtered disruption), `open-the-item-lock-starter`, the ADR-0031
 single-turn planner boundary (`docs/todo/deferred-multi-turn-criticals.md`).
+
+## 2026-07-13/14 — 2nd instance (SUPPORT-EX-PIVOT variant): now an OPEN planner-code proposal (blunder-buster, build 2d2a113)
+
+A new correction **85786096:t2 (CRITICAL, `85786096-t2s0`)** re-surfaces this maneuver in a **new shape**. It
+was first routed capability-gap and DEFERRED (the offensive `disruptor_lock_maneuver` build was unmerged in the
+blunder-buster branch). The branch was then **rebased onto main** (PR #92 / commit 4e38243 merged the build,
+now in-tree + default-ON); re-probed against the merged code it STILL blunders, so the user **graduated it to
+an open planner-code proposal** — `disruptor-lock-from-a-support-ex-pivot` in
+`data/strategy/proposals/blunder-20260713-2d2a113.md`. No longer deferred; the reviewed.json defer was
+removed. Fixture: `tests/fixtures/corrections/dragapult_retreat_to_item_lock_fez_pivot_f25.json`.
+
+- **Board (turn 2 vs Cinderace / Mega Starmie ex, gamma 1.0):** Active = **Fezandipiti ex** (id140,
+  210/210, {D}, retreat 1) — a **support-ex PIVOT**, NOT a fragile win-condition line pre-evo. Bench holds
+  **Budew** (id235, `item_lock`). Hand has one Basic {R}. Human line: attach {R}→Fez → retreat (the {R}
+  pays the cost 1) → promote Budew → Itchy Pollen item-lock. `retest_one 85786096-25`: `decide()=[1]` bench,
+  `planned=None`, `dont-feed-the-doomed` (−30, baseline_energy.py) sinks the maneuver-enabling active attach.
+- **Why `retreat-to-wall-the-line` does NOT cover it:** that built rung (baseline_retreat.py:21) gates on
+  `_can_wall_line_with_disruptor` (pilot.py:3555), whose FIRST clause requires
+  `ma.id in _line_preevo_set()` — the Active must be a **fragile win-condition LINE pre-evo (Dreepy)**.
+  Fezandipiti ex is a support-ex pivot, not a line pre-evo, so the gate is False → nothing fires. The
+  built maneuver only recognizes the "wall the fragile line" trigger; this is a **"sac the support-ex pivot
+  to open the item-lock"** trigger — a distinct premise. The attach-enablement step (feed a 0-energy Active
+  so it can afford the retreat) remains unbuilt for BOTH triggers (that is the still-deferred f20 half).
+- **The OFFENSIVE maneuver IS BUILT and now IN-TREE:** the f20 offensive item-lock maneuver shipped as
+  **`disruptor_lock_maneuver`** (`_can_lock_line_with_disruptor` + `feed-the-line-for-disruptor-lock` +20;
+  commits `4e38243` / `68181a9`), merged to **main** via PR #92 and pulled into this branch by the rebase —
+  default-ON (`runtime.py:41`). So t2 is **NOT** a from-scratch build; the framework exists. `cgpy`/
+  `lethal_verify` is a **WIN** verifier only (it made the LETHAL f15 safe) — orthogonal to this no-KO tempo
+  line, so it was never the blocker either.
+- **Why t2 is STILL a gap — a DISTINCT TRIGGER:** the built gate `_can_lock_line_with_disruptor` requires
+  `ma.id in _line_preevo_set()` (a **fragile win-condition LINE pre-evo** Active, e.g. Dreepy). At t2 the
+  Active is **Fezandipiti ex** (a **support-ex PIVOT**, not a line pre-evo), so the maneuver returns False
+  (re-probed against merged code: `decide()=[1]`, `feed-the-line-for-disruptor-lock` does not fire). This is
+  a NEW trigger: "sac the retreatable support-ex pivot to open the item-lock," alongside the existing
+  "wall/develop the fragile line" trigger.
+- **DoD (a SMALL extension — now an OPEN planner-code proposal, not deferred):** extend
+  `_can_lock_line_with_disruptor` (OR branch / sibling premise sharing the rung) so the maneuver ALSO fires on
+  a **retreatable non-attacking support-ex pivot Active** behind a benched `item_lock` opener, under the SAME
+  guards (turn ≤ 2; nothing being developed = no wincon-Line body carries Energy; retreat reachable this turn
+  on ≤1 more Energy; Active can't already KO). Verify on BOTH fixtures:
+  `dragapult_retreat_to_item_lock_f20.json` (Dreepy-line, now FIXED by the shipped build) AND
+  `dragapult_retreat_to_item_lock_fez_pivot_f25.json` (Fez-pivot). Still the RECOVERY line (primary path
+  `open-the-item-lock-starter` + `preferred_start="second"` opens Budew Active with no maneuver); rank
+  accordingly. **Queued as `disruptor-lock-from-a-support-ex-pivot`** in
+  `data/strategy/proposals/blunder-20260713-2d2a113.md` (the reviewed.json `85786096-t2s0` defer was removed).

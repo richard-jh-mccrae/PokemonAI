@@ -37,6 +37,7 @@ _REMOVE_DAMAGE_COUNTER_COUNT = 40 # how many counters to move (NUMBER options {1
 _ABILITY = 10     # OptionType.ABILITY — use an in-play Ability at the MAIN menu (Adrena-Brain)
 _NUMBER = 0       # OptionType.NUMBER — a numeric choice option ({number: N})
 _ATTACH_FROM = 21 # pick the Pokémon to attach Energy to
+_ATTACH_TO = 22   # pick the CARD (Energy) to attach to a FIXED Pokémon — recipient not per-option
 _IS_FIRST = 41    # IS_FIRST — coin-toss "Would you like to go first?" (YesNo)
 _NO = 2           # OptionType.NO — decline (the _YES sibling; coin-toss "go second" option)
 _MULLIGAN = 42    # "Would you like to redraw the cards?"
@@ -55,6 +56,9 @@ _BENCH = 5    # AreaType.BENCH
 _LOOKING = 12  # AreaType.LOOKING — a face-up reveal (Pokégear/search top-N) in `current.looking`;
               # a grab option's candidate resolves there (None entry = facedown, unresolvable)
 _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player-dict zone key
+
+# ── LogType (cg/api.py) ──
+_MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active/Bench placement logs)
 
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
@@ -88,8 +92,8 @@ __all__ = [
     "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_NO", "_ATTACK", "_END",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
-    "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
-    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE",
+    "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
+    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_MOVE_CARD",
     "KO_SCORE", "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
     "_UTILITY_TAGS", "_EVOLVING_THREAT_DMG",

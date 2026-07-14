@@ -189,6 +189,38 @@ def parse_card_defense(card) -> tuple[str | None, int, int, tuple | None]:
     return (prevents, threshold, reduction, types)
 
 
+# Ability-FUEL energy (ADR-0032): a Pokémon Ability gated on the Pokémon's OWN attached Energy of a
+# specific colour ("if this Pokémon has any {D} Energy attached" — Munkidori's Adrena-Brain). That
+# colour is a REQUIRED energy for the body even though it is never one of its attack costs, so the
+# energy-routing signals must credit it. Anchored on "this Pokémon has … attached" so an
+# accelerator's "attach a {X} Energy" action (a different phrasing) never matches.
+_ABILITY_FUEL_RE = re.compile(r"this Pok.mon has (?:any )?\{(\w)\} Energy attached")
+
+
+def parse_card_ability_energy(card) -> tuple:
+    """Energy-type codes a card's Ability requires ATTACHED to itself as fuel (ADR-0032).
+
+    Args:
+        card: an engine ``CardData``-shaped record (``skills`` with ``text``).
+
+    Returns:
+        The EnergyType ids the card's Ability is gated on (Munkidori Adrena-Brain → ``(7,)`` for
+        {D}); empty when no Ability references its own attached Energy. De-duplicated, order-stable.
+        The routing complement to ``AttackStat.energyTypes`` — an attack-cost-only credit misses a
+        colour a body needs solely to switch its Ability on.
+    """
+    out: list[int] = []
+    for s in (getattr(card, "skills", None) or []):
+        text = getattr(s, "text", None)
+        if text is None and isinstance(s, dict):
+            text = s.get("text")
+        for g in _ABILITY_FUEL_RE.findall((text or "").replace("\n", " ")):
+            code = _TYPE_LETTER.get(g)
+            if code is not None and code not in out:
+                out.append(code)
+    return tuple(out)
+
+
 # Ignore-family (ADR-0032): per-attack dmg modifiers card-level model can't express (Nebula Beam
 # ignores *effects* so lands through Crustle's prevention). Whole-sentence; Conkeldurr's cost-ignore excluded.
 _IGNORES_RE = re.compile(r"\bThis (?:attack.s )?damage isn.t affected by ([^.]+)\.")
