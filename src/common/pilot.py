@@ -29,12 +29,71 @@ from common.strategy.planner import PlannerMixin, TurnLine
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 # (_EFFICIENCY/_BENCH_SNIPE* moved to the KO oracle, ADR-0052 — the one home for combat valuation.)
 from common.strategy.combat import _EFFICIENCY  # noqa: E402  (re-used by the tactical scorers)
+from common.strategy.refresh import fresh_cards, net_change  # noqa: E402  (ADR-0060 swing oracle)
+from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
+from common.strategy.denial import coin_odds, denial_value  # noqa: E402  (ADR-0062 energy denial)
+# A shuffle-refresh moves cards in four directions and they are NOT worth the same per card. Pricing
+# them symmetrically is what broke the guard family on the first cut: a per-card credit for cards I
+# DRAW reached +76 and went straight through `hold-wincon-dont-shuffle` (−25),
+# `hold-irreplaceable-tool-dont-shuffle` (−30) and `dont-refresh-into-a-probable-miss` (−25), which
+# were all calibrated against `dig-before-commit`'s flat +20.
+_REFRESH_CYCLE = 20        # the DRAW side, flat: cards I have not seen are speculative and only as
+                           # good as what the deck can still supply — which is precisely what the
+                           # `hold-*-dont-shuffle` / probable-miss guards adjudicate. Bounded and flat
+                           # so those guards can still cancel it, exactly as they could cancel the +20
+                           # `dig-before-commit` used to supply blindly.
+_REFRESH_SHED = 8          # per card I HOLD and lose (my hand beyond what I redraw). A certain loss of
+                           # a card I chose to keep — ml f111 CRITICAL ("8 good cards"), ms f60, ms f94.
+_REFRESH_STRIP = 4         # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
+_REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card opponent hand REFILLS them to
+                           # 4. Priced like a shed — a card in their hand is as real as one in mine.
+_REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
+                           # resources denied, versus cards they have demonstrably been unable to play.
+_DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
+                           # of their Pokémon (card text + engine), but a benched body must be PROMOTED
+                           # before the denial bites AND they get a turn in between to simply re-attach —
+                           # an Active strip is spent immediately, a bench strip is easily undone. The
+                           # bound is DERIVED, not tuned to taste: ms f29 (bench, 70) must hold while
+                           # ms f15 (Active, 30) must play, which forces bench weight < 30/70 = 0.43.
+_DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLACES `play-energy-denial`'s
+                           # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
+                           # off a benched body. Same lesson as ADR-0060: price the quantity, don't
+                           # threshold it.
+_DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite, and a free Item is tiered
+                           # ahead of everything by `_finish_turn_last` — so a purely positive term could
+                           # never decline one: any score above zero gets it played. The strip must beat
+                           # the hold (ms f29: "wasted crushing hammer").
+_DENIAL_TARGET_W = 1.0     # points per damage-point denied, at the DISCARD_ENERGY select. Ranks the
+                           # Hammer's TARGET once its coin comes up heads; nothing scored that select
+                           # before, so a won flip stripped option [0] — the OLDEST-attached Energy.
+_DENIAL_UNFAVORED = 0.3    # Lever A (ADR-0026), as a MULTIPLIER on the priced denial rather than a flat
+                           # rung beside it: when the Read says the race is lost, a strip that already
+                           # denies something is worth MORE. It can never make a whiff worth playing —
+                           # scaling 0 leaves 0, and scaling a negative play value leaves it negative.
+                           # This is the whole point (ms 83968638 f17, CRITICAL): the old flat
+                           # `disrupt-when-unfavored` (+18) rode `opp_denial_best > 0` (the raw PRESENCE
+                           # of denial) and so OVERRODE the oracle's own hold — a free Item at score > 0
+                           # is tiered ahead of everything. A booster must scale the oracle, never add to it.
+_DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped Energy would pay for on the
+                           # target's FORWARD form. "Evolving keeps attached cards" (rules.md:98), so
+                           # Energy on a pre-evolution is BANKED, not spent: a Riolu's own Accelerating
+                           # Stab ({F}, 30) is not what its Energy is for — Mega Lucario ex's Aura Jab
+                           # ({F}, 130) is. Discounted because the payoff is a TURN AWAY (they must evolve
+                           # first) and CONTINGENT (they must actually hold the evolution). The bound is
+                           # DERIVED from two frames, not tuned: ms 82225643 f12 (Active Riolu, 1 Energy)
+                           # must PLAY, and dragapult 85046350 f32 (Active Gabite, 1 Energy, forward 100)
+                           # must stay BELOW the retreat-to-wall (30) it would otherwise bury — which
+                           # forces 0.154 < _DENIAL_FORWARD < 0.8.
 _ENERGY_RECOVER = 75       # per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X}
                            # from discard") on a NON-KO turn — chip-scale, so fueled Aura Jab beats bare Mega Brave
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
-_LOCK_COST = 40            # charge a self-locking attack (Mega Brave) when a LOCK-FREE one is affordable;
-                           # never charged on the only affordable attack (chipping still beats passing)
+_FOLLOWUP_W = 0.5          # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
+                           # < 1 because damage THIS turn is certain and next turn's is not (they move in
+                           # between) — so at equal two-turn totals the front-loaded nuke wins, which is
+                           # the right default. Replaces the flat _LOCK_COST = 40, which was a phantom
+                           # charge on a same-attack lock (270+130 == 130+270) and a 5x under-charge on a
+                           # full lock (Blood Moon 240 + NOTHING loses to a lock-free 130/turn's 260).
 _LOCK_KO = 0.3             # KO-branch sub-prize variant: among equal-prize KOs keep the nuke off cooldown
 _RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Active doomed (Wild Press at
                            # 80 HP) — combat-scale; a KO/snipe-KO or already-doomed Active is never charged
@@ -221,9 +280,6 @@ class Board:
                                         # rungs SUM past it (ms 85164131 f22 — chip the Staryu that becomes
                                         # Mega Starmie ex, not the energized 1-prize Cinderace). Mirrors the
                                         # `snipe_ko_available` sum-burial stand-down. Kill-switch `evolving_wincon_priority`
-    bench_threat_present: bool = False  # at a DAMAGE select, some benched snipe target already carries
-                                        # Energy (an imminent attacker) — evolving-threat snipe
-                                        # stands down: snipe-the-threat (energized) is the priority
     snipe_ko_available: bool = False    # at a DAMAGE select, SOME benched target is knocked out by the
                                         # snipe rider — so every POSITIONAL snipe rung must stand down and
                                         # let `snipe-for-the-ko` take the free prize. Three positional
@@ -304,11 +360,18 @@ class Board:
     stall_target_is_keystone: bool = False  # that stall target is opponent's KEY attacker (an ex /
                                        # Mega ex) — stranding their win-condition Active is high-value
                                        # disruption, worth the Supporter over a redundant dig (ADR-0022)
+    opp_denial_best: float = 0.0       # ADR-0062: the most damage a single Energy discard could take away
+                                       # from ANY of their Pokémon (Crushing Hammer targets Active OR Bench;
+                                       # bench discounted by `_DENIAL_BENCH`). 0 = every energized body either
+                                       # holds SURPLUS Energy (strip it and they still afford the same attack)
+                                       # or cannot pay an attack at all — the Hammer is a whiff, HOLD it.
     opp_has_energy_in_play: bool = False  # opponent has Energy on any Pokémon (Active or Bench) —
                                           # a target an energy-denial Item (Crushing Hammer) can strip
-    opp_active_has_energy: bool = False   # opponent's ACTIVE carries Energy — the imminent attacker,
-                                          # the worthwhile energy-denial target. Gate for `play-energy-denial`:
-                                          # stripping a benched SUPPORT's lone Energy is a wasted Item (ep82753102 f37)
+    opp_active_has_energy: bool = False   # opponent's ACTIVE carries Energy. NO LONGER the
+                                          # `play-energy-denial` gate (ADR-0062): Crushing Hammer targets
+                                          # "1 of your opponent's POKEMON" — Active OR Bench — so this was
+                                          # narrower than the card, and it fired on SURPLUS Energy besides.
+                                          # `opp_denial_best` (what the strip actually takes away) replaced it.
     opp_active_can_damage_us: bool = False  # opponent's ACTIVE has an AFFORDABLE attack (current Energy)
                                           # dealing >0 to my Active — oracle-resolved, so a conditional
                                           # 0-damage attack (Kyogre's Riptide off an empty discard) or an
@@ -334,8 +397,12 @@ class Board:
                                           # have just ENABLED their post-KO comeback disruptor (Unfair
                                           # Stamp). Sound when True; False when unknown. `unfair-stamp-comeback-posture` gate.
     opp_hand_size_delta: int | None = None  # change in opponent hand size since their previous distinct
-                                          # turn (a large NEGATIVE = they tailored a big hand DOWN to a few
-                                          # key cards); None until a prior turn is known. `disrupt-the-tailored-hand` gate.
+                                          # turn; None until a prior turn is known. SIGN (settled ADR-0060,
+                                          # the two docstrings used to contradict each other): POSITIVE = they
+                                          # GREW their hand = it is FRESH. Consumed by the hand-swing oracle's
+                                          # `fresh_cards` — stripping cards they just drew denies live
+                                          # resources; stripping ones they have been stuck holding for three
+                                          # turns denies cards they demonstrably cannot play.
     opp_last_turn_dumped: bool = False    # opponent's discard grew >=2 since the previous distinct turn
                                           # (an Ultra-Ball-class discard-cost play last turn) — they have
                                           # COMMITTED to the few cards they kept. Conservative proxy; False when unknown.
@@ -389,7 +456,10 @@ class Board:
                                           # general draw-engine card fact. `priority(opp_id)` steers
                                           # snipe/gust. Empty (all-0) default = inert (kill-switch/no Read).
     my_discard_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in
-                                          # MY open discard — the recover-rider fuel (Aura Jab class)
+                                          # MY open discard — the recover-rider fuel (Aura Jab class), and the
+                                          # ONE truth for it since ADR-0061 (`_recover_units` reads it here).
+                                          # `_damage_context` keeps its own attacker-relative copy: that one
+                                          # must also serve the INCOMING direction, so they are not duplicates.
     active_best_attack_locked: bool = False  # my Active's HIGHEST-damage attack is transient-locked this
                                           # turn (Mega Brave class, ADR-0033) — the swap trigger
     opp_has_stage2: bool = False          # opponent has a Stage 2 in play (CardStat.stage2) — the
@@ -499,17 +569,25 @@ class Board:
         return self.brief.opponent_properties.get(key, default)
 
     def brief_is_threat(self, card_id: int) -> bool:
-        """True if the matched Brief lists ``card_id`` as a threat to respect (ADR-0027)."""
+        """True if the matched Brief lists ``card_id`` as a threat to respect (ADR-0027).
+
+        UNCONSUMED: no `src/` caller. Its sibling `brief_target_roles` IS live (it feeds
+        `_matchup_plan`), which is what makes the threat half easy to miss. Kept as a Brief-consumption
+        seam; delete it if the matchup layer settles without one."""
         return card_id in self.brief_threat_ids
 
     def brief_target_role(self, card_id: int):
         """The matched Brief's target role for ``card_id`` (``fragile_preevo`` / ``prize_liability`` /
-        ``engine``), or None if it isn't a Brief target (or no Brief matched)."""
+        ``engine``), or None if it isn't a Brief target (or no Brief matched).
+
+        UNCONSUMED: no `src/` caller (tests only). See `brief_is_threat`."""
         return self.brief_target_roles.get(card_id)
 
     def brief_target_ids(self, role: str | None = None) -> frozenset[int]:
         """Card ids the matched Brief lists as disruption/snipe targets — filtered to ``role`` when
-        given, else all of them. Empty when no Brief matched."""
+        given, else all of them. Empty when no Brief matched.
+
+        UNCONSUMED: no `src/` caller (tests only). See `brief_is_threat`."""
         if role is None:
             return frozenset(self.brief_target_roles)
         return frozenset(cid for cid, r in self.brief_target_roles.items() if r == role)
@@ -1196,6 +1274,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # respects its ADR-0044 redundancy flags
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
+                    + self._refresh_swing_tactical(board, ctx)
+                    + self._denial_play_tactical(board, ctx)
+                    + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
@@ -1239,8 +1320,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         dmg_ctx = self._damage_context(obs)
         dmg = self.predicted_damage(self._my_active_id(obs), attack_id, opp, context=dmg_ctx)
         eff = _EFFICIENCY * self._attack_cost(attack_id, 0)   # cheaper of equal outcomes wins
-        recover = self._recover_units(attack_id, dmg_ctx, board)  # re-attachable discard fuel (Aura Jab)
-        locks = self._lock_cost_applies(attack_id, board)         # burns a cooldown a free attack avoids
+        recover = self._recover_units(attack_id, dmg_ctx, board, obs)  # usable re-attachable fuel (Aura Jab)
+        lock_cost = self._lock_sequence_cost(attack_id, board)    # damage the lock actually forfeits
         snipe_ko = self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(attack_id))
         spread_ko = self._spread_ko_prizes(board.opp_bench, self._rider_spread(attack_id))
         bench_ko = snipe_ko + spread_ko              # direct opp-bench KO prizes (single-target rider +
@@ -1251,14 +1332,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             bonus = bench_ko or (self._bench_snipe_bonus(board, attack_id)   # bench-KO is a full prize;
                                  + self._bench_spread_bonus(board, attack_id))  # else a sub-prize chip tiebreak
             bonus += min(_RECOVER_KO_CAP, _RECOVER_KO * recover)  # sub-prize: the KO that also develops
-            bonus -= _LOCK_KO if locks else 0                     # sub-prize: keep the nuke off cooldown
+            bonus -= _LOCK_KO if lock_cost > 0 else 0             # sub-prize: keep the nuke off cooldown
             return KO_SCORE + self._prize_value(opp) - eff + bonus
         if bench_ko:                                        # Active survives, but a snipe rider / a
             return KO_SCORE + bench_ko - eff                # distributable spread KOs benched Pokémon — a PRIZE this turn
         race = self._race_attack_tactical(obs, board, attack_id, dmg_ctx)   # Tier-3 KO Race (ADR-0040):
         if race is not None:                                # vs a standing wall the single hit is fake
             return (race - eff + _ENERGY_RECOVER * recover  # value — price the SEQUENCE (chip included,
-                    - (_LOCK_COST if locks else 0)          # so no separate spread bonus here)
+                    - lock_cost                             # so no separate spread bonus here)
                     - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
                     + self._self_return_escape_credit(attack_id, board))
         if self.objectives_race:                            # honest coin pricing for RANKING (ADR-0039):
@@ -1269,7 +1350,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if hi > lo:                                     # a coin/conditional CHIP ranks by its mean;
                 dmg = (lo + hi) / 2                         # the KO test above and every sound path
                                                             # (Lethal floor / Incoming ceiling) untouched
-        return (dmg - eff + _ENERGY_RECOVER * recover - (_LOCK_COST if locks else 0)
+        return (dmg - eff + _ENERGY_RECOVER * recover - lock_cost
                 - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
                 + self._bench_spread_bonus(board, attack_id)     # a non-KO spread still chips the Bench (pre-load)
                 + self._self_return_escape_credit(attack_id, board))
@@ -1877,22 +1958,88 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         st = self._attack_stat(attack_id)
         return st.recoil if st else 0
 
-    def _recover_units(self, attack_id, dmg_ctx: dict, board: Board) -> int:
-        """Energy this attack's recover rider would actually re-attach from my discard — the
-        development the Tactical layer credits (Aura Jab: attack + accelerate). min(recoverN, the
-        matching Basic-Energy fuel in my open discard), 0 when the rider's target scope has no
-        recipient (a bench-targeted recover with an empty Bench attaches nothing). Fuel comes off
-        the already-built damage context (`atk_discard_basic_by_type`), so the count is the same
-        one the discard-scaler oracle prices."""
+    def _refresh_swing_tactical(self, board: Board, ctx) -> float:
+        """Closed-form value of a shuffle-refresh (ADR-0060). Judge/Harlequin are symmetric REFILLS,
+        not strips: each player shuffles their hand away and redraws to the card's printed count, so
+        the play is fully described by how many cards move, in which direction (strategy/refresh.py):
+
+            CYCLE                                  the draw side — flat, speculative, guard-cancellable
+            - SHED  * max(-my_net, 0)              cards I hold and lose        (certain)
+            + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them     (certain)
+            - GIFT  * max(opp_net, 0)              cards handed to them         (certain)
+
+        The card's own printed draw count is the break-even — which is why the retired
+        `_STACKED_HAND`/`_REFRESH_HAND_FLOOR`/`_TAILORED_HAND` constants matched no card.
+
+        The DRAW side stays flat on purpose. A per-card credit for cards I have not seen swamps the
+        hand-QUALITY guards (`hold-wincon-dont-shuffle`, `hold-irreplaceable-tool-dont-shuffle`,
+        `dont-refresh-into-a-probable-miss`), which are this codebase's only model of whether the
+        redraw is actually worth having — a spent deck returns dregs however many cards it returns.
+        Silent (0) on anything that is not the PLAY of a known refresh."""
+        if ctx.option_type != _PLAY:
+            return 0.0
+        nets = net_change(ctx.card_id, my_hand=board.my_hand_size, opp_hand=board.opp_hand_size,
+                          my_prizes_remaining=board.my_prizes_remaining,
+                          opp_prizes_remaining=board.opp_prizes_remaining)
+        if nets is None:
+            return 0.0
+        my_net, opp_net = nets
+        stripped = max(-opp_net, 0.0)
+        fresh = fresh_cards(ctx.card_id, board.opp_hand_size, board.opp_hand_size_delta)
+        return (_REFRESH_CYCLE
+                - _REFRESH_SHED * max(-my_net, 0.0)
+                + _REFRESH_STRIP * stripped
+                + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
+                - _REFRESH_GIFT * max(opp_net, 0.0))
+
+    def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
+        """Energy this attack's recover rider would actually re-attach AND that a recipient can
+        actually USE — the development the Tactical layer credits (Aura Jab: attack + accelerate).
+
+        Three independent bounds, all closed-form:
+          1. `recoverN`   — the card's printed ceiling (Aura Jab: "attach up to 3").
+          2. the matching Basic-Energy FUEL in my open discard (`my_discard_basic_energy`, ADR-0061:
+             re-sourced from the Board so it is the one truth for my discard fuel — `_damage_context`
+             keeps its own attacker-relative copy because it must also serve the Incoming direction).
+          3. the recipients' remaining NEED (ADR-0061). The old code checked only that the Bench was
+             non-empty, so 3 {F} onto a Lunatone/Solrock support bench scored an identical +225 to 3
+             {F} onto a Riolu that becomes the second Mega Lucario ex — and that +225 is exactly what
+             tips Aura Jab (130) over Mega Brave (270). Energy nobody can pay an attack with is not
+             development. Need is measured against each recipient's FORWARD form too, so a Riolu
+             counts the {F}{F} its Mega Brave will cost, not the {F} its Quick Attack costs today.
+        """
         st = self._attack_stat(attack_id)
         if not st or not getattr(st, "recoverN", 0):
             return 0
-        if st.recoverTarget == "bench" and not board.my_bench:
-            return 0
-        by_type = dmg_ctx.get("atk_discard_basic_by_type") or {}
+        by_type = (board.my_discard_basic_energy or {})
         fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
                 else sum(by_type.values()))
-        return min(st.recoverN, fuel)
+        need = self._recover_recipient_need(st, board, obs)
+        return max(0, min(st.recoverN, fuel, need))
+
+    def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
+        """Total Energy the rider's recipients still LACK to pay an attack — theirs or their forward
+        evolution's (the dearest, since that is what the line is being built toward). 0 when the
+        rider's target scope has no recipient at all (a bench-targeted recover with an empty Bench
+        attaches nothing), which preserves the old empty-Bench guard as a special case."""
+        me = self._my_player(obs)
+        pool = []
+        if st.recoverTarget in (None, "any", "bench"):
+            pool += [p for p in (me.get("bench") or []) if p]
+        if st.recoverTarget in (None, "any", "self"):
+            pool += [p for p in (me.get("active") or []) if p]
+        total = 0
+        for p in pool:
+            cid = p.get("id")
+            forms = {cid} | set(self._forward_card_ids(cid) or ())
+            costs = [self._attack_cost(aid)
+                     for f in forms
+                     for aid in (getattr(self.stats.get(f), "attacks", None) or ())
+                     if self.stats and self.stats.get(f)]
+            if not costs:
+                continue
+            total += max(0, max(costs) - len(p.get("energies") or []))
+        return total
 
     def _board_has_stage2(self, player: dict | None) -> bool:
         """True when this player has a Stage 2 Pokémon in play (`CardStat.stage2`) — the Gravity
@@ -1999,24 +2146,156 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         best = max(aids, key=self._attack_damage)
         return same == best
 
-    def _lock_cost_applies(self, attack_id, board: Board) -> bool:
-        """True when this attack locks itself (or all attacks) for my next turn AND my Active could
-        have used a lock-free affordable attack instead — the flexibility cost of burning a cooldown
-        (Mega Brave: next turn it can't nuke, exactly when the next body arrives). Never True when
-        it's the Active's only affordable attack: attacking still beats passing (a lock charge must
-        never push the lone chip below END). Closed-form off the attack table + current Energy."""
+    def _attacks_of(self, cid: int | None) -> dict:
+        """``{attack_id: (cost, damage)}`` for a card id — the denial oracle's view of a body."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is None:
+            return {}
+        return {aid: (self._attack_cost(aid), self._attack_damage(aid))
+                for aid in (getattr(st, "attacks", None) or ())}
+
+    def _denial_at(self, p: dict | None) -> float:
+        """Damage this Pokémon loses if ONE Energy is discarded from it (ADR-0062). 0 when the Energy
+        is surplus (it still affords the same attack) or when it could not pay an attack anyway.
+
+        Measured against the body's own attacks AND, discounted by `_DENIAL_FORWARD`, against what it
+        EVOLVES INTO. "Evolving keeps attached cards" (rules.md:98), so Energy on a pre-evolution is
+        being BANKED, not spent: a Riolu holds {F} for Mega Lucario ex's Aura Jab (130), not for its
+        own Accelerating Stab (30). Pricing only the current form under-values every strip aimed at a
+        line under construction — which is exactly where a Hammer earns its keep (ms 82225643 f12).
+
+        The forward credit is DISCOUNTED, never taken at face value: the payoff is a turn away (they
+        must evolve first) and contingent (they must actually hold the evolution). Un-discounted it
+        resurrects a CRITICAL (dragapult 85046350 f32 — a Gabite's Garchomp prices the strip at 100)."""
+        cid = (p or {}).get("id")
+        if cid is None or self.stats is None:
+            return 0.0
+        energy = len((p or {}).get("energies") or [])
+        now = denial_value(energy, self._attacks_of(cid))
+        forward = 0
+        for fwd in self._forward_card_ids(cid):
+            forward = max(forward, denial_value(energy, self._attacks_of(fwd)))
+        return float(max(now, _DENIAL_FORWARD * forward))
+
+    def _opp_denial_best(self, opp: dict | None, active_doomed: bool = False) -> float:
+        """The most damage a single Energy discard could take away from ANY of their Pokémon —
+        Active OR Bench, because that is what the card says and what the engine offers (Crushing
+        Hammer: "discard an Energy from 1 of your opponent's Pokémon"; `op_trash_energy_enemy` builds
+        its options from ACTIVE + BENCH). A benched body must still be promoted before the denial
+        bites, so it is discounted, not ignored — a bench-loading opponent used to make us stand down
+        entirely, leaving 4 Hammers dead in hand all game.
+
+        `active_doomed` (I can already KO their Active this turn) drops the ACTIVE from the max — it
+        does NOT blank the board. Stripping Energy off a body that is about to die denies nothing; a
+        benched body banking Energy is untouched by that fact. Hammer the bench, then take the KO
+        (ms 82748422 f26: the old stand-down zeroed the whole board and left a benched Mega Starmie ex
+        sitting on 3 Energy unmolested).
+
+        0 means every energized body is either holding SURPLUS Energy, cannot pay an attack, or is
+        already dead: there is nothing to deny and the Hammer should be HELD."""
+        if not opp:
+            return 0.0
+        best = 0.0
+        tiers = [(_DENIAL_BENCH, opp.get("bench") or [])]
+        if not active_doomed:
+            tiers.insert(0, (1.0, opp.get("active") or []))
+        for weight, bodies in tiers:
+            for p in bodies:
+                if p:
+                    best = max(best, weight * self._denial_at(p))
+        return best
+
+    def _unfavored(self, board: Board) -> bool:
+        """The Read says the straight race loses (Lever A, ADR-0026) — a compiled favorability at or
+        below `_POSTURE_UNFAVORED`, backed by enough coverage to trust the prior."""
+        return (board.matchup_coverage >= _POSTURE_MIN_COVERAGE
+                and board.favorability <= _POSTURE_UNFAVORED)
+
+    def _denial_play_tactical(self, board: Board, ctx) -> float:
+        """Value of PLAYING an energy-denial Item (ADR-0062): what the strip actually takes away,
+        priced by its odds, net of keeping the card.
+
+            coin_odds(card) * _DENIAL_PLAY_W * (unfavored?) * opp_denial_best  -  _DENIAL_ITEM_COST
+
+        Silent unless the card is `energy_denial`. A whiff (`opp_denial_best == 0` — surplus Energy,
+        no affordable attack, or the only energized body is one I am about to KO) prices at 0 and is
+        held; `_finish_turn_last` tiers a free Item ahead of everything, so declining one REQUIRES a
+        non-positive score. Half of all Crushing Hammers do nothing whatever the board looks like, so
+        the coin is priced here rather than absorbed into a tuned constant.
+
+        The unfavored Read (Lever A) SCALES this value and is never added beside it — see
+        `_DENIAL_UNFAVORED`. A multiplier cannot resurrect a hold; the flat rung it replaces did
+        exactly that, and played a Hammer into a KO turn against a bare bench (ms 83968638 f17)."""
+        if ctx.option_type != _PLAY or "energy_denial" not in ctx.tags:
+            return 0.0
+        if not board.opp_denial_best:
+            return 0.0                                  # nothing to deny — hold it (whiff)
+        weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
+        return coin_odds(ctx.card_id) * weight * board.opp_denial_best - _DENIAL_ITEM_COST
+
+    def _denial_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """Rank the Crushing Hammer's TARGET once its coin comes up heads (ADR-0062).
+
+        The engine poses a DISCARD_ENERGY select over every Energy on the opponent's board, ordered
+        OLDEST-ATTACHED FIRST. Nothing scored it: every option came back 0.0, so the argmax fell
+        through to index 0 and we stripped whatever Energy happened to land first — routinely a Basic
+        on a benched support mon while their Active sat one Energy above its nuke. That is the literal
+        waste. Score each option by what removing it actually denies.
+
+        The DOOMED Active scores 0 here for the same reason it is dropped from `_opp_denial_best`:
+        Energy on a body I am about to knock out is not worth taking. A won flip should land on the
+        bench instead of shaving a corpse."""
+        if (select or {}).get("context") != _DISCARD_ENERGY or option.get("type") != _ENERGY:
+            return 0.0
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
+        area = option.get("area")
+        if area == _ACTIVE:
+            if board.active_can_ko:
+                return 0.0                     # it dies this turn — stripping it denies nothing
+            target, weight = next((p for p in (opp.get("active") or []) if p), None), 1.0
+        elif area == _BENCH:
+            bench = opp.get("bench") or []
+            idx = option.get("index", -1)
+            target = bench[idx] if 0 <= idx < len(bench) else None
+            weight = _DENIAL_BENCH
+        else:
+            return 0.0
+        return _DENIAL_TARGET_W * weight * self._denial_at(target)
+
+    def _lock_sequence_cost(self, attack_id, board: Board) -> float:
+        """Horizon-2 lock cost (ADR-0061): the damage this attack's lock actually FORFEITS next turn,
+        not a flat constant. Replaces `_LOCK_COST = 40`, which charged one number for two structurally
+        different locks:
+
+        - **same-attack lock** (Mega Brave 270 / Aura Jab 130): 270+130 == 130+270. You can never Mega
+          Brave twice in a row WHICHEVER you open with, so the lock forfeits nothing the other ordering
+          would have had — cost **0**. The flat 40 was a phantom charge biasing every pick toward Aura Jab.
+        - **full lock** (Blood Moon 240, "can't use attacks"): 240 + 0 loses to a lock-free 130/turn's
+          260 — cost **~240**, not 40.
+
+        Cost = `_FOLLOWUP_W * (best follow-up a lock-free pick would leave − the follow-up THIS pick
+        leaves)`, so a lock-free attack is always 0 and the term never inflates an attack's score (it is
+        a cost, never a credit — attacks keep their scale against develops).
+
+        Zero when the Active is `active_doomed`: there is no next turn for it, so every lock is free and
+        we front-load. Zero when it is the only affordable attack — chipping must still beat passing
+        (the invariant `_lock_cost_applies` held, preserved here)."""
         st = self._attack_stat(attack_id)
-        if not st or not (getattr(st, "nextTurnSelfLock", False)
-                          or getattr(st, "nextTurnSameAttackLock", False)):
-            return False
+        if not st or board.active_doomed:
+            return 0.0
         active = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
-        for aid in (getattr(active, "attacks", None) or ()):
-            if aid == attack_id or self._attack_cost(aid) > board.my_active_energy:
-                continue
-            alt = self._attack_stat(aid)
-            if alt and not (alt.nextTurnSelfLock or alt.nextTurnSameAttackLock):
-                return True                                  # a lock-free attack was affordable
-        return False
+        affordable = {aid: self._attack_damage(aid)
+                      for aid in (getattr(active, "attacks", None) or ())
+                      if self._attack_cost(aid) <= board.my_active_energy}
+        if len(affordable) <= 1:
+            return 0.0                                   # lone attack: never charged
+        mine = followup_damage(attack_id, affordable=affordable,
+                               full_lock=bool(getattr(st, "nextTurnSelfLock", False)),
+                               same_attack_lock=bool(getattr(st, "nextTurnSameAttackLock", False)))
+        return _FOLLOWUP_W * max(0.0, max(affordable.values()) - mine)
 
     def _damage_context(self, obs: dict, *, attacker_is_me: bool = True) -> dict:
         """Visible-state counts for the oracle's scaling term (ADR-0032 Damage Formula),
@@ -2874,7 +3153,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             evolving_wincon_on_bench=self._evolving_wincon_on_bench(obs, select),
-            bench_threat_present=self._bench_threat_present(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
             snipe_ko_available=self._snipe_ko_available(
                 opp, self._snipe_damage(obs, (ma or {}).get("id"), select)),
@@ -2913,6 +3191,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             attach_from_concentrate_slot=self._attach_from_concentrate_slot(me, select),
             stall_target_exists=self._stall_target_exists(opp),
             stall_target_is_keystone=self._stall_target_is_keystone(opp),
+            opp_denial_best=self._opp_denial_best(opp, self._active_can_ko(ma, oa)),
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
             opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
             opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
@@ -3538,18 +3817,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
         opp_ids = {p.get("id") for p in ((opp.get("active") or []) + (opp.get("bench") or [])) if p}
         return bool(fwd_ids & opp_ids)
-
-    def _bench_threat_present(self, obs: dict, select: dict | None) -> bool:
-        """True if any benched Pokémon a DAMAGE select can snipe already carries Energy — an imminent
-        attacker. When present, the evolving-threat snipe stands down (snipe-the-threat takes the
-        energized body first; a not-yet-evolved threat is the lower priority). False off a Damage select."""
-        if not select or select.get("context") != _DAMAGE:
-            return False
-        for o in (select.get("option") or []):
-            if o.get("type") == _CARD and o.get("area") == _BENCH:
-                if self._target_energy(obs, select, o):
-                    return True
-        return False
 
     def _snipe_ko_available(self, opp: dict, snipe_damage: int) -> bool:
         """Some benched opponent body is KNOCKED OUT by my Active's snipe rider — so a free prize is on

@@ -1018,12 +1018,13 @@ Tagging Lunatone `draw` and Hariyama `gust` is the highest-value infra task. (No
   escape. Since Meowth splashes into many decks, this is a system-wide fix, not a deck patch. See §9 T9'.
 
 ### Trainer-swap open items (2026-07-03)
-- **`shuffle_hand` tag on Unfair Stamp (1080).** Unfair Stamp's text shuffles BOTH hands into deck, but
-  its `card_functions.json` entry is `["draw","hand_disruption"]` — missing `shuffle_hand` (which Judge
-  and Lillie's both carry). Without it the shuffle-refresh guard `hold-wincon-dont-shuffle` won't see
-  it, so a usable Mega in hand could be shuffled away by Unfair Stamp unpenalized. **Candidate general
-  infra fix** (behavioral truth; low-risk, score_diff-gated). Low urgency — Unfair Stamp is a
-  behind/after-a-KO comeback card where digging is usually wanted. **Decision pending at the gate.**
+- ~~**`shuffle_hand` tag on Unfair Stamp (1080).**~~ **RESOLVED — the note was stale.** Unfair Stamp's
+  `card_functions.json` entry *is* `["draw","hand_disruption","shuffle_hand"]`, so
+  `hold-wincon-dont-shuffle` has always seen it. (Verified 2026-07-14 during the ADR-0060 audit, which
+  found the *real* Unfair Stamp gap elsewhere: it was missing from `_DRAW_COUNTS`, so
+  `dont-refresh-into-a-probable-miss` could never fire on it. That dict is now deleted and the card
+  facts live once, in `strategy/refresh.py` — Unfair Stamp draws **5 to their 2**, the only
+  asymmetric-favourable refresh we run, and an *Item*, so it doesn't even spend the Supporter.)
 - **Petrel "which Trainer to fetch" (ladder-watch, not a rule).** A 1-of Trainer tutor; the value pick
   (Boss's for lethal / Unfair Stamp / Black Belt's for a breakpoint / a Stadium) is left to general
   search + Tactical board value. A deck fetch-priority rule would hard-code card ids for a single 1-of

@@ -359,7 +359,10 @@ STRATEGY = Strategy(
            Line(path=[MAKUHITA, HARIYAMA], payoff=HARIYAMA, role="secondary_attacker")],
     roles=ROLES,
     params={"setup_energy_target": 2,    # FF — toward the first Mega Brave (build-active-wincon target)
-            "search_budget": 0,          # 0 = Tier-0 closed-form combat; >0 = Tier-1 Search (ADR-0019)
+            "search_budget": 0,           # ADR-0061/0043: escalation (Tier 6) is search_budget's ONLY
+                                          # functional consumer — Tier-1 engine sims (planner_engine_rank,
+                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Raising it
+                                          # also re-labels telemetry AND the submission manifest as Tier-1.
             "preferred_start": "first",  # setup-heavy evolution deck: take the develop turn
                                          # (general `honor-preferred-start` reads this at the coin toss)
             "reactivity": "solitaire",   # deck-personality (learnthetcg): a linear evolution-beatdown

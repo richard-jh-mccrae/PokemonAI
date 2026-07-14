@@ -1,0 +1,125 @@
+# ADR-0062: Energy denial is what the strip actually takes away, not whether Energy is present
+
+**Status.** Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default
+ON — it corrects a live gate rather than adding a seam. Suite green.
+
+## Context
+
+**Crushing Hammer** (1120, Item) — *"Flip a coin. If heads, discard an Energy from **1 of your
+opponent's Pokémon**."* **Enhanced Hammer** (1081) — *"Discard a Special Energy from **1 of your
+opponent's Pokémon**."*
+
+Not "Active Pokémon". **Any** of them. And the engine agrees: `op_trash_energy_enemy`
+(`src/cgpy/chain.py`, the trace-verified twin, pinned to `ml_dx_2001 f175` / `ms_mirror_1002 f14`)
+builds its `DISCARD_ENERGY` option list from **ACTIVE + BENCH**. `activeOnly` is a different flavour —
+the attack-rider one — which Crushing Hammer does not set.
+
+**dragapult_ex and mega_starmie each run 4 copies.** Three defects were live, and they compound:
+
+1. **The gate was narrower than the card.** `play-energy-denial` fired on `opp_active_has_energy`, so
+   we stood down whenever their Active was bare — even with a loaded bench. That is the *standard* TCG
+   pattern (power up on the bench, promote later), so against a bench-loading opponent four Hammers sat
+   dead in hand all game. The gate came from ep82753102 f37, which correctly diagnosed a whiff and then
+   cured it by checking the wrong pile.
+2. **No whiff model.** It fired whenever Energy was *present*. Strip one Energy from a body carrying
+   more than its dearest attack costs and it **still affords the same attack** — nothing is denied.
+   Mega Lucario ex (Aura Jab `{F}` 130 / Mega Brave `{F}{F}` 270) on **3** Energy loses **zero** damage
+   to a Hammer.
+3. **The target select was unscored.** **No rung in the codebase fired on `DISCARD_ENERGY`.** Every
+   option scored 0.0, so the argmax fell through to index 0 — which the engine orders **oldest-attached
+   first**. A won coin flip routinely stripped a Basic off a benched support mon while their Active sat
+   one Energy above its nuke. That is the literal waste.
+
+## Decision
+
+**A Hammer is worth exactly what it stops them doing.** `strategy/denial.py`:
+
+```
+best_affordable_damage(energy, attacks) = max damage of the attacks `energy` can pay for  (0 if none)
+denial_value(energy, attacks)           = best_affordable(energy) − best_affordable(energy − 1)
+```
+
+Worked on Mega Lucario ex:
+
+| their Energy | best now | after the strip | denies |
+|---|---|---|---|
+| 1 | 130 | 0 | **130** — the attacker goes off |
+| 2 | 270 | 130 | **140** — the nuke goes off |
+| **3** | 270 | 270 | **0** — SURPLUS, the Hammer is wasted |
+
+`Board.opp_denial_best` is the max over **every** body they have, Active **and** Bench.
+
+**`play-energy-denial` (the flat +20 rung) is RETIRED.** The oracle owns the value, exactly as in
+ADR-0060 — price the quantity, don't threshold it:
+
+```
+play value = coin_odds(card) * _DENIAL_PLAY_W * opp_denial_best  -  _DENIAL_ITEM_COST
+```
+
+and `_denial_target_tactical` ranks the `DISCARD_ENERGY` options by the denial each one achieves.
+
+### Why a flat rung could not work, even with the gate fixed
+
+Fixing only the gate left a live regression: **ms 82749168 f29** — *"wasted crushing hammer because
+opponents active has no energy"*. Their Active was indeed bare, but a benched Dragapult ex held 1
+Energy (denial 70), so the widened gate opened and the Pilot played the Hammer. The human's *stated
+reason* is a card-fact error (the card hits the bench), but the *conclusion* was right.
+
+Two things were missing, and both are forced by the data rather than tuned to taste:
+
+1. **`_DENIAL_ITEM_COST` — the value of KEEPING the card.** A free Item is tiered ahead of everything
+   by `_finish_turn_last`, so a purely positive term can never *decline* one: any score above zero
+   gets it played. The strip must beat the hold.
+2. **`_DENIAL_BENCH = 0.25`, not 0.5.** A benched body must be PROMOTED before the denial bites *and*
+   they get a turn in between to simply re-attach. The bound is **derived**: f29 (bench, 70) must hold
+   while f15 (Active, 30) must play, which forces bench weight `< 30/70 = 0.43`. Note this also proves
+   that **no monotone pricing of magnitude alone can separate them** — f29's raw denial (70) is more
+   than twice f15's (30). Imminence, not size, is the discriminator.
+
+Measured on all five Hammer corrections:
+
+| frame | want | denial | play value | result |
+|---|---|---|---|---|
+| ms f29 | HOLD | 17.5 (bench 70 × 0.25) | **−1.25** | held ✔ |
+| ms f15 | PLAY | 30 (Active Riolu) | **+5.00** | played ✔ |
+| ms f79 | PLAY | 130 | **+55.00** | played ✔ |
+| ms f92 / f102 | PLAY | 140 | **+60.00** | played ✔ |
+
+### What the new gate subsumes
+
+`opp_active_can_damage_us` is gone as a separate premise, because the arithmetic already covers it: a
+body that cannot pay any attack has `best_affordable = 0`, so its denial is 0 and we hold. dragapult
+**f6** (the Kyogre that cannot attack off an empty discard) is still correctly held — now by the
+damage math rather than a flag. ep82753102 **f37** (a bare Kadabra Active) likewise denies 0.
+
+## Consequences
+
+- **Two test boards turned out to be describing wasted Hammers.**
+  `test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack` gave the opponent **2**
+  Energy on a Pokémon whose only attack costs **1** — the second Energy is surplus, so the strip does
+  nothing, and the test asserted we play it anyway. The board was corrected to 1 Energy (the sequencing
+  claim it actually tests is unchanged). This is the defect in miniature: the old model could not
+  represent "denies nothing", so nobody noticed the board.
+- `_DISCARD_ENERGY` (SelectContext 30) and `_ENERGY` (OptionType 6) join the engine vocabulary in
+  `strategy/context.py`. **Both had to be added to that module's explicit `__all__`** — `import *` skips
+  underscore names, and omitting them fails at *call* time with a `NameError`, not at import. Sharp edge.
+
+## Deferred
+
+> **All three resolved by [ADR-0063](0063-a-booster-scales-the-oracle-and-a-doomed-body-denies-nothing.md)
+> (2026-07-14).** Two were real; one was a phantom. See below.
+
+- **Denial against the target's FORWARD form.** ~~Deferred.~~ **BUILT (ADR-0063, `_DENIAL_FORWARD = 0.5`).**
+  It was the honest weakness and it was worse than recorded here: this note says the Riolu's own attack
+  is "Quick Attack", but Riolu **677** (the one in the line) has **Accelerating Stab** (`{F}`, 30) —
+  Quick Attack belongs to a *different printing* (333). The conclusion held anyway. Denial is now
+  `max(denial_now, _DENIAL_FORWARD × denial_forward)`, and the discount is **derived** from two frames:
+  ms 82225643 f12 must PLAY (`> 0.154`) and dragapult 85046350 f32 must NOT bury the line advance
+  (`< 0.8`). At face value the forward credit resurrects that CRITICAL.
+- **Enhanced Hammer's Special-Energy filter.** Still deferred, still latent — no deck in the pool runs it.
+- **Multi-Hammer sequencing.** ~~The second is over-valued.~~ **PHANTOM — refuted.** `decide()` is greedy
+  **per frame** and rebuilds the Board from fresh `obs` every call, so Hammer #2 is already rescored on
+  the post-strip board. Proven on ms 82525101 f92: `opp_denial_best` **140.0** → the engine resolves the
+  first strip → the next menu reads **130.0**. Both Hammers show the same score in the *same* menu, which
+  is harmless — `decide()` returns ONE option. The Planner never double-counts either (`energy_denial` is
+  only a `_DISRUPT_TAGS` member there; it never scores denial magnitude). **Nothing to fix.**
