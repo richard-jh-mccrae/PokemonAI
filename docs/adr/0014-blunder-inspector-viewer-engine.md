@@ -1,5 +1,10 @@
 # ADR-0014: Blunder inspector reuses the official cabt visualizer, embedded in a tagging shell
 
+**Status.** Accepted and BUILT — the vendored viewer + tagging shell ship in `tools/train/blunder/`
+(`viewer/build.py`, `shell.py`). **Partially wrong as originally argued:** the amendment below records
+that the vendored board is *not* pixel-identical to online — the colorful HEROZ viewer is a separate,
+online-only app, so offline tagging uses the plain board.
+
 **Context.** The blunder inspector (`tools/train/`, [ADR-0009](0009-training-methodology.md))
 must let us step through a replay **offline** with the *same* visuals the Kaggle site shows.
 The cabt env exposes the official renderer hook (`env.render(mode="html")` →

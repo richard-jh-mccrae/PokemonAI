@@ -1,5 +1,9 @@
 # Scouting knowledge is an offline-compiled, shipped artifact
 
+**Status.** Accepted and BUILT — `tools/build_scouting_artifact.py` compiles the committed
+`src/common/scouting/artifact.json`, which `runtime.build_pilot` loads into the Scout. Card stats are
+still read from the engine at startup (`EngineCardStatProvider.warm()`), never shipped.
+
 **Context.** The runtime agent must recognize opponents and produce the Read, but
 the meta analysis (`meta.db`) lives outside the submission bundle and Kaggle's
 runtime is offline and self-contained (no DB, no network, native lib only).

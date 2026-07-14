@@ -1,5 +1,10 @@
 # ADR-0007: Learning enters as one offline, replay-trained general value model gated by the Read
 
+**Status.** Accepted — the one-learned-seam principle holds and the seam was built as
+[ADR-0042](0042-base-value-model-is-a-dependency-free-logistic-over-objective-features.md), but it
+ships **armed-off** (`value_model` is `PROFILE=False` in `src/common/runtime.py`). The LightGBM model
+class named here was superseded by a dependency-free logistic; a v2 is planned in ADR-0053.
+
 **Context.** We want "intelligence through training" to *reinforce* a rules backbone
 without becoming the backbone. The runtime is CPU-only, no GPU, no internet, ~10-minute
 match bank, and grader processes don't persist state across matches — so all learning

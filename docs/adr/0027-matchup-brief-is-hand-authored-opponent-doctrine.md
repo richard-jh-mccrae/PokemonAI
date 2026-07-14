@@ -1,5 +1,10 @@
 # ADR-0027: Per-archetype counterplay is a hand-authored Matchup Brief, distinct from the auto-Dossier
 
+**Status.** Accepted and BUILT — eight Briefs ship at `src/common/scouting/briefs/<slug>.json` with
+their human doctrine at `docs/matchups/`, authored by the `/matchup-genie` skill and `covers`-routed by
+the Read. Consumption has moved on: the ADR-0038 `brief_preevo`/`brief_engine` levers were retired in
+favour of the ADR-0051 MatchupPlan target-priority spine (`matchup_targeting` is `PROFILE=True`).
+
 **Context.** The auto-compiled Dossier ([ADR-0003](0003-scouting-knowledge-is-a-shipped-artifact.md))
 derives, per archetype, the representative build, signatures, threats, targets (auto-roles) and
 matchup win-rates — i.e. the *cards*. It cannot derive the *gameplan*: how an archetype wins, its

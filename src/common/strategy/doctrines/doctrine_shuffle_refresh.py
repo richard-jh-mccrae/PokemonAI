@@ -17,17 +17,20 @@ from __future__ import annotations
 from math import comb
 
 from common.strategy.context import _PLAY
+from common.strategy.refresh import refresh_branches
 from common.strategy.strategy import Hypothesis
 
-# DRAW-COUNT facts, id-keyed, verified at data/EN_Card_Data.csv 2026-07-03 (ADR-0024 amendment).
-# Each entry -> the coin/condition BRANCHES of "how many I draw" (P averaged exactly over branches).
-# A shuffle_hand card absent here gets NO probabilistic claim (fail-silent; the sound veto still covers).
-_DRAW_COUNTS = {
-    1227: lambda b: (8,) if b.my_prizes_remaining == 6 else (6,),        # Lillie's Determination
-    1199: lambda b: (8,) if 0 < b.opp_prizes_remaining <= 3 else (4,),   # Lacey
-    1213: lambda b: (4,),                                                # Judge
-    1223: lambda b: (3, 5),                                              # Harlequin (coin)
-}
+def _draw_branches(card_id, b):
+    """How many cards *I* draw, as the coin/condition BRANCHES (P averaged exactly over them).
+
+    ADR-0060: the draw-count facts now live ONCE, in `strategy/refresh.py`, keyed per branch as
+    (my_draw, opp_draw) — this reads MY half of them. The old id-keyed `_DRAW_COUNTS` dict here was
+    a second copy of the same card text and had silently drifted: it was **missing Unfair Stamp
+    (1080)** entirely, so `dont-refresh-into-a-probable-miss` could never fire on it.
+
+    A shuffle_hand card with no facts gets NO probabilistic claim (fail-silent, unchanged)."""
+    branches = refresh_branches(card_id, b.my_prizes_remaining, b.opp_prizes_remaining)
+    return None if branches is None else tuple(my_draw for my_draw, _opp in branches)
 
 # P(≥1 needed card among the N drawn) below this -> the refresh is a probable re-roll of dregs.
 # Consistent with doctrine_fetch._WHIFF_PROB_THRESHOLD (the sibling search guard, ADR-0029).
@@ -47,11 +50,11 @@ class ShuffleRefreshMixin:
         `_MISS_PROB_THRESHOLD` over the shuffle-GROWN pool (deck + returned hand − the played card;
         returned dregs dilute, they never add needs — a held card is by definition not lacking).
         K = 0 (a provably-spent deck) gives P = 0 and fires. Requires the tracker anchor
-        (`deck_known_counts`) and a verified draw-count (`_DRAW_COUNTS`); silent otherwise."""
+        (`deck_known_counts`) and a verified draw-count (`refresh.refresh_branches`); silent otherwise."""
         if option.get("type") != _PLAY or "shuffle_hand" not in tags:
             return False
         counts = board.deck_known_counts
-        branches = _DRAW_COUNTS.get(cid)
+        branches = _draw_branches(cid, board)
         if not counts or branches is None:
             return False
         k = sum(n for c2, n in counts.items() if n > 0 and self._grab_value_of(board, c2, plan) > 0)
@@ -69,8 +72,7 @@ class ShuffleRefreshMixin:
                 return 0.0
             return 1.0 - comb(pool - k, n) / comb(pool, n)   # comb(a<b)=0 -> P=1 when a draw must hit
 
-        ns = branches(board)
-        return sum(p_hit(n) for n in ns) / len(ns) < _MISS_PROB_THRESHOLD
+        return sum(p_hit(n) for n in branches) / len(branches) < _MISS_PROB_THRESHOLD
 
     # `_hand_is_dead` (the full real-menu play-scan) RETIRED with its rung — see the HYPOTHESES note.
 

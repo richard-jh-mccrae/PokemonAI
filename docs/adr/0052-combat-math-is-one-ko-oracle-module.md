@@ -1,5 +1,10 @@
 # ADR-0052: Combat math is one KO-oracle module with explicit dependencies
 
+**Status.** Accepted (2026-07-13) and **BUILT** — `CombatMath` ships as `src/common/strategy/combat.py`
+and is merged to main; the card-level KO fallback and the duplicate W/R + ex-prevention implementation
+are deleted (`damage.py` is the one home). Neutrality proven per step by score-diff (`scores` mode, 315
+frames × 3 agents, 0 divergent). No PROFILE flag — it is a structural refactor, always on.
+
 **Context.** The 2026-07-12 architecture review's highest-leverage finding: the closed-form
 "can X KO Y / what is that KO worth / how fast does either side fell a body" computation was
 the most duplicated thing in the decision core — six sibling `*_tactical` scorers sharing a

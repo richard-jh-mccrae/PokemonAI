@@ -1,4 +1,4 @@
-"""``cg.sim`` twin (ADR-0050 M3).
+"""``cg.sim`` twin (ADR-0059 M3).
 
 Exposes the loader-level names consumers might touch. ``lib_path`` is the sentinel
 ``"cgpy"`` so tooling can tell the twin from the native engine; there is deliberately no

@@ -1,4 +1,4 @@
-"""One PvC Match in one subprocess (ADR-0033).
+"""One PvC Match in one subprocess (ADR-0058).
 
 Drives the cabt env with the real agent on one seat and the *human bridge* on the
 other: each human decision goes out as an `obs` line on stdout and blocks until the

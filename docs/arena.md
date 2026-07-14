@@ -3,7 +3,7 @@
 Public web app where a **Visitor** plays a live **PvC Match** against one of our
 agents on the real cabt engine, then leaves a **Rating**. Every game is captured as
 a Tuner-usable replay. Glossary: [tools/arena/CONTEXT.md](../tools/arena/CONTEXT.md);
-capture-path decision: [ADR-0033](adr/0033-arena-captures-pvc-on-cabt-env-path.md).
+capture-path decision: [ADR-0033](adr/0058-arena-captures-pvc-on-cabt-env-path.md).
 
 ## Run
 
@@ -38,7 +38,7 @@ browser ── REST /api/* ──────────┐
   (deck search, discard fetch, look-at-top) swap the text panel for a card carousel:
   wheel or drag to scroll, the centered scan is the candidate, tap it to take it.
 - The **human bridge** wraps the Visitor as an env agent callable: obs out over the
-  WebSocket, option indices back in (ADR-0033). Env timeouts are overridden at
+  WebSocket, option indices back in (ADR-0058). Env timeouts are overridden at
   `env.make` — the cabt defaults would forfeit a slow human.
 - **Forfeit**: concede button, or ~10 min idle → the sweeper forfeits the Table.
   Partial replays are kept, flagged `abandoned` (still taggable). A worker that

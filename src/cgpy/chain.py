@@ -1,4 +1,4 @@
-"""The effect-DSL interpreter: ChainDef programs over a small op vocabulary (ADR-0050 M2).
+"""The effect-DSL interpreter: ChainDef programs over a small op vocabulary (ADR-0059 M2).
 
 A card's behavior is DATA — a list of ops (`defs/chain_overrides.json`, later also
 `generated_chains.json`) executed on a resumable frame stack. One executor per op; ops that
@@ -64,7 +64,7 @@ def def_for(card_id: int) -> dict | None:
 
 
 class UnsupportedCard(NotImplementedError):
-    """A card without a ChainDef was exercised — fail loud, never guess (ADR-0050)."""
+    """A card without a ChainDef was exercised — fail loud, never guess (ADR-0059)."""
 
 
 def stadium_def(gs: GameState) -> dict:

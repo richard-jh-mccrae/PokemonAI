@@ -1,4 +1,4 @@
-"""``cg.api`` twin backed by cgpy (ADR-0050 M3): same enums, dataclasses and functions,
+"""``cg.api`` twin backed by cgpy (ADR-0059 M3): same enums, dataclasses and functions,
 no DLL.
 
 Enums re-export the cgpy schema (values copied verbatim from the native shim, M0); the

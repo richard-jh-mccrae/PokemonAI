@@ -1,0 +1,91 @@
+# ADR index
+
+The authoritative map of **number → file → status**. Generated 2026-07-14 during the audit-remediation
+pass, which found 31 ADRs with no status line at all and 5 whose status was demonstrably false — a
+status that lies is worse than none, and without this index auditing them meant reading 62 files.
+
+## Numbering
+
+Three numbers were used twice. Each collision was one **strategy** ADR and one **tooling** ADR, and the
+bulk of inbound references meant the strategy one — so the tooling ADR moved and the strategy ADR kept
+its number (2026-07-14):
+
+| was | is now | doc |
+|---|---|---|
+| 0022 | **0057** | the self-play corpus (0022 stays the **Gust** doctrine) |
+| 0033 | **0058** | the Arena (0033 stays the **transient-effect tracker**) |
+| 0050 | **0059** | the cgpy engine twin (0050 stays **multi-step lethal verification**) |
+
+`0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
+verification), and its filename prefix is correct.
+
+**Next free number: 0064.**
+
+## Index
+
+| # | Title | Status |
+|---|---|---|
+| [0001](0001-data-source.md) | Source the deck Meta from Simulation-competition replays | accepted |
+| [0002](0002-extracts-only-retention.md) | Extracts-only retention — discard raw replays | accepted |
+| [0003](0003-scouting-knowledge-is-a-shipped-artifact.md) | Scouting knowledge is an offline-compiled, shipped artifact | Accepted and BUILT — `tools/build_scouting_artifact.py` compiles the committed |
+| [0004](0004-shared-common-packaged-per-submission.md) | Shared `common/` + `cg/`, assembled into a self-contained submission at package time | Accepted and BUILT — the repo ships the `src/common/` + `src/cg/` + thin |
+| [0005](0005-deck-stealer-source.md) | deck_stealer copies decks from a replay file, not the leaderboard or meta store | Accepted and BUILT — `tools/deck_stealer.py` is the shipped tool and sources decks from |
+| [0006](0006-function-tags-single-source-of-structural-facts.md) | Function Tags are the single source of structural card facts; roles are tags-in-context | Accepted, then **partially reversed 2026-06-24** (the revision note below): Depth 1 (the |
+| [0007](0007-learning-is-one-offline-value-model.md) | Learning enters as one offline, replay-trained general value model gated by the Read | Accepted — the one-learned-seam principle holds and the seam was built as |
+| [0008](0008-pilot-is-a-layered-rules-pipeline.md) | The Pilot is a layered rules pipeline; decks plug in a declarative Strategy | Accepted and BUILT — `src/common/pilot.py` is the shipped Sense→Plan→Score→Act pipeline |
+| [0009](0009-training-methodology.md) | Training methodology — three jobs, dense signals tune, the ladder gates | Accepted and BUILT — Job A (weight tuning from Corrections) ships as `tools/train/tune.py` |
+| [0010](0010-local-agent-verification-on-cabt-env.md) | Local agent verification runs on the real cabt env (kaggle-environments), not the raw `cg` loop | Accepted and BUILT — `tools/sim/check_agent.py` verifies agents on the real `cabt` env, |
+| [0011](0011-dataset-source.md) | Fetch from the daily top-episode dataset; drop the low band | accepted (supersedes the acquisition mechanism of ADR-0001; |
+| [0012](0012-optimize-for-strategy-category.md) | Optimize for the Strategy Category — legible reasoning over leaderboard rank | Accepted — the standing goal of the whole repo. It is policy, not code: every later ADR is |
+| [0013](0013-decklist-resolution-by-name.md) | Convert Limitless decklists by resolving card *names*, not (set, number) | Accepted and BUILT — `tools/deck_convert.py` is the shipped converter: name-keyed, |
+| [0014](0014-blunder-inspector-viewer-engine.md) | Blunder inspector reuses the official cabt visualizer, embedded in a tagging shell | Accepted and BUILT — the vendored viewer + tagging shell ship in `tools/train/blunder/` |
+| [0015](0015-correction-schema.md) | The Correction schema — atomic, two-axis, self-contained | Accepted and BUILT — the shipped Correction schema (`tools/train/blunder/correction.py`, |
+| [0016](0016-energy-attachment-is-a-layered-procedure.md) | Energy attachment is a layered, override-able procedure | Accepted and BUILT — the universal energy reflexes live in |
+| [0017](0017-corrections-compile-to-hypotheses.md) | Corrections compile to Hypotheses via the Tuner — attribution derived, Tier-0 now, fan-out | Accepted and BUILT — the Tuner (`tools/train/tuner/`) derives `attribution` by replaying |
+| [0018](0018-applying-tuner-output.md) | Applying Tuner output — weights auto-load; Hypotheses are LLM-authored behind a Verifier | Accepted and BUILT — `tuned.json` auto-loads as the Pilot's `overrides` (now through |
+| [0019](0019-submissions-are-traceable-and-tracked.md) | Submissions are traceable, self-describing, and tracked against performance | accepted |
+| [0020](0020-forward-evolution-index-is-a-provider-primitive.md) | Forward-evolution knowledge is a provider primitive, distinct from the Read's EvoPath | accepted (2026-06-28) |
+| [0021](0021-prefilter-balances-seats.md) | The self-play pre-filter balances seats; reproducibility is statistical, not seeded | Accepted and BUILT — `tools/sim/battle.py` seat-balances every run and appends a Battle |
+| [0022](0022-gust-is-closed-form-lethal-lookahead.md) | Gust decisions are a closed-form lethal-lookahead over hypothetical defenders (board-only, Read-deferred) | Accepted (grilled 2026-06-29); **implemented 2026-06-29** — whether-to-play |
+| [0023](0023-fetch-is-a-shared-value-comparator.md) | Fetch decisions are one shared closed-form value comparator (importance × gap × availability), board-only, Read-deferred | Accepted (grilled 2026-06-29); **core implemented 2026-06-29** test-first |
+| [0024](0024-shuffle-refresh-is-fetch-decision-a-over-keep-value.md) | Shuffle-Refresh is the Fetch comparator's decision (A) only — a dead-hand fallback over keep-value, with a deferred stochastic pull-EV | Accepted (grilled 2026-06-29); **Layer-A premise PARTLY REVERSED 2026-06-30** — the |
+| [0025](0025-baseline-rules-cluster-by-decision-context.md) | Baseline rules cluster by decision-context; `doctrine_` vs `baseline_` | Accepted and BUILT (behavior-neutral) — `common/strategy/baseline/baseline_*.py` holds the |
+| [0026](0026-posture-generic-core-is-net-new-read-levers.md) | M2 Posture's generic core is the Read's net-new levers, not generic seek/avoid | Accepted and BUILT — `posture` is `PROFILE=True` (default ON): levers A (favorability) and |
+| [0027](0027-matchup-brief-is-hand-authored-opponent-doctrine.md) | Per-archetype counterplay is a hand-authored Matchup Brief, distinct from the auto-Dossier | Accepted and BUILT — eight Briefs ship at `src/common/scouting/briefs/<slug>.json` with |
+| [0028](0028-tool-deploy-is-survival-turns-board-math.md) | +HP Tool deploy is survival-turns board-math — proactive default, not hold-for-breakpoint | Accepted (grilled 2026-06-30, `/grill-with-docs`) and **BUILT** test-first (`/tdd`, |
+| [0029](0029-own-deck-content-is-sound-oracle-plus-probabilistic-estimate.md) | Own-deck content is a SOUND oracle PLUS a PROBABILISTIC estimate — two epistemics, never contradictory | Accepted & **implemented** test-first 2026-06-30 (`tests/strategy/test_deck_odds.py`, |
+| [0030](0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md) | Winning this turn is an eager, engine-verified Lethal Solver (sound, shortest-line, execute-only) | Accepted (grilled 2026-07-01, `/grill-with-docs`). **Superseded in layout by |
+| [0031](0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md) | The Turn Planner is a goal-directed, engine-simulated whole-turn optimizer (Tier-1 Search) | Accepted (grilled 2026-07-01, `/grill-with-docs`). **Extended by |
+| [0032](0032-card-knowledge-is-an-engine-audited-effect-compendium.md) | Card knowledge is an engine-audited effect compendium (three tables + one damage oracle) | Accepted (grilled 2026-07-02, `/grill-with-docs`). **Built 2026-07-02** (TDD, all |
+| [0033](0033-transient-attack-effects-are-a-log-inferred-match-scoped-tracker.md) | Transient attack effects are a log-inferred, match-scoped tracker | Accepted & built 2026-07-02 (TDD; the completion plan's P2 — |
+| [0034](0034-deck-rules-fold-general-when-vocabulary-is-general.md) | Deck rules fold into the General Strategy when their vocabulary is general | Accepted and BUILT (2026-07-02) — the first fold round landed (mega_starmie ships |
+| [0035](0035-weight-overrides-are-authored-seeds-under-learned-deltas.md) | Per-deck specialization of General-Strategy weights is a two-layer override — authored seeds under learned deltas | Accepted (grilled 2026-07-02, `/grill-with-docs`) and **BUILT** — `/deck-align` is shipped |
+| [0036](0036-deck-strategies-realign-against-the-evolving-general-strategy.md) | Deck strategies are recurringly re-aligned against the evolving General Strategy — /deck-align, ledger-diffed and score_diff-gated | Accepted (grilled 2026-07-02, `/grill-with-docs`) and **BUILT** — `/deck-align` ships at |
+| [0037](0037-lethal-solver-is-the-turn-planners-top-rung.md) | The Lethal Solver is the Turn Planner's sound top rung (one entry point, one generator family, verified locks replay) | Accepted (grilled 2026-07-03, `/grill-with-docs`). **Built 2026-07-03 (`/tdd`), all three |
+| [0038](0038-brief-consumption-sharpens-the-owning-tactical-signal.md) | Brief consumption sharpens the owning Tactical signal (γ-scaled), not parallel Hypotheses | Accepted (2026-07-04) and built — then **SUPERSEDED by ADR-0051 (2026-07-12)**: the γ-gated Brief levers (`brief_preevo` / `brief_engine`) are **RE… |
+| [0039](0039-gamble-lines-are-closed-form-expectimax-over-outcome-classes.md) | Gamble Lines are closed-form expectimax over Outcome Classes | Accepted (grilled 2026-07-05, `/grill-with-docs`). **Built 2026-07-05 (`/tdd`)**: the |
+| [0040](0040-match-judgment-is-per-turn-closed-form-objectives.md) | Match-level judgment is per-turn closed-form objectives (Prize Path × KO Race → derived phases) | Accepted (grilled 2026-07-05, `/grill-with-docs`). **Built 2026-07-05 (`/tdd`)**: KO |
+| [0041](0041-posture-is-observable-in-decision-telemetry.md) | Posture is observable in Decision Telemetry (matchup misplays route to a Brief, not a weight) | Accepted and BUILT (2026-07-05) — the Pilot stamps `_posture_record` on every Decision and |
+| [0042](0042-base-value-model-is-a-dependency-free-logistic-over-objective-features.md) | The Automatic Value Model is a dependency-free logistic over the objective features | Accepted + **Built 2026-07-05** (`/tdd`, Tier 5). The single learned seam (ADR-0007), |
+| [0043](0043-escalation-search-is-a-budgeted-depth-2-tree-on-a-close-attack-tie.md) | Escalation Search is a budgeted depth-2 tree on a close attack tie | *(no status)* |
+| [0044](0044-opponent-choice-residue-is-narrow-closed-form-reads.md) | The deferred opponent-choice residue is narrow closed-form reads, not revived escalation search | Accepted (grilled 2026-07-06, `/grill-with-docs`) + **Built 2026-07-06** (`/tdd`) + |
+| [0045](0045-match-scale-planning-is-a-closed-form-directive-game-plan.md) | Match-scale planning is a closed-form directive Game Plan atop the Turn Planner | Accepted (grilled 2026-07-06/07, `/grill-with-docs`) + **BUILT 2026-07-07 (`/tdd`, all four |
+| [0046](0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md) | Strategy authoring splits — analysis skills propose, one skill applies | Accepted (2026-07-09). `update-strategy` built + proven; **all five producers trimmed to |
+| [0047](0047-opponent-model-is-one-facade-over-knowledge-subsystems.md) | Opponent awareness is one facade over knowledge subsystems, not scattered fields | Accepted (grilled 2026-07-09, `/grill-with-docs`) + **Foundation built 2026-07-09**; the |
+| [0048](0048-prize-economy-fetch-broadens-the-line-concept.md) | Prize-economy fetch broadens the Line concept behind a role-gated win-condition set | Accepted (grilled 2026-07-10) and BUILT — `prize_economy_fetch` is `PROFILE=True` (default |
+| [0049](0049-corrections-carry-a-scope-decision-turn-or-match.md) | A Correction carries a Scope — decision, turn, or match | Accepted and BUILT — `scope` (`decision` | `turn` | `match`) ships through the whole blunder |
+| [0050](0050-glossary.md) | Ubiquitous Language — Lethal verification & engine seeding (ADR-0050) | —  *(companion vocabulary doc for ADR-0050, not an ADR)* |
+| [0050](0050-multi-step-lethal-verification-tool.md) | The Lethal Solver's engine verify seeds the EXACT deck; the multi-step verification tool is that seeding + a fixture backfill + a pytest helper | Accepted + **Phases 1, 2 AND 3 built** — Phase 3's follow-up hooks shipped 2026-07-13 and |
+| [0051](0051-matchup-target-priority-spine.md) | ADR-0051 — Matchup Target Priority is one spine the targeting decisions read | Accepted (Phases 1–3b built 2026-07-12/13) |
+| [0052](0052-combat-math-is-one-ko-oracle-module.md) | Combat math is one KO-oracle module with explicit dependencies | Accepted (2026-07-13) and **BUILT** — `CombatMath` ships as `src/common/strategy/combat.py` |
+| [0053](0053-ml-training-pipeline-build-plan.md) | ML Training Pipeline — Build Plan | Accepted (2026-07-13); an accepted BUILD PLAN — no work package has started (the S1/WP0 row |
+| [0054](0054-provider-splits-into-parsers-indexes-records.md) | The stat provider splits into parser battery, indexes, and records | Accepted (2026-07-13) and **BUILT** — `scouting/card_text.py` (parser battery) and |
+| [0055](0055-one-agent-runtime-owns-the-deployment-profile.md) | One agent runtime owns the deployment profile | Accepted (2026-07-13) and **BUILT** — `src/common/runtime.py` is merged to main: `PROFILE` |
+| [0056](0056-stat-provider-is-the-one-card-knowledge-seam.md) | The Stat Provider is the one card-knowledge seam; records answer single-card questions | Accepted (2026-07-13) and **BUILT** — merged to main: the Stat Provider is the one |
+| [0057](0057-selfplay-corpus-uses-cabt-env-path.md) | The self-play corpus uses the cabt-env path (for Tuner-usable obs), not the A/B harness | Accepted and BUILT — `tools/sim/selfplay.py` generates the own-game corpus on the cabt-env |
+| [0058](0058-arena-captures-pvc-on-cabt-env-path.md) | Arena captures PvC Matches on the cabt-env path (human bridged as an env agent) | Accepted and BUILT (2026-07-02) — `tools/arena/` hosts PvC Tables on the cabt env with the |
+| [0059](0059-cgpy-is-a-trace-verified-python-twin-of-the-native-engine.md) | cgpy is a trace-verified pure-Python twin of the native engine | accepted (2026-07-10) |
+| [0060](0060-hand-refresh-value-is-a-closed-form-card-swing.md) | Hand-refresh value is a closed-form card swing, not a hand-size threshold | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |
+| [0061](0061-a-locking-attacks-value-includes-its-forced-follow-up.md) | A locking attack's value includes its forced follow-up (Horizon-2) | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |
+| [0062](0062-energy-denial-is-what-the-strip-actually-takes-away.md) | Energy denial is what the strip actually takes away, not whether Energy is present | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |
+| [0063](0063-a-booster-scales-the-oracle-and-a-doomed-body-denies-nothing.md) | A booster scales the oracle; a doomed body denies nothing; banked Energy is worth what it will pay for | Accepted and **BUILT 2026-07-14 (`/tdd`)**, default ON — amends ADR-0062 |

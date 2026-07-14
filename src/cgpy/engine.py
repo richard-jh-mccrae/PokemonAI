@@ -1,4 +1,4 @@
-"""Engine facade: start / step / observation / god view / clone (ADR-0050).
+"""Engine facade: start / step / observation / god view / clone (ADR-0059).
 
 `step` validates selections with the native semantics (min/max, in-range, no duplicates) and
 returns nothing — read the next `pending`/`observation`. The mover for the current select is

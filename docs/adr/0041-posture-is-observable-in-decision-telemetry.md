@@ -1,5 +1,10 @@
 # ADR-0041: Posture is observable in Decision Telemetry (matchup misplays route to a Brief, not a weight)
 
+**Status.** Accepted and BUILT (2026-07-05) — the Pilot stamps `_posture_record` on every Decision and
+`telemetry.to_record` emits it under the `posture` key, so it rides into each Correction's `live_trace`;
+`/blunder-buster` uses it as the fourth routing axis, sending a matchup misplay to the Brief/lever
+rather than a deck-agnostic weight.
+
 **Context.** Posture ([ADR-0026](0026-posture-generic-core-is-net-new-read-levers.md)) and Matchup
 Briefs ([ADR-0027](0027-matchup-brief-is-hand-authored-opponent-doctrine.md),
 [ADR-0038](0038-brief-consumption-sharpens-the-owning-tactical-signal.md)) went live: the Read now

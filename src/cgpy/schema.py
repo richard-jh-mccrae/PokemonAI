@@ -1,4 +1,4 @@
-"""The engine wire vocabulary — a DLL-free twin of `src/cg/api.py`'s IntEnums (ADR-0050).
+"""The engine wire vocabulary — a DLL-free twin of `src/cg/api.py`'s IntEnums (ADR-0059).
 
 cgpy renders observations with these int values; they are the agent-facing parity contract.
 Values are copied verbatim from `src/cg/api.py` (which loads the DLL at import time and

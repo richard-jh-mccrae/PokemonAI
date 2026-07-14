@@ -1,4 +1,4 @@
-"""Module-level battle singleton mirroring ``cg/game.py`` (ADR-0050 M3).
+"""Module-level battle singleton mirroring ``cg/game.py`` (ADR-0059 M3).
 
 The drop-in engine surface for the existing harness: ``battle_start(deck0, deck1)`` returns
 ``(obs, StartData)`` with an attribute-compatible StartData; ``battle_select`` raises the

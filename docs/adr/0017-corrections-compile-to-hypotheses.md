@@ -1,5 +1,10 @@
 # ADR-0017: Corrections compile to Hypotheses via the Tuner — attribution derived, Tier-0 now, fan-out
 
+**Status.** Accepted and BUILT — the Tuner (`tools/train/tuner/`) derives `attribution` by replaying
+the Pilot on the embedded `obs` and routes W (weight) vs H (missing Hypothesis); the v1 Tier-0 scope
+shipped. The **Deferred** Tier-1 value-model preference labels are still deferred (`value_model` is
+`PROFILE=False`).
+
 **Context.** The blunder inspector emits **Corrections** ([ADR-0015](0015-correction-schema.md));
 [ADR-0009](0009-training-methodology.md) fixed *that* they tune Hypothesis weights (Job A) and
 *may* author a Hypothesis, but not *how*. Marking blunders is **manual and expensive**, so each

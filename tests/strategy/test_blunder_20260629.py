@@ -245,15 +245,22 @@ def _denial_pilot(**kw):
 def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
     """RACE: the Active win-con can attack for 120 (tactical 119.9), but a Crushing Hammer strip is
     free — `_finish_turn_last` sequences the Item (tier 0) ahead of the turn-ending attack (tier 4),
-    so the agent disrupts AND still attacks the same turn (the ep82525101 fr92/fr102 shape)."""
+    so the agent disrupts AND still attacks the same turn (the ep82525101 fr92/fr102 shape).
+
+    Opponent Energy dropped 2 -> 1 (ADR-0062). Their only attack is Aura Jab at cost {F}: on 2 Energy
+    the second one is SURPLUS, so discarding it leaves them still able to Aura Jab for 130 and the
+    Hammer denies NOTHING. The old gate played it anyway — it asked only whether Energy was present,
+    which is the whole reason Hammers were being burned for zero effect. At 1 Energy the strip turns
+    the attacker off (130 -> 0) and the rung fires on merit. The SEQUENCING claim under test is
+    unchanged; only the board now describes a strip worth making."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)            # Crushing Hammer in hand[0]
     attack = attack_opt(11)                               # Jetting Blow, 120
     obs = make_select([play_crush, attack, opt(END)],
                       current=state(active=poke(WINCON, energy=3, hp=330),
-                                    opp_active=poke(OPP, energy=2, hp=440), hand=[CRUSH]))
+                                    opp_active=poke(OPP, energy=1, hp=440), hand=[CRUSH]))
     traces = pilot.explain(obs)
-    assert "play-energy-denial" in _fired(traces.options[0])
+    assert traces.options[0].score > 0        # ADR-0062: priced tactical, not the retired flat rung
     assert traces.options[1].tactical > traces.options[0].score   # attack scores higher on tactical
     assert pilot.decide(obs) == [0]                       # yet strip taken first (attack-last)
     assert traces.options[1].deferred                     # attack held one slot, not dropped
@@ -271,7 +278,7 @@ def test_play_energy_denial_fires_in_setup_against_a_developing_attacker():
                                     opp_active=poke(OPP, energy=1, hp=440), hand=[CRUSH]))
     traces = pilot.explain(obs)
     assert traces.options[0].plan == Plan.SETUP           # payoff not in play -> still SETUP
-    assert "play-energy-denial" in _fired(traces.options[0])
+    assert traces.options[0].score > 0        # ADR-0062: priced tactical, not the retired flat rung
     assert pilot.decide(obs) == [0]
 
 

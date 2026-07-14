@@ -1,4 +1,4 @@
-"""THE parity gate: every committed trace replays through cgpy divergence-free (ADR-0050).
+"""THE parity gate: every committed trace replays through cgpy divergence-free (ADR-0059).
 
 DLL-free by construction — the trace IS the native side — so this runs on any platform,
 which is what pins cgpy to the binary's behavior in CI. A failure prints the first-divergence

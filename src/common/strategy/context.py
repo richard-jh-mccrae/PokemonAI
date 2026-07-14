@@ -12,6 +12,7 @@ _ATTACH = 8   # attach Energy (the one irreversible per-turn commitment)
 _EVOLVE = 9   # evolve a Pokémon in play
 _RETREAT = 12 # swap Active out -> changes who can attack
 _CARD = 3     # card-target option (attack snipe target, gust SWITCH target)
+_ENERGY = 6   # OptionType.ENERGY — an attached Energy unit (the Crushing Hammer discard target)
 _YES = 1      # "redraw the cards?" affirmative at a Mulligan select
 _ATTACK = 13  # attack (the turn-ender)
 _END = 14     # end the turn
@@ -26,6 +27,10 @@ _TO_BENCH = 5     # fetch a Pokémon straight onto Bench (Buddy-Buddy Poffin)
 _TO_HAND = 7      # search: pick which card to add to hand
 _DISCARD = 8      # pick which card(s) to discard (e.g. Ultra Ball's cost)
 _DAMAGE = 15      # pick which Pokémon an attack damages (bench snipe)
+_DISCARD_ENERGY = 30      # pick which Energy to discard from an opponent's Pokémon (Crushing Hammer,
+                          # post-heads). Options are OptionType.ENERGY over their ACTIVE **and** BENCH
+                          # (engine: `op_trash_energy_enemy`, cgpy/chain.py, trace-pinned ms_mirror_1002
+                          # f14) — the card says "1 of your opponent's Pokémon", not "Active".
 _DAMAGE_COUNTER_ANY = 14  # place a damage counter "in any way you like" (Phantom Dive spread) — one
                           # counter (10) per select, `select.remainDamageCounter` = counters left,
                           # `select.effect.id` = source card
@@ -88,8 +93,17 @@ _UTILITY_TAGS = frozenset({"draw", "dig", "search", "supporter_tutor", "stall"})
                            # attacking (Cinderace's Turbo Flare), so it must keep taking Energy.
 _EVOLVING_THREAT_DMG = 100 # evolution line "becomes an attacker" at >= this dmg (ADR-0020)
 
+# POSTURE thresholds (Lever A, ADR-0026) — the Read's verdict on whether a straight race loses. Shared
+# vocabulary: the Hypothesis layer reads them (baseline_disruption) AND the priced denial oracle scales
+# by them (`Pilot._unfavored`), so they must have exactly one home.
+_POSTURE_UNFAVORED = 0.45     # matchup favorability at/below which a straight race loses
+_POSTURE_FAVORED = 0.55       # ...at/above which deny the opponent outs (the favored half's mirror;
+                              # 0.45-0.55 = the noise band around the 0.5 prior)
+_POSTURE_MIN_COVERAGE = 0.25  # min matchup coverage to trust the favorability prior
+
 __all__ = [
     "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_NO", "_ATTACK", "_END",
+    "_ENERGY", "_DISCARD_ENERGY",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
@@ -97,4 +111,5 @@ __all__ = [
     "KO_SCORE", "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
     "_UTILITY_TAGS", "_EVOLVING_THREAT_DMG",
+    "_POSTURE_UNFAVORED", "_POSTURE_FAVORED", "_POSTURE_MIN_COVERAGE",
 ]

@@ -1,4 +1,4 @@
-"""Op-conformance gate (ADR-0050 M4 item 4): every interpreter op carries a committed
+"""Op-conformance gate (ADR-0059 M4 item 4): every interpreter op carries a committed
 semantic pin — a fixture trace that exercised a ChainDef containing it and replayed
 divergence-free. The parity gate (test_replay_fixtures) proves the traces are green;
 this test proves the op → pinning-trace mapping stays COMPLETE as ops are added.

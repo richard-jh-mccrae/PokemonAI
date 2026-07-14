@@ -1334,7 +1334,7 @@ class PlannerMixin:
         counts = board.deck_known_counts
         if not counts:
             return None
-        from common.strategy.doctrines.doctrine_shuffle_refresh import _DRAW_COUNTS
+        from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
         me = self._my_player(obs)
         hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
         ma = next((p for p in (me.get("active") or []) if p), None)
@@ -1354,11 +1354,10 @@ class PlannerMixin:
             if o.get("type") != _PLAY:
                 continue
             cid = self._option_card_id(obs, select, o)
-            branches = _DRAW_COUNTS.get(cid)
-            if (branches is None or cid is None or not self.functions
+            ns = _draw_branches(cid, board)
+            if (ns is None or cid is None or not self.functions
                     or "shuffle_hand" not in self.functions.tags(cid)):
                 continue
-            ns = branches(board)
             for copies, ko_value, label in classes:
                 from common.deck_odds import draw_hit_probability
                 p = sum(draw_hit_probability(copies, pool, n) for n in ns) / len(ns)

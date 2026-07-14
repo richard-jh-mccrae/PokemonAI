@@ -1,6 +1,9 @@
 # ADR-0047: Opponent awareness is one facade over knowledge subsystems, not scattered fields
 
-**Status.** Accepted (grilled 2026-07-09, `/grill-with-docs`) + **Foundation built 2026-07-09**
+**Status.** Accepted (grilled 2026-07-09, `/grill-with-docs`) + **Foundation built 2026-07-09**; the
+deferred consumer cluster is **WIRED** (`opp_resource_reads` is `PROFILE=True`), and ADR-0060 added the
+first live consumer of `hand_size_delta` (the hand-swing oracle's freshness term). *(Corrected
+2026-07-14: the body still said "no consumer wired yet".)* Foundation built 2026-07-09
 (`/tdd`). Introduces the **Opponent Model** facade and the **Resources** subsystem; folds the
 existing **Read** (ADR-0003/0026/0027) and **Dispositions** (opponent_properties) behind it. New
 glossary terms *Opponent Model*, *Resources*, *Dispositions* in
@@ -21,7 +24,7 @@ called for.
 - `pilot.py` fold: `Pilot.__init__` builds `self.opponent`; `_board` swaps the one `scout.observe` for
   `self.opponent.observe` (Posture-off `read=None` preserved) and calls `note_brief(brief)`;
   `board.opponent` rides the Board; `Board.opp_property` delegates to the facade's Dispositions (same
-  matched Brief → identical values). **No `main.py` churn**; no consumer wired yet (the deferred cluster
+  matched Brief → identical values). **No `main.py` churn**. ~~no consumer wired yet~~ **SUPERSEDED 2026-07-14** — `opp_resource_reads` is `PROFILE=True` and ADR-0060 wired `hand_size_delta` into the hand-swing oracle's freshness term. (the deferred cluster
   consumes it next, via `/update-strategy`). Tests `tests/strategy/test_opponent_resources.py`,
   `tests/strategy/test_opponent_model.py`.
 

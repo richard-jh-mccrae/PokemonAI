@@ -1,4 +1,4 @@
-"""Game flow: setup/mulligan machine, turn loop, attack/KO/promotion (ADR-0050, M1 scope).
+"""Game flow: setup/mulligan machine, turn loop, attack/KO/promotion (ADR-0059, M1 scope).
 
 The setup protocol implements exactly the sequences decoded from native traces
 (docs/pyeng/determinism.md §5):

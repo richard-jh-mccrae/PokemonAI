@@ -1,5 +1,11 @@
 # Function Tags are the single source of structural card facts; roles are tags-in-context
 
+**Status.** Accepted, then **partially reversed 2026-06-24** (the revision note below): Depth 1 (the
+`is_exclass`→tag reuse) was reverted and the shipped `card_functions.json` is **behavioral-only** — it
+carries no `attacker`/`engine`/`prize_swing` tags, so Depths 2–3 never landed and `Scout._target_role`
+still derives roles from `CardStat` (`is_ex_body` / `maxDamage`) rather than from tags. The
+produce-once/consume-as-context principle stands for behavioral tags.
+
 > **Revised 2026-06-24 — structural facts are NOT tagged; Function Tags are behavioral-only.**
 > The six *structural* tags this ADR introduced — `prize_swing` (from `ex`/`megaEx`),
 > `item`/`supporter`/`tool`/`stadium` (from `cardType`), and `ace_spec` (from `aceSpec`) — were

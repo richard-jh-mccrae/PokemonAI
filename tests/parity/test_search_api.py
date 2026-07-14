@@ -1,4 +1,4 @@
-"""M3 verification API (ADR-0050): seeding, sessions, manual coin, compat — DLL-free.
+"""M3 verification API (ADR-0059): seeding, sessions, manual coin, compat — DLL-free.
 
 The committed native traces double as the seeding oracle: every recorded frame carries the
 live obs (what `state_from_obs` gets) AND the god frame (the true hidden zones, standing in

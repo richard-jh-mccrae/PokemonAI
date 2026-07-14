@@ -89,7 +89,7 @@ immunity field on `CardStat` yet); affordability ignored (opponent-agnostic uppe
 **Status: BUILT.** The whole M1 surface ships and is tested (28 tests; smoke A/B confirmed end-to-end):
 seat-balancing (`seat_plan`/`balanced_tally`/`by_seat`) + the `name@overlay.json` config overlay
 (→ `AGENT_OVERLAY`, `common/config.py`) in `tools/sim/battle.py`; the Battle Result → `data/battles.jsonl`
-in `tools/sim/result.py`; the M1b own-game corpus in `tools/sim/selfplay.py` ([ADR-0022](../adr/0022-selfplay-corpus-uses-cabt-env-path.md)).
+in `tools/sim/result.py`; the M1b own-game corpus in `tools/sim/selfplay.py` ([ADR-0022](../adr/0057-selfplay-corpus-uses-cabt-env-path.md)).
 A/B a config with `python tools/sim/battle.py <agent> <agent>@overlay.json`. The build notes below are
 retained as the as-built record.
 
@@ -124,7 +124,7 @@ the glossary reserves for the real competition).
    `deck_hash` per contestant; `turns` null on non-clean exits; **no `verdict`** stored (derived on read). A
    SQLite/dashboard read-path is deferred.
 5. **Own-game replay corpus (M1b, sequenced after the A/B core) — grilled & revised 2026-06-29, see
-   [ADR-0022](../adr/0022-selfplay-corpus-uses-cabt-env-path.md).** A new `tools/sim/selfplay.py`
+   [ADR-0022](../adr/0057-selfplay-corpus-uses-cabt-env-path.md).** A new `tools/sim/selfplay.py`
    (`<agent> -n N [--overlay]`) runs **mirror self-play on the cabt-env path** (`env.run` → `env.toJSON`,
    reusing check_agent) and saves every game to `data/replays/selfplay/<stem>/<episode_id>.json`. **Why
    cabt-env, not battle.py `--save-replays`:** the Tuner needs each Correction's per-frame agent `obs`

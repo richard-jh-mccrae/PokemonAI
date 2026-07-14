@@ -1,5 +1,8 @@
 # ADR-0012: Optimize for the Strategy Category — legible reasoning over leaderboard rank
 
+**Status.** Accepted — the standing goal of the whole repo. It is policy, not code: every later ADR is
+written under it (rules backbone, per-decision rationale, one gated learned seam).
+
 **Context.** Two sibling competitions share one ladder: the **Simulation Category**
 scores raw win rate; the **Strategy Category** scores the *documented reasoning* behind
 the agent — why a strategy was chosen, which hypotheses were tested, demonstrated

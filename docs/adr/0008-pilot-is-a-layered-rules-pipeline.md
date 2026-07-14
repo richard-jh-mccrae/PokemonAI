@@ -1,5 +1,10 @@
 # ADR-0008: The Pilot is a layered rules pipeline; decks plug in a declarative Strategy
 
+**Status.** Accepted and BUILT — `src/common/pilot.py` is the shipped Sense→Plan→Score→Act pipeline
+every agent runs on a declarative per-deck Strategy. Since extended by the tier ADRs
+(0031/0037/0039/0040/0042/0043); `search_budget` still ships at `0` (Tier-0 closed-form), and the
+Posture core it sketched was rescoped by [ADR-0026](0026-posture-generic-core-is-net-new-read-levers.md).
+
 **Context.** Per [ADR-0012](0012-optimize-for-strategy-category.md) we optimize for
 legibility, and per [ADR-0007](0007-learning-is-one-offline-value-model.md) learning is one
 deferred value-model seam — so the agent's backbone is rules. We want one decision

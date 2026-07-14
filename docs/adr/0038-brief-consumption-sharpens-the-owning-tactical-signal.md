@@ -1,5 +1,7 @@
 # ADR-0038: Brief consumption sharpens the owning Tactical signal (γ-scaled), not parallel Hypotheses
 
+**Status.** Accepted (2026-07-04) and built — then **SUPERSEDED by [ADR-0051](0051-matchup-target-priority-spine.md) (2026-07-12)**: the γ-gated Brief levers (`brief_preevo` / `brief_engine`) are **RETIRED FROM THE CODE**, not merely default-OFF, and the MatchupPlan target-priority spine (`matchup_targeting`, `PROFILE=True`) replaces them. *(Corrected 2026-07-14: this ADR still described `brief_engine` as "wired but default OFF" and carried no superseded marker; `runtime.py:44` had recorded the retirement all along.)*
+
 **Context.** The Matchup-Brief pipeline ([ADR-0027](0027-matchup-brief-is-hand-authored-opponent-doctrine.md))
 is built and behavior-neutral: a recognized opponent's Brief lands on `Board.brief` with threats/targets
 resolved to ids — and nothing reads them. ADR-0027 sketched consumption as "General or deck Hypotheses

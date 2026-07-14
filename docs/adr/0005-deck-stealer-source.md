@@ -1,5 +1,8 @@
 # ADR-0005: deck_stealer copies decks from a replay file, not the leaderboard or meta store
 
+**Status.** Accepted and BUILT — `tools/deck_stealer.py` is the shipped tool and sources decks from
+a downloaded replay, exactly as decided here.
+
 `deck_stealer` takes a downloaded replay plus a team name and writes that team's
 exact 60-card deck to `src/agents/<name>/deck.csv`. We source from the
 **replay** — not a team-name lookup against the leaderboard or the meta store —

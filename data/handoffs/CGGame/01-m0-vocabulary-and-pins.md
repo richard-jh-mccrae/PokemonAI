@@ -18,7 +18,7 @@ re-run/regen commands. Nothing to resume unless the competition ships a NEW engi
 - **Determinism pins** — `docs/pyeng/determinism.md` (the prose record) enforced by
   `tests/parity/test_determinism_pins_engine.py` (5 tests, skip cleanly without the DLL).
   Probe tool: `tools/parity/pin_determinism.py --probe {serials,options,selectdeck,fork,mulligan}`.
-- **ADR-0050** — the decision record (reverses ADR-0010 with the parity-gate mitigation).
+- **ADR-0059** — the decision record (reverses ADR-0010 with the parity-gate mitigation).
 
 ## The pins a resuming session must NOT re-derive (they're settled)
 

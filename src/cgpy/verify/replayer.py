@@ -1,4 +1,4 @@
-"""Replay a recorded native trace through cgpy and localize the first divergence (ADR-0050).
+"""Replay a recorded native trace through cgpy and localize the first divergence (ADR-0059).
 
 Randomness binding (docs/pyeng/determinism.md): draw identities come from the mover's own
 full DRAW logs (a seat's draws always land in its own next window, in order), coins from that

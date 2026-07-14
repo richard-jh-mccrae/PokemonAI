@@ -61,11 +61,19 @@ class Hypothesis:
 
     `when(ctx) -> bool` is the trigger; `weight` is the tunable surface; `status` tracks
     its test journey (assumed -> testing -> confirmed/refuted).
+
+    `weight` is REQUIRED — it carries no default (2026-07-14). Authoring a rung at `weight=0` is a
+    real and used pattern (the ladder-gated seed: mint the rung, write its `when()` and its
+    `SEED(ladder): NN`, ship it inert until corrections exercise it, and let the tuner promote it off
+    zero). But a `0.0` DEFAULT made a rung authored by OMISSION — a dropped kwarg, a bad
+    copy-paste — indistinguishable at runtime from a deliberate seed: same value, same silence, no
+    record of intent. Requiring the argument keeps the deliberate zero (write `weight=0`, stating
+    intent) and makes the accidental one impossible.
     """
     id: str
     rationale: str
     when: object                  # callable: (ctx) -> bool
-    weight: float = 0.0
+    weight: float
     status: str = "assumed"
 
 

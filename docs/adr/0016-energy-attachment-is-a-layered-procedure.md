@@ -1,5 +1,10 @@
 # ADR-0016: Energy attachment is a layered, override-able procedure
 
+**Status.** Accepted and BUILT — the universal energy reflexes live in
+`common/strategy/baseline/baseline_energy.py` (relocated by ADR-0025) and readiness is engine-derived
+from `CardStat.minAttackCost`. The full attach-*target* awareness flagged at the end landed only
+partially (`Context.option_area` + `dont-feed-the-doomed`); later energy-routing rungs continue it.
+
 **Context.** Attaching Energy is the core tempo engine of the game, and the deep dive (2026-06-25)
 surfaced gaps. (1) The agent had no positive driver to attach at all — it only attached when a deck
 rule happened to reward a specific card (the special accel Energy), so it never powered up plain

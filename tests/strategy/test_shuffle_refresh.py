@@ -100,8 +100,15 @@ def test_probable_miss_vetoes_a_refresh_into_a_provably_spent_deck():
 @pytest.mark.req("REQ-GEN-0066")
 def test_disruption_value_survives_the_probable_miss_veto():
     """−25 is deliberately clearable: a SYMMETRIC refresh with a live disruption trigger (opponent
-    runs a hand-size attacker) still nets positive (+25 +20 −25) and plays AS disruption even though
-    my own pull is provably dead."""
+    runs a hand-size attacker AND a stacked hand to shrink) still nets positive and plays AS
+    disruption even though my own pull is provably dead.
+
+    `opp_hand_count=8` added 2026-07-14 (ADR-0060). It used to default to 0 — an Alakazam-class
+    attacker holding ZERO cards, which deals zero damage. Judging it would have REFILLED them to 4
+    and ARMED the very attacker we were claiming to disrupt. The swing oracle prices that gift
+    (−8/card) and correctly refuses, so the old board no longer plays the Judge. The board, not the
+    assertion, was wrong: this test's own docstring describes a hand worth shrinking, so give it one.
+    """
     HSATK = 640
     stats = DictCardStatProvider({JUDGE: CardStat(JUDGE, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
@@ -115,7 +122,8 @@ def test_disruption_value_survives_the_probable_miss_veto():
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(WINC, energy=3),
                                     bench=[poke(PLAINMON), poke(FILLER2)], hand=[JUDGE],
-                                    prizes=6, deck_count=20, opp_active=poke(HSATK)))
+                                    prizes=6, deck_count=20, opp_active=poke(HSATK),
+                                    opp_hand_count=8))   # a hand worth shrinking (see docstring)
     obs["own_prizes"] = {FILLER2: 6}
     trace = pilot.explain(obs).options[0]
     assert "dont-refresh-into-a-probable-miss" in _fired(trace)       # my pull IS dead
@@ -172,14 +180,17 @@ def test_laceys_8_draw_window_lifts_the_probable_miss():
     assert pilot.decide(obs) == [0]                                   # refresh plays again
 
 
-# --- Shuffle-Refresh IS a hand-cycling draw -> dig-before-commit endorses it (ADR-0024 reversal) ----
+# --- Shuffle-Refresh IS still a hand-cycling draw -- but the SWING ORACLE owns it (ADR-0060) --------
 @pytest.mark.req("REQ-GEN-0046")
-def test_dig_before_commit_endorses_a_shuffle_refresh_as_a_draw():
-    """A Shuffle-Refresh carries the `draw` tag and refills the hand — playing it to cycle is the strong
-    line, so `dig-before-commit` endorses it like any other draw Supporter. ADR-0024's 'only when the
-    hand is dead' premise was REFUTED 2026-06-30: hoarding the refresh cost ~3:1 in the mega_starmie
-    mirror vs the pre-refactor build. `_finish_turn_last` still tiers it after the Energy attach, and
-    `hold-wincon-dont-shuffle` / `attach-before-hand-shuffle` guard the genuinely-bad shuffles."""
+def test_the_swing_oracle_owns_the_shuffle_refresh_and_dig_owns_the_plain_draw():
+    """A Shuffle-Refresh is still endorsed as a hand-cycle — ADR-0024's 'only when the hand is dead'
+    premise stays REFUTED (hoarding cost ~3:1 in the mega_starmie mirror). But ADR-0060 moves that
+    endorsement OUT of `dig-before-commit`, which is hand-size-BLIND and so endorsed Judge just as
+    warmly when we held 8 cards and the opponent held 1 (ml f111, CRITICAL).
+
+    The cycling credit is preserved EXACTLY (`_REFRESH_CYCLE` = 20, the same +20 dig used to give)
+    and now arrives as a tactical term that also prices what the shuffle actually moves. A plain
+    draw card is untouched: `dig-before-commit` still owns it."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINDRAW: CardStat(PLAINDRAW, hp=0),
                                   PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
@@ -188,8 +199,14 @@ def test_dig_before_commit_endorses_a_shuffle_refresh_as_a_draw():
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, PLAINDRAW]))
-    assert "dig-before-commit" in _fired(pilot.explain(obs).options[0])       # Shuffle-Refresh now endorsed
-    assert "dig-before-commit" in _fired(pilot.explain(obs).options[1])       # plain draw card too
+    refresh, plain = pilot.explain(obs).options[0], pilot.explain(obs).options[1]
+
+    assert "dig-before-commit" not in _fired(refresh)   # the hand-BLIND rung no longer reaches it
+    assert refresh.tactical == 20.0                     # ... the cycling credit is preserved, exactly
+    assert refresh.score > 0                            # ... so the refresh is still the strong line
+
+    assert "dig-before-commit" in _fired(plain)         # a plain draw card is unaffected
+    assert plain.tactical == 0.0                        # ... and the oracle stays silent on it
 
 
 # --- regression fix: Shuffle-Refresh played BEFORE the turn-ending attack (cycle, then KO) ----------

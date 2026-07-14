@@ -1,7 +1,7 @@
 """Arena replay store: PvC replays saved like the Self-play Corpus (tagged cabt JSON),
 with the Arena's metadata in the info block; the Rating patched in post-game.
 
-Offline, pure-dict. The file must stay one self-contained artifact (ADR-0033) so the
+Offline, pure-dict. The file must stay one self-contained artifact (ADR-0058) so the
 SSH pull is a bare rsync.
 """
 import json

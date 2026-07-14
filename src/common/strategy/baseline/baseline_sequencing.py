@@ -27,12 +27,16 @@ HYPOTHESES = [
         rationale="Play free draw/search before irreversible commitments (Energy attach in setup, the "
                   "turn-ending attack while racing — `_finish_turn_last` still attacks same turn) since "
                   "they cost nothing and see more deck. Stands down for discard-cost search "
-                  "(`cost_discard`, not free); DOES endorse Shuffle-Refresh (`shuffle_hand`) as a "
-                  "hand-cycling draw — ADR-0024's 'only when hand is dead' premise was REFUTED "
-                  "2026-06-30 (hoarding cost ~3:1 in the mega_starmie mirror).",
+                  "(`cost_discard`, not free). STANDS DOWN on a Shuffle-Refresh (`shuffle_hand`) since "
+                  "ADR-0060: this rung is hand-size-BLIND, and a flat endorsement of Judge/Harlequin/"
+                  "Lillie's is exactly what made the Pilot shed an 8-card hand to redraw 4 (ml f111 "
+                  "CRITICAL, ms f60, ms f94). A refresh's value is its card SWING — the `refresh_swing` "
+                  "oracle owns that card class end to end and carries the `_REFRESH_CYCLE` credit this "
+                  "rung used to supply. ADR-0024's anti-hoarding finding survives INSIDE the oracle.",
         when=lambda c: c.option_type == _PLAY
         and ("draw" in c.tags or "search" in c.tags)
-        and "cost_discard" not in c.tags,
+        and "cost_discard" not in c.tags
+        and "shuffle_hand" not in c.tags,
         weight=20, status="assumed"),
     Hypothesis(
         id="dont-play-damage-boost-when-cant-attack",

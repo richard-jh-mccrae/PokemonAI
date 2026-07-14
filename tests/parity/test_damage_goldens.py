@@ -1,4 +1,4 @@
-"""ADR-0032 damage goldens re-asserted on cgpy (ADR-0050 M2 close-out).
+"""ADR-0032 damage goldens re-asserted on cgpy (ADR-0059 M2 close-out).
 
 Weakness x2, Resistance -30, Jetting Blow's 120-base + flat-50 bench snipe, Nebula
 Beam's 210 ignoring W/R, and the benched-Tera zero — each trace-pinned during the M2

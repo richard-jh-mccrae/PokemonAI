@@ -1,4 +1,4 @@
-"""Seeded free-run self-play smoke (ADR-0050 M4 item 8) — DLL-free.
+"""Seeded free-run self-play smoke (ADR-0059 M4 item 8) — DLL-free.
 
 Whole games on the cgpy engine alone under a seeded chaos policy: no crash, only legal
 selections, and the game TERMINATES (a result, or the step cap without an exception).

@@ -1,4 +1,4 @@
-# ADR-0050: cgpy is a trace-verified pure-Python twin of the native engine
+# ADR-0059: cgpy is a trace-verified pure-Python twin of the native engine
 
 **Status:** accepted (2026-07-10)
 

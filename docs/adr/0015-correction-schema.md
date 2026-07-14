@@ -1,5 +1,10 @@
 # ADR-0015: The Correction schema — atomic, two-axis, self-contained
 
+**Status.** Accepted and BUILT — the shipped Correction schema (`tools/train/blunder/correction.py`,
+`store.py`). Substantially extended since: the four amendments below (embedded agent `obs`, build
+identity, the per-build correction tree, `live_trace`) and [ADR-0049](0049-corrections-carry-a-scope-decision-turn-or-match.md),
+which relaxes "one Decision" into a Scope (`decision` | `turn` | `match`).
+
 **Context.** [ADR-0009](0009-training-methodology.md) named the Correction
 `(state, chosen, correct, attribution, rationale)` but never defined its shape, the
 granularity of a "decision", or how `state` is stored. The blunder inspector

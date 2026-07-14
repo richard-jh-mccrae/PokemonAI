@@ -1,5 +1,9 @@
 # Shared `common/` + `cg/`, assembled into a self-contained submission at package time
 
+**Status.** Accepted and BUILT — the repo ships the `src/common/` + `src/cg/` + thin
+`src/agents/<name>/` layout, and `tools/submit/package.py` assembles the self-contained bundle
+(now also carrying `brief.html`, ADR-0019).
+
 **Context.** A submission is a single self-contained directory (`main.py` + any sibling
 modules like `strategy.py` + `deck.csv` + the vendored `cg/` engine + the deck-agnostic
 code). But the deck-agnostic code (`common/`, including Scouting) and the engine (`cg/`)
