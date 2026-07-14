@@ -62,6 +62,8 @@ PROFILE = {
                                     # KO/grind lines when the opponent is near deck-out (SOUND deck-out timing)
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
                                     # (Item-tutor / Rare-Candy → evolve → energy → KO; min-bound, sub-prize)
+    "play_accel_lethal": True,      # armed-ON 2026-07-14 ladder-testing: count a play-based accelerator
+                                    # (Crispin) as +1 attach in the KO budget; min-bound
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one

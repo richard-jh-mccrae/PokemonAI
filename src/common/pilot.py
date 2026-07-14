@@ -800,7 +800,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
-                 enabler_item_composer=False):
+                 enabler_item_composer=False, play_accel_lethal=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -907,6 +907,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # evolution of an in-play, this-turn-evolvable body →
                                                         # evolve → attach → KO, preferring the cheaper Item
                                                         # enabler over the scarce Supporter tutor
+        self.play_accel_lethal = play_accel_lethal      # kill-switch (armed-ON): count a PLAY-based energy
+                                                        # accelerator (a Trainer tagged energy_accel that
+                                                        # attaches a Basic on play — Crispin) as +1 attach in
+                                                        # the ko_for_prizes budget, ON TOP of the manual
+                                                        # attach. Min-bound: only when the Trainer is playable
+                                                        # NOW (Supporter needs a free slot) and a Basic Energy
+                                                        # is still fetchable. An ATTACK-based accel (a Pokemon)
+                                                        # is NEVER counted (using it IS the attack)
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —

@@ -67,6 +67,7 @@ EXPECTED_SHIPPED = {
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target rebuild-odds tiebreak
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
+    "play_accel_lethal": True,      # armed-ON 2026-07-14 (ladder-testing): play-based accel (Crispin) +1 KO attach
 }
 
 
