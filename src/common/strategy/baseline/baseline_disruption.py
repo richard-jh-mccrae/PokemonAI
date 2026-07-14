@@ -15,6 +15,13 @@ _STACKED_HAND = 6             # opponent hand size at/above which a `draw` engin
 _REFRESH_HAND_FLOOR = 5       # my hand size at/above which a SYMMETRIC redraw (Judge → 4) is a net card
                               # LOSS for me — below it a symmetric refresh is a fine small-hand dig. Pairs
                               # with the (mine > theirs) gift test. ml 85709280 f111 (my 8 vs opp 1), ladder-tunable
+_TAILORED_HAND = 3            # opponent hand size at/below which a hand they just tailored DOWN (dumped
+                              # normally-kept cards to commit to a few key pieces) is worth Iono-ing to
+                              # scatter — the MIRROR threshold of `_STACKED_HAND` (which fires on a BIG
+                              # stacked hand). Above it there's no tailored-down commitment to disrupt.
+_COMEBACK_HAND_FLOOR = 2      # my hand size at/below which emptying it further into an enabled Unfair-Stamp
+                              # is half-dead next turn — a 1-card hand can't rebuild after their post-KO
+                              # redraw. At/below this, demote a hand-spend; hold a recovery out.
 
 HYPOTHESES = [
     Hypothesis(
@@ -118,4 +125,50 @@ HYPOTHESES = [
         and c.board.my_hand_size >= _REFRESH_HAND_FLOOR
         and c.board.my_hand_size > c.board.opp_hand_size,
         weight=-25, status="assumed"),
+    Hypothesis(
+        id="disrupt-the-tailored-hand",
+        rationale="SEED(ladder): 22. The MIRROR of `strip-the-stacked-engine-hand`: that rule strips a "
+                  "BIG stacked hand; THIS one Iono-s a hand the opponent has TAILORED DOWN to a few key "
+                  "cards. Signal: they dumped normally-kept cards last turn (`opp_last_turn_dumped` — an "
+                  "Ultra-Ball-class discard growth ≥2, committing to the few they held) AND their hand is "
+                  "now SMALL (`opp_hand_size <= _TAILORED_HAND`, they're down to those key pieces). A "
+                  "`hand_disruption` Supporter (Iono / Judge) scatters those specific kept cards back into "
+                  "the deck. Structurally DISTINCT from `strip-the-stacked-engine-hand` (which is "
+                  "draw-engine-scoped and fires at `_STACKED_HAND`+ cards exceeding mine) — this is the "
+                  "small-tailored-hand half and needs no draw engine in play. Rides "
+                  "`hold-wincon-dont-shuffle` (suppressed while my own win-condition is in hand) and "
+                  "`_finish_turn_last` (the shuffle sequences before the attack, so I disrupt and still "
+                  "attack the same turn); never overrides a KO. Ships default-OFF (weight 0, ADR-0009 "
+                  "by-id override): an opponent-model prior that must not move live behavior until the "
+                  "ladder tunes the seed.",
+        when=lambda c: c.option_type == _PLAY
+        and "hand_disruption" in c.tags
+        and c.board.opp_last_turn_dumped
+        and c.board.opp_hand_size <= _TAILORED_HAND,
+        weight=0, status="assumed"),
+    Hypothesis(
+        id="unfair-stamp-comeback-posture",
+        rationale="SEED(ladder): -18. The DEFENSIVE half of the Unfair-Stamp doctrine (the offensive/user "
+                  "half is already covered — both `dragapult_ex` and `mega_lucario` run and sequence Stamp "
+                  "as a post-KO comeback). Unfair Stamp (ACE SPEC, verified in pool) is playable ONLY by a "
+                  "player who had a Pokémon KO'd on the opponent's last turn — so the turn I take a KO "
+                  "(`opp_took_ko_this_turn`) against an opponent recognized to run a post-KO hand "
+                  "disruptor (`opp_comeback_disruptor`), I have just ENABLED their Stamp next turn. "
+                  "Emptying my hand to near-zero now leaves it half-dead to that redraw (a 1-card hand "
+                  "can't rebuild). So DEMOTE a further hand-spend — a `hand_disruption`/`shuffle_hand` "
+                  "PLAY (the cleanest hand-emptying predicate the option model exposes: these refresh/"
+                  "dump my hand) — but only when I'm already low (`my_hand_size <= _COMEBACK_HAND_FLOOR`), "
+                  "keeping the trigger conservative; preserve a recovery out. A soft negative demotion, "
+                  "board-dominated, never overrides a KO (`_finish_turn_last`). DOUBLE-inert by design: "
+                  "weight 0 (ADR-0009 by-id override, ladder-gated) AND `opp_comeback_disruptor` is False "
+                  "until a matchup Brief asserts it (a separate agent registers the property) — so the "
+                  "trigger is normally False too. Both are intentional: an opponent-model prior wired for "
+                  "telemetry that changes nothing live until ladder-validated AND a Brief recognizes the "
+                  "opponent.",
+        when=lambda c: c.option_type == _PLAY
+        and ("hand_disruption" in c.tags or "shuffle_hand" in c.tags)
+        and c.board.opp_took_ko_this_turn
+        and c.board.opp_comeback_disruptor
+        and c.board.my_hand_size <= _COMEBACK_HAND_FLOOR,
+        weight=0, status="assumed"),
 ]

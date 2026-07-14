@@ -52,16 +52,30 @@ _PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on 
 _PLANNER_ENABLER_FREE = 8.0    # cheapest-enabler tier (ADR-0031): a FREE direct-evolve (evolved form
                                # already in hand, pre-evo legally evolvable this turn) is the cheapest
                                # first step to the SAME KO — no card leaves the deck, no tutor spent.
-_PLANNER_ENABLER_ITEM = 4.0    # an Item tutor (Mega Signal) is cheaper than the scarce Supporter slot
-                               # but spends a card — below free-evolve, above the Supporter tutor (0).
-                               # Both stay sub-prize/sub-survival: they only break a same-KO tie among
-                               # enablers, never outrank a genuine prize or survival delta (decision 3).
+_PLANNER_ENABLER_ITEM_SLOT = 6.0  # BUILD 4 (`enabler_item_composer`): an Item enabler's credit WHEN it
+                               # preserves the scarce one-per-turn Supporter slot for a slot-competing
+                               # Supporter in hand (a `gust` Boss's Orders / another high-value Supporter).
+                               # Wider gap over the Supporter-tutor path (0) — the preservation is real —
+                               # but still below a free direct-evolve (8): the Item spends a card.
+_PLANNER_ENABLER_ITEM_BASE = 2.0  # BUILD 4: the SAME Item enabler's credit when NO Supporter competes for
+                               # the slot — keeping it is worth little, so the gap shrinks toward the tutor.
+                               # All three (free 8 / item 6|2 / supporter 0) stay sub-prize/sub-survival:
+                               # they only break a same-KO tie among enablers, never outrank a genuine
+                               # prize or survival delta (decision 3).
 _PLANNER_VALUE_W = 80.0        # Tier-5 (ADR-0042): the Automatic Value Model's P(win) on the simmed
                                # end-of-turn board scales into a sub-prize band (< one KO_SCORE), so
                                # the learned leaf breaks prize-EQUAL ties, never overriding a prize
 _PLANNER_GAMEPLAN_W = 20.0     # ADR-0045 (S3): a candidate line SERVING the Match Planner's directed goal
                                # gets this × the Game Plan's confidence — sub-prize (< one KO_SCORE), ranks
                                # WITHIN a rung, never beats a prize; kill-switch `match_planner_steer`
+_PLANNER_DECKOUT_W = 5.0       # BUILD 2 (`opp_resource_reads`): a sub-prize nudge toward pressing a KO/grind
+                               # line when the opponent is near deck-out. `opp_deckout_in_turns` is SOUND
+                               # (deck count is public); the finer prized-last-copy read is probabilistic
+                               # (opp hand hidden) and deliberately NOT used. Sub-prize — never a reorder.
+_PLANNER_DECKOUT_TURNS = 3     # "near deck-out" horizon: fire only when they exhaust within this many turns
+_RARE_CANDY_ID = 1079         # BUILD 1 (`enabler_item_composer`): Rare Candy (Item, SVI 191) — the Basic→
+                              # Stage-2 evolve SKIP. Matched by id (no Function Tag): behaviorally unique,
+                              # single card, no other consumer. Card text verified at EN_Card_Data.csv id 1079.
 _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
               "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
@@ -787,6 +801,21 @@ class PlannerMixin:
         return (_PLANNER_GAMEPLAN_W * gp.confidence
                 if line_goal in _GOAL_LINE.get(gp.directed_goal, ()) else 0.0)
 
+    def _deckout_grind_bonus(self, board) -> float:
+        """BUILD 2 (`opp_resource_reads`, DEFAULT OFF): a sub-prize nudge toward pressing a KO/grind line
+        when the opponent is near deck-out. ``board.opp_deckout_in_turns`` is SOUND — the opponent's deck
+        count is public, so the exhaustion horizon is calibrated, not asserted; the finer "deny their
+        LAST prized copy" read is probabilistic (their hand is hidden) and is deliberately NOT used here.
+        Silent unless the flag is on AND a near-term deck-out is known; the bump is sub-prize/sub-survival
+        (< one KO_SCORE), so it only ranks WITHIN a rung and never reorders a real prize/survival delta
+        (ADR-0031 decision 3)."""
+        if not getattr(self, "opp_resource_reads", False):
+            return 0.0
+        t = getattr(board, "opp_deckout_in_turns", None)
+        if t is None or t > _PLANNER_DECKOUT_TURNS:
+            return 0.0
+        return _PLANNER_DECKOUT_W
+
     def _forgo_ko_line(self, obs, select, board, options, traces):
         """The forgo-KO directive (ADR-0045 S4, 'don't wake the giant'): when a NON-winning KO of the opp
         Active is on the menu but the tight sound gate holds, commit the best DEVELOP instead — or END the
@@ -1136,6 +1165,12 @@ class PlannerMixin:
             return []
         opp_player = self._opp_player(obs)
         extra = 1 if (board.reusable_energy_in_hand and not board.energy_attached) else 0
+        # A PLAY-based accelerator (Crispin) adds +1 attach ON TOP of the manual one (min-bound, cap 1).
+        # Two reads: `accel_free` for enablers that leave the Supporter slot open (retreat / free-evolve /
+        # item / rare-candy / plain active-KO); `accel_sup` for enablers that THEMSELVES spend the slot
+        # (Salvatore rush-evolve Supporter, energy-tutor Supporter) — a Supporter accel can't also be played.
+        accel_free = self._play_accel_extra(obs, board, select, options, enabler_consumes_supporter=False)
+        accel_sup = self._play_accel_extra(obs, board, select, options, enabler_consumes_supporter=True)
         threat = self._threat_magnitude(opp)
         lines = []
         for i, o in enumerate(options):
@@ -1144,23 +1179,38 @@ class PlannerMixin:
                                                           # tutor reaching the SAME KO; 0 = the scarce
                                                           # Supporter tutor (last), sub-prize throughout
             if o.get("type") == _RETREAT:
-                cand = self._retreat_ko_candidate(obs, board, opp, opp_player, extra)
+                cand = self._retreat_ko_candidate(obs, board, opp, opp_player, extra + accel_free)
                 kind, cost = "retreat", _PLANNER_ENABLER_FREE   # spends no card/slot — a free enabler
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
-                cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra)
+                cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra + accel_free)
                 kind, cost = "free evolve", _PLANNER_ENABLER_FREE
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _BENCH:
                 retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
-                cand = self._free_evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra,
-                                                      retreat_on_menu)
+                cand = self._free_evolve_ko_candidate(obs, select, board, o, opp, opp_player,
+                                                      extra + accel_free, retreat_on_menu)
                 kind, cost = "free evolve", _PLANNER_ENABLER_FREE
             elif o.get("type") == _PLAY and self._is_evolution_tutor(obs, select, o):
                 retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
-                cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, extra,
+                cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, extra + accel_sup,
                                                        retreat_on_menu)
                 kind = "evolution tutor"                  # a Supporter — least-preferred enabler (cost 0)
+            elif (o.get("type") == _PLAY and getattr(self, "enabler_item_composer", False)
+                  and self._is_item_pokemon_tutor(obs, select, o)):
+                retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
+                cand = self._item_evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra,
+                                                      retreat_on_menu, accel=accel_free)
+                kind, cost = "item tutor", self._item_enabler_cost(board)   # BUILD 4: the Item's edge over
+                #                       the scarce Supporter tutor is CONDITIONAL on preserving the slot
+            elif (o.get("type") == _PLAY and getattr(self, "enabler_item_composer", False)
+                  and self._is_rare_candy(obs, select, o)):
+                retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
+                cand = self._rare_candy_ko_candidate(obs, select, board, o, opp, opp_player, extra,
+                                                     retreat_on_menu, accel=accel_free)
+                kind, cost = "rare candy", self._item_enabler_cost(board)   # BUILD 1: a Basic->Stage2 skip
+                #                       Item — tiered like the item tutor (slot-preservation credit)
             elif o.get("type") == _PLAY:
-                cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player)
+                cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player,
+                                                    accel=accel_sup)
                 kind = "energy tutor"
             else:
                 continue
@@ -1169,6 +1219,7 @@ class PlannerMixin:
             prizes, survives = cand
             value = self._leaf_value(prizes=prizes, active_survives=survives, threat_removed=threat)
             value += self._gameplan_goal_bonus("ko_for_prizes", board)       # ADR-0045 seam (S3)
+            value += self._deckout_grind_bonus(board)                        # BUILD 2 seam (opp_resource_reads)
             value += cost                                 # sub-prize/sub-survival: breaks a same-KO tie
                                                           # among enablers, never over a real prize delta
             lines.append(TurnLine(next_step=[i], goal="ko_for_prizes", value=value,
@@ -1194,7 +1245,14 @@ class PlannerMixin:
             return []
         ranked = [(self._body_threat_rank(obs, p, board.read, board.posture_confidence), p)
                   for p in bench]
-        top_rank, top = max(ranked, key=lambda t: t[0])
+        if getattr(self, "ko_target_whiff", False):
+            # BUILD 1 (DEFAULT OFF): among EQUAL-threat-rank targets prefer the one the opponent is
+            # LEAST able to replace — lowest `copies_left_odds` of its own line. Threat rank stays the
+            # dominant key, so this is a pure tiebreak; it never promotes a lesser threat. Fails OPEN
+            # (`copies_left_odds` → 1.0 for an unrecognized opponent, so all-equal → no reorder).
+            top_rank, top = max(ranked, key=lambda t: (t[0], -self._whiff_odds(board, t[1])))
+        else:
+            top_rank, top = max(ranked, key=lambda t: t[0])
         top_stat = self.stats.get(top.get("id")) if self.stats else None
         own_mag = float(getattr(top_stat, "maxDamage", 0) or 0) if top_stat else 0.0
         fwd_fn = getattr(self.stats, "forward_max_damage", None)
@@ -1239,6 +1297,7 @@ class PlannerMixin:
                     and top.get("id") in board.path_target_ids):  # cheapest Prize Path advances the MATCH
                 value += _PLANNER_PATH_W                          # win — sub-prize bump, ranks within rung
             value += self._gameplan_goal_bonus("ko_key_threat", board)       # ADR-0045 seam (S3)
+            value += self._deckout_grind_bonus(board)                        # BUILD 2 seam (opp_resource_reads)
             lines.append(TurnLine(
                 next_step=[i], goal="ko_key_threat", value=value,
                 rationale=f"plan (ko_key_threat): {kind} unlocks the snipe-KO of the benched key threat"))
@@ -1432,6 +1491,284 @@ class PlannerMixin:
         cid = self._option_card_id(obs, select, option)
         return bool(cid is not None and self.functions and "rush_evolve" in self.functions.tags(cid))
 
+    def _whiff_odds(self, board, body) -> float:
+        """BUILD 1 helper: P(the opponent still holds ≥1 copy of ``body``'s line) via the Opponent Model
+        (`copies_left_odds`). Lower = the opponent is LESS able to replace this body if I KO it — the
+        whiff-maximising target. Fails OPEN to 1.0 ("assume replaceable") when no Opponent Model / no
+        confident Read, so the tiebreak silently no-ops without a confident recognition."""
+        opp_model = getattr(board, "opponent", None)
+        if opp_model is None:
+            return 1.0
+        try:
+            return float(opp_model.copies_left_odds((body or {}).get("id")))
+        except Exception:
+            return 1.0
+
+    def _is_item_pokemon_tutor(self, obs, select, option) -> bool:
+        """BUILD 3 helper: this PLAY option is an ITEM that fetches an evolution-form Pokémon into HAND
+        (Mega Signal: `tutor_mega`; the generic `tutor_pokemon`) — the composer's committed first step.
+        Distinct from `rush_evolve` (evolves straight from the deck — a Supporter) and `tutor_energy`.
+        False when the card / its stat / its tags are unknown (fail-closed)."""
+        cid = self._option_card_id(obs, select, option)
+        if cid is None or not self.functions or not self.stats:
+            return False
+        stat = self.stats.get(cid)
+        if stat is None or not getattr(stat, "is_item", False):
+            return False
+        tags = self.functions.tags(cid)
+        return "tutor_mega" in tags or "tutor_pokemon" in tags
+
+    def _item_enabler_cost(self, board) -> float:
+        """BUILD 4 (`enabler_item_composer`): the cost credit for an Item enabler (a pokemon-tutor Item or
+        Rare Candy). The Item's only advantage over the Supporter-tutor path (credit 0) is that it does NOT
+        spend the scarce one-per-turn Supporter slot. That preservation is worth the WIDER gap
+        (``_PLANNER_ENABLER_ITEM_SLOT``) only when a Supporter in hand actually WANTS the slot this turn —
+        canonically a `gust` Supporter (Boss's Orders, which could itself drag+KO) or any other high-value
+        Supporter (``no_supporter_in_hand`` False ⇒ some Supporter competes). With no Supporter competing,
+        keeping the slot is nearly free, so the gap SHRINKS to ``_PLANNER_ENABLER_ITEM_BASE``. Both credits
+        stay sub-prize/sub-survival: a same-KO enabler tiebreak, never a reorder over a real prize."""
+        competes = self._gust_supporter_in_hand(board) or not board.no_supporter_in_hand
+        return _PLANNER_ENABLER_ITEM_SLOT if competes else _PLANNER_ENABLER_ITEM_BASE
+
+    def _gust_supporter_in_hand(self, board) -> bool:
+        """BUILD 4 helper: MY hand holds a `gust` Supporter (Boss's Orders class) — the sharpest claimant on
+        this turn's one Supporter slot (it can itself drag a benched body up and KO). False without
+        stats/functions (fail-closed) — an unrecognized hand never asserts the competing Supporter."""
+        if not (self.stats and self.functions):
+            return False
+        for cid in board.hand_ids:
+            st = self.stats.get(cid)
+            if st is not None and st.is_supporter and "gust" in self.functions.tags(cid):
+                return True
+        return False
+
+    def _tutor_energy_attach_available(self, board) -> bool:
+        """BUILD 3 (`enabler_item_composer`): a PLAYABLE `tutor_energy` card in hand could SOUNDLY fetch an
+        attachable Energy this turn, supplying the single manual attach the composed line otherwise lacks.
+        True only when the turn's one attach is still open (``not energy_attached``), the deck can still
+        yield a Basic Energy (``basic_energy_in_deck``), and a hand `tutor_energy` card is playable NOW — an
+        Item always, the one Supporter only if the slot is free (``not supporter_played``). It NEVER grants a
+        SECOND attach: the caller invokes it only when the base ``extra`` is already 0, so this just makes
+        the ONE manual attach available (mirrors ``_active_attack_payable_via_accel``, pilot.py). Fail-CLOSED
+        on unknown stats/functions."""
+        if board.energy_attached or not board.basic_energy_in_deck:
+            return False
+        if not (self.stats and self.functions):
+            return False
+        for cid in board.hand_ids:
+            if "tutor_energy" not in self.functions.tags(cid):
+                continue
+            st = self.stats.get(cid)
+            if st is not None and st.is_supporter and board.supporter_played:
+                continue                                  # the one Supporter slot is spent — unplayable now
+            return True
+        return False
+
+    def _composed_extra(self, board, extra: int) -> int:
+        """BUILD 3 (`enabler_item_composer`): the SOUND number of manual attaches a composed KO line may
+        count. The caller's base ``extra`` (1 iff a reusable Energy sits in hand and the attach is unspent)
+        is widened to 1 when a playable `tutor_energy` card can provably fetch that single attach this turn
+        (``_tutor_energy_attach_available``). Capped at 1 — one manual attach per turn (the tutor SUPPLIES
+        the attach, it does not add a second).
+
+        BUILD 5 (energy_accel) is deliberately NOT folded in: an accelerator's amount is not soundly
+        bounded for a COMPOSED attacker (an evolved form / a promoted benched body), and ``board``'s only
+        sound accel signal — ``active_attack_payable_via_accel`` — is scoped to the CURRENT Active's OWN
+        attack cost, not this composed evolved attacker, so reusing it would over-credit → phantom KO.
+        Under-fire instead. TODO: model a specific accelerator's bounded attach onto the composed line."""
+        if extra >= 1:
+            return 1
+        return 1 if self._tutor_energy_attach_available(board) else 0
+
+    def _play_accel_extra(self, obs, board, select, options, enabler_consumes_supporter: bool) -> int:
+        """MIN-BOUND: 1 iff a PLAY-based energy accelerator in MY hand can PROVABLY add ONE more attach to
+        a ``ko_for_prizes`` line this turn, else 0. The caller adds this ON TOP of the base ``extra`` — a
+        play-based accelerator's attach is INDEPENDENT of the turn's one manual attach (Crispin attaches a
+        Basic on play AND puts one in hand, so a single play yields up to manual(1) + accel(1) = 2 attaches).
+
+        The accelerator class this counts is the DETERMINISTIC deck-search-and-attach Trainer — Crispin
+        (id 1198): "Search your deck for up to 2 Basic Energy … Attach the other to 1 of your Pokémon". Its
+        soundness anchor is that it is tagged BOTH ``energy_accel`` (attaches on play) AND ``tutor_energy``
+        (an UNCONDITIONAL deck search that puts an attachable Energy into hand). Requiring both tags on a
+        Trainer is what keeps this min-bound — it EXCLUDES the accel Trainers whose attach is NOT provably
+        available: Energy Coin (coin-flip: attaches only on double-heads), Waitress (``dig`` — attaches only
+        if a Basic sits in the TOP 6), and Wondrous Patch / Rosa's Encouragement (attach from DISCARD to a
+        restricted target, no deck-search guarantee). None of those carry ``tutor_energy``, so none count.
+
+        All must hold (else 0 — fail-closed / under-fire):
+          * the ``play_accel_lethal`` flag is on;
+          * a card in ``board.hand_ids`` is tagged BOTH ``energy_accel`` AND ``tutor_energy`` AND is a
+            TRAINER (``is_item``/``is_supporter``) — NOT a Pokemon. A Pokemon ``energy_accel`` is
+            ATTACK-based (Cinderace's Turbo Flare): using it IS your attack, so it can never stack with the
+            KO attack and is deliberately NEVER counted (the ``is_item or is_supporter`` gate drops it);
+          * if that Trainer is a SUPPORTER, the one-per-turn Supporter slot is still free this turn — not
+            already spent (``not board.supporter_played``) AND the enabling first step does not itself claim
+            the slot (``not enabler_consumes_supporter``; True for a Salvatore rush-evolve Supporter or an
+            energy-tutor Supporter enabler — Crispin can't also be played);
+          * a Basic Energy is still fetchable from my deck (``board.basic_energy_in_deck``) — the same sound
+            gate ``_tutor_energy_attach_available`` uses; with none fetchable the search-and-attach whiffs.
+
+        Capped at 1 (Crispin attaches exactly one). The attached Basic is priced WILD by the KO oracle (as
+        the existing ``extra`` term is), so a specific color is not asserted here; the deck-fetchable gate is
+        the sound anchor. Fail-CLOSED on unknown stats/functions."""
+        if not getattr(self, "play_accel_lethal", False):
+            return 0
+        if not board.basic_energy_in_deck:
+            return 0
+        if not (self.stats and self.functions):
+            return 0
+        for cid in board.hand_ids:
+            tags = self.functions.tags(cid)
+            if "energy_accel" not in tags or "tutor_energy" not in tags:
+                continue                                  # not the deterministic search-and-attach class
+            st = self.stats.get(cid)
+            if st is None or not (st.is_item or st.is_supporter):
+                continue                                  # a Pokemon energy_accel is ATTACK-based — skip
+            if st.is_supporter and (board.supporter_played or enabler_consumes_supporter):
+                continue                                  # the one Supporter slot is unavailable this turn
+            return 1
+        return 0
+
+    def _item_evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int,
+                                  retreat_on_menu: bool, accel: int = 0):
+        """BUILD 3 (`enabler_item_composer`, DEFAULT OFF): ``(prizes, active_survives)`` if an ITEM that
+        fetches an evolution Pokémon into HAND composes an otherwise-missed KO of the opponent's Active.
+        The COMPOSITE line: play the Item (committed step[0]) → fetch the DIRECT evolution of an in-play,
+        THIS-TURN-evolvable body (``appearThisTurn`` False — rules.md §4: a body cannot evolve the turn it
+        was played) → evolve it → the evolved form, carrying the body's Energy plus this turn's one attach,
+        affords a MIN-BOUND KO. The fetched form must be PROVABLY still in my deck (the tracker's positive
+        certainty, ``Board.deck_definitely_has``) and fetchable by THIS item (a `tutor_mega` item reaches
+        only a Mega ex; `tutor_pokemon` reaches any). A benched body needs the retreat still on the menu to
+        reach the Active.
+
+        SOUND energy accounting: the one manual attach (``_composed_extra``) is available when a reusable
+        Energy is in hand OR a playable `tutor_energy` card can provably fetch it this turn; ``accel`` adds
+        the caller's play-based accelerator term (Crispin's own on-play attach — ``_play_accel_extra``,
+        min-bound, cap 1) ON TOP, for a max budget of manual(1) + accel(1) = 2. ``_composed_extra`` caps the
+        manual term, so Crispin-as-tutor and Crispin-as-accel never triple-count. Every KO goes through
+        ``_best_affordable_ko_value(bound="min")`` — a coin-conditional attack floors to its min damage, so
+        no phantom KO. Value reflects the downstream evolve+attach KO; the caller tiers step[0] via
+        ``_item_enabler_cost`` (slot-conditional, BUILD 4).
+
+        NARROW SCOPE — single Item → single DIRECT evolve → attack. TODO (generality deferred): multi-hop
+        evolution chains ACROSS turns, the fetched form deployed onto a DIFFERENT body/energy config than
+        the one modelled (#2), and chaining a second Pokémon-tutor. None when no composite reaches a KO."""
+        if not self.stats:
+            return None
+        item_id = self._option_card_id(obs, select, option)
+        tags = self.functions.tags(item_id) if (self.functions and item_id is not None) else ()
+        mega_only = "tutor_mega" in tags and "tutor_pokemon" not in tags   # the item's fetch class
+        eff_extra = self._composed_extra(board, extra) + accel  # BUILD 3: manual attach (cap 1) PLUS a
+        #                     play-based accelerator's independent +1 (Crispin; min-bound, cap 1) → max 2.
+        #                     `_composed_extra` caps the manual term, so no triple-count with Crispin-as-tutor
+        me = self._my_player(obs)
+        bodies = [p for p in (me.get("active") or []) if p]
+        if retreat_on_menu:
+            bodies += [p for p in (me.get("bench") or []) if p]
+        best = None
+        for body in bodies:
+            if body.get("appearThisTurn"):
+                continue                                  # can't evolve a body played this turn (rules.md §4)
+            base = self.stats.get(body.get("id"))
+            if base is None or not getattr(base, "name", None):
+                continue
+            energy = len(body.get("energies") or [])
+            for cid in set(self.deck):
+                st = self.stats.get(cid)
+                if st is None or getattr(st, "evolvesFrom", None) != base.name:
+                    continue
+                if mega_only and not getattr(st, "megaEx", False):
+                    continue                              # this item cannot fetch a non-Mega evolution
+                if not board.deck_definitely_has(cid):    # SOUND present-check — never plan on a whiff
+                    continue
+                if self._best_affordable_ko_value(obs, board, opp, cid, energy + eff_extra,
+                                                  bound="min", body=body) <= 0:
+                    continue
+                my_hp = getattr(st, "hp", 0) or 0
+                cand = (self._prize_value(opp),
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
+                if best is None or cand > best:
+                    best = cand
+        return best
+
+    def _is_rare_candy(self, obs, select, option) -> bool:
+        """BUILD 1 helper: this PLAY option is Rare Candy (card id ``_RARE_CANDY_ID`` = 1079). Matched by
+        ID rather than a Function Tag: Rare Candy is behaviorally unique (a Basic→Stage-2 evolve SKIP that
+        needs the Stage-2 already in hand — NOT a tutor), no other card shares the behavior, and no other
+        consumer needs the tag, so an id constant is the cleaner, self-contained signal than minting a
+        one-card `rare_candy` tag in card_functions.json. (Verified card text at data/EN_Card_Data.csv
+        id 1079.)"""
+        return self._option_card_id(obs, select, option) == _RARE_CANDY_ID
+
+    def _rare_candy_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int,
+                                 retreat_on_menu: bool, accel: int = 0):
+        """BUILD 1 (`enabler_item_composer`, DEFAULT OFF): ``(prizes, active_survives)`` if RARE CANDY
+        (id 1079) composes an otherwise-missed KO of the opponent's Active by SKIPPING the Stage 1. The
+        legal line (card text, data/EN_Card_Data.csv id 1079; rules.md §4): play Rare Candy (committed
+        step[0]) → choose an in-play BASIC (``evolvesFrom`` None) that is NOT ``appearThisTurn`` and NOT on
+        turn ≤ 1 ("can't use this card during your first turn or on a Basic Pokémon that was put into play
+        this turn") → put an IN-HAND Stage-2 whose chain ROOTS at that Basic (the Stage-2's ``evolvesFrom``
+        names a Stage-1 whose ``evolvesFrom`` names the Basic) directly onto it → the Stage-2, carrying the
+        Basic's Energy plus this turn's one (sound) attach, affords a MIN-BOUND KO. A benched Basic needs
+        the retreat still on the menu to reach the Active.
+
+        Unlike the item tutor, Rare Candy is NOT a tutor — the Stage-2 must ALREADY be in hand
+        (``board.hand_ids``), so no ``deck_definitely_has`` whiff-check is needed (in-hand is certain).
+
+        HONEST NOTE: NONE of the 3 current agent decks (mega_lucario, dragapult_ex, mega_starmie) run Rare
+        Candy or a Basic→Stage-1→Stage-2 line — this branch is INERT for them. It is forward-looking
+        generality, exercised only by tests today. None when no composite reaches a KO."""
+        if board.turn <= 1:
+            return None                                   # Rare Candy is illegal on your first turn
+        if not self.stats:
+            return None
+        eff_extra = self._composed_extra(board, extra) + accel  # BUILD 3: manual attach (cap 1) PLUS a
+        #                     play-based accelerator's independent +1 (Crispin; min-bound, cap 1) → max 2
+        me = self._my_player(obs)
+        bodies = [p for p in (me.get("active") or []) if p]
+        if retreat_on_menu:
+            bodies += [p for p in (me.get("bench") or []) if p]
+        best = None
+        for body in bodies:
+            if body.get("appearThisTurn"):
+                continue                                  # can't Rare Candy a Basic put into play this turn
+            base = self.stats.get(body.get("id"))
+            if base is None or not getattr(base, "name", None):
+                continue
+            if getattr(base, "evolvesFrom", None) is not None:
+                continue                                  # Rare Candy targets a BASIC only (nothing evolves into it)
+            energy = len(body.get("energies") or [])
+            for cid in board.hand_ids:                    # the Stage-2 must ALREADY be in hand
+                st = self.stats.get(cid)
+                if st is None or not getattr(st, "stage2", False):
+                    continue                              # a Stage-2 card only
+                if not self._stage2_roots_at(st, base.name):
+                    continue                              # its chain must root at THIS Basic (skip Stage 1)
+                if self._best_affordable_ko_value(obs, board, opp, cid, energy + eff_extra,
+                                                  bound="min", body=body) <= 0:
+                    continue
+                my_hp = getattr(st, "hp", 0) or 0
+                cand = (self._prize_value(opp),
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
+                if best is None or cand > best:
+                    best = cand
+        return best
+
+    def _stage2_roots_at(self, stage2_stat, basic_name: str) -> bool:
+        """BUILD 1 helper: the Stage-2 ``stage2_stat``'s evolution chain roots at the Basic ``basic_name`` —
+        i.e. some Stage-1 card is named ``stage2_stat.evolvesFrom`` AND that Stage-1's ``evolvesFrom`` names
+        the Basic. Verifies the exact two-hop line Rare Candy skips (Basic → Stage-1 → Stage-2), by name,
+        against the real card data (never mainline recall — rules.md §4). False when the intermediate
+        Stage-1 can't be resolved."""
+        stage1_name = getattr(stage2_stat, "evolvesFrom", None)
+        if not stage1_name:
+            return False
+        for s1_id in self.stats.ids_for_name(stage1_name):
+            s1 = self.stats.get(s1_id)
+            if s1 is not None and getattr(s1, "evolvesFrom", None) == basic_name:
+                return True
+        return False
+
     def _tutor_evolution_wins(self, obs, board, opp, body) -> bool:
         """SOUND: some DIRECT evolution of ``body`` (its `evolvesFrom` names the body) is PROVABLY
         still in my deck (the tracker's positive certainty, `Board.deck_definitely_has`), is
@@ -1517,7 +1854,7 @@ class PlannerMixin:
                     best = cand
         return best
 
-    def _supporter_ko_candidate(self, obs, select, board, option, opp, opp_player):
+    def _supporter_ko_candidate(self, obs, select, board, option, opp, opp_player, accel: int = 0):
         """``(prizes, active_survives)`` if playing a **tutor-energy Supporter** (Hilda: search an Energy
         into hand — the ``tutor_energy`` tag) unlocks an otherwise-missed retreat→attach→KO. The Supporter
         SUPPLIES the attachable Energy the plain retreat line lacks: with that fetched Energy modelled as
@@ -1530,7 +1867,10 @@ class PlannerMixin:
             return None
         if not self._is_energy_tutor(obs, select, option):
             return None
-        return self._retreat_ko_candidate(obs, board, opp, opp_player, extra=1)
+        # extra=1 is the fetched-Energy manual attach; ``accel`` adds a play-based accelerator's
+        # independent +1 (0 here whenever Crispin — a Supporter — would clash with THIS energy-tutor
+        # Supporter's slot, since the caller passes accel_sup with enabler_consumes_supporter=True)
+        return self._retreat_ko_candidate(obs, board, opp, opp_player, extra=1 + accel)
 
     def _evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int):
         """``(prizes, active_survives)`` if EVOLVING the Active unlocks a KO of the opponent's Active this

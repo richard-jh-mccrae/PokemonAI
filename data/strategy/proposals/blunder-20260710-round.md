@@ -374,8 +374,9 @@ the Solrock-vs-Riolu tiebreak the deck actually wants (Solrock opens: Cosmic Bea
 - candidate_signal: `Board.energy_placeable` is too coarse — **needs** "the pending attach lands on a body that attacks this turn" (the Active, or a KO-enabling target)
 - verification_contract: verifier
 - provenance: correction 85058574:f16 (mega_lucario) | fixture tests/fixtures/corrections/ml_lunar_cycle_over_inert_bench_attach_f16.json | [[mega-lucario-built]]
-- status: deferred
+- status: applied (covered)
 - applied_note: 2026-07-10 BOUNCED to the producer — spec insufficient. The proposed gate ('the attach lands on a body that attacks this turn') is TRUE at f16 (the Active Riolu would attack), so it does not reproduce the correct. The human's actual claim (draw 3 beats a 30-damage self-locking chip on turn 2) is a value judgment the proposal never pinned down.
+- resolution (2026-07-14, deferred-cleanup): COVERED — this exact frame (85058574 f16, chosen [4] attach the lone {F} to a benched Solrock → correct [6] Lunar Cycle) is now FIXED by the later-applied sibling `lunar-cycle-the-weak-preevo-last-f` (+30, mega_lucario/strategy.py), which fires on the weak-preevo Active and carries Lunar Cycle past the inert bench attach. Verified via retest_one; pinned in tests/strategy/test_deferred_cluster_pins.py::test_lunar_cycle_beats_the_inert_bench_attach_f16 so the coverage cannot regress. No new code needed — the value judgment the bounce named was pinned by the sibling proposal.
 - for: deck:mega_lucario
 
 **Spec (authoring spec — thin fodder, not finished code):**

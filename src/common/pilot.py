@@ -325,6 +325,26 @@ class Board:
     opp_draw_engine_in_play: bool = False  # opponent has a `draw`-tagged ENGINE (Dudunsparce/Budew
                                           # class) in play — the "engine swing turn" gate; a non-engine
                                           # deck has no swing turn to hold for (hand-size decks are `play-harlequin-vs-hand-size`). ADR-0051 Phase 3b
+    # -- Opponent RESOURCES (ADR-0047) flattened onto the Board so a `when()` can trigger off them
+    #    without reaching through `board.opponent.resources`. Sourced from the match-scoped tracker
+    #    (opponent_resources.OpponentResourceModel); every value fails OPEN (unknown -> the no-fire
+    #    default). The consuming cluster is the strategy-ingest deferrals unblocked once the tracker
+    #    landed (learnthetcg / kou 30-deck) — see data/strategy/proposals/*.
+    opp_took_ko_this_turn: bool = False   # I took a prize (KO'd an opponent Pokémon) THIS turn — so I
+                                          # have just ENABLED their post-KO comeback disruptor (Unfair
+                                          # Stamp). Sound when True; False when unknown. `unfair-stamp-comeback-posture` gate.
+    opp_hand_size_delta: int | None = None  # change in opponent hand size since their previous distinct
+                                          # turn (a large NEGATIVE = they tailored a big hand DOWN to a few
+                                          # key cards); None until a prior turn is known. `disrupt-the-tailored-hand` gate.
+    opp_last_turn_dumped: bool = False    # opponent's discard grew >=2 since the previous distinct turn
+                                          # (an Ultra-Ball-class discard-cost play last turn) — they have
+                                          # COMMITTED to the few cards they kept. Conservative proxy; False when unknown.
+    opp_deckout_in_turns: int | None = None  # estimated game-turns until the opponent's deck is exhausted
+                                          # (from the observed deck-count trajectory); None until >=2
+                                          # distinct-turn samples show a net decrease. SOUND (deck-count is public). Feeds the grind-to-deckout read.
+    opp_comeback_disruptor: bool = False  # Disposition: the recognized opponent runs a post-KO hand
+                                          # disruptor (Unfair Stamp class) — `opp_comeback_disruptor` Brief
+                                          # property (opponent_properties.json), γ-gated. False when unrecognized / no Brief asserts it.
     deck_empty_ids: frozenset = field(default_factory=frozenset)  # MY card ids the deck is PROVABLY
                                           # empty of. Stateless: every copy seen OUTSIDE the deck reaches the
                                           # 60-count. With `obs['own_prizes']` it's EXACT. Sound, never probabilistic. Queried by `deck_definitely_empty_of`.
@@ -435,6 +455,11 @@ class Board:
                                           # mode + confidence + directed Turn Goal. Set by `_board` after the
                                           # objective signals resolve; COMPUTE-ONLY (S2) — nothing scores off
                                           # it yet (the seam S3 wires the directed goal into the Turn Planner)
+    turn_goal_satisfied: bool = False     # BUILD 4 (`dont-spend-unneeded-supporter`): the turn's directed
+                                          # goal is ALREADY met and nothing is still being searched/tutored,
+                                          # so a draw/gust/evolution Supporter can be HELD for a later decisive
+                                          # turn rather than spent now. Must FAIL SAFE to False (holding a
+                                          # NEEDED supporter loses tempo) — populated conservatively in `_board`.
 
     def deck_definitely_empty_of(self, card_id: int) -> bool:
         """True iff `card_id` is PROVABLY absent from my deck — every copy is accounted for outside it
@@ -681,8 +706,14 @@ class Context:
                                    # win-condition AND that payoff has no productive landing — wincon already in
                                    # hand, OR no deployable base for it (its immediate pre-evo neither in play nor
                                    # in hand). So the tutor only digs a redundant copy (Mega Signal with a Mega in
-                                   # hand) or a dead card it can't deploy (Mega Signal turn-1, no Staryu — ms f6).
+                                   # hand) or a dead card it can't deploy (Mega Signal with the Mega already in play).
                                    # False off a search / a tutor that can fetch anything else / when a base IS deployable
+    search_baseless_wincon: bool = False  # this option PLAYS a wincon-ONLY tutor whose payoff is NEITHER
+                                   # in hand NOR in play AND has no deployable base (its immediate pre-evo is
+                                   # not in play/hand), and the tutor can't fetch that base — the fetched wincon
+                                   # sits dead. DISTINCT from search_redundant_wincon (which needs the wincon
+                                   # in play/hand). The turn-1 premature-tutor shape (85164605:f6);
+                                   # `dont-tutor-the-baseless-wincon-turn-one` reads it, gated on turn<=1 + a held Energy.
     search_targets_unlikely: bool = False  # this option PLAYS a search whose every still-REACHABLE
                                    # fetch target is PROBABLY (not provably) prized — P(deck contains it)
                                    # below whiff threshold (ADR-0029). PROBABILISTIC complement to search_targets_exhausted; mutually exclusive with it.
@@ -767,7 +798,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
-                 evolving_wincon_priority=True, matchup_targeting=True):
+                 evolving_wincon_priority=True, matchup_targeting=True,
+                 ko_target_whiff=False, opp_resource_reads=False,
+                 enabler_item_composer=False, play_accel_lethal=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -861,6 +894,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # target-priority spine — Brief + Read-Intel (γ-gated)
                                                         # + general draw-engine card fact, read by snipe/gust.
                                                         # OFF = empty plan (every priority 0), byte-identical
+        self.ko_target_whiff = ko_target_whiff          # BUILD 1 kill-switch (DEFAULT OFF): among EQUAL-value
+                                                        # KO/snipe targets, prefer the body the opponent is
+                                                        # LEAST able to replace (lowest `copies_left_odds`).
+                                                        # Pure tiebreak — never reorders a prize/survival delta
+        self.opp_resource_reads = opp_resource_reads    # BUILD 2 kill-switch (DEFAULT OFF): a sub-prize nudge
+                                                        # toward pressing KO/grind lines when the opponent is
+                                                        # near deck-out (`opp_deckout_in_turns`, SOUND). Silent
+                                                        # unless on AND a near-term deck-out is known
+        self.enabler_item_composer = enabler_item_composer  # BUILD 3 kill-switch (DEFAULT OFF): the ko_for_prizes
+                                                        # Item-tutor composer — play an ITEM that fetches an
+                                                        # evolution of an in-play, this-turn-evolvable body →
+                                                        # evolve → attach → KO, preferring the cheaper Item
+                                                        # enabler over the scarce Supporter tutor
+        self.play_accel_lethal = play_accel_lethal      # kill-switch (armed-ON): count a PLAY-based energy
+                                                        # accelerator (a Trainer tagged energy_accel that
+                                                        # attaches a Basic on play — Crispin) as +1 attach in
+                                                        # the ko_for_prizes budget, ON TOP of the manual
+                                                        # attach. Min-bound: only when the Trainer is playable
+                                                        # NOW (Supporter needs a free slot) and a Basic Energy
+                                                        # is still fetchable. An ATTACK-based accel (a Pokemon)
+                                                        # is NEVER counted (using it IS the attack)
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -2159,7 +2213,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_completes_biggest_attack = (
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and self._attach_completes_biggest_attack(at_target, tags))
-        search_exhausted, redundant_wincon = self._search_signals(option, tags, board)
+        search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, tags, board)
         search_unlikely = self._search_probable_whiff(option, tags, board)
         search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
         sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
@@ -2260,6 +2314,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        context_card_id=((select.get("contextCard") or {}).get("id")),
                        search_targets_exhausted=search_exhausted,
                        search_redundant_wincon=redundant_wincon,
+                       search_baseless_wincon=baseless_wincon,
                        search_targets_unlikely=search_unlikely,
                        search_confirmed_hit=search_confirmed,
                        fetch_sheds_junk=sheds_junk, fetch_sheds_live=sheds_live,
@@ -2734,6 +2789,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # top candidate is just the prior favourite -> gate on γ>0 to keep board.brief off until recognized.
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         self.opponent.note_brief(brief)              # feed the γ-gated Brief to Dispositions (ADR-0047)
+        _opp_res = getattr(self.opponent, "resources", None)   # match-scoped Resources tracker (flattened below)
         # Resolve the matched Brief's name-keyed threats/targets to card ids (ADR-0027 consumer). Guarded
         # like forward_max_damage: an old/None provider -> empty, never crashes. Behavior-neutral surface.
         _ids_for_name = getattr(self.stats, "ids_for_name", None)
@@ -2860,6 +2916,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_hand_size=int((opp or {}).get("handCount") or 0),
             my_hand_size=len(me.get("hand") or []),
             opp_draw_engine_in_play=bool(self._draw_engine_ids(opp)),
+            # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers — sourced from the tracker
+            # observed at self.opponent.observe(obs) above; each read fails OPEN (unknown -> no-fire default).
+            opp_took_ko_this_turn=bool(getattr(_opp_res, "took_ko_this_turn", False)),
+            opp_hand_size_delta=getattr(_opp_res, "hand_size_delta", None),
+            opp_last_turn_dumped=bool(getattr(_opp_res, "last_turn_dumped", False)),
+            opp_deckout_in_turns=getattr(_opp_res, "deckout_in_turns", None),
+            opp_comeback_disruptor=bool(brief is not None
+                                        and self.opponent.disposition("opp_comeback_disruptor", False)),
             deck_empty_ids=deck_empty,
             deck_known_counts=deck_known,
             deck_contains_odds=deck_odds_map,
@@ -2888,7 +2952,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
+        board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
         return board                                    # COMPUTE-ONLY here — nothing scores off it yet (S2)
+
+    def _turn_goal_satisfied(self, board: Board, select: dict | None) -> bool:
+        """BUILD 4 predicate — is THIS turn's directed goal already met, so a draw/gust/evolution Supporter
+        could be HELD for a later decisive turn (`dont-spend-unneeded-supporter`)?
+
+        DELIBERATELY FAILS SAFE TO FALSE. A sound "the directed goal is *met*" oracle is not derivable from
+        the current Board signals: the Game Plan exposes the directed goal-KIND (survive / ko_on_path /
+        trade) and its confidence, but NOT a per-mode completion state, and a plausible proxy ("I can attack,
+        so I'm done") over-claims — drawing could still find the piece that turns a chip into a lethal, so
+        holding on that proxy would lose tempo. Rather than assert an unsound True, the predicate returns
+        False until a sound completion oracle exists. The field is WIRED and telemetry-visible; its only
+        consumer ships at weight 0 (inert), and its intended-True board is exercised directly in tests.
+        `select` is threaded so a future sound derivation can require "not mid-search/tutor" (nothing still
+        being resolved) without another signature change."""
+        return False
 
     # Shuffle-Refresh doctrine's signals live in doctrine_shuffle_refresh (ShuffleRefreshMixin); `_board` calls them.
 
