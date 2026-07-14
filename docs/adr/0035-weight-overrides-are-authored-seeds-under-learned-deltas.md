@@ -1,6 +1,8 @@
 # ADR-0035: Per-deck specialization of General-Strategy weights is a two-layer override — authored seeds under learned deltas
 
-**Status.** Accepted (grilled 2026-07-02, `/grill-with-docs`); build pending — ships with `/deck-align`
+**Status.** Accepted (grilled 2026-07-02, `/grill-with-docs`) and **BUILT** — `/deck-align` is shipped
+(`.claude/skills/deck-align/`) and `Strategy.weight_overrides` is live and consumed by `Pilot._weight`.
+*(Status corrected 2026-07-14: it still read "build pending" long after the build landed.)* Ships with `/deck-align`
 ([ADR-0036](0036-deck-strategies-realign-against-the-evolving-general-strategy.md)). Written against
 main's [ADR-0034](0034-deck-rules-fold-general-when-vocabulary-is-general.md) fold state
 (mega_starmie `hypotheses=[]`).

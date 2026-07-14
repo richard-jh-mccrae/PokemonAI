@@ -1,5 +1,8 @@
 # ADR-0013: Convert Limitless decklists by resolving card *names*, not (set, number)
 
+**Status.** Accepted and BUILT — `tools/deck_convert.py` is the shipped converter: name-keyed,
+`(set, number)` only as a tiebreaker, hard-fail on an unresolvable or ambiguous card.
+
 `deck_convert` maps a Limitless `.txt` to a competition `deck.csv` by matching each
 line's **card name** (normalized for case, accents, and straight/curly apostrophes)
 to a pool id — *not* by the `(set, number)` printed in the file. Limitless lets you

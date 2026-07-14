@@ -1,4 +1,4 @@
-"""Randomness sources for cgpy (ADR-0050).
+"""Randomness sources for cgpy (ADR-0059).
 
 The native engine is unseedable; cgpy owns its randomness instead:
 

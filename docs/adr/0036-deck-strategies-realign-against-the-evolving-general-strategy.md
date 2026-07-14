@@ -1,6 +1,7 @@
 # ADR-0036: Deck strategies are recurringly re-aligned against the evolving General Strategy — /deck-align, ledger-diffed and score_diff-gated
 
-**Status.** Accepted (grilled 2026-07-02, `/grill-with-docs`); skill build pending. Builds on
+**Status.** Accepted (grilled 2026-07-02, `/grill-with-docs`) and **BUILT** — `/deck-align` ships at
+`.claude/skills/deck-align/`. *(Status corrected 2026-07-14: it still read "skill build pending".)* Builds on
 [ADR-0034](0034-deck-rules-fold-general-when-vocabulary-is-general.md) (the fold policy + the
 `score_diff` gate — both shipped) and
 [ADR-0035](0035-weight-overrides-are-authored-seeds-under-learned-deltas.md).

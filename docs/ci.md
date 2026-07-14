@@ -33,7 +33,7 @@ a test, that test runs.
 | `tools/submit/**` | `tests/submit`, `tests/sim`, `tests/arena` | `sim` imports `submit.history` |
 | `tools/train/**` | `tests/train`, `tests/tuner`, `tests/blunder`, `tests/value`, `tests/sim` | `sim`/`value` tests import `train.value.*` |
 | `tools/meta_tracker/**`, root card/meta tool scripts | `tests/meta_tracker`, `tests/cards`, `tests/arena`, `tests/sim`, `tests/submit`, `tests/train`, `tests/tuner`, `tests/blunder` | `parse`/`archetype`/`cards` are imported widely |
-| `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json` | `tests/parity` | The ADR-0050 pure-Python engine twin is self-contained — nothing else imports `src/cgpy`, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it) |
+| `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json` | `tests/parity` | The ADR-0059 pure-Python engine twin is self-contained — nothing else imports `src/cgpy`, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it) |
 | shared test infra (`tests/conftest.py`, `tests/*_helpers.py`, `tests/fixtures/**` except `tests/fixtures/parity/**`), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**` except `data/engine/coverage.json`, root card-builder scripts | **full suite** | Can break anything |
 | a single `tests/<area>/**` file | just `tests/<area>` | Editing a test only affects its own dir |
 | docs / any `*.md` | **nothing** (job passes green) | No runtime surface |

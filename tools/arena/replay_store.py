@@ -1,4 +1,4 @@
-"""Persist PvC replays under data/replays/PvC/ (ADR-0033).
+"""Persist PvC replays under data/replays/PvC/ (ADR-0058).
 
 Same shape as the Self-play Corpus — a tagged `env.toJSON()` written uncompressed —
 so the blunder inspector and Tuner ingest PvC games unchanged. The Arena's own

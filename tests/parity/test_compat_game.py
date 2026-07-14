@@ -1,4 +1,4 @@
-"""M3 drop-in engine (ADR-0050): the ``cg.game`` twin + alias, DLL-free.
+"""M3 drop-in engine (ADR-0059): the ``cg.game`` twin + alias, DLL-free.
 
 Runs whole games through the aliased ``cg`` surface exactly as the battle harness does —
 vanilla decks only (every card union-covered), seeded chaos policy.

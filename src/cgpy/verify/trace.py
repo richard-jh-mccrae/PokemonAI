@@ -1,4 +1,4 @@
-"""Parity-trace format: a recorded native game as an executable specification (ADR-0050).
+"""Parity-trace format: a recorded native game as an executable specification (ADR-0059).
 
 A Trace stores, per select the native engine posed: the mover's full observation (verbatim
 live-obs dict, int enums), the choice answered, and — when minted natively — the god-view frame

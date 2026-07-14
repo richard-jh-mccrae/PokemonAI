@@ -206,7 +206,7 @@ the WP2 checkpoint pool is the stand-in.
   `docs/rulebook.txt`, never from memory.
 - ADR numbering: the unpushed arch-review branch holds 0052 (KO Oracle), 0054 (provider split),
   0055 (agent runtime), 0056 (Stat Provider seam, renumbered from 0051 to clear the MatchupPlan
-  collision); **next free is 0057**.
+  collision); **next free is 0063**.
 - End of every session: update the status ledger + notes here, and auto-memory.
 
 ## Execution notes — model & effort (2026-07-13)

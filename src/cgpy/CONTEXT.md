@@ -1,4 +1,4 @@
-# cgpy — the pure-Python twin of the native engine (ADR-0050)
+# cgpy — the pure-Python twin of the native engine (ADR-0059)
 
 A standalone reimplementation of the `src/cg` native engine (`cg.dll`/`libcg.so`), at exact
 parity, verified by trace replay. `src/cg/` is never modified; cgpy never imports it (importing

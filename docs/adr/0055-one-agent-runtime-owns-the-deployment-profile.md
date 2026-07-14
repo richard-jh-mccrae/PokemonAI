@@ -1,5 +1,11 @@
 # ADR-0055: One agent runtime owns the deployment profile
 
+**Status.** Accepted (2026-07-13) and **BUILT** — `src/common/runtime.py` is merged to main: `PROFILE`
+is the single deployment truth every agent, `tune.py` and `score_diff` build from, each `main.py` is
+~5 lines (`make_agent(STRATEGY)`), and `tests/agents/test_runtime.py` pins PROFILE ↔ ctor signature both
+ways. (The armed-off list in the body has since moved on — `brief_engine` was retired by ADR-0051;
+`value_model` and `escalation` remain `False`.)
+
 **Context.** Every agent's `main.py` (3 shipped + the byte-copy test fixture) carried the
 same ~100-line shell: deck read, config/overlay resolution, knowledge-seam wiring, an
 18-line `_params.get("<flag>", True)` kill-switch smear, telemetry, `OwnCardModel`, and the

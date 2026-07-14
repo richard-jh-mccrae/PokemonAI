@@ -1,5 +1,9 @@
 # Local agent verification runs on the real cabt env (kaggle-environments), not the raw `cg` loop
 
+**Status.** Accepted and BUILT — `tools/sim/check_agent.py` verifies agents on the real `cabt` env,
+with `kaggle-environments` pinned and venv-isolated in `tools/sim/requirements.txt` (the fast unit
+suite never imports it).
+
 **Context.** Before submitting an agent we need to know it is legal, plays a full match
 against itself without crashing or timing out, and still works once packaged. There are
 two ways to drive battles locally: the low-level `cg.game` loop (`battle_start` /

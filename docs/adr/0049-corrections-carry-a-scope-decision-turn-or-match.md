@@ -1,5 +1,9 @@
 # ADR-0049: A Correction carries a Scope — decision, turn, or match
 
+**Status.** Accepted and BUILT — `scope` (`decision` | `turn` | `match`) ships through the whole blunder
+path (`tools/train/blunder/correction.py`, `store.py`, `reviewed.py`, `report.py`); a legacy record with
+no `scope` still loads as `decision`, and a scoped Correction never becomes a ranking constraint.
+
 **Context.** [ADR-0015](0015-correction-schema.md) fixed a Correction to **one Decision**: `correct`
 is a mandatory set of option indices at a single frame, and `(episode, seat, frame)` is its identity.
 Real blunders are not all that shape. A turn can be lost by a *set* of individually defensible

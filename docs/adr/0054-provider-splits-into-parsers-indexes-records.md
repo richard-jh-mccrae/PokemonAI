@@ -1,5 +1,10 @@
 # ADR-0054: The stat provider splits into parser battery, indexes, and records
 
+**Status.** Accepted (2026-07-13) and **BUILT** — `scouting/card_text.py` (parser battery) and
+`scouting/forward_index.py` (name-keyed indexes) are merged to main, with `provider.py` re-exporting
+every moved name so all historical import paths stay valid. Byte-faithful move; neutrality proven by
+score-diff (315 frames × 3 agents, 0 divergent).
+
 **Context.** After ADR-0056 made `scouting/provider.py` the one card-knowledge seam, the
 module fused five clusters with no shared state (~1040 lines): the card-text parser battery
 (~20 `parse_*` functions + their regexes — the deep core), the forward-evolution index

@@ -1,5 +1,9 @@
 # ADR-0026: M2 Posture's generic core is the Read's net-new levers, not generic seek/avoid
 
+**Status.** Accepted and BUILT — `posture` is `PROFILE=True` (default ON): levers A (favorability) and
+C (accurate development) are live, γ-gated on the Read. The 2026-07-03 amendment's
+`dont-gift-a-refresh-when-favored` rung cleared all three evidence legs and also ships on.
+
 **Context.** [ADR-0008](0008-pilot-is-a-layered-rules-pipeline.md) defined Posture as a
 deck-agnostic generic core ("seek `targets`, avoid `threats`, calibrate aggression to
 favourability") plus deck-specific Read-conditioned Hypotheses. Wiring it (M2) surfaced two

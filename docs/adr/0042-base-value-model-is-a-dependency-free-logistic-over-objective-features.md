@@ -51,9 +51,25 @@ evaluates.
 **Consequences.** The ADR-0007 "feature encoding" question is resolved by architecture, not by a
 learned encoder. Corrections/telemetry now carry `win_prob` (calibration measurable on real games).
 `build order general → matchup-conditioned → per-deck` (ADR-0007) is a future `--conditioned` split;
-v1 ships one general model. The shipped artifact is a 40-game seed proof-of-pipeline (holdout logloss
-0.60 vs the 0.69 coin-flip floor) — a production model retrains on a larger corpus before the switch
-flips. The seed A/B (2000 games, Battle #60) is 50% (CI 48–53), 0 crashes: the blend is **safe**
-(no regression / crash) but not yet an improvement — a 40-game model in a MIRROR can't move the
-tie-break (the matchup features that carry the model's signal don't vary when both seats are the same
-Pilot). Default-ON waits on the production retrain + a non-mirror gauntlet A/B.
+v1 ships one general model.
+
+> **⚠️ The A/B below is STALE and describes a model that is no longer on disk (corrected 2026-07-14).**
+> It reported the **40-game seed** (holdout logloss 0.60; 2000-game mirror A/B at 50%, CI 48–53, 0
+> crashes — safe but not an improvement, because a mirror cannot move a tie-break whose signal is the
+> matchup). That is not what ships.
+>
+> What actually happened next: a **pipeline bug** was found — `tune.py`'s `_build_pilot` silently
+> dropped the Scout that `main.py` wires, so `favorability` and γ were the neutral default in *every*
+> training row, the seed included. It was fixed, the model was **retrained** on a 6-pairing cross-deck
+> corpus (900 games → **92,454 states**, holdout logloss **0.5551**; favorability now live at +0.047,
+> z≈15), and that retrained artifact is what `src/common/value/value_model.json` contains today.
+>
+> Its real measurement is a **paired-delta A/B over 48,000 games** across 6 directed matchups, 0
+> crashes: **−0.55%, 95% CI [−1.27%, +0.16%]**, negative in 5 of 6 matchups. Parked.
+>
+> The park does not rest on that CI (which crosses zero) but on a **structural** argument that holds
+> regardless: the model's top weights — `prize_diff`, `my_prizes_remaining`, `my_active_hp`,
+> `active_doomed` — are precisely what the closed-form leaf already scores directly, and a general
+> logistic over redundant inputs adds miscalibration, not signal. Its only matchup-conditioned
+> features carry weights of **+0.047** and **+0.029**. ADR-0053 replaces this artifact wholesale at
+> WP1 and flips the default at G2; do not flip it before then.

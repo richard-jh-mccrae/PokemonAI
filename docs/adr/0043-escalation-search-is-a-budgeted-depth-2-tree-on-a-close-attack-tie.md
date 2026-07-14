@@ -1,5 +1,19 @@
 # ADR-0043: Escalation Search is a budgeted depth-2 tree on a close attack tie
 
+> **`search_budget` note (added 2026-07-14).** Escalation is `search_budget`'s **only functional
+> consumer**. The Tier-1 engine sims — `planner_engine_rank`, `lethal_verify`, `lethal_family`,
+> `lethal_veto`, all `PROFILE=True` — run **UNBUDGETED**: `budget_ok()` is consulted only when
+> `opponent_reply=True`, which only `_two_ply_value` passes. So the agents' `# 0 = Tier-0 closed-form;
+> >0 = Tier-1 Search` comments were false and have been corrected. Two consequences: (a) flipping
+> `escalation` alone changes NOTHING — `search_budget` must leave 0 too, so this tier is easy to
+> mis-A/B into a false null; (b) raising `search_budget` silently re-labels **telemetry AND the
+> submission manifest** as Tier-1 (`tests/submit/test_submit_brief.py` pins it), which changes the
+> competition writeup's "simple features/methods" narrative.
+>
+> The 44% regression was measured with `value_model` **OFF** — i.e. escalation ranked its two-ply
+> candidates on the very survival/dev leaf this ADR blames. Escalation ON *with* the value leaf is the
+> unlock this ADR names and **has never been run**.
+
 **Status.** Accepted + **Built 2026-07-05** (`/tdd`, Tier 6). The narrowly-triggered engine tree for
 the one thing closed-form provably cannot see — **opponent choice**. Build record:
 [docs/architecture/tier-6-escalation-search.md](../architecture/tier-6-escalation-search.md).

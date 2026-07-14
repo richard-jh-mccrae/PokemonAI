@@ -1,4 +1,4 @@
-"""cgpy game state: zones, in-play stacks, per-seat log outboxes, select plumbing (ADR-0050).
+"""cgpy game state: zones, in-play stacks, per-seat log outboxes, select plumbing (ADR-0059).
 
 Everything is plain data (no closures/generators), so `clone()` is a straight deepcopy — the
 property the verification API (M3) needs. Serials follow the pinned native scheme: seat 0's

@@ -1,4 +1,4 @@
-"""Pull PvC replays off the Arena host into this repo (the SSH pull, ADR-0033).
+"""Pull PvC replays off the Arena host into this repo (the SSH pull, ADR-0058).
 
 Usage:
     python tools/arena/pull.py rich@workbox /srv/PokemonAI

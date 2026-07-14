@@ -1,5 +1,10 @@
 # ADR-0021: The self-play pre-filter balances seats; reproducibility is statistical, not seeded
 
+**Status.** Accepted and BUILT — `tools/sim/battle.py` seat-balances every run and appends a Battle
+Result to the committed `data/battles.jsonl` (the amendment below); the `AGENT_OVERLAY` A/B lever it
+introduced is still how any PROFILE flag is forced. Reproducibility stays statistical (the engine
+exposes no seed).
+
 **Context.** M1 adds a local self-play **Pre-filter** (extends `tools/sim/battle.py`) to cheaply
 A/B two configs before spending a scarce real-ladder submission —
 [ADR-0009](0009-training-methodology.md) Job C keeps the **real Kaggle ladder** as the authoritative

@@ -1,4 +1,4 @@
-"""Route ``import cg`` to the cgpy compat surface (ADR-0050 M3).
+"""Route ``import cg`` to the cgpy compat surface (ADR-0059 M3).
 
 `install()` maps ``cgpy.compat`` (and its submodules) over ``sys.modules["cg"]``/
 ``cg.api``/``cg.game``/``cg.sim``/``cg.utils`` — a sys.modules mapping wins over the

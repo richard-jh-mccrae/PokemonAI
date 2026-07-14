@@ -1,5 +1,11 @@
 # ADR-0018: Applying Tuner output — weights auto-load; Hypotheses are LLM-authored behind a Verifier
 
+**Status.** Accepted and BUILT — `tuned.json` auto-loads as the Pilot's `overrides` (now through
+`common/runtime.py`, ADR-0055), `tune.py` writes the durable per-deck proposal snapshot, and
+`/blunder-buster` is the shipped interactive authoring skill; the programmatic API tool stays deferred.
+Authoring now ends at a Strategy Proposal that `/update-strategy` applies
+([ADR-0046](0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md)).
+
 **Context.** The **Tuner** ([ADR-0017](0017-corrections-compile-to-hypotheses.md)) emits two
 things: `tuned.json` (weight overrides) and `missing_hypothesis` **proposals**. This fixes *how*
 each becomes a shipped agent improvement — "consistent and accurate." Authoring executable agent

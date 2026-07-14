@@ -1,4 +1,4 @@
-"""The Arena web app: FastAPI + one WebSocket per Table (ADR-0033).
+"""The Arena web app: FastAPI + one WebSocket per Table (ADR-0058).
 
 REST carries the funnel (presets, Deck Text checking, table creation, the Rating);
 the WebSocket carries the match — view-model frames out, choices in. The server

@@ -1,4 +1,4 @@
-"""Engine pins for the native-engine determinism facts cgpy relies on (ADR-0050, M0).
+"""Engine pins for the native-engine determinism facts cgpy relies on (ADR-0059, M0).
 
 Each test re-verifies one empirical fact from docs/pyeng/determinism.md against the live native
 lib. If a future engine build changes one, THIS suite fails (a named fact), rather than the

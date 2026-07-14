@@ -1,5 +1,9 @@
 # ADR-0009: Training methodology — three jobs, dense signals tune, the ladder gates
 
+**Status.** Accepted and BUILT — Job A (weight tuning from Corrections) ships as `tools/train/tune.py`
++ per-deck `tuned.json`; Job C (the ladder as the only ship gate) stands. Job B (the value model) was
+built (ADR-0042) but ships armed-off (`value_model` is `PROFILE=False`).
+
 **Context.** [ADR-0007](0007-learning-is-one-offline-value-model.md) fixed *what* learning
 enters (one offline value model); this fixes *how* the tunable surfaces are trained and how
 match data is used. Ladder win/loss is the real signal but extremely low-bandwidth — one

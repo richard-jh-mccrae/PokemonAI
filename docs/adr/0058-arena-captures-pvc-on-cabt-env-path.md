@@ -1,9 +1,13 @@
-# ADR-0033: Arena captures PvC Matches on the cabt-env path (human bridged as an env agent)
+# ADR-0058: Arena captures PvC Matches on the cabt-env path (human bridged as an env agent)
+
+**Status.** Accepted and BUILT (2026-07-02) — `tools/arena/` hosts PvC Tables on the cabt env with the
+Visitor bridged as an env agent, writing Tuner-usable replays into `data/replays/PvC/` (pulled by
+`tools/arena/pull.py`). (Renumbered 0033 -> 0058 on 2026-07-14: ADR-0033 is the transient-effect tracker. See docs/adr/README.md.)
 
 **Context.** The Arena (`tools/arena/`) hosts live **PvC Matches** — a human **Visitor**
 vs one of our agents. The requirement that shaped this decision: PvC replays are
 **training data**, not keepsakes — they must be blunder-taggable and Tuner-usable like
-the Self-play Corpus. Two engine paths exist ([ADR-0022](0022-selfplay-corpus-uses-cabt-env-path.md)):
+the Self-play Corpus. Two engine paths exist ([ADR-0057](0057-selfplay-corpus-uses-cabt-env-path.md)):
 the raw `battle_*` loop (`cg/game.py`) and the cabt-env path (`env.run` → `env.toJSON`).
 Only `env.toJSON()` carries the per-frame agent `obs` the Tuner replays the Pilot on;
 a `battle_*` capture would be human-viewable but Tuner-dead.

@@ -1,4 +1,4 @@
-"""Structural obs diffing with JSON-path localization (ADR-0050).
+"""Structural obs diffing with JSON-path localization (ADR-0059).
 
 `first_divergence(native, ours)` compares parsed JSON with NO normalization — array order is
 compared as-is (options/logs/zones are ordered contracts), null vs absent is a real

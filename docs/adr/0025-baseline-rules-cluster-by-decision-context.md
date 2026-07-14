@@ -1,5 +1,10 @@
 # ADR-0025: Baseline rules cluster by decision-context; `doctrine_` vs `baseline_`
 
+**Status.** Accepted and BUILT (behavior-neutral) — `common/strategy/baseline/baseline_*.py` holds the
+decision-context clusters, `common/strategy/doctrines/doctrine_*.py` the archetype+Mixin doctrines, and
+`general_strategy.py` is assembly-only. The convention held: the baseline has since grown past the
+original 11 clusters (e.g. `baseline_phases`, `baseline_posture`) without touching `general_strategy.py`.
+
 **Context.** The deck-agnostic General Strategy had grown to 27 baseline Hypotheses in one flat
 list in `common/strategy/general_strategy.py`, alongside three card-archetype **doctrines** that had
 just been pulled into their own `strategy/doctrines/` subpackage (Gust/Fetch/Shuffle-Refresh —

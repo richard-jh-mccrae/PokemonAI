@@ -3,6 +3,10 @@
 <!-- Renumbered 0051 → 0056 (2026-07-13): ADR-0051 was taken by the MatchupPlan
 target-priority spine on main; this branch's Stat Provider ADR moved to the next free slot. -->
 
+**Status.** Accepted (2026-07-13) and **BUILT** — merged to main: the Stat Provider is the one
+card-knowledge seam, the Pilot's seven attack-fact constructor arguments and the legacy synth fallback
+are retired, and `EngineCardStatProvider.warm()` runs in `runtime.build_pilot`'s pregame window.
+Neutrality proven by score-diff (315 frames × 3 agents, 0 divergent).
 
 **Context.** Attack facts reached the Pilot through SEVEN constructor arguments — five
 per-mechanic legacy dicts (`attacks`, `attack_costs`, `recoil`, `bench_snipe`,

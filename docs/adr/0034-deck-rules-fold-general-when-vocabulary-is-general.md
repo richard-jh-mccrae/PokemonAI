@@ -1,5 +1,10 @@
 # ADR-0034: Deck rules fold into the General Strategy when their vocabulary is general
 
+**Status.** Accepted and BUILT (2026-07-02) — the first fold round landed (mega_starmie ships
+`hypotheses=[]`), and `tools/sim/score_diff.py` is the standing neutrality gate for every
+behavior-neutral change since. The policy is now executed by the recurring `/deck-align` pass
+([ADR-0036](0036-deck-strategies-realign-against-the-evolving-general-strategy.md)).
+
 **Context.** mega_starmie's `strategy.py` carried 7 deck Hypotheses. A review (2026-07-02) found
 6 of 7 were already written in **universal vocabulary** — Roles (`accel_source`, `tutor`,
 `win_condition`), Function Tags (`opener`, `discard_eot`, `bench_fill`), and general Board signals

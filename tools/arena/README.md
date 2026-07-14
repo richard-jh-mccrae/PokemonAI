@@ -1,7 +1,7 @@
 # Arena
 
 Play a live Pokémon TCG match against this repo's agents in a browser.
-Full docs: [docs/arena.md](../../docs/arena.md) · glossary: [CONTEXT.md](CONTEXT.md) · ADR-0033.
+Full docs: [docs/arena.md](../../docs/arena.md) · glossary: [CONTEXT.md](CONTEXT.md) · ADR-0058.
 
 ## 1. Run locally (own play / testing)
 

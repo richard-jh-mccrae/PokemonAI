@@ -1,6 +1,8 @@
 # ADR-0050: The Lethal Solver's engine verify seeds the EXACT deck; the multi-step verification tool is that seeding + a fixture backfill + a pytest helper
 
-**Status.** Accepted + **Phase 1 & 2 built** (grilled + TDD-built 2026-07-10, `/grill-with-docs` +
+**Status.** Accepted + **Phases 1, 2 AND 3 built** — Phase 3's follow-up hooks shipped 2026-07-13 and
+are `PROFILE=True` (`retreat_enabler_lethal`, `disruptor_lock_maneuver`). *(Corrected 2026-07-14: the
+body still called Phase 3 "UNBUILT".)* Grilled + TDD-built 2026-07-10 (`/grill-with-docs` +
 `/tdd` on `data/handoffs/pokemonai-handoff-lethal-multistep-verification-tool.md`). Supersedes that
 handoff's framing of the required capabilities. Phase 3 (the `lethal-retreat-enabler` follow-up hooks)
 remains a separate `/update-strategy` task, gated by the `engine_confirms` helper this delivered.
@@ -103,7 +105,7 @@ model instead of `self.deck[:n]`:
   accepts EITHER a single select's picks (the default `[correct]`: one explicit step, `decide()`
   completes it — the gate for a BUILT fix) OR a full explicit multi-step line-of-lists (drive every
   listed select, `decide()` handles only the trailing pure cascades — the proof-of-target for a lethal
-  whose follow-up hooks are still UNBUILT, since its `[correct]`-only form can't yet complete; DoD #3
+  whose follow-up hooks are ~~still UNBUILT~~ **BUILT 2026-07-13** (`retreat_enabler_lethal` + `disruptor_lock_maneuver`, both `PROFILE=True`); DoD #3
   `f24`).
 - **(DoD #3) Re-verify the applied lethals end-to-end** — their first-ever engine-cascade check.
   `f110` (low-id {W} fetch) already confirms and is the tool's hook-free proof-of-life. If any applied

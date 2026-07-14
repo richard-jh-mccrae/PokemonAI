@@ -1,4 +1,4 @@
-"""God-free cabt episodes convert and replay divergence-free (ADR-0050 M4).
+"""God-free cabt episodes convert and replay divergence-free (ADR-0059 M4).
 
 Real meta-deck games through the reveal-oracle path: draw/coin binding from the
 mover's own windows, prize identities at take time, deck order from revealed

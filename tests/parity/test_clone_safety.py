@@ -1,4 +1,4 @@
-"""M3 clone-safety gate (ADR-0050): fork mid-cascade at every select of every committed
+"""M3 clone-safety gate (ADR-0059): fork mid-cascade at every select of every committed
 trace; the fork and the original must replay the recorded choice identically (god frame,
 outboxes, pending select). This is the property the verification API's clone-per-step
 sessions — and every future search consumer — stand on.

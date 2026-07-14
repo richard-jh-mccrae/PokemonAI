@@ -1,4 +1,4 @@
-"""Damage pipeline (ADR-0050): base -> attacker mods -> xWeakness -> -Resistance ->
+"""Damage pipeline (ADR-0059): base -> attacker mods -> xWeakness -> -Resistance ->
 defender mods -> counters. Base and attacker-side stages are ChainDef-driven (M4): coin
 pre-programs feed `pre_vars` (override/bonus), `scale` adds a visible-state scaler,
 `condBonus` adds deterministic board-condition bonuses. Defender-side: the take-less

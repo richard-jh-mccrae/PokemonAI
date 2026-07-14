@@ -432,7 +432,7 @@
       }
     ]
   },
-  "_comment": "Hand-authored ChainDefs (ADR-0050 M2): per-card programs over the chain-op vocabulary. Replaced piecewise by generated_chains.json in the pool-wide fan-out. Provenance: card texts in defs/card_data.json + trace divergences.",
+  "_comment": "Hand-authored ChainDefs (ADR-0059 M2): per-card programs over the chain-op vocabulary. Replaced piecewise by generated_chains.json in the pool-wide fan-out. Provenance: card texts in defs/card_data.json + trace divergences.",
   "1163": {
     "name": "Powerglass",
     "tool": {

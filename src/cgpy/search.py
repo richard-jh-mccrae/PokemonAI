@@ -1,4 +1,4 @@
-"""Search / verification API: fixture-seedable, clonable engine sessions (ADR-0050 M3).
+"""Search / verification API: fixture-seedable, clonable engine sessions (ADR-0059 M3).
 
 The cgpy twin of ``cg.api``'s search surface minus the opaque blob: where the native engine
 reconstructs a search fork from its serialized instance state (``search_begin_input``), cgpy

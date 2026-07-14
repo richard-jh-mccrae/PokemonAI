@@ -1,5 +1,5 @@
 """Self-play Corpus generator: our agent's own mirror games, saved as taggable, Tuner-usable
-replays for the ADR-0009 own-Pilot correction loop (ADR-0022).
+replays for the ADR-0009 own-Pilot correction loop (ADR-0057).
 
 Runs N mirror games on the cabt-env path (reusing `check_agent._run_match` -> `env.toJSON()`, the
 only path that carries the per-frame agent `obs` the Tuner replays the Pilot on) and saves each to
@@ -93,7 +93,7 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser(
         description="Generate a self-play Corpus: our agent's own mirror games as Tuner-usable, "
-                    "auto-filing replays for the own-Pilot correction loop (ADR-0022).")
+                    "auto-filing replays for the own-Pilot correction loop (ADR-0057).")
     ap.add_argument("agent", help="agent under src/agents/ to self-play")
     ap.add_argument("-n", "--games", type=int, default=20, help="games to generate (default 20)")
     ap.add_argument("--overlay", default=None, help="experiment overlay JSON -> corpus of that config")

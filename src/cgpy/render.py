@@ -1,4 +1,4 @@
-"""Observation rendering: per-seat masking identical to native GetBattleData (ADR-0050).
+"""Observation rendering: per-seat masking identical to native GetBattleData (ADR-0059).
 
 The live-obs contract (pinned from raw native dumps, see docs/pyeng/determinism.md §7):
 - top level {select, logs, current, search_begin_input}

@@ -1,4 +1,4 @@
-"""CardDB — the engine's card/attack tables, loaded from the committed snapshot (ADR-0050).
+"""CardDB — the engine's card/attack tables, loaded from the committed snapshot (ADR-0059).
 
 Backed by `src/cgpy/defs/{card_data,attack_data}.json` (minted by
 `tools/parity/snapshot_tables.py` from the DLL's AllCard/AllAttack), so cgpy needs no native

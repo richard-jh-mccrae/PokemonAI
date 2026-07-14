@@ -1,4 +1,8 @@
-# ADR-0022: The self-play corpus uses the cabt-env path (for Tuner-usable obs), not the A/B harness
+# ADR-0057: The self-play corpus uses the cabt-env path (for Tuner-usable obs), not the A/B harness
+
+**Status.** Accepted and BUILT — `tools/sim/selfplay.py` generates the own-game corpus on the cabt-env
+path (carrying the per-frame agent `obs`, so Corrections are Tuner-usable), while `battle.py` stays the
+isolated-subprocess A/B path. (Renumbered 0022 -> 0057 on 2026-07-14: ADR-0022 is the Gust doctrine. See docs/adr/README.md.)
 
 **Context.** M1b generates **our agent's own games** as replays for the ADR-0009 own-Pilot
 correction loop (tag blunders → Corrections → Tuner → weights).

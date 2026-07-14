@@ -1,5 +1,9 @@
 # Prize-economy fetch broadens the Line concept behind a role-gated win-condition set
 
+**Status.** Accepted (grilled 2026-07-10) and BUILT — `prize_economy_fetch` is `PROFILE=True` (default
+ON, kill-switched), verified Score-Diff-neutral across decks and shipped ladder-refine rather than
+A/B-gated.
+
 The fetch grab comparator (ADR-0023) should prefer developing a cheap **1-prize attacker
 layer** over a redundant **high-prize** body once the win-condition is online — forcing the
 opponent onto an eight-prizes-of-work path for a six-prize game (odd-prizing; the FETCH-seam
