@@ -80,14 +80,22 @@ HYPOTHESES = [
     Hypothesis(
         id="hold-evolution-until-attacker-ready",
         rationale="Delay evolving Drakloak into Dragapult ex until the body carries its 2 FP energy for "
-                  "Phantom Dive — keep using Drakloak's Recon Directive (dig) each turn meanwhile, and don't "
-                  "strand an energyless Dragapult while wasting the Recon turns. Counters the general "
-                  "`evolve-into-wincon` (+40) pull. CARVE-OUT: evolve now if my Active is in KO danger "
-                  "(`active_doomed`) — secure the 320-HP body / don't lose the line piece. Seed; ladder-tuned.",
+                  "Phantom Dive — keep using Drakloak's Recon Directive (dig) each turn meanwhile, so the "
+                  "benched Drakloaks draw the whole time and we don't strand an energyless Dragapult while "
+                  "burning the Recon turns. This must CANCEL, not merely dent, the general evolve pull: the "
+                  "premature evolve carries `evolve-into-wincon` (+40) PLUS `evolve-the-energized-body-first` "
+                  "(+5 when the body holds 1 energy) = +45, so at the old seed −18 the evolve still scored "
+                  "+27 and BEAT the +18 Recon dig (`use-the-draw-engine-ability`) — measured, the agent "
+                  "evolved anyway and lost the draw engine. −46 nets the unready evolve to ≈−1, below End(0) "
+                  "and well below the +18 dig / a real attach, so decide() keeps digging. The same-turn case "
+                  "is NOT suppressed: when a 2nd energy is in hand the Turn Planner drives evolve→attach→"
+                  "Phantom Dive itself (verified, planner owns the pick). CARVE-OUT: evolve now if my Active "
+                  "is in KO danger (`active_doomed`) — secure the 320-HP body / don't lose the line piece. "
+                  "Seed; ladder-tuned.",
         when=lambda c: c.option_type == _EVOLVE and c.card_id == DRAGAPULT_EX
         and c.evolve_body_energy is not None and c.evolve_body_energy < 2
         and not c.board.active_doomed,
-        weight=-18, status="assumed"),
+        weight=-46, status="assumed"),
     Hypothesis(
         id="play-risky-ruins-when-net-positive",
         rationale="Play Risky Ruins (SYMMETRIC bench-chip Stadium: 20 damage to any Basic non-{D} a player "
