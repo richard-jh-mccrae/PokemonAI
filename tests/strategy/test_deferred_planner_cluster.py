@@ -19,12 +19,14 @@ import types
 from common.cards import CardFunctions as _CardFunctions
 from common.pilot import Board, Context, Pilot
 from common.runtime import PROFILE
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Plan, Strategy
 from common.strategy.baseline import SEQUENCING_HYPOTHESES
-from common.strategy.context import _ATTACH, _PLAY
-from common.strategy.planner import _PLANNER_DECKOUT_TURNS, _PLANNER_DECKOUT_W
-from pilot_helpers import PLAY, make_select, opt, state
+from common.strategy.context import KO_SCORE, _ATTACH, _PLAY
+from common.strategy.planner import (_PLANNER_DECKOUT_TURNS, _PLANNER_DECKOUT_W,
+                                     _PLANNER_ENABLER_FREE, _PLANNER_ENABLER_ITEM_BASE,
+                                     _PLANNER_ENABLER_ITEM_SLOT, _RARE_CANDY_ID)
+from pilot_helpers import PLAY, make_select, opt, poke, state
 
 _NEW_FLAGS = ("ko_target_whiff", "opp_resource_reads", "enabler_item_composer")
 _SUPPORTER = next(h for h in SEQUENCING_HYPOTHESES if h.id == "dont-spend-unneeded-supporter")
@@ -35,12 +37,27 @@ def _pilot(**kw) -> Pilot:
     return Pilot(Strategy(), [1] * 60, **kw)
 
 
-# ══════════════════════════════ shared: every new flag ships OFF ══════════════════════════════
+def _deck_pilot(deck, **kw) -> Pilot:
+    """A lib-free Pilot with a caller-supplied deck (the composer reads ``self.deck``)."""
+    return Pilot(Strategy(), deck, **kw)
 
-def test_every_new_profile_flag_defaults_false():
+
+# ═══════════════ shared: the three flags are ARMED-ON in the PROFILE, OFF at the ctor default ═══════════════
+
+def test_new_profile_flags_are_armed_on_for_ladder_testing():
+    # Armed ON in the deployment PROFILE (2026-07-14, ladder-testing) — a deliberate opt-in, verified
+    # by the full suite showing zero correction-corpus regressions with the flags on.
     for flag in _NEW_FLAGS:
         assert flag in PROFILE, f"{flag} missing from runtime PROFILE"
-        assert PROFILE[flag] is False, f"{flag} must ship OFF"
+        assert PROFILE[flag] is True, f"{flag} is armed ON for ladder-testing"
+
+
+def test_new_flags_still_default_off_at_the_ctor():
+    # The pilot CTOR default stays False (PROFILE is the deployment override) so the inert-when-off
+    # unit tests below remain meaningful and a raw-constructed Pilot is unaffected.
+    pilot = _pilot()
+    for flag in _NEW_FLAGS:
+        assert getattr(pilot, flag) is False, f"{flag} ctor default must stay False"
 
 
 def test_default_built_pilot_reads_the_flags_off():
@@ -144,6 +161,231 @@ def test_composer_no_ops_without_stats():
     pilot = _pilot(enabler_item_composer=True)
     obs, sel, option = _play_from_hand(1145)
     assert pilot._item_evolve_ko_candidate(obs, sel, Board(), option, {"id": 1, "hp": 60}, {}, 1, True) is None
+
+
+# ══════════════════════════════ BUILD 4 — one-Supporter-per-turn slot accounting ══════════════════════════════
+#
+# Replaces the flat `_PLANNER_ENABLER_ITEM=4` proxy: the Item enabler's advantage over the Supporter-tutor
+# path is CONDITIONAL on actually preserving the scarce one-Supporter-per-turn slot. The gap WIDENS only when
+# a slot-competing Supporter (a `gust` Boss's Orders / another high-value Supporter) is in hand, and SHRINKS
+# otherwise. Everything stays sub-prize — a same-KO enabler tiebreak, never a reorder over a real prize.
+
+def _slot_pilot(hand_ids, stat_by_id):
+    return _pilot(stats=DictCardStatProvider(stat_by_id),
+                  functions=_CardFunctions({cid: [] for cid in stat_by_id}),
+                  enabler_item_composer=True), Board(hand_ids=frozenset(hand_ids))
+
+
+def test_item_enabler_cost_bands_stay_ordered_and_sub_prize():
+    # free-evolve (8) > item-when-slot-competed (6) > item-when-uncompeted (2) > supporter-tutor (0);
+    # all comfortably below one prize (KO_SCORE), so they only ever break a same-KO enabler tie.
+    assert _PLANNER_ENABLER_FREE > _PLANNER_ENABLER_ITEM_SLOT > _PLANNER_ENABLER_ITEM_BASE > 0
+    assert _PLANNER_ENABLER_ITEM_SLOT < KO_SCORE
+
+
+def test_item_gap_widens_when_a_gust_supporter_competes_for_the_slot():
+    # A gust Supporter (Boss's Orders) in hand wants THIS turn's one Supporter slot — the Item enabler that
+    # keeps the slot free earns the WIDER credit.
+    boss = CardStat(cardId=700, cardType=3)                          # cardType 3 = Supporter
+    pilot = _pilot(stats=DictCardStatProvider({700: boss}),
+                   functions=_CardFunctions({700: ["gust"]}))
+    board = Board(hand_ids=frozenset({700}), no_supporter_in_hand=False)
+    assert pilot._gust_supporter_in_hand(board) is True
+    assert pilot._item_enabler_cost(board) == _PLANNER_ENABLER_ITEM_SLOT
+
+
+def test_item_gap_widens_for_any_high_value_supporter_in_hand():
+    # A non-gust Supporter also claims the slot (`no_supporter_in_hand` False) → wide credit.
+    supp = CardStat(cardId=701, cardType=3)
+    pilot = _pilot(stats=DictCardStatProvider({701: supp}),
+                   functions=_CardFunctions({701: ["draw"]}))
+    board = Board(hand_ids=frozenset({701}), no_supporter_in_hand=False)
+    assert pilot._gust_supporter_in_hand(board) is False            # not a gust, but still a Supporter
+    assert pilot._item_enabler_cost(board) == _PLANNER_ENABLER_ITEM_SLOT
+
+
+def test_item_gap_shrinks_when_no_supporter_competes():
+    # No Supporter in hand → keeping the slot is nearly free → the SHRUNK credit.
+    pilot = _pilot(stats=DictCardStatProvider({}), functions=_CardFunctions({}))
+    board = Board(hand_ids=frozenset(), no_supporter_in_hand=True)
+    assert pilot._gust_supporter_in_hand(board) is False
+    assert pilot._item_enabler_cost(board) == _PLANNER_ENABLER_ITEM_BASE
+
+
+# ══════════════ BUILD 3+5 — SOUND energy-enabler chaining (tutor_energy unlock; accel under-fired) ══════════════
+#
+# The composer caps the attacker's Energy at body_energy + extra (extra ≤ 1 manual attach). A KO that needs
+# MORE Energy becomes visible ONLY when that extra attach is PROVABLY available this turn: a playable
+# `tutor_energy` card can fetch the single manual attach the plain line lacks. An accelerator's extra Energy
+# is deliberately NOT counted (unbounded for a composed attacker) — the line under-fires instead.
+
+_EVO_ID, _BASE_ID, _ITEM_ID, _ETUTOR_ID, _AID = 202, 201, 203, 204, 9902
+
+
+def _energy_chain_pilot(*, energy_tutor_is_supporter=False, deck=None):
+    """Pilot whose deck holds a Mega evolution (`_EVO_ID`, needs 2 Energy to KO) of an in-play Basic
+    (`_BASE_ID`), plus a `tutor_energy` card (`_ETUTOR_ID`, Item by default) that could supply the 2nd attach."""
+    etutor_type = 3 if energy_tutor_is_supporter else 1
+    stats = DictCardStatProvider({
+        _BASE_ID: CardStat(cardId=_BASE_ID, name="Base", hp=70),                  # Basic (evolvesFrom None)
+        _EVO_ID: CardStat(cardId=_EVO_ID, name="Evo", hp=200, megaEx=True,
+                          evolvesFrom="Base", attacks=(_AID,)),
+        _ITEM_ID: CardStat(cardId=_ITEM_ID, cardType=1),                          # the Mega Signal Item
+        _ETUTOR_ID: CardStat(cardId=_ETUTOR_ID, cardType=etutor_type),
+    }, {_AID: AttackStat(attackId=_AID, damage=200, cost=2, damageMax=200)})      # 2-Energy 200-dmg KO
+    fns = _CardFunctions({_ITEM_ID: ["tutor_mega"], _ETUTOR_ID: ["tutor_energy"]})
+    return _deck_pilot([_EVO_ID] + (deck or [_BASE_ID] * 59), stats=stats, functions=fns,
+                  enabler_item_composer=True)
+
+
+def _energy_chain_obs(*, hand):
+    obs = make_select([opt(PLAY, index=0)],
+                      current=state(active=poke(_BASE_ID, energy=1, hp=70),
+                                    opp_active=poke(320, hp=190), turn=2, hand=hand))
+    return obs, obs["select"], obs["select"]["option"][0]
+
+
+def _chain_board(**kw):
+    base = dict(hand_ids=frozenset({_ITEM_ID, _ETUTOR_ID}), deck_known_counts={_EVO_ID: 1},
+                basic_energy_in_deck=True, no_supporter_in_hand=True)
+    base.update(kw)
+    return Board(**base)
+
+
+def test_tutor_energy_attach_available_is_sound():
+    pilot = _energy_chain_pilot()
+    assert pilot._tutor_energy_attach_available(_chain_board()) is True
+    # attach slot already spent → no second attach
+    assert pilot._tutor_energy_attach_available(_chain_board(energy_attached=True)) is False
+    # no Basic Energy left to fetch → nothing usable
+    assert pilot._tutor_energy_attach_available(_chain_board(basic_energy_in_deck=False)) is False
+    # no tutor_energy card in hand → nothing to play
+    assert pilot._tutor_energy_attach_available(_chain_board(hand_ids=frozenset({_ITEM_ID}))) is False
+
+
+def test_tutor_energy_supporter_needs_a_free_slot():
+    pilot = _energy_chain_pilot(energy_tutor_is_supporter=True)
+    assert pilot._tutor_energy_attach_available(_chain_board(supporter_played=False)) is True
+    assert pilot._tutor_energy_attach_available(_chain_board(supporter_played=True)) is False
+
+
+def test_composed_extra_caps_at_one_and_reflects_the_tutor():
+    pilot = _energy_chain_pilot()
+    assert pilot._composed_extra(_chain_board(), 0) == 1                 # tutor supplies the 1 attach
+    assert pilot._composed_extra(_chain_board(), 1) == 1                 # already had it → capped at 1
+    assert pilot._composed_extra(_chain_board(hand_ids=frozenset({_ITEM_ID})), 0) == 0  # no tutor → 0
+
+
+def test_composer_finds_the_ko_only_with_the_tutored_attach():
+    pilot = _energy_chain_pilot()
+    obs, sel, option = _energy_chain_obs(hand=[_ITEM_ID, _ETUTOR_ID])
+    opp = {"id": 320, "hp": 190}
+    # base extra=0 (no reusable Energy in hand): the tutor makes the single attach available → 200-dmg KO.
+    got = pilot._item_evolve_ko_candidate(obs, sel, _chain_board(), option, opp, {}, 0, True)
+    assert got is not None and got[0] == 1                              # a 1-prize KO composed
+    # remove the tutor: body's 1 Energy can't pay the 2-Energy attack → no composite.
+    none = pilot._item_evolve_ko_candidate(obs, sel, _chain_board(hand_ids=frozenset({_ITEM_ID})),
+                                           option, opp, {}, 0, True)
+    assert none is None
+
+
+def test_energy_chain_line_appears_only_with_the_flag_on():
+    # Drive the real dispatch (`_ko_for_prizes_lines`): the tutored-attach composite is a line WITH the flag
+    # on, and NOTHING with it off (the branch is gated, and the item is not an energy-tutor so the fallback
+    # `_supporter_ko_candidate` produces nothing either).
+    obs, sel, option = _energy_chain_obs(hand=[_ITEM_ID, _ETUTOR_ID])
+    board = _chain_board()
+
+    on = _energy_chain_pilot()
+    lines_on = on._ko_for_prizes_lines(obs, sel, board, sel["option"], None)
+    assert any("item tutor" in ln.rationale for ln in lines_on)
+
+    off = _energy_chain_pilot()
+    off.enabler_item_composer = False
+    assert off._ko_for_prizes_lines(obs, sel, board, sel["option"], None) == []
+
+
+# ══════════════════════════════ BUILD 1 — Rare Candy (Basic→Stage-2 skip) ══════════════════════════════
+#
+# Rare Candy (id 1079) is NOT a tutor: the Stage-2 must ALREADY be in hand. Legal line: play Rare Candy →
+# choose an in-play Basic (not appearThisTurn, not turn ≤ 1) → put an in-hand Stage-2 whose chain roots at
+# that Basic onto it, SKIPPING the Stage-1 → attach → KO. NONE of the 3 agent decks run Rare Candy today, so
+# the branch is inert for them — forward-looking generality, exercised only here.
+
+_RC_BASIC, _RC_MID, _RC_TOP, _RC_AID = 210, 211, 212, 9903
+
+
+def _rare_candy_pilot():
+    stats = DictCardStatProvider({
+        _RC_BASIC: CardStat(cardId=_RC_BASIC, name="RcBase", hp=60),               # Basic (evolvesFrom None)
+        _RC_MID: CardStat(cardId=_RC_MID, name="RcMid", hp=90, evolvesFrom="RcBase"),   # the skipped Stage-1
+        _RC_TOP: CardStat(cardId=_RC_TOP, name="RcTop", hp=200, stage2=True,
+                          evolvesFrom="RcMid", attacks=(_RC_AID,)),                 # the in-hand Stage-2
+        _RARE_CANDY_ID: CardStat(cardId=_RARE_CANDY_ID, cardType=1),               # Rare Candy (Item)
+    }, {_RC_AID: AttackStat(attackId=_RC_AID, damage=200, cost=1, damageMax=200)})  # 1-Energy 200-dmg KO
+    fns = _CardFunctions({_RARE_CANDY_ID: []})                                     # Rare Candy: no tag today
+    return _deck_pilot([_RARE_CANDY_ID, _RC_TOP, _RC_BASIC, _RC_MID], stats=stats, functions=fns,
+                  enabler_item_composer=True)
+
+
+def _rare_candy_call(pilot, *, turn=2, appear_this_turn=False, hand=(_RC_TOP,), extra=0):
+    body = poke(_RC_BASIC, energy=1, hp=60)
+    if appear_this_turn:
+        body["appearThisTurn"] = True
+    obs = make_select([opt(PLAY, index=0)],
+                      current=state(active=body, opp_active=poke(320, hp=190), turn=turn,
+                                    hand=[_RARE_CANDY_ID]))
+    board = Board(turn=turn, hand_ids=frozenset(hand), basic_energy_in_deck=True,
+                  no_supporter_in_hand=True)
+    return pilot._rare_candy_ko_candidate(obs, obs["select"], board, obs["select"]["option"][0],
+                                          {"id": 320, "hp": 190}, {}, extra, True)
+
+
+def test_is_rare_candy_matches_by_id():
+    pilot = _rare_candy_pilot()
+    obs = make_select([opt(PLAY, index=0)], current=state(hand=[_RARE_CANDY_ID]))
+    assert pilot._is_rare_candy(obs, obs["select"], obs["select"]["option"][0]) is True
+    other = make_select([opt(PLAY, index=0)], current=state(hand=[999]))
+    assert pilot._is_rare_candy(other, other["select"], other["select"]["option"][0]) is False
+
+
+def test_stage2_roots_at_verifies_the_two_hop_chain():
+    pilot = _rare_candy_pilot()
+    top = pilot.stats.get(_RC_TOP)
+    assert pilot._stage2_roots_at(top, "RcBase") is True               # RcTop←RcMid←RcBase
+    assert pilot._stage2_roots_at(top, "Nope") is False                # wrong Basic
+
+
+def test_rare_candy_composes_a_ko():
+    got = _rare_candy_call(_rare_candy_pilot())
+    assert got is not None and got[0] == 1                             # a 1-prize KO via the Stage-2 skip
+
+
+def test_rare_candy_refused_on_turn_one():
+    assert _rare_candy_call(_rare_candy_pilot(), turn=1) is None       # illegal on your first turn
+
+
+def test_rare_candy_refused_on_an_appear_this_turn_basic():
+    assert _rare_candy_call(_rare_candy_pilot(), appear_this_turn=True) is None
+
+
+def test_rare_candy_refused_when_the_stage2_is_not_in_hand():
+    assert _rare_candy_call(_rare_candy_pilot(), hand=()) is None      # Stage-2 not in hand → no line
+
+
+def test_rare_candy_line_appears_only_with_the_flag_on():
+    obs = make_select([opt(PLAY, index=0)],
+                      current=state(active=poke(_RC_BASIC, energy=1, hp=60),
+                                    opp_active=poke(320, hp=190), turn=2, hand=[_RARE_CANDY_ID]))
+    board = Board(turn=2, hand_ids=frozenset({_RC_TOP}), basic_energy_in_deck=True,
+                  no_supporter_in_hand=True)
+    on = _rare_candy_pilot()
+    lines_on = on._ko_for_prizes_lines(obs, obs["select"], board, obs["select"]["option"], None)
+    assert any("rare candy" in ln.rationale for ln in lines_on)
+
+    off = _rare_candy_pilot()
+    off.enabler_item_composer = False
+    assert off._ko_for_prizes_lines(obs, obs["select"], board, obs["select"]["option"], None) == []
 
 
 # ══════════════════════════════ BUILD 4 — turn_goal_satisfied + the Hypothesis ══════════════════════════════

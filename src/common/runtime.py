@@ -54,12 +54,14 @@ PROFILE = {
     "evolving_wincon_priority": True,  # snipe-the-evolving-threat stand-down (ms 85164131 f22)
     "value_model": False,           # ADR-0042 armed-off: a learned seam ships after its own A/B
     "escalation": False,            # ADR-0043 armed-off: needs search_budget>0
-    "ko_target_whiff": False,       # BUILD 1 armed-off: KO-target tiebreak toward the body the
-                                    # opponent is least able to replace (opponent-model rebuild odds)
-    "opp_resource_reads": False,    # BUILD 2 armed-off: press KO/grind lines when the opponent is
-                                    # near deck-out (SOUND deck-out timing; prized-copy exactness is probabilistic)
-    "enabler_item_composer": False,  # BUILD 3 armed-off: ko_for_prizes Item-tutor→evolve→KO composer
-                                    # (prefer a cheaper Item enabler over the scarce Supporter tutor)
+    "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target tiebreak
+                                    # toward the body the opponent is least able to replace (rebuild odds).
+                                    # Data-ready (artifact.json ships 122 representative_build dossiers);
+                                    # a pure equal-rank tiebreak that fails open on an unrecognized opponent.
+    "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): sub-prize nudge toward
+                                    # KO/grind lines when the opponent is near deck-out (SOUND deck-out timing)
+    "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
+                                    # (Item-tutor / Rare-Candy → evolve → energy → KO; min-bound, sub-prize)
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
