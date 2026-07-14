@@ -641,7 +641,10 @@ class Context:
                                        # Never true for a benched Tera body (it takes no damage at all)
     target_is_bench_tera: bool = False  # this snipe target is a BENCHED Tera Pokemon — "prevent all damage
                                        # done to this Pokemon by attacks" while Benched (CardStat.tera), so
-                                       # the rider does literally nothing. Backs `dont-snipe-a-benched-tera`
+                                       # the rider does literally nothing. Backs the STRUCTURAL
+                                       # `_snipe_tera_veto` (KO_SCORE-class, Tactical) — it superseded the
+                                       # tuner-mutable `dont-snipe-a-benched-tera` (−60), which a positional
+                                       # stack could outvote. Also excluded from `target_kos` and `_forced_promotion_key`
     promote_target_kos: bool = False   # at a TO_ACTIVE promote, benched Pokémon this option brings
                                        # up can KNOCK OUT opp's Active this turn (cheapest attack reaches
                                        # HP) — promote it to take the prize from the front (esp. an accelerator that also loads the bench)
@@ -1192,6 +1195,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ctx = self._context(obs, select, board, option)   # built first: the matchup snipe steer
                                                            # respects its ADR-0044 redundancy flags
         tactical = (self._tactical(obs, board, option)
+                    + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
@@ -3636,9 +3640,42 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if cid is None:
             return 0.0
         pri = board.matchup_plan.priority(cid) * _MATCHUP_PRIORITY_SCALE
-        if pri > 0 and (ctx.target_prize_redundant or ctx.target_promotion_mirage):
+        if pri > 0 and (ctx.target_prize_redundant or ctx.target_promotion_mirage
+                        or ctx.target_is_bench_tera):
             return 0.0                                     # don't chip a body ADR-0044 says I don't need
+            #                                              ...nor a benched TERA, which takes NO damage from
+            #                                              attacks at all (CardStat.tera). `_snipe_tera_veto`
+            #                                              already orders it last structurally; this keeps the
+            #                                              boost itself from ever crediting an immune body, so
+            #                                              a Brief may safely role a Tera-ex WINCON
+            #                                              `prize_liability` (the natural call — it IS the
+            #                                              wincon). The GUST is deliberately untouched:
+            #                                              dragging a Tera Active REMOVES the immunity
+            #                                              (bench-only), so `_can_ko` still takes it there —
+            #                                              which is what makes roling one safe at all.
         return pri
+
+    def _snipe_tera_veto(self, ctx) -> float:
+        """STRUCTURAL veto: a benched Tera Pokémon takes NO damage from attacks at all ("prevent all
+        damage done to this Pokémon by attacks", `CardStat.tera`; rules.md §185) — so aiming a snipe
+        rider or a damage counter there is ALWAYS strictly wasted, on every board, forever. That is a
+        CARD FACT, not a preference, so it lives in the Tactical layer (like every other KO/damage
+        fact) rather than as a tunable positional weight.
+
+        Supersedes the retired `dont-snipe-a-benched-tera` (−60 positional, `status="assumed"` — i.e.
+        TUNER-MUTABLE). That weight only ever held by a 10-point margin: the reachable positional stack
+        is `snipe-the-top-threat` (30) + `snipe-the-threat` (20) = 50, and adding `snipe-on-the-path`
+        (12) reaches 62 and DEFEATS it. The bigger rungs are excluded elsewhere — `snipe-for-the-ko` via
+        `target_kos`, `snipe-the-forced-promotion` via `_forced_promotion_key`, and
+        `snipe-the-evolving-threat` only because no Tera card currently has `forward_max_damage > 0`, a
+        DATA accident rather than a guarantee. One weight-tune or one new snipe rung would silently
+        reintroduce the misplay (ms 81785223 f45: Wellspring Mask Ogerpon ex). A KO_SCORE-class veto
+        dominates any positional stack, so nothing can outvote it.
+
+        Orders the Tera LAST; it does NOT remove the option — when a benched Tera is the ONLY target the
+        select is forced and the rider is wasted either way, so the agent must still answer. `ctx`'s
+        `target_is_bench_tera` is already scoped to a bench target at a DAMAGE select."""
+        return -KO_SCORE if ctx.target_is_bench_tera else 0.0
 
     def _draw_engine_ids(self, opp: dict) -> frozenset:
         """Opponent in-play body ids whose card carries the general ``draw`` Function Tag — a draw

@@ -7,7 +7,7 @@ See ADR-0026 (the wiring staircase) and docs/scouting.md (the Read).
 import pytest
 
 from common.cards import CardFunctions
-from common.pilot import Board, Pilot
+from common.pilot import KO_SCORE, Board, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.scouting.briefs import Brief
 from common.scouting.matchup_plan import build_matchup_plan
@@ -496,6 +496,9 @@ def test_resolving_the_brief_changes_no_decision_or_score():
 
 BRUISER = 720   # a plain 120-damage attacker body (the energized competitor in rank tests)
 EX_INERT = 721  # a 2-prize ex body with no Energy — the "bigger inert prize" the wincon-denial bump beats
+SUPPORT_EX = 723  # a 2-prize SUPPORT ex (never attacks) — the equal-prize body the WINCON must outrank
+TERA_WINCON = 722  # a Tera ex WINCON — takes NO damage from attacks while BENCHED (CardStat.tera):
+                   # un-snipable there, but KO-able once a gust drags it Active (immunity is bench-only)
 
 
 def _lever_stats(attacks=None):
@@ -514,6 +517,12 @@ def _lever_stats(attacks=None):
                             evolvesFrom="Kirlia"),
         BRUISER: CardStat(BRUISER, name="Bruiser", hp=120, maxDamage=120),
         EX_INERT: CardStat(EX_INERT, name="Inert ex", hp=80, ex=True, maxDamage=120),
+        SUPPORT_EX: CardStat(SUPPORT_EX, name="Support ex", hp=80, ex=True, maxDamage=0),
+        TERA_WINCON: CardStat(TERA_WINCON, name="Tera ex", hp=200, ex=True, maxDamage=200, tera=True,
+                              minAttackCost=1, minCostDamage=200),   # a READY attacker (as a real Tera-ex
+                              #                                        wincon is) — so the forced-promotion
+                              #                                        key can legitimately land on it
+
     }, attacks=attacks)
 
 
@@ -553,6 +562,97 @@ def test_briefed_preevo_boost_never_overrides_a_ko():
     on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief],
                       attack_table={11: AttackStat(11, damage=120, cost=1, benchSnipe=50)})
     assert on.decide(obs) == [1]                           # take the prize, boost notwithstanding
+
+
+def _tera_snipe_obs(*bench):
+    return make_select([card_opt(BENCH, i, player=1) for i in range(len(bench))], context=DAMAGE,
+                       current=state(active=poke(SNIPER, energy=1),
+                                     opp_active=poke(MEGA_LUCARIO, hp=340), opp_bench=list(bench)))
+
+
+def _tera_snipe_pilot():
+    return _lever_pilot(attack_table={11: AttackStat(11, damage=120, cost=1, benchSnipe=50)})
+
+
+@pytest.mark.req("REQ-POSTURE-0013")
+def test_a_benched_tera_carries_a_structural_snipe_veto_not_a_tunable_weight():
+    """A benched Tera takes NO damage from attacks (rules.md §185, `CardStat.tera`) — sniping one is
+    ALWAYS strictly wasted, in every board, forever. That is a CARD FACT, so it must be a hard
+    structural veto, never a tunable preference competing on points.
+
+    The old `dont-snipe-a-benched-tera` was a −60 POSITIONAL weight with `status="assumed"` — i.e.
+    tuner-mutable — and its rationale's claim that "−60 cancels the largest positional stack" was only
+    ever true by a 10-point margin: `snipe-the-top-threat` (30) + `snipe-the-threat` (20) = 50 held,
+    but adding `snipe-on-the-path` (12) reaches 62 and DEFEATS it. The bigger rungs happen to be
+    excluded elsewhere (`snipe-for-the-ko` via `target_kos`; `snipe-the-forced-promotion` via
+    `_forced_promotion_key`; `snipe-the-evolving-threat` only because no Tera card currently has
+    `forward_max_damage > 0` — a DATA accident, not a guarantee). One weight-tune or one new snipe rung
+    silently reintroduces the misplay.
+
+    So the veto lives in the TACTICAL layer and dominates any positional stack: no weight can outvote
+    it, and a benched Tera can never be preferred over a body that can actually hold the counters.
+    """
+    p = _tera_snipe_pilot()
+    obs = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2), poke(BRUISER, hp=120))
+    tera, bruiser = p.explain(obs).options
+    assert tera.tactical <= -KO_SCORE          # structural veto — not a −60 preference
+    assert tera.score < bruiser.score
+    assert p.decide(obs) == [1]                # put the counters on a body that can HOLD them
+
+
+@pytest.mark.req("REQ-POSTURE-0013")
+def test_the_tera_veto_never_freezes_a_forced_snipe_select():
+    """EDGE CASE: our attack REQUIRES a snipe and the opponent's ONLY benched body is a Tera. The veto
+    must ORDER the Tera last, never REMOVE it — the agent has to answer a forced select or the engine
+    stalls. Safe by construction: the take-fewer trims only `while len(chosen) > min_count`, so it can
+    never return fewer picks than the select demands, and DAMAGE is not in `_GRAB_CONTEXTS` (so the
+    multi-pick greedy path never applies to a snipe).
+
+    Three variants, all forced (minCount=1): one Tera; several Teras (every option vetoed, so the veto
+    can't act as a tiebreak — it must still commit); and the Tera alongside the opponent's ACTIVE, which
+    is NOT immune (the immunity is bench-ONLY, so the Active must remain freely choosable)."""
+    p = _tera_snipe_pilot()
+
+    only = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2))
+    assert p.decide(only) == [0]                      # forced: still selectable, just never preferred
+
+    all_tera = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2), poke(TERA_WINCON, hp=200))
+    assert p.decide(all_tera) == [0]                  # every option vetoed → still commits, no freeze
+    assert len(p.decide(all_tera)) == 1               # never returns an empty (illegal) selection
+
+
+@pytest.mark.req("REQ-POSTURE-0013")
+def test_the_tera_veto_declines_only_when_the_snipe_is_OPTIONAL():
+    """The mirror: at an OPTIONAL select (minCount=0) whose only target is an immune benched Tera, the
+    take-fewer correctly DECLINES rather than placing a counter that provably does nothing. Legal by
+    definition (minCount=0) and strictly better than wasting the placement — and it is the ONLY case in
+    which the veto yields an empty selection."""
+    p = _tera_snipe_pilot()
+    obs = make_select([card_opt(BENCH, 0, player=1)], context=DAMAGE, min_count=0,
+                      current=state(active=poke(SNIPER, energy=1), opp_active=poke(MEGA_LUCARIO, hp=340),
+                                    opp_bench=[poke(TERA_WINCON, hp=200, energy=2)]))
+    assert p.decide(obs) == []                        # optional + provably useless → decline
+
+
+@pytest.mark.req("REQ-POSTURE-0012")
+def test_snipe_matchup_boost_stands_down_on_a_benched_tera():
+    """A Tera Pokémon takes NO damage from attacks while BENCHED (`CardStat.tera`, rules.md §185), so a
+    snipe aimed there does literally nothing. A Brief will NATURALLY role a Tera-ex win-condition
+    `prize_liability` — it IS the wincon — and the ADR-0051 matchup boost is TACTICAL (priority ×5 =
+    +500 at γ=1). `_snipe_tera_veto` already orders a benched Tera last structurally, but the boost must
+    ALSO stand down so it never credits an immune body (belt to the veto's suspenders), exactly as it
+    does on an ADR-0044 redundant/mirage body.
+
+    The GUST is deliberately unaffected: dragging a Tera Active REMOVES the immunity (it is bench-only),
+    so `_can_ko` may still take it there — which is what makes it safe for a Brief to role a Tera wincon
+    at all."""
+    brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
+                  targets=[{"card": "Tera ex", "role": "prize_liability", "why": "the wincon"}])
+    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
+                      current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
+                                    opp_bench=[poke(TERA_WINCON, hp=200), poke(BRUISER, hp=120)]))
+    p = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])
+    assert p.decide(obs) == [1]      # chip the damageable Bruiser — NEVER the immune benched Tera
 
 
 def _gust_obs(*bench):
@@ -600,6 +700,34 @@ def test_gust_target_prefers_a_disruption_target_sub_prize():
                 matchup_plan=build_matchup_plan(brief_roles={SOLROCK: "engine"}, gamma=1.0))
     assert (p._gust_target_tactical(obs, select, eng, select["option"][0])
             == p._gust_target_tactical(obs, select, eng, select["option"][1]))
+
+
+@pytest.mark.req("REQ-POSTURE-0014")
+def test_gust_prefers_the_damaged_wincon_over_an_equal_prize_support_ex():
+    """GENERAL rule (nothing to do with Tera): among EQUAL-prize KO-able gust targets, drag up the
+    opponent's WIN CONDITION, not a support ex. Both bodies here are 2-prize ex's my Active can KO —
+    prize value alone TIES them, so the tie must break toward the body whose loss actually ends their
+    game.
+
+    Card facts CANNOT make this call: in the real Dragapult deck the support Latias ex hits for 200,
+    exactly as hard as the Dragapult ex wincon. Only the Brief knows which is the payoff — so the
+    discriminator is the ROLE: `prize_liability` (the wincon → `_gust_wincon_denial` +1.5 prizes) vs
+    `disruption_target` (an enabler → sub-prize tie-break only).
+
+    "Damaged" is implicit: the gust is KO-gated (`_can_ko`), so the wincon only becomes a candidate once
+    it is actually finishable — a full-HP wincon we cannot kill simply never enters this comparison, and
+    the support prize is correctly taken instead."""
+    obs, select = _gust_obs(poke(EX_INERT, hp=80), poke(SUPPORT_EX, hp=80))   # both 2-prize, both KO-able
+    p = _lever_pilot()
+    board = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
+                  opp_bench=((EX_INERT, 80), (SUPPORT_EX, 80)),
+                  matchup_plan=build_matchup_plan(
+                      brief_roles={EX_INERT: "prize_liability",        # THE wincon
+                                   SUPPORT_EX: "disruption_target"},   # a support/enabler ex
+                      gamma=1.0))
+    wincon = p._gust_target_tactical(obs, select, board, select["option"][0])
+    support = p._gust_target_tactical(obs, select, board, select["option"][1])
+    assert wincon > support                      # equal prizes → break the tie toward the win condition
 
 
 @pytest.mark.req("REQ-POSTURE-0011")

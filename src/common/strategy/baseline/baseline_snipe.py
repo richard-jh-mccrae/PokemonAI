@@ -29,17 +29,14 @@ HYPOTHESES = [
                   "never override a KO, and neither may the sum of three.",
         when=lambda c: c.select_context == _DAMAGE and c.target_kos,
         weight=60, status="testing"),
-    Hypothesis(
-        id="dont-snipe-a-benched-tera",
-        rationale="A benched Tera Pokémon takes NO damage from attacks ('prevent all damage done to this "
-                  "Pokémon by attacks', `CardStat.tera`), so a snipe rider aimed there does literally "
-                  "nothing. Card-fact, not a preference: put the counters on a body that can hold them. "
-                  "Also keeps the un-chippable body from becoming the `snipe-the-forced-promotion` key "
-                  "(ms 81785223 f45: Wellspring Mask Ogerpon ex). −60 cancels the largest positional stack "
-                  "so it is never picked while any damageable target remains; when it is the ONLY bench "
-                  "target the select is forced and the rider is wasted either way.",
-        when=lambda c: c.select_context == _DAMAGE and c.target_is_bench_tera,
-        weight=-60, status="assumed"),
+    # NOTE: `dont-snipe-a-benched-tera` (−60) RETIRED — a benched Tera takes NO damage from attacks at
+    # all (`CardStat.tera`; rules.md §185), so sniping one is ALWAYS strictly wasted. That is a CARD
+    # FACT, not a preference, and it must never compete on points: as a tunable positional weight
+    # (`status="assumed"`) it held only by a 10-point margin (top-threat 30 + threat 20 = 50 < 60) and
+    # was DEFEATED once `snipe-on-the-path` (+12) also fired. It now lives in the Tactical layer as the
+    # structural `Pilot._snipe_tera_veto` (KO_SCORE-class), which dominates any positional stack, so no
+    # weight-tune and no future snipe rung can reintroduce the misplay (ms 81785223 f45: Wellspring Mask
+    # Ogerpon ex). The Tera is ordered LAST but still selectable when it is the ONLY bench target.
     Hypothesis(
         id="snipe-the-top-threat",
         rationale="When no target can be KO'd, hit the biggest threat by `board.strongest_threat_rank` "
