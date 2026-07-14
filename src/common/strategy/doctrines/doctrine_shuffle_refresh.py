@@ -114,9 +114,15 @@ HYPOTHESES = [
                   "(ep83686860 f13: Ultra Ball'd 2 Energy for a Drakloak, then Lillie's shuffled it away "
                   "for zero gain). The LINE-piece mirror of `hold-wincon-dont-shuffle` (the payoff case); "
                   "−25 nets below `dig-before-commit` (+20). Stands down once the win-condition is IN PLAY "
-                  "(a redundant hand duplicate is safe to cycle).",
+                  "(a redundant hand duplicate is safe to cycle) OR the held line piece is already "
+                  "REDUNDANT — the payoff's immediate pre-evo is on the board (`immediate_preevo_in_play`, "
+                  "e.g. a Drakloak already benched) AND the payoff itself is NOT in hand to deploy — so the "
+                  "hand copy is surplus and shuffling it to dig for the buried payoff is the setup play "
+                  "(dragapult f38: behind, Drakloak x2 benched, no Dragapult ex in hand → refill with "
+                  "Lillie's for 8).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.line_preevo_in_hand and not c.board.wincon_in_play,
+        and c.board.line_preevo_in_hand and not c.board.wincon_in_play
+        and not (c.board.immediate_preevo_in_play and not c.board.wincon_in_hand),
         weight=-25, status="assumed"),
     Hypothesis(
         id="hold-wincon-with-base-dont-shuffle",

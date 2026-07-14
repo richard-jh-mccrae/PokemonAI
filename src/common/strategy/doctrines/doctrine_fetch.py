@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from common.strategy.context import (_BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG, _PLAY,
-                                      _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
+from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
+                                      _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
                                       _TO_HAND, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis
 
@@ -386,6 +386,34 @@ HYPOTHESES = [
         and c.stat.energyType in c.board.in_play_attack_colors,
         weight=3, status="testing"),
     Hypothesis(
+        id="fetch-the-ability-fuel-color",
+        rationale="At an Energy search, prefer a colour that switches a DORMANT in-play Ability on over a "
+                  "plain attack colour — grab the {D} a bare Munkidori needs for Adrena-Brain (its damage-move "
+                  "engine, usable now) rather than the redundant {R}/{P} of a dragon line still two evolutions "
+                  "from attacking (dragapult f22). Keyed on `board.in_play_unfueled_ability_colors` (the fuel a "
+                  "body has an Ability for but LACKS attached), so it never fires for an already-fuelled Ability "
+                  "or a body whose Ability wants no energy. +5 to out-rank `fetch-the-attack-color` (+3): an "
+                  "Ability is repeatable free value that doesn't end the turn. Silent when Munkidori is in the "
+                  "deck (empty set) — the must-not-regress f18 anchor picks the attack colour there.",
+        when=lambda c: c.select_context == _TO_HAND and bool(c.stat)
+        and getattr(c.stat, "hp", 1) == 0 and getattr(c.stat, "energyType", None) not in (None, 0)
+        and c.stat.energyType in c.board.in_play_unfueled_ability_colors,
+        weight=5, status="testing"),
+    Hypothesis(
+        id="attach-off-color-at-fixed-recipient",
+        rationale="At an ATTACH_TO (the recipient is FIXED by the effect — a Crispin/attach where you only pick "
+                  "WHICH Energy, and every option scores 0 today), DEMOTE an Energy whose colour NO in-play body "
+                  "can use — neither an attack cost nor an Ability fuel (`board.in_play_required_colors`). "
+                  "Dumping {D} onto the dragon line when no {D}-body is in play is dead weight; the {P} it needs "
+                  "for Phantom Dive isn't (dragapult f86, CRITICAL). The recipient isn't carried per-option in "
+                  "this context, so this is a SOUND board-union floor: an off-board-colour Energy is wasted "
+                  "regardless of which body receives it. −8 mirrors the +3 ToHand tie-break; silent for a "
+                  "mono-colour deck (every colour on-board).",
+        when=lambda c: c.select_context == _ATTACH_TO and bool(c.stat)
+        and getattr(c.stat, "hp", 1) == 0 and getattr(c.stat, "energyType", None) not in (None, 0)
+        and c.stat.energyType not in c.board.in_play_required_colors,
+        weight=-8, status="testing"),
+    Hypothesis(
         id="prefer-bench-fill-first",
         rationale="A `bench_fill` card (Buddy-Buddy Poffin) is best played FIRST in a thin deck: develops the "
                   "Bench, thins the deck (raises later draw/search quality), and feeds spread-Energy attacks. "
@@ -638,6 +666,21 @@ HYPOTHESES = [
                   "half is `bench-the-supporter-tutor` (+25, a Main-phase PLAY when holding no "
                   "Supporter) — the two never fire together (different select contexts).",
         when=lambda c: c.select_context == _SETUP_BENCH and "supporter_tutor" in c.tags,
+        weight=-15, status="assumed"),
+    Hypothesis(
+        id="dont-pre-bench-a-redundant-utility",
+        rationale="At the PREGAME bench placement (`_SETUP_BENCH`, minCount 0), DON'T bench a 2nd copy of a "
+                  "standalone utility Basic already placed on my board (`card_id in board.setup_placed_ids`) — "
+                  "a 2nd Munkidori while one is Active is a prize liability + a scarce bench slot, worth more "
+                  "kept as Ultra-Ball discard fodder (dragapult f4). The `not card_is_line_preevo` guard keeps "
+                  "benching a 2nd Dreepy (a win-condition LINE base you DO want multiples of). Setup-aware: the "
+                  "just-placed Active shows only in the setup logs, so `card_is_redundant` (obs-zone `in_play_ids`) "
+                  "reads False here — `setup_placed_ids` reads the placement from the logs. −15 mirrors the "
+                  "supporter-tutor sibling: `bench-fill-a-basic` (+12) is the only positive, so 12−15 declines "
+                  "the optional pick (`_greedy_grab` take-fewer). The _SETUP_BENCH generalization of mega_lucario's "
+                  "`dont-bench-a-redundant-engine-piece` (−25, _PLAY).",
+        when=lambda c: c.select_context == _SETUP_BENCH and c.card_id is not None
+        and c.card_id in c.board.setup_placed_ids and not c.card_is_line_preevo,
         weight=-15, status="assumed"),
     Hypothesis(
         id="grab-a-gust-supporter-for-the-ko",

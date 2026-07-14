@@ -1,11 +1,17 @@
 """tune — compile the Correction log into per-deck tuned.json + Hypothesis proposals.
 
-    python tools/train/tune.py [--agent mega_starmie] [--store <log>]
+    python tools/train/tune.py [--agent mega_starmie] [--store <log>] [--dry-run]
 
 Engine-backed: builds each agent's real Pilot exactly like its main.py, then routes each of
 its `own` Corrections to a weight fit (W) or a Hypothesis proposal (H) — ADR-0017. Corrections
 without an embedded `obs` are skipped (backfill from their replay first). `peer` corrections are
 deferred (they need mapping to our deck). See docs/blunder-tuner.md.
+
+WRITES (every run, unless `--dry-run`): each deck's `src/agents/<deck>/tuned.json` (+ `.meta.json`),
+the durable tuner ledger `data/corrections/tuner/<deck>.json`, and a `docs/tuning/runs/*.md` report.
+So a plain run RECOMPILES the committed tuned.json from scratch — use `--dry-run` for any
+verification / completion-gate CHECK (prints everything, writes nothing), and the plain form only
+when you intend to refresh the ledger + weights as a deliberate, separately-committed step.
 """
 from __future__ import annotations
 
@@ -99,6 +105,11 @@ def main(argv=None):
     ap.add_argument("--report-dir", default=str(REPO / "docs" / "tuning" / "runs"),
                     help="where to write the human-readable per-run Markdown report")
     ap.add_argument("--no-report", action="store_true", help="skip writing the per-run report")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="READ-ONLY check: compute + print the fit / proposals / UNSATISFIED exactly "
+                         "as normal, but write NOTHING (no tuned.json, tuned.meta.json, tuner ledger, "
+                         "or report). Use for the completion-gate / verification runs so a check can "
+                         "never clobber the committed tuned.json.")
     ap.add_argument("--reviewed", default=str(DEFAULT_REVIEWED),
                     help="the reviewed-corrections ledger (already-assessed blunders to exclude)")
     args = ap.parse_args(argv)
@@ -111,6 +122,9 @@ def main(argv=None):
     if not agents:
         print("no own-source corrections to tune")
         return
+    if args.dry_run:
+        print("=== DRY-RUN: read-only check, no files written "
+              "(tuned.json / tuned.meta.json / tuner ledger / report all skipped) ===")
 
     for agent in sorted(agents):
         corrs_all = [c for c in corrections if c.agent == agent]
@@ -123,9 +137,12 @@ def main(argv=None):
         result = tune(corrs, pilot, seeds, reg=args.reg)
         changed = sparse_overrides(result.overrides, seeds)   # only genuine deltas reach tuned.json
         agent_dir = REPO / "src" / "agents" / agent
-        out = write_overrides(changed, agent_dir / "tuned.json")
-        write_meta(agent_dir / "tuned.meta.json", corrections=corrs, when=datetime.now())  # ADR-0019
-        print(f"[{agent}] {len(corrs)} corrections -> {out} "
+        out = agent_dir / "tuned.json"
+        if not args.dry_run:
+            write_overrides(changed, out)
+            write_meta(agent_dir / "tuned.meta.json", corrections=corrs, when=datetime.now())  # ADR-0019
+        dry = " [dry-run: NOT written]" if args.dry_run else ""
+        print(f"[{agent}] {len(corrs)} corrections -> {out}{dry} "
               f"| {len(changed)} weight change(s), {len(result.proposals)} proposals, "
               f"{len(result.skipped)} skipped")
         n_critical = sum(p.critical for p in result.proposals) + sum(
@@ -166,11 +183,13 @@ def main(argv=None):
                   f"({c.category}): contradictory correction or needs a new Hypothesis, not a weight")
             if c.rationale:                            # show it so CRITICAL marker visible here too
                 print(f"    rationale: {c.rationale}")
-        prop_out = write_proposals(
-            REPO / "data" / "corrections" / "tuner" / f"{agent}.json", agent, result.proposals,
-            result.skipped, generated_at=datetime.now().isoformat(timespec="seconds"),
-            reviewed=dispositioned)
-        print(f"  proposals -> {prop_out} (durable; /blunder-buster reads this)")
+        prop_out = REPO / "data" / "corrections" / "tuner" / f"{agent}.json"
+        if not args.dry_run:
+            write_proposals(prop_out, agent, result.proposals, result.skipped,
+                            generated_at=datetime.now().isoformat(timespec="seconds"),
+                            reviewed=dispositioned)
+        print(f"  proposals -> {prop_out}{' [dry-run: NOT written]' if args.dry_run else ''} "
+              f"(durable; /blunder-buster reads this)")
         n_scoped = sum(p.scope != "decision" for p in result.proposals)
         if n_scoped:
             print(f"  *** {n_scoped} SCOPED correction(s) (turn/match, ADR-0049) — never a ranking "
@@ -194,7 +213,7 @@ def main(argv=None):
                 print(f"    SEEN ep {c.episode_id} frame {c.decision.get('frame')} "
                       f"[{(e or {}).get('disposition', '?')}]: {(e or {}).get('reason', '')}")
 
-        if not args.no_report:                            # human-readable per-run report (docs/tuning/runs/)
+        if not args.no_report and not args.dry_run:       # human-readable per-run report (docs/tuning/runs/)
             now = datetime.now()
             build = next((c.agent_build for c in corrs if c.agent_build), None)
             md = render_run_report(agent, result, seeds, changed, reg=args.reg,

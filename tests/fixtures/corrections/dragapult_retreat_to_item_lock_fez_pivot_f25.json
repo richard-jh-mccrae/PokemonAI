@@ -1,0 +1,287 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 210,
+              "id": 140,
+              "maxHp": 210,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 26,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 119,
+              "maxHp": 70,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 15,
+              "tools": []
+            },
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 119,
+              "maxHp": 70,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 16,
+              "tools": []
+            },
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 30,
+              "id": 235,
+              "maxHp": 30,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 27,
+              "tools": []
+            },
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 305,
+              "maxHp": 70,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 28,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 42,
+          "discard": [
+            {
+              "id": 1086,
+              "playerIndex": 0,
+              "serial": 34
+            },
+            {
+              "id": 1086,
+              "playerIndex": 0,
+              "serial": 32
+            }
+          ],
+          "hand": [
+            {
+              "id": 2,
+              "playerIndex": 0,
+              "serial": 4
+            },
+            {
+              "id": 1120,
+              "playerIndex": 0,
+              "serial": 38
+            },
+            {
+              "id": 120,
+              "playerIndex": 0,
+              "serial": 22
+            },
+            {
+              "id": 120,
+              "playerIndex": 0,
+              "serial": 19
+            }
+          ],
+          "handCount": 4,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 65,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 63,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 64,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 43,
+          "discard": [
+            {
+              "id": 1086,
+              "playerIndex": 1,
+              "serial": 83
+            },
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 78
+            },
+            {
+              "id": 17,
+              "playerIndex": 1,
+              "serial": 122
+            }
+          ],
+          "hand": null,
+          "handCount": 5,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [
+        {
+          "id": 1260,
+          "playerIndex": 0,
+          "serial": 61
+        }
+      ],
+      "stadiumPlayed": true,
+      "supporterPlayed": false,
+      "turn": 2,
+      "turnActionCount": 6,
+      "yourIndex": 0
+    },
+    "logs": [
+      {
+        "cardId": 1260,
+        "playerIndex": 0,
+        "serial": 61,
+        "type": 10
+      }
+    ],
+    "remainingOverageTime": 599.2967800000001,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "area": 2,
+          "inPlayArea": 4,
+          "inPlayIndex": 0,
+          "index": 0,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 0,
+          "index": 0,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 1,
+          "index": 0,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 2,
+          "index": 0,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 3,
+          "index": 0,
+          "type": 8
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    },
+    "step": 26
+  },
+  "chosen": [
+    1
+  ],
+  "correct": [
+    0
+  ],
+  "chosen_label": "Attach Basic {R} Energy → Dreepy (bench 1 · 70/70)",
+  "correct_label": "Attach Basic {R} Energy → Fezandipiti ex (active · 210/210)",
+  "note": "t2/f25 ATTACH (OPEN planner-code proposal disruptor-lock-from-a-support-ex-pivot, 2026-07-14): retreat-to-item-lock maneuver, SUPPORT-EX-PIVOT variant. Active = Fezandipiti ex (210/210, retreat 1), a support-ex PIVOT, NOT a fragile line pre-evo. Human line: attach {R}->Fez active -> retreat (energy pays cost 1) -> promote benched Budew -> Itchy Pollen item-lock. The OFFENSIVE maneuver disruptor_lock_maneuver (_can_lock_line_with_disruptor + feed-the-line-for-disruptor-lock +20) IS BUILT + default-ON (merged to main via PR #92, commits 4e38243/68181a9, in-tree after rebase), but its gate needs ma.id in _line_preevo_set() so Fez (support-ex pivot) is EXCLUDED -> re-probed against merged code: decide()=[1] bench, feed-the-line-for-disruptor-lock does NOT fire, dont-feed-the-doomed (-30) sinks the attach. FIX (gate = decide() materializes attach->Fez then retreat/promote/lock): extend _can_lock_line_with_disruptor to ALSO fire on a retreatable non-attacking support-ex pivot Active behind a benched item_lock (same guards). Sibling 85046350-20 (line-preevo variant) now FIXED by the shipped build. See docs/todo/retreat-to-item-lock-maneuver.md."
+}

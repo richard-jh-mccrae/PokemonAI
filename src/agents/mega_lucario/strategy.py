@@ -303,7 +303,13 @@ HYPOTHESES = [
         and c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
         and not c.board.energy_attached and c.board.energy_placeable
         and not (LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
-                 and c.board.active_is_weak_preevo),
+                 and (c.board.active_is_weak_preevo
+                      or (c.board.my_hand_size <= 1
+                      and (not c.board.active_attack_payable or c.board.active_doomed)
+                      and not c.board.active_arm_available))),
+        # ^ ALSO stands down on a DEAD-HAND famine (engine online, hand ≤ 1, and the lone {F} can't arm a
+        #   this-turn Active attack): draw 3 beats sinking the last card into a premature bench attach —
+        #   the discarded {F} is Aura-Jab-recoverable (ml f42 Makuhita-active / f54 Lunatone-active).
         weight=-30, status="assumed"),
     Hypothesis(
         id="lunar-cycle-the-weak-preevo-last-f",
@@ -319,8 +325,15 @@ HYPOTHESES = [
         and c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
         and not c.board.energy_attached
         and LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
-        and c.board.active_is_weak_preevo,
-        weight=20, status="assumed"),
+        and (c.board.active_is_weak_preevo
+             or (c.board.my_hand_size <= 1
+                      and (not c.board.active_attack_payable or c.board.active_doomed)
+                      and not c.board.active_arm_available)),
+        # ^ fires on the SAME broadened condition as the guard's stand-down (weak pre-evo OR dead-hand
+        #   famine), so the two stay mutually exclusive. +30 (was +20) clears `concentrate-energy-on-wincon`
+        #   (+25) landing on the benched-Mega attach in the famine case (ml f42/f54); the weak-preevo case's
+        #   weaker Riolu-active competitor is unaffected.
+        weight=30, status="assumed"),
     Hypothesis(
         id="gravity-mountain-vs-stage2",
         rationale="Gravity Mountain (−30 HP to every Stage 2, both sides) NEVER touches our board — "

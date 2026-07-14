@@ -132,13 +132,36 @@ HYPOTHESES = [
                   "into ready Mega Starmie ex was pure waste, ep83007714 f65). Open-menu branch is "
                   "gated to a NON-win-condition, OFF-Line doomed Active, since a doomed win-condition "
                   "pre-evolution keeps Energy through evolution and is still worth feeding (ep82522726 "
-                  "f7).",
-        when=lambda c: c.board.active_doomed and c.board.my_bench > 0 and (
+                  "f7). STANDS DOWN for the offensive item-lock maneuver "
+                  "(`can_lock_line_with_disruptor`): there the Active is DELIBERATELY fed to pay its "
+                  "enabling retreat into a benched item_lock (dragapult t2, a support-ex PIVOT like "
+                  "Fezandipiti ex that this off-Line branch would otherwise starve — the line-preevo "
+                  "variant is already exempt via `not attach_target_is_line_member`).",
+        when=lambda c: c.board.active_doomed and c.board.my_bench > 0
+        and not c.board.can_lock_line_with_disruptor and (
             (c.select_context == _ATTACH_FROM and c.option_area == _ACTIVE)
             or (c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
                 and not c.attach_target_is_line_member
-                and not c.attach_feeds_firing_accel)),   # firing accelerator isn't "spent" — feed it
+                and not c.attach_feeds_firing_accel      # firing accelerator isn't "spent" — feed it
+                and not c.board.active_arm_available)),   # go down swinging (off-Line attacker, ml f21/f19)
         weight=-30, status="assumed"),
+    Hypothesis(
+        id="arm-the-doomed-active",
+        rationale="Go down swinging: when the Active is doomed but attaching THIS Energy COMPLETES its "
+                  "biggest attack THIS turn (`attach_completes_biggest_attack`), ARM it — a real hit before "
+                  "it falls beats banking the Energy on a bench body that can't cash it this turn. ml "
+                  "f21/f19: attach the lone {F} to the Active Solrock -> Cosmic Beam 70 NOW (Lunatone is "
+                  "benched so it's live), vs `concentrate-energy-on-wincon` (+25) pumping a benched Riolu we "
+                  "can't evolve this turn (no Mega Lucario ex in hand). The OFF-Line analogue of "
+                  "`dont-overbuild-the-doomed-wincon`'s go-down-swinging stand-down (which the wincon-Role "
+                  "attach already gets); +20 lands the Active attach (power-up +15 − attach-last −5 + 20 = "
+                  "+30) above the bench pre-evo pump (+20), and pairs with `dont-feed-the-doomed` standing "
+                  "down on the same signal. A KO always dominates (KO_SCORE).",
+        when=lambda c: c.option_type == _ATTACH and c.attach_target_area == _ACTIVE
+        and c.board.active_doomed and c.board.active_arm_available,   # real attacker, biggest attack this
+        #   attach completes, no ready benched wincon to retreat into instead (excludes ml 84889011 f24's
+        #   utility Lunatone, f42 Makuhita one-short, and the retreat-into-ready-wincon accel case).
+        weight=20, status="assumed"),
     Hypothesis(
         id="feed-the-line-for-disruptor-lock",
         rationale="Step 1 of the OFFENSIVE item-lock maneuver (dragapult f20): attach the turn's Energy "

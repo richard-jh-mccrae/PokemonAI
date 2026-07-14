@@ -98,22 +98,48 @@ def test_hold_evolution_silent_when_body_has_fp():
     assert "hold-evolution-until-attacker-ready" not in _fired(p.explain(obs).options[0])
 
 
-# --- play-risky-ruins-when-net-positive: play it with no Stadium up / to replace the opponent's -----
+# --- play-risky-ruins-when-net-positive: net-value gated (wincon in play) / opp-stadium denial ------
 
 @pytest.mark.req("REQ-DP-0003")
-def test_play_risky_ruins_fires_with_no_stadium():
-    """No Stadium in play -> place Risky Ruins (chip the opp's Basic non-{D} bench-entries)."""
+def test_play_risky_ruins_fires_with_no_stadium_once_wincon_online():
+    """No Stadium up AND our win-condition is in play -> place Risky Ruins (past our fragile-basic
+    development, the 320-HP body shrugs the symmetric chip while it bleeds the opponent)."""
+    p = _pilot()
+    obs = make_select([opt(PLAY, index=0)],
+                      current=state(active=poke(DRAGAPULT, energy=2, hp=320, max_hp=320),  # wincon in play
+                                    hand=[RISKY_RUINS]))
+    assert "play-risky-ruins-when-net-positive" in _fired(p.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-DP-0003")
+def test_play_risky_ruins_silent_pre_wincon():
+    """No Stadium up but our win-condition NOT in play -> silent: we're the bench-heavier developing
+    side, so the SYMMETRIC chip damages our own fragile Dreepy line more (f24, CRITICAL)."""
+    p = _pilot()
+    obs = make_select([opt(PLAY, index=0)],
+                      current=state(active=poke(CINDERACE, hp=160),
+                                    bench=[poke(DREEPY, hp=70)], hand=[RISKY_RUINS]))   # no Dragapult in play
+    assert "play-risky-ruins-when-net-positive" not in _fired(p.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-DP-0003")
+def test_play_risky_ruins_replaces_opponent_stadium_even_pre_wincon():
+    """An OPPONENT Stadium is up -> fire regardless of our wincon: replacing it denies them, an
+    independent reason from the self-chip net-value."""
     p = _pilot()
     obs = make_select([opt(PLAY, index=0)],
                       current=state(active=poke(CINDERACE, hp=160), hand=[RISKY_RUINS]))
+    obs["current"]["stadium"] = [{"id": 999, "serial": 1, "playerIndex": 1}]   # opponent's Stadium
     assert "play-risky-ruins-when-net-positive" in _fired(p.explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-DP-0003")
 def test_play_risky_ruins_silent_when_ours_is_up():
-    """Our own Risky Ruins is already in play -> silent (nothing to gain; engine blocks a re-play anyway)."""
+    """Our own Risky Ruins is already in play -> silent (nothing to gain; engine blocks a re-play
+    anyway). Wincon in play here, so the ONLY reason for silence is our Stadium already being up."""
     p = _pilot()
     obs = make_select([opt(PLAY, index=0)],
-                      current=state(active=poke(CINDERACE, hp=160), hand=[RISKY_RUINS]))
+                      current=state(active=poke(DRAGAPULT, energy=2, hp=320, max_hp=320),
+                                    hand=[RISKY_RUINS]))
     obs["current"]["stadium"] = [{"id": RISKY_RUINS, "serial": 1, "playerIndex": 0}]   # ours (yourIndex 0)
     assert "play-risky-ruins-when-net-positive" not in _fired(p.explain(obs).options[0])

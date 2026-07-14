@@ -31,7 +31,8 @@ CLUSTERS = {
         "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy",
         "dont-power-the-draw-engine",           # draw-engine attach at _ATTACH (dragapult f21)
         "dont-fund-the-non-attacking-body",     # broader: engine/tutor/stall at _ATTACH + _ATTACH_FROM (ml f121/f84)
-        "feed-the-line-for-disruptor-lock"}),   # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
+        "feed-the-line-for-disruptor-lock",     # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
+        "arm-the-doomed-active"}),              # go down swinging: arm a doomed Active whose attack this completes (ml f21/f19)
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)
@@ -54,6 +55,7 @@ CLUSTERS = {
                                      "retreat-to-wall-the-line"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
         "evolve-into-wincon", "advance-the-evolution-line", "evolve-the-energized-body-first",
+        "advance-the-energized-line-body-first",
         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
