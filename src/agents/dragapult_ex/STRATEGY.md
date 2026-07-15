@@ -4,7 +4,7 @@
 > `strategy.py` is authored from this by `/update-strategy` **after sign-off** (ADR-0017 / ADR-0046).
 > Build on the [General Strategy](../../../docs/general-strategy.md): reuse, override, or extend — don't restate.
 
-**Status:** `locked — proposals queued` (deck swapped to the standard meta list — Cinderace OUT; Budew +
+**Status:** `aligned 2026-07-15` (all 2026-07-09 proposals shipped into common — see §6 banner) · was `locked — proposals queued` (deck swapped to the standard meta list — Cinderace OUT; Budew +
 Dunsparce/Dudunsparce + Rosa's Encouragement IN) · **Signed off:** 2026-07-09 (start SECOND) · **Author:** deck-genie
 + Richard · **Supersedes** the 2026-07-03 Cinderace build (full re-author). Phase 6 done: 4 general proposals in
 `data/strategy/proposals/deck-genie-20260709-dragapult_ex.md` for `/update-strategy`; `preferred_start="second"` +
@@ -27,6 +27,7 @@ Cinderace/Judge dead-ref cleanup applied to `strategy.py` (all gates green — 2
 - [x] Dispositions adversarially verified vs real code + engine-free probes (workflow `wjzvrtwbk` + `probe_ability.py`): 5 gaps CONFIRMED, rest covered-as-is
 - [x] Phase 5 sign-off (2026-07-09 — **start SECOND**, guru-unanimous vs the "setup-heavy → first" steelman, workflow `wh8ls1w6m`)
 - [x] Phase 6 done: **4 general proposals emitted** → `data/strategy/proposals/deck-genie-20260709-dragapult_ex.md`: (1) `use-the-draw-engine-ability`, (2) `open-the-item-lock-starter` + `item_lock` tag on Budew, (3) `energy_accel` tag on Rosa's, (4) `dont-strand-the-evolving-engine`. **Applied directly** (user-requested hygiene): `preferred_start="second"` + Cinderace/Judge dead-ref cleanup in `strategy.py` — 25 agent tests + check_agent 4/4 green.
+- [x] **All 4 proposals SHIPPED into common** (deck-align 2026-07-15): verified live in `baseline_opening.py` / `baseline_sequencing.py` / `doctrine_fetch.py` + tags in `card_functions.json`. Deck covers-as-is; tuned.json 14/14 keys live; no folds available (3 deck hypotheses stay deck-bound).
 
 **What changed vs the 2026-07-03 build (the delta this re-author covers):**
 
@@ -155,7 +156,7 @@ Every block opens with the **engine profile** (dump = ground truth) then the res
 cards are grilled in full;** unchanged cards carry the 2026-07-03 lock (condensed) since their code coverage is
 intact.
 
-### NEW — 1× Budew (235) — Role: `starter` (item-lock opener) · tags: **none → needs `item_lock`** · LOCKED
+### NEW — 1× Budew (235) — Role: `starter` (item-lock opener) · tags: **`item_lock` (SHIPPED)** · LOCKED
 - **Mechanics:** Basic **Grass**, 30 HP, 1-prize, **weakness Fire**, retreat **0**. `—` **Itchy Pollen** (10,
   **no energy cost**): "During your opponent's next turn, they can't play any **Item** cards from their hand."
   It is an **attack** (turn-ender), NOT an ability.
@@ -205,7 +206,7 @@ intact.
   if confirmed, a new GENERAL `use-the-draw-engine-ability` rule (§6) fixes both. *(Munkidori's Adrena-Brain
   auto-activates only because its counter-move earns tactical value — pure draw/dig abilities don't.)*
 
-### NEW — 1× Rosa's Encouragement (1240) — Role: comeback accel (tech) · tags: **none → needs `energy_accel`** · LOCKED
+### NEW — 1× Rosa's Encouragement (1240) — Role: comeback accel (tech) · tags: **`energy_accel` (SHIPPED)** · LOCKED
 - **Mechanics:** **Supporter.** "You can use this card only if you have **more Prize cards remaining than your
   opponent** [= you are BEHIND]. Attach up to 2 Basic Energy cards from your **discard pile** to 1 of your **Stage
   2** Pokémon." (The only Stage 2 here = **Dragapult ex**.)
@@ -389,7 +390,14 @@ skipped); Budew item-lock opener (+ `item_lock` tag); Rosa's `energy_accel` tag;
 
 ## 6 · New rules / tags (drafts — trigger sketches, NOT lambdas yet)
 
-### `open-the-item-lock-starter` · GENERAL (`baseline_opening`) · seed +35 · status: assumed
+> **✅ ALL SHIPPED (deck-align 2026-07-15).** Every rule + tag drafted below has since landed in `common`,
+> gated + committed by `/update-strategy`; this deck is **covered-as-is** and opts in via its tagged cards —
+> no deck-file wiring needed. Landed: `open-the-item-lock-starter` → `baseline/baseline_opening.py`;
+> `use-the-draw-engine-ability` → `baseline/baseline_sequencing.py`; `dont-strand-the-evolving-engine` →
+> `doctrines/doctrine_fetch.py`; **tags** `item_lock`→Budew (235), `energy_accel`→Rosa's (1240) in
+> `card_functions.json`. The per-rule "status:" lines below are kept as the authoring record.
+
+### `open-the-item-lock-starter` · GENERAL (`baseline_opening`) · seed +35 · status: **SHIPPED** (baseline_opening.py)
 > At the pregame `SETUP_ACTIVE` pick, prefer opening an `item_lock`-tagged Basic (Budew) — leading with the free
 > item-lock body lets its Itchy Pollen-class attack fire on your first turn (esp. going **second**, where the
 > attack is legal T1), taxing the opponent's Item-based setup for a turn at no cost.
@@ -413,7 +421,7 @@ Role (would mis-boost at SETUP via `advance-the-accel-pieces`; Rosa's is comebac
 card_functions.json (tag) — no new Hypothesis. **Note:** consider a future `tutor_energy`-style secondary if the
 discard-fuel needs its own keep-value term; deferred (general discard keep-value suffices for v1).
 
-### `use-the-draw-engine-ability` · GENERAL (`baseline_sequencing`) · seed +18 · status: **assumed — CONFIRMED GAP (ship it)**
+### `use-the-draw-engine-ability` · GENERAL (`baseline_sequencing`) · seed +18 · status: **SHIPPED** (baseline_sequencing.py)
 > Activate a benched engine Pokémon's once-per-turn **draw/dig Ability** (`_ABILITY` option on a Pokémon whose
 > ability carries a `draw`/`dig` engine tag — Drakloak Recon Directive, Dudunsparce Run Away Draw) during SETUP/RACE,
 > sequenced early (before the turn-ending attack), because a pure card-advantage ability has no combat value and
@@ -439,7 +447,7 @@ sequence it, but a non-lethal **pre-load** activation is skipped. v1 scopes this
 load-bearing); extending it to the counter-move/heal activation is a **deferred** refinement (§8) — a blanket
 "activate any ability" risks firing a counter-move with no good target.
 
-### `dont-strand-the-evolving-engine` · GENERAL (`doctrine_fetch`) · seed −20 · status: **assumed — CONFIRMED GAP (priority inversion)**
+### `dont-strand-the-evolving-engine` · GENERAL (`doctrine_fetch`) · seed −20 · status: **SHIPPED** (doctrine_fetch.py)
 > Don't tutor a Stage-1 engine Pokémon (Dudunsparce — `card_is_support`, Run Away Draw) to HAND when its base
 > (Dunsparce) is not in play and not in hand — it's a stranded dead card (can't be played). The engine-precursor
 > analogue of `fetch-base-before-stranded-payoff` (which is scoped to the win-condition **Line**, so it does not
