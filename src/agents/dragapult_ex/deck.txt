@@ -9,7 +9,7 @@ Pokémon: 18
 1 Fezandipiti ex ASC 142
 1 Meowth ex POR 62
 
-Trainer: 33
+Trainer: 34
 4 Lillie's Determination MEG 119
 3 Boss's Orders MEG 114
 3 Crispin SCR 133
@@ -23,7 +23,7 @@ Trainer: 33
 2 Risky Ruins MEG 127
 1 Judge POR 76
 
-Energy: 9
+Energy: 8
 3 Psychic Energy MEE 5
 3 Fire Energy MEE 2
 2 Darkness Energy MEE 7
