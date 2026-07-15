@@ -126,6 +126,28 @@ mid-investigation.)
    strong rule firing, options near-tied) — where it can only help — leaving the tuned rules in charge
    where they already decide. Expand the rollout's authority as ladder A/B confirms.
 
+## Leaf lab — the offline measurement bench (BUILT 2026-07-16)
+
+The armed-ON rung played setup turns badly ("almost drunk", user 2026-07-16). Root cause is the one the
+plan always named: the **leaf is blind**. On a develop turn (no prizes/KO) `_engine_leaf_value` collapses
+to `_board_development` ≈ raw body+energy count — no tempo, hold, sequencing, or cross-turn sense — so the
+rung maximizes "play more stuff" and can't even break ties.
+
+`tools/train/leaf_lab.py` (`evaluate_leaf_on_correction` / `leaf_lab_report`) re-scores a tagged
+`turn_plan` correction's board through `_engine_leaf_value` **offline via cgpy** (the new injectable
+`_simulate_line` seam `pilot._search_api`; inject a placeholder `search_begin_input`, cgpy rebuilds the
+state from the MAIN-select board), and reports whether the leaf ranks the human's `correct` pick highest.
+This makes ANY leaf version measurable without a ladder run. cgpy is parity-limited (~298/434) — VALUES
+differ slightly from native, the RANKING is the signal; non-MAIN / unreseedable boards are skipped + counted.
+
+**Baseline (2026-07-16, 4 dragapult turn_plan corrections, 2 scorable): leaf ranks `correct` highest
+0/2 (0%), avg top-tie 2.5.** `ep86090164 correct=[0]` → rank 5/8 under a 4-way tie at 65; `correct=[1]` →
+rank 5/27, top 1075 (a phantom heuristic-sim "win" the leaf hallucinates — the soundness guard correctly
+keeps the rung out there live). This 0/2 is the target the leaf-enrichment work must move.
+
+To harvest the corpus while it's armed, `_DEVELOP_PLAN_K` was raised to 50 so `plan_candidates` captures
+the FULL menu ranking (the human's later `correct` pick is always in the trace with its leaf value).
+
 ## Phased path
 
 - **Phase 0 — the leaf.** Enrich the end-of-turn leaf; validate ranking on the corrections (e.g.

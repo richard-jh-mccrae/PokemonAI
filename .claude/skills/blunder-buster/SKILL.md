@@ -145,9 +145,12 @@ them). Loop: tag → `/blunder-buster` (route) → `/update-strategy` (apply + c
   `when()`/code. Routing is the value; authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
 - **Layer routing is load-bearing:** scope turn/match → `planner-code` (prior; verify against the trace);
-  lethal/planned → `planner-code`; posture-mismatch → `matchup-brief` (or `/matchup-genie`); else →
-  `general-hypothesis`. Never a deck-agnostic weight for a one-archetype misplay, never a `when()` for a
-  Solver/Planner-driven decision, **never a weight for a scoped blunder** (it never entered the fit).
+  a `scope: turn` correction with a `turn_plan` note → the **develop-rung rulebook** (`references/routing.md`:
+  route on the proposal's `develop_class` — `rung-right` → `rule-retirement`, `leaf-misrank` → planner-code
+  leaf/gate tune or capability-gap when cross-turn); lethal/planned → `planner-code`; posture-mismatch →
+  `matchup-brief` (or `/matchup-genie`); else → `general-hypothesis`. Never a deck-agnostic weight for a
+  one-archetype misplay, never a `when()` for a Solver/Planner-driven decision, **never a weight for a
+  scoped blunder** (it never entered the fit).
 - **CRITICAL** flows headless unless a leaf routes it to refuted/capability-gap — then it hard-stops for
   human acknowledgement in the intervention pass (the invariant above). Resolve the CRITICAL interventions
   before any other.

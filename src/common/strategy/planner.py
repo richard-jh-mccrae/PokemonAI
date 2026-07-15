@@ -51,7 +51,11 @@ _PLANNER_WINCON_DEV_W = 10.0   # per-body credit in `_board_development` for a W
                                # (role-gated) — splits prize-equal boards toward the one building the win
 _PLANNER_WINCON_ENERGY_W = 5.0 # extra per-Energy credit for Energy attached to a WIN-CONDITION body —
                                # concentrating on the wincon line beats the same Energy wasted on junk
-_DEVELOP_PLAN_K = 3            # develop-rung Phase 1: how many ranked end-boards ride in `plan_candidates`
+_DEVELOP_PLAN_K = 50          # develop rung: ranked end-boards in `plan_candidates`. Set high to capture
+                              # the FULL menu (Phase-3 leaf-training corpus, armed-ON harvest): the human's
+                              # later `correct` pick must always be in the trace with its leaf value, even
+                              # when it's neither the committed nor the greedy pick. Wire cost is one scalar
+                              # per option — trivial; a MAIN menu never approaches 50 single-pick options.
 _DEVELOP_STRONG_SCORE = 30.0  # develop rung gate: a greedy top score at/above this is a confident pick —
                               # the tuned rules keep the turn (first-cut threshold, ladder-tunable)
 _DEVELOP_TIE_MARGIN = 5.0     # develop rung gate: a top-two score margin below this is "indifferent" —
@@ -2164,10 +2168,12 @@ class PlannerMixin:
         Lazy DLL import keeps the fast unit suite from ever loading the native engine."""
         if not (obs or {}).get("search_begin_input") or not first_step:
             return None
-        try:
-            from cg import api as cgapi
-        except Exception:
-            return None
+        cgapi = getattr(self, "_search_api", None)     # injectable search backend (leaf-lab harness sets
+        if cgapi is None:                              # cgpy's `cg.api`-shaped surface to re-score tagged
+            try:                                       # correction boards offline); production uses native
+                from cg import api as cgapi
+            except Exception:
+                return None
         from dataclasses import asdict
         cur = obs.get("current") or {}
         my_index = cur.get("yourIndex", 0)
