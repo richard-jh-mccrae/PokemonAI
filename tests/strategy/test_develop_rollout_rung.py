@@ -110,3 +110,17 @@ def test_rung_defers_on_a_win_class_rollout_value():
     _stub_leaf(p, {(0,): KO_SCORE * 3, (1,): 40.0})             # option 0 sims to a 'win' (unsound)
     assert p._develop_rollout_line({}, None, None, options, traces) is None
     assert p._develop_candidates_pending is None
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_rung_captures_every_rolled_out_candidate_for_the_corpus():
+    """Phase-3 corpus harvest (armed-ON): the rung must emit the leaf value for EVERY rolled-out option,
+    so the human's later `correct` pick is always in the trace with its value — even when it's neither
+    the committed nor the greedy pick. A realistic menu (here 5 options) is captured in full."""
+    p = _pilot()
+    options = [{"type": 0}] * 5
+    traces = [_trace(i, 5.0 - i) for i in range(5)]              # greedy = option 0
+    _stub_leaf(p, {(0,): 30.0, (1,): 40.0, (2,): 55.0, (3,): 45.0, (4,): 35.0})
+    p._develop_rollout_line({}, None, None, options, traces)
+    steps = {tuple(c["step"]) for c in p._develop_candidates_pending}
+    assert steps == {(0,), (1,), (2,), (3,), (4,)}              # all five leaf values captured
