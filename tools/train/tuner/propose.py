@@ -36,6 +36,9 @@ class ProposedHypothesis:
     # can fix it; fix lives in planner.py / lethal.py. /blunder-buster routes on these (ADR-0030/0031).
     planner_committed: bool = False   # live_trace.planned non-null (Turn Planner committed a line)
     lethal_locked: bool = False       # live_trace.lethal non-null (Lethal Solver locked a win)
+    plan_candidates: list | None = None  # the develop rung's ranked end-boards (Phase 1) — surfaced so a
+                                      # sequencing correction sits next to the alternatives it out-scored,
+                                      # letting /blunder-buster separate a mis-ranked leaf from a bad pick
     # Posture (ADR-0041): a matchup-doctrine miss routes to the archetype's Brief / recognition, not a
     # generic weight. /blunder-buster surfaces these so a matchup misplay isn't authored as a when().
     posture_mismatch: bool = False    # human flagged the opponent Read WRONG at this decision
@@ -105,6 +108,8 @@ def propose_hypothesis(correction, *, attribution: str | None = None) -> Propose
         critical=is_critical(correction.rationale),
         planner_committed=live.get("planned") is not None,
         lethal_locked=live.get("lethal") is not None,
+        plan_candidates=live.get("plan_candidates"),
+
         posture_mismatch=bool(getattr(correction, "posture_mismatch", False)),
         believed_archetype=believed_archetype(correction),
         scope=correction.scope, subject=correction.subject, seat=correction.seat,

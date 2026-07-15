@@ -50,6 +50,19 @@ def _games_payload() -> dict:
             "episode_id": info.get("EpisodeId"), "own_seat": _own_seat(game)}
 
 
+def _turn_plan_from_form(form: dict) -> dict | None:
+    """The develop-rung Phase-3 turn-plan note (`{intended_line, expected_end_board}`) assembled from
+    the tag form — ONLY on a ``turn`` tag that carries content. A decision tag, or an empty note,
+    yields None so the field stays sparse and never rides on a non-turn-plan Correction."""
+    if form.get("scope") != "turn":
+        return None
+    intended = str(form.get("intended_line", "")).strip()
+    end_board = str(form.get("expected_end_board", "")).strip()
+    if not (intended or end_board):
+        return None
+    return {"intended_line": intended, "expected_end_board": end_board}
+
+
 def _json(handler: BaseHTTPRequestHandler, payload, code: int = 200) -> None:
     body = json.dumps(payload).encode("utf-8")
     handler.send_response(code)
@@ -135,6 +148,7 @@ class _Handler(BaseHTTPRequestHandler):
                 attribution=form.get("attribution") or None,
                 posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)
                 scope=form.get("scope", "decision"),   # decision | turn | match (ADR-0049); the Span
+                turn_plan=_turn_plan_from_form(form),   # develop-rung Phase 3: the ideal-line note
             )                                          # is assembled server-side from the Anchor
         except (KeyError, ValueError) as exc:
             return _json(self, {"error": str(exc)}, 400)
@@ -242,6 +256,13 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  <label>Attribution (optional)</label><input id="attribution" placeholder="hypothesis:&lt;id&gt; / missing_hypothesis / tactical / value / scouting">
  <label class="crit" title="blunder-buster resolves CRITICAL blunders first, one at a time, and never leaves one unfixed"><input type="checkbox" id="critical"> Critical</label>
  <label>Rationale — state the <b>general rule</b>, not just this instance</label><textarea id="rationale" placeholder="The rule the agent should learn (e.g. 'snipe the highest-threat benched attacker with energy'), then the intended line. This becomes the when() the Tuner authors."></textarea>
+ <div id="turnplan" style="display:none">
+  <label>Intended line — your ideal decision sequence (develop-rung Phase 3)</label>
+  <textarea id="intended_line" style="height:70px" placeholder="e.g. retreat Cinderace → attach {F} to Solrock → KO the Active"></textarea>
+  <label>Expected end-board — what the line sets up (the leaf's target)</label>
+  <textarea id="expected_end_board" style="height:55px" placeholder="e.g. Mega Lucario active with 2 {F}, boost line armed for next turn"></textarea>
+  <div class="scopehint" id="firedhint"></div>
+ </div>
  <button id="save">Save blunder ▸ ship</button>
  <div id="msg"></div><div id="log"></div>
  <h3 style="margin:16px 0 4px">Logged blunders — this replay (<span id="count">0</span>)</h3>
@@ -304,6 +325,8 @@ function editItem(k){
   gotoStep(it.step);
   $('category').value=it.category; $('rationale').value=it.rationale||''; $('source').value=it.source;
   $('posture_wrong').checked=!!it.posture_mismatch;   // after gotoStep→show() reset it
+  $('intended_line').value=(it.turn_plan&&it.turn_plan.intended_line)||'';
+  $('expected_end_board').value=(it.turn_plan&&it.turn_plan.expected_end_board)||'';
   $('scope').value=it.scope||'decision'; applyScope();
   syncCrit();
   [...$('correct').options].forEach(o=>o.selected=it.correct.includes(+o.value));
@@ -331,6 +354,19 @@ function applyScope(){
   $('scopehint').textContent=s==='decision'?''
     :s==='turn'?'keyed by the turn, not this frame — every decision of the turn travels with the tag'
     :'keyed by (episode, seat) — the played line of every turn travels with the tag';
+  $('turnplan').style.display=(s==='turn')?'block':'none';   // develop-rung Phase-3 ideal-line note
+  if(s==='turn') updateFired();
+}
+// Show which rule(s) the human's `correct` pick currently fires (from the live @T trace's opts.fired),
+// so `leans_on_rule` is DERIVED, never typed — blunder-buster reads the same `fired` at consume time.
+function updateFired(){
+  const f=FR[i], sel=[...$('correct').selectedOptions].map(o=>+o.value);
+  if(!f||!f.live||!f.live.opts||!sel.length){$('firedhint').textContent='';return;}
+  const rules=new Set();
+  sel.forEach(idx=>{const o=f.live.opts.find(x=>x.i===idx);(o&&o.fired||[]).forEach(fr=>rules.add(fr[0]));});
+  $('firedhint').innerHTML=rules.size
+    ?('your pick currently fires: <b>'+[...rules].map(esc).join(', ')+'</b> — the rule(s) it may lean on')
+    :'your pick fires no scored rule in the live trace';
 }
 async function boot(){
   META=await (await fetch('/meta.json')).json();
@@ -339,6 +375,7 @@ async function boot(){
   $('critical').onchange=()=>{$('rationale').value=applyCritical($('rationale').value,$('critical').checked);};
   $('rationale').oninput=syncCrit;
   $('scope').onchange=applyScope;
+  $('correct').onchange=updateFired;                 // refresh the derived leans-on-rule hint
   $('analyze').onchange=()=>{openColorful('viewer'); fillPick(); show(i);};
   $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
   loadGame();
@@ -435,6 +472,7 @@ $('save').onclick=async()=>{
   const rationale=applyCritical($('rationale').value,$('critical').checked);   // checkbox owns the CRITICAL token
   const body={frame:f.frame,correct,category:$('category').value,rationale,
     scope:$('scope').value,                        // what the tag is about (ADR-0049)
+    intended_line:$('intended_line').value, expected_end_board:$('expected_end_board').value,  // Phase-3 note
     source:$('source').value, agent: own?META.agent:pname(f.seat),
     submission_id: own?META.submission_id:null, attribution:$('attribution').value,
     posture_mismatch:$('posture_wrong').checked,   // opponent Read flagged wrong (ADR-0041)
@@ -445,7 +483,9 @@ $('save').onclick=async()=>{
     if(editingId){await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:editingId})}); editingId=null;}
     saved++; $('msg').textContent=`saved: ${pname(f.seat)} · ${j.source} · ${j.scope}`+
       (j.subject!=null?` ${j.subject}`:'')+` · ${j.category}`+(j.correct_label?` → ${j.correct_label}`:'');
-    $('log').textContent=`${saved} blunder(s) shipped this session`; $('rationale').value=''; syncCrit(); refreshList();
+    $('log').textContent=`${saved} blunder(s) shipped this session`; $('rationale').value='';
+    $('intended_line').value=''; $('expected_end_board').value=''; $('firedhint').textContent='';
+    syncCrit(); refreshList();
   } else $('msg').textContent='error: '+j.error;
 };
 boot();

@@ -16,6 +16,7 @@ from common.pilot import Pilot
 from common.scouting.provider import EngineCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.telemetry import to_record
 
 REPO = Path(__file__).resolve().parents[2]
 MEGA = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
@@ -227,3 +228,58 @@ def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
     assert decision.planned is not None and decision.planned.goal == "ko_for_prizes"   # Planner acted
     assert "energy tutor" in decision.planned.rationale                                # via Supporter line
     assert decision.chosen == fx["correct"]        # agent now plays Hilda (energy grab) as human marked
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_develop_rung_commits_a_well_formed_line_on_a_live_drive():
+    """End-to-end on the committed engine: with `develop_rollout=True`, a real mirror drive engages the
+    develop rung on its setup turns (no KO to aim at, greedy weak/indifferent). Every develop line it
+    commits is well-formed — `goal="develop"`, engine-ranked, its step IS the chosen pick — and its
+    telemetry carries the leaf value plus the non-empty ranked `plan_candidates` with the committed pick
+    flagged. Proves the rung fires the real sim from live observations and emits the ranking."""
+    deck = _deck()
+    pilot = _engine_pilot(deck, develop_rollout=True)
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    develop_seen = 0
+    try:
+        for _ in range(120):
+            cur = obs.get("current") or {}
+            if cur.get("result", -1) != -1:
+                break
+            d = pilot.explain(obs)
+            if d.planned is not None and d.planned.goal == "develop":
+                develop_seen += 1
+                assert d.planned.ranked_by == "engine"
+                assert d.planned.next_step == list(d.chosen)
+                rec = to_record(d)
+                assert rec["planned"]["goal"] == "develop" and "value" in rec["planned"]
+                assert rec["plan_candidates"]                        # non-empty ranking emitted
+                assert any(c.get("committed") for c in rec["plan_candidates"])
+            obs = battle_select(d.chosen)
+        assert develop_seen > 0                                      # the rung engaged on the setup turns
+    finally:
+        battle_finish()
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_flag_off_never_commits_develop_and_emits_no_candidates():
+    """The default-OFF invariant on a live drive: with the rung off, no committed line is a develop
+    line and no record carries `plan_candidates` — byte-identical to the pre-rung agent."""
+    deck = _deck()
+    pilot = _engine_pilot(deck)                                      # develop_rollout defaults False
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    try:
+        for _ in range(120):
+            cur = obs.get("current") or {}
+            if cur.get("result", -1) != -1:
+                break
+            d = pilot.explain(obs)
+            assert d.planned is None or d.planned.goal != "develop"
+            rec = to_record(d)
+            if rec is not None:
+                assert "plan_candidates" not in rec
+            obs = battle_select(d.chosen)
+    finally:
+        battle_finish()

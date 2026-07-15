@@ -860,6 +860,11 @@ class Decision:
     game_plan: dict | None = None    # the Match Planner's Game Plan (ADR-0045), compact for telemetry:
                                      # mode + confidence + route + directed goal. Sparse; `/blunder-buster`
                                      # ties a ladder misplay to this match-scale read
+    plan_candidates: list | None = None  # the develop-rollout rung's ranked end-boards (Phase 1): top-K
+                                     # {step, value, why, committed?, greedy?} sorted by value desc, so a
+                                     # correction reader sees WHAT the rung out-scored, not just its pick.
+                                     # Sparse: None unless the develop rung fired — keeps a non-develop
+                                     # record byte-identical to the pre-rung wire format
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -881,7 +886,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
-                 enabler_item_composer=False, play_accel_lethal=False):
+                 enabler_item_composer=False, play_accel_lethal=False,
+                 develop_rollout=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -996,6 +1002,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # NOW (Supporter needs a free slot) and a Basic Energy
                                                         # is still fetchable. An ATTACK-based accel (a Pokemon)
                                                         # is NEVER counted (using it IS the attack)
+        self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
+                                                        # the within-turn rollout rung — on a develop turn
+                                                        # (plan_turn else None) where greedy is weak/indifferent,
+                                                        # sim each candidate first action to end-of-turn and
+                                                        # commit the best leaf. OFF = byte-identical
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -1030,6 +1041,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
+        self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
+                                                        # end-boards, lifted onto the Decision's plan_candidates
         self._planning = False                          # reentrancy guard: True while an engine sim re-runs
                                                         # policy, so plan_turn stays closed-form (no nested search)
 
@@ -1069,6 +1082,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
+                            plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
+                                             if planned.goal == "develop" else None),  # rung's ranking (sparse)
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
