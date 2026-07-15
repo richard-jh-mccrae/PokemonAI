@@ -1,6 +1,7 @@
 """dragapult_ex — Strategy (declarative doctrine). See docs/agent-architecture.md and
 src/agents/dragapult_ex/STRATEGY.md (the grilled playing doctrine; re-authored deck-genie 2026-07-09
-for the standard meta list — Cinderace/Judge OUT; Budew + Dunsparce/Dudunsparce + Rosa's IN).
+for the standard meta list — Cinderace OUT; Budew + Dunsparce/Dudunsparce + Rosa's IN; 1x Judge
+re-added 2026-07-15 for a Psychic energy — general `shuffle_hand` coverage, no deck rule).
 
 Dragapult ex SPREAD + DISRUPTION (chip-then-cash CONTROL). Win-condition line: Dreepy -> Drakloak ->
 Dragapult ex (Stage 2, 320 HP / 2 prizes). Phantom Dive (Fire+Psychic) = 200 to the Active PLUS 6 damage
@@ -20,6 +21,8 @@ deck-specific:
   - Crushing Hammer                        -> general `play-energy-denial` (`energy_denial` tag)
   - Unfair Stamp (ACE SPEC)               -> the Shuffle-Refresh doctrine (`shuffle_hand` tag) + aceSpec
                                             discard guard (same general coverage mega_lucario relies on)
+  - Judge (re-added 2026-07-15)           -> the Shuffle-Refresh doctrine (`shuffle_hand` tag), like Lillie's
+                                            — no Role, no deck rule (user-confirmed general coverage)
   - Phantom Dive spread / Cruel Arrow / Munkidori / Stadium -> the shipped structural infra (A/B/C/D,
                                             provider.py + oracle + baseline_snipe + Board.stadium_in_play)
   - the fetch/draw suite                  -> the Fetch (ADR-0023) + Shuffle-Refresh (ADR-0024) doctrines

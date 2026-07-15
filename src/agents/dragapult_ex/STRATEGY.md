@@ -4,11 +4,18 @@
 > `strategy.py` is authored from this by `/update-strategy` **after sign-off** (ADR-0017 / ADR-0046).
 > Build on the [General Strategy](../../../docs/general-strategy.md): reuse, override, or extend — don't restate.
 
-**Status:** `locked — proposals queued` (deck swapped to the standard meta list — Cinderace/Judge OUT; Budew +
+**Status:** `locked — proposals queued` (deck swapped to the standard meta list — Cinderace OUT; Budew +
 Dunsparce/Dudunsparce + Rosa's Encouragement IN) · **Signed off:** 2026-07-09 (start SECOND) · **Author:** deck-genie
 + Richard · **Supersedes** the 2026-07-03 Cinderace build (full re-author). Phase 6 done: 4 general proposals in
 `data/strategy/proposals/deck-genie-20260709-dragapult_ex.md` for `/update-strategy`; `preferred_start="second"` +
 Cinderace/Judge dead-ref cleanup applied to `strategy.py` (all gates green — 25 agent tests + check_agent 4/4).
+
+> **Update 2026-07-15 (deck-align):** **1× Judge re-added** (SVI 176, `shuffle_hand` Supporter — "each player
+> shuffles their hand into their deck and draws 4") in a **1-for-1 swap for a Psychic energy**. Energy is now
+> **3F / 3P / 2D (8 Basic)**; Trainers 34. Judge is **covered as-is** by the general Shuffle-Refresh doctrine
+> (`shuffle_hand` tag — the same coverage Lillie's and Unfair Stamp ride), so **no new rule and no `strategy.py`
+> logic change**; deck.csv/deck.txt regenerated. **Rosa's stays** — Judge and Rosa's now coexist (proactive
+> hand disruption returns alongside the comeback accel). The "Judge removed" notes below are superseded by this.
 
 ## Progress checklist (resumability — keep current)
 
@@ -26,10 +33,10 @@ Cinderace/Judge dead-ref cleanup applied to `strategy.py` (all gates green — 2
 | Out | In | Consequence |
 |---|---|---|
 | **4 Cinderace** (Explosiveness opener + Turbo Flare bench-accel) | — | **No acceleration engine.** Energy = manual attach (1/turn) + **Crispin** + **Rosa's** (comeback). Dragapult only needs 2 (FP), so it arms by evolving over energy pre-loaded on Dreepy/Drakloak. Leaner, standard, slightly slower first Phantom Dive. `open-the-accelerator` / `develop-the-accel-recipient` / `dont-fetch-the-setup-only-opener` all go **inert** (no accel opener). |
-| **2 Judge** | **1 Rosa's Encouragement** | Less proactive hand disruption; a comeback accel added. |
+| **2 Judge** | **1 Rosa's Encouragement** | Less proactive hand disruption; a comeback accel added. *(1 Judge re-added 2026-07-15 — see Update at top; Judge + Rosa's now coexist.)* |
 | — | **1 Budew** | `Itchy Pollen` (FREE attack, 10 dmg): opp can't play **Items** next turn. Item-lock **opener**. It is an *attack* (turn-ender) → needs Budew Active; first player can't attack T1 → fires my T2 going first / my T1 going **second**. |
 | — | **1 Dunsparce + 1 Dudunsparce** | `Run Away Draw`: draw 3, shuffle Dudunsparce (+attached) back into deck → a **re-usable** consistency engine (fetch base → evolve → draw → self-recycle). |
-| 4F/3P/2D | **3F / 4P / 2D** | Psychic-primary now (no Turbo-Flare Fire engine to feed). |
+| 4F/3P/2D | **3F / 4P / 2D** → **3F/3P/2D** | Psychic-primary (no Turbo-Flare Fire engine to feed); **2026-07-15: −1 P for Judge → even 3F/3P.** |
 | Crushing Hammer 3, Night Stretcher 2 | **4 / 3** | More energy denial + more recursion (feeds Rosa's discard fuel + line rebuild). |
 | `preferred_start="first"` | **`"second"`** | Budew item-lock fires T1 only going second (first player can't attack T1). Flipped. |
 
@@ -66,7 +73,7 @@ No re-build of those; only the new-card gaps below.
   from **discard** → Stage 2 = Dragapult ex, **only when behind**). **Disruption:** Budew item-lock, Crushing
   Hammer (coin energy denial), Unfair Stamp (KO-gated hand strip), Boss's (gust), Risky Ruins (bench chip),
   Munkidori Mind Bend (Confuse). **Recovery:** Night Stretcher (Pokémon or Basic Energy from discard).
-- **Energy:** 9 Basic — **3 Fire, 4 Psychic, 2 Darkness.** F+P power Phantom Dive; the 2 {D} gate Munkidori
+- **Energy:** 8 Basic — **3 Fire, 3 Psychic, 2 Darkness.** F+P power Phantom Dive; the 2 {D} gate Munkidori
   Adrena-Brain (+ Fezandipiti). Very low count — Crispin/Rosa's/Night Stretcher do the fixing.
 - **Validation:** the list is tournament-proven — a near-exact match to Limitless **28250** (Newdorf, 3rd NAIC
   2026); the Prague winner **26243** (Laszkiewicz) is a leaner Dudunsparce-ex variant that cuts our
@@ -297,8 +304,18 @@ color (F/P) or arm Munkidori ({D}). **covers-as-is** by `use-acceleration` + `ad
 
 ### 4× Lillie's Determination (1227) — `draw`, `shuffle_hand` · LOCKED (unchanged)
 Primary hand-refresh (draw 6; **8 at exactly 6 prizes**). Shuffle-Refresh doctrine (ADR-0024): endorsed by
-`dig-before-commit`, floored by the keep-value guards, tier-3 sequenced. Heaviest T1–T2. **(Judge removed — Lillie's
-is the sole `shuffle_hand` refill now.)**
+`dig-before-commit`, floored by the keep-value guards, tier-3 sequenced. Heaviest T1–T2. **(Judge re-added
+2026-07-15 — Lillie's + Judge are the two `shuffle_hand` refills; both ride the same doctrine, no card conflict.)**
+
+### 1× Judge (1213) — Role: none (tag-driven) · tags: `draw`, `hand_disruption`, `shuffle_hand` · covers-as-is
+- **Mechanics:** **Supporter** (SVI 176). "Each player shuffles their hand into their deck and draws **4** cards."
+- **Use:** proactive **hand disruption** + symmetric refresh — cut a loaded opponent to 4 (post-refresh / pre-combo),
+  or use as a leaner Lillie's when our own hand stalls. Symmetric draw-4, so play it when the swap favors us (we're
+  low / they're high). Re-added 2026-07-15 for a Psychic energy; **coexists with Rosa's** (disruption + comeback accel).
+- **Disposition:** **covers-as-is** by the Shuffle-Refresh doctrine (ADR-0024, `shuffle_hand` tag) + keep-value
+  floors — the exact coverage Lillie's rides. **No Role, no deck rule** (user-confirmed general coverage, 2026-07-15).
+  The max-strip nuance (fire Judge when it most hurts a loaded opp) is the deferred general `hand_disruption` seam,
+  same as Unfair Stamp's.
 
 ### Fetch suite — 4× Buddy-Buddy Poffin (1086) / 4× Poké Pad (1152) / 4× Ultra Ball (1121) / 3× Night Stretcher (1097) · LOCKED (unchanged)
 Fetch doctrine (ADR-0023): **Poffin** → ≤70 Basics (**now Dreepy / Budew / Dunsparce**; play FIRST, earliest dev
@@ -314,8 +331,8 @@ Supporter**; shares Fezandipiti's trigger. Play near-**last** with a thin hand. 
 Shuffle-Refresh doctrine (`shuffle_hand`) + the aceSpec discard/keep guard (the max-impact strip nuance stays the
 deferred general `hand_disruption` seam).
 
-### Energy — 3 F / 4 P / 2 D (9 Basic) · LOCKED (unchanged)
-F+P gate Phantom Dive (Psychic-primary now); the 2 {D} gate Munkidori (+ Fezandipiti). F/P → the Dragapult line
+### Energy — 3 F / 3 P / 2 D (8 Basic) · LOCKED (2026-07-15: −1 Psychic for Judge)
+F+P gate Phantom Dive (even F/P now); the 2 {D} gate Munkidori (+ Fezandipiti). F/P → the Dragapult line
 (manual + Crispin + Rosa's-from-discard); {D} → Munkidori via Crispin's free attach. Covered:
 energy-attachment procedure (ADR-0016) + `develop-the-accel-recipient` (now inert without an accel Active — fine).
 
@@ -357,7 +374,7 @@ turn, else Crispin/Lillie's/Rosa's) → **evolve/attach** → **attack LAST**. C
 | Gust doctrine (`gust-for-the-ko`/`gust-target`/`gust-for-the-stall`) | covers-as-is | Boss's id 1182; convert-the-softened-mon IS `gust-for-the-ko` (`gust_ko` uses REMAINING HP) |
 | Fetch doctrine (all rungs) | covers-as-is | Poffin→Dreepy/Budew/Dunsparce, Poké-Pad-first, Ultra-Ball-Rule-Box, `fetch-base-before-stranded-payoff` |
 | `fetch-the-support` | covers-as-is (+ minor gap) | grabs Dudunsparce (`draw` engine) / Drakloak; **minor gap §6**: Dunsparce base under-prioritised + Dudunsparce stranded-in-hand risk |
-| Shuffle-Refresh (Lillie's / Unfair Stamp) | covers-as-is | `shuffle_hand` + keep-value floors + aceSpec guard (Judge removed) |
+| Shuffle-Refresh (Lillie's / **Judge** / Unfair Stamp) | covers-as-is | `shuffle_hand` + keep-value floors + aceSpec guard; **Judge (1213) re-added 2026-07-15 — same coverage, no new rule** |
 | `play-energy-denial` (Crushing Hammer ×4) | covers-as-is | `energy_denial` tag; count change needs nothing |
 | Tool doctrine | **N/A** | no Tools |
 | Tactical: Weakness×2 / `prize-trade-target` | covers-as-is | Dragapult no weakness; prize preference applies |
@@ -462,7 +479,8 @@ that filler to Dunsparce/Dreepy is a nicety for `/update-strategy`.
 **Card ids** (dragapult_ex/deck.csv, verified 2026-07-09): DUDUNSPARCE 66, MUNKIDORI 112, DREEPY 119, DRAKLOAK 120,
 DRAGAPULT_EX 121, FEZANDIPITI_EX 140, BUDEW 235, DUNSPARCE 305, MEOWTH_EX 1071, UNFAIR_STAMP 1080, BUDDY_POFFIN 1086,
 NIGHT_STRETCHER 1097, CRUSHING_HAMMER 1120, ULTRA_BALL 1121, POKE_PAD 1152, BOSS_ORDERS 1182, CRISPIN 1198,
-LILLIES 1227, ROSAS 1240, RISKY_RUINS 1260; FIRE 2, PSYCHIC 5, DARKNESS 7. **(Removed: CINDERACE 666, JUDGE 1213.)**
+LILLIES 1227, ROSAS 1240, RISKY_RUINS 1260; FIRE 2, PSYCHIC 5, DARKNESS 7. **JUDGE 1213 re-added 2026-07-15 (−1
+Psychic; NOT a `strategy.py` const — tag-driven `shuffle_hand`, no deck rule references it). (Removed: CINDERACE 666.)**
 
 ```
 roles = {
@@ -544,7 +562,7 @@ A/B-gated (cross-deck gauntlet proves nothing about gain). Verify via ladder cor
 ## Appendix A · Phase-0 raw fact dump (verbatim substrate — engine ground truth, 2026-07-09)
 
 ```
-# Deck facts — dragapult_ex (60 cards, 23 unique)
+# Deck facts — dragapult_ex (60 cards, 24 unique — Judge re-added 2026-07-15)
 
 ## Pokémon
 - 3× Dragapult ex (121) — Stage 2 Dragon · 320 HP · 2 prize · ex Tera · ← Drakloak · weak - · retreat 1
@@ -568,6 +586,7 @@ A/B-gated (cross-deck gauntlet proves nothing about gain). Verify via ladder cor
 - 3× Crispin (1198) · energy_accel,search,tutor_energy — search 2 Basic Energy diff types, 1 to hand, attach the other.
 - 4× Lillie's Determination (1227) · draw,shuffle_hand — shuffle hand into deck, draw 6 (8 if exactly 6 prizes).
 - 1× Rosa's Encouragement (1240) · (untagged) — only if MORE prizes remaining than opp; attach ≤2 Basic Energy from discard to 1 Stage 2.
+- 1× Judge (1213) · draw,hand_disruption,shuffle_hand — each player shuffles their hand into their deck and draws 4 (re-added 2026-07-15).
 
 ## Item
 - 4× Buddy-Buddy Poffin (1086) · search,bench_fill — search ≤2 Basics ≤70 HP to Bench (Dreepy/Budew/Dunsparce).
@@ -581,5 +600,5 @@ A/B-gated (cross-deck gauntlet proves nothing about gain). Verify via ladder cor
 - 2× Risky Ruins (1260) — any player benches a Basic non-{D} → 2 counters on it.
 
 ## Energy
-- 3× Basic {R} Fire (2) · 4× Basic {P} Psychic (5) · 2× Basic {D} Darkness (7).
+- 3× Basic {R} Fire (2) · 3× Basic {P} Psychic (5) · 2× Basic {D} Darkness (7).  (2026-07-15: −1 Psychic for Judge.)
 ```
