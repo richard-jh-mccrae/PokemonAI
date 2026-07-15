@@ -14,13 +14,13 @@ as separate concurrent worktree sessions.
 
 | Session | WP | Scope | Status | Notes |
 |---------|----|-------|--------|-------|
-| S1 | WP0 | Corpus v2 + contract freeze + background gen | ☐ not started | |
-| S2a | WP1 | Value net v2 | ☐ blocked on S1 | |
+| S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
+| S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
 | S2b | WP2 | Eval harness | ☐ blocked on S1 | |
-| — | G1 | Value-net gate | ☐ | |
-| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | |
-| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | |
-| S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | |
+| — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
+| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
+| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
+| S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | design LOCKED → same doc, D3/D4 |
 | — | G2 | Adoption gate | ☐ | |
 | S4 | WP6 | Rotation-loop glue + orchestration | ☐ blocked on G2 | |
 | — | WP5 | League/exploiter | ☐ deferred (unlock: WP4 checkpoints shipped) | |
@@ -38,9 +38,35 @@ meaningless against an unvalidated net.
 
 ---
 
-## S1 — WP0: corpus v2 + contract freeze (serial, 1 session)
+## S1 — WP0: corpus v2 + contract freeze (serial, 1 session) — ☑ BUILT 2026-07-13
 
-**Entry:** this plan merged to main.
+**Built:** `tools/sim/corpus.py` (matrix + seat-balanced + `MatchRecorder` capture, gzip films,
+per-run manifest, crash-safe resume, `--max-games`/`--max-gb` caps, `prune_runs`); contracts
+frozen in [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built on
+`Correction` (behavior-neutral, default `"human"`); tests `tests/sim/test_corpus.py` +
+`tests/blunder/test_blunder_correction.py::test_provenance_*`. No `filters.yml` change needed —
+`tools/sim/**` + `tests/sim/**` already map to the `sim` area. Measured ~0.028 GB-compressed per
+game (30k games ≈ 0.84 GB; the game cap binds first, not the byte cap).
+
+**Deviations from the scope below (recorded):**
+- **Meta-deck opponents deferred.** The matrix is our-agents × our-agents (3×3, cross + mirror)
+  today. `data/meta/decks/` is gitignored/absent AND no generic driver bundle exists to *play* a
+  bare decklist, so meta opponents can't be driven yet. The runner accepts an `--opponents` slot
+  (manifest `opponents: []`) so they drop in with no rewrite once a driver exists. v1 archetype
+  variety = our 3 decks, which is a valid S2a posterior-block start (design caps vocab ~16, folds
+  the rest into unknown-mass); extend the corpus later with `--resume`.
+- **Serial, not `--jobs` fan-out.** Per-pairing persistent servers (gauntlet lifecycle) amortize
+  import; a 30k run is a few hours single-threaded and keeps the machine usable. `--jobs` is a
+  later optimization if wall-clock bites.
+- **Rotation → caps + `prune_runs`.** A corpus is one growing set, not a time series; the byte cap
+  bounds a run and `prune_runs --prune-to-gb` reclaims oldest *complete* runs. Same disk-safety
+  intent as the scoped "rotation."
+
+**S2a consumes it:** `python tools/train/value/train.py <agent> --replays data/replays/corpus`
+(`load_replay` reads the `.json.gz` films transparently; archetype per seat is in each film's
+`info.TeamNames`).
+
+<details><summary>Original scope (for reference)</summary>
 
 **Scope:**
 1. **Corpus runner** (new, `tools/sim/` — e.g. `corpus.py`): round-robin matchup matrix over
@@ -67,9 +93,16 @@ meaningless against an unvalidated net.
 **Exit / deliverables:** corpus runner + manifest + tests (`tests/sim/`), `.github/filters.yml`
 entry, contracts doc, background generation running, ledger updated.
 
+</details>
+
 ## S2a — WP1: value net v2 (parallel with S2b)
 
 **Owns:** `tools/train/value/`, `src/common/value/`, `requirements-train.txt` (new).
+
+> **Design is LOCKED in [ml-training-design-s2a.md](ml-training-design-s2a.md)** (Fable design
+> grill, 2026-07-13): matchup encoding = replayed-Read posterior block; capacity =
+> measure-then-ship-MLP with distill fallback; episode-level holdout split. Execute it — the
+> scope below is the summary, the design doc is the specification.
 
 **Scope:**
 1. **Features:** grow past the 17-name vector (`src/common/value/features.py`) and add
@@ -148,6 +181,11 @@ played-well-lost report produced.
 
 **Owns:** `tools/train/tuner/`.
 
+> **Design is LOCKED in [ml-training-design-s3b.md](ml-training-design-s3b.md)** (Fable design
+> grill, 2026-07-13): expert = one-step fork lookahead + G1 net with terminal override; loss =
+> disagreement constraints through the existing `fit.py` rails (unifies WP3+WP4); matchup
+> tables = γ-scaled per-archetype deltas, ±30 clamp, `γ_min` shared train/runtime. Execute it.
+
 **S3b-1 — plumbing:**
 - Expert = Turn Planner + value-net one-step lookahead over each logged decision's legal
   options (offline; engine fork where the planner needs it).
@@ -223,6 +261,7 @@ compensations:
 - **Spend the price gap on verification** (Opus ≈ half Fable per token): run `/code-review`
   at the end of S2a and S3b before marking the ledger; hold G1/G2 strictly — the gates are
   the quality backstop for the builder tier.
-- **Remaining Fable 5 budget, if any, goes to design, not plumbing:** short design-grill
-  sessions for S2a's feature/matchup encoding and S3b's expert-target loss — lock the
-  decisions into this doc's session notes; Opus executes the locked designs.
+- **Remaining Fable 5 budget, if any, goes to design, not plumbing:** ✅ DONE 2026-07-13 —
+  both design grills ran on Fable 5; decisions locked in
+  [ml-training-design-s2a.md](ml-training-design-s2a.md) and
+  [ml-training-design-s3b.md](ml-training-design-s3b.md). Opus executes the locked designs.
