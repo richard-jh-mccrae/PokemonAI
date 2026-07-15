@@ -21,8 +21,9 @@ Trainer: 33
 3 Night Stretcher ASC 196
 1 Unfair Stamp TWM 165
 2 Risky Ruins MEG 127
+1 Judge POR 76
 
 Energy: 9
-4 Psychic Energy MEE 5
+3 Psychic Energy MEE 5
 3 Fire Energy MEE 2
 2 Darkness Energy MEE 7
