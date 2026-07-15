@@ -17,7 +17,7 @@
 - candidate_signal: params["reactivity"] (read at src/common/strategy/planner.py:860)
 - verification_contract: score-diff
 - provenance: src/agents/mega_lucario/strategy.py:368-371 (params block) ; consumer src/common/strategy/planner.py:836-863 (forgo-KO `deck-personality-reactivity` exemption, names mega_lucario)
-- status: open
+- status: applied
 - for: deck:mega_lucario
 
 **Spec (authoring spec — thin fodder, not finished code):**
@@ -38,7 +38,7 @@ score-diff must be byte-identical over the baseline; it is a truth-fix, not beha
 - candidate_signal: card_functions.json tags — Judge(1213) & Unfair Stamp(1080) now carry `shuffle_hand`
 - verification_contract: score-diff
 - provenance: src/agents/mega_lucario/STRATEGY.md §5 (line ~827 `attach-before-hand-shuffle` "Needs Judge tagged `discard_hand` (infra)") + §9 T9' (line ~1132 "Unfair Stamp `shuffle_hand` tag: ADD … pending the gate") ; current tags verified: card_functions.json 1213 & 1080 = ['draw','hand_disruption','shuffle_hand']
-- status: open
+- status: applied
 - for: deck:mega_lucario
 
 **Spec (authoring spec — thin fodder, not finished code):**
@@ -62,7 +62,7 @@ documents them as low-value, since even tagged, `dig-before-commit` won't fire o
 - candidate_signal: src/agents/mega_lucario/main.py (now `common.runtime.make_agent`, ADR-0055)
 - verification_contract: score-diff
 - provenance: src/agents/mega_lucario/STRATEGY.md §5b (line ~857 "main.py wiring | REFRESH | current contract: attack_stats + effects + Scout+artifact + briefs + posture + OwnCardModel…") ; current main.py = 5-line `make_agent(STRATEGY)` shell ; ADR-0055 (runtime owns the deployment profile)
-- status: open
+- status: applied
 - for: deck:mega_lucario
 
 **Spec (authoring spec — thin fodder, not finished code):**

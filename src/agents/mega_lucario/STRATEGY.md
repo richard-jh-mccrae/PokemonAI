@@ -824,7 +824,7 @@ prize-trade KO/gust. (Free Items first; Ultra Ball's discard pitches F as Aura J
 | general search (`dig-before-commit` at TO_HAND) | covers-as-is (+ watch) | — | **Team Rocket's Petrel** (`search`, Trainer tutor) — general search handles the PLAY + the fetch pick; the 1-of "which Trainer" value is Tactical, no deck rule (§8 ladder-watch) |
 | `gust-for-the-ko` / `gust-for-the-stall` | covers-as-is | — | **Boss's Orders (id 1182, `gust` tag, Supporter cardType)** — the shipped doctrine fires on it. **Heave-Ho** is the relaxed deck variant (§6) |
 | **`build-active-wincon`** | **covers-as-is (key)** | — | keeps attaching to the Active Mega until its **biggest** attack (Mega Brave, `maxDamageCost`=2) is online → **builds the Mega toward FF** without a deck rule. Matches `setup_energy_target=2` |
-| **`attach-before-hand-shuffle`** (−60) | **covers-as-is (key)** | — | attach your F **before** Lillie's/Judge (a `discard_hand` shuffle would pitch held energy). **Needs Judge tagged `discard_hand`** (infra) — Lillie's already is |
+| **`attach-before-hand-shuffle`** (−60) | **covers-as-is (key)** | — | attach your F **before** Lillie's/Judge (a `shuffle_hand` would pitch held energy). **Live**: Lillie's (1227), Judge (1213) **and** Unfair Stamp (1080) all now carry `shuffle_hand` in card_functions.json (2026-07-15 align) — the guard sees every hand-shuffle Supporter/Item |
 | **`keep-key-cards-at-discard`** (−30) | **covers-as-is** | — | at Ultra Ball's discard-2, won't pitch the **wincon**; spare F (not `discard_eot`, not wincon) is freely pitched as Aura Jab fuel — exactly our discard priority |
 | `play-energy-denial` | N/A | — | no `energy_denial` card (no Crushing Hammer) |
 | `deploy-hp-tool-on-breakpoint` | N/A | — | no +HP tools (Air Balloon is retreat-only; Belt removed) |
@@ -854,7 +854,7 @@ Disposition deltas that supersede §5/§6 entries:
 | *(new)* Cosmic Beam guard | **DECK rule** `dont-cosmic-beam-without-lunatone` (−60) | the compendium models the condition only as `damageMin=0` (lethal-safe) — scoring still prices printed 70; a 0-damage declaration without Lunatone is a hard misplay. Phantom-KO case (opp ≤70 HP) needs oracle-level condition modeling — deferred (§8) |
 | *(new)* Roles/params adoption | DECK declarations | `MEGA_LUCARIO_EX` += `accel_source` (Aura Jab is a bench-accelerator → `develop-the-accel-recipient` endorses benching the 2nd Riolu; `promote-the-accelerator-for-the-ko` applies); `params.preferred_start="first"` (go-first doctrine → general `honor-preferred-start`) |
 | Tool rules | covers-as-is (doctrine_tool, ADR-0028) | `deploy-hp-tool` is +HP-only → inert for Air Balloon (no `hpBonus`). **2026-07-03: Maximum Belt removed** — no ACE SPEC Tool now, so `protect-ace-spec-tool` is inert (the new ACE SPEC, Unfair Stamp, is an Item); Air Balloon is a plain retreat tool. Belt's +damage role → Black Belt's Training via the damage-boost model |
-| main.py wiring | REFRESH | current contract: `attack_stats` (compendium — without it the synth lacks Cosmic Beam's ignore-flags + Mega Brave's lock), `effects`, Scout+artifact, briefs, posture, `OwnCardModel` tracker + `own_prizes`; import path `common.strategy.general_strategy` |
+| main.py wiring | **owned by runtime (ADR-0055)** | — | `main.py` is now the 5-line shell `make_agent(STRATEGY)`; `common.runtime` PROFILE is the single source of the deployment profile / knowledge seams (attack_stats, effects, Scout+artifact, briefs, posture, `OwnCardModel`+`own_prizes`) / kill-switches, each resolved as `params.get(flag, PROFILE[flag])` — no per-deck enumeration, and omitting a seam is structurally impossible (pinned both ways by a test) |
 
 ## 6 · New deck Hypotheses (drafts — trigger sketches, NOT lambdas yet)
 
@@ -1125,12 +1125,12 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
   - **Wally's Compassion (1229):** covers-as-is — `clutch_heal` tag → `baseline_heal.py`
     (`hold-clutch-heal` +60 / `dont-waste-clutch-heal` −40), the doctrine literally built around it.
   - **Unfair Stamp (1080):** covers-as-is — `aceSpec` guarded at discard (`keep-key-cards-at-discard`),
-    `hand_disruption` read by `disrupt-the-hand-size-attacker`, engine-gated legality. Open: the
-    `shuffle_hand` tag gap (§8) — a general infra fix pending the gate.
+    `hand_disruption` read by `disrupt-the-hand-size-attacker`, engine-gated legality. `shuffle_hand` tag
+    now present (2026-07-15 align) — `hold-wincon-dont-shuffle` sees it.
   - **Team Rocket's Petrel (1219):** covers-as-is — general search at the TO_HAND select; the 1-of
     "which Trainer" pick left to Tactical (ladder-watch, §8). *(User sign-off 2026-07-03.)*
-  - **Unfair Stamp `shuffle_hand` tag:** ADD to card_functions.json (1080) so the shuffle-refresh guard
-    `hold-wincon-dont-shuffle` sees it. *(User sign-off 2026-07-03; general infra, score_diff-gated.)*
+  - **Unfair Stamp `shuffle_hand` tag:** ✅ DONE (2026-07-15 align) — card_functions.json (1080) now carries
+    `shuffle_hand`, so `hold-wincon-dont-shuffle` sees it. *(Verified: 1080 = ['draw','hand_disruption','shuffle_hand'].)*
   - **Meowth ex RE-MODEL (GENERAL — grilled 2026-07-03; "get it right, it's splashable").** The `tutor`
     Role misfired (see §3 Meowth). Build:
     1. **card_functions.json (1071):** `['search','stall']` → `['search','supporter_tutor']` (drop inert
