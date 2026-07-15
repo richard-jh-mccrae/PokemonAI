@@ -367,8 +367,10 @@ STRATEGY = Strategy(
                                          # (general `honor-preferred-start` reads this at the coin toss)
             "reactivity": "solitaire",   # deck-personality (learnthetcg): a linear evolution-beatdown
                                          # prioritises its OWN setup; don't over-play-around the opponent.
-                                         # Declared forward contract (behavior-neutral) — deck-gating the
-                                         # opponent-filtered seams to a consumer is an A/B follow-up.
+                                         # WIRED: `_forgo_ko` (planner.py:860) reads this — a solitaire
+                                         # deck skips the develop/END over-reaction lines and races its own
+                                         # plan (the line-1 alt-attack exemption keeps Aura Jab reachable).
+                                         # NB the rung is only reached when `forgo_ko` is ON (defaults OFF).
             "my_archetype": "Hariyama / Mega Lucario ex / Solrock"},  # Posture favorability key (ADR-0026)
     hypotheses=HYPOTHESES,
 )
