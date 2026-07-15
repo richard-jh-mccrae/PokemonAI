@@ -687,5 +687,20 @@
     "disposition": "covered",
     "reason": "redundant 2nd Solrock suppressed by applied dont-bench-a-redundant-engine-piece (mega_lucario strategy.py): f51 opt[2] 25->0, decide() [2]->[0] keeps the bench slot for the Makuhita line. See data/strategy/proposals/blunder-20260713-mega_lucario.md",
     "round": "2026-07-13"
+  },
+  "85785067-14": {
+    "disposition": "covered",
+    "reason": "CRITICAL 'dont switch out of a Solrock-active+Lunatone-benched setup': COVERED on the real shipped Pilot. retest_one decide()=[2]=End turn=correct (FIXED=True, margin 0->8). dont-play-switch-for-no-gain (-8) demotes Play Switch [0] + hold-position-in-setup (-25) demotes [1], so keeping Solrock Active wins. Stale on-disk open[] predates these rules (ledger last written 2026-07-13).",
+    "round": "20260715"
+  },
+  "85785606-1": {
+    "disposition": "covered",
+    "reason": "CRITICAL 'start attacking with Solrock, dont energy Riolu': COVERED (degenerate, chosen==correct==[0]) on the real Pilot. retest_one at the captured SetupActivePokemon frame decide()=[0]=Solrock=correct (FIXED=True) via start-solrock-over-lunatone (+12). The 'dont energy Riolu' intent is a separate attach decision (not this frame) already handled by attach-solrock-over-line-base + the general Active-arm rungs (arm-the-doomed-active on a live Cosmic Beam).",
+    "round": "20260715"
+  },
+  "85058051-4": {
+    "disposition": "covered",
+    "reason": "wasted_resource 'no plan to retreat solrock, waste (Air Balloon on Solrock)': the flagged waste is COVERED. retest_one: live chosen=[0] Attach Air Balloon->Solrock is demoted by hold-the-retreat-tool-with-no-retreat (-12) to score 8; real decide()=[2]=attach energy to arm Cosmic Beam (score 30) -- the 'attaching one energy to solrock was a good move' the human explicitly endorsed in the SAME rationale. Tagged correct=[1] Ultra Ball is a soft draw-engine card-economy preference the human relaxed; tune.py flags the correction contradictory (UNSATISFIED, 'not a weight'). No proposal.",
+    "round": "20260715"
   }
 }
