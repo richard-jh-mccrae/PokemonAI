@@ -47,6 +47,15 @@ _PLANNER_THREAT_W = 0.1        # per-point value of threat magnitude removed by 
 _PLANNER_THREAT_CAP = 100.0    # … capped, so a big threat still can't rival a prize
 _PLANNER_DEV_W = 1.0           # development left on my end-of-turn board (engine-rank phase: bodies
 _PLANNER_DEV_CAP = 100.0       # + attached Energy, `_board_development`) … capped below a prize
+_PLANNER_WINCON_DEV_W = 10.0   # per-body credit in `_board_development` for a WIN-CONDITION body
+                               # (role-gated) — splits prize-equal boards toward the one building the win
+_PLANNER_WINCON_ENERGY_W = 5.0 # extra per-Energy credit for Energy attached to a WIN-CONDITION body —
+                               # concentrating on the wincon line beats the same Energy wasted on junk
+_DEVELOP_PLAN_K = 3            # develop-rung Phase 1: how many ranked end-boards ride in `plan_candidates`
+_DEVELOP_STRONG_SCORE = 30.0  # develop rung gate: a greedy top score at/above this is a confident pick —
+                              # the tuned rules keep the turn (first-cut threshold, ladder-tunable)
+_DEVELOP_TIE_MARGIN = 5.0     # develop rung gate: a top-two score margin below this is "indifferent" —
+                              # greedy has no clear winner, so the rollout may break the tie
 _PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on MY cheapest Prize
                                # Path — sub-prize, ranks lines within the rung, never beats a prize
 _PLANNER_ENABLER_FREE = 8.0    # cheapest-enabler tier (ADR-0031): a FREE direct-evolve (evolved form
@@ -170,8 +179,10 @@ class PlannerMixin:
             line = self._best_gamble_line(obs, select, board, options, traces)   # deterministic goal
         if line is None:                              # Tier-6 escalation (ADR-0043): a close
             line = self._escalate(obs, select, board, options, traces)   # attack tie → depth-2 tree
-        self._turn_plan = (fp, line)
-        return line
+        if line is None and self.develop_rollout and self._develop_should_fire(traces):
+            line = self._develop_rollout_line(obs, select, board, options, traces)   # develop-rung Phase 1:
+        self._turn_plan = (fp, line)                  # the deferred bottom rung — a within-turn rollout on
+        return line                                   # a setup turn where greedy is weak/indifferent
 
     def _closed_form_plan(self, obs, select, board, options, traces) -> TurnLine | None:
         """The single closed-form Goal-Ladder verdict (no engine) — the mid-sim / switch-off pick:
@@ -233,6 +244,86 @@ class PlannerMixin:
         return replace(best, value=best_val,
                        ranked_by=("engine" if engine_valued else "closed"),
                        diverged=(best is not closed_best))
+
+    # ═══ THE DEVELOP RUNG (develop-rung Phase 1) — the deferred bottom rung ═══════════════════════
+    # Fires only when every higher rung returned None (no KO/gamble/escalate to aim at) — the
+    # setup/development turns that fell to greedy. A within-MY-turn rollout: sim each candidate first
+    # action to its end-of-turn board and commit the highest leaf. No opponent model (the safe half —
+    # the regressed escalation was the two-ply OPPONENT tree). Gated behind `develop_rollout`, OFF by
+    # default; when off `plan_turn` never calls it and the record stays byte-identical.
+
+    def _develop_should_fire(self, traces) -> bool:
+        """The augment-not-override gate: True only where greedy has no confident pick, so the rung
+        can only help. Fires when the top score is weak (``< _DEVELOP_STRONG_SCORE``) OR the top two
+        are near-tied (``margin < _DEVELOP_TIE_MARGIN``); a decisive greedy pick keeps the turn. Thresholds
+        are a first cut — Phase-2 ladder A/B widens the rung's authority as it proves out."""
+        if not traces:
+            return True
+        scores = sorted((t.score for t in traces), reverse=True)
+        top = scores[0]
+        margin = top - scores[1] if len(scores) > 1 else top
+        return top < _DEVELOP_STRONG_SCORE or margin < _DEVELOP_TIE_MARGIN
+
+    def _develop_rollout_line(self, obs, select, board, options, traces) -> TurnLine | None:
+        """Commit the develop turn's best end-of-MY-turn board as a ``goal="develop"`` line, or None.
+
+        Rolls out every candidate first action through the engine sim (``_engine_leaf_value`` re-runs
+        my policy to end-of-turn) and commits the highest-leaf option. Defers (None) when NO candidate
+        can be simmed — nothing to rank, so the tuned scoring keeps the turn rather than a blind pick.
+        Stashes the full ranking on ``_develop_candidates_pending`` for the sparse ``plan_candidates``
+        telemetry (top-K sorted desc, committed + greedy flagged), so a correction reader sees what the
+        rung out-scored. ``diverged`` marks an override of greedy's argmax — the key A/B signal."""
+        self._develop_candidates_pending = None
+        if not options:
+            return None
+        greedy_idx = max(range(len(traces)), key=lambda i: traces[i].score) if traces else 0
+        ranked = []
+        for i in range(len(options)):
+            self._planning = True                        # per-sim reentrancy guard (never nest a search)
+            try:
+                val = self._engine_leaf_value(obs, [i])
+            except Exception:
+                val = None                               # a failed fork never crashes the decision
+            finally:
+                self._planning = False
+            if val is not None:
+                ranked.append((val, i))
+        if not ranked:
+            return None                                  # nothing simmable — defer to the tuned scoring
+        ranked.sort(key=lambda t: t[0], reverse=True)
+        best_val, best_i = ranked[0]
+        if best_val >= KO_SCORE:
+            return None                                  # a KO_SCORE-class leaf is an UNSOUND rollout-win
+                                                         # (heuristic sim: auto coins, predicted opponent
+                                                         # zones). Sound wins are the win rung's job — it
+                                                         # ran first and declined — so the develop rung
+                                                         # never commits on a phantom win; defer (ml f24).
+        self._develop_candidates_pending = self._develop_candidates_record(
+            ranked, best_i, greedy_idx, traces)
+        return TurnLine(next_step=[best_i], goal="develop", value=best_val,
+                        rationale="develop: best end-of-turn board by rollout",
+                        ranked_by="engine", diverged=(best_i != greedy_idx))
+
+    def _develop_candidates_record(self, ranked, best_i, greedy_idx, traces) -> list:
+        """The develop rung's ``plan_candidates``: the top-K ranked end-boards (sorted desc) it already
+        computed to pick. The greedy pick is always included — appended if it fell outside the top-K —
+        so an override's value gap is always readable; the committed + greedy picks carry their flags."""
+        top = list(ranked[:_DEVELOP_PLAN_K])
+        if all(i != greedy_idx for _, i in top):
+            gv = next((v for v, i in ranked if i == greedy_idx), None)
+            if gv is not None:
+                top.append((gv, greedy_idx))
+        out = []
+        for val, i in top:
+            cid = traces[i].card_id if 0 <= i < len(traces) else None
+            c = {"step": [i], "value": val,
+                 "why": f"develop rollout (card {cid})" if cid else "develop rollout"}
+            if i == best_i:
+                c["committed"] = True
+            if i == greedy_idx:
+                c["greedy"] = True
+            out.append(c)
+        return out
 
     # ═══ THE WIN RUNG — the Lethal Solver (ADR-0030/0037): sound, engine-verified, preempts all ═══
     # Everything in this section is SOUND by construction: min-bound damage floors, worst-case
@@ -2038,15 +2129,19 @@ class PlannerMixin:
         except Exception:
             return 0.0                                   # a featurize/predict slip never crashes ranking
 
-    @staticmethod
-    def _board_development(me: dict) -> float:
+    def _board_development(self, me: dict) -> float:
         """The development left on MY simmed end-of-turn board — the `_PLANNER_DEV_W` term's input
         (ADR-0031 decision 4, exercised from the engine-rank phase): bodies in play plus the Energy
-        attached to them. A coarse, engine-readable progress measure that splits prize-equal lines
-        toward the one that leaves the stronger board (e.g. a line that spent nothing over one that
-        stripped the Bench); `_leaf_value` caps its contribution below a prize."""
+        attached to them, PLUS a per-body credit for a WIN-CONDITION body (role-gated `_wincon_set`).
+        A coarse, engine-readable progress measure that splits prize-equal lines toward the one that
+        leaves the stronger board — a line that builds toward the win over one that only stacks junk
+        (develop-rung Phase 0); `_leaf_value` caps its contribution below a prize."""
         bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
-        return 10.0 * len(bodies) + 5.0 * sum(len(p.get("energies") or []) for p in bodies)
+        wincon = self._wincon_set()
+        on_wincon = [p for p in bodies if p.get("id") in wincon]
+        return (10.0 * len(bodies) + 5.0 * sum(len(p.get("energies") or []) for p in bodies)
+                + _PLANNER_WINCON_DEV_W * len(on_wincon)
+                + _PLANNER_WINCON_ENERGY_W * sum(len(p.get("energies") or []) for p in on_wincon))
 
     def _simulate_line(self, obs, first_step, max_steps: int = 40, *, opponent_reply: bool = False):
         """Forward-simulate a candidate line through the Engine Search to my end-of-turn board (the

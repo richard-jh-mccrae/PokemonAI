@@ -102,6 +102,10 @@ class Correction:
                                     # number (turn), or None (match). THE identity, not `frame`.
     span: list[dict] | None = None  # the Decisions the Scope covers. turn: per-Decision obs +
                                     # live_trace (re-drivable). match: per-Turn headers + game_plan.
+    turn_plan: dict | None = None   # develop-rung Phase 3 (turn scope): the human's ideal-line note —
+                                    # {intended_line, expected_end_board}. Sparse (None off turn-plan
+                                    # tags), so legacy records are unchanged. `leans_on_rule` is NOT
+                                    # stored — blunder-buster derives it from live_trace `opts[correct].fired`
 
     @property
     def is_critical(self) -> bool:
@@ -151,6 +155,7 @@ def build_correction(
     posture_mismatch: bool = False,
     scope: str = "decision",
     span: list[dict] | None = None,
+    turn_plan: dict | None = None,
 ) -> Correction:
     """Validate and assemble a Correction from a tagged Decision (the **Anchor**).
 
@@ -207,4 +212,5 @@ def build_correction(
         scope=scope,
         subject=subject_of(scope, decision.snapshot()),
         span=span,
+        turn_plan=turn_plan,
     )

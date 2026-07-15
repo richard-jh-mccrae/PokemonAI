@@ -75,6 +75,15 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         rec["planned"]["ranked"] = ranked         # ran (`planner_engine_rank`) — how the committed
         rec["planned"]["diverged"] = bool(getattr(planned, "diverged", False))   # line was valued +
                                                   # whether it beat the closed-form pick (A/B signal)
+    if planned is not None and planned.goal == "develop":     # develop-rung Phase 1: the pick turns on
+        rec["planned"]["value"] = round(planned.value, 3)     # this leaf value — a correction that
+                                                  # disagrees is a claim about the LEAF, unreadable without
+                                                  # it. Keyed on goal=="develop" so other planned records
+                                                  # stay byte-identical.
+    plan_candidates = getattr(decision, "plan_candidates", None)
+    if plan_candidates is not None:               # sparse: the develop rung's ranked end-boards (top-K,
+        rec["plan_candidates"] = plan_candidates  # sorted desc, committed/greedy flagged) — free to emit
+                                                  # (the rung already valued every candidate to pick)
     objectives = getattr(decision, "objectives", None)
     if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)
         rec["objectives"] = objectives            # — race delta + both cheapest-path turns

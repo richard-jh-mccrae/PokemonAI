@@ -64,6 +64,11 @@ PROFILE = {
                                     # (Item-tutor / Rare-Candy → evolve → energy → KO; min-bound, sub-prize)
     "play_accel_lethal": True,      # armed-ON 2026-07-14 ladder-testing: count a play-based accelerator
                                     # (Crispin) as +1 attach in the KO budget; min-bound
+    "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): the within-turn
+                                    # rollout rung — cost-measured affordable + crash-safe (60 games, 0
+                                    # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off
+                                    # submission. Kill-switch if its ladder value is weak. Needs the live
+                                    # search token, so it no-ops (defers) on offline correction retests
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
