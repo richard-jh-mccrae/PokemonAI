@@ -19,7 +19,7 @@ One `## ` entry per proposal, with a fenced field block, then the free-text spec
 ## <short-proposal-title>
 - id: <stable-slug>                     # unique within the queue
 - source: strategy-ingest | blunder-buster | deck-genie | matchup-genie | deck-align
-- target_layer: general-hypothesis | deck-strategy | matchup-brief | planner-code
+- target_layer: general-hypothesis | deck-strategy | matchup-brief | planner-code | rule-retirement
 - candidate_signal: <Function Tag / CardStat / board-or-Context field / "needs a new signal">
 - verification_contract: verifier | score-diff | brief-validator | seed-ladder
 - provenance: <link to source doc + locator, e.g. data/strategy/<digest>.md#unfair-stamp / correction 83661652:f3>
@@ -36,6 +36,14 @@ WHY it wins; the concrete trigger/weight are resolved at apply time, not pre-bak
 - **`target_layer` picks the authoring path and (with `verification_contract`) the gate.** The producer
   decides it — it knows whether its finding is a general rule, deck rule, opponent Brief field, or a
   Planner-code change.
+- **`rule-retirement` is the one REMOVAL layer** (develop-rung Phase 3, blunder-buster): remove (or, for
+  a rule that also fires on KO/lethal turns, *demote* — narrow the `when()`) a scoring Hypothesis the
+  develop rollout rung subsumes. `update-strategy` deletes the Hypothesis definition + its `tuned.json`
+  weight and ledgers it. `verification_contract: seed-ladder` — proof is the **batched R-off ladder run**
+  (`docs/plans/phase3-tooling.md`): candidates' weights are zeroed in ONE committed build, submitted, and
+  a neutral-or-positive ladder delta confirms the batch (a regression bisects). The `spec` names the rule
+  id, its charter (why it's inside the rung's within-turn-development mandate), and the corroboration
+  count; it must NOT be applied before its R-off ladder run returns.
 - **`verification_contract` is chosen by the finding's nature, not the layer alone:**
   - `verifier` — the finding has a **state fixture / correction** to re-measure against (blunder-buster).
   - `score-diff` — a deck rule / fold that must stay score-neutral (ADR-0034).

@@ -1,7 +1,8 @@
 # Phase 3 tooling — turn-planner corrections → rule retirement
 
-**Status: DESIGNED 2026-07-15; capture half BUILT 2026-07-15 (test-first); consume/proof half specced,
-waits for the Phase-2 armed-ON dataset.** Phase 3 of the develop rung
+**Status: DESIGNED + capture + consume BUILT 2026-07-15 (test-first). First armed-ON batch (4 dragapult
+turn_plan corrections) classified — see "First batch" below. Proof loop (batched R-off ladder) is
+maintainer-run.** Phase 3 of the develop rung
 ([turn-planner-develop-rung.md](turn-planner-develop-rung.md)): retire the per-frame whack-a-mole
 scoring rules the develop rollout rung has proven it subsumes. This doc is the grilled design for the
 two tools that drive it: the correction-tagging capture (`tools/train/blunder_correction.py` + shell)
@@ -41,7 +42,24 @@ and the `blunder-buster` consumption skill.
   the embedded live trace and shows *"your pick currently fires: [rules]"*. Derived at consume-time from
   `fired`, never stored (so it can't drift).
 
-## Consume — `blunder-buster` (ask #2) — SPECCED, built after Phase 2 ladders
+## First batch (2026-07-15) — what the consumer found
+
+4 `turn_plan` corrections (all dragapult_ex), classified by `develop_batch_report`:
+`{leaf-misrank: 1, rung-inactive: 1, no-prescription: 2}`, **retire_corroboration: `{}` (zero
+retirements)**, capability_gaps: 1. The one rung-fired case (`ep86090164`, `correct=[0]`) is the rung
+**overriding a correct greedy pick** (committed a supporter at leaf 65 over the human's attach at 50) on
+a **cross-turn** board ("save Lillie's — evolve Dunsparce *next turn*") — the within-turn leaf can't see
+that horizon. Verdict: **capability-gap + gate concern (`overrode_greedy: true`)**, not retirement fodder.
+The honest first-batch signal: refine the leaf/gate (and the augment-not-override threshold) before
+retiring anything; the rung's first ladder outing shows it can over-fire on cross-turn setups.
+
+## Consume — `blunder-buster` (ask #2) — BUILT 2026-07-15 (test-first)
+
+Code: `tools/train/tuner/develop.py` — `classify_develop_correction` (per-correction verdict) +
+`develop_batch_report` (aggregate: counts, `retire_corroboration` by rule, `leaf_tune`,
+`capability_gaps`); wired onto `ProposedHypothesis.develop_class`. Skill: `references/routing.md`
+develop-rung rulebook; `strategy_proposal_contract.md` gains the `rule-retirement` target_layer.
+Design (unchanged):
 
 - **New routing branch:** `scope: turn` + `turn_plan` present → read `live_trace.plan_candidates` and
   classify: committed == `correct` → **rung-right**; `correct` present, lower value → **leaf mis-rank**
