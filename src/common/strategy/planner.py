@@ -23,8 +23,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _BASIC_ENERGY, _BENCH, _COIN_HEAD, _END,
-                                     _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY, _TO_HAND, KO_SCORE)
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
+                                     _COIN_HEAD, _END, _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY,
+                                     _TO_HAND, KO_SCORE)
 
 
 def _prune_none(v):
@@ -123,6 +124,75 @@ _DISRUPT_TAGS = frozenset({"gust", "switch", "heal", "hand_disruption", "energy_
                                # / hand + energy denial — the replies opponent-static tiers can't see
 _PRIZE_AREA = 6                # AreaType.PRIZE — a hidden-zone pick: the sim's ids are predictions,
                                # so a recorded prize pick is policy-driven at replay (ADR-0037 stage 3)
+
+# ═══ READINESS LEAF + SPEND ACCOUNT (board-state-valuation-grill.md / t0-planner-disposition.md,
+#     decided 2026-07-16) ═════════════════════════════════════════════════════════════════════════
+# The MY-side "how close am I to executing my win" positional term — a P(win) proxy over my board,
+# REPLACING `_board_development`'s coarse `10·bodies + 5·energy` inside `_engine_leaf_value`. Gated-
+# additive: every term capped so Σ readiness < one prize (KO_SCORE), preserving the hard-rung invariant
+# (a positional board never outranks a real prize). The opponent is NOT modelled here (the survival term
+# + the later 2-ply own that). The measured problem it fixes: full within-turn search reaches ~36 distinct
+# end-boards but the old leaf collapsed them to ~5 values (SOLE-top ~5%). See the grill spec.
+_READINESS_CAP = 300.0        # Σ readiness ceiling — the dominant positional term, but < KO_SCORE.
+                              # Max positional stack (readiness 300 + survival 50 + threat 100 +
+                              # value 40) = 490 < 1000 = KO_SCORE — no positional board outranks a prize.
+_READINESS_BODY_CAP = 120.0   # per-body contribution cap — one fully-loaded attacker can't dominate the
+                              # sum (a 2nd attacker / the engine stays legible in the total).
+_READINESS_FLOOR = 8.0        # a bench exists — a small BINARY safety credit (a KO doesn't lose the game
+                              # outright); dwarfed by any real contribution, so it only breaks a
+                              # bench-empty vs bench-present tie.
+_READINESS_BENCH_DISCOUNT = 0.45   # v1 FLAT bench position weight for attack readiness (Active = 1.0).
+                              # The mobility lift toward 1.0 (retreat-ease, a switch in hand) is v2 — it
+                              # needs the hand visibility the sim's end-obs doesn't expose cleanly.
+_READINESS_ATTACK_W = 0.45    # damage → readiness scale (Mega Brave 270 × 0.45 = 121 → body cap 120; a
+                              # 70 chip → 31): keeps attack readiness the dominant, legible term.
+_READINESS_EVOLVE_HOP = 0.6   # per-hop discount for an attack reachable only after evolving (v1 coarse: a
+                              # flat discount per evolution still owed; v2 sharpens with deck-odds).
+_READINESS_SATURATED = 0.1    # a 2nd in-play body filling a UTILITY/ENGINE role already filled contributes
+                              # ~this (a 2nd Lunatone is fodder — "we only ever need one"); ATTACKERS are
+                              # never saturated (a 2nd attacker advances the prize race).
+_READINESS_ABILITY_VALUE = {  # value of a body's best FIREABLE setup ability, by behavioral Function Tag
+    "energy_accel": 55.0,     # (card_functions.json) — draw/accel/dig/tutor abilities are a FIRST-CLASS
+    "draw": 45.0,             # contribution in these ability-centric setup decks (Lunatone draw-3,
+    "dig": 45.0,              # Drakloak Recon), CO-EQUAL with an attack. A body with an `engine`/
+    "search": 40.0,           # `accel_source` Role but no matching tag gets `_READINESS_ENGINE_ABILITY`.
+    "tutor_energy": 35.0, "tutor_pokemon": 35.0, "tutor_mega": 35.0,
+    "supporter_tutor": 30.0, "recycle": 25.0, "stall": 20.0,
+}
+_READINESS_ENGINE_ABILITY = 45.0   # fallback ability value for an `engine`/`accel_source`-Role body whose
+                              # ability the Function Tags miss (Lunatone's Lunar Cycle draw is
+                              # role-declared, untagged — verified: card_functions.json has no id 675).
+_LINE_CAP = 100.0             # the line account's POSITIVE contribution is capped here so the hard-rung
+                              # invariant holds strictly: max positional (readiness 300 + survival 50 +
+                              # threat 100 + value 40 + line 100) = 590 < 1000 = KO_SCORE, so no path term
+                              # can lift a positional board over a real prize. The NEGATIVE side (a spend
+                              # penalty) is uncapped — it only ever LOWERS a value, never inverts a prize.
+_CLASS_B_SPEND_IDS = frozenset({   # the "spend account" rules (t0-planner-disposition.md Decision 1): a
+    # NEGATIVE tuned weight whose referent is the SPEND of a scarce resource (a wasted Ultra Ball /
+    # `discard_eot` Energy / the one-per-turn Supporter slot / a held gust/heal) — invisible on the end
+    # board (spent cards don't show; hand hidden) and legitimately additive along the line (pure spends
+    # don't double-count state). REUSED from the live tuned weight set (`OptionTrace.fired`), never
+    # re-derived. `turn_value = readiness(end) − Σ spend_costs(line)`.
+    "dont-waste-discard-energy", "conserve-discard-energy-prefer-basic", "conserve-burst-when-no-ko",
+    "dont-attach-discard-energy-turn1", "prefer-reusable-over-burst", "dont-waste-clutch-heal",
+    "dont-rush-evolve-without-target", "dont-play-switch-for-no-gain",
+    "dont-play-damage-boost-when-cant-attack", "dont-spend-unneeded-supporter",
+    "hold-wincon-dont-shuffle", "hold-line-piece", "hold-wincon-with-base", "hold-successor-when-doomed",
+    "dont-refresh-into-a-probable-miss", "hold-the-retreat-tool-with-no-retreat",
+    "save-tool-for-the-attacker", "hold-irreplaceable-tool", "protect-ace-spec-tool",
+    "dont-lunar-cycle-away-the-last-attachable-f", "dont-search-an-empty-deck",
+    "dont-search-a-probable-whiff", "keep-key-cards",
+})
+_ABILITY_FIRE_IDS = frozenset({    # the "ability-readiness co-equal — fire it = value" rules
+    # (t0-planner-disposition.md class A): a POSITIVE tuned weight whose referent is the ACTION of USING a
+    # beneficial setup Ability (draw/dig/accel) — Lunatone's Lunar Cycle draw-3, Drakloak's Recon Directive.
+    # Its value (the CARDS drawn) is a future resource the end board can't show; the greedy continuation
+    # converges the boards, so the leaf can't see the draw. Credited POSITIVELY along the simmed line
+    # (symmetric to the spend account), REUSED from the live tuned weight set — never re-derived.
+    "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f", "use-the-draw-engine-ability",
+    "advance-the-accel-pieces", "use-acceleration", "bench-the-comeback-drawer",
+    "feed-the-firing-accelerator",
+})
 
 
 @dataclass
@@ -2031,19 +2101,26 @@ class PlannerMixin:
 
     # ---- leaf evaluation (ADR-0031 decision 4): scalar over the resulting end-of-turn board ---------
     def _leaf_value(self, *, prizes: float, active_survives: bool, threat_removed: float = 0.0,
-                    development: float = 0.0, value: float = 0.0) -> float:
+                    development: float = 0.0, value: float = 0.0, readiness: float = 0.0,
+                    line: float = 0.0) -> float:
         """The leaf-eval scalar over a resulting board: prizes taken (dominant, KO_SCORE-weighted) +
-        the threat removed + my Active's survival vs Incoming + the development left on my board
-        (engine-rank phase input, `_board_development`; 0 for closed-form candidates) + the Base
-        Automatic Value Model's re-centred P(win) (``value ∈ [-0.5, 0.5]``, Tier-5/ADR-0042; 0 when off/absent).
-        EVERY positional term is capped, and their capped sum stays below one prize, so a bigger KO
-        always ranks first — a positional score can NEVER outrank a real prize (the hard-rung
-        invariant, ADR-0031 decision 3). The learned term REFINES; it never overrides a sound rung."""
+        the threat removed + my Active's survival vs Incoming + MY-side ``readiness`` (the board-state
+        value function, `_readiness`; 0 for closed-form candidates) + the signed ``line`` account (the path
+        term of `turn_value = readiness(end) + Σ ability-fire credits − Σ spend costs`, `_line_account`;
+        0 off the engine-sim path) + the Base Automatic Value Model's re-centred P(win) (``value ∈ [-0.5,
+        0.5]``, Tier-5/ADR-0042; 0 when off/absent). The legacy ``development`` term (`_board_development`)
+        is retained for back-compat (default 0) — the engine-sim leaf now feeds ``readiness`` instead. EVERY
+        positional term is capped and their capped sum stays below one prize, so a bigger KO always ranks
+        first — a positional score can NEVER outrank a real prize (the hard-rung invariant, ADR-0031
+        decision 3). The learned term REFINES; it never overrides a sound rung. ``line`` is a pure path
+        term (additive, no state double-count — its referent is the ACTION taken, not the resulting board)."""
         return (KO_SCORE * prizes
                 + min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)
                 + (_PLANNER_SURVIVAL_W if active_survives else 0.0)
                 + min(_PLANNER_DEV_CAP, _PLANNER_DEV_W * development)
-                + _PLANNER_VALUE_W * value)
+                + min(_READINESS_CAP, readiness)
+                + _PLANNER_VALUE_W * value
+                + min(_LINE_CAP, line))
 
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
         """True if my body (``my_id`` at ``my_hp``) survives the opponent's Incoming AFTER I KO their
@@ -2094,16 +2171,20 @@ class PlannerMixin:
         return players[oi] if 0 <= oi < len(players) and players[oi] else {}
 
     # ---- Tier-1 Engine Search (ADR-0031 phase 3): simulate a line to its end-of-turn board -----------
-    def _engine_leaf_value(self, obs, first_step) -> float | None:
+    def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True) -> float | None:
         """The leaf-eval value of a candidate line computed on its ENGINE-SIMULATED end-of-turn board
         (ADR-0031 phase 3): the exact prizes taken and my Active's survival vs Incoming, read off the
-        board the simulator produces rather than closed-form-approximated. A line that finishes the game
-        in my favour scores above any prize count (dominant). None when the search is unavailable — the
-        caller then keeps the closed-form leaf value (never crashes, decision 7)."""
+        board the simulator produces rather than closed-form-approximated, PLUS the MY-side ``readiness``
+        of that board (the board-state value function, `_readiness`) + the signed line account (Σ
+        ability-fire credits − Σ spend costs accrued along the simmed line) — ``turn_value = readiness(end)
+        + Σ ability-fire − Σ spend``. A line that finishes the game in my favour scores above any prize
+        count (dominant). None when the search is unavailable — the caller then keeps the closed-form leaf
+        value (never crashes, decision 7). ``spend_account=False`` drops the line term (a pure-readiness
+        terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on)."""
         sim = self._simulate_line(obs, first_step)
         if sim is None:
             return None
-        end, my_index, start_prizes, result = sim
+        end, my_index, start_prizes, result, line_val = sim
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
@@ -2116,8 +2197,9 @@ class PlannerMixin:
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
         return self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                development=self._board_development(me),
-                                value=self._value_term(end))    # Tier-5 learned leaf (ADR-0042)
+                                readiness=self._readiness(me),
+                                value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
+                                line=(line_val if spend_account else 0.0))
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
@@ -2190,6 +2272,204 @@ class PlannerMixin:
                 dev += _PLANNER_PLAN_DEV_W + _PLANNER_PLAN_ENERGY_W * energy
         return dev
 
+    # ---- Readiness leaf (board-state-valuation-grill.md, decided 2026-07-16) ------------------------
+    def _readiness(self, me: dict) -> float:
+        """MY-side readiness — a P(win) proxy over my simmed end-of-turn board: ``Σ_bodies
+        contribution_readiness(b) + floor``, every term capped so the sum stays below one prize
+        (``< KO_SCORE``), REPLACING `_board_development`'s coarse body/energy count inside
+        `_engine_leaf_value`. Its whole job is the measured 36→5 granularity gap: the search reaches ~36
+        distinct end-boards; this tells them apart.
+
+        ``contribution_readiness(b) = max(attack_readiness, ability_readiness) × saturation`` — attack and
+        ability are CO-EQUAL (setup in these decks is ability-driven: Lunatone draw-3, Drakloak Recon). The
+        opponent is NOT modelled here (survival + the 2-ply own that). Pure over the simmed `me` dict + the
+        fixed Strategy/stats; `_leaf_value` caps the returned scalar below a prize."""
+        active = [p for p in (me.get("active") or []) if p]
+        bench = [p for p in (me.get("bench") or []) if p]
+        total = 0.0
+        seen_utility: set = set()          # per-board saturation bookkeeping (role-keyed, mutated below)
+        for is_active, body in ([(True, b) for b in active] + [(False, b) for b in bench]):
+            attack = self._attack_readiness(body, me, is_active=is_active)
+            ability = self._ability_readiness(body, me, is_active=is_active)
+            contribution = max(attack, ability) * self._readiness_saturation(body, seen_utility)
+            total += min(_READINESS_BODY_CAP, contribution)
+        if bench:
+            total += _READINESS_FLOOR      # a bench exists — a KO doesn't lose the game outright
+        return min(_READINESS_CAP, total)
+
+    def _readiness_saturation(self, body: dict, seen_utility: set) -> float:
+        """1.0 for an attacker / Line body (always accumulates — a 2nd attacker advances the prize race);
+        `_READINESS_SATURATED` for a 2nd in-play body of the SAME utility/engine card (a 2nd Lunatone is
+        fodder — "we only ever need one Solrock and one Lunatone"). Role-keyed via `_is_utility_body` +
+        card id, never a global body-count penalty. Mutates ``seen_utility`` (the caller's per-board set)."""
+        cid = body.get("id")
+        if cid is None or not self._is_utility_body(cid):
+            return 1.0
+        if cid in seen_utility:
+            return _READINESS_SATURATED
+        seen_utility.add(cid)
+        return 1.0
+
+    def _attack_readiness(self, body: dict, me: dict, *, is_active: bool) -> float:
+        """``position_w × progress × value`` over the body's BEST reachable attack (its own OR a reachable
+        evolution's), and **0 when it has none** — THE gate that kills "energy anywhere" (a body with no
+        reachable attack scores nothing on this term). ``progress = payable (type-aware) energy / cost``
+        ∈ [0,1] — off-type energy earns nothing; ``value`` = the attack's damage; an evolution's attack is
+        hop-discounted and gated on the evolution being available (v1 coarse: anywhere in my deck+hand+play).
+        ``position_w`` = 1.0 Active, a flat bench discount otherwise (the v2 mobility lift needs the hand)."""
+        cid = body.get("id")
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not stat:
+            return 0.0
+        best = self._best_reachable_attack(body, stat, me)
+        if best is None:
+            return 0.0
+        progress, damage, hops = best
+        if progress <= 0.0 or damage <= 0:
+            return 0.0
+        pos = 1.0 if is_active else _READINESS_BENCH_DISCOUNT
+        return pos * progress * (damage * _READINESS_ATTACK_W) * (_READINESS_EVOLVE_HOP ** hops)
+
+    def _best_reachable_attack(self, body: dict, stat, me: dict):
+        """The body's best ``(progress, damage, hops)`` reachable attack — the one maximising
+        ``progress × damage × hop_discount``: its OWN attacks (hops 0) plus the attacks of a REACHABLE
+        evolution (a forward-line form DEPLOYABLE this turn — in my hand or already in play). Energy carries
+        through evolution, so an evolution's attack is scored on the BODY's currently-attached energy
+        (type-aware). A **weak win-condition pre-evo** (Riolu: own 30 chip ≤ ½ the Mega Lucario it becomes)
+        contributes ONLY its reachable PAYOFF's attack — its own throwaway chip is not "progress toward MY
+        win", so with the payoff undeployable it scores 0 (the attach's ~0 readiness gain, scenario 1).
+        None when no damaging attack is reachable."""
+        weak_preevo = self._active_is_weak_preevo(body)
+        candidates = [] if weak_preevo else [(aid, 0) for aid in (stat.attacks or ())]
+        for eid in self._reachable_forward_ids(body.get("id"), me):
+            estat = self.stats.get(eid) if self.stats else None
+            if estat:
+                candidates += [(aid, 1) for aid in (estat.attacks or ())]   # v1: flat 1-hop discount
+        best = None
+        for aid, hops in candidates:
+            ast = self.combat.attack_stat(aid)
+            if ast is None:
+                continue
+            damage = getattr(ast, "damage", 0) or 0
+            if damage <= 0:
+                continue
+            cost = getattr(ast, "cost", 0) or 0
+            progress = 1.0 if cost <= 0 else self._payable_energy(body, ast) / cost
+            score = progress * damage * (_READINESS_EVOLVE_HOP ** hops)
+            if best is None or score > best[0]:
+                best = (score, progress, damage, hops)
+        return None if best is None else (best[1], best[2], best[3])
+
+    def _reachable_forward_ids(self, cid, me: dict) -> set:
+        """Forward-line evolution ids of ``cid`` DEPLOYABLE this turn — a forward form in my HAND or
+        already in PLAY (the sim's end-obs hides deck CONTENTS, only `deckCount`, so a form buried in the
+        deck is not creditable as "reachable" without drawing it; the full-decklist proxy would make the
+        gate vacuous — every line-evolution always "reachable" — which is exactly the over-credit that
+        buried scenario 1). v2 sharpens to within-frame deck-odds (hypergeometric-fetch-closure.md)."""
+        fwd = self._forward_card_ids(cid) if cid is not None else frozenset()
+        if not fwd:
+            return set()
+        zones = (me.get("active") or []) + (me.get("bench") or []) + (me.get("hand") or [])
+        available = {c.get("id") for c in zones if c}
+        return {e for e in fwd if e in available}
+
+    def _payable_energy(self, body: dict, ast) -> int:
+        """How many of an attack's cost slots the body's ATTACHED energy can currently pay, TYPE-aware:
+        each specific-type slot needs a matching typed Basic; colourless slots take any leftover energy;
+        off-type energy pays nothing toward a specific slot (a wrong-colour attach earns no progress). The
+        type-aware numerator of `progress`. Untyped cost (no `energyTypes`) counts every attached energy."""
+        types = list(getattr(ast, "energyTypes", ()) or ())
+        energies = body.get("energies") or []
+        if not types:
+            return len(energies)
+        from collections import Counter
+        attached = self.combat.attached_type_counts(body)        # typed Basics {type: count}
+        pool = dict(attached)
+        need = Counter(t for t in types if t not in (0, None))
+        colorless = sum(1 for t in types if t in (0, None))
+        untyped = len(energies) - sum(attached.values())         # special/colourless attached
+        paid = 0
+        for t, n in need.items():
+            use = min(n, pool.get(t, 0))
+            paid += use
+            pool[t] = pool.get(t, 0) - use
+        leftover = untyped + sum(max(0, v) for v in pool.values())
+        paid += min(colorless, leftover)
+        return paid
+
+    def _ability_readiness(self, body: dict, me: dict, *, is_active: bool) -> float:
+        """``value(best FIREABLE setup ability: draw/accel/dig/tutor)``, **0 when nothing is fireable** —
+        CO-EQUAL with attack_readiness (setup in these decks is ability-driven). PRECONDITION-gated: the
+        body HAS an Ability (card data `hasAbility`), a draw/accel value (Function Tag OR an `engine`/
+        `accel_source` Role the tags miss — Lunatone's Lunar Cycle is role-declared, untagged), and any
+        co-dependent partner is in play (Lunatone needs Solrock). NO bench discount — abilities fire from
+        the Bench (Solrock-active / Lunatone-benched is the ideal board). v1 coarse: the fine fuel-in-hand
+        / already-spent-this-turn gates are deferred (the end board doesn't expose 'ability used this turn';
+        the spend account penalises the fuel cost separately when the tuned rule fires along the line)."""
+        cid = body.get("id")
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not (stat and getattr(stat, "hasAbility", False)):
+            return 0.0
+        value = self._ability_value(cid)
+        if value <= 0.0:
+            return 0.0
+        if not self._ability_precondition_met(cid, me):
+            return 0.0
+        return value
+
+    def _ability_value(self, cid) -> float:
+        """The readiness value of a body's setup ability: the max over its Function Tags in
+        `_READINESS_ABILITY_VALUE` (draw/accel/dig/tutor), else `_READINESS_ENGINE_ABILITY` for an
+        `engine`/`accel_source`-Role body whose ability the tags miss (Lunatone). 0 for a body whose only
+        Ability isn't a setup engine (an attack-support / defensive Ability earns no setup readiness)."""
+        tags = set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
+        tagged = max((_READINESS_ABILITY_VALUE[t] for t in tags if t in _READINESS_ABILITY_VALUE),
+                     default=0.0)
+        if tagged > 0.0:
+            return tagged
+        roles = set(self.strategy.roles.get(cid, [])) if cid is not None else set()
+        return _READINESS_ENGINE_ABILITY if ({"engine", "accel_source"} & roles) else 0.0
+
+    def _ability_precondition_met(self, cid, me: dict) -> bool:
+        """Can the body's ability fire on this board (v1 coarse)? Models the ONE co-dependency the decks
+        need: a partner-gated engine. A body whose ability the Function Tags NAME (a draw/dig/accel tag) is
+        self-sufficient (Drakloak's Recon Directive) — always ready. A pure-utility `engine`-Role body
+        whose ability the tags MISS (Lunatone: Lunar Cycle "if you have Solrock in play", role-declared /
+        untagged) requires a DISTINCT engine/attacker-Role partner in play — a lone engine on an otherwise-
+        empty board is inert. Fail-open for everything else."""
+        tags = set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
+        if any(t in _READINESS_ABILITY_VALUE for t in tags):
+            return True                                  # tag-recognized ability — self-sufficient
+        roles = set(self.strategy.roles.get(cid, [])) if cid is not None else set()
+        if not ("engine" in roles and self._is_utility_body(cid)):
+            return True                                  # not a role-only engine — always ready
+        partner_roles = _ATTACKER_ROLES | {"engine"}
+        for p in ((me.get("active") or []) + (me.get("bench") or [])):
+            pid = p.get("id") if p else None
+            if pid is not None and pid != cid and (partner_roles & set(self.strategy.roles.get(pid, []))):
+                return True
+        return False
+
+    def _line_account(self, traces, indices) -> float:
+        """The SIGNED path term of `turn_value = readiness(end) + Σ ability-fire credits − Σ spend costs`
+        (t0-planner-disposition.md Decision 1) for the CHOSEN options at ONE step: the POSITIVE weight of
+        every `_ABILITY_FIRE_IDS` rule that fired (using a beneficial setup Ability — value the end board
+        can't show) MINUS the magnitude of every NEGATIVE `_CLASS_B_SPEND_IDS` rule that fired (consuming a
+        scarce resource — spent cards don't show, hand hidden). REUSES the LIVE tuned weights
+        (`OptionTrace.fired` carries the effective weight); never re-derived, never a score of the resulting
+        BOARD (the classification guard against state-summing drift — the referent is always the ACTION)."""
+        total = 0.0
+        for i in indices:
+            if not (0 <= i < len(traces)):
+                continue
+            for h, w in (getattr(traces[i], "fired", None) or ()):
+                hid = getattr(h, "id", None)
+                if w > 0 and hid in _ABILITY_FIRE_IDS:
+                    total += w
+                elif w < 0 and hid in _CLASS_B_SPEND_IDS:
+                    total += w                            # w is negative — a spend subtracts
+        return total
+
     def _simulate_line(self, obs, first_step, max_steps: int = 40, *, opponent_reply: bool = False):
         """Forward-simulate a candidate line through the Engine Search to my end-of-turn board (the
         Tier-1 seam). Steps ``first_step``, then re-runs my own closed-form policy (``decide``) on each
@@ -2197,7 +2477,10 @@ class PlannerMixin:
         finishes — the ADR-0031 "re-running the policy on each intermediate SearchState." Returns
         ``(end_obs_dict, my_index, start_prizes, result)`` or **None** when the search is unavailable,
         the observation carries no ``search_begin_input``, or anything errors (the caller falls back to
-        the closed-form value — never crashes).
+        the closed-form value — never crashes). The 5th tuple element is the SIGNED ``line`` account (the
+        path term of `turn_value = readiness(end) + Σ ability-fire credits − Σ spend costs`): the net
+        `_line_account` over MY chosen actions along the line — the first step plus every greedy
+        continuation step. Opponent-reply steps (Tier-6) never contribute.
 
         With ``opponent_reply=True`` (Tier-6, ADR-0043) the sim does NOT stop at my turn end: it keeps
         stepping through the OPPONENT's turn using our own policy as the reply proxy, until it is my
@@ -2233,7 +2516,16 @@ class PlannerMixin:
             return self._search_steps <= self.search_budget
 
         self._planning = True                          # never nest a search inside the reply policy
+        line_val = 0.0
         try:
+            saved_phase = getattr(self, "_phase_prev", None)   # the root re-score mutates phase/path
+            saved_path = getattr(self, "_my_path_prev", None)  # hysteresis (`_board`) — snapshot + restore
+            try:                                               # so the live turn state is untouched
+                root = self._evaluate(obs)              # line account of the taken FIRST action (its
+                line_val += self._line_account(root.options, list(first_step))   # ability-fire / spend rules)
+            finally:
+                self._phase_prev = saved_phase
+                self._my_path_prev = saved_path
             ob = cgapi.to_observation_class(obs)
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))
@@ -2252,11 +2544,14 @@ class PlannerMixin:
                     break                                 # back to MY next turn — the depth-2 leaf
                 if not budget_ok():
                     break                                 # per-move engine budget spent
-                st = cgapi.search_step(st.searchId, list(self.decide(_prune_none(asdict(o)))))
+                dec = self._evaluate(_prune_none(asdict(o)))
+                if mine and not crossed_my_turn_end:       # only MY within-turn actions carry a line term
+                    line_val += self._line_account(dec.options, dec.chosen)
+                st = cgapi.search_step(st.searchId, list(dec.chosen))
             end = _prune_none(asdict(st.observation))
             result = st.observation.current.result if st.observation.current else -1
             cgapi.search_end()
-            return (end, my_index, start_prizes, result)
+            return (end, my_index, start_prizes, result, line_val)
         except Exception:
             try:
                 cgapi.search_end()
@@ -2408,7 +2703,7 @@ class PlannerMixin:
         sim = self._simulate_line(obs, first_step, opponent_reply=True)
         if sim is None:
             return None
-        end, my_index, start_prizes, result = sim
+        end, my_index, start_prizes, result, line_val = sim
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
@@ -2423,4 +2718,4 @@ class PlannerMixin:
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
         return self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                development=self._board_development(me), value=self._value_term(end))
+                                readiness=self._readiness(me), value=self._value_term(end), line=line_val)

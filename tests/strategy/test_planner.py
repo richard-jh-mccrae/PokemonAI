@@ -690,14 +690,14 @@ def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
 
 # ------------------------------------------------ the development leaf term (ADR-0031 decision 4, item 2c)
 @pytest.mark.req("REQ-PLANNER-0033")
-def test_development_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypatch):
-    """The seeded `_PLANNER_DEV_W` term gets its input (engine-rank phase, `P3 on`): two candidate
-    lines with EQUAL engine prizes + survival are split by the simmed end-board's development (my
-    bodies + their attached Energy) — the line that leaves a more developed board wins. The hard-rung
-    invariant holds: development can never outrank a prize."""
+def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypatch):
+    """The engine-sim leaf's positional term (`_readiness`, replacing `_board_development`) gets its
+    input (engine-rank phase, `P3 on`): two candidate lines with EQUAL engine prizes + survival are split
+    by the simmed end-board's MY-side readiness — the line that leaves a more developed, attack-readier
+    board wins. The hard-rung invariant holds: no positional term can ever outrank a prize."""
     pilot = _pilot(planner_engine_rank=True)
 
-    def fake_sim(obs, first_step, max_steps=40):
+    def fake_sim(obs, first_step, max_steps=40, *, opponent_reply=False):
         me_bare = {"active": [poke(WINCON, energy=1, hp=330)], "bench": [], "prize": [None]}
         me_dev = {"active": [poke(WINCON, energy=1, hp=330)],
                   "bench": [poke(PREEVO, energy=2, hp=70), poke(OPENER, energy=1, hp=110)],
@@ -705,16 +705,19 @@ def test_development_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkey
         opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 2}
         me = me_dev if first_step == [1] else me_bare
         end = {"current": {"turn": 3, "yourIndex": 0, "players": [me, opp]}}
-        return (end, 0, 2, -1)                          # both lines banked 1 prize (2 -> 1), no result
+        return (end, 0, 2, -1, 0.0)                     # both lines banked 1 prize (2 -> 1), no result; 0 line
 
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim)
     d = pilot.explain(_two_candidate_obs())
-    assert d.planned is not None and d.planned.next_step == [1]   # the developed end-board wins the tie
+    assert d.planned is not None and d.planned.next_step == [1]   # the readier end-board wins the tie
     assert d.planned.ranked_by == "engine"
 
     lv = pilot._leaf_value
+    # both the legacy development term AND the new readiness term stay capped below a prize
     assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True,
                                                     threat_removed=10_000, development=10_000)
+    assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True,
+                                                    threat_removed=10_000, readiness=10_000, line=10_000)
 
 
 # --------------------------------- heal-before-attach (corpus 6858 shape): the attach-carried KO

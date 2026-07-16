@@ -1,10 +1,34 @@
-# Board-state valuation (the leaf) — GRILL SPEC / HANDOFF (to grill, not built)
+# Board-state valuation (the leaf) — GRILL SPEC / HANDOFF (v1 BUILT 2026-07-16)
 
-**Status:** **GRILLED — design decided 2026-07-16 (build spec below); not yet built.** The board-value
-function (the "leaf") is the **co-bottleneck** the ply-1 probe exposed, and Gate 0 confirmed it's the
-BINDING one (exhaustive search + the CURRENT leaf is a wash vs the 1-ply rung → fix the leaf FIRST).
-Companion to [ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md) (which GENERATES the boards
-this grades) and [develop-rung-handoff.md](develop-rung-handoff.md). Graduates to an ADR at build.
+**Status:** **v1 BUILT + measured 2026-07-16** (`_readiness` + the line account in
+`src/common/strategy/planner.py`, wired into `_engine_leaf_value`; tests
+`tests/strategy/test_readiness_leaf.py`). Leaf-lab movement on the 267-frame corpus: **SOLE-top 5% → 12%**
+(14 → 33/267), **shared-top 60% → 72%** (160 → 193/267), **avg top-tie 3.7 → 3.1**. Named scenarios: **#4
+hold-the-evolve = SOLE-top**; **#1 discard-to-draw = shared-top rank-1 with the attach blunder deprecated**
+(the tied lines are equivalent non-blunders that also fire Lunar Cycle). **Gate 0 PASSES**: on the honest
+SOLE-top, exhaustive-search + this leaf **BEATS the 1-ply rung — 27% vs 18%** (9 vs 6 of 33 lucario frames)
+with tighter ties (2.24 vs 2.64), where the pre-readiness `_board_development` leaf was a wash. (Gate 0
+run with `gate0_ab.py` at a bounded `CAP=2500` so all frames complete in-session; both columns grade the
+full `turn_value = readiness + Σ ability-fire − Σ spend`, only the SEARCH differs.) The board-value function (the
+"leaf") is the **co-bottleneck** the ply-1 probe exposed, and Gate 0 confirmed it's the BINDING one
+(exhaustive search + the CURRENT leaf was a wash vs the 1-ply rung → fix the leaf FIRST). Companion to
+[ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md) (which GENERATES the boards this grades)
+and [develop-rung-handoff.md](develop-rung-handoff.md). Graduates to an ADR once search v1 lands on it.
+
+**What v1 built (deltas from the spec below):** the design landed as specced with three measurement-forced
+refinements. (1) **The ability value is a LINE credit, not only a board term.** The greedy continuation
+CONVERGES end-boards (all lines fire the draw ability eventually; the drawn cards play into the same board,
+hand → 0), so ability_readiness on the static end board can't separate "fire it FIRST" from "fire it later /
+never". The `max(attack, ability)` board term stays (engine-online asset + saturation), but the decisive
+"fire it = value" signal is a **line account**: `turn_value = readiness(end) + Σ ability-fire credits −
+Σ spend costs`, both reused from the live tuned weights (`OptionTrace.fired`) along the simmed line
+(`_ABILITY_FIRE_IDS` / `_CLASS_B_SPEND_IDS`). This is what flips scenarios 1 & 4. (2) **"Reachable
+evolution" = DEPLOYABLE this turn (hand+play), not the whole decklist.** The sim's end-obs hides deck
+CONTENTS (only `deckCount`), so the "anywhere in deck+hand" v1 proxy would use `self.deck` — which ALWAYS
+contains the payoff, making the gate vacuous (every Riolu reads as Mega-Lucario-ready). Hand+play is the
+sound this-turn-reachable set; deck-odds is v2. (3) **A weak win-condition pre-evo credits ONLY its
+reachable payoff's attack**, not its own throwaway chip — so with the payoff undeployable an energized
+Riolu reads ~0 ("the attach's ~0 readiness gain", scenario 1).
 
 ## Why this exists (the measured problem)
 The ply-1 probe: full within-turn search reaches a **median 36 distinct end-boards** per turn, but the
