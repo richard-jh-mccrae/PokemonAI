@@ -12,6 +12,55 @@ current leaf grades them into only **~5 distinct values** (3/37 frames fully bli
 boards; the leaf can't *tell them apart*. And the honest lab metric — the leaf picks the human's option as
 the **SOLE** top only **~5%** (2/37 lucario). **Closing the 36→5 granularity gap is this doc's whole job.**
 
+## How we got here — the method (competition-writeup record)
+
+This spec was not designed top-down; it was **forced, step by step, by measurements on our own logged
+games**. The sequence, one day (2026-07-16), each step gating the next:
+
+1. **A symptom, then a bench.** The armed-ON develop rung played setup turns "drunk". Rather than patch
+   rules, we built a measurement bench first: the **leaf lab** (`tools/train/leaf_lab.py`) re-scores every
+   human-tagged correction board offline (cgpy engine twin — no Kaggle round-trip) and asks one question:
+   *does the leaf rank the human's pick on top?* First finding: the lab could only score 2 frames, because
+   it gated on a rare payload. Broadening it to every MAIN-select correction (`is_leaf_frame`) took the
+   bench from **2 → 267 scorable frames** — the entire correction corpus became the leaf's test set.
+2. **First fix from the bench, not from intuition.** Dissecting misses showed the wincon-development
+   credit was keyed on the payoff — **which is never in play during setup**, so the credit was inert
+   exactly when the rung fires. The plan-tier fix (payoff > line-piece > off-plan) came straight from
+   correction ep86090147 ("fetch a pokemon for our bench first") and flipped it MISS→OK; corpus 155→160/267.
+3. **An honest metric reframed the problem.** "Ranks correct on top" was 65% — but mostly **ties** (avg
+   3.7-way). The strict number (correct is the SOLE top — what the argmax rung actually picks) was **~5%**.
+   The leaf's failure is *indiscrimination*, not inaccuracy.
+4. **Two probes killed the obvious next steps before we built them.** The **transposition probe**: full
+   within-turn search reaches ~36 genuinely distinct end-boards (the ties were an artifact of greedy
+   continuation) — but the leaf collapses them to ~5 values, and the collision dissection named the exact
+   blindnesses (who's-Active, hand, tools). **Gate 0**: exhaustive search over the *current* leaf is a
+   wash vs the 1-ply rung (67% vs 61%) — deeper search just amplifies leaf error. Conclusion, fixed by
+   measurement: **leaf first, then search.** (Two seductive alternatives — Σ-of-greedy-scores as turn
+   value, raw hand-count credit — were also A/B'd on the bench and **rejected on evidence**: 41% vs 65%,
+   and a regression of the flagship frame, respectively.)
+5. **The corrections + hypotheses ARE the spec.** To make the planner "account for all T0 work", we read
+   **every logged correction (362)** and **every T0 hypothesis (164, with tuned weights)** and dispositioned
+   each into five classes with a named owner ([t0-planner-disposition.md](t0-planner-disposition.md)):
+   state-valuation → this leaf; spend-costs → the new spend account; sequencing crutches → the search;
+   opponent-facing → survival/2-ply; sub-selects → T0 stays, inside rollouts. The design terms below are
+   in near 1:1 correspondence with that corpus: the gate ("never attach a useless energy ever" ×8),
+   ability co-equality ("discard energy, draw 3" / "always use Drakloak's ability before evolving"),
+   preconditions ("Solrock is worthless without a Lunatone — write that down"), saturation ("we only ever
+   need one Solrock and one Lunatone"), the spend account (100 wasted_resource corrections: "save the
+   Ultra Ball", "wasted Crushing Hammer"), and the two-account line value — the human's own Σ-points
+   instinct, restricted to the half that is mathematically sound (pure spends are additive; state scores
+   double-count). The tuned rule weights are **reused** as the spend costs, so years of correction-tuning
+   carry over instead of being re-derived.
+6. **Acceptance is pre-committed.** Four named human scenarios (below), the 362-correction corpus as a
+   regression suite, the SOLE-top + distinct-values metrics, and a re-run of Gate 0 (search must *beat*
+   the 1-ply rung once this leaf lands). Rules retire only per-rule, on proof (planner-ON/rule-OFF,
+   no corpus regression).
+
+The through-line for the writeup: **human corrections are the teacher, hypotheses are the accumulated
+curriculum, and every architectural decision was gated by an offline measurement on that corpus** —
+the same corpus the tuned rule layer was trained on now specifies, tests, and (eventually, per-rule,
+on proof) retires into the turn planner.
+
 ## GRILLED DESIGN — the readiness leaf (decided 2026-07-16)
 **Target = my-side readiness** — a P(win) proxy over MY position: how close I am to executing my win. The
 opponent is NOT modelled here (the survival term + the later 2-ply own that). **Structure = gated-additive**,
