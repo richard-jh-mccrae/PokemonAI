@@ -12,7 +12,12 @@ whole tagged setup corpus (`is_leaf_frame`: any MAIN-select `correct` pick, not 
 records) — **2 → 267 scorable frames** — and the leaf got its first sound enrichment: a **plan-tier
 credit** in `_board_development` (payoff > game-plan piece > off-plan opener), which fixes the fact that
 the old wincon credit was **inert during setup**. Result **155→160/267** (lucario **22→24/37**), flagship
-Poké Pad frame **MISS→OK**. Residual misses cluster into the **resource-conservation / tempo** class
+Poké Pad frame **MISS→OK**. **Honest-metric caveat (built same day): those rates are the LENIENT
+"shared-top" (a shared max counts). The lab now also reports SOLE-top — a UNIQUE max, i.e. the number the
+argmax rung would actually pick your option — and it is only ~5% (2/37 lucario, 14/267 full). The 65% was
+ties (avg 3.7). So the leaf's real ceiling is DISCRIMINATION / tie-breaking, which end-board features can't
+do on convergent boards — depth (2-ply / value net) is the lever.** Residual misses cluster into the
+**resource-conservation / tempo** class
 ("save the Ultra Ball", "attaching is a waste") — a raw `handCount` credit lifts the aggregate to 28/37
 but is **non-monotonic (overfit) and REGRESSES the flagship Poké Pad frame**, so it was rejected: this is
 the parked value-function problem (ADR-0053 ML net), not a hand-tuned scalar. Rung stays **armed** to

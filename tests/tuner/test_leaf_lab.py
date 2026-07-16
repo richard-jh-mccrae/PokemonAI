@@ -60,6 +60,7 @@ def test_evaluate_reports_the_correct_pick_rank_and_top_tie():
     assert v["correct_value"] == 60.0
     assert v["top_value"] == 65.0
     assert v["correct_is_top"] is False
+    assert v["correct_is_unique_top"] is False
     assert v["outscored_by"] == 4                       # opts 1-4 strictly above
     assert v["correct_rank"] == 5
     assert v["top_tie"] == 4                            # the 4-way degenerate tie
@@ -67,10 +68,24 @@ def test_evaluate_reports_the_correct_pick_rank_and_top_tie():
 
 @pytest.mark.req("REQ-TUNER-0019")
 def test_leaf_correct_when_the_human_pick_is_the_unique_top():
-    """A healthy leaf: the correct pick is the strict maximum → correct_is_top, rank 1, no tie above."""
+    """A healthy leaf: the correct pick is the strict maximum → correct_is_top AND unique_top, rank 1."""
     v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 40.0, 2: 55.0}),
                                     SimpleNamespace(correct=[0], obs=_obs(3), episode_id=1))
     assert v["correct_is_top"] is True
+    assert v["correct_is_unique_top"] is True
     assert v["correct_rank"] == 1
     assert v["outscored_by"] == 0
     assert v["top_tie"] == 1
+
+
+@pytest.mark.req("REQ-TUNER-0019")
+def test_shared_top_is_lenient_hit_but_not_a_unique_top():
+    """The distinction the honest headline turns on: the correct pick TIES the max with another option.
+    `correct_is_top` is True (lenient — it holds the shared max) but `correct_is_unique_top` is False —
+    the argmax rung breaks the tie by option order, not by the human's intent, so it would only land on
+    `correct` by luck. This is why the lab reports SOLE-top, not just shared-top."""
+    v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 90.0, 2: 55.0}),
+                                    SimpleNamespace(correct=[0], obs=_obs(3), episode_id=1))
+    assert v["correct_is_top"] is True                  # shares the max → lenient hit
+    assert v["correct_is_unique_top"] is False          # but NOT the sole max → not the rung's guaranteed pick
+    assert v["top_tie"] == 2
