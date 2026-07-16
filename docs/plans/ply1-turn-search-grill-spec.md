@@ -32,11 +32,11 @@ frame (mean 204, max 1227) where greedy's single completion collapsed them to 1 
   rung on the honest SOLE-top is a **wash** (shared-top 67% vs 61%): deeper search over today's coarse
   leaf finds as many leaf-mistakes as it fixes. So build the **leaf** (board-state-valuation-grill, now a
   decided spec) FIRST; this search only starts paying once the leaf discriminates — its acceptance gate is
-  "re-run Gate 0 and beat the 1-ply rung." `scratchpad/gate0_ab.py`.
+  "re-run Gate 0 and beat the 1-ply rung." `tools/train/probes/gate0_ab.py`.
 - **Cost:** node counts median ~64, only 6/37 hit the 4000-node cap. The probe's minute-scale wall-times
   are its re-begin-per-node inefficiency, NOT the search — a proper *incremental* walk over a few thousand
   states is seconds. Tail turns (>4000 states) are where the speced budget-cap + fallback earn their keep.
-- Probe lives at `scratchpad/transposition_probe.py` (reproduce; promote to a fixture if it recurs).
+- Probe lives at `tools/train/probes/transposition_probe.py` (reproduce; promote to a fixture if it recurs).
 
 ## Grill questions (the meat)
 1. **Search structure.** State key for the transposition table (which fields define legality-equivalence:
@@ -73,7 +73,7 @@ frame (mean 204, max 1227) where greedy's single completion collapsed them to 1 
 ## Success measure
 On the lab (honest **SOLE-top** + avg top-tie), exhaustive search beats the 1-ply rung — *and* the measured
 transposition rate / per-turn timing confirms it's both discriminating and affordable. A/B via the leaf-lab
-harness (extend `scratchpad/leaf_ab.py`'s ranker set with an exhaustive-search column).
+harness (`tools/train/probes/gate0_ab.py` already carries the 1-ply-vs-exhaustive columns; re-run it).
 
 ## The stack this sits in
 exhaustive within-turn search (SOUND, this spec) → a decent leaf → 2-ply opponent (heuristic) → value net.
