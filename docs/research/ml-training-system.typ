@@ -715,6 +715,149 @@ the loop: doctrine authoring, flag review, gate sign-off. That is the effort mod
 brief demanded.
 
 // ===========================================================================
+= The mathematics of each training element
+// ===========================================================================
+
+The five stages above say *what* to build. This section teaches the *math* underneath each,
+from the ground up — the same beginner-friendly footing as the companion textbook, so you can
+read every stage as an equation you could compute by hand. Each element also names the runtime
+tier it feeds, so the training side and the playing side line up.
+
+== The value network — learning $P("win")$ (Stage 1 → T5)
+
+The keystone is a function that reads a board and returns *one number*: the probability we go on
+to win from here. Start with the smallest honest model, logistic regression. Summarise the board
+as a list of features $bold(phi)$ (prize difference, energy on board, the Hypothesis activations
+we already compute), *standardise* each to mean $0$ and spread $1$ so no feature dominates by unit
+choice — call the result $bold(z)$ — and push a weighted sum through the logistic squashing
+function:
+
+$ P("win" | "board") = sigma(bold(w) dot bold(z) + b), quad sigma(x) = 1 / (1 + e^(-x)). $
+
+$sigma$ maps any real number into $(0, 1)$: large positive input $-> $ near $1$, large negative
+$-> $ near $0$, zero $-> $ exactly $0.5$. The weights $bold(w)$ and bias $b$ are *learned*.
+
+How? Every state in a self-play game carries a label $y$: $1$ if that game was eventually won,
+$0$ if lost (discount $gamma = 1$, so a state is worth its final result — no decay inside a
+match). We choose $bold(w), b$ to make the model's probabilities match those labels, by minimising
+the *cross-entropy* (log-loss) — the same loss the textbook derives:
+
+$ L = - 1/N sum_(j=1)^N [ y_j ln P_j + (1 - y_j) ln (1 - P_j) ]. $
+
+$L$ is small only when the model is *confident and correct*; it punishes confident-and-wrong
+harshly (a predicted $0.99$ on a lost game costs $-ln(0.01) approx 4.6$). Gradient descent walks
+$bold(w)$ downhill on $L$.
+
+#keyidea[
+  A coin-flip model scores $L = -ln 0.5 approx 0.693$ on every state. *Beating $0.693$ on
+  held-out matches is the whole proof the net learned something real.* That single number is the
+  Stage-1 gate.
+]
+
+The starting architecture is deliberately tiny — Modicum reached master-level poker with two
+hidden layers of $64$ units — and grows only if the gate fails. This trained $P("win")$ *is* the
+rebuilt Tier-5 value model; the planner adds a capped $W (P - 0.5)$ term to each leaf, so it
+*refines* the ranking without ever overturning sound combat math.
+
+== Automated blunder labelling — value deltas (Stage 2 → T0 corrections)
+
+Manual blunder rounds do not scale. The value net lets us find blunders automatically. At one of
+*my* decisions, let $a^star$ be the option the net rates highest and $a$ the option actually
+played. The decision's *value drop* is
+
+$ Delta = P("win" | a^star) - P("win" | a) >= 0. $
+
+A large $Delta$ means a materially better move was available — a blunder. Flag every decision with
+$Delta >= theta$ and emit it as a machine-tagged Correction into the *existing* pipeline; humans
+review the *flags*, never the raw replays.
+
+#example("\"played perfectly but lost\" — detected, not punished")[
+  A match we lost, in which *every* one of our decisions had $Delta approx 0$ (we always picked at
+  or near the net's best option). That is a game lost to variance or matchup, not to misplay — so
+  it produces *zero* corrections. The old pipeline could not tell this apart from a game full of
+  blunders; value deltas separate "bad play" from "bad luck" for free.
+]
+
+The threshold $theta$ is *calibrated*, not guessed: we already hold months of human-confirmed
+blunders, so we set $theta$ where the annotator recovers most of them at a false-flag rate a weekly
+review can absorb — a precision/recall trade you can read straight off the ledger.
+
+== Expert iteration — teaching the rules from a stronger teacher (Stage 3 → T0, T4.4)
+
+Now close the loop. Two players: the *apprentice* is the linear rule layer (T0), which stays the
+runtime policy; the *expert* is the Turn Planner plus the value net, doing a one-step look-ahead
+the apprentice cannot afford at runtime. For a logged decision the expert scores each legal option
+$i$ by simulating it and reading the net on the result — with a *sound override*: if the engine
+says the line wins, its value is $1$, not the net's estimate.
+
+$ V_i = cases(1 & "if the line is an engine-verified win", 0 & "if it loses", P("win" | "board after option " i) & "otherwise"). $
+
+The expert's preferred option is $argmax_i V_i$. Wherever the expert's best beats the apprentice's
+pick by a margin, $V_(a^star) - V_(a) >= theta$, we emit a Correction — *the blunder annotator and
+the expert are literally the same detector*. Those Corrections drive the very same weight fitter
+the textbook builds: the soft-margin perceptron. On a violated ranking constraint it nudges the
+weights toward the better option,
+
+$ bold(w) <- bold(w) + eta (bold(phi)_(a^star) - bold(phi)_(a)), $
+
+with a pull-to-seed regulariser and a *pocket* that keeps the best weights seen. Two extensions:
+matchup-conditioned tables learn a per-archetype adjustment $delta_A [h]$ (this is exactly runtime
+sub-tier T4.4), and compound features are minted from co-active pairs — behind a cost meter,
+because per-node feature evaluation can throttle the search.
+
+#keyidea[
+  No new training machinery is invented: the expert *writes corrections*, and the existing
+  perceptron *consumes* them. The value net turns a scarce human resource (labelled blunders) into
+  an abundant automated one, and the interpretable rule layer stays the thing that actually plays.
+]
+
+== The league and exploiters — why a high win-rate can lie (Stage 4)
+
+Beating a pool of opponents $90%$ of the time does *not* prove you are hard to beat. A dedicated
+*best-responder* — an opponent trained only to exploit *your* fixed policy — can still crush you.
+Formally, an agent's *exploitability* is how much a best response beats it:
+
+$ "exploitability"(pi) = max_(pi') "winrate"(pi' "vs " pi) - 1/2, $
+
+the gap between the best counter-strategy's win-rate and an even match. Headline win-rate against a
+*fixed* pool never measures this; only a probe that *adapts to you* does. So the league keeps a
+standing *exploiter*: behaviour-clone the current agent from its own logs, then fine-tune it purely
+to beat that agent. Its win-rate against the main agent is a dashboard alarm — when it spikes, we
+have a blind spot no gauntlet would have shown.
+
+== Evaluation done right — squeezing signal from noisy games (Stage 5)
+
+Raw win-rate is a terribly noisy ruler. For a measured win-rate $hat(p)$ over $N$ games the
+$95%$ confidence half-width is
+
+$ 1.96 sqrt((hat(p)(1 - hat(p))) / N) quad prop quad 1 / sqrt(N), $
+
+so *halving* the interval needs $4 times$ the games and *quartering* it needs $16 times$. Three
+tricks buy that back:
+
++ *Paired deltas.* Rather than compare two agents' absolute win-rates, measure the same deck with a
+  change *on* versus *off* against the *same* opponent, $"winrate"(D@"on") - "winrate"(D@"off")$.
+  The raw deck matchup cancels, leaving only the effect of the change — a much lower-variance
+  quantity.
++ *Duplicate deals + stratification.* Replay the *same* shuffle under both contestants (luck
+  cancels), and measure on the *skill-sensitive* subset of deals — those a perfect-information
+  cheater wins — where decisions actually decide the game. Aggregate win-rate hides real
+  differences that show up sharply on this stratum.
++ *AIVAT (a control variate).* Subtract a baseline that tracks the outcome but averages to zero —
+  the value net's own per-decision $P("win")$ estimates serve for free. Subtracting a correlated,
+  mean-zero quantity leaves the average unchanged but *cuts the variance*: about an $85%$
+  standard-deviation reduction in the DeepStack evaluation, roughly a ten-fold cut in games needed
+  for significance.
+
+#forus("Evaluation reuses the net we already built")[
+  Every one of these tricks either *reuses* the value net (AIVAT baselines, the cheating-agent
+  stratifier) or *reuses* existing paired-A/B stats. Evaluation is not a new subsystem so much as
+  the disciplined application of the value net we already had to build — which is why Stage 5 is
+  the cheapest stage, not the most expensive. The Kaggle ladder stays the final arbiter; this
+  protocol just stops us shipping blind between ladder reads.
+]
+
+// ===========================================================================
 = Risks, named
 // ===========================================================================
 

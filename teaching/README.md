@@ -4,7 +4,8 @@ An ongoing, multi-session course teaching Richard (embedded engineer, new to ML)
 and decision-theory ideas that actually run inside this repo's Strategy agent.
 
 ## The deliverable
-- **`book/PokemonAI-ML-Textbook.pdf`** — a 49-page ground-up textbook: 12 chapters, worked
+- **`book/PokemonAI-ML-Textbook.pdf`** — a ~72-page ground-up textbook: 13 chapters (Ch. 13 is
+  the complete tier-stack reference — every tier/sub-tier, its math, and its kill-switch), worked
   problems, a final exam, full answer key, and a glossary. Read this first.
 - **`reference/formula-cheatsheet.html`** — a printable one-page formula reference (open in a
   browser; print to A4/Letter).

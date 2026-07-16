@@ -138,6 +138,7 @@ is needed, and collect them all in the Glossary. That is the whole toolkit. Turn
 #include "ch10.typ"
 #include "ch11.typ"
 #include "ch12.typ"
+#include "ch13.typ"
 #include "exam.typ"
 #include "answers.typ"
 #include "glossary.typ"

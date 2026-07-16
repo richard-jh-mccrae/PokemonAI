@@ -226,6 +226,27 @@ well-calibrated model lies on the diagonal $y = x$ — of the states it called 7
 *automatic feedback loop* (e.g. "compare my hypergeometric output to a 10,000-trial simulation and
 assert they agree to within sampling error").]
 
+#sech("Chapter 13 — The tier stack in full")
+#ans("13.1")[Each tier falls through to the tier below it when it has nothing confident to say, and T0
+catches everything. T0 has no kill-switch because it is the floor — there is no lower tier to fall back
+to, so it can never be switched off.]
+#ans("13.2")[Min-bound sum $= 80 + 0 = 80$ (attack Y's worst-case coin is tails $= 0$). $80 < 130$, so
+*no* — the agent cannot *guarantee* a knockout, because a soundness test must hold under the unluckiest
+flip. It may still *try* the line, but T1.1 will not lock it as a win.]
+#ans("13.3")[EV $= 0.5(2) + 0.5(0) = 1$ prize, equal to the guaranteed $1$-prize line's certain $1$.
+The means tie, so T2 prefers the *guaranteed* line when ahead: equal expectation but lower variance,
+and downside variance is exactly what loses a game you are already winning.]
+#ans("13.4")[Subsets reaching $>= 3$ prizes and their turns: $\{"Mega-ex"\} = 2$; $\{"ex","basic"\} =
+1 + 1 = 2$; $\{"Mega-ex","ex"\} = 3$; $\{"Mega-ex","basic"\} = 3$; $\{"all"\} = 4$. The $argmin$ is a
+tie at $2$ turns between $\{"Mega-ex"\}$ and $\{"ex","basic"\}$ — either is a cheapest Prize Path.]
+#ans("13.5")[$ceil(2\/0.5) = ceil(4) = 4$ turns; $ceil(2\/0.25) = ceil(8) = 8$ turns; as
+$gamma -> 0$, $ceil(2\/gamma) -> infinity$ — never. A wrong read is nearly free because low confidence
+pushes the predicted attacker infinitely far into the future, so it changes no decision (fail-open).]
+#ans("13.6")[$sigma(0) = 0.5$; $sigma(2) approx 0.88$. The leaf term is $W(P - 0.5) = 80(0.88 - 0.5) =
+80(0.38) = 30.4$. It is centred at $0.5$ because $P = 0.5$ means "no information" and must contribute
+$0$; only the model's *deviation* from an even coin flip is allowed to nudge the ranking, and it is
+capped below one prize so it can never overturn sound combat math.]
+
 #pagebreak()
 #sech("Final Examination — solutions")
 #ans("E1")[$"Score"(X) = 40 + (-20) = 20$; $"Score"(Y) = 10$. $argmax = X$.]

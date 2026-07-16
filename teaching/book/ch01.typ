@@ -112,23 +112,29 @@ to say. You do not need the details yet, but the shape previews the book:
 
 #block(inset: (left: 6pt))[
   #set text(size: 12pt)
-  - #text(weight: "bold")[Tier 0 — Rules & tuned scoring.] The linear model of §1.2 and its learned
-    weights. *Chapters 2–6.*
-  - #text(weight: "bold")[Tiers 1–2 — Planning & chance.] Looking ahead a turn, and pricing risky
-    moves by exact expected value. *Chapters 8–9.*
-  - #text(weight: "bold")[Tiers 3–4 — Objectives & the opponent.] Turning "who is winning the prize
-    race" into arithmetic. *Touched in Chapters 8–10.*
-  - #text(weight: "bold")[Tier 5 — The value model.] One small logistic-regression "am I winning?"
+  - #text(weight: "bold")[T0 — Rules & Tuned Scoring.] The linear model of §1.2 and its learned
+    weights; the universal fallback. *Chapters 2–6.*
+  - #text(weight: "bold")[T1 — Turn Planner.] Looking ahead within a turn to the best reachable
+    end-of-turn board, led by a *sound* win rung. *Chapter 9.*
+  - #text(weight: "bold")[T2 — Chance & EV.] Pricing risky, coin-flip lines by exact expected value.
+    *Chapter 8.*
+  - #text(weight: "bold")[T3 — Match Objectives.] Turning "who is winning the prize race" into
+    arithmetic — the Prize Path, the KO Race, and derived phases. *Chapters 8–10.*
+  - #text(weight: "bold")[T4 — Opponent Model.] The confidence-gated Read of the not-yet-seen
+    opponent. *Chapters 7–10.*
+  - #text(weight: "bold")[T5 — Automatic Value Model.] One small logistic-regression "am I winning?"
     estimator. *Chapter 7.*
-  - #text(weight: "bold")[Tier 6 — Escalation search.] A narrow, bounded look-ahead for the hardest
-    ties. *Chapter 9.*
-  - #text(weight: "bold")[The Match Planner.] The newest layer, sitting *on top*: it turns the Tier-3
-    objectives into a turn-by-turn *game plan* for the whole match — by pure arithmetic, not search.
+  - #text(weight: "bold")[T6 — Escalation Search.] A narrow, bounded look-ahead for the hardest ties.
     *Chapter 9.*
 ]
 
-Everything rests on Tier 0, and Tier 0 rests on a single idea — turning a messy game state into a
-list of numbers a linear model can score. That is Chapter 2.
+Each tier further splits into numbered *sub-tiers* (T1.1, T3.2, …), and every one is walked in full —
+its exact math, a worked example, and its on/off switch — in #text(weight: "bold")[Chapter 13, the
+complete tier-stack reference]. Read the concept chapters first; return to Chapter 13 to see the whole
+machine assembled.
+
+Everything rests on T0, and T0 rests on a single idea — turning a messy game state into a list of
+numbers a linear model can score. That is Chapter 2.
 
 #problems("1", (
   [In your own words (two sentences), state the difference between a *policy* and the *score
