@@ -1,15 +1,63 @@
 # Board-state valuation (the leaf) — GRILL SPEC / HANDOFF (to grill, not built)
 
-**Status:** grill spec — the board-value function (the "leaf") is the **co-bottleneck** the ply-1
-transposition probe exposed. Not built; grill later. Companion to
-[ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md) (which GENERATES the boards this grades)
-and [develop-rung-handoff.md](develop-rung-handoff.md). Graduates to an ADR when grilled.
+**Status:** **GRILLED — design decided 2026-07-16 (build spec below); not yet built.** The board-value
+function (the "leaf") is the **co-bottleneck** the ply-1 probe exposed, and Gate 0 confirmed it's the
+BINDING one (exhaustive search + the CURRENT leaf is a wash vs the 1-ply rung → fix the leaf FIRST).
+Companion to [ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md) (which GENERATES the boards
+this grades) and [develop-rung-handoff.md](develop-rung-handoff.md). Graduates to an ADR at build.
 
 ## Why this exists (the measured problem)
 The ply-1 probe: full within-turn search reaches a **median 36 distinct end-boards** per turn, but the
 current leaf grades them into only **~5 distinct values** (3/37 frames fully blind). Search *reaches* the
 boards; the leaf can't *tell them apart*. And the honest lab metric — the leaf picks the human's option as
 the **SOLE** top only **~5%** (2/37 lucario). **Closing the 36→5 granularity gap is this doc's whole job.**
+
+## GRILLED DESIGN — the readiness leaf (decided 2026-07-16)
+**Target = my-side readiness** — a P(win) proxy over MY position: how close I am to executing my win. The
+opponent is NOT modelled here (the survival term + the later 2-ply own that). **Structure = gated-additive**,
+every term capped so the sum stays **< one prize** (the hard-rung invariant is preserved).
+
+```
+readiness =  Σ_bodies attack_readiness(b)     ← the core, most of the weight
+           + engine      (a draw/accel body that can FIRE its ability this turn — small flat)
+           + floor       (a bench exists — small BINARY safety: a KO doesn't lose the game)
+           [+ resource]  (v2, deferred — see below)
+           , all capped; Σ_max < KO_SCORE.
+
+attack_readiness(b) = position_w(b) × progress(b) × value(best_reachable_attack(b))
+   best_reachable_attack = b's own attack OR the attack of a REACHABLE evolution
+        · gated on the evolution being available (v1: coarse "is it anywhere in deck+hand";
+          v2: deck-odds — see hypergeometric-fetch-closure.md)
+        · discounted per evolution hop still owed
+   progress = min(energy, cost) / cost  ∈ [0,1]      (energy carries through evolution — verify rules.md)
+   value    = the attack's damage / KO-threat         (CombatMath / AttackStat)
+   position_w:  Active = 1.0
+                Bench  = base_discount lifted toward 1.0 by PROMOTION-EASE
+                         (active's retreat cost − free-retreat tools on the active − a switch in hand);
+                         degrades to the flat base_discount when hand info is absent
+   = 0 if b has no reachable attack                    (the GATE — this is what kills "energy anywhere")
+```
+**Tools are not a term** — each routes to what it touches: retreat-tools (Air Balloon) → `position_w`;
+damage-tools → `value`; HP-tools (Hero's Cape) → the **survival** term (separate).
+
+**Boundary (deliberately OUT of readiness):** the exposed/doomed-Active defensive risk = the survival term;
+the opponent's board / prize race / threat = survival + the 2-ply; per-card situational value = the net.
+
+**v1 → v2 split:**
+- **v1 (build now):** `attack_readiness + engine + floor`; evo-availability = coarse "anywhere in
+  deck+hand"; `position_w` bench = the flat base_discount (the mobility lift needs the hand).
+- **v2 (after hand-visibility plumbing):** the mobility lift (switch-in-hand), the gated actionable-resource
+  term (credit ONLY held cards with a LIVE use — an evolution for a base in play, a tutor with a target,
+  energy when there's an attacker to feed; NEVER raw handCount — measured overfit), and the deck-odds
+  evo-availability sharpening.
+
+**Calibration / soundness:** a small weight set → hand-tune on the lab. Split the sub-prize budget so
+`attack_readiness` dominates and `engine`/`floor` are minor nudges; verify `Σ_max < KO_SCORE` so no
+positional board can outrank a real prize. Measure every change on **SOLE-top + the probe's
+distinct-values / distinct-boards ratio**. **Acceptance gate = re-run Gate 0**: the leaf is "good enough"
+when exhaustive search + this leaf BEATS the 1-ply rung (today that A/B is a wash — the leaf is why).
+
+*(The "Grill questions" section below is the pre-grill record; the decisions above supersede it.)*
 
 ## How boards are graded TODAY (the baseline to beat)
 One function: `_engine_leaf_value` → `_leaf_value` (`src/common/strategy/planner.py`). A weighted sum,
@@ -26,12 +74,35 @@ grade =  KO_SCORE · prizes_taken_this_turn                 # 1000 each — domi
 (the plan-tier shipped this arc): `10 + 5·energy` base, `+10 + 5·energy` if the **payoff** (`_wincon_set`),
 `+5 + 3·energy` if a **plan piece** (`_development_plan_set`), `+0` off-plan (an opener like Meowth ex).
 
-**Why it collapses 36→5:** on a develop turn (no prize/win) the grade reduces to
-`(0 or 50, survival) + min(100, development)`. Survival is **binary**; development is a **sum of small
-integers** (10/15/20/23/30 per body) — an integer lattice. Dozens of different boards land on the same
-total. That coarseness IS the bottleneck.
+**Why it collapses 36→5 — VERIFIED (not a counting bug; the leaf is blind to first-order facts).**
+On a develop turn (no prize/win) the grade reduces to `(0 or 50, survival) + min(100, development)`, and
+walking one frame's full tree dissects the collapse (ep83661652):
+```
+36 distinct full boards      (bodies + tools + prize + handCount)
+ → 18 board POSITIONS          the leaf ignores HAND SIZE               (36→18)
+ →  7 dev-input signatures      (tier, energy) per body only            (18→7)
+ →  6 distinct grades           integer sums that coincide              (7→6)
+```
+The 12 boards that all grade **56** lay it bare — same three bodies, but:
+```
+hand=2  Lunatone[E2](plan)+Air Balloon | Meowth ex[E0](off) | Riolu[E0](plan)
+hand=2  Meowth ex[E0]                   | Lunatone[E2]+Air Balloon | Riolu[E0]
+hand=3  Lunatone[E2]+Air Balloon        | Meowth ex[E0]           | Riolu[E0]
+```
+`_board_development` sums active+bench, ignores tools, ignores the hand, and treats plan-pieces as
+fungible — so a board with **Lunatone[E2]+Air Balloon ACTIVE** grades identically to one with a bare
+Meowth ex active. Three first-order blindnesses fall out, each sound to fix:
+1. **Who's Active** — active+bench are summed; the leaf can't tell a loaded attacker up front from a
+   liability that's about to be KO'd.
+2. **Hand size** — the entire 36→18 step; cards retained are invisible.
+3. **Tools** — Air Balloon (free retreat) contributes nothing.
+(+ plan-piece fungibility and integer-sum collisions finish 18→6.) That coarseness IS the bottleneck —
+and this is the concrete tie the leaf grill must break.
 
 ## What the grade does NOT see (the enrichment surface)
+- **Who's Active** — active+bench are summed into one `development` total (verified above): a loaded
+  attacker in the active spot scores the same as it would benched, and a fragile active liability isn't
+  penalised. First-order and unread.
 - **Value model OFF** (ADR-0042 parked) → the one learned term is 0. No P(win) input today.
 - **Survival is shallow + binary** — `_incoming_worst` counts only the opponent's attacks from bodies
   *already in play* (+1 attach); it does NOT model them evolving a benched pre-evo into a threat
