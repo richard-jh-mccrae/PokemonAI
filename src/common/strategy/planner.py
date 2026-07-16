@@ -51,6 +51,20 @@ _PLANNER_WINCON_DEV_W = 10.0   # per-body credit in `_board_development` for a W
                                # (role-gated) — splits prize-equal boards toward the one building the win
 _PLANNER_WINCON_ENERGY_W = 5.0 # extra per-Energy credit for Energy attached to a WIN-CONDITION body —
                                # concentrating on the wincon line beats the same Energy wasted on junk
+_PLANNER_PLAN_DEV_W = 5.0      # per-body credit for a GAME-PLAN body below the payoff (`_development_plan_set`
+                               # — a wincon/secondary line pre-evo or an attacker/engine Role). HALF the
+                               # payoff's, so developing the plan out-scores stacking an off-plan opener
+                               # (Meowth ex) yet an EVOLVED payoff still out-scores holding its pre-evo
+                               # (payoff 10 > plan 5): the wincon tier alone is INERT during setup (the
+                               # payoff isn't in play yet), which is exactly why the leaf couldn't tell a
+                               # wincon-line setup board from junk (develop-rung Phase 0, ep86090147).
+_PLANNER_PLAN_ENERGY_W = 3.0  # extra per-Energy credit for Energy on a game-plan body — energy on the
+                               # attacker/engine line beats the same energy stranded on an off-plan opener
+                               # ("dont feed Meowth ex", ep83661652 f33); below the payoff's (5).
+_DEVELOPMENT_PLAN_ROLES = frozenset({   # Roles that make an IN-PLAY body a game-plan piece for the develop
+    "primary_attacker", "secondary_attacker",   # leaf. Card-declared (`strategy.roles`) so a deck with no
+    "win_condition_base", "evolution_base",      # roles just falls back to the payoff-only credit — no
+    "engine", "accel_source"})                   # regression. Pairs with `_recognized_line_preevo_set`.
 _DEVELOP_PLAN_K = 50          # develop rung: ranked end-boards in `plan_candidates`. Set high to capture
                               # the FULL menu (Phase-3 leaf-training corpus, armed-ON harvest): the human's
                               # later `correct` pick must always be in the trace with its leaf value, even
@@ -2133,19 +2147,48 @@ class PlannerMixin:
         except Exception:
             return 0.0                                   # a featurize/predict slip never crashes ranking
 
+    def _development_plan_set(self) -> set:
+        """Card ids that are declared GAME-PLAN bodies BELOW the payoff — win-condition/secondary-attacker
+        line pre-evolutions (`_recognized_line_preevo_set`) plus any card carrying an attacker/engine Role
+        (`_DEVELOPMENT_PLAN_ROLES`). The payoff itself is excluded (it earns the higher wincon tier). The
+        develop leaf credits a body on this set above an off-plan body — an opener/utility Basic with no
+        declared role (Meowth ex) — so a setup turn that builds the plan out-scores one that stacks a
+        bench-warmer, WITHOUT the wincon tier's setup-blindness (the payoff isn't in play yet during
+        setup, so `_wincon_set` alone credits nothing there). Match-invariant (pure over the fixed
+        `Strategy`) → memoised like the other line sets; a deck that declares no roles/lines yields the
+        empty set and the credit collapses to the payoff-only behaviour (no regression)."""
+        cached = getattr(self, "_development_plan_cache", None)
+        if cached is not None:
+            return cached
+        plan = set(self._recognized_line_preevo_set())
+        plan |= {cid for cid, roles in self.strategy.roles.items()
+                 if _DEVELOPMENT_PLAN_ROLES & set(roles)}
+        plan -= self._wincon_set()
+        self._development_plan_cache = plan
+        return plan
+
     def _board_development(self, me: dict) -> float:
         """The development left on MY simmed end-of-turn board — the `_PLANNER_DEV_W` term's input
-        (ADR-0031 decision 4, exercised from the engine-rank phase): bodies in play plus the Energy
-        attached to them, PLUS a per-body credit for a WIN-CONDITION body (role-gated `_wincon_set`).
-        A coarse, engine-readable progress measure that splits prize-equal lines toward the one that
-        leaves the stronger board — a line that builds toward the win over one that only stacks junk
-        (develop-rung Phase 0); `_leaf_value` caps its contribution below a prize."""
+        (ADR-0031 decision 4, exercised from the engine-rank phase): every body in play plus its attached
+        Energy (the base), PLUS a per-body/per-Energy credit tiered by how much the body advances my game
+        plan — the payoff highest (`_wincon_set`), a game-plan piece next (`_development_plan_set`), an
+        off-plan opener nothing extra. A coarse, engine-readable progress measure that splits prize-equal
+        lines toward the one building the win — the payoff tier alone can't (it is inert during setup, the
+        payoff not yet in play), so the plan tier is what discriminates a wincon-line setup board from one
+        that stacks junk or feeds an opener (develop-rung Phase 0); `_leaf_value` caps it below a prize."""
         bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
         wincon = self._wincon_set()
-        on_wincon = [p for p in bodies if p.get("id") in wincon]
-        return (10.0 * len(bodies) + 5.0 * sum(len(p.get("energies") or []) for p in bodies)
-                + _PLANNER_WINCON_DEV_W * len(on_wincon)
-                + _PLANNER_WINCON_ENERGY_W * sum(len(p.get("energies") or []) for p in on_wincon))
+        plan = self._development_plan_set()
+        dev = 0.0
+        for p in bodies:
+            energy = len(p.get("energies") or [])
+            dev += 10.0 + 5.0 * energy                       # base: a body plus its attached Energy
+            cid = p.get("id")
+            if cid in wincon:
+                dev += _PLANNER_WINCON_DEV_W + _PLANNER_WINCON_ENERGY_W * energy
+            elif cid in plan:
+                dev += _PLANNER_PLAN_DEV_W + _PLANNER_PLAN_ENERGY_W * energy
+        return dev
 
     def _simulate_line(self, obs, first_step, max_steps: int = 40, *, opponent_reply: bool = False):
         """Forward-simulate a candidate line through the Engine Search to my end-of-turn board (the

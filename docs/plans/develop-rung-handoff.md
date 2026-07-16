@@ -6,11 +6,22 @@ the two design docs it points to. Companion plans: [turn-planner-develop-rung.md
 
 ## TL;DR
 
-The develop rung is **built (Phases 0–3), armed-ON, and playing setup turns badly** ("almost drunk",
-user). The root cause is the one the plan always named: **its end-of-turn LEAF is blind.** The offline
-measurement bench (the "leaf lab") is built and gives the baseline — **the leaf ranks the human's intended
-pick highest 0 / 2 times.** The next real work is **enriching the leaf against the lab** (then an ML value
-net if hand-tuning plateaus). The rung stays **armed** on purpose, to harvest labeled leaf-failure data.
+The develop rung is **built (Phases 0–3), armed-ON**. Its end-of-turn LEAF was blind; the offline
+measurement bench (the "leaf lab") measures it. **2026-07-16:** the lab was **broadened** to score the
+whole tagged setup corpus (`is_leaf_frame`: any MAIN-select `correct` pick, not only prose `turn_plan`
+records) — **2 → 267 scorable frames** — and the leaf got its first sound enrichment: a **plan-tier
+credit** in `_board_development` (payoff > game-plan piece > off-plan opener), which fixes the fact that
+the old wincon credit was **inert during setup**. Result **155→160/267** (lucario **22→24/37**), flagship
+Poké Pad frame **MISS→OK**. **Honest-metric caveat (built same day): those rates are the LENIENT
+"shared-top" (a shared max counts). The lab now also reports SOLE-top — a UNIQUE max, i.e. the number the
+argmax rung would actually pick your option — and it is only ~5% (2/37 lucario, 14/267 full). The 65% was
+ties (avg 3.7). So the leaf's real ceiling is DISCRIMINATION / tie-breaking, which end-board features can't
+do on convergent boards — depth (2-ply / value net) is the lever.** Residual misses cluster into the
+**resource-conservation / tempo** class
+("save the Ultra Ball", "attaching is a waste") — a raw `handCount` credit lifts the aggregate to 28/37
+but is **non-monotonic (overfit) and REGRESSES the flagship Poké Pad frame**, so it was rejected: this is
+the parked value-function problem (ADR-0053 ML net), not a hand-tuned scalar. Rung stays **armed** to
+harvest more labeled data.
 
 ## What the rung is (30-second recap)
 
@@ -25,11 +36,11 @@ armed behind the `develop_rollout` PROFILE flag (**currently ON**).
 
 | Phase | State | Notes |
 |---|---|---|
-| 0 — leaf | **enriched but never validated** | `_board_development` credits wincon bodies/energy. The correction-board proof was *deferred to the ladder* — the unfinished bottleneck. |
+| 0 — leaf | **enriched (plan-tier) + lab-validated** | `_board_development` now tiers the credit: payoff (`_wincon_set`) > game-plan piece (`_development_plan_set` — line pre-evos + attacker/engine Roles) > off-plan opener. Fixes the setup-blindness (the payoff isn't in play during setup, so the old wincon-only credit was **inert** — the leaf collapsed to `10·bodies + 5·energy`). Lab: **155→160/267** full corpus, **22→24/37** lucario; the flagship Poké Pad frame (ep86090147) went **MISS 3/6 → OK 1/6**. |
 | 1 — rung | **built** | `_develop_rollout_line`; telemetry `Decision.plan_candidates` + `planned.value`; soundness guard (defers on `KO_SCORE`-class rollout values). |
 | 2 — cost/ladder | **armed-ON, shipped** | Cost affordable (~1s/game, 0 crashes/60 games). `develop_rollout: True` in PROFILE; the armed-ON build is submitted (on `main`). |
 | 3 — retire whack-a-mole | **capture + consumer built** | `turn_plan` capture + `classify_develop_correction`/`develop_batch_report`. First batch: **0 retire candidates**, 1 cross-turn over-fire. |
-| Leaf lab | **built** | Offline leaf measurement via cgpy. **Baseline: leaf ranks `correct` highest 0/2, avg top-tie 2.5.** |
+| Leaf lab | **built + broadened** | Offline leaf measurement via cgpy. `is_leaf_frame` now scores **any MAIN-select correction with a `correct` pick**, not only prose `turn_plan` records — the corpus jumped **2 → 267 scorable** (the whole tagged setup corpus now drives enrichment). |
 
 ## The diagnosis: why it plays "drunk"
 
@@ -69,14 +80,18 @@ well, and the cross-turn reasoning the corrections cite ("evolve *next turn*") i
 
 ## Next steps (priority order)
 
-1. **Enrich the leaf**, measured on the lab. First jobs: (a) **break the ties** — `_board_development`
-   needs features that discriminate setup boards (wincon-line completeness, evolution readiness,
-   energy-on-attacker vs wasted, bench composition), (b) keep the **phantom `KO_SCORE` sim-wins** from
-   dominating the develop leaf (the soundness guard already makes the *rung* defer on them, but the lab
-   shows the leaf still emits 1075 — decide whether to clamp them in `_board_development` scoring). Target:
-   move `leaf_correct_rate` off 0/2 and shrink `avg_top_tie`.
-2. **Grow the corpus** — keep tagging `turn_plan` corrections on armed-ON games.
-3. **ML value net (ADR-0053)** if hand-tuning plateaus — the lab validates it the same way.
+1. ✅ **DONE (2026-07-16): the plan-tier credit** — `_board_development` now credits game-plan pieces
+   (`_development_plan_set`) below the payoff, curing the setup-blindness. This is the sound, general
+   slice of "enrich the leaf." Two enrichment fronts REMAIN and are **ML-net territory, not scalar-tunable**:
+   - **Resource-conservation / tempo** (the dominant residual miss): the leaf over-values spending a
+     tutor (Ultra Ball) for a marginal 4th–6th body where the human conserves. The only sim-visible signal
+     is `handCount` (the end board has NO `hand` list — hidden), and a `handCount` credit **overfits**
+     (non-monotonic sweep; regresses the Poké Pad frame — it can't tell "spend Ultra Ball for junk" from
+     "spend Poké Pad to build the wincon line"). Leave it for the value net.
+   - **Phantom `KO_SCORE` sim-wins** still dominate some develop leaves (the lab shows 1100). The rung's
+     `>= KO_SCORE` guard already makes the *rung* defer; clamping them inside `_board_development` is open.
+2. **Grow the corpus** — keep tagging setup corrections on armed-ON games; the broadened lab scores them all.
+3. **ML value net (ADR-0053)** — the real fix for the conservation/tempo residue; the lab validates it the same way.
 4. **Phase-3 retirement** only becomes viable once the leaf produces *rung-right* cases (the rung
    reproducing a tuned rule's pick); until then `retire_corroboration` stays empty by design.
 

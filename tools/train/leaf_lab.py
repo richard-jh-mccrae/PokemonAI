@@ -2,10 +2,15 @@
 
 The develop rollout rung commits the option whose simmed end-of-turn board scores highest under
 `_engine_leaf_value`. When it plays badly, the leaf is the suspect (`docs/plans/turn-planner-develop-rung.md`
-Phase 0: "leaf value first — the bottleneck"). This lab re-scores a tagged `turn_plan` correction's
+Phase 0: "leaf value first — the bottleneck"). This lab re-scores a tagged correction's MAIN-select
 board OFFLINE — cgpy-backed, so any leaf version is measurable without a Kaggle-ladder round-trip — and
 reports the one thing that matters: **does the leaf rank the human's `correct` option highest, or bury
 it under a degenerate tie?**
+
+A *leaf frame* (`is_leaf_frame`) is any reseedable MAIN-select correction with a target to rank: a
+turn-planner correction (`turn_plan` payload — the rung's own domain) OR any MAIN-select pick correction
+that names a `correct` option. The second shape lets the whole tagged corpus of setup-turn pick
+corrections drive leaf enrichment, not only the handful that carry the prose `turn_plan` payload.
 
     python tools/train/leaf_lab.py                 # score every turn_plan correction, print the report
     python tools/train/leaf_lab.py --agent dragapult_ex
@@ -49,9 +54,11 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     """Score one `turn_plan` correction's board and rank the human's `correct` pick under the leaf.
 
     Returns per-option `values`, and the verdict: `correct_is_top` (a correct option holds the strict
-    or shared maximum), `correct_rank` (1 = best; ties don't demote), `outscored_by` (options strictly
-    above the best correct), and `top_tie` (how many share the top value — a large tie is a leaf that
-    can't discriminate). `scored` is None-free option count; `unscorable` when no correct option scored.
+    or shared maximum — LENIENT, a shared max counts), `correct_is_unique_top` (a correct option is the
+    SOLE maximum — the honest "the argmax rung would actually pick your option", since ties break by
+    option order, not by you), `correct_rank` (1 = best; ties don't demote), `outscored_by` (options
+    strictly above the best correct), and `top_tie` (how many share the top value — a large tie is a leaf
+    that can't discriminate). `scored` is None-free option count; `unscorable` when no correct option scored.
     """
     values = board_leaf_values(pilot, correction.obs or {})
     correct = list(correction.correct or [])
@@ -61,21 +68,40 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
             "values": values, "scored": len(scored), "n_options": len(values)}
     if not scored or not correct_vals:
         return {**base, "unscorable": True, "correct_value": None, "top_value": None,
-                "correct_is_top": None, "correct_rank": None, "outscored_by": None, "top_tie": None}
+                "correct_is_top": None, "correct_is_unique_top": None, "correct_rank": None,
+                "outscored_by": None, "top_tie": None}
     top = max(scored)
     best_correct = max(correct_vals)
     outscored = sum(1 for v in scored if v > best_correct)
+    top_tie = sum(1 for v in scored if v == top)
+    is_top = best_correct >= top
     return {**base, "unscorable": False, "correct_value": best_correct, "top_value": top,
-            "correct_is_top": best_correct >= top, "correct_rank": outscored + 1,
-            "outscored_by": outscored, "top_tie": sum(1 for v in scored if v == top)}
+            "correct_is_top": is_top, "correct_is_unique_top": is_top and top_tie == 1,
+            "correct_rank": outscored + 1, "outscored_by": outscored, "top_tie": top_tie}
+
+
+def is_leaf_frame(c) -> bool:
+    """Does this correction exercise the develop-rung leaf — a reseedable MAIN-select (context 0) board
+    with a target the leaf can be asked to rank? Two shapes qualify (ADR-0031 develop rung): a
+    turn-planner correction (carries a ``turn_plan`` payload — the rung's own domain, kept even when
+    ``correct`` is empty so an unscored setup turn is still *counted* as a leaf frame), and any
+    MAIN-select pick correction that names a ``correct`` option — the human's intended first action,
+    whatever the correction's scope. Non-MAIN / obs-less records are excluded: the offline sim reseeds
+    ONLY from a MAIN-select board (the leaf-lab gotcha), so they could never be scored regardless."""
+    obs = getattr(c, "obs", None)
+    if not obs:
+        return False
+    if getattr(c, "turn_plan", None):
+        return True
+    return bool(getattr(c, "correct", None)) and (obs.get("select") or {}).get("context") == 0
 
 
 def leaf_lab_report(pilot_for, corrections) -> dict:
     """Aggregate the leaf verdict across a batch. `pilot_for(agent)` builds/returns the cgpy-wired Pilot
-    for an agent (memoised by the caller). Only turn_plan corrections with an `obs` are considered."""
+    for an agent (memoised by the caller). Only leaf frames (``is_leaf_frame``) are considered."""
     rows, skipped = [], 0
     for c in corrections:
-        if not getattr(c, "turn_plan", None) or not getattr(c, "obs", None):
+        if not is_leaf_frame(c):
             continue
         pilot = pilot_for(c.agent)
         if pilot is None:
@@ -83,11 +109,14 @@ def leaf_lab_report(pilot_for, corrections) -> dict:
             continue
         rows.append(evaluate_leaf_on_correction(pilot, c))
     scorable = [r for r in rows if not r["unscorable"]]
-    leaf_correct = [r for r in scorable if r["correct_is_top"]]
+    leaf_correct = [r for r in scorable if r["correct_is_top"]]           # lenient: shared max counts
+    leaf_strict = [r for r in scorable if r["correct_is_unique_top"]]     # honest: SOLE max (rung's pick)
     return {"n": len(rows), "scorable": len(scorable), "unscorable": len(rows) - len(scorable),
             "skipped_agent": skipped,
             "leaf_correct": len(leaf_correct),
             "leaf_correct_rate": (len(leaf_correct) / len(scorable)) if scorable else None,
+            "leaf_correct_strict": len(leaf_strict),
+            "leaf_correct_strict_rate": (len(leaf_strict) / len(scorable)) if scorable else None,
             "avg_top_tie": (sum(r["top_tie"] for r in scorable) / len(scorable)) if scorable else None,
             "rows": rows}
 
@@ -118,23 +147,28 @@ def main(argv=None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    ap = argparse.ArgumentParser(description="Measure the develop-rung leaf on tagged turn_plan corrections")
+    ap = argparse.ArgumentParser(description="Measure the develop-rung leaf on tagged MAIN-select corrections")
     ap.add_argument("--agent", default=None, help="restrict to one agent (default: all)")
     ap.add_argument("--store", default=str(REPO / "data" / "corrections"))
     args = ap.parse_args(argv)
 
     from train.blunder.store import load_corrections
-    corrs = [c for c in load_corrections(args.store) if getattr(c, "turn_plan", None)]
+    corrs = [c for c in load_corrections(args.store) if is_leaf_frame(c)]
     if args.agent:
         corrs = [c for c in corrs if c.agent == args.agent]
 
     rpt = leaf_lab_report(_cgpy_pilot_builder(), corrs)
-    print(f"\n=== leaf lab: {rpt['n']} turn_plan corrections "
+    print(f"\n=== leaf lab: {rpt['n']} leaf frames "
           f"({rpt['scorable']} scorable, {rpt['unscorable']} unscorable, {rpt['skipped_agent']} agent-skip) ===")
-    rate = rpt["leaf_correct_rate"]
-    print(f"leaf ranks `correct` highest: {rpt['leaf_correct']}/{rpt['scorable']}"
-          f"{f' ({rate:.0%})' if rate is not None else ''}   avg top-tie: "
-          f"{rpt['avg_top_tie']:.1f}" if rpt['avg_top_tie'] is not None else "n/a")
+    strict, lenient = rpt["leaf_correct_strict_rate"], rpt["leaf_correct_rate"]
+    tie = rpt["avg_top_tie"]
+    def _pct(x):
+        return f" ({x:.0%})" if x is not None else ""
+    tie_s = f"{tie:.1f}" if tie is not None else "n/a"
+    # HEADLINE = strict (the argmax rung would actually pick `correct`); shared-top (lenient) + tie for context
+    print(f"leaf picks `correct` (SOLE top): {rpt['leaf_correct_strict']}/{rpt['scorable']}{_pct(strict)}"
+          f"   | shared-top: {rpt['leaf_correct']}/{rpt['scorable']}{_pct(lenient)}"
+          f"   | avg top-tie: {tie_s}")
     for r in rpt["rows"]:
         if r["unscorable"]:
             print(f"  ep{r['episode_id']} correct={r['correct']}: UNSCORABLE ({r['scored']}/{r['n_options']} sim'd)")
