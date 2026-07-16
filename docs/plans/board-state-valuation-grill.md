@@ -135,6 +135,21 @@ positional board can outrank a real prize. Measure every change on **SOLE-top + 
 distinct-values / distinct-boards ratio**. **Acceptance gate = re-run Gate 0**: the leaf is "good enough"
 when exhaustive search + this leaf BEATS the 1-ply rung (today that A/B is a wash — the leaf is why).
 
+**Builder gotchas (from project memory — restated here so a fresh/remote session has them):**
+- **A big new positive term silently VOIDS every guard calibrated against the old one** (ADR-0060 lesson).
+  `readiness` replaces `_board_development`'s scale — re-check EVERY consumer/threshold sized against the
+  old dev values (`_PLANNER_DEV_CAP`, the develop-rung gate constants, any tuned weight that assumed the
+  old magnitude) before trusting old behaviour.
+- **A flat positive score can never DECLINE a free play** — the tiering plays any option scoring > 0. The
+  spend account must make a wasteful spend NET negative on the line value, not merely less positive.
+- **Isolated hand-built probes manufacture phantom misplays** — measure on real fixtures / the full menu
+  (the lab + the committed probes), never a synthetic decide() board with options omitted.
+- **"W-route satisfied" ≠ fixed; always retest through the real `decide()`** — a leaf/gate change is
+  invisible to the weight fit; the lab and `tools/train/retest_one.py` are the honest checks
+  (`train.tuner.retest.retest()` returns a dict — `r["fixed"]`).
+- **`tune.py` clobbers `tuned.json`** — keep it out of build commits. **`src/cg/` is off-limits.**
+- **cgpy is parity-limited (~298/434)**: trust the RANKING it produces, never the absolute value.
+
 **Named acceptance scenarios (user, 2026-07-16 — each must rank correctly, or the design fails):**
 1. **Discard-to-draw:** Solrock+Lunatone+Riolu in play, 0 energy on board, 1 energy in hand, no Mega
    Lucario. Correct: attach to NO ONE — discard the energy to Lunar Cycle (draw 3).
@@ -242,7 +257,8 @@ search, not a substitute for it.
 - Learned-term seam: `_value_term`, `_PLANNER_VALUE_W`, `value_model` (ADR-0042, parked).
 - Survival: `_incoming_worst`, `_survives_after_ko` — `planner.py`.
 - Measurement: `tools/train/leaf_lab.py` (honest SOLE-top / distinct-value); the transposition probe
-  (distinct-boards vs distinct-values) — reproduce under `scratchpad/`.
+  (distinct-boards vs distinct-values) — `tools/train/probes/transposition_probe.py`; per-frame leaf
+  dumps `tools/train/probes/leaf_diag.py`; the Gate-0 A/B `tools/train/probes/gate0_ab.py`.
 
 ## Related
 [[value-model-needs-nonmirror-gauntlet]] · [[ml-build-plan-adr-0053]] · [[leaf-lab-develop-rung]] ·
