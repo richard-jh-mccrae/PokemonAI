@@ -2,10 +2,15 @@
 
 The develop rollout rung commits the option whose simmed end-of-turn board scores highest under
 `_engine_leaf_value`. When it plays badly, the leaf is the suspect (`docs/plans/turn-planner-develop-rung.md`
-Phase 0: "leaf value first — the bottleneck"). This lab re-scores a tagged `turn_plan` correction's
+Phase 0: "leaf value first — the bottleneck"). This lab re-scores a tagged correction's MAIN-select
 board OFFLINE — cgpy-backed, so any leaf version is measurable without a Kaggle-ladder round-trip — and
 reports the one thing that matters: **does the leaf rank the human's `correct` option highest, or bury
 it under a degenerate tie?**
+
+A *leaf frame* (`is_leaf_frame`) is any reseedable MAIN-select correction with a target to rank: a
+turn-planner correction (`turn_plan` payload — the rung's own domain) OR any MAIN-select pick correction
+that names a `correct` option. The second shape lets the whole tagged corpus of setup-turn pick
+corrections drive leaf enrichment, not only the handful that carry the prose `turn_plan` payload.
 
     python tools/train/leaf_lab.py                 # score every turn_plan correction, print the report
     python tools/train/leaf_lab.py --agent dragapult_ex
@@ -70,12 +75,28 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
             "outscored_by": outscored, "top_tie": sum(1 for v in scored if v == top)}
 
 
+def is_leaf_frame(c) -> bool:
+    """Does this correction exercise the develop-rung leaf — a reseedable MAIN-select (context 0) board
+    with a target the leaf can be asked to rank? Two shapes qualify (ADR-0031 develop rung): a
+    turn-planner correction (carries a ``turn_plan`` payload — the rung's own domain, kept even when
+    ``correct`` is empty so an unscored setup turn is still *counted* as a leaf frame), and any
+    MAIN-select pick correction that names a ``correct`` option — the human's intended first action,
+    whatever the correction's scope. Non-MAIN / obs-less records are excluded: the offline sim reseeds
+    ONLY from a MAIN-select board (the leaf-lab gotcha), so they could never be scored regardless."""
+    obs = getattr(c, "obs", None)
+    if not obs:
+        return False
+    if getattr(c, "turn_plan", None):
+        return True
+    return bool(getattr(c, "correct", None)) and (obs.get("select") or {}).get("context") == 0
+
+
 def leaf_lab_report(pilot_for, corrections) -> dict:
     """Aggregate the leaf verdict across a batch. `pilot_for(agent)` builds/returns the cgpy-wired Pilot
-    for an agent (memoised by the caller). Only turn_plan corrections with an `obs` are considered."""
+    for an agent (memoised by the caller). Only leaf frames (``is_leaf_frame``) are considered."""
     rows, skipped = [], 0
     for c in corrections:
-        if not getattr(c, "turn_plan", None) or not getattr(c, "obs", None):
+        if not is_leaf_frame(c):
             continue
         pilot = pilot_for(c.agent)
         if pilot is None:
@@ -118,13 +139,13 @@ def main(argv=None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    ap = argparse.ArgumentParser(description="Measure the develop-rung leaf on tagged turn_plan corrections")
+    ap = argparse.ArgumentParser(description="Measure the develop-rung leaf on tagged MAIN-select corrections")
     ap.add_argument("--agent", default=None, help="restrict to one agent (default: all)")
     ap.add_argument("--store", default=str(REPO / "data" / "corrections"))
     args = ap.parse_args(argv)
 
     from train.blunder.store import load_corrections
-    corrs = [c for c in load_corrections(args.store) if getattr(c, "turn_plan", None)]
+    corrs = [c for c in load_corrections(args.store) if is_leaf_frame(c)]
     if args.agent:
         corrs = [c for c in corrs if c.agent == args.agent]
 
