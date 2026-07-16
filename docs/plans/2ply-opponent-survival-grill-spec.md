@@ -1,8 +1,10 @@
 # 2-ply opponent survival / return-KO reachability — GRILLED, decisions locked
 
 **Status:** grilled 2026-07-16 — all six grill questions resolved into the six **Locked Decisions**
-below; **graduated to [ADR-0064](../adr/0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)**
-(this doc remains the build plan). Companion to
+below; **graduated to [ADR-0064](../adr/0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)**;
+**core BUILT 2026-07-16** (reachability primitive + `_incoming_worst` refactor + loss rung +
+grant-awareness — suite-green; the charged matched-Read relaxation and the promote stand-down are the
+documented next increment — see ADR-0064 §Build status). This doc remains the build plan. Companion to
 [board-state-valuation-grill.md](board-state-valuation-grill.md) (the leaf — my-side readiness; this doc
 is its deliberately-excluded opponent-facing counterpart), [ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md)
 (the sound within-turn search; this layer is heuristic, sits above it), and

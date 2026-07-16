@@ -2,8 +2,42 @@
 
 **Status.** Accepted (grilled 2026-07-16, session grill on
 [`docs/plans/2ply-opponent-survival-grill-spec.md`](../plans/2ply-opponent-survival-grill-spec.md) —
-six locked decisions). **NOT yet built** — the grilled spec is the build plan; regression gates listed
-under §Consequences. Deprecates ADR-0043; amends the `incoming-affordability.md` WON'T-FIX.
+six locked decisions). **BUILT (core) 2026-07-16** — the threat read, the refactor, the loss rung and
+grant-awareness landed and green; the charged matched-Read *relaxation* and the promote stand-down are
+the documented next increment (see §Build status). Deprecates ADR-0043; amends the
+`incoming-affordability.md` WON'T-FIX.
+
+## Build status (2026-07-16)
+
+**Landed and suite-green (Decisions 1-threat, 2, 3, 5):**
+- `CombatMath.reachable_incoming` (`src/common/strategy/combat.py`) — the one reachability primitive:
+  current form + one forward evolution hop, BOTH energy policies (ceiling worst-case / charged
+  per-attack typed affordability with the colourless-burst split), transient-grant-aware on the
+  current form. Unit-tested end-to-end incl. the typed/colourless split (`tests/strategy/test_reachable_incoming.py`).
+- `_incoming_worst` (`planner.py`) refactored to a thin adapter over it — all five call sites flip
+  together; pool-forward existence gate; default **ceiling / worst-case** energy policy (the
+  `_incoming_budget` stash is `None` in v1 ⇒ every survival read is unconditionally worst-case, the
+  bounded-pessimism default). Fixes the named bug (a benched evolving threat is now seen). No fixture
+  re-baseline was needed — added pessimism flipped no asserted decision.
+- The `-KO_SCORE` predicted-loss rung (`_predicted_loss`, wired into `_engine_leaf_value`) — gated on
+  the visible bench-empty fact + budgeted Incoming ≥ HP. Unit-tested (`tests/strategy/test_predicted_loss_rung.py`).
+- Grant-awareness (Decision 5) comes for free through the primitive: self-lock/same-lock/self-bonus
+  honoured on a body's live-Active form, so the two engine-leaf call sites now read a locked opponent
+  Active correctly; benched bodies carry no grant.
+
+**Deferred to the next increment (Decision 1-charged / variant 2, Decision 4):**
+- Populating `_incoming_budget` from a matched Read so the *safety* direction can relax pessimism
+  ("greedy is fine" when the opponent provably cannot reach a lethal typed cost). The charged POLICY
+  is already built and unit-tested; what remains is the **colourless-burst-allowance derivation** from
+  the matched rep list. That derivation is genuinely delicate — the energy model counts cards, not
+  units, so "Ignition = 3 colourless in one attach" needs sound per-special-energy unit accounting —
+  and it moves pessimism in the exact direction the 2026-07-07 revert failed on, so it must land
+  behind the `planner_6858`/`planner_0cbc` real-state gate as a focused subsystem pass, never a
+  tail-end heuristic. Ceiling-everywhere is the correct conservative v1 until then (worst-case when
+  unmatched — and v1 treats every decision as unmatched for the *energy* budget).
+- The `interpose`/`dont-promote-into-their-prize-reach` stand-down consumer (Decision 4 safety gate)
+  rides on that same matched-Read read.
+- Escalation code removal (Decision 6) — already gated on a corpus re-check; ADR-0043 marked Deprecated.
 
 ## Context
 

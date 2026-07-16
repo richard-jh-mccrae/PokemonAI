@@ -2045,6 +2045,23 @@ class PlannerMixin:
                 + min(_PLANNER_DEV_CAP, _PLANNER_DEV_W * development)
                 + _PLANNER_VALUE_W * value)
 
+    def _predicted_loss(self, me: dict, opp: dict) -> float:
+        """The predicted-LOSS rung (ADR-0064 Decision 3): a candidate end board whose only Pokémon is
+        a doomed Active — my Bench is EMPTY (a visible fact of the resulting board) and the budgeted
+        Incoming Knocks that Active Out next turn — is a predicted **game loss**, not a lost body.
+        Returns ``-KO_SCORE`` (mirroring ``_two_ply_value``'s terminal read — a rung, not a weight),
+        else 0. The flat ``_PLANNER_SURVIVAL_W`` keeps pricing the recoverable lose-a-body case; this
+        only bites when the loss is structural. Composes below the win rung by construction (a line
+        that wins outright returns ``KO_SCORE × (prizes+1)`` before any leaf math)."""
+        active = next((p for p in (me.get("active") or []) if p), None)
+        if not (active and active.get("hp")):
+            return 0.0
+        if any(b for b in (me.get("bench") or [])):
+            return 0.0                                    # a bench body soaks — recoverable, not a loss
+        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        incoming = self._incoming_worst(active.get("id"), active.get("hp", 0), opp_bodies)
+        return -float(KO_SCORE) if incoming >= active.get("hp", 0) else 0.0
+
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
         """True if my body (``my_id`` at ``my_hp``) survives the opponent's Incoming AFTER I KO their
         Active this turn — their best affordable REMAINING attacker (a benched body they promote) can't
@@ -2055,24 +2072,21 @@ class PlannerMixin:
 
     def _incoming_worst(self, my_id, my_hp: int, opp_bodies) -> int:
         """The worst Weakness/Resistance-adjusted damage the opponent's affordable attackers among
-        ``opp_bodies`` could deal to my body next turn — the closed-form **Incoming** (CONTEXT.md): the
-        hardest-hitting body whose Energy plus one attach affords an attack, their predicted next
-        promotion. An upper-bound estimate (counts each body's biggest attack once it can afford its
-        cheapest), so a survival check is conservative. 0 when unknown."""
+        ``opp_bodies`` could deal to my body next turn — the closed-form **Incoming** (CONTEXT.md).
+        A thin adapter over ``CombatMath.reachable_incoming`` (ADR-0064): the reachability read now
+        counts each body's CURRENT form AND one reachable EVOLUTION hop (their promote→evolve→attach→
+        attack development step), not just the current body. Still an upper-bound (a form's biggest
+        attack is credited once it can pay its cheapest, worst-case), so a survival check stays
+        conservative. The energy policy is the per-decision budget (``_incoming_budget``): ``None``
+        → worst-case ceiling (unmatched Read); a charged dict → per-attack typed affordability under
+        the matched-Read burst budget. 0 when unknown."""
         my_stat = self.stats.get(my_id) if (self.stats and my_id is not None) else None
-        if not (my_stat and my_hp):
+        if not (my_stat and my_hp):                       # unknown my card → no claim (contract-preserving)
             return 0
-        worst = 0
-        for p in opp_bodies:
-            if not p:
-                continue
-            pstat = self.stats.get(p.get("id")) if self.stats else None
-            if not pstat:
-                continue
-            energy = len(p.get("energies") or []) + 1          # allow one attach next turn
-            if pstat.can_pay_cheapest(energy):
-                worst = max(worst, int(self._predicted_max_damage(pstat, {"id": my_id})))
-        return worst
+        return int(self.combat.reachable_incoming(
+            {"id": my_id, "hp": my_hp}, opp_bodies,
+            charged=getattr(self, "_incoming_budget", None),
+            context=getattr(self, "_opp_attack_context", None)))
 
     def _threat_magnitude(self, opp) -> float:
         """The threat magnitude of the opponent's Active — its biggest printed attack — as the
@@ -2115,9 +2129,10 @@ class PlannerMixin:
         if active and active.get("hp"):
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
-        return self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                development=self._board_development(me),
-                                value=self._value_term(end))    # Tier-5 learned leaf (ADR-0042)
+        return (self._leaf_value(prizes=prizes_taken, active_survives=survives,
+                                 development=self._board_development(me),
+                                 value=self._value_term(end))    # Tier-5 learned leaf (ADR-0042)
+                + self._predicted_loss(me, opp))                 # ADR-0064: bench-empty-doom loss rung
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
