@@ -1,6 +1,6 @@
 # 2-ply opponent survival / return-KO reachability — GRILLED, decisions locked
 
-**Status:** grilled 2026-07-16 — all six grill questions resolved into the five **Locked Decisions**
+**Status:** grilled 2026-07-16 — all six grill questions resolved into the six **Locked Decisions**
 below; ready to graduate to **ADR-0064** (confirmed next free in `docs/adr/README.md`). Companion to
 [board-state-valuation-grill.md](board-state-valuation-grill.md) (the leaf — my-side readiness; this doc
 is its deliberately-excluded opponent-facing counterpart), [ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md)
@@ -139,14 +139,17 @@ unconditionally worst-case and becomes charged-with-archetype-budget, defaulting
 the new model the planner_6858 mirror still reads doomed (Starmie archetype runs Ignition; Nebula Beam
 is colorless-costed → burstable), so the original blunder stays fixed — re-verify on the real states.
 
-### 2. Scope: v1 flips the primitive + leaf survival + promote consumers; `active_doomed` is a named follow-up
+### 2. Scope: a REFACTOR of `_incoming_worst` onto the shared primitive — not an in-place edit
 
-All **five** `_incoming_worst` call sites flip together (`planner.py:1391, 1575` snipe-survival picks;
-`2054` `_survives_after_ko` and its seven callers; `2117, 2424` engine leaves) — they share one function
-asking one question, and a partial flip would create two survival dialects in one file. `active_doomed`
-(`combat.py`) is **separate machinery** and stays worst-case in v1; unifying it onto the budget model is
-a named follow-up behind its own fixture re-baseline (it carries the 19-test blast radius that got the
-last attempt reverted mid-session).
+`_incoming_worst` is not patched where it stands: it becomes a **thin adapter over the consolidated
+reachability primitive** (Decision 1's `_threat_forms`-based read), so the Incoming family gets ONE
+home instead of a fifth dialect. All **five** call sites flip together through that adapter, keeping
+their signatures (`planner.py:1391, 1575` snipe-survival picks; `2054` `_survives_after_ko` and its
+seven callers; `2117, 2424` engine leaves) — they share one function asking one question, and a partial
+flip would create two survival dialects in one file. `active_doomed` (`combat.py`) is **separate
+machinery** and stays worst-case in v1; unifying it onto the budget model is a named follow-up behind
+its own fixture re-baseline (it carries the 19-test blast radius that got the last attempt reverted
+mid-session).
 
 ### 3. Predicted loss is a rung, not a weight
 
@@ -191,25 +194,42 @@ read. Evolution clears attack effects (`rules.md` §4), so a forward form escape
 lock — the serial mechanism gives this for free. Symmetrically, our own Mega-Brave-class lockout is
 already priced by the follow-up cost model (`pilot.py:2312`, ADR-0061).
 
-## Relationship to ADR-0043's `_two_ply_value` (why both exist)
+### 6. The ADR-0043 two-ply escalation is DEPRECATED — this layer supersedes its survival role
 
-A sound two-ply already exists: escalation sims the opponent's whole reply turn with our policy as
-proxy (`_two_ply_value`, ADR-0043). It is **structurally blind to hidden-hand development** — the sim
-can only make the opponent play visible cards; it can never play the Mega Lucario ex we cannot see.
-This layer covers exactly that class, deducing reach from the visible zones (board, hand size, prizes,
-discard) plus the Read — and conversely never simulates opponent moves, never resolves coins, and never
-overrides a sound win/KO rung; it only adjusts sub-prize survival scoring, the loss rung, and
-promote-family stand-downs. No deeper opponent search is in scope (ruled: not feasible, not necessary).
+Ruled: an opponent-reply search is neither feasible nor necessary — we can never assume what they hold
+or what they do with it; we see their board, hand size, prizes and discard, and deduce a best guess
+(Decisions 1 + 4). The escalation's reply sim is **structurally blind to hidden-hand development** (it
+can only make the opponent play visible cards — it can never play the Mega Lucario ex we cannot see),
+which is exactly the threat class that decides these boards. Evidence it is already dead weight:
+- It requires BOTH the `escalation` kill-switch (default `False`, `pilot.py:1019`) AND
+  `search_budget > 0` — and **every shipped agent pins `search_budget: 0`** (mega_starmie,
+  mega_lucario, dragapult_ex; escalation is `search_budget`'s ONLY functional consumer, per
+  ADR-0043's own 2026-07-14 note).
+- Prior regression on record: `planner.py:270` — "the regressed escalation was the two-ply OPPONENT
+  tree."
+- Raising `search_budget` silently re-labels telemetry AND the submission manifest as Tier-1
+  (test-pinned, `tests/submit/test_submit_brief.py`), changing the competition writeup's narrative.
+
+**Action:** ADR-0043 is marked **Deprecated** in the ledger and file header (done this session).
+Physical removal of `_escalate` / `_commit_escalation` / `_two_ply_value` / `_close_attack_tie` /
+`_density_trigger` / `_top_k_candidates` / the `escalation` switch is a follow-up build task of
+ADR-0064, gated on one corpus re-check: no reviewed correction case depends on an escalation pick
+(the tuner's score-diff gate). Decision 3's `-KO_SCORE` precedent is conceptual and survives the
+removal — the loss rung lives in the `_leaf_value` pathway, not in `_two_ply_value`.
+
+This layer itself never simulates opponent moves, never resolves coins, and never overrides a sound
+win/KO rung; it only adjusts sub-prize survival scoring, the loss rung, and promote-family stand-downs.
 
 ## Scope
 
 - **IN:** the reachability primitive per Locked Decision 1 (one evolve hop + one attach + derived burst
-  allowance, ceiling/charged policy switch on `_threat_forms`); flipping all five `_incoming_worst`
-  sites onto it; the loss rung (Decision 3); the interpose/dont-promote stand-down (Decision 4 safety
-  gate); the grant-aware routing residue (Decision 5).
-- **OUT:** a full opponent search/tree (ADR-0043's escalation owns sound reply reads for visible
-  pieces); `active_doomed` unification (named follow-up, own re-baseline); fine hypergeometric
-  draw-odds (deferred, its own note); per-card situational opponent modeling; learned opponent models.
+  allowance, ceiling/charged policy switch on `_threat_forms`); the `_incoming_worst` refactor onto it
+  (Decision 2 — thin adapter, five call sites); the loss rung (Decision 3); the interpose/dont-promote
+  stand-down (Decision 4 safety gate); the grant-aware routing residue (Decision 5); the ADR-0043
+  deprecation marking (Decision 6 — done this session; code removal is the build follow-up).
+- **OUT:** any opponent search/tree (Decision 6 deprecates the last one); `active_doomed` unification
+  (named follow-up, own re-baseline); fine hypergeometric draw-odds (deferred, its own note); per-card
+  situational opponent modeling; learned opponent models.
 
 ## Success measure
 
@@ -223,6 +243,9 @@ promote-family stand-downs. No deeper opponent search is in scope (ruled: not fe
   `missed_disruption` — e.g. ep84889539); no regression on `interpose`/
   `dont-promote-into-their-prize-reach`'s existing passing cases (reviewed correction corpus + the
   tuner's score-diff gate).
+- **Escalation deprecation check:** before the removal build-task lands, confirm no reviewed
+  correction case depends on an escalation pick (they cannot today — every shipped agent runs
+  `search_budget: 0` — but the corpus re-check makes it evidence, not inference).
 - **Budget for the blast radius:** the five call sites flip together; expect synthetic-fixture flips
   and re-baseline them deliberately — give fixture opponents the energy/evolution they are meant to
   threaten with (the recipe from `incoming-affordability.md`'s definition-of-done), or assert the new,
@@ -238,7 +261,8 @@ promote-family stand-downs. No deeper opponent search is in scope (ruled: not fe
   all five call sites: `planner.py:1391, 1575, 2054, 2117, 2424`. Leaf survival term: `_leaf_value`,
   `_PLANNER_SURVIVAL_W` — `planner.py:2033-2046`.
 - **The primitive to build on:** `_threat_forms` / `_threat_clock` — `src/common/strategy/objectives.py:263-318`
-  (ADR-0045); the loss-rung precedent: `_two_ply_value` — `planner.py:2402-2426` (ADR-0043).
+  (ADR-0045); the loss-rung precedent: `_two_ply_value` — `planner.py:2402-2426` (ADR-0043,
+  deprecated per Decision 6 — the precedent is conceptual and survives the code's removal).
 - **Existing evolution-aware / grant-aware reads:** `forward_incoming_damage`, `incoming_active_damage`,
   `active_doomed` — `src/common/strategy/combat.py:273-330`; `_ForwardIndex` —
   `src/common/scouting/forward_index.py` (ADR-0020).
@@ -279,5 +303,5 @@ promote-family stand-downs. No deeper opponent search is in scope (ruled: not fe
 [[posture-target-selection-gap]] · [[snipe-threat-two-signals]] · [[promote-after-ko-priority]] ·
 [[opponent-model-facade-adr-0047]] · [[prize-economy-fetch-grilled]] · [[readiness-leaf-spend-account]].
 ADRs: 0020 (Forward Evolution Index), 0031 (Turn Planner), 0033 (TransientTracker), 0040 (Match
-Objectives / Path Denial), 0043 (Escalation two-ply), 0044 (opponent-choice snipe reads), 0045 (Threat
-Clock), 0047 (Opponent Model facade), 0061 (lock follow-up cost).
+Objectives / Path Denial), 0043 (Escalation two-ply — DEPRECATED by Decision 6), 0044 (opponent-choice
+snipe reads), 0045 (Threat Clock), 0047 (Opponent Model facade), 0061 (lock follow-up cost).
