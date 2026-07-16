@@ -89,6 +89,14 @@ Active Riolu this turn.
 Brave), so `_survives_after_ko` reports "survives" in variant 1 too — the false negative is exact and
 reproducible.
 
+**The two supporters, verified (post-grill audit):** Lillie's Determination (1227) — shuffle hand,
+draw 6 — the greedy refresh. Wally's Compassion (1229) — *heal ALL damage from 1 of your Mega ex;
+return its Energy to hand*. So the defensive line's arithmetic is richer than 270-vs-270: the Wally's
+line ends at **330 HP** (healed; re-attach the returned Energy and Jetting Blow {W}/120 still KOs the
+Active Riolu), surviving Mega Brave 270 with 60 to spare, while the Lillie's line ends at 270 → exact
+KO + empty bench → the loss rung fires. The discrimination works **only if the survival/loss read
+prices the line's END board** (healed HP), not the pre-line board — pin this in the build.
+
 ## The prize-math promote scenarios — MOSTLY ALREADY BUILT
 
 The other two scenarios (opp at 2–3 prizes, my Mega Lucario ex KO'd, promote Hariyama not the
@@ -281,6 +289,26 @@ win/KO rung; it only adjusts sub-prize survival scoring, the loss rung, and prom
   `src/common/card_functions.json` (`energy_accel`) + `EN_Card_Data.csv` (special energy units).
 - **The amended WON'T-FIX:** `docs/todo/incoming-affordability.md` — the ADR must record the amendment.
 - **Deferred sharpening:** [hypergeometric-fetch-closure.md](hypergeometric-fetch-closure.md).
+
+## Residual build-verify items (post-grill audit 2026-07-16 — none reopens a locked decision)
+
+1. **Post-KO promotion is FREE.** `_threat_forms` charges `_promotion_surcharge` on benched bodies;
+   in the `_survives_after_ko` context their Active is dead and promotion is forced — the adapter
+   must waive the surcharge there, or every post-KO threat reads a turn too far out (variant 1 would
+   pass for the wrong reason).
+2. **Confirm the acceptance test's decision surface.** The Wally's/Lillie's choice is a supporter
+   play — it reaches the leaf via the develop/engine-rank path (`plan_candidates` end-boards), not
+   the promote family. Confirm that rung is armed on the fixture states; otherwise the loss rung
+   never touches the scenario this spec is named for.
+3. **`energy_accel` tag coverage for ABILITIES.** The derived burst allowance scans the rep list via
+   Function Tags + special-energy units; verify ability-based accel is actually tagged before
+   trusting a "no burst" read (`src/common/card_functions.json`).
+4. **First-turn evolution gate.** No evolution on either player's very first turn (`rules.md` §4) —
+   the primitive should not evolve-extend on turn 1 (cheap gate; the unmatched-Read worst-case budget
+   already dominates early game, so the direction is harmless either way).
+5. **Deprecation housekeeping (removal task):** mega_starmie/mega_lucario/dragapult_ex
+   `strategy.py`/STRATEGY.md comments cite ADR-0043; `CONTEXT.md`'s Incoming definition predates the
+   budget model. Update both when the escalation code is removed / the primitive lands.
 
 ## Builder gotchas (carried forward — a remote/fresh session needs these without local memory)
 
