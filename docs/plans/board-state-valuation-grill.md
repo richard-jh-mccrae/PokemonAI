@@ -18,25 +18,52 @@ opponent is NOT modelled here (the survival term + the later 2-ply own that). **
 every term capped so the sum stays **< one prize** (the hard-rung invariant is preserved).
 
 ```
-readiness =  Σ_bodies attack_readiness(b)     ← the core, most of the weight
-           + engine      (a draw/accel body that can FIRE its ability this turn — small flat)
+readiness =  Σ_bodies contribution_readiness(b)   ← the core, most of the weight
            + floor       (a bench exists — small BINARY safety: a KO doesn't lose the game)
            [+ resource]  (v2, deferred — see below)
            , all capped; Σ_max < KO_SCORE.
+
+contribution_readiness(b) = max( attack_readiness(b), ability_readiness(b) )   ← CO-EQUAL (edge-case
+   round 2026-07-16: these decks are ABILITY-centric in setup — Lunatone draw-3, Drakloak Recon —
+   so abilities are a first-class contribution, not an "engine" footnote), × saturation(b)
 
 attack_readiness(b) = position_w(b) × progress(b) × value(best_reachable_attack(b))
    best_reachable_attack = b's own attack OR the attack of a REACHABLE evolution
         · gated on the evolution being available (v1: coarse "is it anywhere in deck+hand";
           v2: deck-odds — see hypergeometric-fetch-closure.md)
         · discounted per evolution hop still owed
-   progress = min(energy, cost) / cost  ∈ [0,1]      (energy carries through evolution — verify rules.md)
+        · an attack LOCKED OUT next turn (Mega-Brave-class transient, ADR-0033) counts 0 for next-turn
+          readiness — read the cooldown state, not just energy
+   progress = min(energy, cost) / cost  ∈ [0,1]      (energy carries through evolution — verify rules.md;
+                                                      only PAYABLE energy counts — type-aware, so
+                                                      off-type energy earns nothing)
    value    = the attack's damage / KO-threat         (CombatMath / AttackStat)
    position_w:  Active = 1.0
                 Bench  = base_discount lifted toward 1.0 by PROMOTION-EASE
                          (active's retreat cost − free-retreat tools on the active − a switch in hand);
                          degrades to the flat base_discount when hand info is absent
    = 0 if b has no reachable attack                    (the GATE — this is what kills "energy anywhere")
+
+ability_readiness(b) = value(best FIREABLE ability: draw/accel/setup)
+   · PRECONDITION-gated: partner in play (Lunatone needs Solrock — "write that down"), cost payable
+     (Lunar Cycle needs a discardable {F} in hand), not already spent this turn
+   · position: NO bench discount (abilities fire from the bench — Solrock-active/Lunatone-benched is
+     the IDEAL board) unless the ability text is active-only (read per card)
+   = 0 if nothing fireable
+
+saturation(b): a body filling a UTILITY/ENGINE role already filled by another in-play body contributes
+   ~0 (a 2nd Lunatone is fodder — "we only ever need one Solrock and one Lunatone"); ATTACKERS still
+   accumulate (a 2nd attacker advances the prize race). Role-keyed, never a global body-count penalty.
 ```
+
+**Line value (the planner's ranking scalar — decided with the T0 disposition,
+[t0-planner-disposition.md](t0-planner-disposition.md)):**
+```
+turn_value(line) = readiness(end board) − Σ spend_costs(actions along the line)
+```
+Spend costs = the class-B T0 rules (wasted Ultra Ball / `discard_eot` / Supporter slot / held gust-heal
+etc.), REUSED from the live tuned weight set, summed along the path. Pure spends are additive (no state
+double-count — the flaw that killed raw Σ-scores does not apply). The sound win rung preempts as always.
 **Tools are not a term** — each routes to what it touches: retreat-tools (Air Balloon) → `position_w`;
 damage-tools → `value`; HP-tools (Hero's Cape) → the **survival** term (separate).
 
@@ -44,8 +71,10 @@ damage-tools → `value`; HP-tools (Hero's Cape) → the **survival** term (sepa
 the opponent's board / prize race / threat = survival + the 2-ply; per-card situational value = the net.
 
 **v1 → v2 split:**
-- **v1 (build now):** `attack_readiness + engine + floor`; evo-availability = coarse "anywhere in
-  deck+hand"; `position_w` bench = the flat base_discount (the mobility lift needs the hand).
+- **v1 (build now):** `contribution_readiness (attack ∥ ability, precondition-gated, saturated) + floor`
+  + the spend account; evo-availability = coarse "anywhere in deck+hand"; `position_w` bench = the flat
+  base_discount (the mobility lift needs the hand). Ability preconditions/costs read from Function Tags +
+  card data — verify at source, never recall.
 - **v2 (after hand-visibility plumbing):** the mobility lift (switch-in-hand), the gated actionable-resource
   term (credit ONLY held cards with a LIVE use — an evolution for a base in play, a tutor with a target,
   energy when there's an attacker to feed; NEVER raw handCount — measured overfit), and the deck-odds
@@ -56,6 +85,18 @@ the opponent's board / prize race / threat = survival + the 2-ply; per-card situ
 positional board can outrank a real prize. Measure every change on **SOLE-top + the probe's
 distinct-values / distinct-boards ratio**. **Acceptance gate = re-run Gate 0**: the leaf is "good enough"
 when exhaustive search + this leaf BEATS the 1-ply rung (today that A/B is a wash — the leaf is why).
+
+**Named acceptance scenarios (user, 2026-07-16 — each must rank correctly, or the design fails):**
+1. **Discard-to-draw:** Solrock+Lunatone+Riolu in play, 0 energy on board, 1 energy in hand, no Mega
+   Lucario. Correct: attach to NO ONE — discard the energy to Lunar Cycle (draw 3).
+   `ability_readiness(Lunatone)` + the attach's ~0 readiness gain must beat any attach. (leaf)
+2. **Prize-math promote:** opp at 2–3 prizes, my Mega Lucario KO'd; promote Hariyama (1-prize sacrifice,
+   210 swing) over the 3-prize Mega Lucario. (opponent layer — interpose family + 2-ply; OUT of the leaf)
+3. **Same, opp can't punish** (their attacker at 1 energy): promote Mega Lucario instead — the flip needs
+   the 2-ply return-KO read. (opponent layer)
+4. **Hold-the-evolve:** benched Drakloak, 1 energy, Dragapult in hand — do NOT evolve until 2 energy;
+   Drakloak's Recon Directive outvalues a premature Dragapult. `max(attack, ability)` + progress must
+   reproduce the tuned −46 (`hold-evolution-until-attacker-ready`). (leaf)
 
 *(The "Grill questions" section below is the pre-grill record; the decisions above supersede it.)*
 
