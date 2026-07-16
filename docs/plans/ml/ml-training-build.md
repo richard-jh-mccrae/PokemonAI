@@ -4,41 +4,46 @@
 read first) · [research report](../research/ml-training-system.md) (evidence base).
 This doc is the operational plan: per-session scopes, gate checklists, and the status ledger.
 
+**Label axis:** the Build Sessions, Work Packages, and two Gates below are BUILD-axis labels
+(sessions / work packages / gates) — distinct from the runtime `T<n>` decision **tiers**; see
+[naming-convention.md](../../naming-convention.md).
+
 **How a fresh session uses this doc:** read ADR-0053 + this file; check the status ledger;
 take the next unblocked session (respect the gates); work in a worktree owning only that
 track's files; at session end update the ledger below, tick deliverables, and record gotchas
-in the session-notes column and auto-memory. Parallel-phase sessions (P2a∥P2b, P3a∥P3b) run
-as separate concurrent worktree sessions.
+in the session-notes column and auto-memory. Parallel-phase sessions (Build Session 2a ∥
+Build Session 2b, Build Session 3a ∥ Build Session 3b) run as separate concurrent worktree
+sessions.
 
 ## Status ledger
 
-| Session | WP | Scope | Status | Notes |
-|---------|----|-------|--------|-------|
-| S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
-| S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
-| S2b | WP2 | Eval harness | ☐ unblocked (S1 done) | grill scope drafted → [ml-training-design-s2b.md](ml-training-design-s2b.md); **grill pending** (decisions OPEN) |
-| — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
-| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
-| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
-| S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | design LOCKED → same doc, D3/D4 |
-| — | G2 | Adoption gate | ☐ | |
-| S4 | WP6 | Rotation-loop glue + orchestration | ☐ blocked on G2 | |
-| — | WP5 | League/exploiter | ☐ deferred (unlock: WP4 checkpoints shipped) | |
+| Build Session | Work Package | Scope | Status | Notes |
+|---------------|--------------|-------|--------|-------|
+| Build Session 1 | Work Package 0 (Corpus) | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
+| Build Session 2a | Work Package 1 (Value Net) | Value net v2 | ☐ blocked on Build Session 1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
+| Build Session 2b | Work Package 2 (Eval Harness) | Eval harness | ☐ unblocked (Build Session 1 done) | grill scope drafted → [ml-training-design-s2b.md](ml-training-design-s2b.md); **grill pending** (decisions OPEN) |
+| — | Value-Net Gate | Value-net gate | ☐ | measure per Build Session 2a design D3/D4 |
+| Build Session 3a | Work Package 3 (Blunder Labeler) | Blunder labeler | ☐ blocked on the Value-Net Gate | θ + detector shared with Build Session 3b (design D1/D2) |
+| Build Session 3b-1 | Work Package 4 (Expert-Iteration Tuner) | Expert-iteration plumbing | ☐ blocked on the Value-Net Gate | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
+| Build Session 3b-2 | Work Package 4 | Matchup tables + integration | ☐ blocked on Build Session 3b-1 | design LOCKED → same doc, D3/D4 |
+| — | Adoption Gate | Adoption gate | ☐ | |
+| Build Session 4 | Work Package 6 (Rotation-Loop Glue) | Rotation-loop glue + orchestration | ☐ blocked on the Adoption Gate | |
+| — | Work Package 5 (League/Exploiter) | League/exploiter | ☐ deferred (unlock: Work Package 4 checkpoints shipped) | |
 
 ## Dependency diamond
 
 ```
-WP0 corpus v2 ──┬─→ WP1 value net ──[G1]──┬─→ WP3 blunder labeler → corrections flow (exists)
- (bg from S1)   │                         └─→ WP4 expert-iteration ──[G2]─→ shipped weights
-                └─→ WP2 eval harness ─────────(G2 measured on WP2)─────↑
+Work Package 0 corpus v2 ──┬─→ Work Package 1 value net ──[Value-Net Gate]──┬─→ Work Package 3 blunder labeler → corrections flow (exists)
+ (bg from Build Session 1) │                                                └─→ Work Package 4 expert-iteration ──[Adoption Gate]─→ shipped weights
+                           └─→ Work Package 2 eval harness ────(Adoption Gate measured on Work Package 2)────↑
 ```
 
-Plumbing parallelizes; **integration waits for gates** — WP3 thresholds and WP4 targets are
-meaningless against an unvalidated net.
+Plumbing parallelizes; **integration waits for gates** — Work Package 3 thresholds and Work
+Package 4 targets are meaningless against an unvalidated net.
 
 ---
 
-## S1 — WP0: corpus v2 + contract freeze (serial, 1 session) — ☑ BUILT 2026-07-13
+## Build Session 1 — Work Package 0: corpus v2 + contract freeze (serial, 1 session) — ☑ BUILT 2026-07-13
 
 **Built:** `tools/sim/corpus.py` (matrix + seat-balanced + `MatchRecorder` capture, gzip films,
 per-run manifest, crash-safe resume, `--max-games`/`--max-gb` caps, `prune_runs`); contracts
@@ -53,8 +58,8 @@ game (30k games ≈ 0.84 GB; the game cap binds first, not the byte cap).
   today. `data/meta/decks/` is gitignored/absent AND no generic driver bundle exists to *play* a
   bare decklist, so meta opponents can't be driven yet. The runner accepts an `--opponents` slot
   (manifest `opponents: []`) so they drop in with no rewrite once a driver exists. v1 archetype
-  variety = our 3 decks, which is a valid S2a posterior-block start (design caps vocab ~16, folds
-  the rest into unknown-mass); extend the corpus later with `--resume`.
+  variety = our 3 decks, which is a valid Build Session 2a posterior-block start (design caps vocab
+  ~16, folds the rest into unknown-mass); extend the corpus later with `--resume`.
 - **Serial, not `--jobs` fan-out.** Per-pairing persistent servers (gauntlet lifecycle) amortize
   import; a 30k run is a few hours single-threaded and keeps the machine usable. `--jobs` is a
   later optimization if wall-clock bites.
@@ -62,7 +67,7 @@ game (30k games ≈ 0.84 GB; the game cap binds first, not the byte cap).
   bounds a run and `prune_runs --prune-to-gb` reclaims oldest *complete* runs. Same disk-safety
   intent as the scoped "rotation."
 
-**S2a consumes it:** `python tools/train/value/train.py <agent> --replays data/replays/corpus`
+**Build Session 2a consumes it:** `python tools/train/value/train.py <agent> --replays data/replays/corpus`
 (`load_replay` reads the `.json.gz` films transparently; archetype per seat is in each film's
 `info.TeamNames`).
 
@@ -79,7 +84,7 @@ game (30k games ≈ 0.84 GB; the game cap binds first, not the byte cap).
    versions, schema version) under `data/replays/` (gitignored); disk-cap + rotation policy.
 3. **Background entrypoint:** resumable, capped, restartable (precedent:
    `tools/meta_tracker/run_daily.py` cursor pattern). Kick it off at session end — corpus
-   accumulates while P2 builds.
+   accumulates while Build Sessions 2a/2b build.
 4. **Freeze the three contracts** (write `docs/plans/ml-training-contracts.md`):
    - **C1 — feature/schema versioning:** corpus manifest schema version + `value_model.json`
      meta version; name-list drift → null model already enforces runtime safety.
@@ -87,15 +92,16 @@ game (30k games ≈ 0.84 GB; the game cap binds first, not the byte cap).
      from human-tagged (decide: new `source` value vs. attribution field). Must not break
      `tune.py`'s `source=="own"` filter or the `reviewed.json` flow silently — pick the
      encoding deliberately.
-   - **C3 — eval report format:** JSON the WP2 harness emits and G2 consumes (per-matchup ×
-     seat W/L, paired deltas + CIs, stratum breakdown, checkpoint-pool results).
+   - **C3 — eval report format:** JSON the Work Package 2 harness emits and the Adoption Gate
+     consumes (per-matchup × seat W/L, paired deltas + CIs, stratum breakdown, checkpoint-pool
+     results).
 
 **Exit / deliverables:** corpus runner + manifest + tests (`tests/sim/`), `.github/filters.yml`
 entry, contracts doc, background generation running, ledger updated.
 
 </details>
 
-## S2a — WP1: value net v2 (parallel with S2b)
+## Build Session 2a — Work Package 1: value net v2 (parallel with Build Session 2b)
 
 **Owns:** `tools/train/value/`, `src/common/value/`, `requirements-train.txt` (new).
 
@@ -117,11 +123,11 @@ entry, contracts doc, background generation running, ledger updated.
 3. **Runtime cost check:** the net is evaluated at planner leaves. Measure per-call cost of
    the pure-Python MLP forward; if it materially slows the planner, distill to
    logistic+interactions or cap leaf evaluations. Record the measurement.
-4. **Validation suite:** extend `tools/train/value/sanity.py` + holdout tooling for G1.
+4. **Validation suite:** extend `tools/train/value/sanity.py` + holdout tooling for the Value-Net Gate.
 
-**Exit:** G1 checklist below, run and recorded.
+**Exit:** the Value-Net Gate checklist below, run and recorded.
 
-### G1 — value-net gate (checklist)
+### Value-Net Gate (checklist)
 
 - ☐ Held-out logloss/AUC beats the committed seed model and the 0.69 entropy floor.
 - ☐ Calibration curve acceptable (predicted P(win) tracks empirical winrate by bucket).
@@ -130,9 +136,9 @@ entry, contracts doc, background generation running, ledger updated.
   symmetric mirror openings → ~0.5.
 - ☐ Runtime cost measured and within planner budget.
 
-Fail → iterate WP1. WP3/WP4 **integration** stays blocked; their plumbing may proceed.
+Fail → iterate Work Package 1. Work Packages 3 and 4 **integration** stays blocked; their plumbing may proceed.
 
-## S2b — WP2: eval harness (parallel with S2a)
+## Build Session 2b — Work Package 2: eval harness (parallel with Build Session 2a)
 
 **Owns:** `tools/sim/eval*` (new files only).
 
@@ -141,7 +147,7 @@ Fail → iterate WP1. WP3/WP4 **integration** stays blocked; their plumbing may 
    (`battle.py` already resolves both); matchup × seat balanced; paired-delta stats reusing
    `gauntlet_ab.py`/`paired_ab.py`; emits the C3 report.
 2. **Checkpoint opponent pool:** frozen past builds from the Build Ledger as standing
-   opponents (the deferred-WP5 stand-in; catches regressions and non-transitivity drift).
+   opponents (the deferred Work Package 5 stand-in; catches regressions and non-transitivity drift).
 3. **Duplicate-deal spike (timeboxed, ~half a session):** the engine has NO deal seed. Try
    fork-replay: capture the full opening state from a self-play game (both sides known),
    re-enter it via `search_begin(obs, your_deck, your_prize, opponent_deck, opponent_prize,
@@ -150,12 +156,12 @@ Fail → iterate WP1. WP3/WP4 **integration** stays blocked; their plumbing may 
    (replay same deal under both contestants). If not → document and fall back to paired
    high-N; stratify by a proxy (e.g. seed-model value swing across the game).
 4. **AIVAT plug-in point:** stub interface taking per-decision value estimates over logs;
-   fills in after WP1 lands. Not required for the harness to be usable.
+   fills in after Work Package 1 lands. Not required for the harness to be usable.
 
 **Exit:** end-to-end matrix eval of current agents producing a C3 report; spike verdict
 recorded here.
 
-## S3a — WP3: blunder labeler (parallel with S3b, after G1)
+## Build Session 3a — Work Package 3: blunder labeler (parallel with Build Session 3b, after the Value-Net Gate)
 
 **Owns:** new labeler package under `tools/train/` (e.g. `tools/train/label/`).
 
@@ -177,16 +183,17 @@ recorded here.
 **Exit:** labeler run over the corpus with measured precision at the chosen threshold;
 played-well-lost report produced.
 
-## S3b — WP4: expert-iteration tuner (2 sessions, after G1)
+## Build Session 3b — Work Package 4: expert-iteration tuner (2 sessions, after the Value-Net Gate)
 
 **Owns:** `tools/train/tuner/`.
 
 > **Design is LOCKED in [ml-training-design-s3b.md](ml-training-design-s3b.md)** (Fable design
-> grill, 2026-07-13): expert = one-step fork lookahead + G1 net with terminal override; loss =
-> disagreement constraints through the existing `fit.py` rails (unifies WP3+WP4); matchup
-> tables = γ-scaled per-archetype deltas, ±30 clamp, `γ_min` shared train/runtime. Execute it.
+> grill, 2026-07-13): expert = one-step fork lookahead + Value-Net-Gate-passed net with terminal
+> override; loss = disagreement constraints through the existing `fit.py` rails (unifies Work
+> Package 3 + Work Package 4); matchup tables = γ-scaled per-archetype deltas, ±30 clamp, `γ_min`
+> shared train/runtime. Execute it.
 
-**S3b-1 — plumbing:**
+**Build Session 3b-1 — plumbing:**
 - Expert = Turn Planner + value-net one-step lookahead over each logged decision's legal
   options (offline; engine fork where the planner needs it).
 - Target = expert's option ranking/score distribution; extend `tuner/fit.py` from
@@ -194,38 +201,38 @@ played-well-lost report produced.
   cross-entropy over softmax of linear option scores). Per-deck weights first.
 - Verify path: `tuner/verify.py` + `retest.py` rails; `score_diff.py` for neutrality checks.
 
-**S3b-2 — matchup tables + integration:**
+**Build Session 3b-2 — matchup tables + integration:**
 - Learned matchup-conditioned weight tables: per-archetype weight deltas, applied at runtime
   where Briefs apply boosts (archetype-keyed like `match_brief`; distinct from per-deck
   Hypothesis-id `weight_overrides` seeds — this adds the archetype axis).
-- Adoption run against G2. Compound-feature construction (Soemers co-active pairs) is
+- Adoption run against the Adoption Gate. Compound-feature construction (Soemers co-active pairs) is
   explicitly **v2 backlog**, not this session.
 
-### G2 — adoption gate (checklist)
+### Adoption Gate (checklist)
 
-- ☐ WP4 weights beat current hand-tuned weights on the WP2 harness (paired, matchup × seat
+- ☐ Work Package 4 weights beat current hand-tuned weights on the Work Package 2 harness (paired, matchup × seat
   balanced, checkpoint pool included).
 - ☐ `score_diff.py` neutrality where behavior should not move.
 - ☐ Ship default-ON with kill-switch (existing doctrine); `strategy.params["value_model"]`
   default flips ON here too.
 - ☐ Kaggle ladder watch after ship — ladder stays the final arbiter.
 
-## S4 — WP6: rotation-loop glue
+## Build Session 4 — Work Package 6: rotation-loop glue
 
 **Owns:** `tools/train/pipeline.py` (new), docs.
 
-Orchestration CLI chaining the loop: corpus → train → G1 validate → label → expert-retune →
-G2 eval; scheduled-run wiring (meta-tracker precedent); docs for the rotation/meta-shift
+Orchestration CLI chaining the loop: corpus → train → Value-Net Gate validate → label → expert-retune →
+Adoption Gate eval; scheduled-run wiring (meta-tracker precedent); docs for the rotation/meta-shift
 workflow (new deck → deck-genie doctrine seeds → corpus regen → fine-tune → retune → labeler
 surfaces residuals). Update `docs/architecture/tier-5-value-model.md` and `docs/tuning/` to
 reflect the new pipeline.
 
-## WP5 — league/exploiter (deferred)
+## Work Package 5 — league/exploiter (deferred)
 
-**Unlock:** WP4 has shipped checkpoints + corpus mature. Scope then: behavior-clone the
+**Unlock:** Work Package 4 has shipped checkpoints + corpus mature. Scope then: behavior-clone the
 current main agent from its own logs, PPO fine-tune as exploiter probe (report Stage 4 /
 ByteRL recipe); exploiter winrate spike = robustness alarm. Torch offline-only. Until then
-the WP2 checkpoint pool is the stand-in.
+the Work Package 2 checkpoint pool is the stand-in.
 
 ---
 
@@ -237,9 +244,9 @@ the WP2 checkpoint pool is the stand-in.
   `requirements-train.txt` (never imported by `src/`).
 - Cross-platform: `pathlib`, `encoding="utf-8"`, no OS-only assumptions (CI = windows +
   ubuntu).
-- Every WP lands tests in the mirrored `tests/` area + a `.github/filters.yml` entry.
+- Every Work Package lands tests in the mirrored `tests/` area + a `.github/filters.yml` entry.
 - Kill-switch doctrine: big features ship default-ON with a kill-switch — except the value
-  model + learned weights, which flip default at **G2**, not before.
+  model + learned weights, which flip default at the **Adoption Gate**, not before.
 - Rules/card facts for any strategy reasoning: verify at `docs/rules.md` /
   `docs/rulebook.txt`, never from memory.
 - ADR numbering: the unpushed arch-review branch holds 0052 (KO Oracle), 0054 (provider split),
@@ -252,15 +259,15 @@ the WP2 checkpoint pool is the stand-in.
 Build sessions run on **Claude Opus 4.8** (Fable 5 trial expiring). Settings and
 compensations:
 
-- **Effort:** `xhigh` for every build session and both gates (S1, S2a, S2b, S3a, S3b, G1,
-  G2); `high` for S4 glue; `max` only to re-run a gate that failed twice. Mechanical
-  subagent fan-outs (test authoring, sweeps, verify votes) run at `low`.
+- **Effort:** `xhigh` for every build session and both gates (Build Session 1 / 2a / 2b / 3a / 3b,
+  Value-Net Gate, Adoption Gate); `high` for Build Session 4 glue; `max` only to re-run a gate that
+  failed twice. Mechanical subagent fan-outs (test authoring, sweeps, verify votes) run at `low`.
 - **Session kickoff prompts must say to fan out:** Opus 4.8 under-reaches for subagents by
   default. Each kickoff includes: *"Fan independent verification, test authoring, and
   sweeps out to parallel subagents; work the main thread on design and integration."*
 - **Spend the price gap on verification** (Opus ≈ half Fable per token): run `/code-review`
-  at the end of S2a and S3b before marking the ledger; hold G1/G2 strictly — the gates are
-  the quality backstop for the builder tier.
+  at the end of Build Session 2a and Build Session 3b before marking the ledger; hold the
+  Value-Net Gate / Adoption Gate strictly — the gates are the quality backstop for the builder tier.
 - **Remaining Fable 5 budget, if any, goes to design, not plumbing:** ✅ DONE 2026-07-13 —
   both design grills ran on Fable 5; decisions locked in
   [ml-training-design-s2a.md](ml-training-design-s2a.md) and

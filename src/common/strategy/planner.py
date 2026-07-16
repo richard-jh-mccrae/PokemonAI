@@ -58,7 +58,7 @@ _DEVELOP_TIE_MARGIN = 5.0     # develop rung gate: a top-two score margin below 
                               # greedy has no clear winner, so the rollout may break the tie
 _PLANNER_PATH_W = 25.0         # Tier-3 (ADR-0040): the KO'd key threat sits on MY cheapest Prize
                                # Path — sub-prize, ranks lines within the rung, never beats a prize
-_PLANNER_ENABLER_FREE = 8.0    # cheapest-enabler tier (ADR-0031): a FREE direct-evolve (evolved form
+_PLANNER_ENABLER_FREE = 8.0    # cheapest-enabler rank (ADR-0031): a FREE direct-evolve (evolved form
                                # already in hand, pre-evo legally evolvable this turn) is the cheapest
                                # first step to the SAME KO — no card leaves the deck, no tutor spent.
 _PLANNER_ENABLER_ITEM_SLOT = 6.0  # BUILD 4 (`enabler_item_composer`): an Item enabler's credit WHEN it
@@ -405,16 +405,16 @@ class PlannerMixin:
 
     def _family_win_candidates(self, obs, select, board, options, opp):
         """Yield ``goal="win"`` candidates from the ONE generator family (ADR-0037), SHORTEST-first:
-        tier 0 = a direct KO already on the menu; tier 1 = one develop (attach the Active / retreat
-        into a ready body / evolve the Active / gust up a KO-able last-prize body); tier 2 = the same
-        develop PLUS this turn's one attach; tier 3 = the energy-tutor Supporter line (fetch the
+        level 0 = a direct KO already on the menu; level 1 = one develop (attach the Active / retreat
+        into a ready body / evolve the Active / gust up a KO-able last-prize body); level 2 = the same
+        develop PLUS this turn's one attach; level 3 = the energy-tutor Supporter line (fetch the
         attach the line lacks). Every candidate is min-bound SOUND (worst-coin damage floors, exact
-        prize math, engine-vetted step legality — an option on the menu IS legal); the develop tiers'
+        prize math, engine-vetted step legality — an option on the menu IS legal); the develop levels'
         win test is the conservative legacy precondition (opp-Active prize reaches my remaining count
         or their bench is empty — rider snipes under-counted, never over). An option index is yielded
-        once, at its shortest tier (a refuted candidate is not retried at a longer tier: the verify
+        once, at its shortest level (a refuted candidate is not retried at a longer level: the verify
         cascade drives the same policy either way)."""
-        # tier 0: direct — a KO on the menu that wins now.
+        # level 0: direct — a KO on the menu that wins now.
         seen = set()
         for i, o in enumerate(options):
             if o.get("type") == _ATTACK and self._attack_wins(obs, board, o, opp):
@@ -458,7 +458,7 @@ class PlannerMixin:
                 if win:
                     seen.add(i)
                     yield TurnLine(next_step=[i], goal="win", kind=kind, rationale=why)
-        # tier 3: the energy-tutor Supporter supplies the attach the line lacks (the 4298 shape,
+        # level 3: the energy-tutor Supporter supplies the attach the line lacks (the 4298 shape,
         # game-winning). SOUND only when the deck DEFINITELY still holds a reusable Energy (the
         # match-scoped tracker's positive certainty) — a probable fetch is never a win.
         retreat_on_menu = any(o.get("type") == _RETREAT for o in options)
@@ -477,7 +477,7 @@ class PlannerMixin:
                     seen.add(i)
                     yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                    rationale="lethal (unlock): the energy tutor fetches the winning attach")
-        # tier 4: the evolution-tutor Supporter line (Salvatore, `rush_evolve` — the a212 shape):
+        # level 4: the evolution-tutor Supporter line (Salvatore, `rush_evolve` — the a212 shape):
         # evolve a deck-certain, no-Ability DIRECT evolution onto an in-play body straight from the
         # deck, then (for a benched body) retreat into it and attach — e.g. Salvatore -> Mega Starmie
         # onto a Staryu, free-retreat the opener, attach, Jetting Blow the last body: bench-empty win.
@@ -493,12 +493,12 @@ class PlannerMixin:
             if any(self._tutor_evolution_wins(obs, board, opp, p) for p, _ in targets):
                 yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                rationale="lethal (unlock): the evolution tutor evolves the winning attacker")
-        # tier 5 (`boost_lethal`): retreat into a benched attacker whose DAMAGE-BOOSTED KO wins — the
+        # level 5 (`boost_lethal`): retreat into a benched attacker whose DAMAGE-BOOSTED KO wins — the
         # promote-a-benched-{F}-attacker → play N damage-boost Items → swing-lethal shape (ml f24:
         # Solrock's Cosmic Beam 70 + 2x Premium Power Pro = 130 exact OHKOs Duraludon; opp bench empty
         # -> a bench-empty win). The retreat is the driven step; the SWITCH then promotes the boosted
         # body (`promote_ko_aware`'s `is_ko_promote_target`), the Items price at KO_SCORE via
-        # `_boost_lethal_tactical` once it is Active, and the final swing is the direct tier-0 KO. The
+        # `_boost_lethal_tactical` once it is Active, and the final swing is the direct level-0 KO. The
         # boost total is this-turn plays + playable hand copies (`_typed_boost_total`); the retreated
         # Active benches as the `requiresBench` partner. Min-bound sound; engine-verified on lock.
         if self.boost_lethal and ma is not None:
@@ -512,7 +512,7 @@ class PlannerMixin:
                     if pstat is None:
                         continue
                     boost = self._typed_boost_total(obs, pstat, opp)
-                    if boost <= 0:                          # no boost applies -> not this tier
+                    if boost <= 0:                          # no boost applies -> not this level
                         continue
                     names = self._promote_bench_names(me, j, ma)
                     if self._develop_wins(obs, board, opp, p.get("id"),
@@ -523,7 +523,7 @@ class PlannerMixin:
                         yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                        rationale="lethal (boost): retreat into the boosted KO attacker wins")
                         break
-        # tier 6 (`retreat_enabler_lethal`): a benched attacker ALREADY wins if promoted, but the Active
+        # level 6 (`retreat_enabler_lethal`): a benched attacker ALREADY wins if promoted, but the Active
         # can't retreat now — a retreat-reduction Tool (Air Balloon: {C}{C} less) frees the retreat. Drive
         # the Tool play (already in hand), else a Trainer-tutor Supporter (Petrel: "search a Trainer") whose
         # deck DEFINITELY still holds a covering Tool (ml f15: Petrel -> Air Balloon -> onto Makuhita -> free
@@ -548,7 +548,7 @@ class PlannerMixin:
 
     def _bench_body_wins_if_promoted(self, obs, board, opp, me, ma) -> bool:
         """SOUND: some benched body, promoted with its CURRENT Energy (a freed retreat brings it Active),
-        takes a min-bound winning KO of the opponent's Active. The retreat-enabler tier's win test — the
+        takes a min-bound winning KO of the opponent's Active. The retreat-enabler level's win test — the
         retreat itself is supplied by a Tool, not modeled here (``_develop_wins`` values the body as if
         already Active, the retreated Active provably benched via ``_promote_bench_names``)."""
         return any(self._develop_wins(obs, board, opp, p.get("id"), len(p.get("energies") or []),
@@ -586,12 +586,12 @@ class PlannerMixin:
                       boost_amount: int = 0, boost_type=None, promote_bench_names=None) -> bool:
         """SOUND: this attacker, carrying ``energy``, takes a min-bound affordable KO of the
         opponent's Active AND that KO wins — it reaches my remaining prize count or their bench is
-        empty (no Pokémon to promote). The family's shared develop-tier win test: worst-coin damage
+        empty (no Pokémon to promote). The family's shared develop-level win test: worst-coin damage
         floors via ``bound="min"``, rider snipes deliberately under-counted (conservative).
         ``body``/``extra_type``/``extra_units`` forward to the typed-affordability guard (an Energy
         the line provides can't fund a specific-type slot it doesn't match — Ignition never pays a
         {W}); budget beyond attached+extra stays wild (fail-open). ``boost_amount``/``boost_type``/
-        ``promote_bench_names`` forward the damage-boost rider (the `boost_lethal` tier: a typed
+        ``promote_bench_names`` forward the damage-boost rider (the `boost_lethal` level: a typed
         this-turn boost + a provably-benched `requiresBench` partner)."""
         if not (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench):
             return False
@@ -758,7 +758,7 @@ class PlannerMixin:
         MY deck/prize use the EXACT anchored split (``_exact_own_zones``) when ``lethal_seed_exact`` is
         on and the tracker has anchored; else a decklist prefix — the sound fallback, because only
         non-fetch lines (whose verdict is deck-independent) reach the search unanchored (the fetch
-        tiers gate on ``deck_definitely_has``, which needs the anchor). The prefix is what
+        levels gate on ``deck_definitely_has``, which needs the anchor). The prefix is what
         false-refuted the high-id enabler band before this fix (`deck.csv` is id-sorted).
 
         Opponent zones stay a my-deck prefix: a this-turn lethal ends before the opponent acts
@@ -1265,7 +1265,7 @@ class PlannerMixin:
         threat = self._threat_magnitude(opp)
         lines = []
         for i, o in enumerate(options):
-            cost = 0.0                                    # cheapest-enabler tier (ADR-0031): an enabler
+            cost = 0.0                                    # cheapest-enabler rank (ADR-0031): an enabler
                                                           # that PRESERVES deck/slot resources outranks a
                                                           # tutor reaching the SAME KO; 0 = the scarce
                                                           # Supporter tutor (last), sub-prize throughout
@@ -1298,7 +1298,7 @@ class PlannerMixin:
                 cand = self._rare_candy_ko_candidate(obs, select, board, o, opp, opp_player, extra,
                                                      retreat_on_menu, accel=accel_free)
                 kind, cost = "rare candy", self._item_enabler_cost(board)   # BUILD 1: a Basic->Stage2 skip
-                #                       Item — tiered like the item tutor (slot-preservation credit)
+                #                       Item — ranked like the item tutor (slot-preservation credit)
             elif o.get("type") == _PLAY:
                 cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player,
                                                     accel=accel_sup)
@@ -1737,7 +1737,7 @@ class PlannerMixin:
         min-bound, cap 1) ON TOP, for a max budget of manual(1) + accel(1) = 2. ``_composed_extra`` caps the
         manual term, so Crispin-as-tutor and Crispin-as-accel never triple-count. Every KO goes through
         ``_best_affordable_ko_value(bound="min")`` — a coin-conditional attack floors to its min damage, so
-        no phantom KO. Value reflects the downstream evolve+attach KO; the caller tiers step[0] via
+        no phantom KO. Value reflects the downstream evolve+attach KO; the caller ranks step[0] via
         ``_item_enabler_cost`` (slot-conditional, BUILD 4).
 
         NARROW SCOPE — single Item → single DIRECT evolve → attack. TODO (generality deferred): multi-hop
@@ -1864,7 +1864,7 @@ class PlannerMixin:
         still in my deck (the tracker's positive certainty, `Board.deck_definitely_has`), is
         Salvatore-eligible (no Abilities — the card's own fetch filter), and — carrying the body's
         Energy plus this turn's one attach — takes a min-bound winning KO (`_develop_wins`). The
-        family's tier-4 win test; multi-hop descendants are excluded (one Salvatore = one hop)."""
+        family's level-4 win test; multi-hop descendants are excluded (one Salvatore = one hop)."""
         if not self.stats:
             return False
         base = self.stats.get(body.get("id"))

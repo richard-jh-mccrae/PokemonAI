@@ -11,19 +11,22 @@ opponent-property fields.
 
 ## Final design (ADR-0026/0027 + this grilling's extension)
 
-- **Two layers, γ-gated** (γ = Read confidence): a **visible-board floor** (what their current
+- **T4.1 Read — two layers, γ-gated** (γ = Read confidence): a **visible-board floor** (what their current
   board provably threatens — Incoming-class epistemics, always on) plus a **predicted overlay**
   (the dossier's expected attackers/evolution paths and the Brief's authored corrections), weighted
   by γ. Unknown opponent → γ→0 → floor only → structurally no regression.
 - **Net-new in the final architecture**: the overlay feeds **T3's their-side** — predicted
   not-yet-benched bodies join their Prize-Path body set and KO-Race attacker set (γ-weighted
   feasibility), so denial and path choice act *before* the threat lands.
-- **M2 levers stand**: **A** favorability (coverage-gated aggression↔disruption band — now also an
-  input to T3's phase derivation) and **C** accurate development (γ-gated modulator on the
-  forward-evo snipe signal).
-- **Matchup Briefs** (ADR-0027): hand-authored objective counterplay per archetype, `covers:`-routed
-  variants, produced by `/matchup-genie`, walked down the meta ranking at user cadence; the
-  un-Brief'd tail gets the generic core alone.
+- **T4.2 Posture — M2 levers stand**: **A** favorability (coverage-gated aggression↔disruption band
+  — now also an input to T3's phase derivation) and **C** accurate development (γ-gated modulator on
+  the forward-evo snipe signal).
+- **T4.3 Matchup Briefs** (ADR-0027): hand-authored objective counterplay per archetype,
+  `covers:`-routed variants, produced by `/matchup-genie`, walked down the meta ranking at user
+  cadence; the un-Brief'd tail gets the generic core alone.
+- **T4.4 - Opponent Model, Learned Matchup Weights — `grilled, unbuilt`**: the learned counterpart
+  to the Briefs (ML Build Session 3b-2, built by the expert-iteration tuner). No runtime switch yet —
+  design is locked but unbuilt; flips at the **Adoption Gate**.
 
 ## Built (the 50%)
 

@@ -15,12 +15,12 @@
 - [x] Phase 4 General-Strategy disposition + hypothesis drafts complete (§5/§6/§7)
 - [x] Phase 5 **signed off** (2026-06-29) → Phase B authorised (verify-vs-general + decide placement + build all + infra)
 - [x] 2026-07-02 **re-baseline** vs merged `src/common` (ADR-0028/0030/0031/0032/0033/0034/0035 landed): §5b + revised §9
-- [x] Phase 6 Phase B build **COMPLETE** (2026-07-02, gated): T2'–T7' built — see §9 statuses. Gates:
+- [x] Phase 6 Phase B build **COMPLETE** (2026-07-02, gated): B2–B7 built — see §9 statuses. Gates:
   trigger tests 18/18 (`tests/agents/test_mega_lucario_triggers.py`), full suite green, `check_agent`
   playable + deployable. `aligned.json` ledger written.
-- [x] 2026-07-03 **T8': the five deferred items BUILT** (damage-boost OHKO model, attack-condition
+- [x] 2026-07-03 **B8: the five deferred items BUILT** (damage-boost OHKO model, attack-condition
   oracle + cosmic-rule retire, recoil-doom survival charge, stadium tech reads, Lunar-Cycle pair) —
-  see §9 T8'. Trigger tests 33/33; residual deferrals shrunk to the §9 "Still deferred" line.
+  see §9 B8. Trigger tests 33/33; residual deferrals shrunk to the §9 "Still deferred" line.
 - [x] 2026-07-03 **Trainer-swap re-run (deck-genie, this session).** deck.txt trainer package edited
   (Pokémon core 100% unchanged). **Removed:** Maximum Belt (ACE SPEC tool), Team Rocket's Watchtower ×2;
   Judge 3→2, Switch 2→1, Fighting Energy 12→11. **Added:** Unfair Stamp (ACE SPEC Item), Black Belt's
@@ -28,7 +28,7 @@
   finding:** the general layer (grown since Phase A) already covers all four new cards — `baseline_heal`
   is built around Wally's Compassion (`clutch_heal`), the damage-boost model already parses Black Belt's
   Training, the ace-spec/discard guards handle Unfair Stamp — so **no new deck Hypotheses**; the change
-  is doc blocks + disposition flips + deleting the two removed cards' deck rules (Watchtower). See §9 T9'.
+  is doc blocks + disposition flips + deleting the two removed cards' deck rules (Watchtower). See §9 B9.
 
 Cards still to grill: none. Open questions: see §8 (infra/deferred only).
 
@@ -151,7 +151,7 @@ deck.txt → deck.csv via `tools/deck_convert.py to-csv`.
   (deferred) **damage-boost OHKO-line model**; doctrine intent is "stack Power Pro to cross a KO line."
 - **Black Belt's Training** (Supporter, +40 to opp **{ex}** Active only, this turn): the ex-breakpoint
   boost (Maximum Belt's old role). **CardStat `damageBoost=40, damageBoostVsEx=True`** — parsed and
-  consumed by the shipped general damage-boost model (§9 T8'). The `megaEx`-as-{ex} question is
+  consumed by the shipped general damage-boost model (§9 B8). The `megaEx`-as-{ex} question is
   **resolved**: rulebook.txt:337 — Mega Evolution Pokémon ex ARE Pokémon ex, so the {ex} gate includes
   them (matters when the DEFENDER is a Mega ex). **Key difference vs Maximum Belt:** it's a **Supporter**
   (costs the once/turn slot) not a free Tool — so a breakpoint turn can't also Boss's Orders.
@@ -505,7 +505,7 @@ one-sidedly (our deck has no Stage 2) — e.g. Mega Brave 270 vs a 300-HP Stage-
   `bench-the-supporter-tutor` (SETUP + PLAY + `supporter_tutor` + no Supporter in hand) supplies the
   positive trigger; the grab is a **GENERAL** context-ranked TO_HAND supporter-target pair
   (`grab-a-gust-supporter-for-the-ko` / `grab-a-draw-supporter-in-setup`); Tuck Tail is the Tactical
-  `_SELF_RETURN_ESCAPE` credit above. See §5/§9 T9'.
+  `_SELF_RETURN_ESCAPE` credit above. See §5/§9 B9.
 
 ### 4× Lillie's Determination — `draw` (refill) (LOCKED 2026-06-29)
 - **Mechanics:** Supporter. Shuffle hand into deck, draw **6** (**8** if exactly 6 prizes remaining).
@@ -597,7 +597,7 @@ one-sidedly (our deck has no Stage 2) — e.g. Mega Brave 270 vs a 300-HP Stage-
   happens** (this-turn effect); use the **minimum copies** to cross the line (don't over-spend cards).
 - **Anti-patterns:** playing it on a non-attacking turn (wasted); playing fewer than needed to cross
   the line, or more than needed (over-commit cards).
-- **Disposition:** **covers-as-is by the built damage-boost model** (§9 T8') — `CardStat.damageBoost=30,
+- **Disposition:** **covers-as-is by the built damage-boost model** (§9 B8) — `CardStat.damageBoost=30,
   damageBoostType={F}`; `_boost_lethal_tactical` stacks copies to cross a KO line (same model that
   consumes Black Belt's +40-vs-ex). No positional weight needed.
 
@@ -653,7 +653,7 @@ one-sidedly (our deck has no Stage 2) — e.g. Mega Brave 270 vs a 300-HP Stage-
   without needing the gust the same turn. This is the central tax of the ACE-SPEC swap.
 - **Anti-patterns:** playing it vs a non-ex target (the +40 does nothing — wasted Supporter); playing
   it on a turn a gust was the higher-value Supporter; expecting any survivability.
-- **Disposition:** **covers-as-is** by the shipped general damage-boost model (§9 T8'):
+- **Disposition:** **covers-as-is** by the shipped general damage-boost model (§9 B8):
   `CardStat.damageBoost` parsed, `TurnBoostTracker` accumulates it, the oracle applies it before W/R,
   and `_boost_lethal_tactical` makes a boost PLAY that CROSSES a KO line KO_SCORE-class (fires only
   when necessary; stacks with Power Pro copies). No deck rule needed.
@@ -669,7 +669,7 @@ one-sidedly (our deck has no Stage 2) — e.g. Mega Brave 270 vs a 300-HP Stage-
   (Pidgeot control, Meowth-reliant lists) — a meta call, not settled consensus (§2). No self-clash with
   our Meowth anymore (Gravity Mountain doesn't touch abilities).
 - **Disposition:** covers-as-is via the GENERAL deck rule `gravity-mountain-vs-stage2` (+15, reads
-  `board.opp_has_stage2` — §9 T8'). *(The old `watchtower-vs-colorless-abilities` deck rule is
+  `board.opp_has_stage2` — §9 B8). *(The old `watchtower-vs-colorless-abilities` deck rule is
   RETIRED — card removed.)*
 
 ### 11× Basic Fighting Energy — the only energy (LOCKED 2026-06-29 · count 12→11 2026-07-03)
@@ -931,11 +931,11 @@ the General Strategy routes the full prize-map there ([general-strategy.md] "Not
 viable 1-prize attacker. **Fires:** promote / which-attacker decisions in RACE/CLOSE/STABILIZE.
 **Caveat:** must never suppress a lethal of our own (KO-first).
 
-### Deferred to existing General-Strategy work *(Phase-A drafts — ALL BUILT in §9 T8'/T9'; cards updated 2026-07-03)*
-- **Damage-boost OHKO-line model** (Premium Power Pro stacking + ex-breakpoints) — **BUILT** (T8').
+### Deferred to existing General-Strategy work *(Phase-A drafts — ALL BUILT in §9 B8/B9; cards updated 2026-07-03)*
+- **Damage-boost OHKO-line model** (Premium Power Pro stacking + ex-breakpoints) — **BUILT** (B8).
   The +vs-ex boost now comes from **Black Belt's Training +40** (Maximum Belt removed): 270+40=310,
   +Power Pro=340 Dragapult.
-- **Stadium matchup choice** — **BUILT** (T8') as `gravity-mountain-vs-stage2` (reads `opp_has_stage2`).
+- **Stadium matchup choice** — **BUILT** (B8) as `gravity-mountain-vs-stage2` (reads `opp_has_stage2`).
   *(Watchtower cut 2026-07-03 → the Watchtower/Meowth-sequencing half is retired; Gravity Mountain is
   now the sole Stadium.)*
 
@@ -1002,11 +1002,11 @@ Tagging Lunatone `draw` and Hariyama `gust` is the highest-value infra task. (No
   a relaxed (no-`active_doomed`) tempo-stall read → `heave-ho-tempo-gust`.
 - A deck **`engine` Role** (Solrock/Lunatone) → `fetch-the-engine-first`.
 
-### Deferred to existing General-Strategy work *(superseded — all but the last BUILT in §9 T8', 2026-07-03)*
-- ~~**Damage-boost OHKO-line model**~~ — BUILT (T8'): boost facts on `CardStat`, `TurnBoostTracker`,
+### Deferred to existing General-Strategy work *(superseded — all but the last BUILT in §9 B8, 2026-07-03)*
+- ~~**Damage-boost OHKO-line model**~~ — BUILT (B8): boost facts on `CardStat`, `TurnBoostTracker`,
   oracle boosts, `_boost_lethal_tactical` (stacking crossings). The megaEx-as-{ex} question is
   resolved: rulebook.txt:337 says Mega Evolution Pokémon ex ARE Pokémon ex.
-- ~~**Stadium matchup choice + opponent-board reads**~~ — BUILT (T8') as card-fact reads
+- ~~**Stadium matchup choice + opponent-board reads**~~ — BUILT (B8) as card-fact reads
   (`opp_has_stage2` — no Read/Posture dependency) + the deck rule `gravity-mountain-vs-stage2`; only
   current-Stadium visibility (bump timing) remains unread. *(2026-07-03: Watchtower cut, so
   `watchtower-vs-colorless-abilities` is RETIRED; `opp_has_colorless_ability` stays as general infra,
@@ -1015,7 +1015,7 @@ Tagging Lunatone `draw` and Hariyama `gust` is the highest-value infra task. (No
   worse than deferred: the `tutor` Role actively MISFIRED (`play-a-tutor-for-the-unfound-wincon` benched
   the 2-prize ex in setup as a "wincon dig"). Re-modeled GENERAL: `supporter_tutor` tag + the
   `bench-the-supporter-tutor` SETUP rule (no-Supporter-in-hand) + a context-ranked grab + a Tuck-Tail
-  escape. Since Meowth splashes into many decks, this is a system-wide fix, not a deck patch. See §9 T9'.
+  escape. Since Meowth splashes into many decks, this is a system-wide fix, not a deck patch. See §9 B9.
 
 ### Trainer-swap open items (2026-07-03)
 - ~~**`shuffle_hand` tag on Unfair Stamp (1080).**~~ **RESOLVED — the note was stale.** Unfair Stamp's
@@ -1054,29 +1054,29 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
 | Damage-boost OHKO model (Power Pro/Belt breakpoints) | **GENERAL, deferred** | large (meta HP table + stacking) — out of scope this build; named only |
 
 **Tranche order (each gated: trigger tests → `pytest tests/ -q` green → `check_agent.py` playable):**
-- **T1 (foundation): ✅ DONE 2026-06-29 (gated).** `CardStat.recoil` (parsed in `_build_cache`; Wild
+- **B1 (foundation): ✅ DONE 2026-06-29 (gated).** `CardStat.recoil` (parsed in `_build_cache`; Wild
   Press→70 verified); deck `strategy.py` (roles/Line/params) + `main.py` (recoil wired); GENERAL
-  `hold-wincon-dont-shuffle` (−25); DECK `fetch-the-engine-first` (+20). (T1's Judge `discard_hand`
-  tag was superseded on main by the `shuffle_hand` vocabulary; T1's trigger-test file was never
-  committed — recreated in T2'.) _Committed fd3ea94/1fe179a._
-- **T2' (hygiene): ✅ DONE 2026-07-02.** origin/main merged (clean); `main.py` refreshed to the current
+  `hold-wincon-dont-shuffle` (−25); DECK `fetch-the-engine-first` (+20). (B1's Judge `discard_hand`
+  tag was superseded on main by the `shuffle_hand` vocabulary; B1's trigger-test file was never
+  committed — recreated in B2.) _Committed fd3ea94/1fe179a._
+- **B2 (hygiene): ✅ DONE 2026-07-02.** origin/main merged (clean); `main.py` refreshed to the current
   wiring contract (attack_stats + effects + Scout/artifact + briefs + posture + `OwnCardModel`/
   `own_prizes`; import path fix); trigger tests recreated as `tests/agents/test_mega_lucario_triggers.py`
   (18 tests); STRATEGY.md re-baselined (§5b).
-- **T3' (Aura Jab): ✅ DONE 2026-07-02 — GENERAL tactical.** `AttackStat.recoverN/recoverEnergyType/
+- **B3 (Aura Jab): ✅ DONE 2026-07-02 — GENERAL tactical.** `AttackStat.recoverN/recoverEnergyType/
   recoverTarget` (+ `parse_attack_energy_recover`; pool-verified 6 recover attacks), Board
   `my_discard_basic_energy`, Context `attack_id`; `_tactical` recover credit (`_ENERGY_RECOVER` 75/energy
   chip-scale; sub-prize 0.25/cap 0.75 in the KO branch) + self-lock cost (`_LOCK_COST` 40 / `_LOCK_KO`
   0.3, charged only when a lock-free attack is affordable — a lone locking attack still beats passing).
   Tests: fueled AJ > MB; empty-discard MB > AJ; AJ-KO over MB-KO; Stab never below END; ATTACH_FROM
   concentrate routes the load to the benched 2nd Mega (covers-as-is proof).
-- **T4' (swap): ✅ DONE — GENERAL.** Board `active_best_attack_locked` (TransientTracker serial-gated) +
+- **B4 (swap): ✅ DONE — GENERAL.** Board `active_best_attack_locked` (TransientTracker serial-gated) +
   `swap-out-the-locked-attacker` (+35, baseline_retreat; RETREAT or `switch`-tag PLAY when
   `bench_wincon_ready`). Target pick at SWITCH = `promote-the-ready-wincon` (covered).
-- **T5' (prize reach): ✅ DONE — GENERAL.** `dont-promote-into-their-prize-reach` (−20, baseline_promote;
+- **B5 (prize reach): ✅ DONE — GENERAL.** `dont-promote-into-their-prize-reach` (−20, baseline_promote;
   TO_ACTIVE wincon option, `card_prize_value >= opp_prizes_remaining >= 2`, not `promote_target_kos`,
   not closing).
-- **T6' (Heave-Ho): ✅ DONE — DECK.** Engine probe (6 self-matches) pinned the shapes: the evolve
+- **B6 (Heave-Ho): ✅ DONE — DECK.** Engine probe (6 self-matches) pinned the shapes: the evolve
   triggers **ACTIVATE(43)** with bare YES/NO options and the owner only on **`select.contextCard`**
   (id 674), then the target pick is an **opponent-owned SWITCH(3)** select (same shape as Boss's — the
   general gust target tacticals cover it; `select.effect` carries the ability's owner). New GENERAL
@@ -1084,10 +1084,10 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
   the Hariyama EVOLVE), `heave-ho-gust-when-it-pays` (+15 on ACTIVATE-YES with payoff) and
   `heave-ho-decline-without-payoff` (−40 on ACTIVATE-YES without — the Pilot's tie-break otherwise
   always answers YES and would gust up a powered gift).
-- **T7' (deck guards/adoption): ✅ DONE — DECK.** `dont-cosmic-beam-without-lunatone` (−60, keyed on
+- **B7 (deck guards/adoption): ✅ DONE — DECK.** `dont-cosmic-beam-without-lunatone` (−60, keyed on
   the new `attack_id`); `MEGA_LUCARIO_EX` += `accel_source`; `params.preferred_start="first"` +
   `params.my_archetype="Hariyama / Mega Lucario ex / Solrock"`; `aligned.json` ledger.
-- **T8' (the deferred five): ✅ DONE 2026-07-03.**
+- **B8 (the deferred five): ✅ DONE 2026-07-03.**
   - **Damage-boost OHKO model (GENERAL):** `CardStat.damageBoost/damageBoostType/damageBoostVsEx`
     parsed from Trainer text (pool-verified 4: Power Pro {F}+30, Maximum Belt +50-vs-ex, Black
     Belt's Training +40-vs-ex; multi-mode Kieran fail-closed); `TurnBoostTracker` (transients.py)
@@ -1110,18 +1110,18 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
     `watchtower-vs-colorless-abilities` (+15, gated on Meowth NOT still in hand — the
     Last-Ditch-first sequencing). Stadium-slot visibility (bump timing) still unread — minor.
   - **Lunar-Cycle guard (DECK pair):** probe fact — Lunar Cycle is an `ABILITY(10)` MAIN option
-    (nothing endorsed it: score 0 lost to any attack!), so `fire-lunar-cycle` (+15, tier-0
+    (nothing endorsed it: score 0 lost to any attack!), so `fire-lunar-cycle` (+15, sequence-band-0
     sequencing) + `dont-lunar-cycle-away-the-last-attachable-f` (−30, GENERAL Board
     `hand_basic_energy`; self-sequencing: the guard stands down once the turn's attach lands, so
     the ability still fires on the surplus the same turn).
-- **T9' (trainer-swap re-run): ✅ DONE 2026-07-03 — mostly DELETIONS + covers-as-is.** deck.txt trainer
+- **B9 (trainer-swap re-run): ✅ DONE 2026-07-03 — mostly DELETIONS + covers-as-is.** deck.txt trainer
   package edited (Pokémon core unchanged). The general layer (grown since Phase A) already covers all
   four new cards, so **no new deck Hypotheses were authored**:
   - **Removed cards → deleted deck rules:** `watchtower-vs-colorless-abilities` RETIRED (Team Rocket's
     Watchtower cut); Maximum Belt removed (its `damage_tool` Role + const dropped — its breakpoint role
     is re-sourced to Black Belt's Training via the general damage-boost model).
   - **Black Belt's Training (1211):** covers-as-is — `CardStat.damageBoost=40, damageBoostVsEx=True`
-    already parsed + consumed by `_boost_lethal_tactical` (the T8' model). Now a Supporter (slot cost).
+    already parsed + consumed by `_boost_lethal_tactical` (the B8 model). Now a Supporter (slot cost).
   - **Wally's Compassion (1229):** covers-as-is — `clutch_heal` tag → `baseline_heal.py`
     (`hold-clutch-heal` +60 / `dont-waste-clutch-heal` −40), the doctrine literally built around it.
   - **Unfair Stamp (1080):** covers-as-is — `aceSpec` guarded at discard (`keep-key-cards-at-discard`),
@@ -1150,7 +1150,7 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
        against the standard engine option shapes (no non-obvious ACTIVATE like Heave-Ho's — benching a
        Basic and a deck-search are the well-known shapes the trigger-test helpers already model), with
        **`check_agent` real self-matches as the shape safety-net** (a wrong shape surfaces as a
-       crash/illegal move). A dedicated T6'-style probe was not needed here.
+       crash/illegal move). A dedicated B6-style probe was not needed here.
   - **strategy.py delta:** drop `MAX_BELT`/`WATCHTOWER` consts + the `MAX_BELT` Role + the
     `watchtower-vs-colorless-abilities` Hypothesis; **remove the `MEOWTH_EX: ["tutor"]` Role** (the tag
     now drives it); `GRAVITY_MOUNTAIN` const already present; docstring refresh. **Trigger-test delta:**

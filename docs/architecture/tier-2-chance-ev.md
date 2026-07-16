@@ -6,8 +6,8 @@ Battle Result #58 — default ON). Design in
 stochastic actions by **exact** expectation instead of flat penalties or not at all.
 **Upstream:** deck tracker (exact own-deck composition) + Deck-Content Odds (ADR-0029); effect
 compendium for branch valuation.
-**Downstream:** a candidate family on T1's Goal Ladder; fallback EV terms in T0 for non-MAIN
-contexts.
+**Downstream:** a candidate family on T1's Goal Ladder (ranks below the T1.1 win rung); fallback EV
+terms in T0 for non-MAIN contexts.
 
 ## Final design (ADR-0039)
 

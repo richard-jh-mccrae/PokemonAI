@@ -1,9 +1,9 @@
 # Tier 5 — Automatic Value Model
 
-**Status: ~65% complete** (built 2026-07-05, `/tdd`, ADR-0042; a 40-game seed model trains
-end-to-end, holdout logloss **0.60** vs the 0.69 coin-flip floor; DEFAULT OFF pending its ladder
-A/B). The single learned seam (ADR-0007), realized as a **dependency-free logistic over the T3/T4
-objective primitives**.
+**Status: `built, gated:off`** (~65% complete; built 2026-07-05, `/tdd`, ADR-0042; a 40-game seed model trains
+end-to-end, holdout logloss **0.60** vs the 0.69 coin-flip floor; DEFAULT OFF — i.e. `gated:off`,
+flips at the Adoption Gate — pending its ladder A/B). T5 is flat (no sub-tiers). The single learned
+seam (ADR-0007), realized as a **dependency-free logistic over the T3/T4 objective primitives**.
 **Upstream:** mined replays + self-play corpus (labelled states); T3/T4 primitives as features.
 **Downstream:** the planner leaf blend (a capped sub-prize term); `win_prob` on telemetry.
 

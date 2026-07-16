@@ -201,7 +201,7 @@ intact.
 - **General-Strategy disposition:** the **fetch** side is covered (`fetch-the-support` sees Dudunsparce as a `draw`
   engine; Drakloak also fills `support_in_play`). The **activation** side is the open question — a pure `draw`
   `_ABILITY` (option-type 10) has **no combat value** and `dig-before-commit` keys on `_PLAY` (7), so it may score
-  0 → drop to `_finish_turn_last` tier 4 and be **skipped before the turn-ending attack**. **This is load-bearing
+  0 → drop to `_finish_turn_last` sequence band 4 and be **skipped before the turn-ending attack**. **This is load-bearing
   (Run Away Draw AND Drakloak Recon share the mechanism) → being verified empirically** (workflow `wjzvrtwbk`);
   if confirmed, a new GENERAL `use-the-draw-engine-ability` rule (§6) fixes both. *(Munkidori's Adrena-Brain
   auto-activates only because its counter-move earns tactical value — pure draw/dig abilities don't.)*
@@ -305,7 +305,7 @@ color (F/P) or arm Munkidori ({D}). **covers-as-is** by `use-acceleration` + `ad
 
 ### 4× Lillie's Determination (1227) — `draw`, `shuffle_hand` · LOCKED (unchanged)
 Primary hand-refresh (draw 6; **8 at exactly 6 prizes**). Shuffle-Refresh doctrine (ADR-0024): endorsed by
-`dig-before-commit`, floored by the keep-value guards, tier-3 sequenced. Heaviest T1–T2. **(Judge re-added
+`dig-before-commit`, floored by the keep-value guards, sequence-band-3 sequenced. Heaviest T1–T2. **(Judge re-added
 2026-07-15 — Lillie's + Judge are the two `shuffle_hand` refills; both ride the same doctrine, no card conflict.)**
 
 ### 1× Judge (1213) — Role: none (tag-driven) · tags: `draw`, `hand_disruption`, `shuffle_hand` · covers-as-is
@@ -426,7 +426,7 @@ discard-fuel needs its own keep-value term; deferred (general discard keep-value
 > ability carries a `draw`/`dig` engine tag — Drakloak Recon Directive, Dudunsparce Run Away Draw) during SETUP/RACE,
 > sequenced early (before the turn-ending attack), because a pure card-advantage ability has no combat value and
 > `dig-before-commit` (keyed on `_PLAY`) never reaches it — so nothing currently lifts it above `_finish_turn_last`
-> tier 4, and the engine **is** skipped.
+> sequence band 4, and the engine **is** skipped.
 
 **Trigger sketch:** `option_type == _ABILITY` AND the option's ability/card carries a `draw` or `dig` tag AND not
 `cost_discard`. **Fires:** SETUP/RACE. **Lives in:** **GENERAL** `baseline_sequencing` (the free-dig family) — a
@@ -435,11 +435,11 @@ general:** "use your free draw engine" is universal; it's the `_ABILITY` sibling
 
 **VERIFIED (probe `scratchpad/probe_ability.py`, 2026-07-09) — CONFIRMED GAP, NOT redundant.** No hypothesis in
 the general or deck layer reads `option_type == _ABILITY`; a pure draw/dig ability scores **0** (`_tactical`=0 for
-non-attacks) → drops to `_finish_turn_last` tier 4 (`pilot.py` `score<=0 → 4`) → any positive-tactical attack
+non-attacks) → drops to `_finish_turn_last` sequence band 4 (`pilot.py` `score<=0 → 4`) → any positive-tactical attack
 outsorts it (`by_score` descending) → the ability is **skipped** whenever an attack is on the menu; it fires only
 incidentally on a pure-setup turn (no attack). Probe: Recon & Run Away Draw both `score=+0.0 fired={}` and the
 Pilot took the attack instead. **The `_ABILITY` option DOES resolve `card_id` (120 / 66) and its tags** — so this
-tag-keyed rule fires cleanly and lifts it to tier 0. **This is the biggest finding — a GENERAL fix the 2026-07-03
+tag-keyed rule fires cleanly and lifts it to sequence band 0. **This is the biggest finding — a GENERAL fix the 2026-07-03
 build silently needed (its "keep Recon-digging each turn" plan was undriven).** **Related (note, not this rule's
 scope):** Munkidori **Adrena-Brain activation** shares the mechanism (its MAIN `_ABILITY` option also scores 0);
 infra C only handles the *follow-up selects* once it's active. On a lethal/KO-completing turn the planner may

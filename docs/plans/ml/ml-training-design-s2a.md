@@ -1,7 +1,7 @@
-# S2a Design — Value Net v2: Features & Matchup Encoding (LOCKED)
+# Build Session 2a Design — Value Net v2: Features & Matchup Encoding (LOCKED)
 
-**Status:** design locked 2026-07-13 (Fable 5 design grill; user-approved forks). The S2a build
-session **executes** this — it does not re-derive the decisions. Deviations discovered during
+**Status:** design locked 2026-07-13 (Fable 5 design grill; user-approved forks). Build Session 2a
+**executes** this — it does not re-derive the decisions. Deviations discovered during
 build get recorded here with a reason, not silently applied.
 
 **Grounding (verified at design time):**
@@ -34,7 +34,7 @@ New feature block, computed identically at train and runtime (zero train/serve s
 Vocabulary rules: vocab = the meta archetypes present in the corpus (cap ~16, rest folds into
 unknown-mass behavior); the shipped `value_model.json` carries `"archetypes"` and the loader
 requires an **exact match** with the build's `ARCHETYPE_VOCAB` (drift → null model, same rule
-as feature names). Meta rotation ⇒ update vocab + retrain (the WP6 loop).
+as feature names). Meta rotation ⇒ update vocab + retrain (the Work Package 6 rotation loop).
 
 ## D2 — Feature growth (append-only; the 17 keep their order)
 
@@ -54,7 +54,7 @@ opponent hidden-hand content (counts only), engine-internal state.
 
 ## D3 — Capacity: measure, ship MLP if in budget, distill fallback (user-locked)
 
-Train **both** offline: (a) logistic-v2 on the grown features — the baseline, the G1
+Train **both** offline: (a) logistic-v2 on the grown features — the baseline, the Value-Net Gate
 comparison floor, and the guaranteed fallback; (b) a 2×64 ReLU MLP (Modicum sizing).
 
 **Runtime budget gate** (both must pass to ship the MLP):
@@ -77,7 +77,7 @@ runtime stays stdlib-only.
 ## D4 — Training protocol
 
 - **Fix the holdout leak:** `train.py` currently splits every k-th **row** — rows within one
-  game are correlated, so holdout logloss is optimistic. v2 splits by **episode id**; all G1
+  game are correlated, so holdout logloss is optimistic. v2 splits by **episode id**; all Value-Net Gate
   numbers come from episode-level splits. Additionally hold out one **entire deck pair** for
   the cross-deck generalization read.
 - Offline deps: torch (or numpy) via `requirements-train.txt` — never imported by `src/`.
@@ -86,9 +86,9 @@ runtime stays stdlib-only.
 - Report in `meta`: rows, positives, train/holdout logloss (episode-split), held-out-pair
   logloss, ECE (10-bucket reliability), runtime µs/call for the shipped kind.
 
-## Acceptance → G1 mapping
+## Acceptance → Value-Net Gate mapping
 
-G1 checklist items in `ml-training-build.md` are measured exactly as defined here: "beats seed
+Value-Net Gate checklist items in `ml-training-build.md` are measured exactly as defined here: "beats seed
 + 0.69 floor" on the **episode-split** holdout; calibration = the D4 reliability curve;
 cross-deck = the held-out pair; runtime cost = the D3 gate numbers. Sanity probes extend
 `tools/train/value/sanity.py` (prize-diff monotonicity, captured-lethal → high P, mirror
@@ -96,7 +96,7 @@ opening ≈ 0.5, and new: γ=0 board must predict ≈ the general model's output
 
 ## Non-goals (v2 backlog, with triggers)
 
-- Per-archetype model split — trigger: G1 shows per-archetype calibration gaps the posterior
+- Per-archetype model split — trigger: the Value-Net Gate shows per-archetype calibration gaps the posterior
   block doesn't close (Hearthstone +6.5% precedent).
 - Oracle guiding (train with hidden info, anneal away) — sample-efficiency lever if corpus
   volume ever becomes the constraint.

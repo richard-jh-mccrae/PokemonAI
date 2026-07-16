@@ -1,7 +1,7 @@
 """mega_lucario — Strategy (declarative doctrine). See docs/agent-architecture.md and
 src/agents/mega_lucario/STRATEGY.md (the grilled playing doctrine, deck-genie 2026-06-29;
 re-baselined vs the merged general layer 2026-07-02, STRATEGY.md §5b; trainer-swap re-run
-2026-07-03, STRATEGY.md §9 T9').
+2026-07-03, STRATEGY.md §9 B9').
 
 Trainer-swap 2026-07-03 (Pokémon core unchanged): OUT Maximum Belt (ACE SPEC) + Team Rocket's
 Watchtower; IN Unfair Stamp (ACE SPEC Item), Black Belt's Training (+40 vs ex), Team Rocket's Petrel
@@ -262,7 +262,7 @@ HYPOTHESES = [
                   "AGGRESSIVELY: the discarded F is Aura Jab fuel, not waste, and a free +3 cards "
                   "beats almost any other use of the pre-attack window. Nothing endorses an ABILITY "
                   "option generically (it ties with END at 0 and loses to any attack), so the deck "
-                  "says it out loud; the positive score also sequences it TIER-0 (free informative "
+                  "says it out loud; the positive score also sequences it SEQUENCE-BAND-0 (free informative "
                   "development, before the Supporter / the attach / the attack). Stands down exactly "
                   "where the last-F guard below fires, so the pair never double-counts.",
         when=lambda c: c.option_type == _ABILITY and c.card_id == LUNATONE
@@ -290,10 +290,10 @@ HYPOTHESES = [
         rationale="The Lunar Cycle discipline (Phase-A §3 Lunatone): the turn's manual attach to the "
                   "wincon line comes FIRST — never pay the Ability's F-discard with the ONLY Basic "
                   "{F} in hand while this turn's attach is still pending and a body can absorb it "
-                  "(`energy_placeable`). Self-sequencing: the attach (tier 2) resolves first, "
+                  "(`energy_placeable`). Self-sequencing: the attach (sequence band 2) resolves first, "
                   "`energy_attached` flips, this guard stands down, and Lunar Cycle still fires the "
                   "same turn on the surplus — the doctrine's 'hold that F back', not a blanket "
-                  "decline. Surfaced by the T6' probe (the always-YES default would have paid the "
+                  "decline. Surfaced by the B6 probe (the always-YES default would have paid the "
                   "stranding discard). STANDS DOWN when the single {F} IS the whole attach (no surplus "
                   "to cycle) AND the engine is online AND the Active is a weak pre-evo: then attaching "
                   "the lone {F} kills the cycle rather than deferring it, and its 30 chip doesn't change "

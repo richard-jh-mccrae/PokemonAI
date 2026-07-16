@@ -1,7 +1,7 @@
-# S3b Design — Expert-Iteration Targets, Loss & Matchup Weight Tables (LOCKED)
+# Build Session 3b Design — Expert-Iteration Targets, Loss & Matchup Weight Tables (LOCKED)
 
-**Status:** design locked 2026-07-13 (Fable 5 design grill; user-approved forks). The S3b build
-sessions **execute** this — deviations get recorded here with a reason. Depends on G1 (a
+**Status:** design locked 2026-07-13 (Fable 5 design grill; user-approved forks). The Build Session 3b
+sessions **execute** this — deviations get recorded here with a reason. Depends on the Value-Net Gate (a
 validated value net); plumbing may start earlier against the committed seed model.
 
 **Grounding (verified at design time):**
@@ -14,11 +14,11 @@ validated value net); plumbing may start earlier against the committed seed mode
 - Every recorded step obs carries `search_begin_input` (opaque engine fork string); self-play
   logs know BOTH sides, so `cg.api.search_begin(obs, your_deck, your_prize, opponent_deck,
   opponent_prize, opponent_hand, opponent_active)` is fully specifiable offline.
-- Read/γ replayable offline via `pilot._board` (same fact S2a relies on).
+- Read/γ replayable offline via `pilot._board` (same fact Build Session 2a relies on).
 
 ## D1 — The expert: one-step value lookahead over the real option menu
 
-Expert config = the shipped Pilot with all sound tiers ON plus the **G1-passed value net**.
+Expert config = the shipped Pilot with all sound tiers ON plus the **Value-Net-Gate-passed value net**.
 For a sampled decision frame, the expert scores each legal option `i`:
 
 1. Fork the engine from the frame (`search_begin` with the replay's known both-sides state).
@@ -43,19 +43,19 @@ parameter; record it in the run manifest.
 
 ## D2 — Targets & loss: disagreement constraints through the existing fitter (user-locked)
 
-Where `V(expert_best) − V(apprentice_choice) ≥ θ`, emit a **machine Correction** (WP3's C2
+Where `V(expert_best) − V(apprentice_choice) ≥ θ`, emit a **machine Correction** (Work Package 3's C2
 provenance tag; `chosen`=[apprentice pick], `correct`=[expert best], rationale auto-generated
 with ΔV, obs embedded) → `featurize` → `ranking_constraint` → `fit_weights` **unchanged**
 (pocket, L2-to-seed, band clamp, reviewed.json flow all reused).
 
-This deliberately unifies WP3 and WP4: the blunder labeler IS the disagreement detector; S3b
-adds the fit extensions, not a second pipeline. θ is tuned by S3a's human precision review
+This deliberately unifies Work Package 3 and Work Package 4: the blunder labeler IS the disagreement detector; Build Session 3b
+adds the fit extensions, not a second pipeline. θ is tuned by Build Session 3a's human precision review
 (sample flagged disagreements, measure precision, set θ before mass production).
 
 **Outer loop:** fit → replay apprentice over the sampled frames → re-detect disagreements →
 refit. v1 runs ≤ 2 rounds; record the disagreement rate per round (the convergence metric).
 The expert is FIXED within a round; the value net only retrains in the outer rotation loop
-(WP6).
+(Work Package 6).
 
 **v2 escalation (explicit, not v1):** soft cross-entropy over softmax of option scores toward
 the expert's value distribution (torch SGD) — only if constraint-based fitting saturates
@@ -69,7 +69,7 @@ resolution chain untouched, `arch★` = the Read's top candidate, γ = posture c
 
 **Artifact:** `src/agents/<agent>/tuned.matchups.json` — `{archetype: {hyp_id: delta}}` +
 meta (provenance like `tuned.meta.json`). Loaded via a new Pilot ctor arg alongside
-`overrides`; kill-switch param `matchup_weights`, **default OFF until G2 flips it**.
+`overrides`; kill-switch param `matchup_weights`, **default OFF until the Adoption Gate flips it**.
 
 **Runtime:** at `decide()`/`explain()` entry, after `_board`: cache
 `(γ, deltas-for-top-arch)` iff `γ ≥ γ_min`, else empty; `_weight(h)` adds
@@ -86,9 +86,9 @@ and top candidate = A; otherwise it trains the base fit. Same γ-gate at train a
 their move), then `delta = result − base` clamped to **±30** — a matchup table sharpens
 doctrine, it never inverts it (authored weights live at the ±100 scale).
 
-## D4 — Adoption (G2) & neutrality
+## D4 — Adoption Gate & neutrality
 
-- G2 as defined in the playbook: paired matchup×seat-balanced win-delta on the WP2 harness,
+- The Adoption Gate as defined in the playbook: paired matchup×seat-balanced win-delta on the Work Package 2 harness,
   checkpoint pool included; ladder stays final arbiter.
 - **Neutrality invariant:** with `matchup_weights` ON but `γ < γ_min` (or no Read), decisions
   must be bit-identical to OFF — verified with `tools/sim/score_diff.py` over a γ=0 obs

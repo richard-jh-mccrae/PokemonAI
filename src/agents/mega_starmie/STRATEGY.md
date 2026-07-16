@@ -206,7 +206,7 @@ Salvatore rush line stands.
   → KO X" at the point of choosing. The gust (whether-to-play **and** which benched mon)
   is **shipped** as the general Boss's Orders doctrine (ADR-0022, 2026-06-29): the `_can_ko` lethal
   oracle generalizing Tactical to any defender, a whether-to-play gate (+ lethal Tactical term), and
-  the **SWITCH(3)** target-select (KO + prizes + denial + the tier-5 stall). Sniping an evolving pre-evo
+  the **SWITCH(3)** target-select (KO + prizes + denial + the sequence-band-5 stall). Sniping an evolving pre-evo
   with our own attack → general `snipe-the-evolving-threat` (covers the DAMAGE target).
 
 ### 2× Hilda — `search` (targeted setup)
@@ -233,9 +233,9 @@ Salvatore rush line stands.
 - **Disposition:** "Pokégear before your Supporter" is **structural**, not `dig-before-commit`: that
   rule lifts digs above the *attach/attack*, but a Supporter is *also* a `search`/`draw` card, so it
   collected the same bonus — it never ordered the Item-dig vs the Supporter. The Pilot's
-  `_finish_turn_last` tiers a Supporter as a commitment (tier 1) **below** a free Item dig (tier 0), so
+  `_finish_turn_last` sequences a Supporter as a commitment (sequence band 1) **below** a free Item dig (sequence band 0), so
   Pokégear resolves first and may upgrade which Supporter you commit. (The `dig-before-commit` +20 the
-  Supporter still gets is harmless — the tier decides the order.)
+  Supporter still gets is harmless — the sequence band decides the order.)
 
 ### 4× Mega Signal — `search` (payoff tutor)
 - **Mechanics:** Item. Search deck for a **Mega Evolution ex** (→ Mega Starmie ex), reveal, to hand.
@@ -305,8 +305,8 @@ Salvatore rush line stands.
 - **Disposition (BUILT 2026-06-30/07-01, ADR-0028, test-first `/tdd`; full suite 694 passed):** promoted `baseline_tool.py` →
   a **Tool Doctrine** (`doctrines/doctrine_tool.py` + `ToolMixin`) carrying the closed-form board-math
   (`opp_best_attack_vs` next-attacker prediction, `survival_turns`, the target picker, our-next-promotion
-  predictor). **Belt-and-suspenders:** positive `deploy-*` rungs score the picked attach > 0 (→ tier 2,
-  before the tier-3 shuffle — the root-cause fix: a ≤0 attach drops to tier 4 *below* the shuffle) **+** new
+  predictor). **Belt-and-suspenders:** positive `deploy-*` rungs score the picked attach > 0 (→ sequence band 2,
+  before the sequence-band-3 shuffle — the root-cause fix: a ≤0 attach drops to sequence band 4 *below* the shuffle) **+** new
   `hold-irreplaceable-tool-dont-shuffle` (mirror of `hold-wincon-dont-shuffle`, for the no-good-target case).
   **Reconciled weights:** `deploy-hp-tool-on-breakpoint` **removed** (subsumed by survival-turns);
   `save-tool-for-the-attacker` (−15) + `protect-ace-spec-tool` (−10) **re-scoped** to fire only on a body the
@@ -423,9 +423,9 @@ turn-ending attack, not only in SETUP).
 | `use-acceleration` | gap **CLOSED** 2026-07-02 | — | Cinderace now tagged `energy_accel` (function_overrides). Score-equal for this deck: `use-acceleration` is PLAY-gated (a Stage-2 Cinderace has no play-from-hand option) and `fetch-the-support` carries a stranded-evolution guard (a dead grab is never endorsed). Vocabulary correct for future rules/decks. |
 | `develop-turbo-flare-recipient` (deck) | **folded → general** `develop-the-accel-recipient` 2026-07-02 | +20 | accelerator Active + bare Bench → endorse developing a Line recipient (Staryu / `bench_fill`) so Turbo Flare has a target; enshrines #3, behaviour-neutral over `keep-a-bench`. New signal `Board.accel_recipient_missing` |
 | `fetch-base-before-stranded-payoff` (general) | **shipped** 2026-06-30 (TDD) | +20 | grab the deployable base over an un-evolvable payoff (no base in play/hand); fixes the verified Ultra-Ball Mega-over-Staryu trap. New signal `Board.wincon_base_deployable` |
-| Boss's gust (offensive KO + stall) | **shipped** 2026-06-29 (ADR-0022) | `gust-for-the-ko` 50, `gust-for-the-stall` 10 | general gust doctrine: `_can_ko` oracle → whether-to-play + lethal (Tactical) + SWITCH(3) target-select (KO+prizes+denial) + tier-5 stall. Refinements pending: condition/draw guards, 4-mechanic split |
+| Boss's gust (offensive KO + stall) | **shipped** 2026-06-29 (ADR-0022) | `gust-for-the-ko` 50, `gust-for-the-stall` 10 | general gust doctrine: `_can_ko` oracle → whether-to-play + lethal (Tactical) + SWITCH(3) target-select (KO+prizes+denial) + sequence-band-5 stall. Refinements pending: condition/draw guards, 4-mechanic split |
 | `snipe-the-evolving-threat` / `snipe-the-weakest` | covers-as-is | — | Jetting Blow's 50 bench-snipe target (evolving pre-evo / lowest-HP) — forward-evolution index, ADR-0020 |
-| Boss's **gust-target** (stall + offensive pre-evo) | **shipped** → general (ADR-0022) | — | not deck-specific: the general Boss's Orders doctrine — SWITCH(3) target-select (KO+prizes+denial+forward-denial) + tier-5 stall |
+| Boss's **gust-target** (stall + offensive pre-evo) | **shipped** → general (ADR-0022) | — | not deck-specific: the general Boss's Orders doctrine — SWITCH(3) target-select (KO+prizes+denial+forward-denial) + sequence-band-5 stall |
 | `power-up-attacker` | covers-as-is (refined) | — | now gated on `attach_target_needs` — won't pile surplus Energy on an already-online Mega Starmie ex (1 W = Jetting Blow) |
 | `promote-the-ready-wincon` / `promote-the-staller` | covers-as-is | — | promote-after-KO: ready Mega Starmie ex first (40), else Cinderace (`opener`) as a staller (20); no deck rule |
 | `save-tool-for-the-attacker` / `protect-ace-spec-tool` | **re-scoped** (ADR-0028) | — | Tool Doctrine reversal 2026-06-30: these now fire ONLY on a picker-rejected off-line body, never a wincon line-piece; the Cape **deploys proactively** (survival-turns), it is no longer held (§3, Hero's Cape) |

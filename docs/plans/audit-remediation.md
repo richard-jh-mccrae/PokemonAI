@@ -1,13 +1,18 @@
+> **HISTORICAL** — a completed remediation plan whose labels predate the 2026 naming convention
+> ([docs/naming-convention.md](../naming-convention.md)); retained for provenance. Its cleanup
+> "WP1–WP7" work items have been renamed **Audit Item 1–7** so they no longer collide with the ML
+> pipeline's spelled-out **Work Packages** (naming-convention Rule 3).
+
 # Audit remediation — grilled plan (2026-07-14)
 
 Post-merge audit of `main` after the strategy-update rounds: hunt for missed corrections, open
 proposals, designed-but-unimplemented infrastructure, and implemented-but-inert seams. Grilled to
 decisions; **nothing is built yet**. This doc is the record so the grill survives.
 
-Status: **BUILT 2026-07-14.** All three oracles + WP1–WP7 shipped; suite 2901 green; W-route
+Status: **BUILT 2026-07-14.** All three oracles + Audit Items 1–7 shipped; suite 2901 green; W-route
 dragapult 22/22, mega_starmie 115/115, mega_lucario 39/40 (its one gap, ep85058051 f4, pre-dates this
 work). Commits: `d23b75a` (ADR-0060), `8c6c016` (ADR-0061), `e1f370f` + the pricing fix (ADR-0062),
-`9cbf831` (WP1–WP6).
+`9cbf831` (Audit Items 1–6).
 
 ### What the build changed about the plan
 
@@ -59,7 +64,7 @@ consumer was never built** — not dead code. The orphan list was a *backlog of 
 | `opp_hand_size_delta` | → the hand-swing **freshness** term (ADR-0060) |
 | `my_discard_basic_energy` | → the **recover credit** re-source (ADR-0061) |
 | `opp_has_energy_in_play` | → the **denial** presence gate (ADR-0062) |
-| `bench_threat_present` | genuinely dead — doctrine reversed under it (see WP1) |
+| `bench_threat_present` | genuinely dead — doctrine reversed under it (see Audit Item 1) |
 
 ---
 
@@ -260,7 +265,7 @@ flavor (the attack-rider one) that Crushing Hammer does not set. Pinned against 
 
 ## Cleanup work packages
 
-### WP1 — Snipe fossil + the ungated CRITICAL
+### Audit Item 1 — Snipe fossil + the ungated CRITICAL
 
 `Board.bench_threat_present` (`pilot.py:224`, computed `:2873`, helper `:3538`) is a **fossil**. Git
 history: introduced `30bcc4a` (2026-06-29) with exactly one consumer,
@@ -288,7 +293,7 @@ picks Cinderace, the exact blunder. Its two docstrings assert a policy the codeb
   (Cinderace, 90) — pins *why* the switch exists.
 - Add a **degeneracy guard**: assert not all snipe targets score 0.0.
 
-### WP2 — Honest annotation of the remaining true orphans
+### Audit Item 2 — Honest annotation of the remaining true orphans
 
 Only two survive the oracles above:
 - `brief_is_threat` / `brief_target_role` / `brief_target_ids` (`pilot.py:501-510`) — zero `src/`
@@ -297,7 +302,7 @@ Only two survive the oracles above:
 - `rider_recoil` (`strategy/combat.py:132`) — zero callers, **zero tests**. Siblings `rider_snipe` /
   `rider_spread` are both live.
 
-### WP3 — Close the silent-inert weight trap
+### Audit Item 3 — Close the silent-inert weight trap
 
 `Hypothesis.weight: float = 0.0` (`strategy/strategy.py:68`) means a rung authored **without**
 `weight=` is born inert and is **indistinguishable at runtime from a deliberate weight-0 seed**.
@@ -313,7 +318,7 @@ rungs (`disrupt-the-tailored-hand` SEED 22, `unfair-stamp-comeback-posture` SEED
 Note `play-safe-when-ahead-on-prizes` is the **only** hypothesis in `baseline_posture.py`, so that
 whole cluster is inert.
 
-### WP4 — ADR status truth pass
+### Audit Item 4 — ADR status truth pass
 
 **Five statuses are demonstrably false:**
 
@@ -338,7 +343,7 @@ silently re-labels telemetry **and the submission manifest** as Tier-1
 **Backfill** a one-line `**Status.**` header on the **31** ADRs that have none — including the four
 newest (0052, 0054, 0055, 0056).
 
-### WP5 — Stale in-code comments
+### Audit Item 5 — Stale in-code comments
 
 - `"search_budget": 0,  # 0 = Tier-0 closed-form; >0 = Tier-1 Search` is **false** — fix in
   `dragapult_ex/strategy.py:125`, `mega_lucario/strategy.py:362`, `mega_starmie/strategy.py:55`,
@@ -346,7 +351,7 @@ newest (0052, 0054, 0055, 0056).
 - `mega_lucario/STRATEGY.md:1021` claims Unfair Stamp is **missing** `shuffle_hand`. It has it
   (`1080 → ["draw","hand_disruption","shuffle_hand"]`).
 
-### WP6 — ADR renumber + index
+### Audit Item 6 — ADR renumber + index
 
 Three numbers are used twice. Rule: each pair is one **strategy** ADR and one **tooling** ADR, and
 the bulk of the inbound prose references point at the strategy one — so **the tooling ADR moves**.
@@ -365,7 +370,7 @@ so the next audit is a grep. Fix `docs/plans/ml-training-build.md:207-209` (clai
 live on an "unpushed arch-review branch" and that "next free is 0057" — all four are merged).
 **Next free after this plan: 0063.**
 
-### WP7 — Verify
+### Audit Item 7 — Verify
 
 Full `pytest tests/ -q` (2845 + the new gates), green on Windows **and** Linux via CI.
 
@@ -381,7 +386,7 @@ Full `pytest tests/ -q` (2845 + the new gates), green on Windows **and** Linux v
 - **`escalation` stays OFF.** 44% (CI 41–47) on the one instrument the docs call *valid*, both seats
   sub-50. Root cause (its closed-form two-ply leaf) is unchanged.
 - **The four weight-0 seeds stay at 0.**
-- **ADR-0053 / ML training WP0–WP6 stays out of scope** — a documented multi-session plan of record,
+- **ADR-0053 / ML training Work Packages 0–6 stays out of scope** — a documented multi-session plan of record,
   not an accidental gap.
 - **Supporter-economy opportunity cost** (ADR-0023's deferred seam) — **REFUTED 2026-07-14, do not
   build.** The claim was "one Supporter per turn is a hard rule and nothing prices the slot." False:
@@ -407,4 +412,4 @@ Full `pytest tests/ -q` (2845 + the new gates), green on Windows **and** Linux v
 
 ## Order
 
-ADR-0060 → ADR-0061 → ADR-0062 → WP1 → WP3 → WP2/WP5 → WP4 → WP6 → WP7. One commit per unit.
+ADR-0060 → ADR-0061 → ADR-0062 → Audit Item 1 → Audit Item 3 → Audit Items 2/5 → Audit Item 4 → Audit Item 6 → Audit Item 7. One commit per unit.

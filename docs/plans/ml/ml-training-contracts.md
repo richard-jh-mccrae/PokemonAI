@@ -1,7 +1,7 @@
 # ML Training Pipeline — Frozen Cross-Track Contracts (C1/C2/C3)
 
-**Status:** frozen 2026-07-13 in S1 (WP0). These are the three interfaces that let WP1–WP4 build
-in parallel worktree sessions without stepping on each other. Changing one after a downstream
+**Status:** frozen 2026-07-13 in Build Session 1 (Work Package 0). These are the three interfaces
+that let Work Packages 1–4 build in parallel worktree sessions without stepping on each other. Changing one after a downstream
 session has consumed it is a breaking change — amend here first, with a reason, then update every
 consumer. Governing plan: [ADR-0053](../adr/0053-ml-training-pipeline-build-plan.md); playbook:
 [ml-training-build.md](ml-training-build.md).
@@ -43,7 +43,7 @@ flushed periodically and on exit.
 (`src/common/value/model.py`) pins on an **exact match** of both the `features` name list and the
 `archetypes` vocab against the running build's `FEATURE_NAMES` / `ARCHETYPE_VOCAB`; any drift →
 null model (fail-open to the heuristic). A `format`-less artifact is the v1 committed seed
-(back-compat logistic path). This is specified fully in the S2a design; C1 only fixes that the
+(back-compat logistic path). This is specified fully in the Build Session 2a design; C1 only fixes that the
 **corpus manifest records `value_model_format` so a corpus and the artifact it trains can never
 silently disagree on shape**.
 
@@ -52,7 +52,7 @@ silently disagree on shape**.
 ## C2 — Machine-Correction provenance (LOCKED: new `provenance` field)
 
 **Decision (user-approved 2026-07-13):** `Correction` gains `provenance: str = "human"`
-(`tools/train/blunder/correction.py`), written `"machine"` by the ML labeler (WP3). `source`
+(`tools/train/blunder/correction.py`), written `"machine"` by the ML labeler (Work Package 3). `source`
 stays `"own"`/`"peer"` and keeps its meaning (whose *game* it was) — a machine label of our own
 game is `source="own", provenance="machine"`.
 
@@ -65,20 +65,20 @@ game is `source="own", provenance="machine"`.
 - Human and machine corrections still meet in `find_conflicts` (same store), so a disagreement on
   the same decision surfaces for review instead of hiding in a parallel tree.
 
-**Fit-time collision rule (S3b must implement):** when a machine record and a human record share
+**Fit-time collision rule (Build Session 3b must implement):** when a machine record and a human record share
 the identity key `(episode_id, seat, scope, subject)`, the **human record wins** — the machine
 record is excluded from the weight fit. `reviewed.json` dispositions apply to both classes
 identically. Rationale: an automated ΔP(win) flag must never overrule a human's reviewed
 judgment on the same decision.
 
-**Status:** the field + `build_correction(provenance=...)` param are BUILT in S1 (default
-`"human"`, zero behavior change). The labeler writing `"machine"` and the fit exclusion are S3a/S3b.
+**Status:** the field + `build_correction(provenance=...)` param are BUILT in Build Session 1 (default
+`"human"`, zero behavior change). The labeler writing `"machine"` and the fit exclusion are Build Session 3a / Build Session 3b.
 
 ---
 
-## C3 — Eval report format (WP2 emits → G2 consumes)
+## C3 — Eval report format (Work Package 2 emits → Adoption Gate consumes)
 
-The JSON the eval harness (`tools/sim/eval*`) writes and the adoption gate reads. `report_version: 1`:
+The JSON the eval harness (`tools/sim/eval*`) writes and the Adoption Gate reads. `report_version: 1`:
 
 | Field | Meaning |
 |---|---|
@@ -91,10 +91,10 @@ The JSON the eval harness (`tools/sim/eval*`) writes and the adoption gate reads
 | `paired_delta` | `{win_delta, ci_low, ci_high, method}` — candidate−baseline, reusing `paired_ab.py` |
 | `strata` | `[{name, n, win_delta, ci_low, ci_high}]` — e.g. the skill-sensitive stratum (or `[]` if the fork-replay spike didn't land) |
 | `checkpoints` | `[{build_id, n, candidate_wins}]` — the frozen-checkpoint opponent pool results |
-| `aivat` | `{variance_reduction, corrected_delta}` or `null` (fills after WP1) |
-| `verdict` | `pass` \| `fail` \| `inconclusive` — G2's read against the win-delta CI |
+| `aivat` | `{variance_reduction, corrected_delta}` or `null` (fills after Work Package 1) |
+| `verdict` | `pass` \| `fail` \| `inconclusive` — the Adoption Gate's read against the win-delta CI |
 
-WP2 owns the exact emitter; C3 fixes the field set so G2's consumer and any dashboard can be
+Work Package 2 owns the exact emitter; C3 fixes the field set so the Adoption Gate's consumer and any dashboard can be
 written against a stable shape before the harness exists. Additive fields are non-breaking; a
 removed/renamed field bumps `report_version`.
 
@@ -102,4 +102,4 @@ removed/renamed field bumps `report_version`.
 
 ## Change log
 
-- 2026-07-13 — C1/C2/C3 frozen in S1; C2 `provenance` field built (behavior-neutral).
+- 2026-07-13 — C1/C2/C3 frozen in Build Session 1; C2 `provenance` field built (behavior-neutral).

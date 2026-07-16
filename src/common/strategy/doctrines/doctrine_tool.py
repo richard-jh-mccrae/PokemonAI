@@ -186,15 +186,15 @@ class ToolMixin:
                                     require_threat=True)                   # actually in danger (not a safe body)
 
 
-# ── deploy rung: positive endorsement so equip scores > 0, tiers BEFORE a hand-shuffle ──
+# ── deploy rung: positive endorsement so equip scores > 0, sequences BEFORE a hand-shuffle ──
 HYPOTHESES = [
     Hypothesis(
         id="deploy-hp-tool",
         rationale="Deploy a +HP Pokémon Tool (Function Tag `tool`, e.g. Hero's Cape +100) onto the body "
                   "the survival-turns picker chose — PROACTIVE (not held for a breakpoint), since a "
                   "hand-shuffle Supporter (Lillie's / Harlequin) would otherwise bury the irreplaceable "
-                  "ACE SPEC back in the deck (ADR-0028). Positive weight so the equip tiers (tier-2) "
-                  "BEFORE a tier-3 hand-shuffle; reads `Context.attach_is_tool_deploy_target`, and a "
+                  "ACE SPEC back in the deck (ADR-0028). Positive weight so the equip sequences (sequence band 2) "
+                  "BEFORE a sequence band 3 hand-shuffle; reads `Context.attach_is_tool_deploy_target`, and a "
                   "lethal KO still outranks it.",
         when=lambda c: c.attach_is_tool_deploy_target,
         weight=40, status="assumed"),

@@ -1,8 +1,10 @@
-# Naming Convention — the one map (PROPOSAL, not yet applied)
+# Naming Convention — the one map (APPLIED 2026-07-16)
 
-> **STATUS: PROPOSAL under grill.** This is the agreed-naming artifact we are locking BEFORE the
-> repo-wide rewrite. Nothing outside this file has been renamed yet. Once locked, the "rewrite
-> everything" pass (user-chosen scope) retrofits every doc + code label to match.
+> **STATUS: APPLIED.** The convention is locked AND the repo-wide "rewrite everything" pass has run:
+> architecture docs carry dotted sub-tiers + status tags; the ML plan docs spell out the build
+> scaffolding; the histories are converted + bannered; and the code's non-architecture "tier"
+> ladders are renamed (sequence band / lethal-family level / rank). See **"Applied — what changed"**
+> at the bottom for the file-by-file record and the deliberately-deferred tail.
 
 ## Why this exists
 
@@ -98,10 +100,35 @@ These are the "trained/evaluated by" entries above, not tiers.
 3. Notation = dotted `T<n>.<m>`; renames = `sequence band` + `B<n> build step`; build scaffolding
    spelled out (no `WP/S/G`); status tags mandatory; historical docs get the full rewrite.
 
-## Rewrite scope (the apply phase, after this locks)
+## Applied — what changed (2026-07-16)
 
-"Rewrite everything" touches, at minimum: `docs/architecture/tiers.md` + the seven `tier-*.md`;
-`docs/plans/ml/*` (acronyms → spelled-out); `docs/adr/*` cross-refs; the superseded
-`roadmap-search-posture-learning.md` + `audit-remediation.md` (M/WP histories → tier refs +
-"(historical)"); code comments in `pilot.py` (sequence band) + deck `STRATEGY.md` (B-steps). Done as
-its own commit/PR after sign-off.
+- **Architecture docs:** `docs/architecture/tiers.md` + all seven `tier-*.md` — dotted sub-tiers
+  (T1.1–1.5, T3.1–3.3, T4.1–4.4, T6.1–6.2) + status tags; point at the executable map
+  `src/common/tiers.py`.
+- **ML plan docs:** `docs/plans/ml/*` — `WP<n>`/`S<n>`/`G<n>`/`P<n>` spelled out to Work Package /
+  Build Session / Value-Net Gate / Adoption Gate (verified no bare acronyms remain); ADR-0053
+  prose cross-ref updated (its Decision sections keep the shorthand by design).
+- **Histories:** `roadmap-search-posture-learning.md` (M0–M4 → tier refs + `(historical milestone)`),
+  `audit-remediation.md` (**hard collision fixed:** audit `WP1–7` → `Audit Item 1–7`, ML `WP0–6`
+  spelled out), `phase3-tooling.md` / `turn-planner-develop-rung.md` (historical banners). All
+  bannered `HISTORICAL`.
+- **Code — three "tier" ladders disambiguated** (comments / docstrings / rationale strings only,
+  behaviour-neutral; 1009 tests pass): the `_finish_turn_last` play-order ladder → **sequence band**;
+  the planner `_family_win_candidates` generator ladder → **level**; misc priority/cost/threat/stall
+  orderings → **rank**. Constant `_ENERGIZED_SNIPE_TIER` → `_ENERGIZED_SNIPE_RANK`.
+- **Deck files:** 3 `STRATEGY.md` + `mega_lucario/strategy.py` — prime `T2'–T9'` → `B2–B9` build
+  steps (+ `T1→B1`); sequencing `tier N` → `sequence band N`.
+- **Executable map:** `src/common/tiers.py` (built earlier) is the machine-readable twin; a drift
+  test pins every `PROFILE` kill-switch to one tier node.
+
+**Deliberately deferred (a separate, lower-value decision — not done):** the loose *prose* use of
+"tier" to mean level/category/layer/rank still appears in some comments/docs — the MatchupPlan
+composition "tiers" (`matchup_plan.py`), the "card-tier / attack-tier" structural-fact vocabulary
+(`provider.py`, `CONTEXT.md`), and "epistemic tiers" (`opponent_model.py`). And the **telemetry
+`tier` field** (`telemetry.py` / `runtime.py`, the legacy 0/1 search label) is a *schema* field —
+renaming it is a breaking change to telemetry consumers, so it was left. These need a follow-up pass
++ per-concept word choice; flagged, not silently changed.
+
+**Known stale, left untouched:** `mega_lucario/aligned.json` (deck-align machine ledger) still says
+`T8'` in its summary — ledgers self-regenerate; editing risks the diff. And the ADR→plan relative
+links were already broken before this pass (missing `plans/ml/`), a separate path-fix concern.

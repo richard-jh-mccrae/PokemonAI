@@ -1,8 +1,9 @@
 # ADR-0053: ML Training Pipeline — Build Plan
 
-**Status.** Accepted (2026-07-13); an accepted BUILD PLAN — no work package has started (the S1/WP0 row
-of the status ledger in [docs/plans/ml-training-build.md](../plans/ml-training-build.md) still reads
-"not started", and `value_model` is still `PROFILE=False`).
+**Status.** Accepted (2026-07-13); an accepted BUILD PLAN — no work package has started (the
+Build Session 1 / Work Package 0 row of the status ledger in
+[docs/plans/ml-training-build.md](../plans/ml-training-build.md) still reads "not started", and
+`value_model` is still `PROFILE=False`).
 
 - **Status:** accepted (2026-07-13)
 - **Input:** `docs/research/ml-training-system.md` (deep-research report, 2026-07-11)

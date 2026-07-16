@@ -1,7 +1,7 @@
 """Tier 3 — Match Objectives (ADR-0040): the KO Race.
 
 Closed-form turns-to-KO arithmetic over attack SEQUENCES — the opponent-static multi-turn read at
-the same epistemic tier as Incoming/Survival Window (docs/architecture/tier-3-match-objectives.md).
+the same epistemic class as Incoming/Survival Window (docs/architecture/tier-3-match-objectives.md).
 Against a standing wall (no affordable attack KOs this turn) every min-turn sequence fells the
 wall in the same number of turns, so the biggest single hit is fake value; what actually differs
 between sequences is the incidental chip (bench-snipe / spread riders) they bank along the way —

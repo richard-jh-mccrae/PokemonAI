@@ -11,10 +11,12 @@ remainder is the leaf seam for T5 and the defer-vs-commit revisit.
 
 - **One planning entry point**: `plan_turn` at the single-pick MAIN menu; every other context defers
   to T0. Plan once per board fingerprint, re-plan on reveal (cache keyed by fingerprint).
-- **Goal Ladder, top-down**: **win rung** (Lethal Solver — sound: min-bound damage, worst-case
-  coins, engine-verified lock, materialized-replay veto with identity matching) › KO-the-key-threat
-  › KO-for-prizes › stabilize-then-KO › develop. Heuristic rungs generate candidate Turn Lines,
-  engine-sim to end-of-turn, rank by leaf-eval, commit the best.
+- **Goal Ladder, top-down** (dotted sub-tiers per `src/common/tiers.py`): **T1.1 win rung** (Lethal
+  Solver — sound: min-bound damage, worst-case coins, engine-verified lock, materialized-replay veto
+  with identity matching) › **T1.2 KO-the-key-threat** › **T1.3 KO-for-prizes** › **T1.4
+  stabilize-then-KO** › **T1.5 develop**. Heuristic rungs generate candidate Turn Lines,
+  engine-sim to end-of-turn, rank by leaf-eval, commit the best. (T2 Gamble Lines join as a candidate
+  family below T1.1 — see the additions below.)
 - **Two soundness regimes, one module**: only the win rung locks; everything below is ranking.
 - Final-architecture additions (this grilling):
   1. **T2 Gamble Lines** join the ladder as a candidate family below the win rung (EV-valued,

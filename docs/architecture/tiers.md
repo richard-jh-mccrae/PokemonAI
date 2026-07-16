@@ -9,6 +9,14 @@
 [roadmap-search-posture-learning.md](../todo/roadmap-search-posture-learning.md) as the architecture
 reference (that file stays as M0–M4 milestone history).
 
+> **Convention & executable twin.** This map follows the locked
+> [naming convention](../naming-convention.md) — dotted sub-tiers `T<n>.<m>`, the word "tier"
+> reserved for runtime decision layers, and a mandatory status tag on every node. The **executable
+> twin** of this map is [`src/common/tiers.py`](../../src/common/tiers.py): the machine-readable
+> Tier Map kept in sync with this doc, in which **each `PROFILE` kill-switch is pinned to exactly one
+> tier node** (`tests/common/test_tiers.py` fails if a switch is left unplaced). Read that file for
+> the authoritative sub-tier names, numbers, and per-node flags/status.
+
 ## Thesis
 
 The strongest consistent pilot is NOT a W/L-trained policy — W/L stays the **gate** (M1 A/B +
@@ -52,8 +60,34 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 | 2 | [Chance & EV](tier-2-chance-ev.md) | **70%** | Gamble Lines BUILT 2026-07-05 (A/B 52%, CI 50–54): exact-odds refresh-first KO gambles + coin-EV ranking |
 | 3 | [Match Objectives](tier-3-match-objectives.md) | **75%** | BUILT 2026-07-05: KO Race (a21472 green), two-sided Prize Path + denial, derived phases, gate-ban migration |
 | 4 | [Opponent Model](tier-4-opponent-model.md) | **70%** | Levers + Briefs shipped (main); the γ-continuous predicted-attacker overlay into T3 BUILT 2026-07-05 |
-| 5 | [Automatic Value Model](tier-5-value-model.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0042); cross-deck gauntlet A/B **regressed −0.55%** (CI [−1.27,+0.16], 6 matchups, 0 crashes) → **parked OFF** (features redundant with the closed-form leaf; matchup-conditioned model is the real unlock) |
-| 6 | [Escalation Search](tier-6-escalation-search.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0043); attack-tie trigger inert (0/646) + density trigger fires but A/B **regressed to 44%** (PR #39) → **parked OFF** (two-ply proxy loses to the tuned scorer) |
+| 5 | [Automatic Value Model](tier-5-value-model.md) | **`built, gated:off`** | BUILT 2026-07-05 (ADR-0042); cross-deck gauntlet A/B **regressed −0.55%** (CI [−1.27,+0.16], 6 matchups, 0 crashes) → **parked OFF** (features redundant with the closed-form leaf; matchup-conditioned model is the real unlock) |
+| 6 | [Escalation Search](tier-6-escalation-search.md) | **`built, gated:off`** | BUILT 2026-07-05 (ADR-0043); attack-tie trigger inert (0/646) + density trigger fires but A/B **regressed to 44%** (PR #39) → **parked OFF** (two-ply proxy loses to the tuned scorer) |
+
+## Sub-tiers (the dotted map)
+
+Dotted sub-tier numbering per the [naming convention](../naming-convention.md), mirroring
+[`src/common/tiers.py`](../../src/common/tiers.py) (the authoritative names/numbers/status). A
+written reference expands both names, e.g. *T4.2 - Opponent Model, Posture*. Tier-level %-complete
+marks live in the table above; sub-tiers carry only a status tag.
+
+| Sub-tier | Status |
+|---|---|
+| **T1.1 - Turn Planner, Win Rung (Lethal Solver)** | `built` |
+| **T1.2 - Turn Planner, KO the Key Threat** | `built` |
+| **T1.3 - Turn Planner, KO for Prizes** | `built` |
+| **T1.4 - Turn Planner, Stabilize-then-KO** | `built` (structural) |
+| **T1.5 - Turn Planner, Develop** | `built` |
+| **T3.1 - Match Objectives, Prize Path (+ Denial)** | `built` |
+| **T3.2 - Match Objectives, KO Race** | `built` |
+| **T3.3 - Match Objectives, Derived Phases** | `built` |
+| **T4.1 - Opponent Model, Read** | `built` |
+| **T4.2 - Opponent Model, Posture** | `built` |
+| **T4.3 - Opponent Model, Matchup Briefs** | `built` |
+| **T4.4 - Opponent Model, Learned Matchup Weights** | `grilled, unbuilt` |
+| **T6.1 - Escalation Search, Two-ply search** | `built, gated:off` |
+| **T6.2 - Escalation Search, Sampled-Belief Search** | `unbuilt (research)` |
+
+(T0, T2, T5 are flat — no sub-tiers.)
 
 ## Build order (recommended)
 

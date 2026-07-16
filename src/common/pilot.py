@@ -59,7 +59,7 @@ _DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLAC
                            # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
                            # off a benched body. Same lesson as ADR-0060: price the quantity, don't
                            # threshold it.
-_DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite, and a free Item is tiered
+_DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite, and a free Item is ranked
                            # ahead of everything by `_finish_turn_last` — so a purely positive term could
                            # never decline one: any score above zero gets it played. The strip must beat
                            # the hold (ms f29: "wasted crushing hammer").
@@ -73,7 +73,7 @@ _DENIAL_UNFAVORED = 0.3    # Lever A (ADR-0026), as a MULTIPLIER on the priced d
                            # This is the whole point (ms 83968638 f17, CRITICAL): the old flat
                            # `disrupt-when-unfavored` (+18) rode `opp_denial_best > 0` (the raw PRESENCE
                            # of denial) and so OVERRODE the oracle's own hold — a free Item at score > 0
-                           # is tiered ahead of everything. A booster must scale the oracle, never add to it.
+                           # is ranked ahead of everything. A booster must scale the oracle, never add to it.
 _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped Energy would pay for on the
                            # target's FORWARD form. "Evolving keeps attached cards" (rules.md:98), so
                            # Energy on a pre-evolution is BANKED, not spent: a Riolu's own Accelerating
@@ -100,9 +100,9 @@ _RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Ac
 _SELF_RETURN_ESCAPE = 50   # per-prize CREDIT for a self-return attack (Meowth ex Tuck Tail) that bounces a
                            # DOOMED multi-prize Active to hand, denying the opponent the prize(s); non-KO
                            # branch only, so a real KO always wins (mirror of _RECOIL_DOOM, a survival credit)
-_ENERGIZED_SNIPE_TIER = 100000  # energized benched target is strictly higher snipe TIER than any
+_ENERGIZED_SNIPE_RANK = 100000  # energized benched target is strictly higher snipe RANK than any
                            # bare one — attacks SOONER (imminence), sniped before a bigger latent
-                           # threat (ADR-0020). Within a tier, threat magnitude orders the choice.
+                           # threat (ADR-0020). Within a rank band, threat magnitude orders the choice.
 _SNIPE_THREAT_PRIZE_FLOOR = 5   # deny an ENERGIZED off-Prize-Path attacker (don't treat it as prize-
                            # redundant) while I still hold >= this many prizes — early game, the imminent
                            # threat will bleed my prizes before I close; below it I race my committed path
@@ -960,11 +960,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # affordable attack (given the attachable Energy +
                                                         # playable {F} damage-boost) KOs the opp Active,
                                                         # over the energy-ranked pick. OFF = byte-identical
-        self.boost_lethal = boost_lethal                # kill-switch: the `_family_win_candidates` tier that
+        self.boost_lethal = boost_lethal                # kill-switch: the `_family_win_candidates` level that
                                                         # composes promote-a-benched-{F}-attacker → play N
                                                         # damage-boost Items → swing lethal (presumes
                                                         # lethal_family; engine-confirmed on every lock)
-        self.retreat_enabler_lethal = retreat_enabler_lethal  # kill-switch: the `_family_win_candidates` tier
+        self.retreat_enabler_lethal = retreat_enabler_lethal  # kill-switch: the `_family_win_candidates` level
                                                         # that plays/tutors a retreat-reduction Tool (Air
                                                         # Balloon) to free a retreat into an already-winning
                                                         # benched attacker (ml f15; presumes lethal_family,
@@ -1171,27 +1171,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                           max_count: int, select_context: int | None) -> list:
         """Sequence the turn's commitments LAST. The engine re-presents the open turn menu after each
         non-ending action, so the whole turn still happens — which means you should take the most
-        informative, reversible actions first and the irreversible ones last:
+        informative, reversible actions first and the irreversible ones last, by sorting the menu
+        into **sequence bands** (0 = earliest / most reversible, 4 = the turn-ender):
 
-          tier 0  free informative development — draw / search, fill the Bench, evolve a benched
+          band 0  free informative development — draw / search, fill the Bench, evolve a benched
                   Pokémon, play a Pokémon (and an attach / gust that UNLOCKS a KO — take the win). A
                   GAME-WINNING attack (a KO that takes my last prize) also sits here: when this action
                   wins the match there is nothing to develop FOR, so take it immediately rather than
                   dig/develop first (a non-winning KO still develops-first — the whole point of
                   attack-last is intact; ep83037962 f78).
                   Free, and reveals a better target before you commit.
-          tier 1  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
+          band 1  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
                   so commit it AFTER the free Item digs (a Pokégear may upgrade which Supporter you
-                  play) but before the blind attach. A KO-enabling gust Supporter stays in tier 0.
-          tier 2  the blind / costly COMMITMENTS — the Energy attach, and a discard-COST search
+                  play) but before the blind attach. A KO-enabling gust Supporter stays in band 0.
+          band 2  the blind / costly COMMITMENTS — the Energy attach, and a discard-COST search
                   (`cost_discard`, e.g. Ultra Ball: pays 2 cards from hand).
-          tier 3  a hand-SHUFFLE Supporter (`shuffle_hand`, e.g. Lillie's / Harlequin) — it nukes the
-                  hand, so attach your held Energy (tier 2) FIRST, then shuffle the dregs away.
-          tier 4  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
+          band 3  a hand-SHUFFLE Supporter (`shuffle_hand`, e.g. Lillie's / Harlequin) — it nukes the
+                  hand, so attach your held Energy (band 2) FIRST, then shuffle the dregs away.
+          band 4  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
 
         An option is sequenced early only when a Hypothesis endorses it (score > 0). A knockout is
-        never forfeited: an Evolve of the Active drops to the last tier when a KO is on the menu, and
-        the KO attack outscores everything else there. Stable within a tier (keeps the score order).
+        never forfeited: an Evolve of the Active drops to the last band when a KO is on the menu, and
+        the KO attack outscores everything else there. Stable within a band (keeps the score order).
         Only at a single-pick MAIN menu; every other context (snipe, search, mulligan) is untouched."""
         if max_count != 1 or len(order) < 2 or select_context != _MAIN:
             return order
@@ -1234,7 +1235,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             cid = traces[i].card_id
             return bool(self.functions) and cid is not None and "shuffle_hand" in self.functions.tags(cid)
 
-        def _tier(i: int) -> int:
+        def _sequence_band(i: int) -> int:
             o = options[i]
             t = o.get("type")
             if t in (_ATTACH, _PLAY, _RETREAT) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach
@@ -1243,8 +1244,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return 0                                             # fires only when the gust-KO takes MORE
                                                                      # prizes than any menu attack (its own gate),
                                                                      # so take the gust-setup first, then KO the
-                                                                     # dragged-up body — not tier-1 Supporter filler,
-                                                                     # nor tier-4 behind the KO it out-values (f79/f81)
+                                                                     # dragged-up body — not sequence-band-1 Supporter
+                                                                     # filler, nor sequence-band-4 behind the KO it
+                                                                     # out-values (f79/f81)
             if t == _RETREAT and _retreat_walls_the_line(i):         # retreat-to-promote the sacrificial
                 return 0                                             # item-lock wall (dragapult f32/f20): the
                                                                      # retreat is STEP 1 of the maneuver, ahead
@@ -1277,11 +1279,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return 2
             return 0
 
-        if any(_tier(i) < 4 for i in order):                         # legibility: mark the held-back attacks
+        if any(_sequence_band(i) < 4 for i in order):                # legibility: mark the held-back attacks
             for i in order:
-                if options[i].get("type") == _ATTACK and _tier(i) == 4:  # a winning attack (tier 0) not held
+                if options[i].get("type") == _ATTACK and _sequence_band(i) == 4:  # a winning attack (band 0) not held
                     traces[i].deferred = True
-        return sorted(order, key=_tier)                             # stable -> within a tier, score order
+        return sorted(order, key=_sequence_band)                    # stable -> within a band, score order
 
     def _option_trace(self, obs: dict, select: dict, board: Board, option: dict,
                       index: int) -> OptionTrace:
@@ -1638,7 +1640,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         retreat now; a benched body, promoted, takes a min-bound WINNING KO
         (`_bench_body_wins_if_promoted`); the grabbed Tool's `retreatReduction` covers the Active's exact
         retreat shortfall. Extends the grab select because the enabler win rung (`_family_win_candidates`
-        tier 6) is MAIN-only — the same shape as `_grab_enabler_lethal_tactical`, so the Petrel search
+        level 6) is MAIN-only — the same shape as `_grab_enabler_lethal_tactical`, so the Petrel search
         picks Air Balloon over an off-line Trainer. Gated on `retreat_enabler_lethal`; SOUND (min-bound +
         win). Its downside mirrors the other grab tacticals: an over-claim only grabs the Tool over
         another card, never throws a game (the real retreat + KO still gate the later steps). 0 off a grab
@@ -1862,7 +1864,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         only when the boost is NECESSARY (no affordable attack already KOs — else just attack) and
         the crossing is exact oracle arithmetic (context-priced, so boosts ALREADY played this turn
         are in the base; each further copy's play re-passes this check on the updated context).
-        `_finish_turn_last` then sequences the lethal play tier-0, ahead of the attack it enables.
+        `_finish_turn_last` then sequences the lethal play sequence-band-0, ahead of the attack it enables.
         Skips a crossing whose forced recoil would be a simultaneous draw. 0 otherwise."""
         t = option.get("type")
         if board.turn <= 1:            # turn 1 going first: can't attack, no boost is lethal
@@ -2234,7 +2236,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Silent unless the card is `energy_denial`. A whiff (`opp_denial_best == 0` — surplus Energy,
         no affordable attack, or the only energized body is one I am about to KO) prices at 0 and is
-        held; `_finish_turn_last` tiers a free Item ahead of everything, so declining one REQUIRES a
+        held; `_finish_turn_last` sequences a free Item ahead of everything, so declining one REQUIRES a
         non-positive score. Half of all Crushing Hammers do nothing whatever the board looks like, so
         the coin is priced here rather than absorbed into a tuned constant.
 
@@ -3995,8 +3997,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if (my_active and my_active.is_ex_body                    # I attack with an ex/Mega ex …
                     and any("prevent_ex_damage" in self.functions.tags(i) for i in line)):  # … can't touch
                 rank += _PREVENT_EX_SNIPE_BOOST                        # this line once evolved — kill now
-        if poke.get("energies"):                              # energized = imminent: a higher snipe tier
-            rank += _ENERGIZED_SNIPE_TIER
+        if poke.get("energies"):                              # energized = imminent: a higher snipe rank
+            rank += _ENERGIZED_SNIPE_RANK
         return rank
 
     def _forward_card_ids(self, cid: int | None) -> frozenset:
@@ -4168,7 +4170,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         safety, promote the wall, item-lock, and evolve the line on the Bench behind cover. Board-SOUND
         (visible zones); silent for decks with no benched item-lock opener (no-op on mega_starmie /
         mega_lucario) and once the Active is the payoff (not a pre-evo). Backs `retreat-to-wall-the-line`
-        and stands `hold-position-in-setup` down; `_finish_turn_last` rides the retreat step tier-0."""
+        and stands `hold-position-in-setup` down; `_finish_turn_last` rides the retreat step sequence-band-0."""
         if not (self.functions and ma and ma.get("id") in self._line_preevo_set()):
             return False
         has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))

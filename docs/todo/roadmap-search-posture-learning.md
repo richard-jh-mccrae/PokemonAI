@@ -1,3 +1,7 @@
+> **HISTORICAL** — the M0–M4 milestone labels below predate the 2026 naming convention
+> ([docs/naming-convention.md](../naming-convention.md)) and are retained for provenance; each is now
+> shown with its tier equivalent (M0/M2 → Tier 4, M1 → the A/B gate, M3 → Tiers 1+6, M4 → Tier 5).
+
 # Roadmap — graduating the Pilot: cheap f75 → Posture → Tier-1 Search → Self-play & Automatic Value Model
 
 > **SUPERSEDED as the architecture reference (2026-07-05).** The final architecture now lives in
@@ -18,18 +22,18 @@ Tier-0 rules Pilot. Trigger-gated, not date-gated. Anchored to
 ## TL;DR — the dependency chain
 
 ```
-M0 cheap f75            M1 self-play PRE-FILTER     M2 Posture            M3 Tier-1 Search       M4 Automatic Value Model
+Tier 4 (M0) cheap f75            A/B gate (M1) self-play PRE-FILTER     Tier 4 (M2) Posture   Tiers 1+6 (M3) Tier-1 Search   Tier 5 (M4) Automatic Value Model
 (forward evo graph)  →  (cheap A/B, NOT the gate)→  (the Read → play)  →  (escalation+budget) →  (replay-trained leaf eval)
 ship next round         foundational, build early   Read already built    Search API exists      heaviest, last
 ```
 
-- **M1 is foundational**, not last: you cannot triage M2/M3/M4 changes without a cheap offline A/B.
+- **The A/B gate (M1) is foundational**, not last: you cannot triage Tier 4 (M2)/Tiers 1+6 (M3)/Tier 5 (M4) changes without a cheap offline A/B.
   It is a **pre-filter, not the gate** — the real Kaggle ladder stays authoritative (ADR-0009 Job C);
   trust *negative* signals (drop clearly-worse configs), treat positives as hints (ADR-0021).
 - **"Training via self-play" ≠ RL.** ADR-0007 rejects RL-from-scratch. Self-play is the **evaluator + on-policy
   filler + source of our own games to correct**; the **value model is supervised on mined replays**. Keep these separate.
 - Two unknowns are already resolved: the **Read is built** (`src/common/scouting/`), the **Search API exists**
-  (`search_begin`/`search_step`/`search_end` in `src/cg/api.py`). That de-risks M2 and M3.
+  (`search_begin`/`search_step`/`search_end` in `src/cg/api.py`). That de-risks Tier 4 (M2) and Tiers 1+6 (M3).
 
 ## Where we are
 - Tier-0 rules Pilot built end-to-end: `Score = Σ wₕ·firesₕ + tactical`, `choose_plan` SETUP→RACE, decision trace.
@@ -44,7 +48,7 @@ ship next round         foundational, build early   Read already built    Search
 
 ---
 
-## M0 — Cheap f75: forward evolution-threat signal  ·  *ship in the next blunder round*
+## Tier 4 — Cheap f75: forward evolution-threat signal  ·  *ship in the next blunder round*  ·  *(historical milestone M0)*
 
 **Why now:** contained infra, needs no Posture, clears the last open correction from this round.
 See [[snipe-threat-two-signals]].
@@ -78,15 +82,15 @@ threat>evolving), a DAMAGE-context **only-intended-rules-fire** guard, and the f
 Also fix `tests/scouting/test_scouting_provider.py` fixture `evolvesFrom="Lucario"` → `"Riolu"`.
 **Accept:** f75 (ep81905522) satisfied in `tune.py` (verified: margin 33>0), corpus ≥ current, suite green.
 On ship, **remove** the `81905522-75` deferred entry from `data/corrections/reviewed.json`.
-**Known M0 gaps (documented, not fixed):** bench-damage-immune pre-evos are wastefully sniped (no
-immunity field on `CardStat` yet); affordability ignored (opponent-agnostic upper bound — M2 Read refines).
-**Note:** this is the **generic** version (any deck). Opponent-*accuracy* (will they actually evolve it?) is an M2 refinement.
+**Known Tier 4 (M0) gaps (documented, not fixed):** bench-damage-immune pre-evos are wastefully sniped (no
+immunity field on `CardStat` yet); affordability ignored (opponent-agnostic upper bound — Tier 4 (M2) Read refines).
+**Note:** this is the **generic** version (any deck). Opponent-*accuracy* (will they actually evolve it?) is a Tier 4 (M2) refinement.
 
 ---
 
-## M1 — Self-play Pre-filter: cheap offline A/B (NOT the gate)  ·  ✅ *BUILT & verified 2026-06-30*
+## The cross-tier A/B gate — Self-play Pre-filter: cheap offline A/B (NOT the gate)  ·  ✅ *BUILT & verified 2026-06-30*  ·  *(historical milestone M1)*
 
-**Status: BUILT.** The whole M1 surface ships and is tested (28 tests; smoke A/B confirmed end-to-end):
+**Status: BUILT.** The whole A/B-gate (M1) surface ships and is tested (28 tests; smoke A/B confirmed end-to-end):
 seat-balancing (`seat_plan`/`balanced_tally`/`by_seat`) + the `name@overlay.json` config overlay
 (→ `AGENT_OVERLAY`, `common/config.py`) in `tools/sim/battle.py`; the Battle Result → `data/battles.jsonl`
 in `tools/sim/result.py`; the M1b own-game corpus in `tools/sim/selfplay.py` ([ADR-0022](../adr/0057-selfplay-corpus-uses-cabt-env-path.md)).
@@ -100,7 +104,7 @@ clearly-worse configs); a positive is only a hint. *(Grilled & measured 2026-06-
 
 **Entry:** a working packaged agent (have it) + the cabt engine (have it). The existing **Battle** harness
 (`tools/sim/battle.py`) already runs N-match A/B in **isolated subprocesses** with Wilson CI + parallelism —
-M1 **extends it**; **`tools/selfplay/` is dropped** (it would duplicate Battle and misuse "ladder", which
+the A/B gate (M1) **extends it**; **`tools/selfplay/` is dropped** (it would duplicate Battle and misuse "ladder", which
 the glossary reserves for the real competition).
 
 **Build** (extend `tools/sim/battle.py`)
@@ -145,19 +149,19 @@ the old "reproducible from a seed" criterion is **retired** (ADR-0021).
 `tuned.json`; absent env = today's behavior, grader-inert); report shows balanced aggregate + per-seat split;
 Battle Result round-trips (write → reload → aggregates recompute from `matches[]`); `--save-replays` file parses in
 the inspector (captured `visualize` sample, no live engine); smoke: tiny balanced mirror runs and returns a report.
-**Risk:** match cost is negligible at Tier-0; it only bites at M3/Tier-1 (search) — measure there.
+**Risk:** match cost is negligible at Tier-0; it only bites at Tiers 1+6 (M3) / Tier-1 (search) — measure there.
 
 ---
 
-## M2 — Posture: wire the Read → play  ·  *grilled & scoped 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md), [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)*
+## Tier 4 — Posture: wire the Read → play  ·  *grilled & scoped 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md), [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)*  ·  *(historical milestone M2)*
 
 **Reality check (corrects "the Read is built").** The Read *code* exists
 (`scouting/scout.py`,`read.py`,`scorer.py`,`matchup.py`), but no `artifact.json` was compiled/committed,
 `pilot.py` never referenced the Scout, and the dossier's compiled `threats`/`targets` (the `engine` role)
-were **dead data** — loaded by `artifact.py`, never read by `scout.py` (observed-only intel). So M2 is real
+were **dead data** — loaded by `artifact.py`, never read by `scout.py` (observed-only intel). So Tier 4 (M2) is real
 wiring + finishing the documented predicted-intel layer, not a plug-in.
 
-**Entry:** M1 (to measure M2.1b). Artifact compiled+committed (gates M2.0).
+**Entry:** the A/B gate (M1) (to measure M2.1b). Artifact compiled+committed (gates M2.0).
 
 **Track 1 — generic Posture core (deck-agnostic; covers all 122 archetypes).** Scoped to the Read's
 *net-new* levers only — card facts already do generic seek/avoid (ADR-0026). A behavior-neutral staircase:
@@ -166,9 +170,9 @@ wiring + finishing the documented predicted-intel layer, not a plug-in.
    `my_archetype="Cinderace / Mega Starmie ex"`; emit the Read in the trace. Verified in isolation.
 2. **M2.1a — Scout completes the predicted layer (zero decisions change).** Merge `dossiers[arch]`
    `threats`/`targets` into the Read (`seen`-flagged); Scout-level lib-free tests + trace.
-3. **M2.1b — the levers (first behavior change; gates on M1).** **A** favorability — coverage-gated
+3. **M2.1b — the levers (first behavior change; gates on the A/B gate (M1)).** **A** favorability — coverage-gated
    aggression↔disruption weight-band scalar, board-dominated, *no* Plan change (STABILIZE stays deferred).
-   **C** accurate development — `γ`-gated modulator (both directions) on M0's forward-evo snipe (boost when
+   **C** accurate development — `γ`-gated modulator (both directions) on Tier 4 (M0)'s forward-evo snipe (boost when
    the Read confirms the line, suppress when a recognized archetype doesn't run it, generic fallback when
    unknown). Confidence is a continuous `γ` → unknown opponent `γ→0` → no regression is structural.
 
@@ -186,41 +190,41 @@ deck → counterplay research fan-out (deck + close variants) → weakness grill
 self-describing Brief. The user walks the ranking in chunks at their own cadence, measure-and-stop; the tail
 gets the generic core alone.
 
-**Seam deferred to M3:** feed the predicted opponent deck into `search_begin` (a Tier-1 input).
+**Seam deferred to Tiers 1+6 (M3):** feed the predicted opponent deck into `search_begin` (a Tier-1 input).
 
 **Files:** `tools/meta_tracker/` (artifact compile + deck export), `pilot.py` (Read on `Board`; levers A/C;
 brief-populated opponent fields), `scouting/scout.py` (predicted layer), `scouting/briefs/`,
 `agents/<deck>/strategy.py` (relativizing Hypotheses), `main.py` (Scout wiring), `docs/matchups/`.
-**Accept:** M2.0/M2.1a — suite green, Read in trace, **zero decisions change**. M2.1b — M1 A/B: Posture-on ≥
+**Accept:** M2.0/M2.1a — suite green, Read in trace, **zero decisions change**. M2.1b — the A/B gate (M1): Posture-on ≥
 off vs **recognised**; **unknown** → no regression (`γ→0`). Trace emits a one-line Posture rationale.
 
 ---
 
-## M3 — Tier-1 Search: escalation under a budget  ·  *Search API exists; build the policy*  ·  **first slices BUILT**
+## Tiers 1+6 — Tier-1 Search: escalation under a budget  ·  *Search API exists; build the policy*  ·  **first slices BUILT**  ·  *(historical milestone M3)*
 
-**Status.** The entry trigger fired (multi-step-sequencing corrections) and the first M3 slices ship: the
+**Status.** The entry trigger fired (multi-step-sequencing corrections) and the first Tiers 1+6 (M3) slices ship: the
 **Lethal Solver** ([ADR-0030](../adr/0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md),
 the sound win-this-turn case) and the **Turn Planner**
 ([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md), the general
 Goal-Ladder case: goal-directed candidate generation → engine-sim to end-of-turn → leaf-eval ranking,
 layer-on-top). Build (2)'s "leaf eval = the Tier-0 score initially" is realized as the closed-form leaf
 scalar; the **always-engine-sim** budget question is retired by the cost spike (`search_step`≈0.1 ms).
-Remaining M3: the general escalation policy on *arbitrary* effectful decisions, feeding Posture's predicted
+Remaining Tiers 1+6 (M3): the general escalation policy on *arbitrary* effectful decisions, feeding Posture's predicted
 opponent deck into `search_begin`, and the Tier-1 telemetry wiring. **Two multi-turn CRITICALs are parked
 here** — captured, fixtured, and characterised in
 [deferred-multi-turn-criticals.md](deferred-multi-turn-criticals.md): `a21472` (multi-turn attack-sequence —
 a **live gap**) needs this deep search; `b4649` (prize-race/tempo — re-measured as **already covered** by
-tuned scoring) is the exemplar for the **Prize-Race Planner** and needs the M4 value model, not a lock.
+tuned scoring) is the exemplar for the **Prize-Race Planner** and needs the Tier 5 (M4) value model, not a lock.
 
 **Entry trigger:** Tier-0 rules **plateau** — new corrections become "an extra ply would have caught it"
-(multi-step tactical) rather than "a rule was missing." M1 ladder to validate. *(Fired 2026-07-01.)*
+(multi-step tactical) rather than "a rule was missing." The A/B gate (M1) ladder to validate. *(Fired 2026-07-01.)*
 
 **Build**
 1. **Escalation policy** in `pilot.py`: with `search_budget>0`, escalate to the engine Search API **only when it can
    change the decision** — effectful attacks, lethal confirmation, close-line lookahead — else stay Tier-0.
 2. **Search driver** (new module) over `search_begin` → `search_step` → `search_end`/`search_release`; **leaf eval =
-   the Tier-0 Pilot score initially** (the value model upgrades it in M4); feed Posture's predicted opponent deck into
-   `search_begin` (M2 seam 3).
+   the Tier-0 Pilot score initially** (the value model upgrades it in Tier 5 (M4)); feed Posture's predicted opponent deck into
+   `search_begin` (Tier 4, M2 seam 3).
 3. **Hard per-move budget** + **never-time-out** guarantee: budget exhausted → return the Tier-0 choice. Wire the
    reserved Tier-1 telemetry (tree depth / branches, ADR-0019).
 
@@ -231,10 +235,10 @@ tuned scoring) is the exemplar for the **Prize-Race Planner** and needs the M4 v
 
 ---
 
-## M4 — Automatic Value Model (Job B): replay-trained leaf eval  ·  *heaviest, last; plugs into M3*
+## Tier 5 — Automatic Value Model (Job B): replay-trained leaf eval  ·  *heaviest, last; plugs into Tiers 1+6 (M3)*  ·  *(historical milestone M4)*
 
-**Entry:** a replay **data engine** producing labelled states (mined replays, label = eventual winner); M3 to consume
-the leaf eval; M1 ladder to validate. Per ADR-0007 this is the **single learned seam**.
+**Entry:** a replay **data engine** producing labelled states (mined replays, label = eventual winner); Tiers 1+6 (M3) to consume
+the leaf eval; the A/B gate (M1) ladder to validate. Per ADR-0007 this is the **single learned seam**.
 
 **Build**
 1. **State-feature encoding** — the highest-leverage surface (ADR-0007). Engineered features over the observation
@@ -242,9 +246,9 @@ the leaf eval; M1 ladder to validate. Per ADR-0007 this is the **single learned 
 2. **Supervised trainer** (`tools/train/value/`, [planned]): LightGBM, `state → P(win)`. Build order
    **general → matchup-conditioned → per-deck** (3→2→1) as data justifies.
 3. **Loader + consumption** (`src/common/value/`, [planned]): load once at import; consume as the **Search leaf eval**
-   (M3) and a **tiebreaker** in the Score layer. Heuristic stays the fallback.
+   (Tiers 1+6, M3) and a **tiebreaker** in the Score layer. Heuristic stays the fallback.
 
-**Files:** `tools/train/value/`, `src/common/value/`, hook in `pilot.py` + the M3 driver.
+**Files:** `tools/train/value/`, `src/common/value/`, hook in `pilot.py` + the Tiers 1+6 (M3) driver.
 **Open:** feature encoding; replay volume for matchup/per-deck tiers; **inference within budget** (same constraint that
 rejected card2vec — the model must run cheap at grader time).
 **Accept:** ladder A/B — value-on ≥ heuristic-only; inference within the per-move budget; clean fallback when the model
@@ -254,23 +258,23 @@ is absent.
 
 ## Decision log
 - **DE-RISKED:** engine Search API exists (`cg/api.py search_begin/step/end`); the Read *code* is built
-  (`scouting/`) — though M2 grilling found it **unwired** (no compiled artifact, Scout absent from `pilot.py`,
+  (`scouting/`) — though Tier 4 (M2) grilling found it **unwired** (no compiled artifact, Scout absent from `pilot.py`,
   predicted-intel layer incomplete; corrected in [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md)).
-- **RESOLVED (M1, grilled 2026-06-28 → [ADR-0021](../adr/0021-prefilter-balances-seats.md)):** M1 is a *pre-filter,
+- **RESOLVED (A/B gate M1, grilled 2026-06-28 → [ADR-0021](../adr/0021-prefilter-balances-seats.md)):** the A/B gate (M1) is a *pre-filter,
   not the gate*; **extend `tools/sim/battle.py`** (drop `tools/selfplay/`); **seat-balancing is required** (measured
   ~13pt first/second skew; engine has **no seed** → reproducibility is statistical); config via an **env-var experiment
   overlay** factored into `common`; opponent = **same-deck self** now (gauntlet later; random rejected); own-game
   taggable replays via `--save-replays`/`visualize_data()` (M1b), not the cabt-env path.
-- **RESOLVED (M2, grilled 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md),
+- **RESOLVED (Tier 4 M2, grilled 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md),
   [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)):** the generic Posture core is scoped
   to the Read's *net-new* levers — **A** favorability (board-dominated weight-band, no Plan change) + **C** `γ`-gated
-  accurate-development modulator on M0; generic seek/avoid stays card-fact; STABILIZE deferred. Wiring is a
+  accurate-development modulator on Tier 4 (M0); generic seek/avoid stays card-fact; STABILIZE deferred. Wiring is a
   behavior-neutral staircase (M2.0 Read→`Board` → M2.1a Scout predicted layer → M2.1b levers). Per-archetype
   counterplay is a hand-authored, shared **Matchup Brief** (≠ the auto-Dossier), produced by a new **`matchup-genie`**
   skill and consumed via `Board` opponent-property fields; engine-removal lives there.
 - **FOUND (separate blunder):** the Pilot has no `IS_FIRST` handler → it always elects to go first (the worse side),
   a ~13pt self-inflicted loss; tracked for `/blunder-buster`.
-- **OPEN (resolve early, cheap to check):** per-move Tier-1 cost (M3); value-model feature encoding + replay volume (M4).
+- **OPEN (resolve early, cheap to check):** per-move Tier-1 cost (Tiers 1+6, M3); value-model feature encoding + replay volume (Tier 5, M4).
 - **REJECTED (ADR-0007):** RL / self-play as the primary trainer; neural policy / learned card embeddings.
 
 ## References

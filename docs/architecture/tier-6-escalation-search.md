@@ -1,6 +1,6 @@
 # Tier 6 — Escalation Search
 
-**Status: ~75% built, still DEFAULT OFF** (built 2026-07-05, `/tdd`, ADR-0043; the DENSITY trigger +
+**Status: `built, gated:off`** (~75% built for T6.1; DEFAULT OFF; built 2026-07-05, `/tdd`, ADR-0043; the DENSITY trigger +
 engine-backed fixture added 2026-07-05 — the trigger fires + commits but its mirror A/B **regressed**
 (ON 44 %), so it stays parked OFF; see Acceptance / ADR-0043 Amendment). The narrow, budgeted engine tree for the one thing closed-form provably
 cannot see: **opponent choice**. Demoted by the 2026-07-05 grilling from "the" multi-turn answer (old
@@ -26,8 +26,12 @@ the real unlock (fires + commits on real boards — see *Built — density trigg
   unconditionally on exhaustion — never-crash/never-timeout is structural, not aspirational.
 - **Leaf** = T5 value model when present, closed-form scalar otherwise.
 - Tier-1 telemetry keys (tree depth/branches, reserved since ADR-0019) get wired here.
+- **Two sub-tiers** (per `src/common/tiers.py`): the built policy below is **T6.1 - Escalation
+  Search, Two-ply search** (`built, gated:off`); its value-net-backed decision-time upgrade
+  (Sampled-Belief / Search-over-Games shape, consuming T5's value net) is **T6.2 - Escalation Search,
+  Sampled-Belief Search — `unbuilt (research)`**.
 
-## Built (the 55%) — 2026-07-05, ADR-0043
+## Built (the 55%) — 2026-07-05, ADR-0043 (T6.1 - Escalation Search, Two-ply search)
 
 - **The trigger** (`_close_attack_tie`, REQ-ESCALATE-0001): fires only on ATTACK options within
   `_ESCALATE_EPS` tactical points; a clear leader / lone attack / KO-on-menu short-circuit to no

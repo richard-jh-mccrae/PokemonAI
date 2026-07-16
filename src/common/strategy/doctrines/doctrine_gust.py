@@ -308,7 +308,7 @@ HYPOTHESES = [
         weight=50, status="assumed"),
     Hypothesis(
         id="gust-for-the-stall",
-        rationale="Defensive stall-gust (tier 5, LAST resort): Active doomed, no gustable/direct KO "
+        rationale="Defensive stall-gust (rank 5, LAST resort): Active doomed, no gustable/direct KO "
                   "available, but the opponent has an energyless high-retreat benched Pokémon — drag it "
                   "Active so they burn a turn retreating it, buying a setup turn. GATED on the opponent's "
                   "CURRENT Active actually being able to damage us this turn (`opp_active_can_damage_us`): "

@@ -1,3 +1,6 @@
+> **HISTORICAL** — a per-feature build-phase design doc; its Phase-N build labels predate the 2026
+> naming convention ([docs/naming-convention.md](../naming-convention.md)) and are retained for provenance.
+
 # Phase 3 tooling — turn-planner corrections → rule retirement
 
 **Status: DESIGNED 2026-07-15; capture half BUILT 2026-07-15 (test-first); consume/proof half specced,

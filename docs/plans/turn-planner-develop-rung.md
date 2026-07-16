@@ -1,3 +1,6 @@
+> **HISTORICAL** — a per-feature build-phase log; its Phase-N build labels predate the 2026 naming
+> convention ([docs/naming-convention.md](../naming-convention.md)) and are retained for provenance.
+
 # Turn Planner — the missing "develop optimally" rung (within-turn rollout)
 
 **Status: Phase 0 + Phase 1 BUILT + Phase 2 cost/safety MEASURED 2026-07-15; the rung is now armed-ON in the

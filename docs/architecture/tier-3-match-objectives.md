@@ -11,21 +11,21 @@ Board signals), derived phases, T5 features, T6 trigger.
 
 ## Final design (ADR-0040)
 
-- **Prize Path, two-sided, per turn**: enumerate assignments of KOs over the other side's KO-able
+- **T3.1 Prize Path, two-sided, per turn**: enumerate assignments of KOs over the other side's KO-able
   bodies whose prize values ({1,2,3} = regular/ex/Mega-ex, verified `docs/rules.md` §6) sum to the
   remaining prizes — MY cheapest feasible acquisition path over their board, and THEIR cheapest
   path over mine. Feasibility weight per KO from KO-Race turns + replacement likelihood. ≤6 bodies
   a side ⇒ trivial subset-sums. Mild **stickiness** (path-switch penalty) buys coherence without
   commitment.
-- **Path Denial** — the "force 7, not 6": bench discipline (never gift the body completing their
+- **Path Denial (part of T3.1)** — the "force 7, not 6": bench discipline (never gift the body completing their
   ≤6 route), promote order (interpose generalized: the absorbed KO should sit OFF their cheapest
   path), KO-priority on their path-critical attackers.
-- **KO Race** — closed-form turns-to-KO both directions: my best attack **sequence** vs a standing
+- **T3.2 KO Race** — closed-form turns-to-KO both directions: my best attack **sequence** vs a standing
   wall (damage accumulation; riders/snipes credited when they land on Prize-Path targets — the
   `a21472` fix: 2×Jetting+Nebula = 450 ≥ 440 in the same 3 turns as any order, so the 100 bench
   chip onto Riolu breaks the tie), and their sequence vs each of my bodies (Survival Window
   generalized). Opponent-static per computation; recomputed every turn.
-- **Derived phases — advisory, never gates** (contract from the 2026-07-05 phase grilling):
+- **T3.3 Derived phases — advisory, never gates** (contract from the 2026-07-05 phase grilling):
   `Plan` becomes a pure function of the objectives — behind-in-race + their-path-imminent →
   **STABILIZE** (denial/heal/wall bands up); my-path ≤2 prizes or lethal-adjacent → **CLOSE**
   (force the line, deprioritize long-horizon development); else SETUP→RACE as today. The label
@@ -41,16 +41,16 @@ Board signals), derived phases, T5 features, T6 trigger.
 
 ## Built (the 75%) — 2026-07-05
 
-- **KO Race** (`common/strategy/objectives.py` `race_values` + `_race_attack_tactical`, switch
+- **T3.2 KO Race** (`common/strategy/objectives.py` `race_values` + `_race_attack_tactical`, switch
   `objectives_race`, ON): wall attacks priced by the best min-turn SEQUENCE (`hp/t★` + own chip +
   tempo-discounted rest-chip, bench-pool-capped) — **the live `a21472` blunder is a green gate**
   (REQ-OBJ-0001: the shipped Pilot picks Jetting on the captured state).
-- **Two-sided Prize Path** (`prize_paths` + `_path_signals` → five Board fields:
+- **T3.1 Two-sided Prize Path** (`prize_paths` + `_path_signals` → five Board fields:
   `my_path_turns` / `their_path_turns` / `race_ahead` / `path_target_ids` / `their_path_my_ids`),
   always-on data, re-derived per decision; consumers behind `objectives_path` (ON):
   `snipe-on-the-path` (+12), `dont-bench-onto-their-path` (−10, the "force 7" brake, REQ-OBJ-0006),
   the planner key-threat on-path bump (+25 sub-prize).
-- **Derived advisory phases** (`_derive_phase`, switch `objectives_phases`, ON): STABILIZE via the
+- **T3.3 Derived advisory phases** (`_derive_phase`, switch `objectives_phases`, ON): STABILIZE via the
   race Schmitt trigger (enter ≤ −1 / exit ≥ +1, REQ-OBJ-0007), CLOSE at payoff-online + ≤2 prizes;
   the two small `baseline_phases` bands are the ONE sanctioned `board.phase` consumer.
 - **The gate-ban migration**: all 24 `c.plan` rule sites migrated to the real signals

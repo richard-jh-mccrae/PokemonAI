@@ -26,7 +26,7 @@ HYPOTHESES = [
     #     their ACTIVE **and** BENCH — so we stood down whenever their Active was bare and their bench
     #     was loaded, and 4 Hammers sat dead in hand all game against a bench-loading deck.
     #   • its WEIGHT paid the same +20 for turning off a 270 nuke as for shaving 70 off a benched body,
-    #     and could never DECLINE one: `_finish_turn_last` tiers a free Item ahead of everything, so any
+    #     and could never DECLINE one: `_finish_turn_last` sequences a free Item ahead of everything, so any
     #     positive score got it played (ms 82749168 f29, "wasted crushing hammer").
     # `pilot._denial_play_tactical` + `strategy/denial.py` now own it: coin x what-the-strip-actually-
     # takes-away, net of keeping the card. Same lesson as ADR-0060 — price the quantity, don't threshold
@@ -54,7 +54,7 @@ HYPOTHESES = [
                   "TACTICAL (`coin x denial - the cost of keeping the Item`, and zero when I can already "
                   "KO their Active). This rung kept the coarse `opp_denial_best > 0` gate — the raw "
                   "PRESENCE of denial — so a flat +18 sat on top of an oracle that had said HOLD, and a "
-                  "free Item at score > 0 is tiered ahead of everything by `_finish_turn_last`. It played "
+                  "free Item at score > 0 is sequenced ahead of everything by `_finish_turn_last`. It played "
                   "a Hammer into a KO turn against a bare opponent bench (ms 83968638 f17, CRITICAL). "
                   "A booster must SCALE the oracle, never ADD to it: the unfavored amplification now "
                   "lives INSIDE `_denial_play_tactical` as `_DENIAL_UNFAVORED`, where multiplying a whiff "

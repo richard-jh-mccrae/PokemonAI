@@ -11,12 +11,12 @@ HYPOTHESES = [
         rationale="Activate a pure card-advantage Ability at the MAIN menu — a `draw`/`dig` Ability "
                   "(Drakloak Recon Directive, Dudunsparce Run Away Draw, Bibarel) has NO combat value "
                   "(`_tactical`=0 for a non-attack option) and `dig-before-commit` only fires on `_PLAY`, "
-                  "so nothing endorsed it: it scored 0, `_finish_turn_last` dropped it to tier 4 beside "
+                  "so nothing endorsed it: it scored 0, `_finish_turn_last` dropped it to sequence band 4 beside "
                   "the turn-ending attack, and any positive-tactical attack ended the turn first — the "
                   "free draw/dig was systematically skipped whenever an attack was on the menu (probe: "
                   "Recon + Run Away Draw both scored 0, fired={}). The `_ABILITY` sibling of "
-                  "`dig-before-commit`: give a draw/dig Ability a positive weight so it sequences to tier "
-                  "0 (before the attack). Scoped to `draw`/`dig` and non-`cost_discard` — a blanket "
+                  "`dig-before-commit`: give a draw/dig Ability a positive weight so it sequences to "
+                  "sequence band 0 (before the attack). Scoped to `draw`/`dig` and non-`cost_discard` — a blanket "
                   "'activate any ability' risks firing a counter-move/heal with no good target (deferred "
                   "refinement). Silent for decks with no draw/dig Ability.",
         when=lambda c: c.option_type == _ABILITY

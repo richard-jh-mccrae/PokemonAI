@@ -25,7 +25,7 @@ HYPOTHESES = [
                   "line NOW (`can_wall_line_with_disruptor`), RETREAT it — pull the fragile line to the "
                   "Bench to safety, promote the item-lock wall (`promote-the-staller` picks it at the "
                   "follow-up SWITCH), and evolve + energize the line behind cover while the opponent is "
-                  "item-locked. Step 1 of a multi-step turn: `_finish_turn_last` rides this retreat TIER-0 "
+                  "item-locked. Step 1 of a multi-step turn: `_finish_turn_last` rides this retreat in sequence band 0 "
                   "(ahead of a free evolve / Item strip) so it happens FIRST, and `hold-position-in-setup` "
                   "stands down under the same premise. Silent for decks without a benched item-lock opener. "
                   "Budew is sacrificial by design — the opponent KOs it next turn, having bought a locked "

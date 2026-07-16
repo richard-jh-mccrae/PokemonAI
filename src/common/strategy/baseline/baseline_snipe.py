@@ -56,7 +56,7 @@ HYPOTHESES = [
                   "denies the opponent their next attacker rather than poking a bare benchsitter. "
                   "Stands down on a KO target — every positional rung must, or their SUM out-votes the "
                   "free prize (ms 82754241 f45 / 82753102 f63). "
-                  "Co-fires with `snipe-the-top-threat` (`_target_threat_rank` already tiers energized "
+                  "Co-fires with `snipe-the-top-threat` (`_target_threat_rank` already ranks energized "
                   "targets above bare ones) as the legible imminence signal on top of it.",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_threat and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
@@ -80,7 +80,7 @@ HYPOTHESES = [
                   "FORCED next turn — they bring up their highest-value READY attacker (the "
                   "win-condition, energy-independent), not the energized bench-sitter that merely "
                   "carries Energy now. Pre-chip that body this turn. Overrides the energized-imminence "
-                  "tier for this pick (its mirages are suppressed); silent while their Active is alive.",
+                  "rank for this pick (its mirages are suppressed); silent while their Active is alive.",
         when=lambda c: (c.select_context == _DAMAGE and c.target_is_forced_promotion
                         and not c.board.snipe_ko_available
                         and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),

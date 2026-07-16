@@ -4,7 +4,7 @@ A Shuffle-Refresh Supporter shuffles your whole hand into the deck then draws (L
 Judge, Harlequin, Lacey; Function Tag `shuffle_hand`). It presents NO select, so it is the Fetch
 comparator's decision (A) ONLY — *whether to play it* — and it REUSES Fetch's `_grab_value_of` for the
 gain side rather than restating a value model. Post-refutation (2026-06-30, ~3:1 mirror cost of
-hoarding) the refresh is ENDORSED by default (`dig-before-commit` +20, hand-blind — tier-3 sequencing
+hoarding) the refresh is ENDORSED by default (`dig-before-commit` +20, hand-blind — sequence band 3
 means it only ever sees the residual dregs); the keep-value floors guard the narrow bad shuffles, and
 Layer B (ADR-0024 amendment, revised at the 2026-07-03 A/B) adds ONE deck-side suppressor: the
 post-anchor pull-EV `dont-refresh-into-a-probable-miss` over `_DRAW_COUNTS` (its K=0 case covers the
@@ -85,7 +85,7 @@ HYPOTHESES = [
                   "Determination), since that card discards any Energy still in hand — playing it first "
                   "wastes the attach and can shuffle away a game-winning Energy. Fires only with a "
                   "reusable Energy in hand, not yet attached this turn; belt-and-suspenders with "
-                  "`_finish_turn_last`'s structural tiering (tier 3 shuffle after tier-2 attach). Stands "
+                  "`_finish_turn_last`'s structural sequencing (sequence band 3 shuffle after sequence band 2 attach). Stands "
                   "down when the Energy has NO placeable home (`not energy_placeable`), so it never vetoes "
                   "a bench-finding refresh (ep83038055 f40).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
@@ -132,7 +132,7 @@ HYPOTHESES = [
                   "to evolve onto next turn (`line_preevo_in_play`, e.g. benched Staryu under a Mega "
                   "Starmie ex in hand) — this is a concrete imminent evolution, not just recoverable "
                   "tempo, so hold firmly and develop instead. Stacks on the base hold (−25) to net the "
-                  "shuffle below 0 even against `dig-before-commit` (+20), tiering it below the attack "
+                  "shuffle below 0 even against `dig-before-commit` (+20), sequencing it below the attack "
                   "(ep82867148 f52: 3 Mega in hand, benched Staryu, Turbo Flare available); narrow to "
                   "base-in-play, else the moderate hold still allows a dead-hand refill.",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
