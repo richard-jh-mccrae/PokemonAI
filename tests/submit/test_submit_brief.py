@@ -138,7 +138,7 @@ def test_brief_falls_back_to_size_when_no_card_db(tmp_path):
     html = render_brief(build_manifest(agent, cards={}, when=datetime(2026, 6, 25), git_hash="abc1234"))
 
     assert "Deck — 60 cards" in html                # still shows the size header
-    assert "<li" not in html                         # but no broken/empty decklist
+    assert "×" not in html                           # but no broken/empty decklist rows (count× name)
 
 
 @pytest.mark.req("REQ-SUB-0010")
@@ -221,6 +221,38 @@ def test_brief_renders_expandable_hypothesis_rows_with_all_info(tmp_path):
     assert "Explosiveness" in html                # its rationale text (the human "all info")
     assert "lambda" in html                        # trigger source shown too
 
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_brief_renders_tier_dropdowns_with_enabled_disabled(tmp_path):
+    """The Brief carries the T0–T6 map as drop-downs, each (sub-)tier badged enabled/disabled."""
+    agent = _agent_with_tuned(tmp_path, {})
+    html = render_brief(build_manifest(agent, when=datetime(2026, 6, 25), git_hash="abc1234"))
+
+    assert "Tiers — enabled / disabled" in html      # the section heading
+    assert "<details class='tier'>" in html          # each tier is an expandable drop-down
+    assert "T1 - Turn Planner" in html               # a tier row
+    assert "T4.2 - Posture" in html                  # a sub-tier row (nested)
+    assert "T5 - Automatic Value Model" in html
+    assert "✓ enabled" in html and "✗ disabled" in html   # both live states appear
+    assert "class='badge off'" in html               # T5 ships gated off by default
+    assert "… unbuilt" in html                        # T4.4 Learned Matchup Weights (grilled, unbuilt)
+    assert "<code>value_model</code>" in html         # the governing kill-switch is shown
+
+
+@pytest.mark.req("REQ-SUB-0011")
+def test_brief_tier_state_follows_the_decks_strategy_params(tmp_path):
+    """A deck that force-disables a switch shows that (sub-)tier disabled in its own Brief."""
+    agent = tmp_path / "a"
+    agent.mkdir()
+    (agent / "strategy.py").write_text(
+        "from common.strategy import Strategy\n"
+        "STRATEGY = Strategy(name='a', params={'objectives_race': False})\n", encoding="utf-8")
+
+    manifest = build_manifest(agent)
+    t3 = {t["id"]: t for t in manifest["tiers"]}["T3"]
+    race = {s["id"]: s for s in t3["sub"]}["T3.2"]
+    assert race["state"] == "off"                    # objectives_race forced off in params
 
 
 @pytest.mark.req("REQ-SUB-0005")

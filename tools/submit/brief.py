@@ -30,7 +30,7 @@ def render_brief(manifest: dict, *, prev_deck: dict | None = None,
     """
     payload = json.dumps(manifest, ensure_ascii=False).replace("<", "\\u003c")
     p, caps = manifest["provenance"], manifest["capabilities"]
-    flags = (f"Tier-{caps['tier']} · card_functions:{'✓' if caps['card_functions']['present'] else '✗'}"
+    flags = (f"card_functions:{'✓' if caps['card_functions']['present'] else '✗'}"
              f" · posture:{'on' if caps['posture']['enabled'] else 'off'}"
              f" · overrides:{caps['overrides']['count']}")
     added, removed, changed, badges = _deck_diff(prev_deck, manifest["deck"])
@@ -45,9 +45,17 @@ def render_brief(manifest: dict, *, prev_deck: dict | None = None,
         ".deckdiff{background:#fff8e1;border-left:4px solid #f5a623;padding:.4rem .8rem;"
         "margin:.5rem 0;border-radius:4px}.deckdiff li.add{color:#1a7f37}.deckdiff li.rem{color:#b42318}"
         ".deckdiff li.chg{color:#9a6700}li.changed{background:#fff8e1;border-radius:3px;padding:0 .2rem}"
-        ".tag{font-weight:600;color:#9a6700}</style></head>\n<body>\n"
+        ".tag{font-weight:600;color:#9a6700}"
+        ".badge{font-size:.8em;padding:.05rem .35rem;border-radius:3px;font-weight:600;white-space:nowrap}"
+        ".badge.on{background:#e6f4ea;color:#1a7f37}.badge.off{background:#fde8e8;color:#b42318}"
+        ".badge.partial{background:#fff4e5;color:#9a6700}.badge.unbuilt{background:#eef;color:#3538cd}"
+        "ul.tiers{margin:.3rem 0 .3rem 1rem}ul.tiers li{margin:.25rem 0;list-style:none}"
+        "ul.switches{margin:.2rem 0;color:#555;font-size:.9em}details.tier>summary{padding:.15rem 0}"
+        "</style></head>\n<body>\n"
         f"<h1>{html.escape(p['agent'])}</h1>\n"
         f"<p>built {p['built_at']} · commit <code>{html.escape(p['git_hash'])}</code> · {flags}</p>\n"
+        f"<h2>Tiers — enabled / disabled</h2>\n"
+        f"{_tiers_html(manifest.get('tiers', []))}\n"
         f"<h2>Deck — {manifest['deck']['size']} cards</h2>\n"
         f"{_deck_diff_html(prev_build_id, added, removed, changed)}\n"
         f"{_deck_html(manifest['deck'], badges)}\n"
@@ -59,6 +67,50 @@ def render_brief(manifest: dict, *, prev_deck: dict | None = None,
         f'<script type="application/json" id="manifest">{payload}</script>\n'
         "</body></html>\n"
     )
+
+
+_STATE_BADGE = {"on": "✓ enabled", "off": "✗ disabled", "partial": "◑ partial", "unbuilt": "… unbuilt"}
+
+
+def _switches_inline(flags: list[dict]) -> str:
+    """The governing kill-switches with a ✓/✗ each, inline (empty when structural / none)."""
+    if not flags:
+        return ""
+    return " " + " ".join(f"{'✓' if f['on'] else '✗'}<code>{html.escape(f['name'])}</code>"
+                          for f in flags)
+
+
+def _subtier_li(node: dict) -> str:
+    """One sub-tier as a badged list row: `T4.2 - Posture ✓ enabled` + its switches + note."""
+    badge = _STATE_BADGE.get(node["state"], node["state"])
+    status = f" <em>{html.escape(node['status'])}</em>" if node.get("status") else ""
+    note = f"<br><small>{html.escape(node['note'])}</small>" if node.get("note") else ""
+    return (f"<li class='{node['state']}'><b>{html.escape(node['id'])} - {html.escape(node['name'])}</b> "
+            f"<span class='badge {node['state']}'>{badge}</span>{status}"
+            f"{_switches_inline(node['flags'])}{note}</li>")
+
+
+def _tier_block(node: dict) -> str:
+    """One tier as an expandable drop-down: badged summary, note, own switches, nested sub-tiers."""
+    badge = _STATE_BADGE.get(node["state"], node["state"])
+    status = f" — <em>{html.escape(node['status'])}</em>" if node.get("status") else ""
+    body = []
+    if node.get("note"):
+        body.append(f"<p>{html.escape(node['note'])}</p>")
+    if node["flags"]:
+        sw = "".join(f"<li>{'✓' if f['on'] else '✗'} <code>{html.escape(f['name'])}</code></li>"
+                     for f in node["flags"])
+        body.append(f"<ul class='switches'>{sw}</ul>")
+    if node.get("sub"):
+        body.append("<ul class='tiers'>" + "".join(_subtier_li(s) for s in node["sub"]) + "</ul>")
+    return (f"<details class='tier'><summary><b>{html.escape(node['id'])} - "
+            f"{html.escape(node['name'])}</b> <span class='badge {node['state']}'>{badge}</span>"
+            f"{status}</summary>{''.join(body)}</details>")
+
+
+def _tiers_html(tiers: list[dict]) -> str:
+    """The whole Tier Map as nested drop-downs — one per tier, sub-tiers inside (empty-safe)."""
+    return "\n".join(_tier_block(t) for t in tiers)
 
 
 def _hyp_details(hyps: list[dict], marks: dict | None = None) -> str:
@@ -298,6 +350,12 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
     meta_path = agent_dir / "tuned.meta.json"          # provenance sidecar (ADR-0019)
     training = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     search_budget = strategy.params.get("search_budget", 0)
+    # The deployed enabled/disabled state of every tier & sub-tier: the shipped PROFILE defaults
+    # overlaid with this deck's Strategy params (exactly runtime.build_pilot's merge, but
+    # declarative — no Pilot build). tiers.py is the single source of truth for flag→tier.
+    from common import tiers as tier_map
+    from common.runtime import PROFILE
+    tiers_resolved = tier_map.resolve(tier_map.effective_flags(strategy.params, PROFILE))
     return {
         "schema_version": 1,
         "provenance": {
@@ -308,9 +366,10 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
         },
         "deck": _deck(agent_dir, cards),
         "training": training,
+        "tiers": tiers_resolved,     # the T0–T6 map with live enabled/disabled per (sub-)tier
         "capabilities": {
             "search_budget": search_budget,
-            "tier": 1 if search_budget > 0 else 0,    # >0 = Tier-1 Search; else Tier-0 closed-form
+            "tier": 1 if search_budget > 0 else 0,    # legacy field; superseded by "tiers" above
             "card_functions": {"present": (agent_dir / "common" / "card_functions.json").exists()},
             "posture": {"enabled": (agent_dir / "common" / "scouting" / "artifact.json").exists()},
             "overrides": {"present": bool(tuned), "count": len(tuned)},

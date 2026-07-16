@@ -12,6 +12,7 @@ full:
   - 'pytest.ini'
   - '.github/**'
   - 'tests/conftest.py'
+  - 'tests/common/**'
   - 'tests/pilot_helpers.py'
   - 'tests/scouting_helpers.py'
   - 'tests/lethal_helpers.py'
