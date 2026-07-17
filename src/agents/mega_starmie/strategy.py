@@ -52,10 +52,10 @@ STRATEGY = Strategy(
                 role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
     params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority
-            "search_budget": 0,           # ADR-0061/0043: escalation (Tier 6) is search_budget's ONLY
-                                          # functional consumer — Tier-1 engine sims (planner_engine_rank,
-                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Raising it
-                                          # also re-labels telemetry AND the submission manifest as Tier-1.
+            "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
+                                          # functional consumer). Tier-1 engine sims (planner_engine_rank,
+                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
+                                          # hold the submission manifest at Tier-0 (test-pinned).
             "my_archetype": "Cinderace / Mega Starmie ex",   # Posture favorability key (ADR-0026 lever A)
             "reactivity": "solitaire",    # deck-personality (learnthetcg): turbo aggro plays its own
                                           # game; don't over-react to the opponent. CONSUMED by the

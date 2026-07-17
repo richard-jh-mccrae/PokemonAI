@@ -321,6 +321,11 @@ class Board:
     bench_wincon_underpowered: bool = False  # a benched win-condition carries fewer Energy than its
                                        # highest-damage attack costs — can't yet fire payoff, so an accel
                                        # promote can power it off-Bench, which promoting the finisher directly can't
+    opp_cannot_punish_wincon: bool = False  # ADR-0064 Decision 4: the opponent's reachable Incoming
+                                       # (charged safety read) cannot KO my best benched win-condition next
+                                       # turn — the return-KO reachability veto. Stands down interpose /
+                                       # dont-promote-into-their-prize-reach so promote-the-ready-wincon wins
+                                       # (scenario 3: they literally can't afford to punish). Fails CLOSED
     basic_energy_in_deck: bool = False  # my deck can still yield a Basic Energy (a Basic-Energy id not
                                        # known-exhausted) — fuel gate for an accelerator promote
                                        # (Cinderace's Turbo Flare fetches Basic Energy to the Bench)
@@ -880,7 +885,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  lethal_veto=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, forced_promotion=False,
-                 value_model=None, escalation=False,
+                 value_model=None,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
@@ -1016,9 +1021,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # ValueModel refines the planner leaf + rides
                                                         # telemetry; None / null model = off (heuristic
                                                         # leaf unchanged), so it default-OFF until an A/B
-        self.escalation = escalation                    # ADR-0043 kill-switch: Tier-6 depth-2 tree on a
-                                                        # close attack tie (needs search_budget>0); the
-                                                        # tuned pick is the guaranteed fallback. Default OFF
         self._search_steps = 0                          # per-move Engine-Search step budget counter
         self._locked_line = None                        # the materialized verified line (turn-scoped):
                                                         # {"turn": n, "queue": [entries]} or None
@@ -1031,6 +1033,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._transients = TransientTracker(self._attack_stat)   # ADR-0033: live next-turn grants
                                                         # (Frost Barrier class) inferred from ATTACK
                                                         # logs — obs exposes no effect state
+        self._incoming_budget = None                    # ADR-0064: reachable-Incoming energy policy,
+                                                        # set per decision in _board (None = worst-case ceiling)
         from common.strategy.combat import CombatMath
         self.combat = CombatMath(stats, functions, transients=self._transients)   # the KO oracle
                                                         # (ADR-0052): the one closed-form combat home;
@@ -3087,6 +3091,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # top candidate is just the prior favourite -> gate on γ>0 to keep board.brief off until recognized.
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         self.opponent.note_brief(brief)              # feed the γ-gated Brief to Dispositions (ADR-0047)
+        # ADR-0064 Decision 1: the reachable-Incoming energy policy. Charged (per-attack typed-cost
+        # affordability) ONLY behind a γ-matched Brief — the calibrated "we know what they run" signal;
+        # an unrecognized opponent stays None → worst-case ceiling (never relax pessimism on a guess).
+        # burst_on_evo credits an Ignition-class colourless burst ({C}{C}{C} on an Evolution): it only
+        # ever makes a COLOURLESS-costed attack more reachable (the pessimism-safe direction — it can
+        # never fund a typed {F}{F}), so a flat matched-archetype allowance keeps a burst nuke doomed
+        # while the typed/colourless split sharpens genuine typed-cost reach (the variant-2 read).
+        self._incoming_budget = {"base_attach": 1, "burst_on_evo": 2} if brief is not None else None
         _opp_res = getattr(self.opponent, "resources", None)   # match-scoped Resources tracker (flattened below)
         # Resolve the matched Brief's name-keyed threats/targets to card ids (ADR-0027 consumer). Guarded
         # like forward_max_damage: an old/None provider -> empty, never crashes. Behavior-neutral surface.
@@ -3183,6 +3195,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
             bench_wincon_prize_value=self._bench_wincon_prize_value(me),
             bench_wincon_underpowered=self._bench_wincon_underpowered(me),
+            opp_cannot_punish_wincon=self._opp_cannot_punish_wincon(me, opp),
             basic_energy_in_deck=self._basic_energy_in_deck(deck_empty),
             my_discard_basic_energy=self._discard_energy_counts(me.get("discard") or [])[1],
             active_best_attack_locked=self._active_best_attack_locked(ma),
@@ -3582,6 +3595,33 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return any(p and p.get("id") in wincon
                    and len(p.get("energies") or []) >= _min_attack_cost(self.stats, p.get("id"))
                    for p in (me.get("bench") or []))
+
+    def _opp_cannot_punish_wincon(self, me: dict, opp: dict | None) -> bool:
+        """ADR-0064 Decision 4: True when the opponent's reachable Incoming cannot KO my best benched
+        win-condition next turn — the return-KO reachability veto behind the interpose / dont-promote
+        stand-down (scenario 3: they literally can't afford to punish the exposed wincon, so
+        `promote-the-ready-wincon` should win). **Matched-Read only** (Decision 4's safety direction):
+        the veto fires solely behind a γ-matched Brief (`_incoming_budget` populated) — we expose a
+        3-prize wincon only when we KNOW the archetype and its charged typed-affordability read says no
+        lethal is reachable. Unmatched → False (fail CLOSED: keep interpose — under-counting their reach
+        would feed them the wincon). Deliberately PESSIMISTIC even when matched (pool-forward evolution
+        existence, `evo_min_energy` default 0), so a wincon is never exposed on a phantom-safety read."""
+        if getattr(self, "_incoming_budget", None) is None:
+            return False                                  # no matched Read → never expose on a guess
+        slot = self._best_promote_slot(me)
+        if slot is None or opp is None:
+            return False
+        idx = slot[1]
+        bench = me.get("bench") or []
+        wincon = bench[idx] if 0 <= idx < len(bench) else None
+        if not (wincon and wincon.get("hp")):
+            return False
+        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        incoming = self.combat.reachable_incoming(
+            {"id": wincon.get("id"), "hp": wincon.get("hp")}, opp_bodies,
+            charged=getattr(self, "_incoming_budget", None),
+            context=getattr(self, "_opp_attack_context", None))
+        return incoming < wincon.get("hp")
 
     def _best_promote_slot(self, me: dict) -> tuple | None:
         """(_BENCH, index) of the benched win-condition best to bring to the Active Spot — the READY

@@ -107,21 +107,6 @@ _RARE_CANDY_ID = 1079         # BUILD 1 (`enabler_item_composer`): Rare Candy (I
 _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
               "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
-_ESCALATE_EPS = 15.0          # Tier-6 (ADR-0043): two attacks within this many tactical points are a
-                               # "close race tie" the closed-form can't separate — the escalation
-                               # trigger. Narrow, so only genuinely ambiguous attack picks pay the tree
-_ESCALATE_DENSITY = 2.0       # Tier-6 (ADR-0043) DENSITY trigger: escalate when the opponent's
-                               # gust/heal/disruption capability (Function Tags over revealed + Read-
-                               # predicted opp cards) reaches this weighted count — the opponent-choice-
-                               # dominated board the opponent-STATIC closed-form misprices. Unlike the
-                               # attack-tie trigger it needs no 2+ affordable attacks (those occur on
-                               # ~0-1.5% of our menus), so it fires on the common one-attacker board.
-                               # Calibrated against the firing diagnostic (docs/architecture/tier-6*).
-_ESCALATE_TOPK = 3            # the density trigger sims the top-K options by tactical two-ply (there is
-                               # no tie to reuse); the strict-improvement gate keeps only a real upgrade
-_DISRUPT_TAGS = frozenset({"gust", "switch", "heal", "hand_disruption", "energy_denial"})   # the
-                               # opponent-choice texture: force-swap / retreat-dodge / heal-out-of-range
-                               # / hand + energy denial — the replies opponent-static tiers can't see
 _PRIZE_AREA = 6                # AreaType.PRIZE — a hidden-zone pick: the sim's ids are predictions,
                                # so a recorded prize pick is policy-driven at replay (ADR-0037 stage 3)
 
@@ -265,8 +250,8 @@ class PlannerMixin:
             line = self._commit_best(obs, candidates)
         if line is None:                              # Tier-2 Gamble rung (ADR-0039): below every
             line = self._best_gamble_line(obs, select, board, options, traces)   # deterministic goal
-        if line is None:                              # Tier-6 escalation (ADR-0043): a close
-            line = self._escalate(obs, select, board, options, traces)   # attack tie → depth-2 tree
+        # Tier-6 escalation (ADR-0043) REMOVED — deprecated by ADR-0064 Decision 6 (its depth-2 reply
+        # sim was blind to hidden-hand development; already inert in production, search_budget=0).
         if line is None and self.develop_rollout and self._develop_should_fire(traces):
             line = self._develop_rollout_line(obs, select, board, options, traces)   # develop-rung Phase 1:
         self._turn_plan = (fp, line)                  # the deferred bottom rung — a within-turn rollout on
@@ -2122,6 +2107,32 @@ class PlannerMixin:
                 + _PLANNER_VALUE_W * value
                 + min(_LINE_CAP, line))
 
+    def _predicted_loss(self, me: dict, opp: dict) -> float:
+        """The predicted-LOSS rung (ADR-0064 Decision 3): a candidate end board whose only Pokémon is
+        a doomed Active — my Bench is EMPTY (a visible fact of the resulting board) and the budgeted
+        Incoming Knocks that Active Out next turn — is a predicted **game loss**, not a lost body.
+        Returns ``-KO_SCORE`` (a terminal loss rung — a rung, not a weight; the same magnitude the
+        removed ADR-0043 two-ply used for "the reply won for them"),
+        else 0. The flat ``_PLANNER_SURVIVAL_W`` keeps pricing the recoverable lose-a-body case; this
+        only bites when the loss is structural. Composes below the win rung by construction (a line
+        that wins outright returns ``KO_SCORE × (prizes+1)`` before any leaf math)."""
+        active = next((p for p in (me.get("active") or []) if p), None)
+        my_hp = (active or {}).get("hp", 0)
+        my_stat = self.stats.get(active.get("id")) if (active and self.stats) else None
+        if not (my_stat and my_hp):
+            return 0.0
+        if any(b for b in (me.get("bench") or [])):
+            return 0.0                                    # a bench body soaks — recoverable, not a loss
+        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        # The catastrophe rung reads a STRICTER Incoming than the ±50 survival term: an evolution-based
+        # KO counts only off a pre-evo that ALREADY carries Energy (evo_min_energy=1) — a bare 0-Energy
+        # pre-evo is not a credible next-turn game-ender (ADR-0064 bounded-pessimism guard).
+        incoming = self.combat.reachable_incoming(
+            {"id": active.get("id"), "hp": my_hp}, opp_bodies,
+            charged=getattr(self, "_incoming_budget", None), evo_min_energy=1,
+            context=getattr(self, "_opp_attack_context", None))
+        return -float(KO_SCORE) if incoming >= my_hp else 0.0
+
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
         """True if my body (``my_id`` at ``my_hp``) survives the opponent's Incoming AFTER I KO their
         Active this turn — their best affordable REMAINING attacker (a benched body they promote) can't
@@ -2132,24 +2143,21 @@ class PlannerMixin:
 
     def _incoming_worst(self, my_id, my_hp: int, opp_bodies) -> int:
         """The worst Weakness/Resistance-adjusted damage the opponent's affordable attackers among
-        ``opp_bodies`` could deal to my body next turn — the closed-form **Incoming** (CONTEXT.md): the
-        hardest-hitting body whose Energy plus one attach affords an attack, their predicted next
-        promotion. An upper-bound estimate (counts each body's biggest attack once it can afford its
-        cheapest), so a survival check is conservative. 0 when unknown."""
+        ``opp_bodies`` could deal to my body next turn — the closed-form **Incoming** (CONTEXT.md).
+        A thin adapter over ``CombatMath.reachable_incoming`` (ADR-0064): the reachability read now
+        counts each body's CURRENT form AND one reachable EVOLUTION hop (their promote→evolve→attach→
+        attack development step), not just the current body. Still an upper-bound (a form's biggest
+        attack is credited once it can pay its cheapest, worst-case), so a survival check stays
+        conservative. The energy policy is the per-decision budget (``_incoming_budget``): ``None``
+        → worst-case ceiling (unmatched Read); a charged dict → per-attack typed affordability under
+        the matched-Read burst budget. 0 when unknown."""
         my_stat = self.stats.get(my_id) if (self.stats and my_id is not None) else None
-        if not (my_stat and my_hp):
+        if not (my_stat and my_hp):                       # unknown my card → no claim (contract-preserving)
             return 0
-        worst = 0
-        for p in opp_bodies:
-            if not p:
-                continue
-            pstat = self.stats.get(p.get("id")) if self.stats else None
-            if not pstat:
-                continue
-            energy = len(p.get("energies") or []) + 1          # allow one attach next turn
-            if pstat.can_pay_cheapest(energy):
-                worst = max(worst, int(self._predicted_max_damage(pstat, {"id": my_id})))
-        return worst
+        return int(self.combat.reachable_incoming(
+            {"id": my_id, "hp": my_hp}, opp_bodies,
+            charged=getattr(self, "_incoming_budget", None),
+            context=getattr(self, "_opp_attack_context", None)))
 
     def _threat_magnitude(self, opp) -> float:
         """The threat magnitude of the opponent's Active — its biggest printed attack — as the
@@ -2196,10 +2204,11 @@ class PlannerMixin:
         if active and active.get("hp"):
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
-        return self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                readiness=self._readiness(me),
-                                value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
-                                line=(line_val if spend_account else 0.0))
+        return (self._leaf_value(prizes=prizes_taken, active_survives=survives,
+                                 readiness=self._readiness(me),
+                                 value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
+                                 line=(line_val if spend_account else 0.0))
+                + self._predicted_loss(me, opp))                 # ADR-0064: bench-empty-doom loss rung
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
@@ -2560,162 +2569,3 @@ class PlannerMixin:
             return None
         finally:
             self._planning = False
-
-    # ═══ TIER-6 ESCALATION (ADR-0043): budgeted depth-2 tree for the opponent-CHOICE residue ═══
-    # Closed-form (Tiers 0-3) is blind to the opponent's REPLY: two attacks can price identically
-    # this turn yet leave very different boards after the opponent's best answer. When the tuned
-    # scoring can't separate the top attacks (a race tie within ε), escalate — sim each candidate
-    # through MY turn AND the opponent's reply (our own policy as the proxy), then rank by the leaf
-    # (value model when present, else closed-form). Hard per-move step budget; the tuned pick is the
-    # guaranteed fallback (budget exhausted / engine absent → return None → tuned scoring decides).
-
-    def _escalate(self, obs, select, board, options, traces):
-        """A committed Turn Line from the depth-2 escalation, or None to defer to the tuned scoring.
-
-        Two triggers, one budgeted engine tree (ADR-0043). Both need the ``escalation`` switch on, a
-        search budget, that we're not already mid-sim, and a search input on ``obs``:
-
-        1. **Close attack tie** (``_close_attack_tie``): the top attacks price within ``_ESCALATE_EPS``
-           — the race tie closed-form can't separate.
-        2. **Opponent-disruption density** (``_density_dominated``): the opponent's board TEXTURE is
-           gust/heal/disruption-dense, so the opponent-STATIC closed-form misprices which line survives
-           their reply. It needs no 2+ affordable attacks (those are ~absent on our menus), escalating
-           the top-K options by tactical instead — the unlock the attack-tie trigger structurally lacks.
-
-        Either trigger produces a candidate set; ``_commit_escalation`` sims each two-ply and commits
-        the best ONLY if it strictly beats the tuned pick's own two-ply value (else defer — escalation
-        breaks a tie / re-reads a texture, never overturns a clear tuned pick). Budget-guarded; any
-        engine slip returns None and the tuned scoring stands."""
-        if (not getattr(self, "escalation", False) or self._planning
-                or self.search_budget <= 0 or not (obs or {}).get("search_begin_input")):
-            return None
-        candidates = self._close_attack_tie(options, traces)      # trigger 1: the close race tie
-        trigger = "close attack tie"
-        if len(candidates) < 2 and self._density_dominated(obs, board):
-            candidates = self._top_k_candidates(options, traces)  # trigger 2: opponent-disruption density
-            trigger = "opponent-disruption density"
-        if len(candidates) < 2:
-            return None
-        return self._commit_escalation(obs, candidates, traces, trigger)
-
-    def _commit_escalation(self, obs, candidates, traces, trigger) -> "TurnLine | None":
-        """Sim each candidate option two-ply, rank by leaf value, and CONSERVATIVELY commit: the best
-        overrides the tuned pick only when it strictly beats that pick's own two-ply value (else defer).
-        Shared by both triggers (ADR-0043). Budget-guarded — ``_search_steps`` is capped per move, and
-        fewer than two completed sims defers to the tuned scoring (the guaranteed fallback)."""
-        self._search_steps = 0                         # per-move engine-step budget (reset per plan)
-        scored = []
-        for i in candidates:
-            val = self._two_ply_value(obs, [i])
-            if val is not None:
-                scored.append((val, i))
-            if self._search_steps >= self.search_budget:
-                break                                  # budget spent — rank what we reached
-        if len(scored) < 2:
-            return None                                # not enough sims completed → defer (fallback)
-        scored.sort(reverse=True)
-        best_val, best_i = scored[0]
-        tuned_top = max(candidates, key=lambda i: traces[i].tactical)   # the pick tuned scoring would make
-        if best_i == tuned_top:
-            return None                                # escalation agrees → let tuned scoring own it
-        tuned_val = next((v for v, i in scored if i == tuned_top), None)
-        if tuned_val is None or best_val <= tuned_val:
-            return None                                # no strict improvement → defer
-        return TurnLine(next_step=[best_i], goal="escalation", value=best_val,
-                        rationale=f"escalation ({trigger}): depth-2 tree prefers option [{best_i}] "
-                                  f"over the tuned pick [{tuned_top}] (opponent-reply-aware)")
-
-    def _close_attack_tie(self, options, traces) -> list:
-        """Indices of the ATTACK options whose tactical score is within ``_ESCALATE_EPS`` of the top
-        attack — the close race tie the closed-form can't separate. Empty (or singleton) when one
-        attack clearly leads, a KO is on the menu (KO_SCORE-class — no tie to break), or there are
-        fewer than two attacks. Only these few candidates pay the engine cost."""
-        atks = [(t.tactical, i) for i, (o, t) in enumerate(zip(options, traces))
-                if o.get("type") == _ATTACK and t.tactical > 0]
-        if len(atks) < 2:
-            return []
-        top = max(a[0] for a in atks)
-        if top >= KO_SCORE:
-            return []                                  # a KO dominates — nothing to escalate
-        tie = [i for score, i in atks if top - score <= _ESCALATE_EPS]
-        return tie if len(tie) >= 2 else []            # a lone leader is no tie to break
-
-    def _density_dominated(self, obs, board) -> bool:
-        """True when the opponent's board TEXTURE is disruption-dense (ADR-0043 density trigger): their
-        gust/heal/disruption capability (``_opp_disruption_density``) is at/above ``_ESCALATE_DENSITY``.
-        The opponent-CHOICE-dominated board — a wall that can retreat/heal/gust out of the KO-Race math
-        — that the opponent-static tiers permanently misprice; escalating it reads the reply they'd make."""
-        return self._opp_disruption_density(obs, board) >= _ESCALATE_DENSITY
-
-    def _opp_disruption_density(self, obs, board) -> float:
-        """Weighted count of the opponent's gust/heal/disruption capability (ADR-0043), from Function
-        Tags + the Read. REVEALED opponent cards (active/bench/discard) count at full weight (certain);
-        the Read's Representative-Build predictions (``expected_cards``) count at ``γ · inclusion_prob``
-        — the Brief-gated archetype signal for the still-hidden deck (γ = ``posture_confidence``, so an
-        unconfident Read barely contributes). 0.0 when Function Tags are absent (signal-blind → no fire)."""
-        if not self.functions:
-            return 0.0
-        cur = (obs or {}).get("current") or {}
-        my = cur.get("yourIndex", 0)
-        players = cur.get("players") or []
-        opp = players[1 - my] if 0 <= 1 - my < len(players) and players[1 - my] else {}
-        density = 0.0
-        for zone in ("active", "bench", "discard"):    # revealed → certain, full weight
-            for c in (opp.get(zone) or []):
-                density += self._disrupt_weight(c.get("id") if c else None)
-        read = getattr(board, "read", None)             # predicted → γ · inclusion-prob (Brief-gated)
-        gamma = getattr(board, "posture_confidence", 0.0) or 0.0
-        if read is not None and gamma > 0:
-            for cid, prob in (getattr(read, "expected_cards", None) or []):
-                density += gamma * prob * self._disrupt_weight(cid)
-        return density
-
-    def _disrupt_weight(self, card_id) -> float:
-        """Count of DISTINCT disruption Function Tags (``_DISRUPT_TAGS``) on ``card_id`` — a card that
-        both gusts and heals counts twice. 0 for an untagged / non-disruptive card (or no functions)."""
-        if card_id is None or not self.functions:
-            return 0.0
-        return float(len(_DISRUPT_TAGS.intersection(self.functions.tags(card_id))))
-
-    def _top_k_candidates(self, options, traces, k: int = _ESCALATE_TOPK) -> list:
-        """The top-``k`` MAIN options by tactical score — the density trigger's candidate set (ADR-0043).
-        Gated to a combat-relevant board: at least one AFFORDABLE ATTACK must be on the menu (the engine
-        only lists affordable attacks; a pure setup turn with none → defer) and no KO on the menu (a KO
-        dominates — escalation never talks us out of it). The raw top-K is simmed, NOT a positive-score
-        subset: the opponent-static tactical ranking is exactly what a disruption-dense board makes
-        unreliable, so the two-ply strict-improvement gate in ``_commit_escalation`` — not a tactical-sign
-        filter — is what keeps a weak line from committing. Empty unless there are ≥2 options to compare."""
-        if len(options) < 2 or len(traces) < 2:
-            return []
-        if max(t.tactical for t in traces) >= KO_SCORE:
-            return []                                  # a KO dominates — nothing to escalate
-        if not any((o or {}).get("type") == _ATTACK for o in options):
-            return []                                  # no affordable attack on the menu — not a combat choice
-        order = sorted(range(len(traces)), key=lambda i: traces[i].tactical, reverse=True)
-        return order[:k]
-
-    def _two_ply_value(self, obs, first_step) -> float | None:
-        """The leaf value of ``first_step`` after MY turn AND the opponent's reply (ADR-0043): sim my
-        turn to its end, then continue stepping the engine through the OPPONENT's turn using our own
-        policy as the reply proxy, until it is my turn again or the game ends, and read the leaf on
-        that board. The opponent-choice-aware read closed-form lacks. None when the search is
-        unavailable / the budget is spent / anything errors (caller falls back)."""
-        sim = self._simulate_line(obs, first_step, opponent_reply=True)
-        if sim is None:
-            return None
-        end, my_index, start_prizes, result, line_val = sim
-        players = (end.get("current") or {}).get("players") or []
-        me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
-        opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
-        if result == my_index:
-            return KO_SCORE * (start_prizes + 1)
-        if result == 1 - my_index:
-            return -KO_SCORE                           # the reply WON for them — worst outcome
-        prizes_taken = max(0, start_prizes - len(me.get("prize") or []))
-        active = next((p for p in (me.get("active") or []) if p), None)
-        survives = False
-        if active and active.get("hp"):
-            bodies = (opp.get("active") or []) + (opp.get("bench") or [])
-            survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
-        return self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                readiness=self._readiness(me), value=self._value_term(end), line=line_val)

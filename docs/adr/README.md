@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0064.**
+**Next free number: 0065.**
 
 ## Index
 
@@ -67,7 +67,7 @@ verification), and its filename prefix is correct.
 | [0040](0040-match-judgment-is-per-turn-closed-form-objectives.md) | Match-level judgment is per-turn closed-form objectives (Prize Path × KO Race → derived phases) | Accepted (grilled 2026-07-05, `/grill-with-docs`). **Built 2026-07-05 (`/tdd`)**: KO |
 | [0041](0041-posture-is-observable-in-decision-telemetry.md) | Posture is observable in Decision Telemetry (matchup misplays route to a Brief, not a weight) | Accepted and BUILT (2026-07-05) — the Pilot stamps `_posture_record` on every Decision and |
 | [0042](0042-base-value-model-is-a-dependency-free-logistic-over-objective-features.md) | The Automatic Value Model is a dependency-free logistic over the objective features | Accepted + **Built 2026-07-05** (`/tdd`, Tier 5). The single learned seam (ADR-0007), |
-| [0043](0043-escalation-search-is-a-budgeted-depth-2-tree-on-a-close-attack-tie.md) | Escalation Search is a budgeted depth-2 tree on a close attack tie | *(no status)* |
+| [0043](0043-escalation-search-is-a-budgeted-depth-2-tree-on-a-close-attack-tie.md) | Escalation Search is a budgeted depth-2 tree on a close attack tie | **Deprecated & REMOVED (2026-07-17**, ADR-0064 Decision 6); corpus re-check clean; code + tests physically removed, `search_budget` kept inert |
 | [0044](0044-opponent-choice-residue-is-narrow-closed-form-reads.md) | The deferred opponent-choice residue is narrow closed-form reads, not revived escalation search | Accepted (grilled 2026-07-06, `/grill-with-docs`) + **Built 2026-07-06** (`/tdd`) + |
 | [0045](0045-match-scale-planning-is-a-closed-form-directive-game-plan.md) | Match-scale planning is a closed-form directive Game Plan atop the Turn Planner | Accepted (grilled 2026-07-06/07, `/grill-with-docs`) + **BUILT 2026-07-07 (`/tdd`, all four |
 | [0046](0046-strategy-authoring-splits-analysis-proposes-one-skill-applies.md) | Strategy authoring splits — analysis skills propose, one skill applies | Accepted (2026-07-09). `update-strategy` built + proven; **all five producers trimmed to |
@@ -89,3 +89,4 @@ verification), and its filename prefix is correct.
 | [0061](0061-a-locking-attacks-value-includes-its-forced-follow-up.md) | A locking attack's value includes its forced follow-up (Horizon-2) | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |
 | [0062](0062-energy-denial-is-what-the-strip-actually-takes-away.md) | Energy denial is what the strip actually takes away, not whether Energy is present | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |
 | [0063](0063-a-booster-scales-the-oracle-and-a-doomed-body-denies-nothing.md) | A booster scales the oracle; a doomed body denies nothing; banked Energy is worth what it will pay for | Accepted and **BUILT 2026-07-14 (`/tdd`)**, default ON — amends ADR-0062 |
+| [0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md) | Incoming counts the opponent's next development step, budgeted by the Read | Accepted (grilled 2026-07-16) and **BUILT 2026-07-16/17** — all six decisions, suite-green; deprecates+removes ADR-0043, amends the `incoming-affordability` WON'T-FIX |

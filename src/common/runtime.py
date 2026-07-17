@@ -53,7 +53,6 @@ PROFILE = {
     "prize_economy_fetch": True,    # ADR-0048 cheap 1-prize attacker line
     "evolving_wincon_priority": True,  # snipe-the-evolving-threat stand-down (ms 85164131 f22)
     "value_model": False,           # ADR-0042 armed-off: a learned seam ships after its own A/B
-    "escalation": False,            # ADR-0043 armed-off: needs search_budget>0
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target tiebreak
                                     # toward the body the opponent is least able to replace (rebuild odds).
                                     # Data-ready (artifact.json ships 122 representative_build dossiers);

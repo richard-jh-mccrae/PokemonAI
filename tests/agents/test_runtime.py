@@ -63,7 +63,6 @@ EXPECTED_SHIPPED = {
     "prize_economy_fetch": True,    # ADR-0048
     "evolving_wincon_priority": True,  # ms 85164131 f22
     "value_model": False,           # ADR-0042 armed-off: ships only after its own ladder A/B
-    "escalation": False,            # ADR-0043 armed-off: needs search_budget>0
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target rebuild-odds tiebreak
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
@@ -97,7 +96,7 @@ def test_profile_covers_every_pilot_flag():
 def test_profile_ships_the_validated_best_config():
     """REQ-WIRE-0001 (inverted from the per-file AST pins): the shipped values are the
     A/B-cleared / user-decided deployment config — in particular no armed-off switch
-    (brief_engine, value_model, escalation) silently flips ON without its evidence gate."""
+    (brief_engine, value_model) silently flips ON without its evidence gate."""
     assert PROFILE == EXPECTED_SHIPPED
 
 

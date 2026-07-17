@@ -333,6 +333,96 @@ class CombatMath:
                      self.forward_incoming_damage(ma, oa, opp, context=context))
         return threat >= my_hp
 
+    # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
+    def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
+                           charged: dict | None = None, evo_min_energy: int = 0,
+                           context: dict | None = None) -> int:
+        """Worst Weakness/Resistance-adjusted damage the opponent's affordable attackers among
+        ``opp_bodies`` could deal to ``my_body`` NEXT TURN — the **Incoming that counts one
+        development step** (ADR-0064): each body contributes its CURRENT form AND one reachable
+        EVOLUTION hop (promote → evolve → attach → attack, legal in one turn per rules.md §4). The
+        generalisation of ``_incoming_worst`` that the leaf's survival term and the promote
+        stand-down share. 0 when unknown.
+
+        ``forward_ids``: callable ``cardId -> iterable`` of the one-hop forward card ids to
+        consider — the AVAILABILITY gate (ADR-0064 Decision 4: pool-forward existence for the
+        threat read, matched-Read rep list for the safety read). None → ``forward_card_ids`` (the
+        pool-level index).
+
+        ``charged``: the ENERGY policy (ADR-0064 Decision 1).
+        - ``None`` → **ceiling** (worst-case, the hidden-burst-safe survival read): a form
+          contributes its biggest attack once it can pay its CHEAPEST under attached + one attach;
+          the bigger attack's affordability is NOT charged. Mirrors the historical ``_incoming_worst``.
+        - ``{"base_attach": int, "burst_on_evo": int}`` → **charged**: per-attack typed-cost
+          affordability under attached + ``base_attach`` manual attaches (each wild — pays any one
+          typed slot) + ``burst_on_evo`` colourless-only units available ONLY when the attacking form
+          is an Evolution (a matched-Read burst-Energy allowance: Ignition provides {C} on a Basic but
+          {C}{C}{C} on an Evolution, so the +2 lands only on an evolved form; it pays colourless slots
+          only, never a typed {F}{F}). The Read-budgeted read.
+
+        ``evo_min_energy``: the minimum Energy an opponent body must ALREADY carry for its forward
+        evolution hop to count (default 0 — credit every pre-evolution). A catastrophe-grade consumer
+        (the ``-KO_SCORE`` loss rung) passes 1: a bare 0-Energy pre-evolution is not a credible
+        next-turn game-ender (it needs the evolution IN HAND plus a from-scratch attach), and crediting
+        it manufactures phantom doom on turn 2 (the bounded-pessimism guard, ADR-0064). The current
+        form is always counted regardless.
+
+        Transient locks (ADR-0033) are honoured on a body's CURRENT form only — a self-lock skips it
+        entirely, a same-attack lock excludes that attack, a self-bonus raises the hit; a forward
+        form is grant-free (evolving clears attack effects, rules.md §4). Benched bodies carry no
+        grant (serial-gated), so only their live Active is ever lock-adjusted."""
+        my_hp = (my_body or {}).get("hp", 0)
+        if not (self.stats and my_hp):
+            return 0
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        worst = 0
+        for body in opp_bodies:
+            if not body:
+                continue
+            grant = self._grant(body) or {}
+            if grant.get("self_lock"):
+                continue                              # this body can't attack at all next turn
+            attached = len(body.get("energies") or [])
+            worst = max(worst, self._reach_form_damage(
+                my_body, body.get("id"), body, attached, charged, context,
+                exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0)))
+            if attached < evo_min_energy:
+                continue                              # bare pre-evo — not a credible evolving threat here
+            for fid in (fwd(body.get("id")) or ()):   # one evolution hop — carries the attached Energy
+                evo = {"id": fid, "energies": body.get("energies") or []}
+                worst = max(worst, self._reach_form_damage(
+                    my_body, fid, evo, attached, charged, context, exclude=None, bonus=0))
+        return worst
+
+    def _reach_form_damage(self, my_body, form_id, form_body, attached, charged, context, *,
+                           exclude, bonus) -> int:
+        """The worst damage ONE attacker form (current or evolved) deals ``my_body`` next turn under
+        the ``charged`` energy policy (see :meth:`reachable_incoming`). 0 when the form resolves no
+        stat, cannot afford to attack, or deals nothing."""
+        stat = self._card_stat(form_id)
+        if not stat:
+            return 0
+        if charged is None:                           # ceiling: pay cheapest, credit biggest
+            if not stat.can_pay_cheapest(attached + 1):
+                return 0
+            dmg = self.predicted_max_damage(stat, my_body, exclude_attack=exclude, context=context)
+            return int(dmg) + bonus if dmg else 0
+        base = charged.get("base_attach", 1)
+        # Ignition-class colourless burst lands its full {C}{C}{C} only on an Evolution (rules.md /
+        # card text) — a Basic form gets the plain single attach, no burst.
+        burst = charged.get("burst_on_evo", 0) if getattr(stat, "evolvesFrom", None) else 0
+        best = 0
+        for aid in (stat.attacks or ()):
+            if aid == exclude:
+                continue
+            if self.attack_cost(aid) > attached + base + burst:
+                continue                              # count-unaffordable even with the burst allowance
+            if not self.attack_type_payable(aid, form_body, wild_units=base):
+                continue                              # a typed slot can't be paid (burst is colourless-only)
+            best = max(best, int(self.predicted_damage(form_id, aid, my_body,
+                                                       bound="max", context=context)))
+        return best + bonus if best else 0
+
     def turns_to_ko(self, attacker_id, energy: int, body: dict | None, *,
                     context: dict | None = None) -> float | None:
         """Feasibility turns for ``attacker_id`` (carrying ``energy``) to fell ``body`` — hp over

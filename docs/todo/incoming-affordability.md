@@ -1,5 +1,15 @@
 # TODO — make the Incoming / `active_doomed` estimate Energy-affordability-aware
 
+> 🔁 **AMENDED by [ADR-0064](../adr/0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)
+> (2026-07-16).** The survival read behind `_incoming_worst`/`_survives_after_ko` becomes
+> **charged-with-archetype-budget** (per-attack, typed-cost-shape affordability; energy budget =
+> attached + 1 attach + a colorless-burst allowance derived from the matched Read's rep list),
+> **defaulting to worst-case when the Read is unmatched** — so the planner_6858 hidden-Ignition lesson
+> below stays honored (Nebula Beam's ●●● cost is colorless → burstable → still doomed).
+> `active_doomed` itself STAYS worst-case per the original ruling until its own named follow-up behind
+> a fixture re-baseline. The re-verification demanded below (`test_critical_0cbc_*`/`test_critical_6858_*`
+> on real states) is ADR-0064's safety gate.
+
 > ⛔ **RESOLVED as WON'T-FIX for the survival boolean (2026-07-07, ADR-0045 build).** Making
 > `active_doomed` affordability-aware was built and **reverted**: it is **unsound** because it ignores the
 > opponent's HIDDEN burst Energy. On the CRITICAL `planner_6858`/`planner_0cbc` states the opponent is a

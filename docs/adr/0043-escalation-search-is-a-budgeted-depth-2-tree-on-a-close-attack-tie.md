@@ -1,5 +1,17 @@
 # ADR-0043: Escalation Search is a budgeted depth-2 tree on a close attack tie
 
+> **Status: DEPRECATED & REMOVED (2026-07-16/17, ADR-0064 Locked Decision 6,
+> [`docs/plans/2ply-opponent-survival-grill-spec.md`](../plans/2ply-opponent-survival-grill-spec.md)).**
+> The reply sim is structurally blind to hidden-hand development (it can only make the opponent play
+> visible cards), which is the threat class that decides these boards; the hidden-development Incoming
+> layer (ADR-0064) supersedes its survival role. It was already dead in production (every shipped agent
+> pins `search_budget: 0`, the `escalation` kill-switch defaulted `False`). The corpus re-check was
+> clean — no correction fixture depended on an escalation pick — so the code was **physically removed**
+> (2026-07-17): `_escalate`/`_commit_escalation`/`_two_ply_value`/`_close_attack_tie`/
+> `_top_k_candidates`/`_opp_disruption_density`/`_disrupt_weight`, the `_ESCALATE_*`/`_DISRUPT_TAGS`
+> constants, the `escalation` ctor param + PROFILE key, and the two dedicated test files. `search_budget`
+> is kept (now inert) to hold the submission manifest at Tier-0. This ADR is retained for the record.
+
 > **`search_budget` note (added 2026-07-14).** Escalation is `search_budget`'s **only functional
 > consumer**. The Tier-1 engine sims — `planner_engine_rank`, `lethal_verify`, `lethal_family`,
 > `lethal_veto`, all `PROFILE=True` — run **UNBUDGETED**: `budget_ok()` is consulted only when
