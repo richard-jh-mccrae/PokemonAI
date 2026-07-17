@@ -493,6 +493,60 @@ against the new vocabulary — their STRATEGY.md deck rules that merely restate 
 derives (fodder lists, "never Ultra-Ball the Ignition", duplicate-first pitching) FOLD into the
 general layer per ADR-0034, shrinking deck files as the system generalizes.
 
+## Round 11 (user, 2026-07-17) — tag completeness audit of the three decks: DONE, applied, suite-green
+
+**Ruling.** The card representation must be complete WITHOUT a new text-consuming system — and the
+repo already has the two designated tiers: Function Tags stay coarse boolean routing triggers
+(ADR-0006), and parametric predicates (target type/class, counts, destination, costs, conditions)
+belong in the BUILT `card_effects.json` Effect-Clause tier (ADR-0032: "a mechanic is encoded when a
+Tier-0 consumer would blunder without it" — the closure is now that consumer). Tag fixes enter via
+`tools/meta_tracker/function_overrides.json` (curated, never clobbered by probe rebuilds).
+
+**Audit: all 50 unique cards of mega_starmie / mega_lucario / dragapult_ex, text vs tags vs clauses.**
+
+*Boolean lapses — FIXED (overrides + shipped table, additive only):* 140 Fezandipiti ex `+draw`
+(Flip the Script), 305 Dunsparce `+switch` (Trading Places; Samurott precedent for attack-based),
+674 Hariyama `+gust` (Heave-Ho Catcher on-evolve), 675 Lunatone `+draw` (Lunar Cycle — the probe
+can't stage its Solrock+hand-energy precondition), 1142 Fighting Gong `+tutor_pokemon` (fetches a
+Basic {F} Pokémon — the user's own example), 1152 Poké Pad `+tutor_pokemon`, 1225 Hilda
+`+tutor_pokemon` (fetches an Evolution Pokémon).
+
+*Verified NOT lapses (right tier already):* 1141 Premium Power Pro / 1211 Black Belt's →
+`CardStat.damageBoost` + TransientTracker; attack riders (Aura Jab, Jetting Blow, Phantom Dive,
+Tuck Tail, Wild Press recoil) → the AttackStat tier; 676 Solrock — no draw of its own.
+
+*Recorded decisions (deferred with reasons):* attack-based accel (678 Aura Jab, 666 Turbo Flare)
+goes to the ATTACK tier, NOT card tags — the ADR-0064 burst-budget scan reads `energy_accel` tags
+and attack-based accel must stay excluded from one-step budgets (a card tag would corrupt the scan);
+1122 Pokégear's `draw` tag is loose (it digs, supporter-only — predicate to clause); 17 Ignition's
+{C}{C}{C}-on-Evolution → an `energy_provide` clause (ADR-0064 hardcodes this knowledge today);
+1252 Gravity Mountain / 1260 Risky Ruins have NO representation (stage-2 −30 HP shifts KO math; a
+CardStat-parsed field like `damageBoost` is the recommended shape); 121 Dragapult ex benched-
+immunity = the known CardStat gap (rules.md §11).
+
+*Clause backlog (the card_effects.json extension the closure consumes — replaces
+`doctrine_fetch._FETCH_FILTERS`, the FIFTH private valuation shadow):* fetch/tutor predicates for
+1086 (≤70-HP Basics ×2 → BENCH), 1097/1110/1118 (recycle targets), 1121 (any Pokémon, cost
+discard-2), 1122, 1142 ({F}-locked), 1145, 1152 (no Rule Box), 1189 (no-Ability evolution,
+timing-exempt), 1198 (2 different-type Basics, 1 → attached), 1219, 1225 (evolution + ANY energy
+incl. Special), 1071 (Supporter, on-bench-play trigger); draw-engine clauses for 66 (3 +
+self-shuffle), 120 (top-2-take-1), 140/675 (conditional), 1080 (5/2, post-KO gate); accel clauses
+for 666/678 (via attack)/1240 (discard→Stage-2, prize-behind gate); 1120 (coin).
+
+**The consumer recalibration (the round-7 currency-zone warning, live).** Three pinned tests flipped
+— each because a consumer was calibrated against the INCOMPLETE data: (1) `_is_draw_engine_body`
+test had pinned "Lunatone untagged" as ground truth — re-baselined, and `dont-power-the-draw-engine`
+is now LIVE on mega_lucario, exactly what corrections 85785067-f42/f54 + 85058574-f16 demanded;
+(2) `dig-before-commit` (+20) endorsed BENCHING Lunatone over the wincon base (ml0703 f44) — fixed:
+the rung stands down on Pokémon plays (benching a body whose ability draws later is not a dig;
+Meowth ex is owned by `bench-the-supporter-tutor`); (3) `fetch-the-support` (+15) newly stacked with
+mega_lucario's `fetch-the-missing-engine-half` (+22) to 49, out-ranking the +35 famine Energy and
+re-opening ml0705 f9 — fixed: famine stand-down, honouring the rung's own "second only to
+energy-when-starved" charter. One synthetic fixture re-powered (the famine gate needs a powered
+Active it never modelled). Bonus: `use-the-draw-engine-ability` (+18) now fires on Lunar Cycle —
+corrections-aligned. **Suite: 2941 passed, 13 skipped** (the 2 excluded files are a pre-existing
+plotly environment gap, failing identically on the clean tree).
+
 ## Where it plugs in (corrected)
 **Priority:** the Gamble Rung's Outcome Classes (`_gamble_ko_classes`, ADR-0039) — v1 above — then the
 probable-whiff generalization (ADR-0029) and win-odds/lethal reach. **Deferred behind ADR-0064:** any

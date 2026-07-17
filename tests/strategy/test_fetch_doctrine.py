@@ -440,15 +440,17 @@ def test_confirmed_hit_prefers_the_provable_search_between_two_digs():
 def test_fetch_the_support_never_endorses_a_stranded_support():
     """An engine-tagged Pokémon that is a stranded evolution (energy_accel Cinderace, no Raboot in
     deck) is a dead grab — `fetch-the-support` must not endorse it even with no support in play."""
-    OPENER, LIVEMON = 666, 868
+    OPENER, LIVEMON, PLAINMON = 666, 868, 869
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
-        LIVEMON: CardStat(LIVEMON, name="Livemon", hp=90)})          # a Basic support
+        LIVEMON: CardStat(LIVEMON, name="Livemon", hp=90),           # a Basic support
+        PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=80)})       # non-engine Active
     funcs = CardFunctions({OPENER: ["opener", "energy_accel"], LIVEMON: ["energy_accel"]})
-    pilot = Pilot(Strategy(), deck=[OPENER] * 4 + [LIVEMON] * 2 + [1] * 54,
+    pilot = Pilot(Strategy(), deck=[OPENER] * 4 + [LIVEMON] * 2 + [PLAINMON] + [1] * 53,
                   general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": OPENER}, {"id": LIVEMON}], current=state(hand=[]))
+                      deck=[{"id": OPENER}, {"id": LIVEMON}],
+                      current=state(active=poke(PLAINMON, energy=1), hand=[]))  # powered: not the famine case
     stranded, live = pilot.explain(obs).options
     assert "fetch-the-support" not in _fired(stranded)   # dead grab, engine tag notwithstanding
     assert "fetch-the-support" in _fired(live)           # deployable support keeps the rung

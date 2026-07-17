@@ -11,8 +11,11 @@ energy signals; two fixes, each keyed on a new signal:
     (`attach_target_is_draw_engine`: Dunsparce -> Dudunsparce) that is NOT on the win-condition Line, so
     the {D} goes to the on-Line Dreepy rather than the Dunsparce -> Dudunsparce draw engine.
 
-Inert on the single-hop decks: Solrock/Lunatone draw via an ABILITY (untagged), so the draw-engine rung
-never trips, and a mono-color deck's every fetch is on-color.
+2026-07-17 tag-completeness audit: Lunatone earned its `draw` tag (Lunar Cycle IS a draw ability —
+the untagged state was a probe gap, not ground truth), so `_is_draw_engine_body` now flags it and
+`dont-power-the-draw-engine` is LIVE on mega_lucario — corrections 85785067-f42/f54 + 85058574-f16
+(attach-to-body instead of using Lunar Cycle was the blunder) support exactly that. Solrock stays
+unflagged: its own card neither draws nor evolves into a drawer.
 """
 import json
 import sys
@@ -62,10 +65,11 @@ def test_f21_dont_sink_energy_into_the_draw_engine():
 @pytest.mark.req("REQ-GEN-0074")
 def test_draw_engine_detection_flags_the_engine_line_not_the_single_hop_engines():
     """`_is_draw_engine_body` flags the Dunsparce -> Dudunsparce line (the base is untagged but its payoff
-    carries `draw`/`stall`); it does NOT flag Solrock/Lunatone, whose draw is an Ability (untagged), so
-    the rung is inert on mega_lucario. Card facts (Function Tags) are engine ground truth."""
+    carries `draw`/`stall`) AND Lunatone (Lunar Cycle draws — tagged in the 2026-07-17 completeness
+    audit; the old untagged state was a probe gap, and the corrections say don't sink Energy into it).
+    Solrock stays unflagged: its own card neither draws nor evolves into a drawer."""
     p = _pilot("dragapult_ex")
     assert p._is_draw_engine_body(305)                         # Dunsparce -> Dudunsparce (draw/stall)
     assert p._is_draw_engine_body(66)                          # Dudunsparce itself
-    assert not p._is_draw_engine_body(676)                     # Solrock — Ability-draw, untagged
-    assert not p._is_draw_engine_body(675)                     # Lunatone — Ability-draw, untagged
+    assert not p._is_draw_engine_body(676)                     # Solrock — no draw, no drawing evolution
+    assert p._is_draw_engine_body(675)                         # Lunatone — Lunar Cycle draw (tagged 2026-07-17)
