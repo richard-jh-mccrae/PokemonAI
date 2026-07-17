@@ -57,9 +57,15 @@ loss rung fires → defend) from the phantom (0-Energy Staryu → no catastrophe
   `test_promote_preserve_wincon.py::test_standdown_veto_is_matched_read_only`; the existing interpose
   cases still fire (unmatched in-test → veto off).
 
-**Remaining:**
-- Escalation code removal (Decision 6) — already gated on a corpus re-check; ADR-0043 marked Deprecated.
-  All six decisions are otherwise built and suite-green.
+- **Escalation removal (Decision 6) — DONE (2026-07-17).** The corpus re-check was clean (no correction
+  fixture depends on an escalation pick; every agent runs `search_budget: 0`), so the whole Tier-6
+  cluster was physically removed: `_escalate`/`_commit_escalation`/`_two_ply_value`/`_close_attack_tie`/
+  `_top_k_candidates`/`_opp_disruption_density`/`_disrupt_weight`, the `_ESCALATE_*`/`_DISRUPT_TAGS`
+  constants, the `escalation` ctor param + runtime PROFILE key, and both dedicated test files.
+  `search_budget` is kept (now inert) so the submission manifest stays Tier-0 (test-pinned). ADR-0043
+  header + the ledger row updated to "Deprecated & Removed".
+
+**All six ADR-0064 decisions are now built and suite-green.**
 
 ## Context
 

@@ -1,9 +1,9 @@
 """ADR-0064 Decision 3 — the predicted-LOSS rung (`Pilot._predicted_loss`).
 
 A candidate end board whose only Pokémon is a doomed Active (my Bench EMPTY + budgeted Incoming ≥ my
-HP) is a predicted game loss, priced at ``-KO_SCORE`` (a rung, mirroring ``_two_ply_value``'s terminal
-read), not the flat ``_PLANNER_SURVIVAL_W`` nudge. The rung stands down the moment a bench body can
-soak — that's a recoverable lost body, not a loss.
+HP) is a predicted game loss, priced at ``-KO_SCORE`` (a terminal loss rung, not the flat
+``_PLANNER_SURVIVAL_W`` nudge). The rung stands down the moment a bench body can soak — that's a
+recoverable lost body, not a loss.
 """
 from common.cards import CardFunctions
 from common.pilot import KO_SCORE, Pilot

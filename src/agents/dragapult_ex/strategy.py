@@ -125,10 +125,10 @@ STRATEGY = Strategy(
                 role="win_condition", ready=Ready(energy=2))],
     roles=ROLES,
     params={"setup_energy_target": 2,     # FP for Phantom Dive
-            "search_budget": 0,           # ADR-0061/0043: escalation (Tier 6) is search_budget's ONLY
-                                          # functional consumer — Tier-1 engine sims (planner_engine_rank,
-                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Raising it
-                                          # also re-labels telemetry AND the submission manifest as Tier-1.
+            "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
+                                          # functional consumer). Tier-1 engine sims (planner_engine_rank,
+                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
+                                          # hold the submission manifest at Tier-0 (test-pinned).
             "preferred_start": "second",  # Budew item-lock fires T1 only going 2nd (1st player can't attack
                                           # OR play a Supporter T1 — rules.md L72-73); guru-unanimous. (was "first")
             "reactivity": "opponent-filtered",  # deck-personality (learnthetcg): a spread + disruption

@@ -63,7 +63,6 @@ EXPECTED_SHIPPED = {
     "prize_economy_fetch": True,    # ADR-0048
     "evolving_wincon_priority": True,  # ms 85164131 f22
     "value_model": False,           # ADR-0042 armed-off: ships only after its own ladder A/B
-    "escalation": False,            # ADR-0043 armed-off: needs search_budget>0
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target rebuild-odds tiebreak
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer

@@ -885,7 +885,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  lethal_veto=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, forced_promotion=False,
-                 value_model=None, escalation=False,
+                 value_model=None,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
@@ -1021,9 +1021,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # ValueModel refines the planner leaf + rides
                                                         # telemetry; None / null model = off (heuristic
                                                         # leaf unchanged), so it default-OFF until an A/B
-        self.escalation = escalation                    # ADR-0043 kill-switch: Tier-6 depth-2 tree on a
-                                                        # close attack tie (needs search_budget>0); the
-                                                        # tuned pick is the guaranteed fallback. Default OFF
         self._search_steps = 0                          # per-move Engine-Search step budget counter
         self._locked_line = None                        # the materialized verified line (turn-scoped):
                                                         # {"turn": n, "queue": [entries]} or None
