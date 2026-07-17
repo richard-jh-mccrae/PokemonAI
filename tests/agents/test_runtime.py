@@ -96,7 +96,7 @@ def test_profile_covers_every_pilot_flag():
 def test_profile_ships_the_validated_best_config():
     """REQ-WIRE-0001 (inverted from the per-file AST pins): the shipped values are the
     A/B-cleared / user-decided deployment config — in particular no armed-off switch
-    (brief_engine, value_model, escalation) silently flips ON without its evidence gate."""
+    (brief_engine, value_model) silently flips ON without its evidence gate."""
     assert PROFILE == EXPECTED_SHIPPED
 
 

@@ -87,7 +87,7 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
         assert menu is not None
         sim = pilot._simulate_line(menu, pilot.decide(menu))
         assert sim is not None
-        end, my_index, start_prizes, result = sim
+        end, my_index, start_prizes, result, line_val = sim   # 5th = the signed line account
         assert my_index in (0, 1) and start_prizes >= 1
         cur = end.get("current") or {}
         # my turn's over: game finished, or menu is no longer mine to act on
