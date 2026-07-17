@@ -170,6 +170,29 @@ engine stage, not infinite recursion — engine-finds-engine is cut off (bounded
   deck/discard, bypassing the manual attach) — same per-card text-predicate treatment, enumerated at
   build time, not from memory.
 
+**The "exactly one short" gate becomes DERIVED, not hardcoded (user grill, 2026-07-17).** The existing
+`cost != my_active_energy + 1` gate in `_gamble_ko_classes` is legality arithmetic (one manual attach ⇒
+only a 1-slot shortfall is fillable this turn), NOT a value judgment — and it silently assumes attach
+capacity = 1. Once the closure carries attach-adding edges (Crispin attaches a fetched Energy directly;
+`energy_accel` abilities attach from deck/discard), a TWO-short KO becomes legitimately reachable. The
+gate generalises to `shortfall ≤ 1 + reachable-accel-attaches` — computed from the same closure, per
+slot type (an accel edge must match the missing slot's type predicate). Zero-short stays out (the KO is
+deterministic — attack) and shortfalls beyond capacity stay out (no draw helps this turn).
+
+**Cost side — ownership and the honest gap (user grill, 2026-07-17).** "What is my hand worth if I
+shuffle it away?" splits per horizon. *This turn* is priced: the gamble must beat `det` (the best
+deterministic line, including what the held hand already reaches), and ordinary non-KO refresh economics
+are owned by ADR-0060's card-swing oracle (shed −8/card, flat +20 draw, strip/gift) under the ADR-0024
+keep-value floors — the gamble rung never gatekeeps ordinary refreshes or attaches. *Next turn* is the
+gap: keep-value exists only as BINARY vetoes (wincon / line pre-evo / irreplaceable ACE-SPEC Tool in
+hand → stand down); every other held card is priced at zero keep-value, so six merely-good cards shuffle
+away like dregs. That graded hand-quality read is the **explicitly parked** value-model problem
+(ADR-0060 §Deferred "Hand QUALITY", ADR-0007/0042/0053) — the hand-tuned-scalar route was tried on the
+develop-leaf `handCount` credit and overfit. Acceptable for the KO gamble (benefit ≈ KO_SCORE dwarfs
+per-card shed; the error only matters near break-even), but any future NON-KO outcome class (ability
+unlock, ACE-SPEC hunt — each needs its own crisp closed-form value) must not ship without a graded
+keep-value term, or the flat +20 draw credit will systematically over-fire refreshes.
+
 ## Grill checklist → build checklist (verdicts as of 2026-07-17)
 - [ ] Outs count **tutor-closure entry points** — FAILS today (`_gamble_ko_classes` literal-only; v1 above).
 - [ ] Closure includes the **recycle/discard branch** — MISSING from code and from the original note.
