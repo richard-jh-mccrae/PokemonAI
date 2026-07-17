@@ -127,12 +127,48 @@ Gamble Line IS the refresh window — but counts no chained enablers inside it.)
 5. **Prized outs**: removed this-turn, horizon-dependent across a KO (they take a prize when they KO).
 6. **Horizon per consumer** — "this turn" vs "by their next attack" (+1 draw + their expansions).
 
-### v1 target (smallest honest slice)
-Closure outs in `_gamble_ko_classes`: add **Item-class** deck-tutors whose predicate matches the missing
-slot type AND whose target class remains in deck (both exact post-anchor), plus **recycle Items** whose
-target sits in the visible discard. Supporter tutors count only when the refresh was an Item (Unfair
-Stamp). Same shape as the existing literal count — pure counting, testable, errs by under-counting only
-(hop-2 and draw-chaining stay out of v1).
+### Staged build (re-grilled 2026-07-17 — user pushback: "why limit ourselves?")
+
+**Stage 1 — the full ITEM closure (and it IS the full closure, not a truncation).** Closure outs in
+`_gamble_ko_classes`: **Item-class** deck-tutors whose predicate matches the missing slot type AND whose
+target remains in deck (both exact post-anchor), plus **recycle Items** whose target sits in the visible
+discard. Under exact deck knowledge the fetch step is **deterministic** (whole-deck search / visible
+discard), so "refresh → Item → Energy" is NOT a two-step probability — it is the SAME single window
+hypergeometric with a bigger outs list. And in this set the Item-only graph has **depth 1 to Energy by
+construction**: the only any-Trainer fetcher is Petrel (Supporter) and the only Supporter-fetcher is
+Meowth ex's on-bench ability → a fetched Supporter is slot-dead in the refresh window anyway. So Stage 1
+loses nothing to hop-depth — "one hop of Items" ≡ the reachable closure post-Supporter-refresh.
+Supporter tutors join the outs only when the refresh was the Item (Unfair Stamp).
+
+**Stage 2 — DRAW ENGINES: the genuinely probabilistic second stage (user, 2026-07-17).** The realistic
+miss-chain is: refresh whiffs on Energy/Items but hits a **draw engine** — verified anchors: Drakloak
+(120, ability *Recon Directive*: top 2, take 1, other to bottom; `dig,draw`) and Dudunsparce (66,
+ability *Run Away Draw*: draw 3, then shuffle ITSELF + attached back into the deck; `draw,stall`) — and
+the engine's extra draws are fresh Energy chances. This is failure mode B made concrete, and it has an
+**exact Tier-0 closed form** (no simulation, plain `math.comb`), because conditioning on "no out among
+the first n" leaves all O outs uniformly in the remaining pool:
+
+> P(assemble) = P(≥1 out in n)
+>             + [ P(no out in n) − P(no out AND no usable engine in n) ] × P(≥1 out in m | pool−n, O)
+
+with n = refresh draws, m = the engine's window (Recon: 2 with take-1; Run Away Draw: 3). Both bracket
+terms are single multivariate-hypergeometric ratios (outs and engines are disjoint card classes). One
+engine stage, not infinite recursion — engine-finds-engine is cut off (bounded, always under-counting).
+
+**Engine usability is a hard gate, checked exactly, before an engine copy counts:**
+- **Evolution timing** (`rules.md` §4): a DRAWN Drakloak needs an eligible pre-evo already on board
+  (in play since last turn, not either player's first turn). No eligible Dreepy → Drakloak copies are
+  not engines this turn.
+- **Already-on-board engines with the ability unused** are better than drawn ones: their window is
+  **unconditional** — and sequencing matters (fire Recon BEFORE the refresh: hit → the deterministic
+  attach line, no gamble needed; miss → the refresh is still live). The planner already sequences
+  options; the odds function just has to price both orders.
+- **Ability wording is per-card** ("Once during your turn" — engine-enforced), bench space for a drawn
+  Basic engine, and Run Away Draw's cost: the body + attachments leave play (pool grows, board tempo
+  paid — priced by the leaf, not the probability).
+- **`energy_accel` abilities** (16 tagged) are a further deterministic edge class (attach from
+  deck/discard, bypassing the manual attach) — same per-card text-predicate treatment, enumerated at
+  build time, not from memory.
 
 ## Grill checklist → build checklist (verdicts as of 2026-07-17)
 - [ ] Outs count **tutor-closure entry points** — FAILS today (`_gamble_ko_classes` literal-only; v1 above).
@@ -158,6 +194,8 @@ Stamp). Same shape as the existing literal count — pure counting, testable, er
 | 1118 | Energy Retrieval | Item | `recycle` | up to 2 Basic Energy from discard |
 | 1121 | Ultra Ball | Item | `tutor_pokemon` | discard 2 from hand — the cost anchor |
 | 1080 | Unfair Stamp | Item | `shuffle_hand` | the only **Item** refresh — keeps Supporter tutors live post-draw |
+| 120 | Drakloak | Stage 1 (← Dreepy) | `dig`, `draw` | ability *Recon Directive*: top 2, take 1 — the selective engine (Stage 2) |
+| 66 | Dudunsparce | Stage 1 (← Dunsparce) | `draw`, `stall` | ability *Run Away Draw*: draw 3, **shuffles itself + attached back in** — window +3, body leaves play |
 
 ## Where it plugs in (corrected)
 **Priority:** the Gamble Rung's Outcome Classes (`_gamble_ko_classes`, ADR-0039) — v1 above — then the
