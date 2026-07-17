@@ -122,8 +122,17 @@ Gamble Line IS the refresh window — but counts no chained enablers inside it.)
 3. **Resource limits are load-bearing** — 1 Supporter/turn (charge the chain; the refresh itself usually
    spends it), 1 manual attach/turn (unless the edge attaches directly, Crispin/`energy_accel`),
    discard costs charged against the assembled set, bench/hand caps.
-4. **Hidden-info split** — exact tracker (`deck_known_counts`) when anchored: the closure is then
-   deterministic counting. Hypergeometric (`p_contains`) only on unanchored counts.
+4. **Hidden-info split — and pre-anchor is NOT a stand-down (user grill, 2026-07-17).** Anchored
+   (`deck_known_counts`): the closure is deterministic counting. **Unanchored: the decklist is still
+   fully known** (own deck, the ADR-0029 model) — only the prize assignment of unseen copies is random,
+   and that is the same hypergeometric split `p_contains` prices. The gamble probability stays exact
+   closed-form: sum over j = copies-in-deck (prize-split weights) × the window draw with j copies —
+   ≤ 5 terms per card class (u ≤ 4), plain `math.comb`. The current `if not deck_known_counts: return
+   None` gate in `_best_gamble_line` prices every pre-anchor gamble at ZERO — the same modeling-gap-as-
+   caution failure this whole note attacks; uncertainty must shade P down smoothly, not slam the door.
+   A large payoff rightly clears the higher bar ("roll the dice given the uncertainty"): the EV
+   comparison needs no special case. Tutor-out validity goes probabilistic the same way (a tutor out is
+   void only when EVERY matching target is prized — a computable, usually tiny corner).
 5. **Prized outs**: removed this-turn, horizon-dependent across a KO (they take a prize when they KO).
 6. **Horizon per consumer** — "this turn" vs "by their next attack" (+1 draw + their expansions).
 
@@ -131,8 +140,8 @@ Gamble Line IS the refresh window — but counts no chained enablers inside it.)
 
 **Stage 1 — the full ITEM closure (and it IS the full closure, not a truncation).** Closure outs in
 `_gamble_ko_classes`: **Item-class** deck-tutors whose predicate matches the missing slot type AND whose
-target remains in deck (both exact post-anchor), plus **recycle Items** whose target sits in the visible
-discard. Under exact deck knowledge the fetch step is **deterministic** (whole-deck search / visible
+target remains in deck (exact post-anchor; prize-split-weighted pre-anchor, point 4 below), plus
+**recycle Items** whose target sits in the visible discard. Under exact deck knowledge the fetch step is **deterministic** (whole-deck search / visible
 discard), so "refresh → Item → Energy" is NOT a two-step probability — it is the SAME single window
 hypergeometric with a bigger outs list. And in this set the Item-only graph has **depth 1 to Energy by
 construction**: the only any-Trainer fetcher is Petrel (Supporter) and the only Supporter-fetcher is
@@ -193,6 +202,14 @@ per-card shed; the error only matters near break-even), but any future NON-KO ou
 unlock, ACE-SPEC hunt — each needs its own crisp closed-form value) must not ship without a graded
 keep-value term, or the flat +20 draw credit will systematically over-fire refreshes.
 
+**Information value of the FIRST whole-deck search (user grill, 2026-07-17).** `OwnCardModel` resolves
+the prize split exactly only once a search reveals the whole deck (ADR-0029/0023). So the first
+deck-revealing fetch pays twice: the card, plus anchoring the tracker — collapsing every later
+consumer (gamble classes, whiff veto, closure counts, deck-emptiness) from hypergeometric to certainty
+for the rest of the match. Seam: a small, bounded first-reveal credit on deck-revealing searches —
+kept well below a real fetch need so we never dig just to peek (the ADR-0023 over-play risk); at
+minimum, tie-break equal fetch lines toward the one that anchors.
+
 ## Grill checklist → build checklist (verdicts as of 2026-07-17)
 - [ ] Outs count **tutor-closure entry points** — FAILS today (`_gamble_ko_classes` literal-only; v1 above).
 - [ ] Closure includes the **recycle/discard branch** — MISSING from code and from the original note.
@@ -201,6 +218,9 @@ keep-value term, or the flat +20 draw credit will systematically over-fire refre
 - [ ] Entry-window × prize-split composition (NOT per-hop draws) — corrected spec, not built.
 - [x] **Exact tracker when revealed, hypergeometric on counts** — already the codebase shape
       (`deck_known_counts` / `p_contains` collapse, ADR-0029 §3).
+- [ ] **Pre-anchor gambles NOT stood down** — the `if not deck_known_counts: return None` gate replaced
+      by the prize-split-weighted window sum (design point 4); decklist-known makes it exact closed-form.
+- [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
 - [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
       is the canonical trap; re-verify per set.
 
