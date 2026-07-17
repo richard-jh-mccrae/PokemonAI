@@ -269,6 +269,51 @@ keep-value blocker, the rest stay blocked).**
    that was a raw SIZE scalar with no structure; this is role-priced and closure-derived — the
    corrections arbitrate, not a hand-fitted constant.
 
+**Round 7 (user grill, 2026-07-17) — card worth is ONE marginal oracle, and the repo has four
+disjoint shadows of it.** User ruling, CONCEDED after source-check: "what a card is worth" and "the
+cost to shuffle/discard it" are not two problems — worth is only ever a **difference at a decision
+point**: `worth(card | state, horizon) = best-plan(with) − best-plan(without)`. There is no absolute
+card value, which is precisely what makes it computable: the situation enters through visible-state
+gates, not through an oracle of taste. The codebase already proves the principle LOCALLY — ADR-0023's
+fetch doctrine runs one shared value function behind whether-to-play / what-to-grab / what-to-discard
+("agree by construction": `_grab_value_of` benefit side, `_pitch_value_of` signed cost side,
+`_shed_signals` top-2 netting = exactly the user's Ultra-Ball trade) — but the repo holds **four
+partial valuations that do not share a spine**: (a) the fetch grab/pitch rungs, (b) ADR-0060's flat
+refresh prices (shed −8 flat, draw +20 flat), (c) the gamble's binary keep-floors, (d) the
+develop-leaf plan-tier credit. Same card, same state, four answers. Unification target: one
+**card-worth oracle** module (the ADR-0052 one-oracle pattern), consumed by all four sites + this
+note's keep-value floor; existing rung weights seed the calibration; corrections arbitrate.
+
+The closed-form ladder (the HOW): **role tier** (deck-declared: wincon / line piece / engine fuel /
+energy / tech / dreg — exists, `_BASE_ROLES`/`_wincon_set`/plan-tier vocabulary, which measurably
+lifted the leaf lab) × **gate proximity** (is the card's precondition live NOW: pre-evo in play →
+evolution hot; typed energy deficit on a matching body → energy hot; Active doomed → switch hot;
+discard empty → recycler dead — what the need-gated rungs encode piecemeal today) × **redundancy
+discount** (visible copies + closure re-access, round 6) + **residue** (timing windows, sequencing,
+opponent context — the true ML remainder, now small).
+
+Corrections to the user's formulation, accepted into the design:
+- **Sets, not sums.** Hand value is non-additive (a 2nd copy of a one-use Supporter ≈ dead; combo
+  pairs superadditive — the doctrine itself already fights naive additivity: "a 2nd Dreepy is a 2nd
+  LINE, not junk"). The Ultra-Ball discard pair is valued **jointly** (C(hand,2) pairs, cheap);
+  `_shed_signals`' current top-2-independent pitch is exactly the naive form — an upgrade site.
+- **Differences, not ratios.** Cost/benefit < 1 breaks at zero cost (free Items) and a good ratio on
+  a tiny benefit still loses to a better menu option; the single tactical scale + menu argmax
+  subsumes the ratio test. Net = benefit − cost, ranked against the menu.
+- **Signed by zone and deck.** Kyogre (721, verified text) counts Basic {W} Energy IN THE DISCARD as
+  attack fuel — for that deck, pitching W Energy has NEGATIVE cost (it is progress). Only a
+  deck-declared, role-aware valuation flips that sign; recycle reachability (round 6) makes discard
+  partially recoverable everywhere else.
+- **The Lillie's formula grades ADR-0060.** Hand total X (set-corrected marginal worths) vs
+  `E[n random] = n × deck-mean marginal worth over the remaining decklist` — computable, and it
+  auto-derives ADR-0060's deferred "a spent deck returns dregs" (deck-mean falls as the deck spends).
+  ⚠️ Blast radius: ADR-0060's flat asymmetry was deliberately calibrated against the keep-guard
+  family after the +76 blowthrough incident — the graded swing REPLACES that calibration and must
+  re-audit it under the correction corpus, not bolt on beside it.
+
+This oracle outgrows this note — when built it earns its own ADR; it is recorded here because the
+grill produced it and the closure supplies its redundancy leg.
+
 **Information value of the FIRST whole-deck search (user grill, 2026-07-17).** `OwnCardModel` resolves
 the prize split exactly only once a search reveals the whole deck (ADR-0029/0023). So the first
 deck-revealing fetch pays twice: the card, plus anchoring the tracker — collapsing every later
@@ -297,6 +342,9 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 - [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
       the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).
+- [ ] **One card-worth oracle** (round 7): marginal (with-vs-without), set-capable, zone/deck-signed
+      (Kyogre discard-fuel flip), role × gate × redundancy ladder; unifies fetch grab/pitch, refresh
+      swing, gamble keep-floors, and the plan-tier credit — graduates to its own ADR at build time.
 - [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
       is the canonical trap; re-verify per set.
 
