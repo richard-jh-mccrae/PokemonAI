@@ -311,6 +311,42 @@ Corrections to the user's formulation, accepted into the design:
   family after the +76 blowthrough incident — the graded swing REPLACES that calibration and must
   re-audit it under the correction corpus, not bolt on beside it.
 
+**Round 8 (user grill, 2026-07-17) — gate proximity is a DEADLINE, not a multiplier; the horizon is
+owned by role tier + hard rungs.**
+
+1. **The proximity-multiplier table (live-now ×1.0 / next-turn ×0.7 / cold ×0.3) is REFUTED before it
+   was built.** Shuffling a next-turn-live card doesn't cost a fraction of its worth — it costs
+   `role value × P(can't have it back by when the gate opens)`. Same card, same proximity, opposite
+   costs depending on the closure between now and the deadline (Mega Lucario in hand, Riolu benched
+   this turn: cheap to shuffle with 2 Mega Signal + Ultra Ball live, near-catastrophic with them
+   spent). Proximity is the **deadline parameter of the re-access probability** — hot = short window
+   = high cost, derived, zero new constants.
+2. **Resource quotas are gates**: 1 attach/turn gives the k-th held copy of a class deadline k−1 —
+   the 3rd hand Energy is near-free to shuffle because two turns of draws+closure stand before its
+   deadline. Derives the intuition instead of asserting it.
+3. **Gates CLOSE as well as open** — use-it-or-lose-it (the KO window, a pre-evo the threat read
+   prices as dying). A gate is an interval [opens, closes]; a closing edge SPIKES keep-cost — decay
+   constants are wrong-shaped for cliffs. Closing edges come from existing machinery
+   (`reachable_incoming`).
+4. **The ladder COLLAPSES.** Role × proximity × redundancy was pedagogy; the computation is one
+   marginal probability difference per class:
+   `keep-cost(X) = role value × [P(class need met by deadline | keep X) − P(met | shuffle X)]` —
+   redundancy and proximity both live inside the same closure query, and it is the SAME math as the
+   gamble's gain side pointed backwards. The oracle got simpler under grilling (the right-primitive
+   sign).
+5. **Held-card risk (new seam, tier-2):** holding across k opponent turns exposes the card to THEIR
+   symmetric refreshes (Judge/Harlequin); P(stripped before my deadline) from the matched Read's rep
+   build minus tracker-observed plays (`copies_left_odds` pointed at their disruption count). Prices
+   fetch-early (certainty now, exposure till deadline) vs fetch-late (no exposure, re-access risk) —
+   both sides closed-form.
+6. **Horizon discipline: the oracle refuses to price the match.** Provably match-deciding cards are
+   the hard rungs' jurisdiction (lethal solver / loss rung / win rung, KO_SCORE scale, outrank leaf
+   math by construction); the oracle prices ONLY the positional band, and worth-to-the-match enters
+   through role TIER alone — bounded, already encoded. No match-importance multiplier, no blanket γ:
+   enumerate the computable risks (stripped, gate-closes) instead; a residual γ only ever ships as
+   one tuned seed under the score-diff gate. This is the structural guard against a +76-class
+   runaway recurring in the new currency.
+
 This oracle outgrows this note — when built it earns its own ADR; it is recorded here because the
 grill produced it and the closure supplies its redundancy leg.
 
@@ -342,9 +378,12 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 - [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
       the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).
-- [ ] **One card-worth oracle** (round 7): marginal (with-vs-without), set-capable, zone/deck-signed
-      (Kyogre discard-fuel flip), role × gate × redundancy ladder; unifies fetch grab/pitch, refresh
-      swing, gamble keep-floors, and the plan-tier credit — graduates to its own ADR at build time.
+- [ ] **One card-worth oracle** (rounds 7–8): marginal (with-vs-without), set-capable, zone/deck-signed
+      (Kyogre discard-fuel flip); keep-cost = role value × ΔP(class need met by DEADLINE | keep vs
+      shuffle) — proximity is the deadline (quota-aware, interval-valued for closing windows), never a
+      multiplier; horizon = role tier only, match scale stays with the hard rungs; unifies fetch
+      grab/pitch, refresh swing, gamble keep-floors, and the plan-tier credit — graduates to its own
+      ADR at build time.
 - [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
       is the canonical trap; re-verify per set.
 
