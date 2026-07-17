@@ -1,10 +1,16 @@
-"""GATE 0 — does exhaustive within-turn search + the CURRENT leaf beat the 1-ply rung?
+"""GATE 0 — does exhaustive within-turn search + the readiness leaf beat the 1-ply rung?
 
-Apples-to-apples, per first-action option (chance/refresh first-actions excluded from BOTH columns):
-  1-ply       : greedy continuation to end-of-turn, scored by the leaf (`_engine_leaf_value`) — the rung.
-  exhaustive  : MAX leaf over ALL deterministic continuations (memoized best-leaf DP; cgpy clone-per-step;
-                hand-shuffle-DRAW = chance horizon). Same terminal leaf as 1-ply — only the search differs.
+Apples-to-apples, per first-action option (chance/refresh first-actions excluded from BOTH columns). BOTH
+columns grade the SAME turn_value = readiness(end) + Σ ability-fire credits − Σ spend costs (the readiness
+leaf + the line account) — only the SEARCH differs:
+  1-ply       : greedy continuation to end-of-turn, scored by `_engine_leaf_value` (spend_account on) — the rung.
+  exhaustive  : MAX turn_value over ALL deterministic continuations (memoized best-value DP; cgpy clone-per-
+                step; hand-shuffle-DRAW = chance horizon). The line account folds in as a per-edge term —
+                `best(state) = max_step[line(step) + best(child)]`, terminal = readiness — sound to memoize
+                by state since a step's line cost depends only on that state's chosen options, not the path.
 Verdict per column = the honest SOLE-top (correct is the SOLE max) + shared-top + top-tie, vs the human pick.
+(Historical note: on the pre-readiness `_board_development` leaf this A/B was a wash — deeper search over a
+coarse leaf found as many leaf-mistakes as it fixed. The readiness leaf is what the search needed to pay.)
 
     python tools/train/probes/gate0_ab.py            # smoke: 1 frame
     python tools/train/probes/gate0_ab.py --all
@@ -71,7 +77,7 @@ def exhaustive_values(pilot, c):
             surv = pilot._incoming_worst(act.get("id"), act.get("hp", 0),
                                          (o2.get("active") or []) + (o2.get("bench") or [])) < act.get("hp", 0)
         return pilot._leaf_value(prizes=taken, active_survives=surv,
-                                 development=pilot._board_development(m), value=0.0)
+                                 readiness=pilot._readiness(m), value=0.0)
 
     def is_terminal(o):
         cc = o.get("current") or {}
@@ -109,6 +115,16 @@ def exhaustive_values(pilot, c):
     memo, inprog, capped = {}, set(), [False]
     pilot._planning = True
 
+    def line_of(o, step):
+        """The signed line account (`turn_value`'s path term) of taking `step` at node `o` — the ACTION's
+        ability-fire credit / spend cost off `o`'s own option traces. Folded into the DP as a per-edge
+        term: `bestleaf(state) = max_step [line(step) + bestleaf(child)]`, terminal = readiness. Sound to
+        memoize by state — a step's line cost depends ONLY on that state's chosen options, not the path."""
+        try:
+            return pilot._line_account(pilot._evaluate(o).options, step)
+        except Exception:
+            return 0.0
+
     def bestleaf(sid, o):
         if is_terminal(o):
             return leaf_val(o)
@@ -122,7 +138,7 @@ def exhaustive_values(pilot, c):
         best = NEG
         for step in child_steps(o):
             ch = cgapi.search_step(sid, step)
-            v = bestleaf(ch.searchId, _prune_none(asdict(ch.observation)))
+            v = line_of(o, step) + bestleaf(ch.searchId, _prune_none(asdict(ch.observation)))
             cgapi.search_release(ch.searchId)
             if v > best:
                 best = v
@@ -141,7 +157,7 @@ def exhaustive_values(pilot, c):
                 if refresh_branches(hand0[op["index"]].get("id"), start_prizes, opp_prizes) is not None:
                     continue                                    # chance first-action — excluded
             ch = cgapi.search_step(st.searchId, [i])
-            values[i] = bestleaf(ch.searchId, _prune_none(asdict(ch.observation)))
+            values[i] = line_of(root, [i]) + bestleaf(ch.searchId, _prune_none(asdict(ch.observation)))
             cgapi.search_release(ch.searchId)
     finally:
         cgapi.search_end()
@@ -167,7 +183,10 @@ def oneply_values(pilot, c):
                 continue
         pilot._planning = True
         try:
-            out[i] = pilot._engine_leaf_value(obs, [i])
+            # full turn_value (spend_account=True): readiness(end) + the greedy line's line account, so both
+            # columns grade the SAME turn_value (`readiness + Σ ability-fire − Σ spend`) — apples-to-apples,
+            # only the SEARCH differs (greedy continuation here vs the best-completion DP in exhaustive).
+            out[i] = pilot._engine_leaf_value(obs, [i], spend_account=True)
         except Exception:
             out[i] = None
         finally:
