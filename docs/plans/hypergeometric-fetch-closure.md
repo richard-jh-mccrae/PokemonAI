@@ -245,11 +245,29 @@ keep-value blocker, the rest stay blocked).**
    definition — it dwarfs per-card shed cost exactly like the KO class, so the binary hold-* guards
    suffice and the round-3 blocker does not apply. Same void rule (enabler in hand → deterministic
    line, no gamble) and det baseline (the deterministic route to survival) as the KO class.
-3. **Mid-value classes STAY BLOCKED — now with the reason quantified.** Ability unlocks, ACE-SPEC
-   hunts, need-filling digs: benefit ≈ rung-weight scale (tens of points) — the SAME order as the
-   unpriced next-turn keep-value of the shuffled hand, so the EV comparison would be dominated by the
-   term we can't compute. Blocked behind graded keep-value (ADR-0007/0042/0053), not behind math.
-   (The KO and survival classes clear the bar precisely because their value is 1–2 orders above it.)
+3. **Mid-value classes — blocker REVISED (round 6, user grill 2026-07-17): keep-value has a
+   closed-form FLOOR, and it is this note's own machinery pointed backwards.** The round-3/5 ruling
+   ("blocked behind the ML value model") was too coarse. Hand value splits:
+   - **Replaceability — closed-form.** A refresh SHUFFLES the hand into the DECK (nothing is
+     destroyed), so the cost of shuffling card X = X's role value × the drop in P(having X when
+     needed) — and re-access probability is exactly the closure math (window draws + tutor closure +
+     recycle closure), per card class. The same code prices BOTH sides of a refresh: P(gain the hunt
+     target) and P(lose access to the held cards). A held Energy with Energy Search copies in deck
+     shuffles at ≈0 cost; a closure-unreachable one-of shuffles at ≈full role value. Role tiers
+     already exist (wincon / line piece / tool / energy / dreg — the `_development_plan_set`
+     vocabulary); joint multi-piece re-assembly is multivariate but computable; horizon defaults to
+     next turn. Refinement en passant: the binary `irreplaceable_tool_in_hand` flag is DECK-RELATIVE —
+     Hero's Cape is a Trainer, so a Petrel deck can re-fetch a shuffled ACE SPEC from deck; the
+     closure computes per-deck what the flag hardcodes.
+   - **Situational synergy — the genuine ML residue.** Combo adjacency/timing windows, sequencing,
+     tempo, opponent-context ("they will Judge me anyway"). This part stays parked on
+     ADR-0007/0042/0053.
+   Revised ruling: mid-value classes (ability unlock, ACE-SPEC hunt, need-filling) unblock behind the
+   **replaceability-floor keep-value**, shipped under the standard correction-corpus / score-diff
+   gate, with the synergy residue a stated known error (replaceability plausibly dominates —
+   irreplaceability is most of why shuffling hurts). Distinguish the `handCount`-overfit precedent:
+   that was a raw SIZE scalar with no structure; this is role-priced and closure-derived — the
+   corrections arbitrate, not a hand-fitted constant.
 
 **Information value of the FIRST whole-deck search (user grill, 2026-07-17).** `OwnCardModel` resolves
 the prize split exactly only once a search reveals the whole deck (ADR-0029/0023). So the first
@@ -275,8 +293,10 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 - [ ] **Evolution-KO class** added to `_gamble_ko_classes` (the Active's eligible evolutions' attacks,
       energy carried over) — a missing KO class, not a non-KO extension.
 - [ ] **Survival class** (avert the ADR-0064 predicted-loss shape via `switch`/`heal` closure) —
-      KO_SCORE-scale, exempt from the keep-value blocker; mid-value classes stay blocked behind
-      graded keep-value.
+      KO_SCORE-scale, exempt from the keep-value blocker.
+- [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
+      the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
+      residue stays on the value model (ADR-0007/0042/0053).
 - [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
       is the canonical trap; re-verify per set.
 
