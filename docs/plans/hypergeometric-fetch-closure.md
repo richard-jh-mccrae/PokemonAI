@@ -161,8 +161,33 @@ the first n" leaves all O outs uniformly in the remaining pool:
 >             + [ P(no out in n) − P(no out AND no usable engine in n) ] × P(≥1 out in m | pool−n, O)
 
 with n = refresh draws, m = the engine's window (Recon: 2 with take-1; Run Away Draw: 3). Both bracket
-terms are single multivariate-hypergeometric ratios (outs and engines are disjoint card classes). One
-engine stage, not infinite recursion — engine-finds-engine is cut off (bounded, always under-counting).
+terms are single multivariate-hypergeometric ratios (outs and engines are disjoint card classes).
+
+**Engine-finds-engine recursion — GRILLED 2026-07-17 (the cutoff dissolves into a board-derived bound).**
+The "one engine stage" cutoff was framed as a tractability limit; grilling shows it never was one:
+
+1. **The formula ITERATES for free.** Conditioning on "no out in the windows so far" leaves all outs
+   uniform in the thinned pool, so each further stage is the same two `comb` ratios in a loop — no new
+   math, no blow-up.
+2. **The true bound is the BOARD, not a constant.** A k-th engine *activation* needs a k-th eligible
+   pre-evo already in play (evolution timing, `rules.md` §4) plus bench capacity — visible facts. So
+   derive the recursion depth from **board-supported engine capacity** (count of eligible
+   pre-evo/engine pairings), exactly the pattern that replaced the hardcoded one-short gate. Usually
+   0–1, occasionally 2; compute to whatever the board legally supports.
+3. **Magnitude honestly measured** (illustrative MC, 400k trials: pool 30, outs 6 = 4 Energy + 2 Item
+   tutors, 2 Drakloak in deck, n=6 refresh, Recon top-2-take-1, greedy policy): depth 1 adds
+   **+4.5pp** hit probability (~+50 EV at KO scale — Stage 2 earns its keep); depth 2 adds **+0.6pp**
+   with TWO eligible pre-evos on board and **exactly 0** with one (illegal — confirming point 2).
+   ~0.6pp ≈ tie-break EV; since depth is board-derived we pay its cost only when the board offers it.
+4. **Engine→TUTOR→Energy is NOT recursion** — the second window's outs are the same Stage-1 union
+   (Energy + valid Items + recyclers), and that mass is far larger than engine→engine. Stated
+   explicitly so a builder doesn't count literal Energy only in window 2.
+5. **Policy inside the probability:** Recon's take-1 is a CHOICE node — the model assumes the greedy
+   policy (take an out > take an engine > best other), optimal for a single-target class; the only
+   place player choice enters the chance tree.
+6. **Dudunsparce bookkeeping:** Run Away Draw returns itself + attached cards to the deck AFTER its
+   3-draw — a known-composition pool shift (which can even return an attached Energy as a fresh out);
+   pure bookkeeping, still closed form. Its real cost (the body leaves play) is the leaf's to price.
 
 **Engine usability is a hard gate, checked exactly, before an engine copy counts:**
 - **Evolution timing** (`rules.md` §4): a DRAWN Drakloak needs an eligible pre-evo already on board
@@ -202,6 +227,30 @@ per-card shed; the error only matters near break-even), but any future NON-KO ou
 unlock, ACE-SPEC hunt — each needs its own crisp closed-form value) must not ship without a graded
 keep-value term, or the flat +20 draw credit will systematically over-fire refreshes.
 
+**Non-KO outcome classes — GRILLED 2026-07-17 (triage: one is a missing KO class, one escapes the
+keep-value blocker, the rest stay blocked).**
+
+1. **FINDING — the evolution-KO class is MISSING and was never non-KO.** `_gamble_ko_classes` prices
+   only the **current Active's** attacks (`planner.py:1507` feeds it `board.my_active_id`'s stat). But
+   "draw the evolution → evolve the Active → ITS attack KOs" is legal in one turn (Active eligible =
+   in play since last turn; evolving keeps attached Energy, `rules.md` §4; a Mega ex does NOT end the
+   turn on evolving) and is KO-valued — no new value theory, no keep-value blocker. Outs = the
+   evolution's copies + its tutor closure (Ultra Ball, Mega Signal, Hilda…). Variant B, the two-piece
+   window ("evolution AND the missing Energy both in the draw"), is a multivariate hypergeometric —
+   computable, smaller p, same class. This is the highest-value un-built class in the whole note.
+2. **The SURVIVAL class escapes the keep-value blocker.** Trigger: the ADR-0064 predicted-loss shape
+   (my bench empty / Active doomed, budgeted incoming ≥ HP) — crisp, already-built machinery
+   (`active_doomed`, `_predicted_loss`). Outs: `switch`/`heal`/`bench_guard`-class cards + their
+   closure. Value: averting a predicted GAME loss is ±KO_SCORE-scale by the loss rung's own
+   definition — it dwarfs per-card shed cost exactly like the KO class, so the binary hold-* guards
+   suffice and the round-3 blocker does not apply. Same void rule (enabler in hand → deterministic
+   line, no gamble) and det baseline (the deterministic route to survival) as the KO class.
+3. **Mid-value classes STAY BLOCKED — now with the reason quantified.** Ability unlocks, ACE-SPEC
+   hunts, need-filling digs: benefit ≈ rung-weight scale (tens of points) — the SAME order as the
+   unpriced next-turn keep-value of the shuffled hand, so the EV comparison would be dominated by the
+   term we can't compute. Blocked behind graded keep-value (ADR-0007/0042/0053), not behind math.
+   (The KO and survival classes clear the bar precisely because their value is 1–2 orders above it.)
+
 **Information value of the FIRST whole-deck search (user grill, 2026-07-17).** `OwnCardModel` resolves
 the prize split exactly only once a search reveals the whole deck (ADR-0029/0023). So the first
 deck-revealing fetch pays twice: the card, plus anchoring the tracker — collapsing every later
@@ -221,6 +270,13 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 - [ ] **Pre-anchor gambles NOT stood down** — the `if not deck_known_counts: return None` gate replaced
       by the prize-split-weighted window sum (design point 4); decklist-known makes it exact closed-form.
 - [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
+- [ ] **Engine depth = board-supported capacity** (eligible pre-evo/engine pairings), not a hardcoded
+      one stage; window-2 outs are the full Stage-1 union, not literal Energy.
+- [ ] **Evolution-KO class** added to `_gamble_ko_classes` (the Active's eligible evolutions' attacks,
+      energy carried over) — a missing KO class, not a non-KO extension.
+- [ ] **Survival class** (avert the ADR-0064 predicted-loss shape via `switch`/`heal` closure) —
+      KO_SCORE-scale, exempt from the keep-value blocker; mid-value classes stay blocked behind
+      graded keep-value.
 - [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
       is the canonical trap; re-verify per set.
 
