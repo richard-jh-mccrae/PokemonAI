@@ -2054,13 +2054,21 @@ class PlannerMixin:
         only bites when the loss is structural. Composes below the win rung by construction (a line
         that wins outright returns ``KO_SCORE × (prizes+1)`` before any leaf math)."""
         active = next((p for p in (me.get("active") or []) if p), None)
-        if not (active and active.get("hp")):
+        my_hp = (active or {}).get("hp", 0)
+        my_stat = self.stats.get(active.get("id")) if (active and self.stats) else None
+        if not (my_stat and my_hp):
             return 0.0
         if any(b for b in (me.get("bench") or [])):
             return 0.0                                    # a bench body soaks — recoverable, not a loss
         opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
-        incoming = self._incoming_worst(active.get("id"), active.get("hp", 0), opp_bodies)
-        return -float(KO_SCORE) if incoming >= active.get("hp", 0) else 0.0
+        # The catastrophe rung reads a STRICTER Incoming than the ±50 survival term: an evolution-based
+        # KO counts only off a pre-evo that ALREADY carries Energy (evo_min_energy=1) — a bare 0-Energy
+        # pre-evo is not a credible next-turn game-ender (ADR-0064 bounded-pessimism guard).
+        incoming = self.combat.reachable_incoming(
+            {"id": active.get("id"), "hp": my_hp}, opp_bodies,
+            charged=getattr(self, "_incoming_budget", None), evo_min_energy=1,
+            context=getattr(self, "_opp_attack_context", None))
+        return -float(KO_SCORE) if incoming >= my_hp else 0.0
 
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
         """True if my body (``my_id`` at ``my_hp``) survives the opponent's Incoming AFTER I KO their

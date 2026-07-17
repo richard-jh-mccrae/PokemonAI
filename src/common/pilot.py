@@ -1031,6 +1031,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._transients = TransientTracker(self._attack_stat)   # ADR-0033: live next-turn grants
                                                         # (Frost Barrier class) inferred from ATTACK
                                                         # logs — obs exposes no effect state
+        self._incoming_budget = None                    # ADR-0064: reachable-Incoming energy policy,
+                                                        # set per decision in _board (None = worst-case ceiling)
         from common.strategy.combat import CombatMath
         self.combat = CombatMath(stats, functions, transients=self._transients)   # the KO oracle
                                                         # (ADR-0052): the one closed-form combat home;
@@ -3087,6 +3089,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # top candidate is just the prior favourite -> gate on γ>0 to keep board.brief off until recognized.
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         self.opponent.note_brief(brief)              # feed the γ-gated Brief to Dispositions (ADR-0047)
+        # ADR-0064 Decision 1: the reachable-Incoming energy policy. Charged (per-attack typed-cost
+        # affordability) ONLY behind a γ-matched Brief — the calibrated "we know what they run" signal;
+        # an unrecognized opponent stays None → worst-case ceiling (never relax pessimism on a guess).
+        # burst_on_evo credits an Ignition-class colourless burst ({C}{C}{C} on an Evolution): it only
+        # ever makes a COLOURLESS-costed attack more reachable (the pessimism-safe direction — it can
+        # never fund a typed {F}{F}), so a flat matched-archetype allowance keeps a burst nuke doomed
+        # while the typed/colourless split sharpens genuine typed-cost reach (the variant-2 read).
+        self._incoming_budget = {"base_attach": 1, "burst_on_evo": 2} if brief is not None else None
         _opp_res = getattr(self.opponent, "resources", None)   # match-scoped Resources tracker (flattened below)
         # Resolve the matched Brief's name-keyed threats/targets to card ids (ADR-0027 consumer). Guarded
         # like forward_max_damage: an old/None provider -> empty, never crashes. Behavior-neutral surface.

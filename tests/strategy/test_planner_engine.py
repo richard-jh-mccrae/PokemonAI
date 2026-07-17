@@ -52,10 +52,13 @@ def _first_open_menu(pilot, obs, limit=80):
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
     """Drive a real mirror game to its first open turn menu, then evaluate the live first move through
-    the engine sim: the primitive must return a concrete, non-negative leaf value (not None), proving
+    the engine sim: the primitive must return a concrete FINITE leaf value (not None), proving
     ``search_begin`` → step the move → re-run the policy to end-of-turn round-trips from a live
     observation and the resulting board is read (prizes taken + survival). The engine, not our
-    closed-form math, produced the board it scored."""
+    closed-form math, produced the board it scored. NB the value may be NEGATIVE: the ADR-0064 loss
+    rung prices a bench-empty-doomed end board at ``-KO_SCORE`` (a predicted game loss is a legitimate
+    leaf outcome), so this asserts finiteness, not sign."""
+    import math
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
@@ -64,8 +67,7 @@ def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
         menu = _first_open_menu(pilot, obs)
         assert menu is not None                            # reached an open turn menu with a search input
         value = pilot._engine_leaf_value(menu, pilot.decide(menu))
-        assert value is not None                           # search round-tripped to an end-of-turn board
-        assert value >= 0                                  # prizes/survival are non-negative
+        assert value is not None and math.isfinite(value)  # search round-tripped to an end-of-turn board
     finally:
         battle_finish()
 

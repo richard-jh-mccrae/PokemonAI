@@ -335,7 +335,8 @@ class CombatMath:
 
     # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
-                           charged: dict | None = None, context: dict | None = None) -> int:
+                           charged: dict | None = None, evo_min_energy: int = 0,
+                           context: dict | None = None) -> int:
         """Worst Weakness/Resistance-adjusted damage the opponent's affordable attackers among
         ``opp_bodies`` could deal to ``my_body`` NEXT TURN — the **Incoming that counts one
         development step** (ADR-0064): each body contributes its CURRENT form AND one reachable
@@ -352,10 +353,19 @@ class CombatMath:
         - ``None`` → **ceiling** (worst-case, the hidden-burst-safe survival read): a form
           contributes its biggest attack once it can pay its CHEAPEST under attached + one attach;
           the bigger attack's affordability is NOT charged. Mirrors the historical ``_incoming_worst``.
-        - ``{"base_attach": int, "burst": int}`` → **charged**: per-attack typed-cost affordability
-          under attached + ``base_attach`` manual attaches (each wild — pays any one typed slot)
-          + ``burst`` colourless-only units (a matched-Read burst-Energy allowance, e.g. Ignition's
-          {C}{C}{C}; pays colourless slots only, never a typed {F}{F}). The Read-budgeted read.
+        - ``{"base_attach": int, "burst_on_evo": int}`` → **charged**: per-attack typed-cost
+          affordability under attached + ``base_attach`` manual attaches (each wild — pays any one
+          typed slot) + ``burst_on_evo`` colourless-only units available ONLY when the attacking form
+          is an Evolution (a matched-Read burst-Energy allowance: Ignition provides {C} on a Basic but
+          {C}{C}{C} on an Evolution, so the +2 lands only on an evolved form; it pays colourless slots
+          only, never a typed {F}{F}). The Read-budgeted read.
+
+        ``evo_min_energy``: the minimum Energy an opponent body must ALREADY carry for its forward
+        evolution hop to count (default 0 — credit every pre-evolution). A catastrophe-grade consumer
+        (the ``-KO_SCORE`` loss rung) passes 1: a bare 0-Energy pre-evolution is not a credible
+        next-turn game-ender (it needs the evolution IN HAND plus a from-scratch attach), and crediting
+        it manufactures phantom doom on turn 2 (the bounded-pessimism guard, ADR-0064). The current
+        form is always counted regardless.
 
         Transient locks (ADR-0033) are honoured on a body's CURRENT form only — a self-lock skips it
         entirely, a same-attack lock excludes that attack, a self-bonus raises the hit; a forward
@@ -376,6 +386,8 @@ class CombatMath:
             worst = max(worst, self._reach_form_damage(
                 my_body, body.get("id"), body, attached, charged, context,
                 exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0)))
+            if attached < evo_min_energy:
+                continue                              # bare pre-evo — not a credible evolving threat here
             for fid in (fwd(body.get("id")) or ()):   # one evolution hop — carries the attached Energy
                 evo = {"id": fid, "energies": body.get("energies") or []}
                 worst = max(worst, self._reach_form_damage(
@@ -396,7 +408,9 @@ class CombatMath:
             dmg = self.predicted_max_damage(stat, my_body, exclude_attack=exclude, context=context)
             return int(dmg) + bonus if dmg else 0
         base = charged.get("base_attach", 1)
-        burst = charged.get("burst", 0)
+        # Ignition-class colourless burst lands its full {C}{C}{C} only on an Evolution (rules.md /
+        # card text) — a Basic form gets the plain single attach, no burst.
+        burst = charged.get("burst_on_evo", 0) if getattr(stat, "evolvesFrom", None) else 0
         best = 0
         for aid in (stat.attacks or ()):
             if aid == exclude:

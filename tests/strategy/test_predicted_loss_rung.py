@@ -66,6 +66,15 @@ def test_loss_rung_stands_down_when_the_active_survives():
     assert p._predicted_loss(_me(400), _opp(riolu_energy=1)) == 0.0   # 400 HP > 270 worst-case → safe
 
 
+def test_loss_rung_does_not_fire_on_a_bare_zero_energy_pre_evo_phantom():
+    # The bounded-pessimism guard: an opponent's 0-Energy benched pre-evo (Riolu) is NOT a credible
+    # next-turn game-ender — it needs the evolution in hand plus a from-scratch attach. The ±50
+    # survival term may still be pessimistic, but the -KO_SCORE catastrophe rung must not fire (else
+    # a lone Active reads as a turn-2 game loss off a phantom evolution).
+    p = _pilot()
+    assert p._predicted_loss(_me(270), _opp(riolu_energy=0)) == 0.0
+
+
 def test_loss_rung_zero_without_an_active():
     p = _pilot()
     assert p._predicted_loss({"active": [], "bench": []}, _opp(riolu_energy=1)) == 0.0
