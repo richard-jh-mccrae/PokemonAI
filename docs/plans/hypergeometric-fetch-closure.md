@@ -432,6 +432,67 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 | 120 | Drakloak | Stage 1 (← Dreepy) | `dig`, `draw` | ability *Recon Directive*: top 2, take 1 — the selective engine (Stage 2) |
 | 66 | Dudunsparce | Stage 1 (← Dunsparce) | `draw`, `stall` | ability *Run Away Draw*: draw 3, **shuffles itself + attached back in** — window +3, body leaves play |
 
+## Round 10 (user, 2026-07-17) — build addendum: the correction-seeded test corpus, the module home,
+## and the skill loop
+
+**The whole grill is one subsystem: shuffle + fetch/discard economics.** Three build directives:
+
+### 1. Tests seeded from the TAGGED BLUNDERS, not invented scenarios
+The correction corpus (`data/corrections/*/corrections.jsonl`) holds ~70 shuffle/fetch/discard
+corrections that ARE the acceptance suite. Repo pattern applies: replay the REAL recorded state
+through the real `decide()` (the `test_critical_*` shape), assert the correct pick outranks the
+blunder; join against `reviewed.json` dispositions first (refuted/covered corrections don't become
+fixtures) and route via /blunder-buster classification. Families → design components:
+
+- **Discard-pair valuation (sets, not sums; role floors):** 82525101-f14 (kept Ignition? never
+  Ultra-Ball it away; pitch the duplicate Wally's), 82749656-f20 (pitched the ACE SPEC Hero's Cape),
+  83661652-f30/f31 (pitched the main-line attacker; **discarded a Riolu to fetch a Riolu**),
+  83686860-f18 (pitched BOTH Dreepy — killed a line: the pair-valuation case verbatim),
+  82867148-f48 + 83967840-f54 (duplicates-first), 85045840-f14 (pitched Drakloak to fetch Dragapult —
+  discarded the line piece the fetched card NEEDS), 86091435-f68 (pitched a live-now Drakloak).
+- **Fetch-target valuation (role × gate × closure):** 84890060-f26 (energy-over-body: the fetched
+  Energy chains attach→retreat→KO), 82228640-f9 + 82753746-f11 (role-dead Cinderace — gate closed
+  after opening), 84071010-f53 + 83686860-f33 (fetch the evolution with pre-evos EXHAUSTED — deadline
+  permanently closed, tracker-known), 85058051-f13 (fetch = WIN, missed), 81903490-f8 (Ultra Ball
+  hunts the wincon), 85059103-f9 (fetched a duplicate of a held card).
+- **Whether-to-play / hold the fetch (deadline + held-card risk + whiff):** 83007714-f8,
+  85045840-f12, 83967841-f17, 86091728-f19 (no need → hold), 83661652-f29 (basics can't evolve yet —
+  hold a turn), 85163634-f17 (**fetch one turn early = Judge exposure** — the held-card-risk seam's
+  own correction), 85164605-f64 (fetched into a known whiff), 82754241-f12 + 82525741-f78 +
+  82524455-f6 (Poffin with Staryu line exhausted), 85046350-f79 + 85058574-f114 (dead fetchers become
+  **Ultra Ball fodder** — a negative-cost discard role).
+- **Shuffle timing & keep-value (the refresh side):** 83686860-f13 + 83661652-f40 (fetched a piece
+  then SHUFFLED IT AWAY next decision — cross-decision sequencing), 83038055-f51 + 82752045-f94
+  (strong hand → don't refresh; ">7 good cards" heuristic emerges from graded keep-value),
+  82749168-f65 + 83969481-f55 (Ignition / Wally's valued by next-turn & match need), 82750161-f60
+  (Harlequin 11-vs-2, the ADR-0060 anchor), 83037962-f49 (symmetric refresh returned our own
+  Starmie+Energy), 82756664-f9 (USE the Cape, then refresh — play-before-shuffle ordering),
+  83457493-f31 (pitch dead cards BEFORE the symmetric shuffle).
+- **Discard-as-resource (zone-signed worth):** 85785067-f42/f54 + 85058574-f16 (Lunatone: discard
+  Energy to draw 3 — Energy is FUEL here), 84071010-f45 (hold surplus Energy FOR Aura Jab's
+  discard-recycle — the sign flip in our own deck), 85058051-f4 (Ultra-Ball back the spent Supporters
+  to feed the engine).
+CI-gated like the rest of the suite; every family lists its correction ids so coverage is auditable.
+
+### 2. One module home — the oracle is a backend, the doctrines stay the deciders
+Consolidate the sprinkled machinery behind ONE seam (the ADR-0052 one-oracle pattern — `combat.py`
+is the model): a `common` **card-economics module cluster** — `fetch_closure.py` (the tutor/recycle
+graph + text predicates), `card_worth.py` (the marginal oracle: role table, gate library, deadlines,
+keep-cost), extending `deck_odds.py` (window + prize-split math stays where it lives). NOT a
+doctrine deprecation: `doctrine_fetch` / `doctrine_shuffle_refresh` / the gamble rung keep owning
+WHEN-to-decide (rungs, gates, telemetry) and become CONSUMERS of the shared value backend —
+`_grab_value_of` / `_pitch_value_of` / `refresh.py`'s swing / the gamble keep-floors all call the
+oracle instead of carrying private valuations. The four-shadow disagreement (round 7) dies by
+construction; each flip lands under the corpus above + the score-diff gate, staged like the ADR-0064
+five-call-site refactor.
+
+### 3. The skill loop closes it
+Round 9's Role Sheet contract: **/deck-genie** authors roles/synergies for NEW decks;
+**/deck-align** re-audits the three existing agents (mega_starmie, mega_lucario, dragapult_ex)
+against the new vocabulary — their STRATEGY.md deck rules that merely restate what the oracle now
+derives (fodder lists, "never Ultra-Ball the Ignition", duplicate-first pitching) FOLD into the
+general layer per ADR-0034, shrinking deck files as the system generalizes.
+
 ## Where it plugs in (corrected)
 **Priority:** the Gamble Rung's Outcome Classes (`_gamble_ko_classes`, ADR-0039) — v1 above — then the
 probable-whiff generalization (ADR-0029) and win-odds/lethal reach. **Deferred behind ADR-0064:** any
