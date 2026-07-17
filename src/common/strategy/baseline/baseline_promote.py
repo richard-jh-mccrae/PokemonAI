@@ -49,10 +49,14 @@ HYPOTHESES = [
                   "finisher (`bench_wincon_underpowered` + `basic_energy_in_deck`); (c) "
                   "`opp_has_played_gust` (tax a shown gust threat). Scores +50 vs `promote-the-ready-wincon` "
                   "(+40), so the sacrifice wins; additive with `promote-the-accelerator-for-the-ko` (+50) "
-                  "when it can also KO this turn (ADR-0031).",
+                  "when it can also KO this turn (ADR-0031). STANDS DOWN when the opponent's board literally "
+                  "cannot KO the preserved wincon next turn (`opp_cannot_punish_wincon`, ADR-0064 Decision 4): "
+                  "with no return-KO to fear, exposing the ready finisher is free, so `promote-the-ready-wincon` "
+                  "(+40) wins instead (scenario 3).",
         when=lambda c: c.select_context == _TO_ACTIVE and not c.card_is_wincon
         and c.promote_target_can_attack and c.board.opp_prizes_remaining >= 2
         and c.board.bench_wincon_prize_value > c.card_prize_value
+        and not c.board.opp_cannot_punish_wincon
         and (c.promote_target_hits_weakness
              or ("accel_source" in c.roles and c.board.bench_wincon_underpowered
                  and c.board.basic_energy_in_deck)
@@ -81,11 +85,14 @@ HYPOTHESES = [
                   "so ANY viable alternative (interpose +50, staller +20) outranks the fatal promote. "
                   "Stands down when the promoted wincon can itself KO right away "
                   "(`promote_target_kos` — trading KOs while ahead on the exchange is fine), when the "
-                  "opponent needs only ONE prize (any KO wins for them — lead the strongest body), and "
-                  "when we're CLOSING (my_prizes_remaining <= 2: exposure is how you finish).",
+                  "opponent needs only ONE prize (any KO wins for them — lead the strongest body), when "
+                  "we're CLOSING (my_prizes_remaining <= 2: exposure is how you finish), and when the "
+                  "opponent's board literally cannot KO the wincon next turn (`opp_cannot_punish_wincon`, "
+                  "ADR-0064 Decision 4: no return-KO to fear → the prize-math penalty is moot).",
         when=lambda c: c.select_context == _TO_ACTIVE and c.card_is_wincon
         and c.card_prize_value >= c.board.opp_prizes_remaining >= 2
-        and not c.promote_target_kos and c.board.my_prizes_remaining > 2,
+        and not c.promote_target_kos and c.board.my_prizes_remaining > 2
+        and not c.board.opp_cannot_punish_wincon,
         weight=-20, status="assumed"),
     Hypothesis(
         id="promote-the-staller",

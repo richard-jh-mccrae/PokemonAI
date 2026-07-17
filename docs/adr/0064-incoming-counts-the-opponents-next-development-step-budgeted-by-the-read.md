@@ -46,12 +46,20 @@ attach and is not a credible next-turn game-ender). This distinguishes variant 1
 loss rung fires → defend) from the phantom (0-Energy Staryu → no catastrophe). Pinned by
 `test_reachable_incoming.py::test_evo_min_energy_*` and `test_predicted_loss_rung.py::…phantom`.
 
-**Remaining (Decision 4 consumer):**
-- The `interpose`/`dont-promote-into-their-prize-reach` **promote stand-down** — when the (now-built)
-  charged safety read says the opponent's board cannot punish my benched wincon next turn, stand down
-  so `promote-the-ready-wincon` wins. Needs a Board field over the reachability read + `when`-clause
-  wiring; its own test + full-suite gate (independent regression risk on `test_promote_preserve_wincon`).
+- **The promote stand-down (Decision 4 consumer).** `Board.opp_cannot_punish_wincon` runs the charged
+  safety read against my best benched win-condition; when the opponent's board cannot KO it next turn,
+  `interpose-the-cheap-attacker-to-preserve-the-wincon` and `dont-promote-into-their-prize-reach` both
+  stand down so `promote-the-ready-wincon` (+40) wins (scenario 3). The build surfaced the soundness
+  line: the veto fires **only behind a matched Read** (`_incoming_budget` populated) — unmatched → fail
+  CLOSED (keep interpose; a placeholder/unmodelled opponent must never expose a 3-prize wincon on a
+  can't-model read, the "under-counting feeds them the wincon" direction). Pool-forward existence +
+  `evo_min_energy=0` keep it pessimistic even when matched. Pinned by
+  `test_promote_preserve_wincon.py::test_standdown_veto_is_matched_read_only`; the existing interpose
+  cases still fire (unmatched in-test → veto off).
+
+**Remaining:**
 - Escalation code removal (Decision 6) — already gated on a corpus re-check; ADR-0043 marked Deprecated.
+  All six decisions are otherwise built and suite-green.
 
 ## Context
 

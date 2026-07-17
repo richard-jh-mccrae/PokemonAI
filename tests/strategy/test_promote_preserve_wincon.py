@@ -130,6 +130,20 @@ def test_interpose_when_opponent_has_shown_a_gust():
 
 
 @pytest.mark.req("REQ-GEN-0054")
+def test_standdown_veto_is_matched_read_only():
+    # ADR-0064 Decision 4: the interpose/dont-promote stand-down (opp_cannot_punish_wincon) fires ONLY
+    # behind a matched Read. Unmatched → fail-closed (keep interpose — never expose a 3-prize wincon on
+    # a can't-model read); matched + an opponent who can't reach the 330-HP Mega → veto fires.
+    p = _pilot()
+    me = {"active": [None], "bench": _bench(mega_energy=3)}
+    opp = {"active": [{"id": NEUTRAL, "hp": 300, "energies": [1, 1]}], "bench": []}
+    p._incoming_budget = None
+    assert p._opp_cannot_punish_wincon(me, opp) is False          # unmatched → keep interpose
+    p._incoming_budget = {"base_attach": 1, "burst_on_evo": 2}
+    assert p._opp_cannot_punish_wincon(me, opp) is True           # matched + no lethal reach → stand down
+
+
+@pytest.mark.req("REQ-GEN-0054")
 def test_never_interpose_when_opponent_needs_one_prize():
     # HARD VETO: opponent needs a single prize. Even Fire-weak (driver a would fire), interposing a 1-prize
     # body just hands them the win -- lead w/ strongest body (the Mega), which might survive / KO back.
