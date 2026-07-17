@@ -547,6 +547,30 @@ Active it never modelled). Bonus: `use-the-draw-engine-ability` (+18) now fires 
 corrections-aligned. **Suite: 2941 passed, 13 skipped** (the 2 excluded files are a pre-existing
 plotly environment gap, failing identically on the clean tree).
 
+## Round 12 (user, 2026-07-17) — class-generality verification: the system is typed by TARGET
+## CLASS, never "target = Energy"
+
+Verified: the Energy examples were pedagogy, not architecture. Every layer is already
+class-parameterized — the closure graph's edges are typed (`tutor_pokemon` / `tutor_mega` /
+`tutor_trainer` / `supporter_tutor` / recycle's "Pokémon or Basic Energy"; Petrel is the universal
+Trainer hop), the window/prize-split math counts ANY card class, keep-cost is defined over "class
+need met by deadline" for any class, role tiers span all card types, and the correction corpus is
+class-diverse (Riolu/Mega Starmie fetches, Wally's/Boss's keep-value). Rounds 5's classes already
+target non-Energy (evolution-KO = Pokémon; survival = Trainer).
+
+**Amendment that makes it explicit: outcome classes are an ENABLER TAXONOMY, "exactly one enabler
+short," typed per class — each with the same void-if-in-hand rule, det baseline, and legality gate:**
+- **Energy-attach** (built today) — slot-typed, attach-capacity-gated (round 3).
+- **Evolution** (round 5) — eligibility-gated; closure via Ultra Ball / Mega Signal / Hilda / Poké Pad.
+- **Gust** — the KO exists but the real target is BENCHED: drawing Boss's Orders (or closure: Petrel →
+  Boss's) enables it. Gate: my affordable attack ≥ the benched target's HP.
+- **Damage pump** — short by ≤ the boost: `CardStat.damageBoost` with its `damageBoostType`
+  ({F}-only) and `damageBoostVsEx` gates — VERIFIED parsed (provider.py:97-100), so the class
+  never over-credits a type-locked pump.
+- **Switch/heal** (round 5 survival) — Trainer outs, threat-read-gated.
+- **Bench-fill** (anti-donk survival) — bench empty + Active doomed: ANY Basic is an out, and
+  Buddy-Buddy Poffin's destination is the BENCH directly (the closure's destination distinction).
+
 ## Where it plugs in (corrected)
 **Priority:** the Gamble Rung's Outcome Classes (`_gamble_ko_classes`, ADR-0039) — v1 above — then the
 probable-whiff generalization (ADR-0029) and win-odds/lethal reach. **Deferred behind ADR-0064:** any
