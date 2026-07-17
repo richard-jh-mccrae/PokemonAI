@@ -347,6 +347,35 @@ owned by role tier + hard rungs.**
    one tuned seed under the score-diff gate. This is the structural guard against a +76-class
    runaway recurring in the new currency.
 
+**Round 9 (user grill, 2026-07-17) — where base values and deadlines COME FROM: declare identity,
+derive everything else (the Meowth-ex lesson).** The general oracle must stay deck-agnostic while
+deck-genie walks each card; the split follows the existing `ROLES` overlay + `Lines` mechanism and its
+recorded misfire (mega_lucario: a declared `tutor` Role benched the 2-prize Meowth ex; the fix was
+REMOVING the declaration for the general `supporter_tutor` tag — a wrong declared fact is worse than
+none):
+
+1. **Base value = one general tier table** (role → points, tuned under corrections, one currency
+   zone; deck-genie NEVER invents numbers) **× mostly-derived roles**: wincon/line pieces from the
+   declared `Lines` (payoff/path + forward index), engine from Function Tags, energy fit from the
+   deck's attack costs. Deck-genie declares only the sparse identity residue (which lines are the
+   plan; intentional roles the derivation can't see) — what `ROLES` already is.
+2. **Deadlines are never authored** — runtime state, evaluated by a general **gate library** keyed by
+   card class: evolution gate (`evolvesFrom` + Line), quota gate (k-th copy → deadline k−1),
+   recycler gate (discard nonempty), pressure gates (switch/heal ← threat read). The deck data only
+   has to make every card's gate RESOLVE.
+3. **Synergy: derive the majority** (a tutor's held value = the closure-reachable value, recursively
+   free; line adjacency from `Lines`; type fit from costs); **declare the residue** — text-effect
+   synergies (Kyogre's discard-fuel sign flip, hand-size attackers) in one sparse `SYNERGIES` overlay
+   sibling of `ROLES` (`{cards/class, zone, effect, rationale}`). If SYNERGIES grows dense, that is
+   the ADR-0034 fold signal: a general vocabulary term is missing.
+4. **Pipeline**: deck-genie's card walk gains a **Role Sheet** output (derived role confirmed or
+   overridden + gate type + SYNERGIES entries, each grilled against the derivation: "the general
+   layer would say X; overriding because…") → Strategy Proposal (ADR-0046) → `/update-strategy`
+   compiles the overlay → `/deck-align` re-audits as `common/` vocabulary grows (ADR-0036).
+5. **Guardrails**: a CI coverage lint (every `deck.csv` card resolves to a role, derived or declared
+   — no card silently priced at zero, the Scouting-gate pattern); declarations are corrections to the
+   deriver, never a parallel system.
+
 This oracle outgrows this note — when built it earns its own ADR; it is recorded here because the
 grill produced it and the closure supplies its redundancy leg.
 
