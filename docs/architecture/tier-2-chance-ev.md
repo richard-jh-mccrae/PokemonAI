@@ -191,9 +191,19 @@ its own class (no double-count); pre-anchor stays plain (anchored-only sharpenin
 carries `engine_copies` / `engine_windows` / `engine_ids` per class. On-board engines with unused
 abilities remain the sequencing rung's jurisdiction (fire before the refresh, deterministically).
 
-**Still designed, not built:** WP5's remaining classes + shortfall gate (gust / damage-pump /
-survival / bench-fill; `shortfall ≤ 1 + reachable accel attaches` reading the accel clauses), WP6
-(the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the `fetch_closure.py` +
+**WP5 — the enabler taxonomy (built 2026-07-18, test-first):** the gamble rung now prices five
+Outcome Classes, each with the same void-if-in-hand / det-baseline / trace shape and the post-Item
+Supporter supplement — **energy** (WP1), **evolution-KO**, **damage-pump** (`_gamble_pump_ko_classes`:
+short by ≤ one boost, gates mirror `_boost_lethal_tactical`'s attacker-type + defender-{ex}; Premium
+Power Pro Item always-live, Black Belt's Supporter post-Item), **gust** (`_gamble_gust_ko_classes`:
+no direct KO but a benched target reachable — `_gust_best_ko_prizes`; Boss's Orders → supplement),
+and the **bench-fill anti-donk survival** class (`_gamble_survival_classes`: bench empty +
+`active_doomed` = a game loss, any benchable Basic or Poffin's fetch averts it, value KO_SCORE,
+exempt from the keep-value blocker). The `switch`/`heal`-margin survival outs and the accel-aware
+shortfall gate (`shortfall ≤ 1 + reachable accel attaches`) are the remaining WP5 refinements.
+
+**Still designed, not built:** WP5's switch/heal-margin survival outs + the accel shortfall gate,
+WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the `fetch_closure.py` +
 `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.
 
 ## Acceptance — met 2026-07-05

@@ -1562,6 +1562,7 @@ class PlannerMixin:
         classes = classes + self._gamble_pump_ko_classes(obs, board, stat, ma, opp, hp, class_counts, hand)
         classes = classes + self._gamble_gust_ko_classes(obs, board, ma, self._opp_player(obs), hand,
                                                          class_counts)
+        classes = classes + self._gamble_survival_classes(obs, board, me, class_counts, hand)
         if not classes:
             return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
@@ -2029,6 +2030,34 @@ class PlannerMixin:
         return [(sum(counts[b] for b in item_ids), KO_SCORE + best_prizes,
                  "a gust for the benched KO", item_ids,
                  (sum(counts[b] for b in sup_ids), sup_ids))]
+
+    def _gamble_survival_classes(self, obs, board, me, counts: dict, hand: list):
+        """WP5 (survival): the BENCH-FILL anti-donk class — my Active is doomed (opp KOs it next turn,
+        ADR-0064 `active_doomed`) AND my Bench is EMPTY, so a KO of my only Pokémon LOSES the game
+        (no Pokémon in play → you lose). Drawing any benchable Basic — or Poffin, whose bench-fill
+        clause reaches a ≤70-HP Basic still in deck — averts it. Value = KO_SCORE (a game loss
+        averted is ±KO_SCORE-scale by the loss rung's definition; spec §Round 5), so the class is
+        EXEMPT from the keep-value blocker (loss-scale dwarfs any per-card shed). A benchable Basic
+        already in hand voids it (bench it — the deterministic line). Always-live (Basics are
+        Pokémon, Poffin an Item — no Supporter slot). Errs by under-counting."""
+        if not board.active_doomed or any(b for b in (me.get("bench") or [])):
+            return []                                         # not doomed, or a bench body already exists
+
+        def _benchable(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return bool(st and st.is_pokemon and not getattr(st, "evolvesFrom", None))
+        if any(_benchable(c.get("id")) for c in hand):
+            return []                                         # a Basic in hand -> bench it, no gamble
+        out_ids = {cid for cid, n in counts.items() if n > 0 and _benchable(cid)}
+        for tid, n in counts.items():                         # Poffin: a bench-fill fetch reaching a Basic
+            if n > 0 and tid not in out_ids and any(
+                    _benchable(bid) and self._fetch_reaches_pokemon(bid, tid, counts) for bid in counts):
+                out_ids.add(tid)
+        sought = sorted(out_ids)
+        copies = sum(counts[cid] for cid in sought)
+        if copies <= 0:
+            return []
+        return [(copies, KO_SCORE, "a Basic to avoid the donk loss", sought, (0, []))]
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
         """The DETERMINISTIC baseline a gamble must beat: the best tactical already on the menu, or

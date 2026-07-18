@@ -504,3 +504,26 @@ def test_wp5_gust_ko_class():
     walls = {"active": [{"id": 678, "hp": 340}], "bench": [{"id": 678, "hp": 340}]}   # nothing KO-able
     assert ml._gamble_gust_ko_classes(obs, board, ma, walls, [{"id": 1227}], {1182: 2}) == []
     assert ml._gamble_gust_ko_classes(obs, board, ma, reachable, [{"id": 1182}], {1182: 2}) == []
+
+
+@pytest.mark.req("REQ-GAMBLE-0014")
+def test_wp5_bench_fill_anti_donk_survival_class():
+    """WP5 (survival): bench EMPTY + Active doomed = a donk game-loss looms — a KO of my only Pokémon
+    ends the game. Drawing ANY benchable Basic (or Poffin, whose bench-fill clause reaches a ≤70-HP
+    Basic still in deck) averts it; value = KO_SCORE-scale (a loss averted). Voided when a Basic is
+    already in hand (bench it — deterministic), when the bench isn't empty, or when not doomed."""
+    from common.pilot import Board
+    ms = _shipped_pilot("mega_starmie")
+    ma = {"id": 1031, "hp": 40, "energies": []}
+    me = {"active": [ma], "bench": [], "hand": [{"id": 1227}]}
+    doomed = Board(active_doomed=True, my_active_id=1031)
+    counts = {1030: 4, 1086: 4}                           # Staryu (Basic) + Buddy-Buddy Poffin
+    cls = ms._gamble_survival_classes({"current": {}}, doomed, me, counts, [{"id": 1227}])
+    assert cls and cls[0][3] == [1030, 1086]              # the Basic AND the bench-fill Item are outs
+    assert cls[0][1] >= 1000 and cls[0][4] == (0, [])     # loss-scale value, no Supporter supplement
+    # A benchable Basic in hand → bench it (deterministic); bench occupied → no donk; not doomed → safe.
+    assert ms._gamble_survival_classes({"current": {}}, doomed, me, counts, [{"id": 1030}]) == []
+    occupied = {**me, "bench": [{"id": 1030, "hp": 70}]}
+    assert ms._gamble_survival_classes({"current": {}}, doomed, occupied, counts, [{"id": 1227}]) == []
+    safe = Board(active_doomed=False, my_active_id=1031)
+    assert ms._gamble_survival_classes({"current": {}}, safe, me, counts, [{"id": 1227}]) == []

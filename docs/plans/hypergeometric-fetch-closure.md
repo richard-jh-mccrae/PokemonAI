@@ -421,10 +421,16 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       with UNUSED abilities stay the sequencing rung's jurisdiction (`use-the-draw-engine-ability`
       fires them before the refresh deterministically — pricing them inside the gamble would
       double-count the same window).
-- [x] ✅ **WP5** **Evolution-KO class** added to the gamble rung (`_gamble_evolution_ko_classes`: the
-      Active's eligible evolutions' attacks, Energy carried over, Item Pokémon-tutor closure) — BUILT.
-- [ ] **Survival class** (avert the ADR-0064 predicted-loss shape via `switch`/`heal` closure) —
-      KO_SCORE-scale, exempt from the keep-value blocker.
+- [x] ✅ **WP5** The enabler-taxonomy KO family — BUILT 2026-07-18, test-first: **evolution-KO**
+      (`_gamble_evolution_ko_classes`: eligible evolutions, Energy carried over, Item Pokémon-tutor
+      closure), **damage-pump** (`_gamble_pump_ko_classes`: short by ≤ one boost, gates MIRROR
+      `_boost_lethal_tactical` — attacker-type + defender-{ex}; Premium Power Pro Item always-live,
+      Black Belt's Supporter post-Item), **gust** (`_gamble_gust_ko_classes`: no direct KO but a
+      benched target reachable via `_gust_best_ko_prizes`; Boss's Orders → post-Item supplement).
+- [x] ✅ **WP5** **Survival class — bench-fill anti-donk** (`_gamble_survival_classes`): bench empty +
+      `active_doomed` = a game loss; drawing any benchable Basic (or Poffin's bench-fill fetch) averts
+      it, value KO_SCORE, exempt from the keep-value blocker. The `switch`/`heal`-margin outs of the
+      same survival class (heal ≥ incoming, a switch target on a non-empty bench) remain a refinement.
 - [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
       the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).
