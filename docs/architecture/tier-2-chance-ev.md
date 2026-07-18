@@ -134,17 +134,25 @@ Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeome
   representation too (`_fetch_reaches_pokemon` over FETCH clauses): Poké Pad's `no_rule_box` clause
   correctly excludes a Rule-Box Mega ex — the parametric fact the `tutor_pokemon` tag can't carry.
 
-**Fetch-clause tier (WP3, fetch portion built):** the tutor/recycle predicates now live in
-`card_effects.json` as `fetch` clauses (`target` / `zone` / `energy_type` / `no_rule_box` / `hp_max` /
-`no_ability`), authored in `effect_overrides.json` and verified at source — the Round-11 ruling that the
-card representation carries every mechanical need so text is never parsed. **`doctrine_fetch._FETCH_FILTERS`
-(the fifth private-valuation shadow) is RETIRED:** `_search_deck_set` and the whiff/redundancy/
-confirmed-hit signals now read the clauses through one shared predicate (`_fetch_target_matches`), also
-consumed by the gamble closure (`_fetch_reaches_slot` / `_fetch_reaches_pokemon`) — one representation,
-one predicate. The migration sharpened the fetch-sets to exactly what each card can pull (Fighting Gong
-→ Basic-only Pokémon, Poké Pad → no-Rule-Box, Hilda → Evolutions only), a pure precision gain.
+**Clause tier (WP3 — fetch, draw-engine, and accel clauses built):** every fetch/tutor/recycle,
+draw-ENGINE ability, and Trainer/Supporter accel mechanic the 3 agents use now lives in
+`card_effects.json` (ADR-0032), authored in `effect_overrides.json` and verified against engine
+ability/attack text — the Round-11 ruling that the card representation carries every mechanical need so
+text is never parsed.
+- **`fetch` clauses** (`target` / `zone` / `energy_type` / `no_rule_box` / `hp_max` / `no_ability`):
+  **`doctrine_fetch._FETCH_FILTERS` (the fifth private-valuation shadow) is RETIRED** — `_search_deck_set`
+  and the whiff/redundancy/confirmed-hit signals read the clauses through one shared predicate
+  (`_fetch_target_matches`), also consumed by the gamble closure (`_fetch_reaches_slot` /
+  `_fetch_reaches_pokemon`). The migration sharpened the fetch-sets to exactly what each card can pull
+  (Fighting Gong → Basic-only Pokémon, Poké Pad → no-Rule-Box, Hilda → Evolutions only).
+- **`draw` clauses** for the draw-engine abilities (Dudunsparce draw-3-self-shuffle, Drakloak
+  look-2-take-1, Fezandipiti ex / Lunatone / Unfair Stamp conditional) — `amount` + `window` + gating
+  `condition` + self-effect `rider`; the foundation the Stage-2 draw-engine closed form (WP4) reads.
+- **`accel` clauses** for Trainer/Supporter accel (Rosa's discard→Stage-2 prize-behind, Crispin
+  deck→attach) — `amount` / `source` / `target` / `condition`; the foundation WP5's shortfall gate reads.
+  Attack-based accel stays the AttackStat tier per ADR-0064 (Aura Jab already carries `recoverN`).
 
-**Still designed, not built:** WP3 remainder (the draw-engine + accel clauses), WP4
+**Still designed, not built:** the WP3 clause CONSUMERS (WP4 draw-engine Stage-2, WP5 shortfall gate),
 (Stage-2 draw engines — the two-window closed form), WP5's remaining classes (gust / damage-pump /
 survival / bench-fill), WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the
 `fetch_closure.py` + `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.

@@ -1,4 +1,44 @@
 {
+"66": [
+{
+"kind": "draw",
+"amount": 3,
+"condition": "once_per_turn_ability",
+"rider": "shuffle_self_in"
+}
+],
+"120": [
+{
+"kind": "draw",
+"amount": 1,
+"window": 2,
+"condition": "once_per_turn_ability",
+"rider": "other_to_bottom"
+}
+],
+"140": [
+{
+"kind": "draw",
+"amount": 3,
+"condition": "pokemon_ko_last_turn"
+}
+],
+"675": [
+{
+"kind": "draw",
+"amount": 3,
+"condition": "solrock_in_play",
+"rider": "discard_basic_f_energy"
+}
+],
+"1080": [
+{
+"kind": "draw",
+"amount": 5,
+"condition": "pokemon_ko_last_turn",
+"rider": "shuffle_both_hands"
+}
+],
 "1086": [
 {
 "kind": "fetch",
@@ -176,6 +216,15 @@
 "amount": 5
 }
 ],
+"1198": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "deck",
+"target": "any_pokemon",
+"energy": "basic"
+}
+],
 "1199": [
 {
 "kind": "draw",
@@ -291,6 +340,16 @@
 {
 "kind": "draw",
 "amount": 3
+}
+],
+"1240": [
+{
+"kind": "accel",
+"amount": 2,
+"source": "discard",
+"target": "stage2",
+"energy": "basic",
+"condition": "more_prizes_remaining_than_opp"
 }
 ],
 "1241": [

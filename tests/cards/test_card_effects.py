@@ -128,6 +128,33 @@ def test_multi_clause_override_of_one_kind_ships_whole():
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
+    """WP3: the 3 agents' draw-ENGINE abilities and Trainer/Supporter accel carry parametric clauses in
+    the shipped `card_effects.json` (verified against engine ability/attack text) — so the mechanic lives
+    in the representation, never a card-text parse. Pins the load-bearing amount/condition/rider per card."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    # Draw engines (abilities): amount + the gating condition / self-effect rider.
+    assert eff.clauses(66) == ({"kind": "draw", "amount": 3, "condition": "once_per_turn_ability",
+                                "rider": "shuffle_self_in"},)                       # Dudunsparce
+    assert eff.clauses(120)[0] == {"kind": "draw", "amount": 1, "window": 2,        # Drakloak: look 2, take 1
+                                   "condition": "once_per_turn_ability", "rider": "other_to_bottom"}
+    assert eff.clauses(140)[0]["condition"] == "pokemon_ko_last_turn"               # Fezandipiti ex
+    assert eff.clauses(675)[0] == {"kind": "draw", "amount": 3, "condition": "solrock_in_play",
+                                   "rider": "discard_basic_f_energy"}               # Lunatone
+    assert eff.clauses(1080)[0]["amount"] == 5 and eff.clauses(1080)[0]["condition"] == "pokemon_ko_last_turn"
+    # Trainer / Supporter accel: Rosa's discard→Stage-2 (prize-behind gate); Crispin's deck→attach.
+    assert eff.clauses(1240)[0] == {"kind": "accel", "amount": 2, "source": "discard", "target": "stage2",
+                                    "energy": "basic", "condition": "more_prizes_remaining_than_opp"}
+    assert eff.clauses(1198)[0] == {"kind": "accel", "amount": 1, "source": "deck",
+                                    "target": "any_pokemon", "energy": "basic"}
+    # Crispin carries NO fetch clause — a Supporter is slot-dead after a Supporter refresh, so the gamble
+    # energy-closure (which counts any `basic_energy` fetch clause) must not treat it as an out.
+    assert all(c["kind"] != "fetch" for c in eff.clauses(1198))
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
 def test_override_only_card_needs_no_probe():
     ovr = [{"kind": "heal", "amount": 150}]
     assert classify_effect_clauses({}, overrides=ovr) == ovr
