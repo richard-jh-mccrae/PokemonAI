@@ -168,3 +168,55 @@ def test_recovery_class_counts_the_held_burst_energy_copies():
     counts = {17: 3}                                      # three more in the deck
     assert pilot._gamble_burst_copies(counts, hand, stat) == 4   # 3 deck + 1 returned hand copy
     assert pilot._gamble_burst_copies({}, [{"id": 999}], stat) == 0   # nothing discard_eot held
+
+
+@pytest.mark.req("REQ-GAMBLE-0007")
+def test_wp1_fetch_reaches_slot_predicate():
+    """WP1: the interim fetch-closure predicate `_fetch_reaches_slot` — an Item out reaches the
+    missing slot only when its type-lock is compatible AND its target is still in the source zone.
+    Fighting Gong (deck search, {F}-locked) is the canonical trap: its generic `tutor_energy` tag
+    can't see the {F}-lock, so it is a {F} out only, never a {W} out."""
+    ml = _shipped_pilot("mega_lucario")
+    F, W = 6, 3
+    deck = {F: 2, 1142: 4}                                # Fighting basics + Fighting Gong in the deck
+    # Fighting Gong (1142) = ("deck", 6): reaches a {F} slot / a colourless slot; NOT a {W} slot.
+    assert ml._fetch_reaches_slot(F, ("deck", F), deck, set()) is True
+    assert ml._fetch_reaches_slot(None, ("deck", F), deck, set()) is True   # any Basic fills colourless
+    assert ml._fetch_reaches_slot(W, ("deck", F), deck, set()) is False     # {F}-locked ≠ a {W} slot
+    assert ml._fetch_reaches_slot(F, ("deck", F), {1142: 4}, set()) is False   # no {F} Basic left in deck
+    # Recycle (discard zone): reaches iff a matching Basic sits in the VISIBLE discard, no prize split.
+    ms = _shipped_pilot("mega_starmie")
+    assert ms._fetch_reaches_slot(W, ("discard", None), {}, {W}) is True
+    assert ms._fetch_reaches_slot(W, ("discard", None), {}, set()) is False
+
+
+@pytest.mark.req("REQ-GAMBLE-0007")
+def test_wp1_fetch_items_join_the_gamble_ko_class_outs():
+    """WP1: a drawable fetch Item whose target is reachable is a closure out — its deck copies join
+    the class's `copies`/`sought`. The recycle branch (Night Stretcher, a matching Basic ONLY in the
+    discard) makes a class EXIST that the literal-energy-only reading could not (deck has no matching
+    Basic left) — the deck-closure ∪ discard-closure the spec calls for. A held tutor voids the class."""
+    from common.pilot import Board
+    # (a) deck-search closure: Fighting Gong copies added to a Fighting slot's outs.
+    ml = _shipped_pilot("mega_lucario")
+    stat = ml.stats.get(673)                              # Makuhita: attack 977 = {F}{F}, one short at 1
+    board = Board(my_active_id=673, my_active_energy=1)
+    ma = {"id": 673, "hp": 110, "energies": [6]}
+    opp = {"id": 666, "hp": 30, "energies": []}
+    classes = ml._gamble_ko_classes(board, stat, ma, opp, 30, {6: 5, 1142: 4}, [{"id": 1227}], set())
+    assert classes and classes[0][3] == [6, 1142]        # sought = literal {F} Basic (6) ∪ Fighting Gong
+    assert classes[0][0] == 9                             # 5 Basics + 4 Gong copies in the pool
+    # Fighting Gong with NO {F} Basic left in deck cannot fetch anything → not an out, no class.
+    assert ml._gamble_ko_classes(board, stat, ma, opp, 30, {1142: 4}, [{"id": 1227}], set()) == []
+
+    # (b) recycle closure: Night Stretcher makes a class the literal reading can't (Basic only in discard).
+    ms = _shipped_pilot("mega_starmie")
+    st = ms.stats.get(1031)                               # Mega Starmie ex: attack 1487 = {W}, one short at 0
+    b = Board(my_active_id=1031, my_active_energy=0)
+    msa = {"id": 1031, "hp": 330, "energies": []}
+    low = {"id": 666, "hp": 40, "energies": []}
+    recycle = ms._gamble_ko_classes(b, st, msa, low, 40, {1097: 2}, [{"id": 1227}], {3})
+    assert recycle and recycle[0][3] == [1097] and recycle[0][0] == 2   # the class exists VIA the recycler
+    assert ms._gamble_ko_classes(b, st, msa, low, 40, {1097: 2}, [{"id": 1227}], set()) == []  # empty discard
+    # A held Night Stretcher + a matching Basic in discard is a DETERMINISTIC tutor line → class voided.
+    assert ms._gamble_ko_classes(b, st, msa, low, 40, {1097: 2}, [{"id": 1097}], {3}) == []

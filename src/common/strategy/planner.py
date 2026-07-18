@@ -104,6 +104,25 @@ _PLANNER_DECKOUT_TURNS = 3     # "near deck-out" horizon: fire only when they ex
 _RARE_CANDY_ID = 1079         # BUILD 1 (`enabler_item_composer`): Rare Candy (Item, SVI 191) — the Basic→
                               # Stage-2 evolve SKIP. Matched by id (no Function Tag): behaviorally unique,
                               # single card, no other consumer. Card text verified at EN_Card_Data.csv id 1079.
+# ═══ WP1 — Stage-1 fetch-CLOSURE outs for the Gamble Rung (hypergeometric-fetch-closure spec) ══════
+# The interim energy-fetch predicate table (folds into card_effects.json clauses in WP3). Each ITEM
+# that can put a Basic Energy into HAND, verified against card TEXT (data/EN_Card_Data.csv) — NOT bare
+# tags: Fighting Gong's generic `tutor_energy` tag can't see its {F}-lock, so a {W} deck counting Gong
+# as a {W} out would be WRONG (the canonical trap, spec §Refuted 1). A drawn such Item enables the SAME
+# one-short KO (Items are free, playable post-refresh, pre-attach), so its deck copies join the class
+# outs when its target is still reachable. Errs by UNDER-counting only (an endorser; spec §Fail-dir).
+#   zone:  "deck"    — a whole-deck SEARCH; target available iff a matching Basic remains in deck
+#          "discard" — a RECYCLE from the visible discard; target available iff a matching Basic sits
+#                      in the discard pile (deterministic — a visible pool, no prize split)
+#   lock:  an EnergyType code (cg.api.EnergyType) the fetch is restricted to ({F}=6); None = any Basic
+_ENERGY_FETCH_ITEMS = {
+    1119: ("deck", None),      # Energy Search — "Search your deck for a Basic Energy card…"
+    1100: ("deck", None),      # Energy Search Pro — "…any number of Basic Energy cards of different types"
+    1142: ("deck", 6),         # Fighting Gong — "…a Basic {F} Energy card or a Basic {F} Pokémon" ({F}=6)
+    1097: ("discard", None),   # Night Stretcher — "…a Pokémon or a Basic Energy card from your discard pile"
+    1118: ("discard", None),   # Energy Retrieval — "…up to 2 Basic Energy cards from your discard pile"
+    1110: ("discard", None),   # Max Rod — "…Pokémon and Basic Energy cards from your discard pile"
+}
 _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
               "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
@@ -1527,7 +1546,11 @@ class PlannerMixin:
         stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
         if not (hp and stat and ma):
             return None
-        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand)
+        discard_basic_types = {                               # WP1: Basic-Energy types in my visible
+            st.energyType for c in (me.get("discard") or [])  # discard — the recycle closure's source
+            if c and (st := self.stats.get(c.get("id"))) is not None
+            and st.is_basic_energy and st.energyType is not None}
+        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand, discard_basic_types)
         if not classes:
             return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
@@ -1587,14 +1610,47 @@ class PlannerMixin:
             best = max(best, counts.get(cid, 0) + in_hand)
         return best
 
-    def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list):
+    def _fetch_reaches_slot(self, want, spec, counts: dict, discard_basic_types: set) -> bool:
+        """WP1: True iff the Item ``spec`` = ``(zone, lock)`` (from ``_ENERGY_FETCH_ITEMS``) can put a
+        Basic Energy that FILLS the missing slot ``want`` (``None`` = a colourless slot: any Basic)
+        into hand, its target still reachable in the source zone — a whole-deck search (a matching
+        Basic still in ``counts``) or a recycle (a matching Basic type in ``discard_basic_types``, the
+        visible discard). The interim energy-fetch closure predicate; folds into ADR-0032 clauses (WP3)."""
+        zone, lock = spec
+        if lock is not None and want is not None and lock != want:
+            return False                                      # a type-locked fetch can't supply this slot
+
+        def _ok(et) -> bool:
+            if et is None:
+                return False
+            if want is not None and et != want:               # a specific slot needs its exact type
+                return False
+            return lock is None or et == lock                 # a locked fetch only finds its lock type
+
+        if zone == "deck":
+            for cid, n in counts.items():
+                if n <= 0:
+                    continue
+                st = self.stats.get(cid) if self.stats else None
+                if st and st.is_basic_energy and _ok(getattr(st, "energyType", None)):
+                    return True
+            return False
+        return any(_ok(et) for et in discard_basic_types)     # recycle: a matching Basic in the discard
+
+    def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list,
+                           discard_basic_types: set):
         """The KO-enabling **Outcome Classes** of a refresh draw: for each of my Active's attacks
-        exactly ONE Energy short whose damage fells the opponent's Active, the class of draws
-        containing ≥1 Basic Energy that fills the missing slot (its specific type, or any Basic for
-        a colourless slot). Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]``
-        — ``sought_ids`` = the deck card ids that ARE the outs, for the `gamble` telemetry block; an
-        enabler already in HAND voids the class (no gamble needed — attaching it is the
-        deterministic line)."""
+        exactly ONE Energy short whose damage fells the opponent's Active, the class of draws whose
+        entry points ASSEMBLE a Basic Energy filling the missing slot (its specific type, or any Basic
+        for a colourless slot). Entry points = the literal Basic Energy copies PLUS the **fetch-closure
+        outs** (WP1): drawable ``_ENERGY_FETCH_ITEMS`` whose target is still reachable — a whole-deck
+        search Item (Energy Search / Fighting Gong / Energy Search Pro) with a matching Basic still in
+        deck, or a recycle Item (Night Stretcher / Energy Retrieval / Max Rod) with a matching Basic in
+        the visible discard. Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]`` —
+        ``sought_ids`` = the deck card ids that ARE the outs (literal ∪ closure), for the `gamble`
+        telemetry block. An enabler already in HAND — a held Basic OR a held fetch Item that reaches the
+        slot — voids the class (no gamble needed; playing it is the deterministic line). Errs by
+        UNDER-counting the outs only (an endorser: a gamble must never fire on garbage)."""
         out = []
         attached = self._attached_type_counts(ma)
         hand_ids = [c.get("id") for c in hand]
@@ -1622,8 +1678,17 @@ class PlannerMixin:
                 et = getattr(est, "energyType", None)         # colourless slots — under-counted, safe)
                 return (et == want) if want is not None else True
             if any(_enables(cid) for cid in hand_ids):
-                continue                                      # hand already holds the enabler
-            sought = sorted(cid for cid, n in counts.items() if n > 0 and _enables(cid))
+                continue                                      # hand already holds the Basic enabler
+            if any((cid in _ENERGY_FETCH_ITEMS)               # …or a held fetch Item that reaches it:
+                   and self._fetch_reaches_slot(want, _ENERGY_FETCH_ITEMS[cid], counts, discard_basic_types)
+                   for cid in hand_ids):
+                continue                                      # deterministic tutor line — no gamble needed
+            out_ids = {cid for cid, n in counts.items() if n > 0 and _enables(cid)}   # literal Basics
+            for tid, spec in _ENERGY_FETCH_ITEMS.items():     # WP1 closure entry points
+                if counts.get(tid, 0) > 0 and self._fetch_reaches_slot(want, spec, counts,
+                                                                       discard_basic_types):
+                    out_ids.add(tid)
+            sought = sorted(out_ids)
             copies = sum(counts[cid] for cid in sought)
             if copies <= 0:
                 continue
