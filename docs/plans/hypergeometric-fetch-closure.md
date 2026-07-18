@@ -571,6 +571,35 @@ short," typed per class — each with the same void-if-in-hand rule, det baselin
 - **Bench-fill** (anti-donk survival) — bench empty + Active doomed: ANY Basic is an out, and
   Buddy-Buddy Poffin's destination is the BENCH directly (the closure's destination distinction).
 
+## Round 13 (user, 2026-07-17) — the DEVELOPMENT gamble (third family) and the to-gamble threshold
+
+**Not only "one enabler short of KO/survival."** The enabler taxonomy (round 12) lists the KO and
+survival families because their value dwarfs keep-cost; the THIRD family — the **development
+gamble** (refresh/dig to find a plan piece: Cinderace active, empty bench, payable Turbo Flare →
+hunt a Staryu; Solrock leading → complete the Lunar Cycle pair) — is the rounds-5/6 mid-value class,
+unblocked by the replaceability keep-value floor and riding behind it.
+
+**It staples on GENERALLY — deck declares identity, machinery derives the gamble.** The Staryu case
+prices with zero new deck rules: worth = the declared Line base (role `win_condition`, top tier);
+gate = Turbo Flare's accel clause (`target: bench_only`) meeting an empty bench — the deck's engine
+attack is firing blanks, a derivable "recipient needed NOW" signal; exposure = bench-empty as a
+standing loss condition (loss-rung composition); outs = Staryu + Poffin (bench destination) + Ultra
+Ball via the standard closure (illustratively ~65% on a 6-card Lillie's, ~40-card deck, 6-7 outs) —
+× top-tier benefit − dead-hand keep-cost ⇒ "basically always," DERIVED. The Lunatone case is the
+same formula one tier down (SYNERGIES-declared engine pair, half-open gate, engine-tier benefit) ⇒
+"desirable at reasonable odds when the hand is cheap" falls out of tier ordering. Deck-specific
+hypotheses remain only for what derivation can't see; today's `fetch-the-missing-engine-half` deck
+rung is the fold-target precursor of the SYNERGIES declaration.
+
+**The threshold is the EV comparison, never a fixed probability bar:**
+> gamble iff **P(assemble) × benefit − keep-cost(shuffled hand) > best deterministic line on the menu**
+— one currency (rounds 7-8). The bar moves correctly by itself: big benefit → long odds acceptable;
+precious hand → higher bar; rich deterministic option → higher bar; dead hand + stalled board →
+near-zero bar. Only the role-tier values are tuned constants; the hard rungs stay above (never
+gamble past a deterministic KO; famine ordering holds). The graded keep-cost is what makes this
+family safe — without it, "P × moderate benefit" beats a mispriced free shuffle far too often
+(the 83686860-f13 Drakloak-then-Lillie's blunder class).
+
 ## Where it plugs in (corrected)
 **Priority:** the Gamble Rung's Outcome Classes (`_gamble_ko_classes`, ADR-0039) — v1 above — then the
 probable-whiff generalization (ADR-0029) and win-odds/lethal reach. **Deferred behind ADR-0064:** any
