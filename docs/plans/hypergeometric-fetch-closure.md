@@ -387,21 +387,24 @@ for the rest of the match. Seam: a small, bounded first-reveal credit on deck-re
 kept well below a real fetch need so we never dig just to peek (the ADR-0023 over-play risk); at
 minimum, tie-break equal fetch lines toward the one that anchors.
 
-## Grill checklist → build checklist (verdicts as of 2026-07-17)
-- [ ] Outs count **tutor-closure entry points** — FAILS today (`_gamble_ko_classes` literal-only; v1 above).
-- [ ] Closure includes the **recycle/discard branch** — MISSING from code and from the original note.
+## Grill checklist → build checklist (verdicts as of 2026-07-17; ✅ = BUILT 2026-07-18, suite-green)
+- [x] ✅ **WP1** Outs count **tutor-closure entry points** — BUILT (`_ENERGY_FETCH_ITEMS` +
+      `_fetch_reaches_slot`: Item energy-tutors join the class outs, verified against card text).
+- [x] ✅ **WP1** Closure includes the **recycle/discard branch** — BUILT (Night Stretcher / Energy
+      Retrieval / Max Rod, from the visible discard; a class can now EXIST via the recycler alone).
 - [ ] **Hand-expansion** chains modeled — not built (first expansion only, via the Gamble window itself).
-- [ ] **1 Supporter / 1 attach / costs** charged along the chain — spec verified against rules.md §3.
-- [ ] Entry-window × prize-split composition (NOT per-hop draws) — corrected spec, not built.
+- [~] **1 Supporter / 1 attach / costs** charged along the chain — WP1/WP5 scope Items only (the
+      refresh spends the Supporter slot); the Supporter-post-Unfair-Stamp branch is deferred.
+- [x] ✅ **WP2** Entry-window × prize-split composition (NOT per-hop draws) — BUILT (`_prize_split_hit`).
 - [x] **Exact tracker when revealed, hypergeometric on counts** — already the codebase shape
       (`deck_known_counts` / `p_contains` collapse, ADR-0029 §3).
-- [ ] **Pre-anchor gambles NOT stood down** — the `if not deck_known_counts: return None` gate replaced
-      by the prize-split-weighted window sum (design point 4); decklist-known makes it exact closed-form.
+- [x] ✅ **WP2** **Pre-anchor gambles NOT stood down** — BUILT: the `if not deck_known_counts: return
+      None` gate is replaced by the prize-split-weighted window sum (`_prize_split_hit`, ≤ u+1 terms).
 - [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
-- [ ] **Engine depth = board-supported capacity** (eligible pre-evo/engine pairings), not a hardcoded
-      one stage; window-2 outs are the full Stage-1 union, not literal Energy.
-- [ ] **Evolution-KO class** added to `_gamble_ko_classes` (the Active's eligible evolutions' attacks,
-      energy carried over) — a missing KO class, not a non-KO extension.
+- [ ] **WP4** **Engine depth = board-supported capacity** (eligible pre-evo/engine pairings), not a
+      hardcoded one stage; window-2 outs are the full Stage-1 union, not literal Energy.
+- [x] ✅ **WP5** **Evolution-KO class** added to the gamble rung (`_gamble_evolution_ko_classes`: the
+      Active's eligible evolutions' attacks, Energy carried over, Item Pokémon-tutor closure) — BUILT.
 - [ ] **Survival class** (avert the ADR-0064 predicted-loss shape via `switch`/`heal` closure) —
       KO_SCORE-scale, exempt from the keep-value blocker.
 - [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via

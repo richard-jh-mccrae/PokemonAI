@@ -245,3 +245,25 @@ def test_wp2_prize_split_hit_is_the_exact_closed_form():
     assert pilot._prize_split_hit(u, d, k, pool, n) == pytest.approx(expect)
     assert pilot._prize_split_hit(0, 40, 6, 40, 6) == 0.0      # no copies → never hits
     assert pilot._prize_split_hit("x", 40, 6, 40, 6) == 0.0    # garbage → fail closed
+
+
+@pytest.mark.req("REQ-GAMBLE-0009")
+def test_wp5_evolution_ko_gamble_class_prices_drawing_the_evolution():
+    """WP5: the evolution-KO class — a Staryu Active (in play since last turn) that, evolved to Mega
+    Starmie ex, KOs with its carried Energy + one attach. The gamble to DRAW the evolution is priced,
+    its outs = the evolution's copies ∪ the Item Pokémon-tutor closure (Ultra Ball / Mega Signal —
+    Supporter tutors are slot-dead post-refresh). Voided when the evolution is in hand (deterministic
+    evolve-KO), and when the Active was placed THIS turn (rules.md §4: can't evolve a new-in-play body)."""
+    from common.pilot import Board
+    ms = _shipped_pilot("mega_starmie")
+    ma = {"id": 1030, "hp": 70, "energies": [3, 3], "appearThisTurn": False}   # Staryu, 2 {W}, eligible
+    opp = {"id": 666, "hp": 240, "energies": []}
+    board = Board(my_active_id=1030, my_active_energy=2)
+    counts = {1031: 3, 1121: 4, 1145: 2}                  # Mega Starmie ex + Ultra Ball + Mega Signal
+    classes = ms._gamble_evolution_ko_classes({"current": {}}, board, ma, opp, counts, [{"id": 1227}])
+    assert classes and classes[0][3] == [1031, 1121, 1145]   # evolution ∪ Item Pokémon-tutor closure
+    assert classes[0][0] == 9 and "Mega Starmie ex" in classes[0][2]
+    # Placed this turn → ineligible to evolve; evolution in hand → deterministic line, both void it.
+    placed = {**ma, "appearThisTurn": True}
+    assert ms._gamble_evolution_ko_classes({"current": {}}, board, placed, opp, counts, [{"id": 1227}]) == []
+    assert ms._gamble_evolution_ko_classes({"current": {}}, board, ma, opp, counts, [{"id": 1031}]) == []

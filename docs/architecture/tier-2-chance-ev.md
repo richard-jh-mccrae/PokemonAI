@@ -109,6 +109,31 @@ out-card ids, per-option p·EV) or its named stand-down reason on the `@T` stder
 as a dropdown in the blunder shell — so every future closure stage lands observable from day one.
 Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeometric-fetch-closure-build-handoff.md).
 
+**Built (2026-07-18) — the gamble GAIN side, suite-green:**
+- **WP1 — Stage-1 fetch-closure outs** (`_ENERGY_FETCH_ITEMS` + `_fetch_reaches_slot`): a KO class's
+  outs are no longer literal Basic Energy only — a drawable Item that puts a matching Basic into hand
+  (whole-deck search: Energy Search / Fighting Gong {F}-locked / Energy Search Pro; or recycle from
+  the visible discard: Night Stretcher / Energy Retrieval / Max Rod) joins the entry points when its
+  target is reachable. The recycle branch makes a class EXIST that the literal reading could not
+  (deck-closure ∪ discard-closure). Predicates verified against card TEXT, not bare tags (Gong's
+  `tutor_energy` can't see the {F}-lock). Closure out-ids flow into the trace's `sought`.
+- **WP2 — pre-anchor gambles priced** (`_prize_split_hit`): the `if not deck_known_counts: return None`
+  stand-down (which priced every pre-anchor gamble at zero) is replaced by the prize-split-weighted
+  window sum — the decklist is fully known, only the unseen copies' prize assignment is random, so
+  P(assemble) = Σⱼ [C(deck,j)·C(prizes,u−j)/C(deck+prizes,u)] × window(j), ≤ u+1 `comb` terms. The
+  anchored path is byte-for-byte unchanged. The trace records `anchored` + `prizes_hidden`.
+- **WP5 — the evolution-KO class** (`_gamble_evolution_ko_classes`, the spec's highest-value un-built
+  class): where `_gamble_ko_classes` prices only the current Active's attacks, this prices "draw an
+  evolution of my (evolution-eligible) Active → evolve → ITS attack KOs with the carried Energy + one
+  attach" (rules.md §4: evolving keeps Energy, a Mega ex does NOT end the turn). Outs = the evolution's
+  copies ∪ the Item Pokémon-tutor closure (Ultra Ball / Poké Pad / Mega Signal). Voided when the
+  evolution is in hand (the deterministic evolve-KO owns it).
+
+**Still designed, not built:** WP3 (the ADR-0032 clause tier + `_FETCH_FILTERS` migration), WP4
+(Stage-2 draw engines — the two-window closed form), WP5's remaining classes (gust / damage-pump /
+survival / bench-fill), WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the
+`fetch_closure.py` + `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.
+
 ## Acceptance — met 2026-07-05
 
 Lillie's-class fixture flips exactly on the EV comparison (REQ-GAMBLE-0001/0002); suite 1269

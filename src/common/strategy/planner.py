@@ -1570,6 +1570,7 @@ class PlannerMixin:
             if deck_count <= 0 or not class_counts:
                 return stand_down("pre-anchor: deck bookkeeping unresolved")
         classes = self._gamble_ko_classes(board, stat, ma, opp, hp, class_counts, hand, discard_basic_types)
+        classes = classes + self._gamble_evolution_ko_classes(obs, board, ma, opp, class_counts, hand)
         if not classes:
             return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
@@ -1747,6 +1748,51 @@ class PlannerMixin:
                 continue
             label = f"a type-{want} Basic Energy" if want is not None else "any Basic Energy"
             out.append((copies, KO_SCORE + self._prize_value(opp), label, sought))
+        return out
+
+    def _gamble_evolution_ko_classes(self, obs, board, ma, opp, counts: dict, hand: list):
+        """WP5: the **evolution-KO** Outcome Class — the highest-value un-built gamble class. Where
+        ``_gamble_ko_classes`` prices only the CURRENT Active's attacks, this prices "draw an evolution
+        of my (evolution-eligible) Active → evolve it → ITS attack KOs": evolving is legal the same
+        turn (Active in play since last turn — `appearThisTurn` False, rules.md §4 L96; turn ≥ 2 is
+        already gated upstream), keeps the attached Energy (rules.md §4 L98), and a Mega ex does NOT
+        end the turn on evolving (rules.md §4 L103), so the evolved form attacks with the carried Energy
+        plus this turn's one attach. Outs = the evolution's deck copies PLUS the Item Pokémon-tutor
+        closure that fetches it (Ultra Ball / Poké Pad / Mega Signal — Supporter tutors are slot-dead
+        after the refresh, so Items only, mirroring WP1's Stage-1 scope). An evolution already in HAND
+        voids the class (the deterministic evolve-KO owns it, and puts a KO on the menu → the rung
+        stands down upstream). Returns the same 4-tuples; errs by under-counting only."""
+        if ma.get("appearThisTurn"):                          # placed this turn -> can't evolve (§4 L96)
+            return []
+        base = self.stats.get(ma.get("id")) if (self.stats and ma.get("id") is not None) else None
+        if base is None or not getattr(base, "name", None):
+            return []
+        energy = board.my_active_energy + 1                   # carried Energy + this turn's one attach
+        hand_ids = {c.get("id") for c in hand}
+        out = []
+        for eid in set(self.deck):                            # DIRECT evolutions of the Active in my deck
+            st = self.stats.get(eid) if self.stats else None
+            if st is None or getattr(st, "evolvesFrom", None) != base.name:
+                continue
+            if counts.get(eid, 0) <= 0 or eid in hand_ids:    # none left to draw / in hand (deterministic)
+                continue
+            if self._best_affordable_ko_value(obs, board, opp, eid, energy, body=ma) <= 0:
+                continue                                      # the evolved form doesn't reach a KO
+            out_ids = {eid}
+            for tid in set(self.deck):                        # Item Pokémon-tutor closure to this evolution
+                if tid == eid or counts.get(tid, 0) <= 0 or tid in hand_ids:
+                    continue
+                tst = self.stats.get(tid) if self.stats else None
+                if tst is None or not getattr(tst, "is_item", False):
+                    continue                                  # Supporter tutors are slot-dead post-refresh
+                if eid in self._search_deck_set(self.functions.tags(tid) if self.functions else []):
+                    out_ids.add(tid)
+            sought = sorted(out_ids)
+            copies = sum(counts.get(cid, 0) for cid in sought)
+            if copies <= 0:
+                continue
+            out.append((copies, KO_SCORE + self._prize_value(opp),
+                        f"the evolution {st.name}", sought))
         return out
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
