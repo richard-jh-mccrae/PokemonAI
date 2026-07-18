@@ -45,10 +45,14 @@ def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = F
     return base
 
 
-def keep_cost(role_value: float, reaccess_odds: float) -> float:
+def keep_cost(role_value: float, reaccess_odds: float, deadline_odds: float = 1.0) -> float:
     """The cost of shuffling a card away = its role worth × how UN-recoverable it is
-    (``1 − re-access odds``). 0 for a worthless card; capped at the role value (fully
-    irreplaceable). The one primitive behind every keep-value site (spec §Round 8)."""
+    (``1 − re-access odds``) × how realisable its role is by its deadline (``deadline_odds``, the gate
+    library's factor — 1.0 for a card whose role is live, →0 for a dead one such as an undeployable
+    evolution). 0 for a worthless card; capped at the role value (fully irreplaceable, role live). The
+    one primitive behind every keep-value site (spec §Round 8): ``role_value × [P(met | keep) − P(met |
+    shuffle)]`` with ``P(met | keep) = deadline_odds`` and ``P(met | shuffle) = deadline_odds ×
+    reaccess`` — the ``deadline_odds`` factors out."""
     if role_value <= 0:
         return 0.0
-    return role_value * max(0.0, min(1.0, 1.0 - reaccess_odds))
+    return role_value * max(0.0, min(1.0, deadline_odds)) * max(0.0, min(1.0, 1.0 - reaccess_odds))

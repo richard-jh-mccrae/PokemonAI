@@ -2051,7 +2051,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if deck_count <= 0 or not counts:
                 return 0.0
         pool = deck_count + max(0, len(board.hand_ids) - 1)      # the shuffle-grown draw pool
-        return sum(self._keep_cost(hid, counts, pool, draws)
+        return sum(self._keep_cost(hid, counts, pool, draws, board)
                    for hid in board.hand_ids if hid != ctx.card_id)
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:

@@ -236,11 +236,15 @@ def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_a
     and the agent doesn't bury the piece it just found — the fold of the retired `hold-wincon-dont-
     shuffle` guard into the one currency. (A realistic deck so the closure's re-access math is live.)"""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu",
+                                                 name="Mega Lucario ex"),
+                                  STARYU: CardStat(STARYU, hp=70, name="Staryu"),
                                   PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[BASIC] * 40, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    # deck still holds the Staryu base -> the wincon is DEPLOYABLE (the evolution gate keeps its worth).
+    pilot = Pilot(strat, deck=[BASIC] * 39 + [STARYU], general_strategy=GENERAL_STRATEGY,
+                  stats=stats, functions=funcs)
     # hand holds BOTH refresh and win-condition -> shuffling would bury the wincon.
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
@@ -273,13 +277,15 @@ def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
     scores NEGATIVE and the agent takes a board action this turn instead of refilling — the fold of the
     retired `hold-wincon-with-base-dont-shuffle` stack. ep82867148 f52."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu",
+                                                 name="Mega Lucario ex"),
+                                  STARYU: CardStat(STARYU, hp=70, name="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
     pilot = Pilot(strat, deck=[BASIC] * 40, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,          # the Staryu base is benched
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(STARYU)],
                                     hand=[LILLIES, WINC]))
     assert pilot.explain(obs).options[0].score < 0, "a held wincon (base benched) must make refresh negative"
@@ -302,25 +308,38 @@ def test_hold_wincon_is_cheap_to_shuffle_when_the_hand_is_dregs():
     assert pilot.explain(obs).options[0].score > 0, "a dreg hand must still refresh freely"
 
 
-@pytest.mark.req("REQ-GEN-0047")
-def test_hold_wincon_stands_down_when_the_held_wincon_is_undeployable():
-    """The moderate `hold-wincon-dont-shuffle` ALSO stands down when the held win-condition is an
-    UNDEPLOYABLE evolution — no base anywhere (not in play AND not in hand) to evolve it onto — so it's
-    a dead card worth shuffling away to dig for the base, not a piece to hold. ep83966336 f44 (CRITICAL,
-    blunder round 2026-07-05): Mega Lucario ex held with no Riolu in play or hand while the agent ended
-    the turn instead of refilling — `wincon_in_hand_undeployable` now frees the refresh."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+def _undeployable_pilot(base_in_deck: bool):
+    """A held Mega ex (evolves from Staryu) + a Lillie's refresh, on a realistic deck. ``base_in_deck``
+    toggles whether a Staryu (the base) is still reachable — the ONE difference the evolution gate reads.
+    The Staryu stat is always KNOWN to the provider (so `evolvesFrom` resolves to an id); it is only its
+    presence in the DECK that changes."""
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0, name="Lillie's Determination"),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu",
+                                                 name="Mega Lucario ex"),
+                                  STARYU: CardStat(STARYU, hp=70, name="Staryu"),
+                                  PLAINMON: CardStat(PLAINMON, hp=90, name="Plainmon"),
+                                  BASIC: CardStat(BASIC, hp=0, name="Basic Energy")})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
-    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,          # no Staryu in play OR hand:
+    deck = [BASIC] * 39 + ([STARYU] if base_in_deck else [BASIC])
+    pilot = Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,          # no Staryu in play OR hand
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
-                                    hand=[LILLIES, WINC]))                    # the Mega is a dead hand card
-    dec = pilot.explain(obs)
-    fired = _fired(dec.options[0])
-    assert "hold-wincon-dont-shuffle" not in fired                           # the dead wincon is not held
-    assert "hold-wincon-with-base-dont-shuffle" not in fired
-    assert dec.chosen == [0]                                                  # Lillie's refresh, not End
+                                    hand=[LILLIES, WINC]))
+    return pilot.explain(obs).options[0]
+
+
+@pytest.mark.req("REQ-GATE-0001")
+def test_undeployable_wincon_is_cheap_to_shuffle_but_a_deployable_one_is_not():
+    """The evolution gate (ADR-0065 Stage 1), through the real refresh scorer. Same held Mega ex, same
+    hand, same deck size — only its base's reachability differs:
+      * base still in the deck  → the wincon is deployable, `keep_cost` full, refresh RELUCTANT (< 0);
+      * base gone from the deck → the wincon is a DEAD card (`deploy_odds`→0), `keep_cost` collapses, so
+        the refresh is FREE (> 0) — shuffle it away to dig (ep83966336 f44, the retired
+        `wincon_in_hand_undeployable` stand-down, now graded in the one equation).
+    A flat keep-value can't tell these two boards apart — the gate is exactly that discriminator."""
+    deployable = _undeployable_pilot(base_in_deck=True)
+    undeployable = _undeployable_pilot(base_in_deck=False)
+    assert deployable.score < 0, f"a deployable wincon must make the refresh reluctant ({deployable.score:+.1f})"
+    assert undeployable.score > 0, f"a dead (undeployable) wincon must not ({undeployable.score:+.1f})"

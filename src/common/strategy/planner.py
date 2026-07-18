@@ -1608,7 +1608,7 @@ class PlannerMixin:
             keep_ids = list(hand_ids)
             if cid in keep_ids:
                 keep_ids.remove(cid)
-            hand_keep = sum(self._keep_cost(hid, class_counts, pool, max(ns)) for hid in keep_ids)
+            hand_keep = sum(self._keep_cost(hid, class_counts, pool, max(ns), board) for hid in keep_ids)
             for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
                     in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
@@ -1721,19 +1721,47 @@ class PlannerMixin:
             is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
             is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)))
 
-    def _keep_cost(self, cid, counts: dict, pool: int, draws: int) -> float:
-        """WP6: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it is
-        by the deadline — ``role_value × (1 − P(re-draw or re-fetch it in `draws`))`` over the
-        shuffle-grown ``pool`` (+1 out for the shuffled held copy rejoining the deck). The replaceability
-        floor (spec §Round 8): a wincon with its tutors live shuffles cheap, a closure-unreachable one-of
-        near its full role value. 0 for a role-less card."""
+    def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None) -> float:
+        """WP6/WP7: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it
+        is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown ``pool``, +1 out for the
+        shuffled copy) × how realisable its role is by its deadline (`_deploy_odds`, the gate library —
+        ADR-0065 Stage 1: an undeployable evolution collapses to 0, a dead card shed freely). ``board``
+        supplies base presence for the evolution gate; omitted → the deadline factor stays 1.0."""
         role_value = self._role_value(cid)
         if role_value <= 0:
             return 0.0
         from common.card_worth import keep_cost
         from common.deck_odds import draw_hit_probability
         outs = self._card_reaccess_outs(cid, counts) + 1      # +1: the shuffled held copy rejoins deck
-        return keep_cost(role_value, draw_hit_probability(outs, pool, draws))
+        deadline = self._deploy_odds(cid, board, counts) if board is not None else 1.0
+        return keep_cost(role_value, draw_hit_probability(outs, pool, draws), deadline)
+
+    def _deploy_odds(self, cid, board, counts: dict) -> float:
+        """The evolution gate (`common.gate_library`, ADR-0065 Stage 1): P(card ``cid``'s role is
+        realisable by its deadline). 1.0 for a non-evolution or a deployable evolution — a bare base
+        (matched by ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0
+        for a provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
+        (keep): pre-anchor ``counts`` is the unseen deck, so a base still in the decklist keeps its
+        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega Lucario ex
+        with every Riolu evolved/gone)."""
+        from common import gate_library
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not gate_library.is_evolution(st):
+            return 1.0
+        base = getattr(st, "evolvesFrom", None)
+
+        def _named(ids) -> bool:
+            return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
+                       for i in (ids or ()))
+
+        base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
+                         and getattr(s, "name", None) == base
+                         for t, n in (counts or {}).items())
+        return gate_library.deploy_odds(
+            st,
+            base_in_play=_named(getattr(board, "in_play_ids", None)),
+            base_in_hand=_named(getattr(board, "hand_ids", None)),
+            base_reachable_in_deck=base_reach)
 
     def _slot_basic_in_zone(self, want, lock, zone: str, counts: dict, discard_basic_types: set) -> bool:
         """A Basic Energy that FILLS the missing slot ``want`` (``None`` = colourless: any Basic) AND

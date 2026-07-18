@@ -61,14 +61,22 @@ benefit — the anti-speculation / currency-zone discipline says don't. The shad
 already converged; its residue rides with the gate library.
 
 **Staged (designed here, NOT built — each a corpus-gated behavioural flip):**
-- **The gate library + deadlines (Round 9 §2).** Now the identified critical path — both surviving
-  grab/pitch gaps and the retired guards' residue (`hold-successor-when-doomed`, the undeployable-
-  wincon discount) are its jurisdiction, not keep_cost's. Scoped in
-  [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md): `keep_cost = role_value ×
-  [P(need met by deadline | keep) − P(met | shuffle)]`, deadlines derived from existing Board state
-  (evolution / quota / recycler / pressure gates). Recommended first cut: the **evolution gate** + a
-  discard keep-floor (the flagship pair `86091435-68` flips while `83686860-18` still correctly
-  pitches a covered Drakloak — the guard a flat floor can't supply).
+- **The gate library — Stage 1 BUILT 2026-07-18 (evolution gate).** `keep_cost` gains its deadline
+  factor: `keep_cost = role_value × deploy_odds × (1 − reaccess)` — the `[P(met | keep) − P(met |
+  shuffle)]` form with `deploy_odds` = P(the card's role is realisable by its deadline).
+  `common/gate_library.py` owns the odds; `planner._deploy_odds` resolves base presence (the evolution
+  gate: a bare base by `evolvesFrom` name in play / hand / the deck counts). An undeployable evolution
+  (base gone from every zone) collapses to `deploy_odds = 0` → shed freely; everything else stays 1.0.
+  Wired on the two converged keep-value sites (gamble keep-floor, refresh SHED). This restores the
+  retired `hold-wincon-dont-shuffle` `wincon_in_hand_undeployable` stand-down, gradedly, in the one
+  equation — **as a PARAMETER, not a new rung** (the discipline the whole ADR protects). It is a
+  correctness/robustness change: LATENT on the current corpus + pins (pre-anchor the base sits in the
+  unseen deck, so nothing is discounted — it bites only a genuinely dead card), unit- and
+  synthetic-integration-tested (`test_gate_library.py`, `test_undeployable_wincon_is_cheap_to_shuffle_
+  but_a_deployable_one_is_not`), zero regressions.
+  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). Later stages
+  (quota / recycler / pressure gates; the discard-side `86091435-68` which needs a principled discard
+  convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
 - **The held-card-risk tier-2 seam (Round 8 §5)** and **the skill loop** (deck-genie Role Sheet /
   deck-align fold — Round 9 §4). The oracle is the backend; the skill loop is how decks feed it.
 

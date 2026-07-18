@@ -89,3 +89,15 @@ def test_keep_cost_is_role_value_scaled_by_irreplaceability():
     dear = ml._keep_cost(678, gone, pool, draws)
     assert cheap < dear <= ROLE_TIER["win_condition"]
     assert ml._keep_cost(999999, live, pool, draws) == 0.0   # a role-less card is free to shuffle
+
+
+@pytest.mark.req("REQ-WORTH-0001")
+def test_keep_cost_deadline_odds_gates_the_worth():
+    """The gate library's deadline factor (ADR-0065 Stage 1): ``keep_cost`` scales by ``deadline_odds``
+    — 1.0 (default) leaves the closure value unchanged, 0.0 collapses it to nothing (an undeployable
+    evolution is a dead card, free to shuffle), and it factors linearly in between."""
+    from common.card_worth import keep_cost
+    base = keep_cost(30.0, 0.4)                       # deadline_odds defaults to 1.0
+    assert keep_cost(30.0, 0.4, 1.0) == base
+    assert keep_cost(30.0, 0.4, 0.0) == 0.0
+    assert keep_cost(30.0, 0.4, 0.5) == base * 0.5

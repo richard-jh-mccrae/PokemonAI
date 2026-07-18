@@ -1,8 +1,10 @@
 # Scope: the deadline gate library (ADR-0065 §Round 8-9, the deferred leg)
 
-**Status.** Scoped 2026-07-18, NOT built. The recurring residue after the three keep-value
-convergences (gamble WP6, refresh SHED, fetch grab/pitch). Earns its place under ADR-0065; may amend it
-or take its own ADR at build time.
+**Status.** Scoped 2026-07-18. **Stage 1 (evolution gate) BUILT 2026-07-18** — `common/gate_library.py`
++ the `deploy_odds` factor in `card_worth.keep_cost`, wired on the gamble keep-floor and refresh SHED
+(`planner._deploy_odds`). A PARAMETER of the one keep-value equation, not a new rung; latent on the
+current pins (bites only a genuinely dead evolution), unit + synthetic-integration tested, zero
+regressions. Stages 2–4 below remain. Under ADR-0065.
 
 ## The one-line problem
 
@@ -93,9 +95,13 @@ first and cleanest; it modulates the SAME currency, no new constants (currency-z
 
 ## Risk & staging (build order)
 
-1. **Evolution gate only** (open-and-mine spike + covered/closed discount), wired into the NEW discard
-   floor. Smallest surface, the flagship pair `86091435-68` vs `83686860-18` as the gate. Low risk — a new
-   rung, not a ladder rewrite. **Do this first.**
+1. ✅ **Evolution gate — the CLOSED/undeployable discount (BUILT).** As the `deploy_odds` factor of
+   `keep_cost` on the gamble + refresh sites — a held evolution whose base is gone collapses to 0.
+   Landed as an equation parameter (not a rung). NOTE: the deploy-now SPIKE on the *discard* side
+   (`86091435-68`) was deliberately NOT built here — injecting a gate into the un-converged discard
+   ladder means either a flat rung (the regression the currency-zone rule forbids) or a full discard
+   convergence; it waits for the latter (see the grab/pitch finding in ADR-0065). The refresh/gamble
+   discount needs no discard change and carries no such tension.
 2. **Evolution gate into refresh/gamble keep_cost** (the undeployable discount). Re-audit the ADR-0060
    pins + keep pins. Medium risk (touches the converged keep-value sites).
 3. **Pressure gate** — fold `hold-successor-when-doomed`; re-audit ep83037962 f49. Medium.
