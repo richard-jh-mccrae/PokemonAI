@@ -65,12 +65,49 @@ The right choice is EV equality over those classes — board-dependent, not "P >
 
 ## Gap to final (the 30%)
 
-1. **Recovery classes** — the "no {W} but the Ignition came back" branch (EV under-counted today;
-   conservative direction).
+1. **Recovery classes** — BUILT since (the `_gamble_burst_copies` miss-branch redraw term;
+   `test_recovery_class_counts_the_held_burst_energy_copies`).
 2. Multi-class EV across several enabling attacks/refreshes in one menu (today: best single class).
 3. Hand-disruption side-value for Judge-class refreshes (opponent hand unknown — heuristic term).
 4. T0 fallback EV terms for non-MAIN contexts.
-5. Pre-anchor gambles via the ADR-0029 prize-split hypergeometric (today: post-anchor only).
+5. Pre-anchor gambles via the ADR-0029 prize-split hypergeometric — now fully SPECIFIED (below).
+
+## Fetch-chain closure & card worth — the 2026-07-17 grill (designed; observability built)
+
+**Background (the writeup story).** The v1 gamble counts *literal* enabling cards as outs — 4 Water
+Energy in a 30-card deck is a 4-out draw. The owner's insight (2026-07-16): the real outs are the
+**transitive closure** of everything that legally *reaches* the target this turn — tutors (Energy
+Search → any Basic Energy; Fighting Gong → {F} only), recyclers (Energy Retrieval, from the fully
+visible discard), and draw engines (Drakloak's Recon, Dudunsparce's Run Away Draw) — so the naive
+hypergeometric systematically under-prices gambles, and the agent passes on wins it could assemble.
+A 14-round adversarial grill ([hypergeometric-fetch-closure.md](../plans/hypergeometric-fetch-closure.md))
+turned that into a full spec. Its through-line — the finding that ties the whole feature together —
+is that every hardcoded limit examined dissolved into a **derived quantity**: the one-hop limit
+(Items reach Energy at depth 1 *by construction of this card pool*), the exactly-one-short gate
+(→ shortfall ≤ 1 + reachable accel attaches), the exact-tracker requirement (→ the ADR-0029
+prize-split weights the window sum, ≤5 `comb` terms), the engine-recursion cutoff (→ bounded by
+eligible pre-evolutions on the visible board), and the proximity/horizon multipliers (→ deadlines
+priced by the same closure). **Key simplification:** every tutor in this set is a whole-deck search,
+so interior hops are *deterministic given unprized* — P(assemble) = one window hypergeometric on the
+closure's entry points × prize-split factors. No simulation, no sampling, Tier-0 closed-form
+throughout.
+
+**Why it matters for the competition:** the same primitive prices BOTH sides of every shuffle,
+fetch, and discard — the gain side (outs by this turn's deadline) and the cost side (a shuffled
+card's re-access odds by *its* deadline = graded keep-value), unifying four previously-separate
+valuations (fetch grab/pitch, refresh card-swing, gamble keep-floors, the develop-leaf plan credit)
+behind one card-worth oracle. Outcome classes generalize from Energy to an **enabler taxonomy**
+(energy / evolution / gust / damage-pump / switch-heal / bench-fill) plus the **development gamble**
+(hunt a plan piece — the empty-bench Turbo Flare → Staryu case), with the to-gamble bar staying the
+EV comparison, never a fixed probability. Acceptance is the owner's own tagged blunder corpus
+(~70 shuffle/fetch corrections) replayed through the real `decide()`.
+
+**Built already (suite-green):** the three-deck tag-completeness audit (7 boolean lapses fixed, two
+consumers recalibrated — the audit itself demonstrated the calibrated-currency lesson live), and
+**full gamble observability**: the rung emits its complete working (pool, det, classes with sought
+out-card ids, per-option p·EV) or its named stand-down reason on the `@T` stderr record, rendered
+as a dropdown in the blunder shell — so every future closure stage lands observable from day one.
+Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeometric-fetch-closure-build-handoff.md).
 
 ## Acceptance — met 2026-07-05
 
