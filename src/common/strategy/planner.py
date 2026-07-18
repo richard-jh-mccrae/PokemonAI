@@ -1697,39 +1697,29 @@ class PlannerMixin:
             best = max(best, counts.get(cid, 0) + in_hand)
         return best
 
+    def _closure_stat_of(self, cid):
+        return self.stats.get(cid) if (self.stats and cid is not None) else None
+
+    def _closure_clauses_of(self, cid):
+        return self.effects.clauses(cid) if self.effects else ()
+
     def _card_reaccess_outs(self, cid, counts: dict) -> int:
-        """WP6: the copies in my DECK that re-access card ``cid`` once it is shuffled back in — its own
-        deck copies PLUS every deck-search tutor whose FETCH clause reaches it (`_fetch_target_matches`
-        — Ultra Ball a Pokémon, Energy Search an energy, Fighting Gong a {F} Basic, Mega Signal a Mega
-        ex …). The gamble's gain-side closure pointed BACKWARDS: the same predicate, asked "can I get
-        this card back?" A shuffled card lands in the DECK, so only deck re-access counts (no discard).
-        0 for an unknown card. Errs by under-counting (a lower re-access → a higher, safer keep-cost)."""
-        xst = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if xst is None:
-            return 0
-        outs = counts.get(cid, 0)
-        for tid, n in counts.items():
-            if n <= 0 or tid == cid:
-                continue
-            if any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
-                   and self._fetch_target_matches(cl, xst)
-                   for cl in (self.effects.clauses(tid) if self.effects else ())):
-                outs += n
-        return outs
+        """WP6/WP7: the copies in my DECK that re-access card ``cid`` once it is shuffled back in — the
+        `common.fetch_closure` graph pointed BACKWARDS. Delegates to the ONE shared closure module
+        (ADR-0065) so the gamble gain side and the keep-cost read the same implementation."""
+        from common import fetch_closure
+        return fetch_closure.reaccess_outs(cid, counts, self._closure_stat_of, self._closure_clauses_of)
 
     def _role_value(self, cid) -> float:
-        """WP6: card ``cid``'s base worth = the tuned `card_worth.ROLE_TIER` max over its declared /
-        derived Roles (`_roles_of`), with the energy and ACE-SPEC fallbacks for an un-Roled card. The
-        ONE currency zone; the closure supplies the redundancy discount (`_keep_cost`)."""
-        from common.card_worth import ROLE_TIER, ENERGY_TIER, ACE_SPEC_TIER
-        base = max((ROLE_TIER.get(r, 0.0) for r in self._roles_of(cid)), default=0.0)
+        """WP6/WP7: card ``cid``'s base worth = the tuned tier max over its declared / derived Roles
+        (`_roles_of`), with the energy and ACE-SPEC fallbacks. Delegates to `card_worth.role_value`
+        (ADR-0065) — the ONE currency zone; the Pilot only supplies the card facts."""
+        from common.card_worth import role_value
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if base <= 0 and st is not None:
-            if getattr(st, "aceSpec", False):
-                return ACE_SPEC_TIER                          # a one-per-deck, unrecoverable ACE SPEC
-            if getattr(st, "is_typed_basic_energy", False):
-                return ENERGY_TIER
-        return base
+        return role_value(
+            self._roles_of(cid),
+            is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
+            is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)))
 
     def _keep_cost(self, cid, counts: dict, pool: int, draws: int) -> float:
         """WP6: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it is
@@ -1874,18 +1864,12 @@ class PlannerMixin:
                    for cl in (self.effects.clauses(tid) if self.effects else ()))
 
     def _fetch_reaches_pokemon(self, target_id: int, cid: int, counts: dict) -> bool:
-        """WP5: True iff card ``cid``'s ``zone: deck`` **FETCH clauses** can pull the Pokémon
-        ``target_id`` (still in ``counts``) — via the shared `_fetch_target_matches` predicate, so
-        Poké Pad's ``no_rule_box`` never fetches a Rule-Box Mega ex (the parametric fact the generic
-        ``tutor_pokemon`` tag can't carry). The gamble-closure sibling of `_search_deck_set`."""
-        if counts.get(target_id, 0) <= 0:
-            return False
-        tst = self.stats.get(target_id) if self.stats else None
-        if tst is None or not tst.is_pokemon:
-            return False
-        return any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
-                   and self._fetch_target_matches(cl, tst)
-                   for cl in (self.effects.clauses(cid) if self.effects else ()))
+        """WP5/WP7: True iff card ``cid``'s ``zone: deck`` FETCH clauses can pull the Pokémon
+        ``target_id`` (still in ``counts``) — Poké Pad's ``no_rule_box`` never fetches a Rule-Box Mega
+        ex. Delegates to the shared `common.fetch_closure` graph (ADR-0065)."""
+        from common import fetch_closure
+        return fetch_closure.fetch_reaches_pokemon(
+            target_id, cid, counts, self._closure_stat_of, self._closure_clauses_of)
 
     def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list,
                            discard_basic_types: set):

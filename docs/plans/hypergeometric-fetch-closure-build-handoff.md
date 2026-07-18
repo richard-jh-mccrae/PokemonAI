@@ -47,7 +47,7 @@ three-deck tag audit (7 fixes + 2 consumer recalibrations) and full gamble obser
 | WP4 Stage-2 draw engines | **BUILT** — `draw_hit_with_engines` two-window closed form (exact at depth 1) |
 | WP5 Outcome classes | **BUILT** — evolution-KO / gust / pump / survival / bench-fill; each void-if-in-hand + det + legality |
 | WP6 Keep-value replaceability floor | **BUILT** — `common/card_worth.py` tier table; graded `_keep_cost` REPLACES the 3 binary gamble stand-downs; suite-green (2975) |
-| WP7 oracle module + skill loop | designed, NOT built |
+| WP7 oracle module + skill loop | **CORE BUILT** — `common/fetch_closure.py` (graph, extracted) + `common/card_worth.py` (worth backend); Pilot delegates; ADR-0065; role-coverage lint. Value-convergence flips + gate library + skill loop STAGED |
 
 ## Work packages (priority order; each lands separately, suite-green, trace-extended)
 
@@ -117,7 +117,19 @@ ADR-0060 flat prices and the binary hold-* guards' jurisdiction — full family 
 six ADR-0060 corrections + the corpus, per the currency-zone rule. Unblocks the development gamble
 (third family — the empty-bench Turbo-Flare→Staryu case, spec §Round 13) and the mid-value classes.
 
-**WP7 — The card-worth oracle module + skill loop** (spec §Rounds 7-9). `common/fetch_closure.py`
+**WP7 — The card-worth oracle module + skill loop** (spec §Rounds 7-9). **CORE BUILT 2026-07-18**
+(the "one module home" — Round 10 §2; behaviour-preserving, suite-green). `common/fetch_closure.py`
+now owns the tutor/recycle/search GRAPH as pure Pilot-independent functions (`fetch_target_matches`,
+`reaccess_outs`, `fetch_reaches_pokemon`); the Pilot's `_fetch_target_matches` (was on FetchMixin),
+`_card_reaccess_outs` / `_fetch_reaches_pokemon` (PlannerMixin) DELEGATE — the fetch doctrine, the
+gamble gain side, and the keep-cost read ONE implementation. `common/card_worth.py` owns the WORTH
+currency + primitives (`role_value` added; `_role_value` delegates). ADR-0065 earned. Role-coverage
+lint (`tests/strategy/test_role_coverage.py`) pins the Round-9 §5 guard (soundly checkable subset).
+STAGED (each a corpus-gated flip, per "staged like the ADR-0064 five-call-site refactor"): the refresh
+SHED convergence (ADR-0060's flat −8 + `hold-*` guards → `Σ keep_cost`, re-baselines the six
+corrections), the fetch grab/pitch convergence, the gate library + deadlines (no consumer yet — Round
+8 §6 anti-speculation), the held-card-risk tier-2 seam, and the skill loop. Original design:
+`common/fetch_closure.py`
 (typed graph + clause predicates) + `common/card_worth.py` (role tier table — ONE tuned currency —
 gate library, deadlines, keep-cost), extending `deck_odds.py`. Doctrines stay the deciders and
 become consumers (grab/pitch, refresh swing, gamble floors, plan-tier credit — the four shadows

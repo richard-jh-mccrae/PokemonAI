@@ -49,6 +49,28 @@ def test_role_value_reads_the_tuned_tier_table():
 
 
 @pytest.mark.req("REQ-WORTH-0001")
+def test_role_value_pure_function_owns_the_tier_and_fallbacks():
+    """`card_worth.role_value(roles, is_ace_spec, is_typed_basic_energy)` is the Pilot-free worth
+    primitive the Pilot's `_role_value` delegates to (WP7): the tier max over roles, the ACE-SPEC and
+    typed-Basic-Energy fallbacks for an un-Roled card, 0 otherwise — deck-agnostic, zero card facts."""
+    from common.card_worth import role_value, ROLE_TIER, ENERGY_TIER, ACE_SPEC_TIER
+    assert role_value(["win_condition", "accel_source"]) == ROLE_TIER["win_condition"]   # max over roles
+    assert role_value([]) == 0.0
+    assert role_value([], is_typed_basic_energy=True) == ENERGY_TIER
+    assert role_value([], is_ace_spec=True) == ACE_SPEC_TIER
+    assert role_value(["engine"], is_ace_spec=True) == ROLE_TIER["engine"]   # a real role beats fallback
+    assert role_value(["not_a_real_role"]) == 0.0                            # unknown role -> no worth
+    # parity: the Pilot delegator reproduces the pure function on real cards
+    ml = _shipped_pilot("mega_lucario")
+    for cid in (678, 6, 999999):
+        st = ml.stats.get(cid)
+        expect = role_value(ml._roles_of(cid),
+                            is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
+                            is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)))
+        assert ml._role_value(cid) == expect
+
+
+@pytest.mark.req("REQ-WORTH-0001")
 def test_keep_cost_is_role_value_scaled_by_irreplaceability():
     """`keep_cost = role_value × (1 − re-access odds)` over the shuffle-grown pool (+1 for the shuffled
     held copy rejoining the deck). The SAME wincon costs almost nothing to shuffle with its tutors live

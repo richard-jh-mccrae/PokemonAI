@@ -224,9 +224,18 @@ re-accessible plan piece and only stands down when it is closure-unreachable. Th
 re-audit (ADR-0060's other jurisdiction) rides into WP7's oracle fold. Gated `test_card_worth.py`
 (3) + the WP6 gamble unblock test; strategy/blunder/agents re-audit = no flips.
 
-**Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks),
-WP7 (the `fetch_closure.py` + `card_worth.py` oracle cluster + skill loop, incl. the ADR-0060
-refresh-swing SHED replacement), and the correction-seeded corpus.
+**WP7 — the card-worth oracle module, core built (2026-07-18, ADR-0065):** the "one module home" seam
+is in. `common/fetch_closure.py` owns the tutor/recycle/search graph as pure functions
+(`fetch_target_matches` / `reaccess_outs` / `fetch_reaches_pokemon`); the Pilot's closure methods
+delegate, so the fetch doctrine, the gamble gain side, and the keep-cost read ONE implementation.
+`common/card_worth.py` owns the worth currency + `role_value` / `keep_cost` primitives (the Pilot
+delegates). Behaviour-preserving; the four-shadow value CONVERGENCE (refresh SHED → `Σ keep_cost`,
+grab/pitch re-point, plan-tier credit) is staged, each a corpus-gated flip under the score-diff gate.
+
+**Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks), the WP7
+value-convergence flips (incl. the ADR-0060 refresh-swing SHED replacement), the gate library +
+deadlines (no consumer yet), the held-card-risk tier-2 seam, the skill loop (deck-genie Role Sheet /
+deck-align fold), and the correction-seeded corpus.
 
 ## Acceptance — met 2026-07-05
 

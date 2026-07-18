@@ -147,37 +147,12 @@ class FetchMixin:
                    for c in fetch_set)
 
     def _fetch_target_matches(self, clause: dict, stat) -> bool:
-        """True iff a card with ``stat`` matches a FETCH clause's target class (`card_effects.json`,
-        ADR-0032) — the ONE predicate that REPLACES the tag-keyed `_FETCH_FILTERS`, shared by the
-        doctrine's `_search_deck_set` and the gamble closure (`planner._fetch_reaches_pokemon`).
-        Targets: basic_energy / energy (± ``energy_type`` lock) · mega (Mega ex) · evolution
-        (``evolvesFrom`` set, ± ``no_ability``) · pokemon / basic_pokemon (± ``no_rule_box``, ``hp_max``).
-        NOTE: ``energy_type`` on a POKÉMON target (Fighting Gong's "Basic {F} Pokémon") is NOT resolvable
-        from CardStat (no Pokémon-type field), so it is applied only to ENERGY targets — a Pokémon target
-        over-includes on type (fail-open; never false-suppresses a whiff; exact for a mono-type deck)."""
-        if stat is None:
-            return False
-        target = clause.get("target")
-        etype = clause.get("energy_type")
-        if target == "basic_energy":
-            return stat.is_basic_energy and (etype is None or getattr(stat, "energyType", None) == etype)
-        if target == "energy":
-            return stat.is_energy and (etype is None or getattr(stat, "energyType", None) == etype)
-        if target == "mega":
-            return bool(getattr(stat, "megaEx", False))
-        if target == "evolution":
-            return (bool(getattr(stat, "evolvesFrom", None))
-                    and (not clause.get("no_ability") or not getattr(stat, "hasAbility", False)))
-        if target in ("pokemon", "basic_pokemon"):
-            if not stat.is_pokemon:
-                return False
-            if target == "basic_pokemon" and getattr(stat, "evolvesFrom", None):
-                return False
-            if clause.get("no_rule_box") and getattr(stat, "is_ex_body", False):
-                return False
-            hp_max = clause.get("hp_max")
-            return hp_max is None or getattr(stat, "hp", 0) <= hp_max
-        return False
+        """True iff a card with ``stat`` matches a FETCH clause's target class — the ONE predicate that
+        REPLACED the tag-keyed `_FETCH_FILTERS`, shared by the doctrine's `_search_deck_set` and the
+        gamble closure. Delegates to `common.fetch_closure` (WP7, ADR-0065) so the whole graph — this
+        doctrine, the planner gamble outs, the card-worth keep-cost — reads ONE implementation."""
+        from common import fetch_closure
+        return fetch_closure.fetch_target_matches(clause, stat)
 
     def _search_deck_set(self, cid) -> set:
         """The set of deck card ids the search/tutor ``cid`` can pull OUT of the deck — the POKÉMON

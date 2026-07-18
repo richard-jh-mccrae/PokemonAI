@@ -30,6 +30,21 @@ ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the 
 ACE_SPEC_TIER = 25.0              # a one-per-deck, unrecoverable ACE SPEC — high floor, closure-discounted
 
 
+def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = False) -> float:
+    """A card's BASE worth = the tuned `ROLE_TIER` max over its declared / derived ``roles``, with the
+    ACE-SPEC and typed-Basic-Energy fallbacks for a card a deck leaves un-Roled (WP7, ADR-0065). The
+    ONE currency zone; deck-genie never invents numbers, the closure supplies the redundancy discount
+    (`keep_cost`). 0 for a role-less non-energy, non-ACE-SPEC card (priced by tag/CardStat rules, not
+    the worth oracle). Pure over card FACTS — the Pilot supplies ``roles`` / the two flags."""
+    base = max((ROLE_TIER.get(r, 0.0) for r in roles), default=0.0)
+    if base <= 0:
+        if is_ace_spec:
+            return ACE_SPEC_TIER                  # a one-per-deck, unrecoverable ACE SPEC
+        if is_typed_basic_energy:
+            return ENERGY_TIER
+    return base
+
+
 def keep_cost(role_value: float, reaccess_odds: float) -> float:
     """The cost of shuffling a card away = its role worth × how UN-recoverable it is
     (``1 − re-access odds``). 0 for a worthless card; capped at the role value (fully

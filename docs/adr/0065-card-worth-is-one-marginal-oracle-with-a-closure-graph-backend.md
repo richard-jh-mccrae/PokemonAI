@@ -1,0 +1,109 @@
+# ADR-0065: Card worth is one marginal oracle with a closure-graph backend
+
+**Status.** Accepted (grilled 2026-07-17 across Rounds 7–9 of
+[`docs/plans/hypergeometric-fetch-closure.md`](../plans/hypergeometric-fetch-closure.md)) and
+**BUILT 2026-07-18 — the module seam (WP7 structural core), suite-green (2975+).** The four-shadow
+value convergence is STAGED (see §Build status): the gamble keep-floor (WP6) already consumes the
+oracle; the refresh SHED, the fetch grab/pitch, and the plan-tier credit each land under the
+correction corpus + score-diff gate, "staged like the ADR-0064 five-call-site refactor." Amends
+ADR-0060 (its flat SHED / `hold-*` guard jurisdiction folds into the oracle when that flip lands);
+builds on ADR-0023 (the shared fetch comparator) and ADR-0032 (Effect-Clause tier).
+
+## Build status
+
+**Landed and suite-green (the "one module home" — Round 10 §2):**
+- **`src/common/fetch_closure.py`** — the tutor / recycle / search GRAPH and its clause predicates,
+  lifted out of the Pilot into pure, Pilot-independent functions over the card REPRESENTATION only
+  (`card_effects.json` FETCH clauses + `CardStat`, never a text parse — the Round-11 ruling):
+  `fetch_target_matches(clause, stat)`, `reaccess_outs(cid, counts, stat_of, clauses_of)`,
+  `fetch_reaches_pokemon(target, cid, counts, stat_of, clauses_of)`. The Pilot's
+  `_fetch_target_matches` (was on `FetchMixin`), `_card_reaccess_outs` / `_fetch_reaches_pokemon`
+  (on `PlannerMixin`) now DELEGATE — one implementation, read by the fetch doctrine, the gamble
+  gain side, and the keep-cost by construction. Behaviour-preserving; pinned by
+  `tests/strategy/test_fetch_closure.py` (parity against the ground-truth Pilot methods over the
+  real decks).
+- **`src/common/card_worth.py`** — the WORTH backend: the ONE tuned currency (`ROLE_TIER` /
+  `ENERGY_TIER` / `ACE_SPEC_TIER`), the `role_value(roles, is_ace_spec, is_typed_basic_energy)`
+  primitive (the Pilot's `_role_value` delegates), and the `keep_cost(role_value, reaccess_odds)`
+  primitive. The Pilot supplies card facts; the module owns the numbers.
+- **The gamble keep-floor consumes it (WP6):** `planner._keep_cost = role_value × (1 − re-access
+  odds)`, the closure pointed backwards, replacing the binary protected-hand veto.
+- **The coverage lint (Round 9 §5):** `tests/strategy/test_role_coverage.py` — no card silently
+  priced at zero from a typo (every declared role is known vocabulary; every ROLES key is a real
+  deck card; every worth-roled card prices positive).
+
+**Staged (designed here, NOT built — each a corpus-gated behavioural flip):**
+- **The refresh SHED convergence.** `pilot._refresh_swing_tactical` still prices the shed side flat
+  (`_REFRESH_SHED = 8` per held card) with the `hold-wincon` / `hold-line-piece` /
+  `hold-irreplaceable-tool` guards as its only hand-QUALITY proxy (ADR-0060's explicitly-parked
+  seam). Replacing that flat term + those guards with `Σ keep_cost` is the same move WP6 made for the
+  gamble — but it re-baselines the six ADR-0060 corrections (ml f111, ms f60/f94/f45/f100/f64) and
+  needs the correction corpus built first. `ENERGY_TIER = 8` is deliberately the flat-shed anchor so
+  the convergence starts calibrated.
+- **The fetch grab/pitch convergence.** `doctrine_fetch._grab_value_of` / `_pitch_value_of` /
+  `_shed_signals` stay Hypothesis-rung sums today; re-pointing them at `role_value` + the closure
+  is the round-7 four-shadow collapse, staged under the discard-pair / fetch-target corpus families.
+- **The gate library + deadlines (Round 9 §2).** Deferred deliberately: with no consumer beyond the
+  gamble's fixed-window keep-cost, a gate library would be speculative machinery (Round 8 §6). It
+  lands with the mid-value classes that read it.
+- **The held-card-risk tier-2 seam (Round 8 §5)** and **the skill loop** (deck-genie Role Sheet /
+  deck-align fold — Round 9 §4). The oracle is the backend; the skill loop is how decks feed it.
+
+## Context
+
+Round 7 (user grill, source-checked): "what a card is worth" is ONE marginal quantity, and the repo
+carried FOUR disjoint shadows of it that disagreed by construction — the fetch grab/pitch comparator,
+the refresh card-swing (ADR-0060), the gamble keep-floor, and the develop-leaf plan credit. Each had
+its own private valuation; a Mega Lucario ex was worth one thing to the fetch doctrine and another to
+the refresh scorer. The codebase already proved the one-oracle pattern locally (ADR-0023's shared
+fetch comparator, ADR-0052's KO oracle); worth had simply never been consolidated.
+
+Rounds 8–9 produced the closed form. Two results made it BUILDABLE without a taste model:
+
+1. **Keep-cost is the closure pointed backwards.** The cost of shuffling a card away is
+   `role value × (1 − P(re-access it by its deadline))` — the SAME window-hypergeometric-over-closure
+   primitive the gamble uses for its GAIN side, run in reverse. Redundancy and proximity both live
+   inside the one closure query; proximity is the deadline PARAMETER of the re-access probability, not
+   a multiplier (the live-now ×1.0 / next-turn ×0.7 table was refuted before it was built).
+2. **The horizon discipline guard.** The oracle prices ONLY the positional band. Match-deciding cards
+   are the hard rungs' jurisdiction (lethal solver / loss rung / win rung at KO_SCORE scale, which
+   outrank leaf math by construction); worth-to-the-match enters through role TIER alone — bounded,
+   already encoded. No match-importance multiplier, no blanket γ. This is the structural guard
+   against a +76-class runaway (ADR-0060's first cut) recurring in the new currency: enumerate the
+   computable risks (stripped, gate-closes), never a fudge factor.
+
+## Decision
+
+**One module cluster is the value BACKEND; the doctrines stay the DECIDERS.** `fetch_closure.py` owns
+the graph, `card_worth.py` owns the currency + primitives, `deck_odds.py` keeps the window/prize-split
+math. `doctrine_fetch` / `doctrine_shuffle_refresh` / the gamble rung keep owning WHEN-to-decide
+(rungs, gates, telemetry) and become CONSUMERS of the shared backend. The four-shadow disagreement
+dies by construction — not because a doctrine was deprecated, but because they all read the same
+`role_value` and the same closure.
+
+**Base value = one general tier table × mostly-derived roles** (Round 9). Roles derive first
+(`_roles_of`: accel_source from the attack representation; the deck confirms/overrides), deck-genie
+declares only the sparse identity residue — never invents numbers. The energy / ACE-SPEC fallbacks
+cover the un-Roled mid cards. The currency-zone rule (ADR-0060's +76 lesson) governs every future
+convergence: a graded term REPLACES its guard family and re-audits it, never bolts on beside it.
+
+### Consequences
+
+- The extraction is behaviour-preserving: the gamble, fetch, and blunder suites are unchanged
+  (1160 + 27 pinned green). The seam is the deliverable; the flips are the follow-on work.
+- Every future value consumer has ONE place to call and ONE currency to argue about under the
+  score-diff gate — the four private valuations can no longer drift apart.
+- The `no_rule_box` / `energy_type` / `evolvesFrom` parametric facts stay in `card_effects.json`
+  clauses read by `fetch_target_matches`; the closure is a representation query, never a text parse.
+
+## Alternatives rejected
+
+- **Converge all four shadows at once.** Big-bang re-baselines every calibrated consumer in one
+  step; the round-11 gotcha ("accurate data flips calibrated consumers") and ADR-0060's +76 incident
+  both argue for staging each flip under its correction family + the score-diff gate.
+- **A proximity multiplier / match-importance γ.** Refuted in Round 8: the same card at the same
+  proximity has opposite costs depending on the closure, and a blanket γ is exactly the +76 runaway
+  shape. Deadlines and the role tier carry it instead.
+- **Keep the closure on the Pilot mixin.** It already unified `_fetch_target_matches` cross-mixin,
+  but left the graph un-testable in isolation and un-callable by a non-Pilot consumer (the worth
+  backend). A pure module is the ADR-0052 one-oracle shape.
