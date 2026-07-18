@@ -600,6 +600,25 @@ gamble past a deterministic KO; famine ordering holds). The graded keep-cost is 
 family safe — without it, "P × moderate benefit" beats a mispriced free shuffle far too often
 (the 83686860-f13 Drakloak-then-Lillie's blunder class).
 
+## Round 14 (user, 2026-07-17) — gamble observability: BUILT, suite-green
+
+**The gamble rung now emits its full working to stderr, and the blunder shell shows it as a
+dropdown.** `_best_gamble_line` records `self._gamble_trace` — either the complete pricing (pool,
+det baseline, burst copies, every outcome class with its **sought out-card ids**, per-option
+p·EV rows, the committed best) or the exact **stand-down reason** (feature off / turn 1 / attach
+spent / active already KOs / KO on menu / each protected-hand gate separately / pre-anchor / no
+one-short class). Never recorded mid-sim (engine re-runs can't clobber the live trace); cleared per
+plan fingerprint. It rides `Decision.gamble` → the sparse `"gamble"` key of the `@T` stderr record
+(`telemetry.to_record`, ADR-0019) → joins each frame's `live_trace` in the tagging shell → a
+`<details>` dropdown: "🎲 gamble: priced — fired/declined · det · pool" with the classes (cards
+sought) and per-option pricing, or "🎲 gamble: stood down — <why>". A shuffle-in / Ultra-Ball
+correction can now target the real defect (outs undercounted? det wrong? a gate too eager?) and
+/blunder-buster reads the same record from the correction's `live_trace`. Pinned by
+`test_gamble.py` (trace on fire: classes+sought+p ranges+wire record; exact stand-down dicts for
+pre-anchor and feature-off). Suite 2940 passed. As the Stage-1/2 closure and the new outcome
+classes land, they extend THIS trace (closure outs appear in `sought`; new classes appear in
+`classes`) — observability is now a build invariant, not an afterthought.
+
 ## Where it plugs in (corrected)
 **Priority:** the Gamble Rung's Outcome Classes (`_gamble_ko_classes`, ADR-0039) — v1 above — then the
 probable-whiff generalization (ADR-0029) and win-odds/lethal reach. **Deferred behind ADR-0064:** any

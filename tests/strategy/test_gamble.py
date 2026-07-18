@@ -75,6 +75,15 @@ def test_the_lillies_gamble_commits_when_ev_beats_the_banked_line():
     assert decision.planned is not None and decision.planned.goal == "gamble"
     assert decision.chosen == [0]                        # Lillie's first — the gamble, not the bank
     assert "gamble:" in decision.planned.rationale and "KO" in decision.planned.rationale
+    # The full working rides the Decision (sparse `gamble` telemetry, ADR-0019): classes with the
+    # SOUGHT out-card ids, per-option p·EV rows, the det baseline, and the committed best.
+    tr = decision.gamble
+    assert tr is not None and tr["considered"] is True and tr["best"] is not None
+    assert tr["classes"] and all(c["sought"] and c["copies"] > 0 for c in tr["classes"])
+    assert tr["evals"] and all(0.0 <= e["p"] <= 1.0 for e in tr["evals"])
+    from common import telemetry
+    rec = telemetry.to_record(decision)
+    assert rec["gamble"]["considered"] is True           # the wire record carries it to stderr
 
 
 @pytest.mark.req("REQ-GAMBLE-0002")
@@ -94,11 +103,16 @@ def test_the_gamble_stands_down_pre_anchor_and_when_switched_off():
     pilot = _shipped_pilot()
     decision = pilot.explain(_gamble_obs(opp_hp=230, with_prizes=False))
     assert decision.planned is None or decision.planned.goal != "gamble"
+    if decision.planned is None:                         # the rung was reached: it must SAY why it
+        assert decision.gamble == {"considered": False,  # declined (the blunder-shell dropdown for
+                                   "why": "pre-anchor: no exact deck counts"}   # "should have gambled")
     pilot2 = _shipped_pilot()
     pilot2.gamble_lines = False
     pilot2._turn_plan = None
     decision2 = pilot2.explain(_gamble_obs(opp_hp=230))
     assert decision2.planned is None or decision2.planned.goal != "gamble"
+    if decision2.planned is None:
+        assert decision2.gamble == {"considered": False, "why": "feature off (gamble_lines)"}
 
 
 @pytest.mark.req("REQ-GAMBLE-0005")
