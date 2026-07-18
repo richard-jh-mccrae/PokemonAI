@@ -121,3 +121,33 @@ def test_parse_attack_hand_size(text, expected):
 ])
 def test_parse_attack_ignores_active_effects(text, expected):
     assert parse_attack_ignores_active_effects(text) == expected
+
+
+@pytest.mark.req("REQ-ACCEL-0001")
+@pytest.mark.parametrize("text,expected", [
+    # DISCARD-source family (the recover riders) — unchanged, now with source="discard".
+    ("Attach up to 3 Basic {F} Energy cards from your discard pile to your Benched Pokémon in any "
+     "way you like.", (3, 6, "bench", "discard")),                       # Aura Jab
+    ("Attach a Basic {W} Energy card from your discard pile to this Pokémon.",
+     (1, 3, "self", "discard")),                                         # Regi Charge shape
+    # DECK-source family (the search-attach accel — NEW): Turbo Flare, Kaguras, Energy Gift.
+    ("Search your deck for up to 3 Basic Energy cards and attach them to your Benched Pokémon in "
+     "any way you like. Then, shuffle your deck.", (3, None, "bench", "deck")),   # Turbo Flare
+    ("Search your deck for a Basic {F} Energy card and attach it to 1 of your Pokémon. Then, "
+     "shuffle your deck.", (1, 6, "any", "deck")),                       # Rock Kagura
+    ("Search your deck for a Basic {M} Energy card and attach it to this Pokémon. Then, shuffle "
+     "your deck.", (1, 8, "self", "deck")),                              # Steel Armament
+    # Deliberately UNPARSED (an endorser under-counts, never over-credits):
+    ("Flip 3 coins. For each heads, search your deck for up to 2 Basic Energy cards and attach "
+     "them to your Pokémon in any way you like. Then, shuffle your deck.", None),  # coin-gated
+    ("Search your deck for up to 2 Basic Energy cards and attach them to your Future Pokémon in "
+     "any way you like. Then, shuffle your deck.", None),                # scope-locked target
+    ("Search your deck for up to 2 Basic {G} Energy cards and up to 2 Basic {L} Energy cards and "
+     "attach them to your Pokémon in any way you like. Then, shuffle your deck.", None),  # twin clause
+    ("Search your deck for a Basic Energy card, reveal it, and put it into your hand. Then, "
+     "shuffle your deck.", None),                                        # to HAND, not an attach
+    ("", None),
+])
+def test_parse_attack_energy_recover_both_zones(text, expected):
+    from common.scouting.card_text import parse_attack_energy_recover
+    assert parse_attack_energy_recover(text) == expected

@@ -152,6 +152,21 @@ text is never parsed.
   deck→attach) — `amount` / `source` / `target` / `condition`; the foundation WP5's shortfall gate reads.
   Attack-based accel stays the AttackStat tier per ADR-0064 (Aura Jab already carries `recoverN`).
 
+**Deck-source attack accel — the Turbo Flare family (built 2026-07-18, derivation-first):**
+`AttackStat.recoverSource` ("discard" | "deck") widens the recover-rider family to the 14 deck-source
+search-attach attacks (Turbo Flare, the Kaguras, Energy Gift; coin-gated and scope-locked variants
+deliberately unmatched — an endorser under-counts). The Tactical development credit
+(`_recover_units`) branches its fuel bound by zone: visible discard (Aura Jab) vs deck fuel
+(tracker-exact once anchored, else the sound pigeonhole floor `unseen − hidden prizes`), keeping the
+need gate — Turbo Flare on an empty bench credits 0 ("firing blanks"), with a benched line pre-evo it
+credits the full min(3, fuel, need) ≈ +225, the same scale that tips Aura Jab. The bench-accelerator
+body is now DERIVED from that attack fact (`_derived_accel_body_ids` → `_roles_of` injects
+`accel_source`, `accel_recipient_missing` unions it), so the whole accel rung family
+(open-the-accelerator, develop-the-accel-recipient, feed-the-accelerator, promote) fires for a NEW
+Cinderace deck with zero deck rules — mega_starmie's hand-declared Role becomes the confirm, exactly
+the Round-9 derive-then-declare shape. For the existing agents the union is a proven no-op (both
+already declare it; suite unflipped).
+
 **Still designed, not built:** the WP3 clause CONSUMERS (WP4 draw-engine Stage-2, WP5 shortfall gate),
 (Stage-2 draw engines — the two-window closed form), WP5's remaining classes (gust / damage-pump /
 survival / bench-fill), WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the

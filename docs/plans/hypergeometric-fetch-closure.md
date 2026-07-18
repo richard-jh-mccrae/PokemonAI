@@ -540,8 +540,14 @@ attached; NO fetch clause — slot-dead Supporter), 1219 (any Trainer), 1225 (ev
 (look-2-take-1), 140/675 (conditional), 1080 (5, post-KO gate); accel clauses for 1240
 (discard→Stage-2, prize-behind); coin 1120; energy_provide 17 ({C}{C}{C}-on-Evolution). **Attack-based
 accel (666/678) stays the AttackStat tier** (ADR-0064 integrity): 678 Aura Jab already carries
-`recoverN`; 965 Turbo Flare (deck-source) is the noted AttackStat gap. **Consumers are WP4/WP5** (the
-draw/accel clauses are additive and inert to today's kind-filtered readers).
+`recoverN`; 965 Turbo Flare's deck-source variant — CLOSED 2026-07-18: `AttackStat.recoverSource`
+("discard"/"deck") + the `_DECK_ACCEL_RE` parser (14 deck-source attacks incl. the Kaguras; coin/scope
+variants safely unmatched), the Tactical `_recover_units` fuel bound branching by zone (deck fuel =
+tracker-exact, else the sound pigeonhole floor), and the bench-accelerator DERIVED from the attack fact
+(`_derived_accel_body_ids` → `_roles_of` injects `accel_source`, `accel_recipient_missing` unions it) —
+so a NEW deck fielding Cinderace gets the whole bench-fill/accel rung family with no Role declaration
+(the Round-9 shape: the declaration is the confirm, never a parallel system). **Consumers of the
+draw/accel CLAUSES are WP4/WP5** (still additive and inert to today's kind-filtered readers).
 
 **The consumer recalibration (the round-7 currency-zone warning, live).** Three pinned tests flipped
 — each because a consumer was calibrated against the INCOMPLETE data: (1) `_is_draw_engine_body`

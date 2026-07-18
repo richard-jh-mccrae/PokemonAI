@@ -272,3 +272,78 @@ def test_real_pilot_plays_bosss_orders_to_reach_a_benched_ko():
     p = _gust_pilot()
     assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
     assert p.decide(obs) == [1]
+
+
+# --- GENERAL: the deck-source accel rider (Turbo Flare) is DERIVED, not declared ---------------
+# hypergeometric-fetch-closure follow-up 2026-07-18: the attack fact lives in AttackStat
+# (recoverSource="deck"), the Tactical credit and the accel rung family derive from it — the
+# `accel_source` Role declaration becomes the confirm, so a NEW deck fielding Cinderace as its
+# starter/accelerator gets the whole bench-fill machinery with no deck rules.
+
+def _shipped():
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from train.tune import _build_pilot
+    return _build_pilot("mega_starmie")[0]
+
+
+@pytest.mark.req("REQ-ACCEL-0002")
+def test_turbo_flare_rider_is_in_the_attack_stat_and_derives_the_accel_body():
+    """The shipped provider parses Turbo Flare (965) as a deck-source bench accel — and Cinderace
+    joins the DERIVED bench-accelerator set from that attack fact alone (the Role declaration is
+    now the confirm, not the source of truth)."""
+    sp = _shipped()
+    st = sp._attack_stat(965)
+    assert (st.recoverN, st.recoverEnergyType, st.recoverTarget, st.recoverSource) == (
+        3, None, "bench", "deck")
+    assert sp._derived_accel_body_ids() == frozenset({CINDERACE})
+    aura = _shipped_lucario_attack_stat()
+    assert aura.recoverSource == "discard"          # the discard family is untouched
+
+
+def _shipped_lucario_attack_stat():
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from train.tune import _build_pilot
+    return _build_pilot("mega_lucario")[0]._attack_stat(982)   # Aura Jab
+
+
+@pytest.mark.req("REQ-ACCEL-0002")
+def test_turbo_flare_credit_is_need_and_fuel_gated():
+    """`_recover_units` prices Turbo Flare like Aura Jab, with the fuel bound read from the DECK:
+    3 with a benched Staryu (its forward Mega Starmie needs 3) and Water in deck; 0 on an empty
+    bench (firing blanks — the signal the deck rules hand-encoded); 0 when the anchored deck is
+    dry of Basic Energy; the pre-anchor pigeonhole floor (9 Water unseen − 6 hidden prizes ≥ 3)
+    keeps the credit sound before the tracker resolves."""
+    from common.pilot import Board
+    sp = _shipped()
+    me = {"active": [{"id": CINDERACE, "hp": 160, "energies": []}],
+          "bench": [{"id": STARYU, "hp": 70, "energies": []}],
+          "hand": [], "discard": [], "prize": [None] * 6}
+    obs = {"current": {"yourIndex": 0, "players": [me, {"active": [], "bench": [], "prize": []}]}}
+    anchored = Board(deck_known_counts={WATER: 5, STARYU: 2})
+    assert sp._recover_units(965, {}, anchored, obs) == 3
+    empty = {**me, "bench": []}
+    obs_empty = {"current": {"yourIndex": 0, "players": [empty, {"active": [], "bench": [], "prize": []}]}}
+    assert sp._recover_units(965, {}, anchored, obs_empty) == 0
+    dry = Board(deck_known_counts={STARYU: 2})
+    assert sp._recover_units(965, {}, dry, obs) == 0
+    assert sp._deck_basic_energy_fuel(Board(), obs, None) == 3   # pre-anchor pigeonhole floor
+
+
+@pytest.mark.req("REQ-ACCEL-0002")
+def test_accel_machinery_derives_without_any_role_declaration():
+    """A Strategy with NO roles at all: `_roles_of` still carries the derived `accel_source` for
+    Cinderace (so the Role-keyed accel rungs fire), and `accel_recipient_missing` still flags a
+    bare bench with the accelerator Active / stands down once a Line member is benched — the whole
+    bench-fill trigger with zero deck rules (repeatable for new Cinderace decks)."""
+    from common.strategy import Strategy
+    sp = _shipped()
+    bare = Strategy(lines=STRATEGY.lines)                        # lines only, no roles
+    p = Pilot(bare, deck=list(sp.deck), general_strategy=GENERAL_STRATEGY,
+              stats=sp.stats, functions=sp.functions)
+    assert "accel_source" in p._roles_of(CINDERACE)
+    me = {"active": [{"id": CINDERACE, "hp": 160, "energies": []}], "bench": []}
+    assert p._accel_recipient_missing(me) is True
+    me2 = {**me, "bench": [{"id": STARYU, "hp": 70, "energies": []}]}
+    assert p._accel_recipient_missing(me2) is False

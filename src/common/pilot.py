@@ -1047,6 +1047,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             lambda cid: self.stats.get(cid) if (self.stats and cid is not None) else None)
                                                         # class) — OHKO-line model's play half
         self._fetch_cache: dict = {}                    # memo: search card id -> deck ids it can fetch
+        self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
         self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
@@ -2018,29 +2019,60 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 - _REFRESH_GIFT * max(opp_net, 0.0))
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
-        """Energy this attack's recover rider would actually re-attach AND that a recipient can
-        actually USE — the development the Tactical layer credits (Aura Jab: attack + accelerate).
+        """Energy this attack's accel rider would actually attach AND that a recipient can
+        actually USE — the development the Tactical layer credits (Aura Jab / Turbo Flare:
+        attack + accelerate).
 
         Three independent bounds, all closed-form:
           1. `recoverN`   — the card's printed ceiling (Aura Jab: "attach up to 3").
-          2. the matching Basic-Energy FUEL in my open discard (`my_discard_basic_energy`, ADR-0061:
-             re-sourced from the Board so it is the one truth for my discard fuel — `_damage_context`
-             keeps its own attacker-relative copy because it must also serve the Incoming direction).
+          2. the matching Basic-Energy FUEL in the rider's SOURCE zone (`recoverSource`):
+             "discard" → my open discard (`my_discard_basic_energy`, ADR-0061: re-sourced from the
+             Board so it is the one truth for my discard fuel — `_damage_context` keeps its own
+             attacker-relative copy because it must also serve the Incoming direction);
+             "deck" → the whole-deck search's pool (`_deck_basic_energy_fuel`: tracker-exact once
+             anchored, else the sound pigeonhole floor — an endorser never over-counts).
           3. the recipients' remaining NEED (ADR-0061). The old code checked only that the Bench was
              non-empty, so 3 {F} onto a Lunatone/Solrock support bench scored an identical +225 to 3
              {F} onto a Riolu that becomes the second Mega Lucario ex — and that +225 is exactly what
              tips Aura Jab (130) over Mega Brave (270). Energy nobody can pay an attack with is not
              development. Need is measured against each recipient's FORWARD form too, so a Riolu
              counts the {F}{F} its Mega Brave will cost, not the {F} its Quick Attack costs today.
+             The same need gate makes Turbo Flare on an EMPTY bench credit 0 — the "firing blanks"
+             signal the mega_starmie deck rules hand-encoded (hypergeometric-fetch-closure §Round 13).
         """
         st = self._attack_stat(attack_id)
         if not st or not getattr(st, "recoverN", 0):
             return 0
-        by_type = (board.my_discard_basic_energy or {})
-        fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
-                else sum(by_type.values()))
+        if getattr(st, "recoverSource", None) == "deck":
+            fuel = self._deck_basic_energy_fuel(board, obs, st.recoverEnergyType)
+        else:
+            by_type = (board.my_discard_basic_energy or {})
+            fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
+                    else sum(by_type.values()))
         need = self._recover_recipient_need(st, board, obs)
         return max(0, min(st.recoverN, fuel, need))
+
+    def _deck_basic_energy_fuel(self, board: Board, obs: dict, etype) -> int:
+        """Matching Basic-Energy copies a whole-deck search rider (Turbo Flare) can PROVABLY still
+        find in my deck. Tracker-anchored (`deck_known_counts`): the exact count. Pre-anchor: the
+        sound pigeonhole FLOOR — of the ``unseen`` matching copies (decklist − visible), at most
+        ``prizes_hidden`` can sit in the face-down prizes, so ≥ ``unseen − prizes_hidden`` are in
+        deck. An endorser must never over-count (grader safety); the floor typically saturates the
+        ``min(recoverN, …)`` anyway (9 Water unseen − 6 prizes ≥ 3). 0 without a decklist."""
+        def _matches(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return bool(st and st.is_basic_energy
+                        and (etype is None or getattr(st, "energyType", None) == etype))
+        if board.deck_known_counts:
+            return sum(n for cid, n in board.deck_known_counts.items() if n > 0 and _matches(cid))
+        if not self.deck:
+            return 0
+        me = self._my_player(obs)
+        visible = self._visible_card_counts(me)
+        unseen = sum(n - visible.get(cid, 0) for cid, n in Counter(self.deck).items() if _matches(cid))
+        prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                            if not (isinstance(p, dict) and p.get("id") is not None))
+        return max(0, unseen - prizes_hidden)
 
     def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
         """Total Energy the rider's recipients still LACK to pay an attack — theirs or their forward
@@ -2440,7 +2472,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                           # (`_board`), shared by every option; rules no longer gate
                                           # on it (the gate-ban migration), traces still record it
         cid = self._option_card_id(obs, select, option)
-        roles = self.strategy.roles.get(cid, []) if cid is not None else []
+        roles = self._roles_of(cid)
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         card_is_line_preevo = cid is not None and cid in self._line_preevo_set()
@@ -2497,7 +2529,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         promote_target_can_attack = self._promote_target_can_attack(obs, select, option)
         promote_target_hits_weakness = self._promote_target_hits_weakness(obs, select, option)
         at_target = self._attach_target(obs, option)   # Pokémon an attach option puts Energy on
-        at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
+        at_roles = self._roles_of(at_target.get("id")) if at_target else []
         # the body an attach FUNDS, at either seam: the manual ATTACH (inPlayArea/inPlayIndex) or the
         # accel ATTACH_FROM recipient pick (area/index — cf `_option_pokemon`).
         fund_target = at_target
@@ -3448,12 +3480,47 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         accelerator's recipient hunt (ADR-0048)."""
         return {cid for line in self._wincon_lines() for cid in line.path}
 
+    def _roles_of(self, cid) -> list:
+        """The Context's per-card Roles: the deck-DECLARED list (`strategy.roles`) plus the DERIVED
+        `accel_source` for a body whose attack carries a bench-target accel rider
+        (`_derived_accel_body_ids` — Turbo Flare / Aura Jab class). Derivation-first, declaration as
+        the confirm/override (Round 9): a new deck fielding Cinderace gets the whole accel rung
+        family (open-the-accelerator, develop-the-accel-recipient, feed-the-accelerator, promote)
+        with NO Role declaration; for the existing agents the union is a no-op (both declare it)."""
+        if cid is None:
+            return []
+        roles = self.strategy.roles.get(cid, [])
+        if cid in self._derived_accel_body_ids() and "accel_source" not in roles:
+            roles = [*roles, "accel_source"]
+        return roles
+
+    def _derived_accel_body_ids(self) -> frozenset:
+        """Deck Pokémon whose ATTACK carries a bench-target energy-accel rider (`recoverTarget ==
+        "bench"`, either zone: Turbo Flare deck-search, Aura Jab discard-recover) — the DERIVED
+        bench-accelerator set (hypergeometric-fetch-closure §Round 9: derive from the card
+        representation; the deck's `accel_source` Role declaration stays the override/confirm, never
+        a parallel system). Self-target chargers (Regi Charge) are NOT bench accelerators. Memoised
+        (deck-fixed). Empty without stats/deck."""
+        if self._derived_accel_cache is None:
+            ids = set()
+            for cid in set(self.deck):
+                st = self.stats.get(cid) if self.stats else None
+                for aid in (getattr(st, "attacks", None) or ()):
+                    ast = self._attack_stat(aid)
+                    if (ast is not None and getattr(ast, "recoverN", 0)
+                            and getattr(ast, "recoverTarget", None) == "bench"):
+                        ids.add(cid)
+                        break
+            self._derived_accel_cache = frozenset(ids)
+        return self._derived_accel_cache
+
     def _accel_recipient_missing(self, me: dict) -> bool:
-        """True if my Active is a bench-accelerator (an `accel_source`-Role Pokémon, e.g. Cinderace)
-        but NO Line member sits on my Bench to receive the accelerated Energy — so Turbo Flare would
-        attach to nothing. The trigger for developing a recipient first. False with no `accel_source`
-        Role declared, no such Active, or any Line member already benched."""
-        accel = {cid for cid, r in self.strategy.roles.items() if "accel_source" in r}
+        """True if my Active is a bench-accelerator (declared `accel_source` Role ∪ the DERIVED
+        bench-accel-attack set, e.g. Cinderace's Turbo Flare) but NO Line member sits on my Bench to
+        receive the accelerated Energy — so the accel attack would fire blanks. The trigger for
+        developing a recipient first. False with no accel body Active or any Line member benched."""
+        accel = ({cid for cid, r in self.strategy.roles.items() if "accel_source" in r}
+                 | self._derived_accel_body_ids())
         ma = next((p for p in (me.get("active") or []) if p), None)
         if not (accel and ma and ma.get("id") in accel):
             return False

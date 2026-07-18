@@ -469,6 +469,19 @@ _RECOVER_RE = re.compile(
     r"Attach (?:up to (\d+) |a )Basic(?: \{(\w)\})? Energy cards? from your discard pile to "
     r"(this Pok.mon|(?:1 of )?your Benched Pok.mon|(?:1 of )?your Pok.mon)")
 
+# The DECK-source accel sibling ("Search your deck for … Energy … and attach …" — Turbo Flare,
+# the Kaguras, Burning/Humming Charge, Energy Gift; pool-verified 2026-07-18: 21 deck-attach
+# attacks, 13 in this standard shape). The fuel pool differs (hidden deck, not the visible
+# discard) but the mechanic — attack + accelerate — is the same family. Deliberately UNMATCHED
+# (endorser under-counts, never over-credits): scope-locked targets ("your Future/Tera Pokémon",
+# "your Benched {G} Pokémon" — a scope the parser can't verify), the per-bench form ("For each
+# of your Benched Pokémon, search…"), multi-type twin clauses (Jolting Charge), and — via the
+# coin guard below — flip-gated variants (Kaleidowaltz, Gormandizer).
+_DECK_ACCEL_RE = re.compile(
+    r"Search your deck for (?:up to (\d+) |an? )Basic(?: \{(\w)\})? Energy cards? and attach "
+    r"(?:them|it) to (this Pok.mon|(?:1 of )?your Benched Pok.mon|(?:1 of )?your Pok.mon)")
+_COIN_GUARD_RE = re.compile(r"[Ff]lip .*coin")   # a coin-gated accel is not an unconditional credit
+
 
 # The damage-boost Trainer families (the OHKO-line model's card facts). An Item/Supporter grants
 # "During this turn, attacks used by your [{X}] Pokémon do N more damage to your opponent's Active
@@ -550,21 +563,32 @@ def parse_attack_self_return(text: str) -> bool:
     return bool(_SELF_RETURN_RE.search((text or "").replace("\n", " ")))
 
 
-def parse_attack_energy_recover(text: str) -> tuple[int, int | None, str] | None:
-    """Energy-recover rider read from attack text: ``(n, basicEnergyType|None, target)``.
+def parse_attack_energy_recover(text: str) -> tuple[int, int | None, str, str] | None:
+    """Energy-accel rider read from attack text: ``(n, basicEnergyType|None, target, source)``.
+
+    Both zone families of the attach-rider mechanic: ``source == "discard"`` (the recover
+    family — Aura Jab) and ``source == "deck"`` (the search-attach family — Turbo Flare,
+    the Kaguras). A coin-gated deck accel (Kaleidowaltz) is NOT parsed — the credit must
+    stay unconditional.
 
     Args:
         text: the attack's free-text effect.
 
     Returns:
-        e.g. Aura Jab → ``(3, 6, "bench")``; Regi Charge → ``(2, 3, "self")``; Pick and
-        Stick → ``(2, None, "any")``. None when the attack recovers nothing.
+        e.g. Aura Jab → ``(3, 6, "bench", "discard")``; Turbo Flare → ``(3, None, "bench",
+        "deck")``; Regi Charge → ``(2, 3, "self", "discard")``. None when the attack
+        attaches nothing.
     """
-    m = _RECOVER_RE.search((text or "").replace("\n", " "))
+    t = (text or "").replace("\n", " ")
+    m = _RECOVER_RE.search(t)
+    source = "discard"
+    if not m and not _COIN_GUARD_RE.search(t):
+        m = _DECK_ACCEL_RE.search(t)
+        source = "deck"
     if not m:
         return None
     n = int(m.group(1)) if m.group(1) else 1
     etype = _TYPE_LETTER.get(m.group(2)) if m.group(2) else None
     tgt = m.group(3)
     target = "self" if "this" in tgt else ("bench" if "Benched" in tgt else "any")
-    return (n, etype, target)
+    return (n, etype, target, source)
