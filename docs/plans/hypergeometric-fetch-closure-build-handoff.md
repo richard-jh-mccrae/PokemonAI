@@ -41,7 +41,7 @@ three-deck tag audit (7 fixes + 2 consumer recalibrations) and full gamble obser
 | 14-round grilled spec | **DONE** — `hypergeometric-fetch-closure.md` |
 | Tag-completeness audit (3 decks, 50 cards) | **BUILT** — 7 additive fixes (140/305/674/675 + tutor_pokemon on 1142/1152/1225), 2 consumer recalibrations, suite-green |
 | Gamble observability | **BUILT** — `_gamble_trace` → `Decision.gamble` → sparse `@T` `gamble` key → shell `<details>` dropdown; pinned in `test_gamble.py` |
-| Correction-seeded test corpus | **BUILT** — `tests/strategy/test_hyperclosure_corpus.py`: 25 PINS + 10 xfail-strict TARGETS across 5 families; partial-discard subset semantics; refuted/covered provably excluded |
+| Correction-seeded test corpus | **BUILT** — `tests/strategy/test_hyperclosure_corpus.py`: 25 PINS + 4 SUBSTANCE PINS (tagged blunder dead, residue adjudicated) + 6 xfail-strict TARGETS; fresh pilot per replay (statefulness fix); diagnoses in `combat-tempo-cluster-findings.md` |
 | WP1 Stage-1 closure outs | **BUILT** — `_gamble_ko_classes` outs = literal ∪ tutor/recycle closure; post-Item Supporter supplement (5-tuple) |
 | WP3 draw-engine + accel clauses | **BUILT** — `card_effects.json` draw/accel clauses; AttackStat `recover*` tier (Turbo Flare deck-source) |
 | WP4 Stage-2 draw engines | **BUILT** — `draw_hit_with_engines` two-window closed form (exact at depth 1) |

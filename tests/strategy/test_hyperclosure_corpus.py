@@ -79,15 +79,37 @@ TARGETS = {
                    "— the duplicate Lillie's is already avoided (`dont-grab-a-card-already-in-hand`); "
                    "the gap is tutor-chain fetch-priority, not redundancy.",
     # whether-to-play / hold the fetch
-    "86091728-19": "hold: attach the {P} to Dreepy rather than a needless Ultra Ball",
-    "85163634-17": "hold: attack (Turbo Flare) instead of Ultra Ball",
-    "82754241-12": "hold: Ultra Ball over Poffin when the Staryu line is exhausted",
-    # shuffle timing & keep-value (the refresh side — the SHED convergence's own targets)
-    "83038055-51": "keep: strong hand → attack (Nebula Beam), don't refresh",
-    "82752045-94": "keep: >7 good cards → attack, don't shuffle them away",
-    "82749168-65": "keep: Ignition/Wally's valued by next-turn need — attack instead",
-    "83969481-55": "keep: attack (Jetting Blow) over Lillie's on a live hand",
-    "83037962-49": "keep: attack over Harlequin (symmetric refresh returns their board)",
+    "86091728-19": "attach: the {P} belongs on the benched Dreepy (2nd line), not the Active — the "
+                   "Ultra Ball substance is FIXED; the residue is attach-target priority "
+                   "(`prefer-active-attach-in-setup` +8 tips it Active). A minor separate axis.",
+    "85163634-17": "hold: fetch one turn early = Judge exposure — the held-card-risk tier-2 seam "
+                   "(spec §Round 8 §5, explicitly deferred): fetch-late beats fetch-early when "
+                   "disruption is live. Not keep-value, not the gate library.",
+    # worth-coverage: the refresh SHED under-prices situational Trainers/special Energy — their
+    # keep-value lives in the DISCARD ladder (keep-key −30 covers `discard_eot`; dont-waste-clutch-
+    # heal) but `role_value` prices them 0 (no ROLE, no tag fallback), so the graded shed lets the
+    # refresh stay positive and it plays (tier 3) before the deferred attack. The identified fix:
+    # tag-derived worth fallbacks (Round 9 'engine from Function Tags'), measured before flipping.
+    "82749168-65": "worth: Lillie's (+) shuffles back the Ignition burst before a KO attack — "
+                   "Ignition (`discard_eot`) prices 0 in role_value, so hand_keep can't see it",
+    "83969481-55": "worth: Lillie's (+10) shuffles back Wally's Compassion (clutch_heal, role 0) "
+                   "that answers next-turn Nebula Beam — same coverage gap + a pressure deadline",
+}
+# The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
+# the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the
+# recorded blunder pick is not made and its option prices ≤ 0.
+SUBSTANCE_PINS = {
+    "83038055-51": "Lillie's dead (−34); agent attacks. Residue: Jetting-vs-Nebula, ALREADY "
+                   "adjudicated in the agent's favour (reviewed.json ep83661649 f30 / ep83116501 "
+                   "f60; the f94 precedent test declines to pin Nebula over Jetting).",
+    "82752045-94": "Lillie's dead (−10); agent attacks. Same Jetting-vs-Nebula residue, same "
+                   "adjudication.",
+    "83037962-49": "Harlequin dead (−11, the SHED convergence); agent plays Night Stretcher first — "
+                   "`recover-to-refill-bench`'s DESIGNED refill-THEN-attack sequencing (its own "
+                   "rationale), the attack follows.",
+    "82754241-12": "Poffin dead (−25, `dont-search-an-empty-deck`); the pick is now a PRICED "
+                   "refresh-first gamble (52%, EV 525 > det 8 + keep 16) the human never evaluated "
+                   "— a line adopted after the correction, not the tagged blunder.",
 }
 # Provably out (spec: refuted/covered don't become fixtures; one record is unreplayable).
 EXCLUDED = {
@@ -116,7 +138,6 @@ def _build_index() -> dict:
 
 _INDEX = _build_index()
 _REVIEWED = json.loads((CORR / "reviewed.json").read_text(encoding="utf-8"))
-_PILOTS: dict = {}
 
 
 def _record(cid: str) -> dict:
@@ -127,12 +148,14 @@ def _record(cid: str) -> dict:
 
 
 def _pilot(agent: str):
-    if agent not in _PILOTS:
-        spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        _PILOTS[agent] = mod._build_pilot(agent)[0]
-    return _PILOTS[agent]
+    """A FRESH pilot per replay — the Pilot is stateful across `explain()` calls (the deck tracker
+    accumulates observations of ONE game), so sharing a pilot across corrections from different
+    games makes each verdict depend on which replays ran before it (measured: the same option scored
+    +8.1 polluted vs −6.9 clean). Slower, sound."""
+    spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod._build_pilot(agent)[0]
 
 
 def _replay_picks_correct(cid: str) -> bool:
@@ -175,6 +198,22 @@ def test_correction_ranks_the_human_pick_top(cid):
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
+@pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in SUBSTANCE_PINS])
+def test_substance_pin_the_tagged_blunder_is_dead(cid):
+    """The recorded blunder pick is not made AND its option prices ≤ 0 — the correction's substance,
+    without pinning the alternative line (which is separately adjudicated / designed; see
+    SUBSTANCE_PINS notes)."""
+    rec = _record(cid)
+    d = _pilot(rec["agent"]).explain(rec["obs"])
+    blunder = set(rec["chosen"])
+    assert not (blunder & set(d.chosen)), f"{cid}: still makes the tagged pick {rec['chosen_label']!r}"
+    for t in d.options:
+        if t.index in blunder:
+            assert t.score <= 0, (f"{cid}: the tagged blunder option [{t.index}] still prices "
+                                  f"{t.score:+.1f} — the fix is an accident of ordering, not a floor")
+
+
+@pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.parametrize("cid,why", sorted(EXCLUDED.items()))
 def test_excluded_ids_are_provably_out(cid, why):
     """Every excluded correction is out for a checkable reason — a `refuted`/`covered` disposition in
@@ -188,6 +227,8 @@ def test_excluded_ids_are_provably_out(cid, why):
 
 
 def test_corpus_families_are_disjoint_and_ided():
-    """No id is both a pin and a target or double-listed — the audit surface stays clean."""
-    assert not (set(PINS) & set(TARGETS)), "an id is both a pin and a target"
-    assert not (set(PINS | TARGETS) & set(EXCLUDED)), "an id is both included and excluded"
+    """No id is double-listed across categories — the audit surface stays clean."""
+    cats = [set(PINS), set(TARGETS), set(SUBSTANCE_PINS), set(EXCLUDED)]
+    for i, a in enumerate(cats):
+        for b in cats[i + 1:]:
+            assert not (a & b), f"an id is listed in two categories: {sorted(a & b)}"
