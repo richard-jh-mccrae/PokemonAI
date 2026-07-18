@@ -46,6 +46,8 @@ PINS = {
     "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
     "82525741-78": "hold: evolve Mega Starmie ex instead of a Poffin with the line set",
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
+    "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
+                   "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
     # shuffle timing & keep-value (the refresh side)
     "83686860-13": "keep: don't refresh a live hand — end the turn",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
@@ -69,7 +71,6 @@ TARGETS = {
     # whether-to-play / hold the fetch
     "86091728-19": "hold: attach the {P} to Dreepy rather than a needless Ultra Ball",
     "85163634-17": "hold: attack (Turbo Flare) instead of Ultra Ball",
-    "85164605-64": "hold: attack (Jetting Blow) instead of Ultra Ball",
     "82754241-12": "hold: Ultra Ball over Poffin when the Staryu line is exhausted",
     # shuffle timing & keep-value (the refresh side — the SHED convergence's own targets)
     "83038055-51": "keep: strong hand → attack (Nebula Beam), don't refresh",

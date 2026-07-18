@@ -47,7 +47,7 @@ three-deck tag audit (7 fixes + 2 consumer recalibrations) and full gamble obser
 | WP4 Stage-2 draw engines | **BUILT** — `draw_hit_with_engines` two-window closed form (exact at depth 1) |
 | WP5 Outcome classes | **BUILT** — evolution-KO / gust / pump / survival / bench-fill; each void-if-in-hand + det + legality |
 | WP6 Keep-value replaceability floor | **BUILT** — `common/card_worth.py` tier table; graded `_keep_cost` REPLACES the 3 binary gamble stand-downs; suite-green (2975) |
-| WP7 oracle module + skill loop | **CORE BUILT** — `common/fetch_closure.py` (graph, extracted) + `common/card_worth.py` (worth backend); Pilot delegates; ADR-0065; role-coverage lint. Value-convergence flips + gate library + skill loop STAGED |
+| WP7 oracle module + skill loop | **CORE BUILT** — `common/fetch_closure.py` (graph) + `common/card_worth.py` (worth backend); ADR-0065; role-coverage lint. Two consumers converged (gamble keep-floor WP6; **refresh SHED** 2026-07-18 — flat `_REFRESH_SHED` + 4 `hold-*` guards → `Σ keep_cost`). Fetch grab/pitch + plan-tier credit + gate library + skill loop STAGED |
 
 ## Work packages (priority order; each lands separately, suite-green, trace-extended)
 

@@ -42,8 +42,9 @@ _REFRESH_CYCLE = 20        # the DRAW side, flat: cards I have not seen are spec
                            # `hold-*-dont-shuffle` / probable-miss guards adjudicate. Bounded and flat
                            # so those guards can still cancel it, exactly as they could cancel the +20
                            # `dig-before-commit` used to supply blindly.
-_REFRESH_SHED = 8          # per card I HOLD and lose (my hand beyond what I redraw). A certain loss of
-                           # a card I chose to keep — ml f111 CRITICAL ("8 good cards"), ms f60, ms f94.
+# _REFRESH_SHED (the flat −8/card-lost shed) RETIRED 2026-07-18 (ADR-0065): the shed side is now the
+# GRADED Σ keep_cost over the actual hand (`_refresh_shed_keepcost`) — a wincon costs its role value ×
+# how UN-recoverable it is, a dreg ~0. ENERGY_TIER (8, `common.card_worth`) is the old flat anchor.
 _REFRESH_STRIP = 4         # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
 _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card opponent hand REFILLS them to
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
@@ -1300,7 +1301,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # respects its ADR-0044 redundancy flags
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
-                    + self._refresh_swing_tactical(board, ctx)
+                    + self._refresh_swing_tactical(obs, board, ctx)
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
@@ -1984,24 +1985,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         st = self._attack_stat(attack_id)
         return st.recoil if st else 0
 
-    def _refresh_swing_tactical(self, board: Board, ctx) -> float:
-        """Closed-form value of a shuffle-refresh (ADR-0060). Judge/Harlequin are symmetric REFILLS,
-        not strips: each player shuffles their hand away and redraws to the card's printed count, so
-        the play is fully described by how many cards move, in which direction (strategy/refresh.py):
+    def _refresh_swing_tactical(self, obs: dict, board: Board, ctx) -> float:
+        """Closed-form value of a shuffle-refresh (ADR-0060, SHED graded by ADR-0065). Judge/Harlequin
+        are symmetric REFILLS, not strips: each player shuffles their hand away and redraws to the
+        card's printed count, so the play is fully described by how many cards move, in which direction
+        (strategy/refresh.py):
 
             CYCLE                                  the draw side — flat, speculative, guard-cancellable
-            - SHED  * max(-my_net, 0)              cards I hold and lose        (certain)
-            + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them     (certain)
-            - GIFT  * max(opp_net, 0)              cards handed to them         (certain)
+            - Σ keep_cost(held card)              the graded SHED — what shuffling my hand costs
+            + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them        (certain)
+            - GIFT  * max(opp_net, 0)              cards handed to them            (certain)
 
-        The card's own printed draw count is the break-even — which is why the retired
-        `_STACKED_HAND`/`_REFRESH_HAND_FLOOR`/`_TAILORED_HAND` constants matched no card.
+        The card's own printed draw count is the break-even. **The SHED side is now graded** (WP7): it
+        was a flat ``_REFRESH_SHED × cards-lost``, propped up by the hand-QUALITY guards
+        (`hold-wincon` / `hold-line-piece` / `hold-irreplaceable-tool`) — a wincon and a dreg cost the
+        same to shuffle. It is now ``Σ keep_cost`` over the actual hand (`_refresh_shed_keepcost`): the
+        SAME closure the gamble uses, so a live hand of wincons/engines is expensive to shuffle and a
+        dead hand is nearly free — the guards fold in, one currency (the closure supplies the
+        redundancy discount, so a wincon with its tutors live shuffles cheaper than a lone one-of).
 
-        The DRAW side stays flat on purpose. A per-card credit for cards I have not seen swamps the
-        hand-QUALITY guards (`hold-wincon-dont-shuffle`, `hold-irreplaceable-tool-dont-shuffle`,
-        `dont-refresh-into-a-probable-miss`), which are this codebase's only model of whether the
-        redraw is actually worth having — a spent deck returns dregs however many cards it returns.
-        Silent (0) on anything that is not the PLAY of a known refresh."""
+        The DRAW side stays flat (`dont-refresh-into-a-probable-miss` owns redraw quality, a separate
+        jurisdiction). Silent (0) on anything that is not the PLAY of a known refresh."""
         if ctx.option_type != _PLAY:
             return 0.0
         nets = net_change(ctx.card_id, my_hand=board.my_hand_size, opp_hand=board.opp_hand_size,
@@ -2009,14 +2013,46 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                           opp_prizes_remaining=board.opp_prizes_remaining)
         if nets is None:
             return 0.0
-        my_net, opp_net = nets
+        _my_net, opp_net = nets
         stripped = max(-opp_net, 0.0)
         fresh = fresh_cards(ctx.card_id, board.opp_hand_size, board.opp_hand_size_delta)
         return (_REFRESH_CYCLE
-                - _REFRESH_SHED * max(-my_net, 0.0)
+                - self._refresh_shed_keepcost(obs, board, ctx)
                 + _REFRESH_STRIP * stripped
                 + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
                 - _REFRESH_GIFT * max(opp_net, 0.0))
+
+    def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
+        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``
+        over every held card EXCEPT the refresh being played (it is discarded, not shuffled). Each
+        card's cost = role value × (1 − re-access odds) over the shuffle-grown pool across the refresh's
+        own draw window — the closure pointed backwards, exactly the gamble's `hand_keep`
+        (`_best_gamble_line`). Anchored deck counts when the tracker has them, else the pre-anchor
+        unseen composition (`decklist − visible − hidden prizes`, needs obs — the reason obs is
+        threaded here). 0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit
+        alone stands, matching the old flat term's floor)."""
+        from common.strategy.refresh import refresh_branches
+        branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
+        if not branches:
+            return 0.0
+        draws = max(my_draw for my_draw, _opp in branches)
+        counts = board.deck_known_counts
+        if counts:
+            deck_count = sum(counts.values())
+        else:
+            from collections import Counter
+            me = self._my_player(obs)
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(counts.values()) - prizes_hidden
+            if deck_count <= 0 or not counts:
+                return 0.0
+        pool = deck_count + max(0, len(board.hand_ids) - 1)      # the shuffle-grown draw pool
+        return sum(self._keep_cost(hid, counts, pool, draws)
+                   for hid in board.hand_ids if hid != ctx.card_id)
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can

@@ -96,8 +96,10 @@ def test_deploy_beats_a_hand_shuffle_supporter():
 def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
     """The belt for the case the positive deploy can't reach: holding the irreplaceable Cape with NO
     win-condition body to equip (only an off-line opener Active), a hand-shuffle Supporter would shuffle
-    the ACE SPEC into the deck. `hold-irreplaceable-tool-dont-shuffle` fires (negative), so the agent
-    holds the Cape (ends) rather than shuffle it away."""
+    the ACE SPEC into the deck. The graded SHED (ADR-0065) prices the held ACE SPEC at its
+    ACE_SPEC_TIER worth × how UN-recoverable it is (a one-per-deck, discard-irretrievable Tool ⇒ near
+    its full worth), so the refresh scores NEGATIVE — the fold of the retired
+    `hold-irreplaceable-tool-dont-shuffle` guard — and the agent holds the Cape (ends)."""
     stats = DictCardStatProvider({
         CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
         LILLIES: CardStat(LILLIES, hp=0),
@@ -109,7 +111,7 @@ def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(OPENER, hp=160, energy=1), hand=[LILLIES, CAPE]))
     trace = pilot.explain(obs).options[0]                        # the Lillie's (shuffle) option
-    assert "hold-irreplaceable-tool-dont-shuffle" in _fired(trace)
+    assert trace.score < 0, f"held ACE SPEC must make the refresh reluctant, scored {trace.score:+.1f}"
     assert pilot.decide(obs) == [1]                              # hold (End), don't shuffle Cape away
 
 

@@ -231,20 +231,23 @@ def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_away():
     """A Shuffle-Refresh shuffles the WHOLE hand into the deck — including a win-condition you are
-    holding. The reluctance fires (negative) so the agent doesn't bury the piece it just found. Closes
-    the behavioral coverage gap flagged by the 2026-06-29 refactor audit."""
+    holding. The graded SHED (ADR-0065, `_refresh_shed_keepcost`) prices that held wincon at its role
+    value × how UN-recoverable it is, so the refresh scores NEGATIVE (its CYCLE credit is outweighed)
+    and the agent doesn't bury the piece it just found — the fold of the retired `hold-wincon-dont-
+    shuffle` guard into the one currency. (A realistic deck so the closure's re-access math is live.)"""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    pilot = Pilot(strat, deck=[BASIC] * 40, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     # hand holds BOTH refresh and win-condition -> shuffling would bury the wincon.
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, WINC]))
     trace = pilot.explain(obs).options[0]
-    assert "hold-wincon-dont-shuffle" in _fired(trace)
+    assert trace.score < 0, f"held wincon must make the refresh reluctant, scored {trace.score:+.1f}"
+    assert trace.index not in pilot.explain(obs).chosen, "shuffled the held wincon away anyway"
 
 
 @pytest.mark.req("REQ-GEN-0047")
@@ -266,39 +269,37 @@ def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
     """The held win-condition has its Line BASE already on the Bench (deploy-soon), so the shuffle
-    would bury an imminent evolution — the stronger hold fires (stacks on the moderate base hold) so
-    the agent takes a board action this turn instead of refilling. ep82867148 f52."""
+    would bury an imminent evolution. The graded SHED prices the held wincon (ADR-0065), so the refresh
+    scores NEGATIVE and the agent takes a board action this turn instead of refilling — the fold of the
+    retired `hold-wincon-with-base-dont-shuffle` stack. ep82867148 f52."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
-    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    pilot = Pilot(strat, deck=[BASIC] * 40, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(STARYU)],
                                     hand=[LILLIES, WINC]))
-    assert "hold-wincon-with-base-dont-shuffle" in _fired(pilot.explain(obs).options[0])
+    assert pilot.explain(obs).options[0].score < 0, "a held wincon (base benched) must make refresh negative"
 
 
 @pytest.mark.req("REQ-GEN-0047")
-def test_hold_wincon_with_base_silent_when_no_base_is_in_play():
-    """No Line base IN PLAY (but the base is in HAND, so the wincon is still deployable) -> the stronger
-    base-in-PLAY hold stays silent; only the moderate `hold-wincon-dont-shuffle` fires, so a genuinely
-    dead hand can still refill (the base hold is NOT absolute)."""
+def test_hold_wincon_is_cheap_to_shuffle_when_the_hand_is_dregs():
+    """The mirror: NO high-role card in hand (only the refresh + a role-less basic) -> the graded SHED
+    is ~0, so the refresh keeps its full CYCLE credit and stays POSITIVE — a genuinely dead hand still
+    refills freely (the graded shed is not a blanket anti-refresh, ADR-0065)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
-    pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,          # bench body is NOT the base;
+    pilot = Pilot(strat, deck=[BASIC] * 40, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,       # hand: refresh + a role-less basic
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
-                                    hand=[LILLIES, WINC, STARYU]))            # base sits in HAND (deployable)
-    fired = _fired(pilot.explain(obs).options[0])
-    assert "hold-wincon-with-base-dont-shuffle" not in fired
-    assert "hold-wincon-dont-shuffle" in fired
+                                    hand=[LILLIES, BASIC]))
+    assert pilot.explain(obs).options[0].score > 0, "a dreg hand must still refresh freely"
 
 
 @pytest.mark.req("REQ-GEN-0047")

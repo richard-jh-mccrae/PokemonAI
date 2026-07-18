@@ -2,12 +2,13 @@
 
 **Status.** Accepted (grilled 2026-07-17 across Rounds 7–9 of
 [`docs/plans/hypergeometric-fetch-closure.md`](../plans/hypergeometric-fetch-closure.md)) and
-**BUILT 2026-07-18 — the module seam (WP7 structural core), suite-green (2975+).** The four-shadow
-value convergence is STAGED (see §Build status): the gamble keep-floor (WP6) already consumes the
-oracle; the refresh SHED, the fetch grab/pitch, and the plan-tier credit each land under the
-correction corpus + score-diff gate, "staged like the ADR-0064 five-call-site refactor." Amends
-ADR-0060 (its flat SHED / `hold-*` guard jurisdiction folds into the oracle when that flip lands);
-builds on ADR-0023 (the shared fetch comparator) and ADR-0032 (Effect-Clause tier).
+**BUILT 2026-07-18 — the module seam + two consumers converged, suite-green.** The gamble keep-floor
+(WP6) and now the **refresh SHED** consume the oracle; the fetch grab/pitch and the plan-tier credit
+remain STAGED (see §Build status), each landing under the correction corpus + score-diff gate,
+"staged like the ADR-0064 five-call-site refactor." Amends ADR-0060 (its flat SHED + the
+`hold-wincon` / `hold-line-piece` / `hold-wincon-with-base` / `hold-irreplaceable-tool` guard
+jurisdiction is now folded into the graded `Σ keep_cost`); builds on ADR-0023 (the shared fetch
+comparator) and ADR-0032 (Effect-Clause tier).
 
 ## Build status
 
@@ -28,18 +29,21 @@ builds on ADR-0023 (the shared fetch comparator) and ADR-0032 (Effect-Clause tie
   primitive. The Pilot supplies card facts; the module owns the numbers.
 - **The gamble keep-floor consumes it (WP6):** `planner._keep_cost = role_value × (1 − re-access
   odds)`, the closure pointed backwards, replacing the binary protected-hand veto.
+- **The refresh SHED consumes it (2026-07-18):** `pilot._refresh_swing_tactical`'s flat
+  `_REFRESH_SHED × cards-lost` term is now `pilot._refresh_shed_keepcost = Σ keep_cost` over the
+  actual hand — a wincon/engine is expensive to shuffle, a dead hand nearly free, the closure
+  supplying the redundancy discount. The four hand-QUALITY guards (`hold-wincon` / `hold-line-piece`
+  / `hold-wincon-with-base` / `hold-irreplaceable-tool`) that propped up the flat term RETIRE into it
+  (the currency-zone rule). All six ADR-0060 corrections (ml f111, ms f60/f94/f45/f100/f64) hold
+  under the graded term; the corpus KEEP pins hold; one corpus TARGET (`85164605-64`) flipped to a
+  pin (the costly-hand Lillie's drops below tier-0, freeing a lethal). `hold-successor-when-doomed`
+  survives — its `active_doomed` premise is a DEADLINE the fixed re-access window doesn't yet model
+  (the gate library, still staged), not a pure keep-value the closure prices.
 - **The coverage lint (Round 9 §5):** `tests/strategy/test_role_coverage.py` — no card silently
   priced at zero from a typo (every declared role is known vocabulary; every ROLES key is a real
   deck card; every worth-roled card prices positive).
 
 **Staged (designed here, NOT built — each a corpus-gated behavioural flip):**
-- **The refresh SHED convergence.** `pilot._refresh_swing_tactical` still prices the shed side flat
-  (`_REFRESH_SHED = 8` per held card) with the `hold-wincon` / `hold-line-piece` /
-  `hold-irreplaceable-tool` guards as its only hand-QUALITY proxy (ADR-0060's explicitly-parked
-  seam). Replacing that flat term + those guards with `Σ keep_cost` is the same move WP6 made for the
-  gamble — but it re-baselines the six ADR-0060 corrections (ml f111, ms f60/f94/f45/f100/f64) and
-  needs the correction corpus built first. `ENERGY_TIER = 8` is deliberately the flat-shed anchor so
-  the convergence starts calibrated.
 - **The fetch grab/pitch convergence.** `doctrine_fetch._grab_value_of` / `_pitch_value_of` /
   `_shed_signals` stay Hypothesis-rung sums today; re-pointing them at `role_value` + the closure
   is the round-7 four-shadow collapse, staged under the discard-pair / fetch-target corpus families.

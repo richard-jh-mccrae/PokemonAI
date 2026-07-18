@@ -229,13 +229,16 @@ is in. `common/fetch_closure.py` owns the tutor/recycle/search graph as pure fun
 (`fetch_target_matches` / `reaccess_outs` / `fetch_reaches_pokemon`); the Pilot's closure methods
 delegate, so the fetch doctrine, the gamble gain side, and the keep-cost read ONE implementation.
 `common/card_worth.py` owns the worth currency + `role_value` / `keep_cost` primitives (the Pilot
-delegates). Behaviour-preserving; the four-shadow value CONVERGENCE (refresh SHED → `Σ keep_cost`,
-grab/pitch re-point, plan-tier credit) is staged, each a corpus-gated flip under the score-diff gate.
+delegates). The **refresh SHED** convergence has landed (2026-07-18): `_refresh_swing_tactical`'s flat
+`_REFRESH_SHED × cards-lost` is now `Σ keep_cost` over the actual hand (`_refresh_shed_keepcost`), and
+the four `hold-*` hand-quality guards fold into it — all six ADR-0060 corrections hold, one corpus
+target flipped to a pin. The remaining shadows (fetch grab/pitch, plan-tier credit) stay staged.
 
-**Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks), the WP7
-value-convergence flips (incl. the ADR-0060 refresh-swing SHED replacement), the gate library +
-deadlines (no consumer yet), the held-card-risk tier-2 seam, the skill loop (deck-genie Role Sheet /
-deck-align fold), and the correction-seeded corpus.
+**Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks), the
+remaining WP7 value-convergence flips (fetch grab/pitch, plan-tier credit), the gate library +
+deadlines (no consumer yet — `hold-successor-when-doomed` still carries the one deadline the fixed
+window can't model), the held-card-risk tier-2 seam, and the skill loop (deck-genie Role Sheet /
+deck-align fold).
 
 ## Acceptance — met 2026-07-05
 

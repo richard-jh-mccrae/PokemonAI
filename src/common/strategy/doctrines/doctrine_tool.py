@@ -198,16 +198,11 @@ HYPOTHESES = [
                   "lethal KO still outranks it.",
         when=lambda c: c.attach_is_tool_deploy_target,
         weight=40, status="assumed"),
-    Hypothesis(
-        id="hold-irreplaceable-tool-dont-shuffle",
-        rationale="Don't shuffle an irreplaceable ACE SPEC Tool (e.g. Hero's Cape — one-per-deck, not "
-                  "recoverable from discard) away with a `shuffle_hand` Supporter; sent back into the "
-                  "deck it's effectively lost for the game. Belt to `deploy-hp-tool`'s suspenders (that "
-                  "equips it when a carrier exists, this holds it when none does yet) — mirrors "
-                  "`hold-wincon-dont-shuffle` but stronger, since a shuffled wincon is at least recoverable.",
-        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.irreplaceable_tool_in_hand,
-        weight=-30, status="assumed"),
+    # `hold-irreplaceable-tool-dont-shuffle` (−30) RETIRED 2026-07-18 (ADR-0065): the graded refresh
+    # SHED (`pilot._refresh_shed_keepcost`) now prices a held ACE SPEC Tool at its ACE_SPEC_TIER role
+    # value × how UN-recoverable it is (a one-per-deck, discard-irretrievable Tool ⇒ near its full
+    # worth) — the same fold as the wincon/line-piece holds. `deploy-hp-tool` (+40) still equips it
+    # proactively when a carrier exists; the closure-graded shed is the belt that formerly held here.
     # ── WHERE-NOT guards (moved from baseline_tool, re-scoped per ADR-0028): reluctant to fritter
     #    a Tool on an off-line body — but stands DOWN on the body the survival-turns picker chose ──
     Hypothesis(
