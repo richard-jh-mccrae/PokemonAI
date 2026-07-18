@@ -1,0 +1,69 @@
+"""WP6 — the replaceability-floor keep-value (hypergeometric-fetch-closure §Rounds 6-8).
+
+`keep_cost(X) = role_value(X) × (1 − re-access_odds(X))` — the gamble's gain-side closure pointed
+BACKWARDS: a card that shuffles into the deck costs its role value scaled by how UN-recoverable it is.
+A wincon with two Mega Signal live shuffles cheap; a closure-unreachable one-of shuffles at ~full role
+value. The `common.card_worth` tier table is the ONE tuned currency; the closure supplies the redundancy.
+"""
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def _shipped_pilot(agent):
+    sys.path.insert(0, str(REPO / "tools"))
+    from train.tune import _build_pilot
+    return _build_pilot(agent)[0]
+
+
+@pytest.mark.req("REQ-WORTH-0001")
+def test_reaccess_outs_are_the_closure_pointed_backwards():
+    """`_card_reaccess_outs(X)` = X's own deck copies PLUS every deck-search tutor whose FETCH clause
+    reaches X (`_fetch_target_matches`) — Mega Lucario ex is reached by Ultra Ball (any Pokémon) and
+    Mega Signal (mega) but NOT Poké Pad (no-Rule-Box), exactly the closure the gamble gain side uses."""
+    ml = _shipped_pilot("mega_lucario")
+    counts = {678: 1, 1121: 4, 1145: 2, 1152: 4, 6: 10}   # Mega Lucario ex + Ultra Ball + Mega Signal
+    assert ml._card_reaccess_outs(678, counts) == 1 + 4 + 2       # Poké Pad (1152) excluded: Rule Box
+    # A {F} Basic Energy: reached by Fighting Gong ({F}) and (were it in deck) Energy Search — here just
+    # its own copies plus Fighting Gong, which fetches a Basic {F} Energy.
+    assert ml._card_reaccess_outs(6, {6: 10, 1142: 4}) == 10 + 4
+    assert ml._card_reaccess_outs(6, {6: 10, 1152: 4}) == 10        # Poké Pad fetches Pokémon, not energy
+    assert ml._card_reaccess_outs(999999, counts) == 0             # unknown card -> no outs
+
+
+@pytest.mark.req("REQ-WORTH-0001")
+def test_role_value_reads_the_tuned_tier_table():
+    """Base worth = the general role→points tier (`common.card_worth.ROLE_TIER`), max over a card's
+    declared/derived roles, with the energy and ACE-SPEC fallbacks. Deck-agnostic: deck-genie never
+    invents numbers (spec §Round 9)."""
+    from common.card_worth import ROLE_TIER, ENERGY_TIER, ACE_SPEC_TIER
+    ml = _shipped_pilot("mega_lucario")
+    assert ml._role_value(678) == ROLE_TIER["win_condition"]       # Mega Lucario ex: the wincon tier
+    assert ml._role_value(6) == ENERGY_TIER                        # a typed Basic Energy
+    ms = _shipped_pilot("mega_starmie")
+    assert ms._role_value(1100) == ACE_SPEC_TIER                   # Energy Search Pro: an ACE SPEC one-of
+    assert ml._role_value(999999) == 0                             # unknown card -> no declared worth
+
+
+@pytest.mark.req("REQ-WORTH-0001")
+def test_keep_cost_is_role_value_scaled_by_irreplaceability():
+    """`keep_cost = role_value × (1 − re-access odds)` over the shuffle-grown pool (+1 for the shuffled
+    held copy rejoining the deck). The SAME wincon costs almost nothing to shuffle with its tutors live
+    and near its full role value with them gone — the replaceability floor, graded, zero new constants."""
+    from math import isclose
+    from common.card_worth import ROLE_TIER
+    from common.deck_odds import draw_hit_probability
+    ml = _shipped_pilot("mega_lucario")
+    pool, draws = 40, 6
+    live = {678: 1, 1121: 4, 1145: 2}                     # wincon + Ultra Ball + Mega Signal in deck
+    outs = ml._card_reaccess_outs(678, live) + 1          # +1: the shuffled copy rejoins the deck
+    expect = ROLE_TIER["win_condition"] * (1 - draw_hit_probability(outs, pool, draws))
+    assert isclose(ml._keep_cost(678, live, pool, draws), expect)
+    gone = {678: 1}                                       # the one-of, no tutors: near-full role value
+    cheap = ml._keep_cost(678, live, pool, draws)
+    dear = ml._keep_cost(678, gone, pool, draws)
+    assert cheap < dear <= ROLE_TIER["win_condition"]
+    assert ml._keep_cost(999999, live, pool, draws) == 0.0   # a role-less card is free to shuffle

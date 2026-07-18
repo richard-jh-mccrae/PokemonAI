@@ -1516,15 +1516,14 @@ class PlannerMixin:
             return stand_down("active already reaches a KO")
         if any(t.tactical >= KO_SCORE for t in traces):
             return stand_down("a KO is already on the tuned menu")
-        if board.wincon_in_hand and not board.wincon_in_play:
-            return stand_down("protected hand: wincon in hand")
-        if board.line_preevo_in_hand:
-            return stand_down("protected hand: line pre-evolution in hand")
-        if board.irreplaceable_tool_in_hand:
-            return stand_down("protected hand: ACE-SPEC Tool in hand")
+        # WP6: the binary protected-hand stand-downs (wincon / line pre-evo / ACE-SPEC Tool in hand)
+        # are REPLACED by the graded keep-cost priced into the det baseline below — a wincon with its
+        # tutors live shuffles cheap, an irreplaceable one-of near its full role value (the currency-
+        # zone rule: replace the guard family, never bolt on beside it).
         from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
         me = self._my_player(obs)
         hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        hand_ids = [c.get("id") for c in hand]                # WP6: for the shuffle keep-cost
         ma = next((p for p in (me.get("active") or []) if p), None)
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
@@ -1602,6 +1601,14 @@ class PlannerMixin:
             rst = self.stats.get(cid) if self.stats else None
             sup_live = bool(rst is not None and getattr(rst, "is_item", False)
                             and not board.supporter_played)
+            # WP6: the KEEP-COST of shuffling this refresh's hand away (the played refresh itself is
+            # discarded, not shuffled) — Σ role value × (1 − re-access odds) over the shuffle redraw.
+            # The gamble must beat det PLUS this graded floor, replacing the binary protected-hand
+            # stand-downs: a KO (≈ KO_SCORE) dwarfs it, an irreplaceable one-of raises the bar.
+            keep_ids = list(hand_ids)
+            if cid in keep_ids:
+                keep_ids.remove(cid)
+            hand_keep = sum(self._keep_cost(hid, class_counts, pool, max(ns)) for hid in keep_ids)
             for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
                     in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
@@ -1624,10 +1631,14 @@ class PlannerMixin:
                        "p": round(p, 3), "ev": round(ev, 1)}
                 if sup_live and sup_copies:
                     row["post_item_sup"] = sup_copies         # the Item-refresh Supporter supplement
+                if hand_keep:
+                    row["keep"] = round(hand_keep, 1)         # WP6: the shuffled-hand keep-cost floor
                 evals.append(row)
-                if ev > det and (best is None or ev > best[0]):
-                    best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
-                                   f"for the KO (EV {ev:.0f} > held line {det:.0f})")
+                bar = det + hand_keep                         # WP6: beat the held line + the keep-cost
+                if ev > bar and (best is None or ev - hand_keep > best[0]):
+                    best = (ev - hand_keep, i,
+                            f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} for the KO "
+                            f"(EV {ev:.0f} > held line {det:.0f} + keep {hand_keep:.0f})")
         self._gamble_trace = {                     # the full working, win or stand-down (ADR-0019)
             "considered": True, "anchored": anchored, "prizes_hidden": prizes_hidden,
             "pool": pool, "det": round(det, 1), "burst": burst_copies,
@@ -1685,6 +1696,54 @@ class PlannerMixin:
             in_hand = sum(1 for c2 in hand if c2.get("id") == cid)
             best = max(best, counts.get(cid, 0) + in_hand)
         return best
+
+    def _card_reaccess_outs(self, cid, counts: dict) -> int:
+        """WP6: the copies in my DECK that re-access card ``cid`` once it is shuffled back in — its own
+        deck copies PLUS every deck-search tutor whose FETCH clause reaches it (`_fetch_target_matches`
+        — Ultra Ball a Pokémon, Energy Search an energy, Fighting Gong a {F} Basic, Mega Signal a Mega
+        ex …). The gamble's gain-side closure pointed BACKWARDS: the same predicate, asked "can I get
+        this card back?" A shuffled card lands in the DECK, so only deck re-access counts (no discard).
+        0 for an unknown card. Errs by under-counting (a lower re-access → a higher, safer keep-cost)."""
+        xst = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if xst is None:
+            return 0
+        outs = counts.get(cid, 0)
+        for tid, n in counts.items():
+            if n <= 0 or tid == cid:
+                continue
+            if any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
+                   and self._fetch_target_matches(cl, xst)
+                   for cl in (self.effects.clauses(tid) if self.effects else ())):
+                outs += n
+        return outs
+
+    def _role_value(self, cid) -> float:
+        """WP6: card ``cid``'s base worth = the tuned `card_worth.ROLE_TIER` max over its declared /
+        derived Roles (`_roles_of`), with the energy and ACE-SPEC fallbacks for an un-Roled card. The
+        ONE currency zone; the closure supplies the redundancy discount (`_keep_cost`)."""
+        from common.card_worth import ROLE_TIER, ENERGY_TIER, ACE_SPEC_TIER
+        base = max((ROLE_TIER.get(r, 0.0) for r in self._roles_of(cid)), default=0.0)
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if base <= 0 and st is not None:
+            if getattr(st, "aceSpec", False):
+                return ACE_SPEC_TIER                          # a one-per-deck, unrecoverable ACE SPEC
+            if getattr(st, "is_typed_basic_energy", False):
+                return ENERGY_TIER
+        return base
+
+    def _keep_cost(self, cid, counts: dict, pool: int, draws: int) -> float:
+        """WP6: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it is
+        by the deadline — ``role_value × (1 − P(re-draw or re-fetch it in `draws`))`` over the
+        shuffle-grown ``pool`` (+1 out for the shuffled held copy rejoining the deck). The replaceability
+        floor (spec §Round 8): a wincon with its tutors live shuffles cheap, a closure-unreachable one-of
+        near its full role value. 0 for a role-less card."""
+        role_value = self._role_value(cid)
+        if role_value <= 0:
+            return 0.0
+        from common.card_worth import keep_cost
+        from common.deck_odds import draw_hit_probability
+        outs = self._card_reaccess_outs(cid, counts) + 1      # +1: the shuffled held copy rejoins deck
+        return keep_cost(role_value, draw_hit_probability(outs, pool, draws))
 
     def _slot_basic_in_zone(self, want, lock, zone: str, counts: dict, discard_basic_types: set) -> bool:
         """A Basic Energy that FILLS the missing slot ``want`` (``None`` = colourless: any Basic) AND

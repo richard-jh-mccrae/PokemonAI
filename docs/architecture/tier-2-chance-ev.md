@@ -49,8 +49,14 @@ The right choice is EV equality over those classes — board-dependent, not "P >
   over `AttackStat.energyTypes`), tracker-anchored hypergeometrics (`deck_odds.draw_hit_probability`,
   fail-closed), the deterministic baseline (`_gamble_det_baseline` = best menu tactical or best
   after-attach chip), per-refresh draw branches (`_DRAW_COUNTS`). Stands down: mid-sim / KO on the
-  menu / protected hand / pre-anchor / hand already holds the enabler. Trace prints P, the class,
-  and the EV-vs-held comparison. Gated REQ-GAMBLE-0001..0005 (`tests/strategy/test_gamble.py`) —
+  menu / pre-anchor / hand already holds the enabler. The old binary *protected-hand* veto is
+  retired (WP6): each held card's shuffle cost is now GRADED — `_keep_cost = role_value × (1 −
+  re-access odds)` (`common/card_worth.py` owns the tier table; `_card_reaccess_outs` is the fetch
+  closure pointed backwards), summed into `hand_keep` and folded into the baseline (`ev > det +
+  hand_keep`, the winner scores `ev − hand_keep`). A KO gamble now fires while holding a
+  *re-accessible* wincon/pre-evo and stands down only when the held plan piece is genuinely
+  closure-unreachable. Trace prints P, the class, the EV-vs-held comparison, and a `keep` field.
+  Gated REQ-GAMBLE-0001..0005 + WP6 (`tests/strategy/test_gamble.py`, `test_card_worth.py`) —
   the canonical Lillie's board commits the gamble at 230 HP and stands down at 200.
 - **The type-payable fix** (`Pilot._attack_type_payable`): the attach-lethal hook no longer counts
   Ignition's {C}{C}{C} as funding Jetting Blow's {W} — the false KO_SCORE unlock that produced the
@@ -205,9 +211,22 @@ shortfall gate (`shortfall ≤ 1 + reachable accel attaches`); for the 3 agents 
 accel is Crispin (post-Item, dragapult), so it's deferred as narrow + core-gate-touching (the other
 decks' accel is bench-targeting: Turbo Flare / Aura Jab).
 
+**WP6 — the replaceability-floor keep-value (built 2026-07-18, test-first):** the gamble's binary
+protected-hand veto is replaced by a GRADED shuffle cost. `common/card_worth.py` owns the ONE tuned
+currency — `ROLE_TIER` (wincon/attacker 30, line-base/engine/accel/tutor 20-10) + `ENERGY_TIER` (8,
+the retired ADR-0060 flat-shed anchor) + `ACE_SPEC_TIER` (25) — and the single `keep_cost` primitive.
+The Pilot derives the rest at the decision point: `_card_reaccess_outs` is the fetch closure pointed
+backwards (a held card's own deck copies ∪ every deck-search tutor whose FETCH clause reaches it),
+`_role_value` reads the tier table (energy / ACE-SPEC fallbacks), `_keep_cost = role_value × (1 −
+draw_hit_probability(outs+1, pool, draws))`. `_best_gamble_line` sums `hand_keep` over the held cards
+and folds it into the baseline (`ev > det + hand_keep`), so a KO gamble fires while holding a
+re-accessible plan piece and only stands down when it is closure-unreachable. The refresh-swing SHED
+re-audit (ADR-0060's other jurisdiction) rides into WP7's oracle fold. Gated `test_card_worth.py`
+(3) + the WP6 gamble unblock test; strategy/blunder/agents re-audit = no flips.
+
 **Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks),
-WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the `fetch_closure.py` +
-`card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.
+WP7 (the `fetch_closure.py` + `card_worth.py` oracle cluster + skill loop, incl. the ADR-0060
+refresh-swing SHED replacement), and the correction-seeded corpus.
 
 ## Acceptance — met 2026-07-05
 

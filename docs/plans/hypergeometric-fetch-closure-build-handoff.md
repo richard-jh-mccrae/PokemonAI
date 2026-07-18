@@ -42,7 +42,12 @@ three-deck tag audit (7 fixes + 2 consumer recalibrations) and full gamble obser
 | Tag-completeness audit (3 decks, 50 cards) | **BUILT** — 7 additive fixes (140/305/674/675 + tutor_pokemon on 1142/1152/1225), 2 consumer recalibrations, suite-green |
 | Gamble observability | **BUILT** — `_gamble_trace` → `Decision.gamble` → sparse `@T` `gamble` key → shell `<details>` dropdown; pinned in `test_gamble.py` |
 | Correction-seeded test corpus | corrections identified + families mapped (spec §Round 10); fixtures NOT yet built |
-| Everything else (WP1-7 below) | designed, NOT built |
+| WP1 Stage-1 closure outs | **BUILT** — `_gamble_ko_classes` outs = literal ∪ tutor/recycle closure; post-Item Supporter supplement (5-tuple) |
+| WP3 draw-engine + accel clauses | **BUILT** — `card_effects.json` draw/accel clauses; AttackStat `recover*` tier (Turbo Flare deck-source) |
+| WP4 Stage-2 draw engines | **BUILT** — `draw_hit_with_engines` two-window closed form (exact at depth 1) |
+| WP5 Outcome classes | **BUILT** — evolution-KO / gust / pump / survival / bench-fill; each void-if-in-hand + det + legality |
+| WP6 Keep-value replaceability floor | **BUILT** — `common/card_worth.py` tier table; graded `_keep_cost` REPLACES the 3 binary gamble stand-downs; suite-green (2975) |
+| WP7 oracle module + skill loop | designed, NOT built |
 
 ## Work packages (priority order; each lands separately, suite-green, trace-extended)
 
@@ -91,7 +96,19 @@ destination). Generalize the shortfall gate: `shortfall ≤ 1 + reachable accel 
 `energy_accel` edges), derived per slot type. Each class: void-if-in-hand + det baseline +
 legality gate. Every class extends the `gamble` trace.
 
-**WP6 — Keep-value: the replaceability floor + graded swing** (spec §Rounds 6-8). Keep-cost(X) =
+**WP6 — Keep-value: the replaceability floor + graded swing** (spec §Rounds 6-8). **BUILT** (the
+gamble protected-hand jurisdiction; refresh-swing SHED re-audit deferred to WP7's oracle fold).
+`common/card_worth.py` owns the ONE tuned currency (`ROLE_TIER`/`ENERGY_TIER`/`ACE_SPEC_TIER` +
+`keep_cost`); the Pilot derives re-access odds from the closure (`_card_reaccess_outs` = the fetch
+graph pointed backwards) and prices `_keep_cost = role_value × (1 − reaccess_odds)` per held card.
+`_best_gamble_line` REPLACES the three binary protected-hand stand-downs (`wincon_in_hand`,
+`line_preevo_in_hand`, `irreplaceable_tool_in_hand`) with a graded `hand_keep` term folded into the
+det baseline (`ev > det + hand_keep`; `best` scores `ev − hand_keep`; the eval row carries a `keep`
+field). A KO gamble now fires while holding a *re-accessible* wincon/pre-evo and stands down only
+when the held plan piece is genuinely closure-unreachable — the replaceability floor, graded, zero
+new constants. Pinned in `test_card_worth.py` (3) + `test_gamble.py`
+(`test_wp6_ko_gamble_fires_despite_a_held_line_preevo_via_graded_keep_cost`); full-family re-audit
+of strategy/blunder/agents = no flips. Original design: Keep-cost(X) =
 role value × ΔP(class need met by X's DEADLINE | keep vs shuffle) — the closure pointed backwards;
 deadlines from the gate library (evolution eligibility, quota k-1, closing edges from
 `reachable_incoming`); sets not sums (discard PAIRS valued jointly — `_shed_signals`' independent

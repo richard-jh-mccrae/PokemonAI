@@ -551,3 +551,19 @@ def test_wp5_survival_heal_out_lifts_the_doomed_active_above_the_incoming():
     assert ms._gamble_survival_classes(obs_full, doomed, full, {1229: 1}, [{"id": 1227}]) == []
     # A held heal that averts is the deterministic play → the class stands down.
     assert ms._gamble_survival_classes(obs, doomed, me, {1229: 1}, [{"id": 1229}]) == []
+
+
+@pytest.mark.req("REQ-GAMBLE-0015")
+def test_wp6_ko_gamble_fires_despite_a_held_line_preevo_via_graded_keep_cost():
+    """WP6: the binary protected-hand stand-downs (wincon / line pre-evo / ACE-SPEC in hand) are gone,
+    replaced by the graded keep-cost priced into the det baseline. A KO gamble (≈ KO_SCORE) now fires
+    even holding a Line pre-evolution — its keep-cost (a re-accessible Staryu) is dwarfed by the KO —
+    where the old binary guard stood down. The eval row carries the `keep` floor."""
+    pilot = _shipped_pilot()
+    obs = _gamble_obs(opp_hp=230)
+    obs["current"]["players"][0]["hand"].append({"id": 1030})   # Staryu — the line pre-evolution
+    decision = pilot.explain(obs)
+    assert decision.planned is not None and decision.planned.goal == "gamble"   # fires despite the pre-evo
+    assert "keep" in decision.planned.rationale                 # the keep-cost is named in the working
+    tr = decision.gamble
+    assert tr["considered"] is True and any("keep" in e for e in tr["evals"])
