@@ -374,3 +374,71 @@ def test_supporter_outs_count_only_when_the_refresh_is_an_item():
     ml._best_gamble_line(obs, select, board2, select["option"], [])
     stamp2 = next(e for e in ml._gamble_trace["evals"] if e["cid"] == 1080)
     assert "post_item_sup" not in stamp2
+
+
+@pytest.mark.req("REQ-GAMBLE-0011")
+def test_wp4_engine_derivation_is_board_gated():
+    """`_gamble_draw_engines`: a drawn engine copy counts only when its ability is unconditional-once-
+    in-play (`once_per_turn_ability` — Drakloak/Dudunsparce; Fezandipiti's post-KO gate and Lunatone's
+    Solrock+discard gate fail closed) AND an eligible base is already on board (rules.md §4: in play
+    since last turn). Depth = board-supported capacity (Σ min(copies, eligible bases) per line), the
+    stage window = the MINIMUM usable window (conservative); an excluded id (the class's own sought
+    evolution) never double-counts."""
+    dx = _shipped_pilot("dragapult_ex")
+    counts = {120: 3, 66: 1, 5: 4}
+    dreepy = {"id": 119, "hp": 70, "energies": [], "appearThisTurn": False}
+    me = {"active": [{"id": 112, "hp": 110, "energies": [5]}], "bench": [dreepy]}
+    copies, windows, ids = dx._gamble_draw_engines(me, counts, set())
+    assert (copies, windows, ids) == (3, (2,), [120])          # 1 eligible Dreepy -> depth 1, Recon window
+    two = {**me, "bench": [dreepy, dict(dreepy)]}
+    assert dx._gamble_draw_engines(two, counts, set())[1] == (2, 2)   # 2 eligible bases -> depth 2
+    placed = {**me, "bench": [{**dreepy, "appearThisTurn": True}]}
+    assert dx._gamble_draw_engines(placed, counts, set()) == (0, (), [])   # new-in-play: can't evolve
+    assert dx._gamble_draw_engines({**me, "bench": []}, counts, set()) == (0, (), [])   # no base at all
+    dun = {"id": 305, "hp": 60, "energies": [], "appearThisTurn": False}
+    both = {**me, "bench": [dreepy, dun]}
+    copies_b, windows_b, ids_b = dx._gamble_draw_engines(both, counts, set())
+    assert copies_b == 4 and ids_b == [66, 120]                # both lines usable
+    assert windows_b == (2, 2)                                 # 2 activations, min window (Recon's 2)
+    assert dx._gamble_draw_engines(both, counts, {120}) == (1, (3,), [66])   # exclusion drops Drakloak
+
+
+@pytest.mark.req("REQ-GAMBLE-0011")
+def test_wp4_engine_windows_lift_the_anchored_gamble_price():
+    """Integration: Munkidori one {C} short, 4 Basic Psychic outs, 2 Drakloak + an eligible Dreepy —
+    the anchored eval prices with the two-window form (base + the missed-but-drew-Drakloak branch's
+    Recon window over the thinned pool) and the trace carries the engine block; without the eligible
+    Dreepy the same board prices at the plain window. Pre-anchor stays plain (engines are an
+    anchored-only sharpening; under-count, never a guess)."""
+    from math import isclose
+    from common.pilot import Board
+    from common.deck_odds import draw_hit_probability, draw_hit_with_engines
+    from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
+    from common.strategy.context import _PLAY
+    dx = _shipped_pilot("dragapult_ex")
+    counts = {5: 4, 120: 2, 119: 1, 9999: 5}                   # outs=4 psychic; engines=2 Drakloak
+    dreepy = {"id": 119, "hp": 70, "energies": [], "appearThisTurn": False}
+    me = {"active": [{"id": 112, "hp": 110, "energies": [5]}], "bench": [dreepy],
+          "hand": [{"id": 1227}], "discard": [], "prize": [None] * 3}
+    opp = {"active": [{"id": 666, "hp": 60, "energies": []}], "bench": [], "prize": [None] * 3}
+    obs = {"current": {"yourIndex": 0, "turn": 6, "players": [me, opp], "energyAttached": False},
+           "select": {"option": [{"type": _PLAY, "area": 2, "index": 0}]}}
+    board = Board(turn=6, my_active_id=112, my_active_energy=1, deck_known_counts=counts,
+                  my_prizes_remaining=3, opp_prizes_remaining=3)
+    dx._best_gamble_line(obs, obs["select"], board, obs["select"]["option"], [])
+    tr = dx._gamble_trace
+    cls = tr["classes"][0]
+    assert cls["engine_copies"] == 2 and cls["engine_windows"] == [2] and cls["engine_ids"] == [120]
+    pool, ns = tr["pool"], _draw_branches(1227, board)
+    expect = sum(draw_hit_with_engines(4, pool, n, 2, (2,)) for n in ns) / len(ns)
+    assert isclose(tr["evals"][0]["p"], round(expect, 3))
+    assert expect > sum(draw_hit_probability(4, pool, n) for n in ns) / len(ns)   # a real lift
+    # Same board, Dreepy placed THIS turn: no usable engine -> the plain window price.
+    dx._gamble_trace = None
+    me2 = {**me, "bench": [{**dreepy, "appearThisTurn": True}]}
+    obs2 = {**obs, "current": {**obs["current"], "players": [me2, opp]}}
+    dx._best_gamble_line(obs2, obs["select"], board, obs["select"]["option"], [])
+    tr2 = dx._gamble_trace
+    assert "engine_copies" not in tr2["classes"][0]
+    plain = sum(draw_hit_probability(4, pool, n) for n in ns) / len(ns)
+    assert isclose(tr2["evals"][0]["p"], round(plain, 3))

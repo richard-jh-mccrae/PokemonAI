@@ -1564,13 +1564,24 @@ class PlannerMixin:
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
         pool = deck_count + max(0, len(hand) - 1)             # the shuffle-grown draw pool
         burst_copies = self._gamble_burst_copies(class_counts, hand, stat)   # the recovery class (below)
-        from common.deck_odds import draw_hit_probability
+        from common.deck_odds import draw_hit_probability, draw_hit_with_engines
         if anchored:
             def hit(cp, n):
                 return draw_hit_probability(cp, pool, n)
         else:
             def hit(cp, n):
                 return self._prize_split_hit(cp, deck_count, prizes_hidden, pool, n)
+        # WP4 — the Stage-2 draw-engine windows, per class (the class's own sought/supplement ids are
+        # EXCLUDED so a Drakloak that is itself the sought evolution never double-counts). Engines are
+        # an ANCHORED-only sharpening: pre-anchor the prize-split window stays plain (under-count,
+        # never a guess about where the engine copies sit).
+        class_engines = []
+        for _c, _v, _l, sought, (_sc, sup_ids) in classes:
+            if anchored:
+                class_engines.append(self._gamble_draw_engines(
+                    me, class_counts, set(sought) | set(sup_ids)))
+            else:
+                class_engines.append((0, (), []))
         best = None                                           # (ev, index, rationale)
         evals = []                                            # per (refresh option × class) working rows
         for i, o in enumerate(options):
@@ -1587,9 +1598,15 @@ class PlannerMixin:
             rst = self.stats.get(cid) if self.stats else None
             sup_live = bool(rst is not None and getattr(rst, "is_item", False)
                             and not board.supporter_played)
-            for copies, ko_value, label, sought, (sup_copies, _sup_ids) in classes:
+            for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
+                    in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
-                p = sum(hit(eff, n) for n in ns) / len(ns)
+                if e_cp:
+                    # WP4: the missed refresh may still hit a usable draw engine — its window digs
+                    # the SAME class outs over the thinned pool (the two-window closed form).
+                    p = sum(draw_hit_with_engines(eff, pool, n, e_cp, e_ws) for n in ns) / len(ns)
+                else:
+                    p = sum(hit(eff, n) for n in ns) / len(ns)
                 ev = p * ko_value
                 if burst_copies and det > 0:
                     # the RECOVERY class: the miss branch may still redraw the held burst Energy
@@ -1611,8 +1628,10 @@ class PlannerMixin:
             "considered": True, "anchored": anchored, "prizes_hidden": prizes_hidden,
             "pool": pool, "det": round(det, 1), "burst": burst_copies,
             "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s,
-                         **({"post_item_sought": si, "post_item_copies": sc} if sc else {})}
-                        for c, v, la, s, (sc, si) in classes],
+                         **({"post_item_sought": si, "post_item_copies": sc} if sc else {}),
+                         **({"engine_copies": ec, "engine_windows": list(ew), "engine_ids": ei}
+                            if ec else {})}
+                        for (c, v, la, s, (sc, si)), (ec, ew, ei) in zip(classes, class_engines)],
             "evals": evals,
             "best": ([best[1], round(best[0], 1)] if best is not None else None)}
         if best is None:
@@ -1730,6 +1749,49 @@ class PlannerMixin:
                        for t, n in counts.items()):
                     return True
         return False
+
+    def _gamble_draw_engines(self, me: dict, counts: dict, exclude: set) -> tuple:
+        """WP4: the refresh window's usable DRAW ENGINES — ``(engine_copies, stage_windows,
+        engine_ids)`` for `deck_odds.draw_hit_with_engines`. A drawn engine copy is usable iff its
+        ability is unconditional-once-in-play (`draw` clause, ``condition: once_per_turn_ability`` —
+        Drakloak's Recon, Dudunsparce's Run Away Draw; Fezandipiti's post-KO gate and Lunatone's
+        Solrock+hand-discard gate fail CLOSED — the refresh empties the hand, the gate can't be
+        promised) AND an eligible base for it is already on board (rules.md §4: a body in play since
+        last turn, ``appearThisTurn`` False — evolving the drawn engine onto it is legal this turn;
+        turn ≥ 2 is gated upstream). Depth = board-supported capacity, Σ per line of min(copies in
+        pool, eligible bases) — never a hardcoded stage count (spec §recursion point 2). The stage
+        window = the MINIMUM usable window (Recon sees 2, take-1 greedy; Run Away Draw sees 3) —
+        conservative when lines mix. ``exclude`` drops ids the class already counts as outs (a
+        Drakloak that IS the sought evolution never double-counts). Errs by under-counting only."""
+        bases: dict = {}                                      # base name -> eligible bodies on board
+        for b in ((me.get("active") or []) + (me.get("bench") or [])):
+            if not b or b.get("appearThisTurn"):
+                continue
+            st = self.stats.get(b.get("id")) if self.stats else None
+            nm = getattr(st, "name", None)
+            if nm:
+                bases[nm] = bases.get(nm, 0) + 1
+        ids, copies_total, activations, min_window = [], 0, 0, None
+        for eid, n in counts.items():
+            if n <= 0 or eid in exclude:
+                continue
+            st = self.stats.get(eid) if self.stats else None
+            base = getattr(st, "evolvesFrom", None) if st else None
+            if not base or not bases.get(base):
+                continue
+            for cl in (self.effects.clauses(eid) if self.effects else ()):
+                if cl.get("kind") == "draw" and cl.get("condition") == "once_per_turn_ability":
+                    window = int(cl.get("window") or cl.get("amount") or 0)
+                    if window <= 0:
+                        break
+                    ids.append(eid)
+                    copies_total += n
+                    activations += min(n, bases[base])
+                    min_window = window if min_window is None else min(min_window, window)
+                    break
+        if not ids or not activations:
+            return 0, (), []
+        return copies_total, (min_window,) * activations, sorted(ids)
 
     def _supporter_evolution_tutor_reaches(self, tid, eid, counts: dict) -> bool:
         """WP5 (Supporter branch): True iff Supporter ``tid`` can deliver the evolution ``eid`` —

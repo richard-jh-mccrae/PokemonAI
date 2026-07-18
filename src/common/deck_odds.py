@@ -49,6 +49,60 @@ def draw_hit_probability(copies, pool, draws) -> float:
     return 1.0 - comb(p - c, n) / comb(p, n)
 
 
+def _none_of(k, pool, n) -> float:
+    """P(none of ``k`` marked cards among ``n`` drawn from ``pool``) — the miss ratio both bracket
+    terms of the Stage-2 form are built from. Overdraws clamp; drawing more than ``pool − k`` cards
+    must include a marked one (0.0)."""
+    n = min(n, pool)
+    if n <= 0:
+        return 1.0
+    if pool - k < n:
+        return 0.0
+    return comb(pool - k, n) / comb(pool, n)
+
+
+def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
+    """WP4 — the Stage-2 draw-engine **two-window closed form** (hypergeometric-fetch-closure §Stage 2):
+
+        P(assemble) = P(≥1 out in n)
+                    + [P(no out in n) − P(no out ∧ no usable engine in n)] × P(≥1 out in m | pool−n)
+
+    iterated once per board-supported engine stage (``windows`` — the caller derives the depth from
+    eligible pre-evo/engine pairings, never a constant). ``outs`` and ``engines`` are DISJOINT card
+    classes, so at depth 1 the form is EXACT (conditioning on a missed window leaves the outs uniform
+    in the thinned pool — pinned against exhaustive enumeration). Deeper stages reuse the same two
+    ``comb`` ratios over the thinned pool with one engine consumed per stage — the engine-availability
+    term there is the documented approximation (the spec's measured depth-2 magnitude ≈ +0.6pp).
+    Window-2 outs are the SAME class outs (the full Stage-1 union — spec §recursion point 4).
+    Degenerates to ``draw_hit_probability`` with no engines/windows; bad input → 0.0 (an endorser
+    fails closed); the total is clamped to a probability."""
+    try:
+        o, p, n, e = int(outs), int(pool), int(draws), int(engines)
+        ws = tuple(int(w) for w in windows)
+    except Exception:
+        return 0.0
+    if o <= 0 or p <= 0 or n <= 0:
+        return 0.0
+    base = draw_hit_probability(o, p, n)
+    if e <= 0 or not ws:
+        return base
+    total = base
+    pool_k = p
+    drawn = min(n, p)
+    weight = _none_of(o, p, n) - _none_of(o + e, p, n)   # missed, but drew ≥1 usable engine
+    for k, m in enumerate(ws):
+        pool_k -= drawn
+        if pool_k <= 0 or weight <= 0.0 or m <= 0:
+            break
+        total += weight * draw_hit_probability(o, pool_k, m)
+        e_left = e - (k + 1)                             # one engine consumed per activation
+        if e_left <= 0:
+            break
+        weight *= _none_of(o, pool_k, m) - _none_of(o + e_left, pool_k, m)
+        drawn = min(m, pool_k)
+    return max(0.0, min(1.0, total))
+
+
 def p_contains(unseen_copies, prizes_hidden, deck_count) -> float:
     """P(my deck still contains ≥1 copy of a card) from the hypergeometric split of its ``unseen_copies``
     over the ``deck_count + prizes_hidden`` hidden positions (of which ``prizes_hidden`` are face-down

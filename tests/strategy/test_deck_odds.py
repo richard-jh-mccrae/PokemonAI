@@ -228,3 +228,53 @@ def test_probable_whiff_is_mutually_exclusive_with_the_sound_empty_guard():
     fired = _fired(pilot.explain(obs).options[0])
     assert "dont-search-an-empty-deck" in fired              # sound guard fires
     assert "dont-search-a-probable-whiff" not in fired       # probabilistic rung stands aside
+
+
+# ── WP4: the Stage-2 draw-engine two-window closed form (hypergeometric-fetch-closure §Stage 2) ──
+# P(assemble) = P(≥1 out in n) + [P(no out in n) − P(no out ∧ no usable engine in n)] × P(≥1 out in
+# m | pool−n) — iterated per board-supported engine stage. Outs and engines are DISJOINT classes, so
+# at depth 1 the form is EXACT: pinned below against a full exhaustive enumeration, not a simulation.
+
+@pytest.mark.req("REQ-GAMBLE-0011")
+def test_two_window_form_matches_exhaustive_enumeration_at_depth_one():
+    """Universe: pool 9 = 2 outs, 2 engines, 5 blanks; refresh n=3, one engine window m=2 (Recon).
+    The oracle enumerates every C(9,3) first window and, on a missed-with-engine branch, every
+    C(6,2) second window — the exact expectation the closed form must reproduce."""
+    from itertools import combinations
+    from math import comb
+    from common.deck_odds import draw_hit_with_engines
+    cards = ["O", "O", "E", "E", "b", "b", "b", "b", "b"]
+    n, m = 3, 2
+    total = hit = 0
+    for w1 in combinations(range(len(cards)), n):
+        total += 1
+        kinds = [cards[i] for i in w1]
+        if "O" in kinds:
+            hit += 1                                        # window 1 finds the out
+            continue
+        if "E" not in kinds:
+            continue                                        # missed, no engine: the chain ends
+        rest = [cards[i] for i in range(len(cards)) if i not in w1]
+        sub_hit = sum(1 for w2 in combinations(range(len(rest)), m)
+                      if any(rest[i] == "O" for i in w2))
+        hit += sub_hit / comb(len(rest), m)                 # engine window over the thinned pool
+    exact = hit / total
+    assert draw_hit_with_engines(2, 9, 3, 2, (2,)) == pytest.approx(exact)
+
+
+@pytest.mark.req("REQ-GAMBLE-0011")
+def test_two_window_form_degenerates_bounds_and_fails_closed():
+    """No engines / no windows → exactly the plain window draw; engines only ever ADD (the miss
+    branch gets a second chance) and the total stays a probability; a deeper board-supported chain
+    ≥ a shallower one; garbage input → 0.0 (an endorser fails closed)."""
+    from common.deck_odds import draw_hit_probability, draw_hit_with_engines
+    base = draw_hit_probability(3, 30, 6)
+    assert draw_hit_with_engines(3, 30, 6, 0, (2,)) == pytest.approx(base)
+    assert draw_hit_with_engines(3, 30, 6, 2, ()) == pytest.approx(base)
+    one = draw_hit_with_engines(3, 30, 6, 2, (2,))
+    two = draw_hit_with_engines(3, 30, 6, 2, (2, 2))
+    assert base < one <= two <= 1.0
+    assert draw_hit_with_engines(3, 30, 6, 2, (3,)) > one   # a wider engine window digs deeper
+    assert draw_hit_with_engines(0, 30, 6, 2, (2,)) == 0.0  # no outs: nothing to assemble
+    assert draw_hit_with_engines("x", 30, 6, 2, (2,)) == 0.0
+    assert draw_hit_with_engines(3, 30, 6, "x", (2,)) == 0.0

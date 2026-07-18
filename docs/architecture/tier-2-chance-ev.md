@@ -176,10 +176,25 @@ Cinderace deck with zero deck rules — mega_starmie's hand-declared Role become
 the Round-9 derive-then-declare shape. For the existing agents the union is a proven no-op (both
 already declare it; suite unflipped).
 
-**Still designed, not built:** the WP3 clause CONSUMERS (WP4 draw-engine Stage-2, WP5 shortfall gate),
-(Stage-2 draw engines — the two-window closed form), WP5's remaining classes (gust / damage-pump /
-survival / bench-fill), WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the
-`fetch_closure.py` + `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.
+**WP4 — Stage-2 draw engines (built 2026-07-18, test-first):** the two-window closed form ships as
+`deck_odds.draw_hit_with_engines` — P(assemble) = P(≥1 out in n) + [P(miss) − P(miss ∧ no usable
+engine)] × P(≥1 out in the engine window | thinned pool), iterated per board-supported stage. EXACT
+at depth 1 (outs and engines are disjoint classes — pinned against a full exhaustive enumeration,
+not a simulation); deeper stages are the spec's same-two-ratios loop with one engine consumed per
+stage (documented approximation, measured magnitude ≈ +0.6pp). `planner._gamble_draw_engines`
+derives the usable engines from the representation: a `draw` clause with
+`condition: once_per_turn_ability` (Drakloak look-2-take-1 → window 2; Dudunsparce draw-3 → window
+3; Fezandipiti's post-KO and Lunatone's Solrock+hand-discard gates fail closed) AND an eligible base
+in play since last turn — depth = Σ min(copies, eligible bases) per line, never a constant. Window-2
+outs are the SAME class outs (the full Stage-1 union); a sought-evolution engine is excluded from
+its own class (no double-count); pre-anchor stays plain (anchored-only sharpening). The trace
+carries `engine_copies` / `engine_windows` / `engine_ids` per class. On-board engines with unused
+abilities remain the sequencing rung's jurisdiction (fire before the refresh, deterministically).
+
+**Still designed, not built:** WP5's remaining classes + shortfall gate (gust / damage-pump /
+survival / bench-fill; `shortfall ≤ 1 + reachable accel attaches` reading the accel clauses), WP6
+(the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the `fetch_closure.py` +
+`card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.
 
 ## Acceptance — met 2026-07-05
 

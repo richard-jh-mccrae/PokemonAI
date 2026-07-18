@@ -407,8 +407,20 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 - [x] ✅ **WP2** **Pre-anchor gambles NOT stood down** — BUILT: the `if not deck_known_counts: return
       None` gate is replaced by the prize-split-weighted window sum (`_prize_split_hit`, ≤ u+1 terms).
 - [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
-- [ ] **WP4** **Engine depth = board-supported capacity** (eligible pre-evo/engine pairings), not a
-      hardcoded one stage; window-2 outs are the full Stage-1 union, not literal Energy.
+- [x] ✅ **WP4** **Engine depth = board-supported capacity** — BUILT 2026-07-18, test-first:
+      `deck_odds.draw_hit_with_engines` (the two-window closed form, EXACT at depth 1 — pinned against
+      exhaustive enumeration, not simulation; deeper stages the documented same-two-ratios loop with
+      one engine consumed per stage) + `planner._gamble_draw_engines` (usable = unconditional
+      once-per-turn draw ability + an eligible base in play since last turn; depth = Σ min(copies,
+      eligible bases) per line; stage window = min usable window — Recon 2 take-1 greedy, Run Away
+      Draw 3; Fezandipiti/Lunatone's conditions fail closed). Window-2 outs = the SAME class outs
+      (the full Stage-1 union incl. the post-Item Supporter supplement), never literal Energy only.
+      A sought-evolution engine (Drakloak for a Dreepy Active) is excluded — no double-count.
+      Anchored-only sharpening (pre-anchor stays the plain prize-split window — under-count, safe);
+      the trace carries `engine_copies`/`engine_windows`/`engine_ids` per class. On-board engines
+      with UNUSED abilities stay the sequencing rung's jurisdiction (`use-the-draw-engine-ability`
+      fires them before the refresh deterministically — pricing them inside the gamble would
+      double-count the same window).
 - [x] ✅ **WP5** **Evolution-KO class** added to the gamble rung (`_gamble_evolution_ko_classes`: the
       Active's eligible evolutions' attacks, Energy carried over, Item Pokémon-tutor closure) — BUILT.
 - [ ] **Survival class** (avert the ADR-0064 predicted-loss shape via `switch`/`heal` closure) —
