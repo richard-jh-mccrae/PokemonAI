@@ -61,9 +61,14 @@ benefit — the anti-speculation / currency-zone discipline says don't. The shad
 already converged; its residue rides with the gate library.
 
 **Staged (designed here, NOT built — each a corpus-gated behavioural flip):**
-- **The gate library + deadlines (Round 9 §2).** Deferred deliberately: with no consumer beyond the
-  gamble's fixed-window keep-cost, a gate library would be speculative machinery (Round 8 §6). It
-  lands with the mid-value classes that read it.
+- **The gate library + deadlines (Round 9 §2).** Now the identified critical path — both surviving
+  grab/pitch gaps and the retired guards' residue (`hold-successor-when-doomed`, the undeployable-
+  wincon discount) are its jurisdiction, not keep_cost's. Scoped in
+  [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md): `keep_cost = role_value ×
+  [P(need met by deadline | keep) − P(met | shuffle)]`, deadlines derived from existing Board state
+  (evolution / quota / recycler / pressure gates). Recommended first cut: the **evolution gate** + a
+  discard keep-floor (the flagship pair `86091435-68` flips while `83686860-18` still correctly
+  pitches a covered Drakloak — the guard a flat floor can't supply).
 - **The held-card-risk tier-2 seam (Round 8 §5)** and **the skill loop** (deck-genie Role Sheet /
   deck-align fold — Round 9 §4). The oracle is the backend; the skill loop is how decks feed it.
 
