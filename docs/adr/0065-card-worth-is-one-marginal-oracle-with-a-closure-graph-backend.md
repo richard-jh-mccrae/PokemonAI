@@ -3,9 +3,9 @@
 **Status.** Accepted (grilled 2026-07-17 across Rounds 7–9 of
 [`docs/plans/hypergeometric-fetch-closure.md`](../plans/hypergeometric-fetch-closure.md)) and
 **BUILT 2026-07-18 — the module seam + two consumers converged, suite-green.** The gamble keep-floor
-(WP6) and now the **refresh SHED** consume the oracle; the fetch grab/pitch and the plan-tier credit
-remain STAGED (see §Build status), each landing under the correction corpus + score-diff gate,
-"staged like the ADR-0064 five-call-site refactor." Amends ADR-0060 (its flat SHED + the
+(WP6) and the **refresh SHED** consume the oracle; the **fetch grab/pitch** shadow was investigated
+and found ALREADY subsumed (its tuned discard ladder prices roles + redundancy; its residual gaps are
+the gate library's, not keep_cost's — see §Build status). Only the plan-tier credit remains STAGED. Amends ADR-0060 (its flat SHED + the
 `hold-wincon` / `hold-line-piece` / `hold-wincon-with-base` / `hold-irreplaceable-tool` guard
 jurisdiction is now folded into the graded `Σ keep_cost`); builds on ADR-0023 (the shared fetch
 comparator) and ADR-0032 (Effect-Clause tier).
@@ -43,10 +43,24 @@ comparator) and ADR-0032 (Effect-Clause tier).
   priced at zero from a typo (every declared role is known vocabulary; every ROLES key is a real
   deck card; every worth-roled card prices positive).
 
+**Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
+gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
+correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles
+(`keep-key −30` wincon/ACE-SPEC/burst, `keep-line-base −15`, `keep-engine −8`, …) AND redundancy
+(`card_is_hand_duplicate` / `card_is_redundant`; the grab side's `dont-grab-a-card-already-in-hand`).
+Measuring the seven corpus targets against the shipped agent: **five were malformed fixtures** (a
+single-index `correct` for a `minCount=2` forced discard) that the ladder ALREADY satisfies
+(`correct ⊆ chosen` — the flagged card is discarded); they are reclassified as subset PINS. The two
+genuine residual gaps — `86091435-68` (don't pitch a Drakloak that can *evolve the active this turn*)
+and `85059103-9` (prefer the Petrel tutor-chain over a redundant draw Supporter; the duplicate is
+already avoided) — are **DEADLINE / fetch-priority** nuances, NOT keep-value: a flat `keep_cost` floor
+on Drakloak would regress `83686860-18` (where pitching a Drakloak IS correct, a benched copy exists)
+to fix `86091435-68`. That distinction is the gate library's jurisdiction (below), not the oracle's.
+Converging the ladder onto `keep_cost` would re-baseline ~8 tuned pins for zero measured corpus
+benefit — the anti-speculation / currency-zone discipline says don't. The shadow is effectively
+already converged; its residue rides with the gate library.
+
 **Staged (designed here, NOT built — each a corpus-gated behavioural flip):**
-- **The fetch grab/pitch convergence.** `doctrine_fetch._grab_value_of` / `_pitch_value_of` /
-  `_shed_signals` stay Hypothesis-rung sums today; re-pointing them at `role_value` + the closure
-  is the round-7 four-shadow collapse, staged under the discard-pair / fetch-target corpus families.
 - **The gate library + deadlines (Round 9 §2).** Deferred deliberately: with no consumer beyond the
   gamble's fixed-window keep-cost, a gate library would be speculative machinery (Round 8 §6). It
   lands with the mid-value classes that read it.

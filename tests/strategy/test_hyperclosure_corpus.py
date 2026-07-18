@@ -33,6 +33,15 @@ CORR = REPO / "data" / "corrections"
 PINS = {
     # discard-pair valuation (sets, not sums; role floors)
     "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",
+    # These five record a SINGLE flagged discard for a 2-card forced pitch (correct ⊆ chosen, the
+    # partial-discard semantics above). The shipped keep-value ladder ALREADY discards the flagged
+    # card in each — role-floor + duplicate-first work; they pin that (they were misfiled as targets
+    # because a 1-index `correct` can never equal a 2-index pick).
+    "82525101-14": "dp: never Ultra-Ball away the Ignition burst — pitch the duplicate Wally's (⊆)",
+    "82749656-20": "dp: keep the ACE SPEC Hero's Cape — give back the redundant Salvatore (⊆)",
+    "83686860-18": "dp: don't pitch BOTH Dreepy — one line survives; Judge goes instead (⊆)",
+    "82867148-48": "dp: keep the lone Boss's/Harlequin disruptors — pitch a duplicate Lillie's (⊆)",
+    "82753746-11": "ft: pitch the role-dead Cinderace after the opening — keep the draw Supporters (⊆)",
     # fetch-target valuation (role × gate × closure)
     "84890060-26": "ft: energy-over-body — the fetched {F} chains attach→retreat→KO",
     "84071010-53": "ft: fetch the Solrock line piece, pre-evos accounted",
@@ -60,14 +69,15 @@ PINS = {
 }
 TARGETS = {
     # discard-pair valuation
-    "82525101-14": "dp: kept Ignition — never Ultra-Ball it away; pitch the duplicate",
-    "82749656-20": "dp: pitched the ACE SPEC Hero's Cape",
-    "83686860-18": "dp: pitched BOTH Dreepy — killed a line (the pair-valuation case)",
-    "82867148-48": "dp: duplicates-first pitching",
-    "86091435-68": "dp: pitch order / duplicate-first at the Lillie's shuffle",
-    # fetch-target valuation
-    "82753746-11": "ft: role-dead Cinderace — gate closed after opening",
-    "85059103-9":  "ft: fetched a duplicate of a held card",
+    # The two grab/pitch targets that survive as GENUINE gaps (the other five discard-pair records
+    # were malformed single-index fixtures now pinned above). Both need the DEADLINE/gate library, NOT
+    # the keep_cost oracle — the shipped ladder already prices roles + redundancy (ADR-0065 §grab/pitch):
+    "86091435-68": "dp: don't pitch a Drakloak that can EVOLVE the active Dreepy this turn — a "
+                   "deployability deadline (a benched-Drakloak board pitches it correctly, ep83686860 "
+                   "f18), which a flat keep_cost floor can't tell apart. Gate library, not keep_cost.",
+    "85059103-9":  "ft: fetch Petrel (→ Fighting Gong → Solrock chain) over a redundant draw Supporter "
+                   "— the duplicate Lillie's is already avoided (`dont-grab-a-card-already-in-hand`); "
+                   "the gap is tutor-chain fetch-priority, not redundancy.",
     # whether-to-play / hold the fetch
     "86091728-19": "hold: attach the {P} to Dreepy rather than a needless Ultra Ball",
     "85163634-17": "hold: attack (Turbo Flare) instead of Ultra Ball",
@@ -126,9 +136,22 @@ def _pilot(agent: str):
 
 
 def _replay_picks_correct(cid: str) -> bool:
+    """Did the shipped Pilot make the human's pick? Set-valued (order-independent).
+
+    A forced DISCARD select takes ``minCount`` cards, but a human often records only the ONE
+    load-bearing card their correction is about ("pitch the duplicate Wally's, not the Ignition") —
+    a `correct` shorter than the pick count. Such a partial correction is satisfied iff every card it
+    names IS discarded (`correct ⊆ chosen`): the flagged mistake is not made, whatever fills the
+    remaining forced slot. A fully-specified correction (as many picks as the select forces) still
+    demands set equality."""
     rec = _record(cid)
     d = _pilot(rec["agent"]).explain(rec["obs"])
-    return list(d.chosen) == list(rec["correct"])
+    chosen, correct = set(d.chosen), set(rec["correct"])
+    sel = rec["obs"].get("select") or {}
+    picks = sel.get("minCount") or sel.get("maxCount") or len(correct) or 1
+    if 0 < len(correct) < picks:                 # a partial discard correction: the flagged card(s) only
+        return correct <= chosen
+    return chosen == correct
 
 
 def _param(cid, reason, *, xfail):
