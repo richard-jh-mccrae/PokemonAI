@@ -110,13 +110,16 @@ as a dropdown in the blunder shell — so every future closure stage lands obser
 Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeometric-fetch-closure-build-handoff.md).
 
 **Built (2026-07-18) — the gamble GAIN side, suite-green:**
-- **WP1 — Stage-1 fetch-closure outs** (`_ENERGY_FETCH_ITEMS` + `_fetch_reaches_slot`): a KO class's
-  outs are no longer literal Basic Energy only — a drawable Item that puts a matching Basic into hand
-  (whole-deck search: Energy Search / Fighting Gong {F}-locked / Energy Search Pro; or recycle from
-  the visible discard: Night Stretcher / Energy Retrieval / Max Rod) joins the entry points when its
-  target is reachable. The recycle branch makes a class EXIST that the literal reading could not
-  (deck-closure ∪ discard-closure). Predicates verified against card TEXT, not bare tags (Gong's
-  `tutor_energy` can't see the {F}-lock). Closure out-ids flow into the trace's `sought`.
+- **WP1 — Stage-1 fetch-closure outs** (`_fetch_reaches_slot`): a KO class's outs are no longer
+  literal Basic Energy only — a drawable card with a `basic_energy` **FETCH clause** (whole-deck
+  search: Energy Search / Fighting Gong {F}-locked / Energy Search Pro; or recycle from the visible
+  discard: Night Stretcher / Energy Retrieval / Max Rod) joins the entry points when its target is
+  reachable. The recycle branch makes a class EXIST that the literal reading could not (deck-closure ∪
+  discard-closure). The tutor/recycle predicates (type-lock, zone, target class) live in the card
+  **representation** — `card_effects.json` FETCH clauses (ADR-0032), authored in `effect_overrides.json`
+  and verified against engine card text — so the closure never parses card text (Round-11 ruling);
+  Fighting Gong's {F}-lock is its `energy_type: 6` clause, which the generic `tutor_energy` tag can't
+  carry. Closure out-ids flow into the trace's `sought`.
 - **WP2 — pre-anchor gambles priced** (`_prize_split_hit`): the `if not deck_known_counts: return None`
   stand-down (which priced every pre-anchor gamble at zero) is replaced by the prize-split-weighted
   window sum — the decklist is fully known, only the unseen copies' prize assignment is random, so
@@ -127,9 +130,17 @@ Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeome
   evolution of my (evolution-eligible) Active → evolve → ITS attack KOs with the carried Energy + one
   attach" (rules.md §4: evolving keeps Energy, a Mega ex does NOT end the turn). Outs = the evolution's
   copies ∪ the Item Pokémon-tutor closure (Ultra Ball / Poké Pad / Mega Signal). Voided when the
-  evolution is in hand (the deterministic evolve-KO owns it).
+  evolution is in hand (the deterministic evolve-KO owns it). The Pokémon-tutor closure reads the
+  representation too (`_fetch_reaches_pokemon` over FETCH clauses): Poké Pad's `no_rule_box` clause
+  correctly excludes a Rule-Box Mega ex — the parametric fact the `tutor_pokemon` tag can't carry.
 
-**Still designed, not built:** WP3 (the ADR-0032 clause tier + `_FETCH_FILTERS` migration), WP4
+**Fetch-clause tier (WP3, started):** the tutor/recycle predicates for the gamble closure now live in
+`card_effects.json` as `fetch` clauses (`target` / `zone` / `energy_type` / `no_rule_box`), authored
+in `effect_overrides.json` and verified at source — the Round-11 ruling that the card representation
+carries every mechanical need so text is never parsed. The broader WP3 (draw-engine + accel clauses,
+migrating `doctrine_fetch._FETCH_FILTERS` off the tag-only fetch set) remains.
+
+**Still designed, not built:** WP3 remainder (draw-engine/accel clauses + `_FETCH_FILTERS` migration), WP4
 (Stage-2 draw engines — the two-window closed form), WP5's remaining classes (gust / damage-pump /
 survival / bench-fill), WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the
 `fetch_closure.py` + `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.

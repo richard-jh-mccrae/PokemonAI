@@ -174,23 +174,43 @@ def test_recovery_class_counts_the_held_burst_energy_copies():
 
 
 @pytest.mark.req("REQ-GAMBLE-0007")
-def test_wp1_fetch_reaches_slot_predicate():
-    """WP1: the interim fetch-closure predicate `_fetch_reaches_slot` — an Item out reaches the
-    missing slot only when its type-lock is compatible AND its target is still in the source zone.
-    Fighting Gong (deck search, {F}-locked) is the canonical trap: its generic `tutor_energy` tag
-    can't see the {F}-lock, so it is a {F} out only, never a {W} out."""
+def test_fetch_predicates_live_in_the_card_representation_not_text():
+    """Round-11 ruling: the tutor/recycle predicate the gamble closure needs must live in the card
+    REPRESENTATION (`card_effects.json` FETCH clauses), so no card text is parsed at runtime or build
+    time. Pin the load-bearing predicates against source: Fighting Gong is {F}-locked (energy_type 6)
+    with an energy AND a Pokémon branch; the recyclers are discard-zone; Poké Pad is no-Rule-Box."""
+    from common.effects import CardEffects
+    eff = CardEffects.load()
+    gong = eff.clauses(1142)
+    assert {"kind": "fetch", "target": "basic_energy", "zone": "deck", "energy_type": 6} in gong
+    assert {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "energy_type": 6} in gong
+    # the plain any-Basic searchers, the discard recyclers, and the no-Rule-Box / mega Pokémon tutors
+    assert {"kind": "fetch", "target": "basic_energy", "zone": "deck"} in eff.clauses(1119)
+    assert {"kind": "fetch", "target": "basic_energy", "zone": "discard"} in eff.clauses(1118)
+    assert {"kind": "fetch", "target": "basic_energy", "zone": "discard"} in eff.clauses(1097)
+    assert eff.clauses(1152)[0].get("no_rule_box") is True           # Poké Pad
+    assert eff.clauses(1145)[0].get("target") == "mega"              # Mega Signal
+
+
+@pytest.mark.req("REQ-GAMBLE-0007")
+def test_wp1_fetch_reaches_slot_reads_the_clause_representation():
+    """WP1: `_fetch_reaches_slot(want, card_id, …)` reads the card's `basic_energy` FETCH clauses
+    from `card_effects.json` (ADR-0032) — never card text. Fighting Gong (1142) is the canonical
+    trap: its `energy_type: 6` clause makes it a {F} out only (the generic `tutor_energy` tag can't
+    carry the lock), never a {W} out, and only when a {F} Basic is still reachable in the source zone."""
     ml = _shipped_pilot("mega_lucario")
     F, W = 6, 3
     deck = {F: 2, 1142: 4}                                # Fighting basics + Fighting Gong in the deck
-    # Fighting Gong (1142) = ("deck", 6): reaches a {F} slot / a colourless slot; NOT a {W} slot.
-    assert ml._fetch_reaches_slot(F, ("deck", F), deck, set()) is True
-    assert ml._fetch_reaches_slot(None, ("deck", F), deck, set()) is True   # any Basic fills colourless
-    assert ml._fetch_reaches_slot(W, ("deck", F), deck, set()) is False     # {F}-locked ≠ a {W} slot
-    assert ml._fetch_reaches_slot(F, ("deck", F), {1142: 4}, set()) is False   # no {F} Basic left in deck
-    # Recycle (discard zone): reaches iff a matching Basic sits in the VISIBLE discard, no prize split.
+    assert ml.effects.clauses(1142)                       # the clause tier carries the predicate
+    assert ml._fetch_reaches_slot(F, 1142, deck, set()) is True
+    assert ml._fetch_reaches_slot(None, 1142, deck, set()) is True    # any Basic fills a colourless slot
+    assert ml._fetch_reaches_slot(W, 1142, deck, set()) is False      # {F}-locked ≠ a {W} slot
+    assert ml._fetch_reaches_slot(F, 1142, {1142: 4}, set()) is False   # no {F} Basic left in deck
+    # Recycle (discard-zone clause): reaches iff a matching Basic sits in the VISIBLE discard.
     ms = _shipped_pilot("mega_starmie")
-    assert ms._fetch_reaches_slot(W, ("discard", None), {}, {W}) is True
-    assert ms._fetch_reaches_slot(W, ("discard", None), {}, set()) is False
+    assert ms._fetch_reaches_slot(W, 1097, {1097: 2}, {W}) is True    # Night Stretcher, {W} in discard
+    assert ms._fetch_reaches_slot(W, 1097, {1097: 2}, set()) is False  # empty discard → no recycle
+    assert ms._fetch_reaches_slot(W, 3, {3: 4}, set()) is False       # a Basic Energy is not a fetcher
 
 
 @pytest.mark.req("REQ-GAMBLE-0007")
@@ -267,3 +287,10 @@ def test_wp5_evolution_ko_gamble_class_prices_drawing_the_evolution():
     placed = {**ma, "appearThisTurn": True}
     assert ms._gamble_evolution_ko_classes({"current": {}}, board, placed, opp, counts, [{"id": 1227}]) == []
     assert ms._gamble_evolution_ko_classes({"current": {}}, board, ma, opp, counts, [{"id": 1031}]) == []
+    # The Pokémon-tutor closure honours the clause representation: Poké Pad's `no_rule_box` clause
+    # EXCLUDES a Rule-Box Mega ex (the parametric fact the `tutor_pokemon` tag can't carry); Ultra
+    # Ball (any Pokémon) and Mega Signal (mega) include it.
+    ml = _shipped_pilot("mega_lucario")
+    megalu = next(cid for cid in set(ml.deck) if (s := ml.stats.get(cid)) and getattr(s, "megaEx", False))
+    assert ml._fetch_reaches_pokemon(megalu, 1152, {megalu: 1, 1152: 4}) is False   # Poké Pad: no Rule Box
+    assert ml._fetch_reaches_pokemon(megalu, 1121, {megalu: 1, 1121: 4}) is True    # Ultra Ball: any Pokémon

@@ -104,25 +104,13 @@ _PLANNER_DECKOUT_TURNS = 3     # "near deck-out" horizon: fire only when they ex
 _RARE_CANDY_ID = 1079         # BUILD 1 (`enabler_item_composer`): Rare Candy (Item, SVI 191) — the Basic→
                               # Stage-2 evolve SKIP. Matched by id (no Function Tag): behaviorally unique,
                               # single card, no other consumer. Card text verified at EN_Card_Data.csv id 1079.
-# ═══ WP1 — Stage-1 fetch-CLOSURE outs for the Gamble Rung (hypergeometric-fetch-closure spec) ══════
-# The interim energy-fetch predicate table (folds into card_effects.json clauses in WP3). Each ITEM
-# that can put a Basic Energy into HAND, verified against card TEXT (data/EN_Card_Data.csv) — NOT bare
-# tags: Fighting Gong's generic `tutor_energy` tag can't see its {F}-lock, so a {W} deck counting Gong
-# as a {W} out would be WRONG (the canonical trap, spec §Refuted 1). A drawn such Item enables the SAME
-# one-short KO (Items are free, playable post-refresh, pre-attach), so its deck copies join the class
-# outs when its target is still reachable. Errs by UNDER-counting only (an endorser; spec §Fail-dir).
-#   zone:  "deck"    — a whole-deck SEARCH; target available iff a matching Basic remains in deck
-#          "discard" — a RECYCLE from the visible discard; target available iff a matching Basic sits
-#                      in the discard pile (deterministic — a visible pool, no prize split)
-#   lock:  an EnergyType code (cg.api.EnergyType) the fetch is restricted to ({F}=6); None = any Basic
-_ENERGY_FETCH_ITEMS = {
-    1119: ("deck", None),      # Energy Search — "Search your deck for a Basic Energy card…"
-    1100: ("deck", None),      # Energy Search Pro — "…any number of Basic Energy cards of different types"
-    1142: ("deck", 6),         # Fighting Gong — "…a Basic {F} Energy card or a Basic {F} Pokémon" ({F}=6)
-    1097: ("discard", None),   # Night Stretcher — "…a Pokémon or a Basic Energy card from your discard pile"
-    1118: ("discard", None),   # Energy Retrieval — "…up to 2 Basic Energy cards from your discard pile"
-    1110: ("discard", None),   # Max Rod — "…Pokémon and Basic Energy cards from your discard pile"
-}
+# ═══ WP1/WP5 — Stage-1 fetch CLOSURE for the Gamble Rung (hypergeometric-fetch-closure spec) ═══════
+# The tutor/recycle PREDICATES a drawn card needs to enable a one-short KO (type-lock, source zone,
+# target class) live in the card REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032),
+# authored in `tools/meta_tracker/effect_overrides.json` and verified against engine card text, so the
+# closure NEVER parses card text (Round 11 ruling). Fighting Gong's generic `tutor_energy` tag can't
+# carry its {F}-lock; its `{"kind":"fetch","target":"basic_energy","energy_type":6}` clause does. The
+# consumers are `_fetch_reaches_slot` (energy, WP1) and `_fetch_reaches_pokemon` (Pokémon, WP5).
 _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
               "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
@@ -1664,32 +1652,69 @@ class PlannerMixin:
             best = max(best, counts.get(cid, 0) + in_hand)
         return best
 
-    def _fetch_reaches_slot(self, want, spec, counts: dict, discard_basic_types: set) -> bool:
-        """WP1: True iff the Item ``spec`` = ``(zone, lock)`` (from ``_ENERGY_FETCH_ITEMS``) can put a
-        Basic Energy that FILLS the missing slot ``want`` (``None`` = a colourless slot: any Basic)
-        into hand, its target still reachable in the source zone — a whole-deck search (a matching
-        Basic still in ``counts``) or a recycle (a matching Basic type in ``discard_basic_types``, the
-        visible discard). The interim energy-fetch closure predicate; folds into ADR-0032 clauses (WP3)."""
-        zone, lock = spec
-        if lock is not None and want is not None and lock != want:
-            return False                                      # a type-locked fetch can't supply this slot
+    def _fetch_reaches_slot(self, want, cid: int, counts: dict, discard_basic_types: set) -> bool:
+        """WP1: True iff card ``cid``'s **FETCH clauses** (``card_effects.json`` / ADR-0032 — the
+        parametric tier a boolean Function Tag can't carry) can put a Basic Energy FILLING the missing
+        slot ``want`` (``None`` = a colourless slot: any Basic) into hand, its target still reachable in
+        the clause's source zone — a whole-deck search (``zone: deck``, a matching Basic still in
+        ``counts``) or a recycle (``zone: discard``, a matching Basic type in the visible discard). The
+        predicate lives in the card representation, NOT a card-text parse: Fighting Gong's ``{F}`` lock
+        is its ``energy_type: 6`` clause, which the generic ``tutor_energy`` tag can't express. () for a
+        card with no fetch clause. Errs by under-counting only (an endorser)."""
+        for cl in (self.effects.clauses(cid) if self.effects else ()):
+            if cl.get("kind") != "fetch" or cl.get("target") != "basic_energy":
+                continue
+            lock = cl.get("energy_type")                      # the fetch's type lock (None = any Basic)
+            if lock is not None and want is not None and lock != want:
+                continue                                      # a type-locked fetch can't supply this slot
 
-        def _ok(et) -> bool:
-            if et is None:
-                return False
-            if want is not None and et != want:               # a specific slot needs its exact type
-                return False
-            return lock is None or et == lock                 # a locked fetch only finds its lock type
+            def _ok(et, lock=lock) -> bool:
+                if et is None:
+                    return False
+                if want is not None and et != want:           # a specific slot needs its exact type
+                    return False
+                return lock is None or et == lock             # a locked fetch only finds its lock type
 
-        if zone == "deck":
-            for cid, n in counts.items():
-                if n <= 0:
-                    continue
-                st = self.stats.get(cid) if self.stats else None
-                if st and st.is_basic_energy and _ok(getattr(st, "energyType", None)):
+            if cl.get("zone") == "deck":
+                if any((st := self.stats.get(c)) is not None and st.is_basic_energy
+                       and _ok(getattr(st, "energyType", None))
+                       for c, n in counts.items() if n > 0):
                     return True
+            elif cl.get("zone") == "discard":
+                if any(_ok(et) for et in discard_basic_types):
+                    return True
+        return False
+
+    def _fetch_reaches_pokemon(self, target_id: int, cid: int, counts: dict) -> bool:
+        """WP5: True iff card ``cid``'s **FETCH clauses** can pull the Pokémon ``target_id`` out of the
+        DECK (``target_id`` still in ``counts``). Honours the representation's ``mega`` / ``no_rule_box``
+        / ``basic_pokemon`` / ``hp_max`` predicates, so Poké Pad (``no_rule_box``) never fetches a
+        Rule-Box Mega ex — the parametric fact the generic ``tutor_pokemon`` tag can't carry."""
+        if counts.get(target_id, 0) <= 0:
             return False
-        return any(_ok(et) for et in discard_basic_types)     # recycle: a matching Basic in the discard
+        tst = self.stats.get(target_id) if self.stats else None
+        if tst is None or not tst.is_pokemon:
+            return False
+        for cl in (self.effects.clauses(cid) if self.effects else ()):
+            if cl.get("kind") != "fetch" or cl.get("zone") != "deck":
+                continue
+            tgt = cl.get("target")
+            if tgt == "mega":
+                if getattr(tst, "megaEx", False):
+                    return True
+            elif tgt == "evolution":
+                if getattr(tst, "evolvesFrom", None):
+                    return True
+            elif tgt in ("pokemon", "basic_pokemon"):
+                if tgt == "basic_pokemon" and getattr(tst, "evolvesFrom", None):
+                    continue                                  # a Basic-only fetch can't grab an Evolution
+                if cl.get("no_rule_box") and getattr(tst, "is_ex_body", False):
+                    continue                                  # a no-Rule-Box fetch can't grab an ex/Mega
+                hp_max = cl.get("hp_max")
+                if hp_max is not None and getattr(tst, "hp", 0) > hp_max:
+                    continue
+                return True
+        return False
 
     def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list,
                            discard_basic_types: set):
@@ -1697,10 +1722,10 @@ class PlannerMixin:
         exactly ONE Energy short whose damage fells the opponent's Active, the class of draws whose
         entry points ASSEMBLE a Basic Energy filling the missing slot (its specific type, or any Basic
         for a colourless slot). Entry points = the literal Basic Energy copies PLUS the **fetch-closure
-        outs** (WP1): drawable ``_ENERGY_FETCH_ITEMS`` whose target is still reachable — a whole-deck
-        search Item (Energy Search / Fighting Gong / Energy Search Pro) with a matching Basic still in
-        deck, or a recycle Item (Night Stretcher / Energy Retrieval / Max Rod) with a matching Basic in
-        the visible discard. Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]`` —
+        outs** (WP1): a drawable card with a `basic_energy` FETCH clause (`card_effects.json`, read by
+        `_fetch_reaches_slot`) whose target is still reachable — a whole-deck search (Energy Search /
+        Fighting Gong {F}-locked / Energy Search Pro) with a matching Basic still in deck, or a recycle
+        (Night Stretcher / Energy Retrieval / Max Rod) with a matching Basic in the visible discard. Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]`` —
         ``sought_ids`` = the deck card ids that ARE the outs (literal ∪ closure), for the `gamble`
         telemetry block. An enabler already in HAND — a held Basic OR a held fetch Item that reaches the
         slot — voids the class (no gamble needed; playing it is the deterministic line). Errs by
@@ -1733,14 +1758,13 @@ class PlannerMixin:
                 return (et == want) if want is not None else True
             if any(_enables(cid) for cid in hand_ids):
                 continue                                      # hand already holds the Basic enabler
-            if any((cid in _ENERGY_FETCH_ITEMS)               # …or a held fetch Item that reaches it:
-                   and self._fetch_reaches_slot(want, _ENERGY_FETCH_ITEMS[cid], counts, discard_basic_types)
-                   for cid in hand_ids):
+            if any(self._fetch_reaches_slot(want, cid, counts, discard_basic_types)
+                   for cid in hand_ids):                      # …or a held fetch card that reaches it:
                 continue                                      # deterministic tutor line — no gamble needed
             out_ids = {cid for cid, n in counts.items() if n > 0 and _enables(cid)}   # literal Basics
-            for tid, spec in _ENERGY_FETCH_ITEMS.items():     # WP1 closure entry points
-                if counts.get(tid, 0) > 0 and self._fetch_reaches_slot(want, spec, counts,
-                                                                       discard_basic_types):
+            for tid, n in counts.items():                     # WP1 closure entry points (fetch clauses)
+                if n > 0 and tid not in out_ids and self._fetch_reaches_slot(
+                        want, tid, counts, discard_basic_types):
                     out_ids.add(tid)
             sought = sorted(out_ids)
             copies = sum(counts[cid] for cid in sought)
@@ -1779,13 +1803,13 @@ class PlannerMixin:
             if self._best_affordable_ko_value(obs, board, opp, eid, energy, body=ma) <= 0:
                 continue                                      # the evolved form doesn't reach a KO
             out_ids = {eid}
-            for tid in set(self.deck):                        # Item Pokémon-tutor closure to this evolution
-                if tid == eid or counts.get(tid, 0) <= 0 or tid in hand_ids:
+            for tid, n in counts.items():                     # Item Pokémon-tutor closure (fetch clauses)
+                if tid == eid or n <= 0 or tid in hand_ids:
                     continue
                 tst = self.stats.get(tid) if self.stats else None
                 if tst is None or not getattr(tst, "is_item", False):
                     continue                                  # Supporter tutors are slot-dead post-refresh
-                if eid in self._search_deck_set(self.functions.tags(tid) if self.functions else []):
+                if self._fetch_reaches_pokemon(eid, tid, counts):   # honours no-Rule-Box / mega predicate
                     out_ids.add(tid)
             sought = sorted(out_ids)
             copies = sum(counts.get(cid, 0) for cid in sought)

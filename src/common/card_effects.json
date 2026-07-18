@@ -5,11 +5,42 @@
 "amount": 150
 }
 ],
+"1097": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard"
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "discard"
+}
+],
+"1100": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck"
+}
+],
 "1105": [
 {
 "kind": "heal",
 "amount": 60,
 "restriction": "active_dragon_only"
+}
+],
+"1110": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard"
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "discard"
 }
 ],
 "1112": [
@@ -25,6 +56,27 @@
 "amount": 30
 }
 ],
+"1118": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard"
+}
+],
+"1119": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck"
+}
+],
+"1121": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck"
+}
+],
 "1130": [
 {
 "kind": "heal",
@@ -37,12 +89,41 @@
 "restriction": "active_only"
 }
 ],
+"1142": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck",
+"energy_type": 6
+},
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"energy_type": 6
+}
+],
+"1145": [
+{
+"kind": "fetch",
+"target": "mega",
+"zone": "deck"
+}
+],
 "1147": [
 {
 "kind": "heal",
 "amount": 80,
 "restriction": "active_only",
 "condition": "energy_3_plus"
+}
+],
+"1152": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"no_rule_box": true
 }
 ],
 "1153": [

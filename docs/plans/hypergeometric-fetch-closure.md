@@ -416,8 +416,11 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       multiplier; horizon = role tier only, match scale stays with the hard rungs; unifies fetch
       grab/pitch, refresh swing, gamble keep-floors, and the plan-tier credit — graduates to its own
       ADR at build time.
-- [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
-      is the canonical trap; re-verify per set.
+- [x] ✅ **WP1/WP5** Graph enumerated from the card **REPRESENTATION with predicates** (tags as index,
+      parametric predicate in `card_effects.json` FETCH clauses — NOT a text parse; Round-11 ruling).
+      Fighting Gong's {F}-lock is its `energy_type: 6` clause; Poké Pad's no-Rule-Box is `no_rule_box`.
+      Authored in `effect_overrides.json`, verified at source. (WP3's draw-engine/accel clauses +
+      `_FETCH_FILTERS` migration remain.)
 
 ## Anchors (verified 2026-07-16/17 from `EN_Card_Data.csv` + `card_functions.json`)
 | id | card | cat | tags | verified text fact (the load-bearing bit) |
