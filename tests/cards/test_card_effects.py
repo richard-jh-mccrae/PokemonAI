@@ -155,6 +155,27 @@ def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_supporter_trainer_coin_and_energy_provide_clauses():
+    """WP3 tail: the 3 agents' Supporter/Trainer tutors, the coin denial, and Ignition's on-Evolution
+    energy provision carry parametric clauses (verified against engine card text). The Supporter/Trainer
+    fetch targets are OUTSIDE `_FETCH_POKEMON_TARGETS`, so the Pokémon-only `_search_deck_set` ignores
+    them — they never disturb the whiff/redundancy signals; they are foundation for the Supporter-tutor
+    closure branch. Ultra Ball's discard-2 cost rides its Pokémon fetch clause (still Pokémon-typed)."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.clauses(1219) == ({"kind": "fetch", "target": "trainer", "zone": "deck"},)   # Petrel
+    assert eff.clauses(1122)[0] == {"kind": "fetch", "target": "supporter", "zone": "deck", "dig": 7}
+    assert eff.clauses(1071)[0] == {"kind": "fetch", "target": "supporter", "zone": "deck",
+                                    "trigger": "on_bench_play"}                              # Meowth ex
+    assert eff.clauses(1120) == ({"kind": "coin", "effect": "discard_opp_energy", "amount": 1},)
+    assert eff.clauses(17)[0] == {"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3,
+                                  "type": "colorless", "rider": "discard_eot"}               # Ignition
+    ultra = eff.clauses(1121)[0]                                                             # Ultra Ball
+    assert ultra["target"] == "pokemon" and ultra["cost"] == "discard_2"
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
 def test_override_only_card_needs_no_probe():
     ovr = [{"kind": "heal", "amount": 150}]
     assert classify_effect_clauses({}, overrides=ovr) == ovr

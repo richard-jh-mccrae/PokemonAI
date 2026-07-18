@@ -530,14 +530,18 @@ and attack-based accel must stay excluded from one-step budgets (a card tag woul
 CardStat-parsed field like `damageBoost` is the recommended shape); 121 Dragapult ex benched-
 immunity = the known CardStat gap (rules.md §11).
 
-*Clause backlog (the card_effects.json extension the closure consumes — replaces
-`doctrine_fetch._FETCH_FILTERS`, the FIFTH private valuation shadow):* fetch/tutor predicates for
-1086 (≤70-HP Basics ×2 → BENCH), 1097/1110/1118 (recycle targets), 1121 (any Pokémon, cost
-discard-2), 1122, 1142 ({F}-locked), 1145, 1152 (no Rule Box), 1189 (no-Ability evolution,
-timing-exempt), 1198 (2 different-type Basics, 1 → attached), 1219, 1225 (evolution + ANY energy
-incl. Special), 1071 (Supporter, on-bench-play trigger); draw-engine clauses for 66 (3 +
-self-shuffle), 120 (top-2-take-1), 140/675 (conditional), 1080 (5/2, post-KO gate); accel clauses
-for 666/678 (via attack)/1240 (discard→Stage-2, prize-behind gate); 1120 (coin).
+*Clause backlog (the card_effects.json extension — replaced `doctrine_fetch._FETCH_FILTERS`, the FIFTH
+private valuation shadow). ✅ BUILT 2026-07-18 (`effect_overrides.json`, verified against engine card
+text; pinned by tests/cards/test_card_effects.py goldens):* fetch/tutor predicates for 1086 (≤70-HP
+Basics → BENCH), 1097/1110/1118 (recycle), 1121 (any Pokémon, cost discard-2), 1122 (dig-7 Supporter),
+1142 ({F}-locked), 1145 (mega), 1152 (no Rule Box), 1189 (no-Ability evolution), 1198 (accel: 1 →
+attached; NO fetch clause — slot-dead Supporter), 1219 (any Trainer), 1225 (evolution + energy),
+1071 (Supporter, on-bench-play trigger); draw-engine clauses for 66 (3 + self-shuffle), 120
+(look-2-take-1), 140/675 (conditional), 1080 (5, post-KO gate); accel clauses for 1240
+(discard→Stage-2, prize-behind); coin 1120; energy_provide 17 ({C}{C}{C}-on-Evolution). **Attack-based
+accel (666/678) stays the AttackStat tier** (ADR-0064 integrity): 678 Aura Jab already carries
+`recoverN`; 965 Turbo Flare (deck-source) is the noted AttackStat gap. **Consumers are WP4/WP5** (the
+draw/accel clauses are additive and inert to today's kind-filtered readers).
 
 **The consumer recalibration (the round-7 currency-zone warning, live).** Three pinned tests flipped
 — each because a consumer was calibrated against the INCOMPLETE data: (1) `_is_draw_engine_body`

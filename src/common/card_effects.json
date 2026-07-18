@@ -1,4 +1,13 @@
 {
+"17": [
+{
+"kind": "energy_provide",
+"amount": 1,
+"amount_on_evolution": 3,
+"type": "colorless",
+"rider": "discard_eot"
+}
+],
 "66": [
 {
 "kind": "draw",
@@ -29,6 +38,14 @@
 "amount": 3,
 "condition": "solrock_in_play",
 "rider": "discard_basic_f_energy"
+}
+],
+"1071": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"trigger": "on_bench_play"
 }
 ],
 "1080": [
@@ -119,11 +136,27 @@
 "zone": "deck"
 }
 ],
+"1120": [
+{
+"kind": "coin",
+"effect": "discard_opp_energy",
+"amount": 1
+}
+],
 "1121": [
 {
 "kind": "fetch",
 "target": "pokemon",
-"zone": "deck"
+"zone": "deck",
+"cost": "discard_2"
+}
+],
+"1122": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"dig": 7
 }
 ],
 "1130": [
@@ -278,6 +311,13 @@
 {
 "kind": "draw",
 "amount": 2
+}
+],
+"1219": [
+{
+"kind": "fetch",
+"target": "trainer",
+"zone": "deck"
 }
 ],
 "1222": [
