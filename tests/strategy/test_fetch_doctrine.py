@@ -31,6 +31,12 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
+# The fetch doctrine's whiff/redundancy/confirmed-hit signals read a search's FETCH CLAUSES from
+# `card_effects.json` (ADR-0032), the tier that REPLACED the tag-keyed `_FETCH_FILTERS`. These synthetic
+# fetchers carry TAGS only, so mirror the standard fetcher tags to their clauses (`fetch_effects`).
+from pilot_helpers import fetch_effects as _fetch_effects   # noqa: E402
+
+
 # --- fetch-a-starter: an underdeveloped board wants a Basic body to develop ----------------------
 @pytest.mark.req("REQ-GEN-0035")
 def test_fetch_a_starter_prefers_a_basic_when_the_board_is_thin():
@@ -258,10 +264,11 @@ def test_fetch_is_endorsed_when_it_can_grab_a_needed_card():
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, hp=70)})
-    funcs = CardFunctions({ULTRA: ["search", "tutor_pokemon", "cost_discard"]})
+    fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"]}
+    funcs = CardFunctions(fmap)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
-                  stats=stats, functions=funcs)
+                  stats=stats, functions=funcs, effects=_fetch_effects(fmap))
     # the win-condition is NOT in play (active is a plain body) -> the fetch can grab it -> endorse.
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1), bench=[poke(701), poke(702)], hand=[ULTRA]))
@@ -277,9 +284,11 @@ def test_fetch_endorsement_is_silent_when_no_need_remains():
     (and a developed board), the reachable set scores 0 -> the rung does not fire."""
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu")})
-    funcs = CardFunctions({ULTRA: ["search", "tutor_pokemon", "cost_discard"]})
+    fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"]}
+    funcs = CardFunctions(fmap)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[WINC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    pilot = Pilot(strat, deck=[WINC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
+                  effects=_fetch_effects(fmap))
     # win-condition already Active + bench developed -> the only reachable card fills no need.
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(WINC, energy=3),
@@ -365,10 +374,11 @@ def _confirmed_stats():
 
 
 def _confirmed_pilot(deck):
-    funcs = CardFunctions({SIGNAL: ["search", "tutor_mega"], ULTRA: ["search", "bench_fill"]})
+    fmap = {SIGNAL: ["search", "tutor_mega"], ULTRA: ["search", "bench_fill"]}
+    funcs = CardFunctions(fmap)
     strat = Strategy(roles={MEGA: ["win_condition"]})
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY,
-                 stats=_confirmed_stats(), functions=funcs)
+                 stats=_confirmed_stats(), functions=funcs, effects=_fetch_effects(fmap))
 
 
 @pytest.mark.req("REQ-GEN-0063")
@@ -464,9 +474,11 @@ def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None):
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   JUNKMON: CardStat(JUNKMON, hp=70), **(extra_stats or {})})
-    funcs = CardFunctions({ULTRA: ["search", "tutor_pokemon", "cost_discard"], **(extra_funcs or {})})
+    fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"], **(extra_funcs or {})}
+    funcs = CardFunctions(fmap)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
+                 effects=_fetch_effects(fmap))
 
 
 @pytest.mark.req("REQ-GEN-0065")

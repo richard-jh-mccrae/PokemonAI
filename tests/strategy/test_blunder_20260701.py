@@ -16,7 +16,8 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
-from pilot_helpers import ACTIVE, BENCH, HAND, PLAY, attack_opt, make_select, opt, poke, state
+from pilot_helpers import (ACTIVE, BENCH, HAND, PLAY, attack_opt, fetch_effects, make_select,
+                           opt, poke, state)
 
 ATTACH = 8
 WINCON = 900        # Mega Starmie ex shape: Stage-1 Mega ex, Jetting Blow (cost 1, 120) + Nebula (CCC, 210)
@@ -60,7 +61,7 @@ def _pilot(deck=None, **kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"], ACCEL: ["accel_source"]},
                      lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)])
     return Pilot(strat, deck=deck if deck is not None else [1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=_stats(), functions=CardFunctions(_FNS), **kw)
+                 stats=_stats(), functions=CardFunctions(_FNS), effects=fetch_effects(_FNS), **kw)
 
 
 # ---------------------------------------------------------- f48: dont-overbuild-the-doomed-wincon

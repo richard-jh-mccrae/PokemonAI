@@ -15,7 +15,7 @@ from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
-from pilot_helpers import HAND, PLAY, make_select, opt, poke, state
+from pilot_helpers import HAND, PLAY, fetch_effects, make_select, opt, poke, state
 
 END = 14  # OptionType.END
 
@@ -171,9 +171,10 @@ def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prize
     treat as a win-condition (so no lacking-need grab driver fires): its sole driver is dig-before-commit
     (+20), and the probable-whiff penalty drops it below End. NOT the sound guard (the target is still
     reachable)."""
-    funcs = CardFunctions({SIGNAL: ["search", "tutor_mega"]})
+    _fm = {SIGNAL: ["search", "tutor_mega"]}
+    funcs = CardFunctions(_fm)
     pilot = Pilot(Strategy(), deck=[MEGA] + [FILLER] * 40, general_strategy=GENERAL_STRATEGY,
-                  stats=_whiff_stats(), functions=funcs)
+                  stats=_whiff_stats(), functions=funcs, effects=fetch_effects(_fm))
     play_signal = opt(PLAY, area=HAND, index=0)
     # MEGA nowhere visible; 1 in deck, 5 hidden prizes -> P(in deck) = 1/6 < threshold.
     cur = state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5, deck_count=1)
@@ -197,9 +198,10 @@ def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
     """The ep82524455-f6 refutation, encoded: 2 of 3 Staryu unseen could sit in the 6 hidden prizes, so
     a 2nd Buddy-Buddy Poffin is a PROBABILISTIC read, not a whiff. The estimate is ~0.98 (well above
     threshold) -> the rung does NOT fire and the bench-filler is played."""
-    funcs = CardFunctions({BASIC_TUTOR: ["search", "bench_fill"]})
+    _fm = {BASIC_TUTOR: ["search", "bench_fill"]}
+    funcs = CardFunctions(_fm)
     pilot = Pilot(Strategy(), deck=[STARYU] * 3 + [FILLER] * 57, general_strategy=GENERAL_STRATEGY,
-                  stats=_whiff_stats(), functions=funcs)
+                  stats=_whiff_stats(), functions=funcs, effects=fetch_effects(_fm))
     play_poffin = opt(PLAY, area=HAND, index=0)
     # 1 of 3 Staryu visible (discard); deck 30, 6 hidden prizes -> 2 unseen, P(in deck) ~ 0.98.
     cur = state(discard=[STARYU], hand=[BASIC_TUTOR], prizes=6, deck_count=30)
@@ -215,9 +217,10 @@ def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
 def test_probable_whiff_is_mutually_exclusive_with_the_sound_empty_guard():
     """When EVERY target is provably gone, the sound `dont-search-an-empty-deck` owns the suppression;
     the probabilistic rung stays silent (it requires a still-reachable target), so they never double-count."""
-    funcs = CardFunctions({SIGNAL: ["search", "tutor_mega"]})
+    _fm = {SIGNAL: ["search", "tutor_mega"]}
+    funcs = CardFunctions(_fm)
     pilot = Pilot(Strategy(), deck=[MEGA] * 2 + [FILLER] * 58, general_strategy=GENERAL_STRATEGY,
-                  stats=_whiff_stats(), functions=funcs)
+                  stats=_whiff_stats(), functions=funcs, effects=fetch_effects(_fm))
     play_signal = opt(PLAY, area=HAND, index=0)
     # Both Mega ex in discard -> provably gone (sound), regardless of prizes/deck.
     cur = state(discard=[MEGA, MEGA], hand=[SIGNAL], prizes=6, deck_count=10)

@@ -1,4 +1,13 @@
 {
+"1086": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"hp_max": 70,
+"dest": "bench"
+}
+],
 "1096": [
 {
 "kind": "heal",
@@ -145,6 +154,15 @@
 "amount": 3
 }
 ],
+"1189": [
+{
+"kind": "fetch",
+"target": "evolution",
+"zone": "deck",
+"no_ability": true,
+"dest": "in_play"
+}
+],
 "1190": [
 {
 "kind": "heal",
@@ -229,6 +247,18 @@
 {
 "kind": "draw",
 "amount": 3
+}
+],
+"1225": [
+{
+"kind": "fetch",
+"target": "energy",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "evolution",
+"zone": "deck"
 }
 ],
 "1227": [

@@ -786,8 +786,8 @@ class Context:
     context_card_id: int | None = None  # the select's OWNER (`select.contextCard`): the card whose effect/
                                    # Ability resolves (an ACTIVATE's bare YES/NO carries no card itself)
     search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
-                                   # fetch target (see doctrine_fetch._FETCH_FILTERS) is PROVABLY gone from
-                                   # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / unknown filter
+                                   # fetch target (its FETCH clauses, `_search_deck_set`) is PROVABLY gone from
+                                   # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / no clause
     search_redundant_wincon: bool = False  # this option PLAYS a tutor that can fetch ONLY the
                                    # win-condition AND that payoff has no productive landing — wincon already in
                                    # hand, OR no deployable base for it (its immediate pre-evo neither in play nor
@@ -1046,7 +1046,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._turn_boosts = TurnBoostTracker(            # this-turn flat damage-boost plays (Power Pro
             lambda cid: self.stats.get(cid) if (self.stats and cid is not None) else None)
                                                         # class) — OHKO-line model's play half
-        self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
+        self._fetch_cache: dict = {}                    # memo: search card id -> deck ids it can fetch
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
         self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
@@ -2460,7 +2460,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             select.get("context") == _TO_HAND and board.supporter_played
             and bool(stat and stat.is_supporter))
         fetch_fills_a_need = (option.get("type") == _PLAY
-                              and self._fetch_fills_a_need(board, tags, plan))
+                              and self._fetch_fills_a_need(board, cid, plan))
         target_energy = self._target_energy(obs, select, option)
         target_hp = self._target_hp(obs, select, option)
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
@@ -2521,9 +2521,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_completes_biggest_attack = (
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and self._attach_completes_biggest_attack(at_target, tags))
-        search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, tags, board)
-        search_unlikely = self._search_probable_whiff(option, tags, board)
-        search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
+        search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, cid, board)
+        search_unlikely = self._search_probable_whiff(option, cid, board)
+        search_confirmed = self._search_confirmed_hit(option, cid, board, plan)
         sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
         refresh_miss = self._refresh_probable_miss(option, cid, tags, board, obs, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)

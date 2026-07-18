@@ -28,19 +28,12 @@ _KEEP_ENGINE_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 # 2nd Dreepy is a 2nd LINE, not junk). ep83661652 f30 / ep83686860 f18.
 _BASE_ROLES = frozenset({"win_condition_base", "evolution_base"})
 
-# FETCH FILTER: cards a search can pull OUT of deck, predicate over CardStat, keyed by Function Tag.
-# Shared basis for whiff/redundancy signals (all targets gone/held = dead card). Add filter tag+predicate per new search card.
-_FETCH_FILTERS = {
-    # Buddy-Buddy Poffin (the only `bench_fill` card in the pool): "up to 2 Basic Pokémon with 70 HP
-    # or less". The HP cap is the card's own text — without it the filter counted a 170-HP Meowth ex
-    # as fetchable and the whiff guard never fired on an exhausted deck (dragapult f79, CRITICAL).
-    "bench_fill": lambda st: st.hp > 0 and not st.evolvesFrom and st.hp <= 70,
-    "tutor_mega": lambda st: bool(getattr(st, "megaEx", False)),  # a Mega Evolution ex (Mega Signal)
-    "tutor_pokemon": lambda st: st.hp > 0,                        # any Pokémon (Ultra Ball)
-    # Rush-evolve tutor (Salvatore): only ability-LESS Evolutions (e.g. Mega Starmie ex, not Cinderace).
-    # Board-blind by design -> over-includes, never false-suppresses. Cf `dont-rush-evolve-without-target` (in-play case); this = not-in-DECK case, ep83117367.
-    "rush_evolve": lambda st: bool(st.evolvesFrom) and not getattr(st, "hasAbility", False),
-}
+# The Pokémon target classes a `_search_deck_set` whiff/redundancy question ranges over — the scope
+# the retired `_FETCH_FILTERS` covered (bench_fill / tutor_mega / tutor_pokemon / rush_evolve). Energy
+# and Trainer tutors carry no deck whiff-set (as before). The per-card PREDICATE now lives in the card
+# REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032; hypergeometric-fetch-closure WP3),
+# read by `_fetch_target_matches` — so the doctrine never re-encodes card knowledge in a private table.
+_FETCH_POKEMON_TARGETS = frozenset({"pokemon", "basic_pokemon", "mega", "evolution"})
 
 # PROBABLE-WHIFF threshold (ADR-0029): `dont-search-a-probable-whiff` fires when best reachable target's
 # hypergeometric P(still in deck) < this. Conservative (refuted ep82524455-f6: P~=0.98 stays above bar). SOUND whiff (P=0) is separate/unconditional.
@@ -87,13 +80,13 @@ class FetchMixin:
                 live += 1
         return pool > 0 and live == 0
 
-    def _search_signals(self, option: dict, tags: list, board) -> tuple[bool, bool, bool]:
+    def _search_signals(self, option: dict, cid, board) -> tuple[bool, bool, bool]:
         """The three deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
         (every card it can fetch is provably gone from the deck), whether it is a REDUNDANT
         wincon-tutor (it can fetch ONLY the win-condition, which you can't usefully deploy a second
         of), and whether it is a BASELESS wincon-tutor (it can fetch only the win-condition and there
         is NO base to deploy it onto and it isn't in hand/play — the fetched payoff sits dead). All
-        three False off a PLAY / a card with no known fetch-filter (cf. `_FETCH_FILTERS`).
+        three False off a PLAY / a card with no fetch clause (`_search_deck_set`).
 
         The wincon-tutor is redundant when a copy is already in HAND (a second is a dead dig) OR the
         win-condition is already IN PLAY with no base to evolve another onto (`not
@@ -108,10 +101,10 @@ class FetchMixin:
         alternative narrowing so the SOUND `play-a-tutor-for-the-unfound-wincon` setup case stays."""
         if option.get("type") != _PLAY:
             return False, False, False
-        fetch_set = self._search_deck_set(tags)
+        fetch_set = self._search_deck_set(cid)
         if not fetch_set:
             return False, False, False
-        exhausted = all(cid in board.deck_empty_ids for cid in fetch_set)
+        exhausted = all(c in board.deck_empty_ids for c in fetch_set)
         wincon = self._wincon_set()
         wincon_only = bool(wincon) and fetch_set <= wincon
         wincon_undeployable_in_play = board.wincon_in_play and not board.wincon_base_deployable
@@ -121,7 +114,7 @@ class FetchMixin:
                     and not board.wincon_in_play and not board.wincon_base_deployable)
         return exhausted, redundant, baseless
 
-    def _search_probable_whiff(self, option: dict, tags: list, board) -> bool:
+    def _search_probable_whiff(self, option: dict, cid, board) -> bool:
         """The PROBABILISTIC complement to `_search_signals`' SOUND `search_targets_exhausted`
         (ADR-0029): a search whose every still-REACHABLE fetch target is UNLIKELY to remain in the deck
         — the best reachable target's `Board.deck_contains_probability` is below `_WHIFF_PROB_THRESHOLD`,
@@ -131,46 +124,82 @@ class FetchMixin:
         hidden prizes is never suppressed). Drives the soft `dont-search-a-probable-whiff`."""
         if option.get("type") != _PLAY:
             return False
-        fetch_set = self._search_deck_set(tags)
+        fetch_set = self._search_deck_set(cid)
         if not fetch_set:
             return False
         reachable = fetch_set - board.deck_empty_ids
         if not reachable:
             return False                          # all provably gone -> SOUND guard owns this whiff
-        best = max(board.deck_contains_probability(cid) for cid in reachable)
+        best = max(board.deck_contains_probability(c) for c in reachable)
         return best < _WHIFF_PROB_THRESHOLD
 
-    def _search_confirmed_hit(self, option: dict, tags: list, board, plan) -> bool:
+    def _search_confirmed_hit(self, option: dict, cid, board, plan) -> bool:
         """The POSITIVE deck-knowledge signal for a search/tutor PLAY (ADR-0029): True iff a card the
-        search's fetch-filter can pull is PROVABLY still in the deck (`Board.deck_definitely_has` —
+        search's fetch clause can pull is PROVABLY still in the deck (`Board.deck_definitely_has` —
         the tracker's exact post-anchor counts) AND fills a real need (positive grab value, the SAME
         rungs the real grab scores — the ADR-0023 shared-oracle invariant). Sound-or-silent, mirroring
         the oracle it reads: False off a PLAY, before the tracker anchors the prizes, or for a card
-        with no known fetch-filter — a positive endorsement is never asserted on a guess."""
+        with no fetch clause — a positive endorsement is never asserted on a guess."""
         if option.get("type") != _PLAY or not board.deck_known_counts:
             return False
-        fetch_set = self._search_deck_set(tags)
-        return any(board.deck_definitely_has(cid) and self._grab_value_of(board, cid, plan) > 0
-                   for cid in fetch_set)
+        fetch_set = self._search_deck_set(cid)
+        return any(board.deck_definitely_has(c) and self._grab_value_of(board, c, plan) > 0
+                   for c in fetch_set)
 
-    def _search_deck_set(self, tags: list) -> set:
-        """The set of card ids in my deck a search with these fetch-filter tags can pull OUT of the
-        deck (union over the card's `_FETCH_FILTERS` tags; empty for a non-search / unknown filter).
-        Each filter's deck-set is deck-fixed, so it is memoised per tag."""
-        result: set = set()
-        for tag in tags:
-            pred = _FETCH_FILTERS.get(tag)
-            if pred is None:
-                continue
-            if tag not in self._fetch_cache:
-                ids = set()
-                for cid in set(self.deck):
-                    stat = self.stats.get(cid) if self.stats else None
-                    if stat and pred(stat):
-                        ids.add(cid)
-                self._fetch_cache[tag] = ids
-            result |= self._fetch_cache[tag]
-        return result
+    def _fetch_target_matches(self, clause: dict, stat) -> bool:
+        """True iff a card with ``stat`` matches a FETCH clause's target class (`card_effects.json`,
+        ADR-0032) — the ONE predicate that REPLACES the tag-keyed `_FETCH_FILTERS`, shared by the
+        doctrine's `_search_deck_set` and the gamble closure (`planner._fetch_reaches_pokemon`).
+        Targets: basic_energy / energy (± ``energy_type`` lock) · mega (Mega ex) · evolution
+        (``evolvesFrom`` set, ± ``no_ability``) · pokemon / basic_pokemon (± ``no_rule_box``, ``hp_max``).
+        NOTE: ``energy_type`` on a POKÉMON target (Fighting Gong's "Basic {F} Pokémon") is NOT resolvable
+        from CardStat (no Pokémon-type field), so it is applied only to ENERGY targets — a Pokémon target
+        over-includes on type (fail-open; never false-suppresses a whiff; exact for a mono-type deck)."""
+        if stat is None:
+            return False
+        target = clause.get("target")
+        etype = clause.get("energy_type")
+        if target == "basic_energy":
+            return stat.is_basic_energy and (etype is None or getattr(stat, "energyType", None) == etype)
+        if target == "energy":
+            return stat.is_energy and (etype is None or getattr(stat, "energyType", None) == etype)
+        if target == "mega":
+            return bool(getattr(stat, "megaEx", False))
+        if target == "evolution":
+            return (bool(getattr(stat, "evolvesFrom", None))
+                    and (not clause.get("no_ability") or not getattr(stat, "hasAbility", False)))
+        if target in ("pokemon", "basic_pokemon"):
+            if not stat.is_pokemon:
+                return False
+            if target == "basic_pokemon" and getattr(stat, "evolvesFrom", None):
+                return False
+            if clause.get("no_rule_box") and getattr(stat, "is_ex_body", False):
+                return False
+            hp_max = clause.get("hp_max")
+            return hp_max is None or getattr(stat, "hp", 0) <= hp_max
+        return False
+
+    def _search_deck_set(self, cid) -> set:
+        """The set of deck card ids the search/tutor ``cid`` can pull OUT of the deck — the POKÉMON
+        targets of its ``zone: deck`` FETCH clauses (`card_effects.json`, read by `_fetch_target_matches`),
+        REPLACING the tag-keyed `_FETCH_FILTERS`. Scope stays Pokémon (`_FETCH_POKEMON_TARGETS` — the
+        bench_fill/tutor_mega/tutor_pokemon/rush_evolve tags the old filter covered); an energy / Trainer
+        tutor and a recycle (discard-zone) carry no deck whiff-set, exactly as before. Empty for a card
+        with no such clause. Deck-fixed, so memoised per card id."""
+        if cid is None:
+            return set()
+        if cid not in self._fetch_cache:
+            clauses = [cl for cl in (self.effects.clauses(cid) if self.effects else ())
+                       if cl.get("kind") == "fetch" and cl.get("zone") == "deck"
+                       and cl.get("target") in _FETCH_POKEMON_TARGETS]
+            ids: set = set()
+            if clauses:
+                for tid in set(self.deck):
+                    stat = self.stats.get(tid) if self.stats else None
+                    if any(self._fetch_target_matches(cl, stat) for cl in clauses):
+                        ids.add(tid)
+            self._fetch_cache[cid] = ids
+        return self._fetch_cache[cid]
 
     def _grab_value_of(self, board, cid: int, plan) -> float:
         """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
@@ -193,16 +222,16 @@ class FetchMixin:
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
 
-    def _fetch_fills_a_need(self, board, tags: list, plan) -> bool:
-        """True iff a fetch with these tags can pull a card I currently LACK from the deck — any
-        still-reachable candidate (its fetch-filter set minus the provably-gone `deck_empty_ids`) whose
-        grab value is positive. The whether-to-play lookahead: it estimates `best_grab_value > 0` from the
-        known deck before the search reveals it. False for a non-fetch (empty fetch set)."""
-        fetch_set = self._search_deck_set(tags)
+    def _fetch_fills_a_need(self, board, cid, plan) -> bool:
+        """True iff the fetch ``cid`` can pull a card I currently LACK from the deck — any still-reachable
+        candidate (its fetch-clause set minus the provably-gone `deck_empty_ids`) whose grab value is
+        positive. The whether-to-play lookahead: it estimates `best_grab_value > 0` from the known deck
+        before the search reveals it. False for a non-fetch (empty fetch set)."""
+        fetch_set = self._search_deck_set(cid)
         if not fetch_set:
             return False
         reachable = fetch_set - board.deck_empty_ids
-        return any(self._grab_value_of(board, cid, plan) > 0 for cid in reachable)
+        return any(self._grab_value_of(board, c, plan) > 0 for c in reachable)
 
     def _pitch_value_of(self, board, cid: int, plan) -> tuple[float, bool]:
         """(pitch score, keep-key fired) of hand card `cid` at a virtual `_DISCARD` Context — the

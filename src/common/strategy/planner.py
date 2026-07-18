@@ -1686,35 +1686,18 @@ class PlannerMixin:
         return False
 
     def _fetch_reaches_pokemon(self, target_id: int, cid: int, counts: dict) -> bool:
-        """WP5: True iff card ``cid``'s **FETCH clauses** can pull the Pokémon ``target_id`` out of the
-        DECK (``target_id`` still in ``counts``). Honours the representation's ``mega`` / ``no_rule_box``
-        / ``basic_pokemon`` / ``hp_max`` predicates, so Poké Pad (``no_rule_box``) never fetches a
-        Rule-Box Mega ex — the parametric fact the generic ``tutor_pokemon`` tag can't carry."""
+        """WP5: True iff card ``cid``'s ``zone: deck`` **FETCH clauses** can pull the Pokémon
+        ``target_id`` (still in ``counts``) — via the shared `_fetch_target_matches` predicate, so
+        Poké Pad's ``no_rule_box`` never fetches a Rule-Box Mega ex (the parametric fact the generic
+        ``tutor_pokemon`` tag can't carry). The gamble-closure sibling of `_search_deck_set`."""
         if counts.get(target_id, 0) <= 0:
             return False
         tst = self.stats.get(target_id) if self.stats else None
         if tst is None or not tst.is_pokemon:
             return False
-        for cl in (self.effects.clauses(cid) if self.effects else ()):
-            if cl.get("kind") != "fetch" or cl.get("zone") != "deck":
-                continue
-            tgt = cl.get("target")
-            if tgt == "mega":
-                if getattr(tst, "megaEx", False):
-                    return True
-            elif tgt == "evolution":
-                if getattr(tst, "evolvesFrom", None):
-                    return True
-            elif tgt in ("pokemon", "basic_pokemon"):
-                if tgt == "basic_pokemon" and getattr(tst, "evolvesFrom", None):
-                    continue                                  # a Basic-only fetch can't grab an Evolution
-                if cl.get("no_rule_box") and getattr(tst, "is_ex_body", False):
-                    continue                                  # a no-Rule-Box fetch can't grab an ex/Mega
-                hp_max = cl.get("hp_max")
-                if hp_max is not None and getattr(tst, "hp", 0) > hp_max:
-                    continue
-                return True
-        return False
+        return any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
+                   and self._fetch_target_matches(cl, tst)
+                   for cl in (self.effects.clauses(cid) if self.effects else ()))
 
     def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list,
                            discard_basic_types: set):

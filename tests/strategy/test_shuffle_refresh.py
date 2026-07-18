@@ -12,7 +12,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
-from pilot_helpers import MAIN, PLAY, attack_opt, make_select, opt, poke, state
+from pilot_helpers import MAIN, PLAY, attack_opt, fetch_effects, make_select, opt, poke, state
 
 END = 14
 LILLIES = 1227        # a Shuffle-Refresh (shuffle hand into deck, draw 6)
@@ -59,11 +59,11 @@ def test_a_playable_tutor_is_played_before_the_refresh():
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
-    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"],
-                           ULTRA: ["search", "tutor_pokemon", "cost_discard"]})
+    _fm = {LILLIES: ["draw", "shuffle_hand"], ULTRA: ["search", "tutor_pokemon", "cost_discard"]}
+    funcs = CardFunctions(_fm)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
-                  stats=stats, functions=funcs)
+                  stats=stats, functions=funcs, effects=fetch_effects(_fm))
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, ULTRA]))

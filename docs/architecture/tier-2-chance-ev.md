@@ -134,13 +134,17 @@ Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeome
   representation too (`_fetch_reaches_pokemon` over FETCH clauses): Poké Pad's `no_rule_box` clause
   correctly excludes a Rule-Box Mega ex — the parametric fact the `tutor_pokemon` tag can't carry.
 
-**Fetch-clause tier (WP3, started):** the tutor/recycle predicates for the gamble closure now live in
-`card_effects.json` as `fetch` clauses (`target` / `zone` / `energy_type` / `no_rule_box`), authored
-in `effect_overrides.json` and verified at source — the Round-11 ruling that the card representation
-carries every mechanical need so text is never parsed. The broader WP3 (draw-engine + accel clauses,
-migrating `doctrine_fetch._FETCH_FILTERS` off the tag-only fetch set) remains.
+**Fetch-clause tier (WP3, fetch portion built):** the tutor/recycle predicates now live in
+`card_effects.json` as `fetch` clauses (`target` / `zone` / `energy_type` / `no_rule_box` / `hp_max` /
+`no_ability`), authored in `effect_overrides.json` and verified at source — the Round-11 ruling that the
+card representation carries every mechanical need so text is never parsed. **`doctrine_fetch._FETCH_FILTERS`
+(the fifth private-valuation shadow) is RETIRED:** `_search_deck_set` and the whiff/redundancy/
+confirmed-hit signals now read the clauses through one shared predicate (`_fetch_target_matches`), also
+consumed by the gamble closure (`_fetch_reaches_slot` / `_fetch_reaches_pokemon`) — one representation,
+one predicate. The migration sharpened the fetch-sets to exactly what each card can pull (Fighting Gong
+→ Basic-only Pokémon, Poké Pad → no-Rule-Box, Hilda → Evolutions only), a pure precision gain.
 
-**Still designed, not built:** WP3 remainder (draw-engine/accel clauses + `_FETCH_FILTERS` migration), WP4
+**Still designed, not built:** WP3 remainder (the draw-engine + accel clauses), WP4
 (Stage-2 draw engines — the two-window closed form), WP5's remaining classes (gust / damage-pump /
 survival / bench-fill), WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the
 `fetch_closure.py` + `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.

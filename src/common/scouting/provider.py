@@ -50,8 +50,8 @@ class CardStat:
     megaEx: bool = False
     aceSpec: bool = False              # ACE SPEC — one/deck, irreplaceable; CardStat feeds
                                        # 'protect the ACE SPEC' rules (e.g. Hero's Cape)
-    hasAbility: bool = False           # Pokémon w/ Ability (CardData.skills, hp>0). Salvatore's
-                                       # fetch-filter excludes ability-bearing Evolution targets (cf _FETCH_FILTERS)
+    hasAbility: bool = False           # Pokémon w/ Ability (CardData.skills, hp>0). Salvatore's fetch
+                                       # clause excludes ability-bearing Evolutions (`no_ability`, card_effects.json)
     hpBonus: int = 0                   # flat HP a Tool grants holder (e.g. Hero's Cape +100),
                                        # parsed from skill text — engine has no structured field.
                                        # Primitive behind the general +HP-tool breakpoint model.
