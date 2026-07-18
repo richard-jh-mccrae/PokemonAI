@@ -97,15 +97,18 @@ def test_the_gamble_stands_down_when_a_deterministic_ko_exists():
 
 
 @pytest.mark.req("REQ-GAMBLE-0003")
-def test_the_gamble_stands_down_pre_anchor_and_when_switched_off():
-    """No tracker anchor (no own_prizes → no exact counts) → silent, mirroring
-    `dont-refresh-into-a-probable-miss`; kill-switch off → silent on the same board."""
+def test_the_gamble_prices_pre_anchor_and_stands_down_when_switched_off():
+    """WP2: pre-anchor (no own_prizes → no exact counts) the gamble no longer stands down — the
+    decklist is fully known, only the prize split of the unseen copies is random, so it PRICES with
+    the prize-split-weighted window sum (`anchored: False`, `prizes_hidden` set) instead of the old
+    modeling-gap zero. The {W}-flush deck still clears the bar. Kill-switch off → silent stand-down."""
     pilot = _shipped_pilot()
     decision = pilot.explain(_gamble_obs(opp_hp=230, with_prizes=False))
-    assert decision.planned is None or decision.planned.goal != "gamble"
-    if decision.planned is None:                         # the rung was reached: it must SAY why it
-        assert decision.gamble == {"considered": False,  # declined (the blunder-shell dropdown for
-                                   "why": "pre-anchor: no exact deck counts"}   # "should have gambled")
+    tr = decision.gamble
+    assert tr is not None and tr["considered"] is True     # it PRICED, it did not stand down
+    assert tr["anchored"] is False and tr["prizes_hidden"] == 5
+    assert tr["classes"] and all(0.0 <= e["p"] <= 1.0 for e in tr["evals"])
+    assert decision.planned is not None and decision.planned.goal == "gamble"   # and clears the bar
     pilot2 = _shipped_pilot()
     pilot2.gamble_lines = False
     pilot2._turn_plan = None
@@ -220,3 +223,25 @@ def test_wp1_fetch_items_join_the_gamble_ko_class_outs():
     assert ms._gamble_ko_classes(b, st, msa, low, 40, {1097: 2}, [{"id": 1227}], set()) == []  # empty discard
     # A held Night Stretcher + a matching Basic in discard is a DETERMINISTIC tutor line → class voided.
     assert ms._gamble_ko_classes(b, st, msa, low, 40, {1097: 2}, [{"id": 1097}], {3}) == []
+
+
+@pytest.mark.req("REQ-GAMBLE-0008")
+def test_wp2_prize_split_hit_is_the_exact_closed_form():
+    """WP2: `_prize_split_hit(u, deck, prizes, pool, n)` = Σ_j C(deck,j)C(prizes,u−j)/C(deck+prizes,u)
+    × window(j). Degenerates to the plain window draw with no hidden prizes; discounts BELOW it once
+    copies can be prized; fails closed on garbage (an endorser)."""
+    from math import comb
+    from common.deck_odds import draw_hit_probability
+    pilot = _shipped_pilot()
+    # No hidden prizes → every unseen copy is in the deck → identical to the plain window draw.
+    assert pilot._prize_split_hit(3, 40, 0, 40, 6) == pytest.approx(draw_hit_probability(3, 40, 6))
+    # With hidden prizes the copies may be prized → strictly BELOW the all-in-deck probability.
+    split = pilot._prize_split_hit(3, 40, 6, 40, 6)
+    assert 0.0 < split < draw_hit_probability(3, 40, 6)
+    # Exact against the hand-rolled sum (u=2, deck=10, prizes=4, pool=10, n=3).
+    u, d, k, pool, n = 2, 10, 4, 10, 3
+    expect = sum(comb(d, j) * comb(k, u - j) / comb(d + k, u) * draw_hit_probability(j, pool, n)
+                 for j in range(max(0, u - k), min(u, d) + 1))
+    assert pilot._prize_split_hit(u, d, k, pool, n) == pytest.approx(expect)
+    assert pilot._prize_split_hit(0, 40, 6, 40, 6) == 0.0      # no copies → never hits
+    assert pilot._prize_split_hit("x", 40, 6, 40, 6) == 0.0    # garbage → fail closed

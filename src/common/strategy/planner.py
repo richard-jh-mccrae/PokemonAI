@@ -1534,9 +1534,6 @@ class PlannerMixin:
             return stand_down("protected hand: line pre-evolution in hand")
         if board.irreplaceable_tool_in_hand:
             return stand_down("protected hand: ACE-SPEC Tool in hand")
-        counts = board.deck_known_counts
-        if not counts:
-            return stand_down("pre-anchor: no exact deck counts")
         from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
         me = self._my_player(obs)
         hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
@@ -1550,12 +1547,41 @@ class PlannerMixin:
             st.energyType for c in (me.get("discard") or [])  # discard — the recycle closure's source
             if c and (st := self.stats.get(c.get("id"))) is not None
             and st.is_basic_energy and st.energyType is not None}
-        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand, discard_basic_types)
+        # WP2 — the closure-COUNTS the classes are built over, and the window `hit` that prices them.
+        # ANCHORED (prizes resolved): exact deck counts, a plain window hypergeometric. PRE-ANCHOR:
+        # the decklist is still fully known (own deck) — only the prize assignment of unseen copies is
+        # random, so build the classes over the unseen counts (`decklist − visible`) and price with the
+        # prize-split-weighted window sum. The old `if not deck_known_counts: return None` priced EVERY
+        # pre-anchor gamble at ZERO — the modeling-gap-as-caution failure the whole spec attacks.
+        counts = board.deck_known_counts
+        anchored = bool(counts)
+        if anchored:
+            class_counts = counts
+            deck_count = sum(counts.values())
+            prizes_hidden = 0
+        else:
+            from collections import Counter as _Counter
+            unseen = _Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))    # copies provably outside deck+prizes
+            class_counts = {cid: n for cid, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(class_counts.values()) - prizes_hidden   # hidden deck cards (H − prizes)
+            if deck_count <= 0 or not class_counts:
+                return stand_down("pre-anchor: deck bookkeeping unresolved")
+        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, class_counts, hand, discard_basic_types)
         if not classes:
             return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
-        pool = sum(counts.values()) + max(0, len(hand) - 1)   # the shuffle-grown draw pool
-        burst_copies = self._gamble_burst_copies(counts, hand, stat)   # the recovery class (below)
+        pool = deck_count + max(0, len(hand) - 1)             # the shuffle-grown draw pool
+        burst_copies = self._gamble_burst_copies(class_counts, hand, stat)   # the recovery class (below)
+        from common.deck_odds import draw_hit_probability
+        if anchored:
+            def hit(cp, n):
+                return draw_hit_probability(cp, pool, n)
+        else:
+            def hit(cp, n):
+                return self._prize_split_hit(cp, deck_count, prizes_hidden, pool, n)
         best = None                                           # (ev, index, rationale)
         evals = []                                            # per (refresh option × class) working rows
         for i, o in enumerate(options):
@@ -1567,8 +1593,7 @@ class PlannerMixin:
                     or "shuffle_hand" not in self.functions.tags(cid)):
                 continue
             for copies, ko_value, label, sought in classes:
-                from common.deck_odds import draw_hit_probability
-                p = sum(draw_hit_probability(copies, pool, n) for n in ns) / len(ns)
+                p = sum(hit(copies, n) for n in ns) / len(ns)
                 ev = p * ko_value
                 if burst_copies and det > 0:
                     # the RECOVERY class: the miss branch may still redraw the held burst Energy
@@ -1576,7 +1601,7 @@ class PlannerMixin:
                     # deterministic line held — the "no {W}, but the Ignition came back → Nebula
                     # anyway" branch. Independence approximation on the conditional (documented;
                     # errs small, and only ever ADDS honest EV to the miss side).
-                    p_re = sum(draw_hit_probability(burst_copies, pool, n) for n in ns) / len(ns)
+                    p_re = sum(hit(burst_copies, n) for n in ns) / len(ns)
                     ev += (1 - p) * p_re * det
                 evals.append({"i": i, "cid": cid, "draws": max(ns), "label": label,
                               "p": round(p, 3), "ev": round(ev, 1)})
@@ -1584,7 +1609,8 @@ class PlannerMixin:
                     best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
                                    f"for the KO (EV {ev:.0f} > held line {det:.0f})")
         self._gamble_trace = {                     # the full working, win or stand-down (ADR-0019)
-            "considered": True, "pool": pool, "det": round(det, 1), "burst": burst_copies,
+            "considered": True, "anchored": anchored, "prizes_hidden": prizes_hidden,
+            "pool": pool, "det": round(det, 1), "burst": burst_copies,
             "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s}
                         for c, v, la, s in classes],
             "evals": evals,
@@ -1592,6 +1618,33 @@ class PlannerMixin:
         if best is None:
             return None
         return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
+
+    def _prize_split_hit(self, u: int, deck_count: int, prizes_hidden: int, pool: int, draws: int) -> float:
+        """WP2: P(≥1 enabler in the ``draws``-card refresh) PRE-ANCHOR — the decklist is fully known,
+        only the prize assignment of the class's ``u`` unseen enabler copies is random. Sum over
+        ``j`` = copies-that-landed-in-the-deck of the hypergeometric prize-split weight × the window
+        draw with ``j`` copies: ``Σ_j [C(deck,j)·C(prizes,u−j)/C(deck+prizes,u)] × hit(j, pool, n)``
+        — ≤ ``u+1`` plain ``math.comb`` terms (``u ≤ 4`` in practice). The exact closed form the
+        ``if not deck_known_counts: return None`` gate replaced with a zero (the modeling-gap-as-
+        caution failure the fetch-closure spec attacks). Never raises; bad input → 0.0 (an endorser
+        fails closed). Degenerates to the plain window draw when no prizes are hidden."""
+        from math import comb
+        from common.deck_odds import draw_hit_probability
+        try:
+            u, d, k = int(u), int(deck_count), int(prizes_hidden)
+        except Exception:
+            return 0.0
+        if u <= 0 or d <= 0:
+            return 0.0
+        if k <= 0:
+            return draw_hit_probability(u, pool, draws)        # no hidden prizes -> every copy in deck
+        h = d + k
+        u = min(u, h)                                          # can't split more copies than positions
+        denom = comb(h, u)                                     # u ≤ h -> comb(h, u) > 0, no zero-div
+        total = 0.0
+        for j in range(max(0, u - k), min(u, d) + 1):          # j = enabler copies landing in the deck
+            total += comb(d, j) * comb(k, u - j) / denom * draw_hit_probability(j, pool, draws)
+        return max(0.0, min(1.0, total))
 
     def _gamble_burst_copies(self, counts: dict, hand: list, stat) -> int:
         """Copies (pool-wide, INCLUDING the returned hand copy) of a held `discard_eot` burst Energy
