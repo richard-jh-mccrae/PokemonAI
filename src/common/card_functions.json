@@ -510,7 +510,8 @@
  ],
  "1142": [
   "search",
-  "tutor_energy"
+  "tutor_energy",
+  "tutor_pokemon"
  ],
  "1145": [
   "search",
@@ -523,7 +524,8 @@
   "heal"
  ],
  "1152": [
-  "search"
+  "search",
+  "tutor_pokemon"
  ],
  "1153": [
   "heal"
@@ -661,7 +663,8 @@
  ],
  "1225": [
   "search",
-  "tutor_energy"
+  "tutor_energy",
+  "tutor_pokemon"
  ],
  "1227": [
   "draw",
@@ -720,5 +723,17 @@
  ],
  "1174": [
   "tool"
+ ],
+ "140": [
+  "draw"
+ ],
+ "305": [
+  "switch"
+ ],
+ "674": [
+  "gust"
+ ],
+ "675": [
+  "draw"
  ]
 }

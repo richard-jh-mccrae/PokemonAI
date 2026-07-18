@@ -852,6 +852,10 @@ class Decision:
     objectives: dict | None = None   # sparse Tier-3 trace (ADR-0040): {"race", "my", "their"} — the
                                      # live race delta + both cheapest-path turns; None off-board /
                                      # both paths unknown. Telemetry emits it for the writeup/tuner.
+    gamble: dict | None = None   # sparse Tier-2 working-trace (ADR-0039): the gamble rung's full
+                                 # calculation (pool/det/classes with the sought out-card ids/per-
+                                 # option p·EV) or its stand-down reason — the blunder shell shows
+                                 # it as a dropdown so shuffle/fetch corrections are fully analyzable
     win_prob: float | None = None    # Tier-5 (ADR-0042): the Automatic Value Model's P(win) on THIS
                                      # decision's board — emitted for calibration measurement on real
                                      # games; None when the model is off/absent (no learned claim)
@@ -1088,6 +1092,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         game_plan=self._game_plan_record(board),
                             plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
                                              if planned.goal == "develop" else None),  # rung's ranking (sparse)
+                            gamble=getattr(self, "_gamble_trace", None),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -1117,6 +1122,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         posture=self._posture_record(board),
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
+                        gamble=getattr(self, "_gamble_trace", None),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod

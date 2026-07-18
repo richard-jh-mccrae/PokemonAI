@@ -106,7 +106,10 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     posture = getattr(decision, "posture", None)  # the Read's belief about the opponent at this
     if posture:                                   # decision (ADR-0041): believed archetype(s), γ,
         rec["posture"] = posture                  # matched Brief. Sparse: only when a Scout was wired.
-    return rec                                     # Rides into every Correction's live_trace so the
+    gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
+    if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
+        rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung
+    return rec                                    # ran; the blunder shell renders it as a dropdown.                                     # Rides into every Correction's live_trace so the
                                                   # inspector shows it + /blunder-buster ties it to a matchup.
 
 

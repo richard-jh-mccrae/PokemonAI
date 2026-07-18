@@ -438,6 +438,28 @@ function show(n){
       (P.fav!=null?` · fav ${P.fav}`:'')+
       (alt?`<div class="alt">also weighed: ${alt}</div>`:'')+`</div>`;
   }
+  if(f.live&&f.live.gamble){
+    // The gamble rung's full working (ADR-0039/0019): every number behind the (non-)gamble, so a
+    // shuffle-in / Ultra-Ball-fetch blunder tag can target the real defect (outs undercounted?
+    // det baseline wrong? a stand-down gate too eager?). Sparse: present only when the rung ran.
+    const G=f.live.gamble;
+    if(!G.considered){
+      h+=`<details class="live"><summary>&#127922; gamble: stood down — ${esc(G.why||'?')}</summary>`+
+        `<div class="alt">the rung was reached but declined before pricing; if the human line here `+
+        `was a refresh/dig, this gate is the thing to correct</div></details>`;
+    }else{
+      const cls=(G.classes||[]).map(c=>
+        `<div>· ${esc(c.label)} — <b>${c.copies}</b> outs (cards ${esc((c.sought||[]).join(', '))}) `+
+        `worth ${c.value}</div>`).join('');
+      const ev=(G.evals||[]).map(e=>
+        `<div>· opt ${e.i} (cid ${e.cid}, draw ${e.draws}): P=${e.p} &rarr; EV ${e.ev} for ${esc(e.label)}</div>`).join('');
+      h+=`<details class="live"><summary>&#127922; gamble: priced — `+
+        (G.best?`<b>fired</b> opt ${G.best[0]} EV ${G.best[1]}`:`<b>declined</b> (no EV beat the held line)`)+
+        ` · det ${G.det} · pool ${G.pool}${G.burst?` · burst ${G.burst}`:''}</summary>`+
+        (cls?`<div class="alt">outcome classes (cards sought):</div>`+cls:'')+
+        (ev?`<div class="alt">per-option pricing:</div>`+ev:'')+`</details>`;
+    }
+  }
   $('now').innerHTML=h;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);

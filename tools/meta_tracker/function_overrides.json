@@ -1,5 +1,5 @@
 {
- "_note": "Curated tags the probe can't reach, confirmed via tools/verify_meta_cards.py against card text. Unioned with probe-derived tags at build; never clobbered by regeneration. cardId -> [tags]. NOTE: `stall` is a curated *play-role* seed (a big-HP setup wall that declines to attack) \u2014 a usage pattern, not a parseable function; proper coverage needs replay-usage learning (see docs/card-functions.md). Inline names are for humans only.",
+ "_note": "Curated tags the probe can't reach, confirmed via tools/verify_meta_cards.py against card text. Unioned with probe-derived tags at build; never clobbered by regeneration. cardId -> [tags]. NOTE: `stall` is a curated *play-role* seed (a big-HP setup wall that declines to attack) — a usage pattern, not a parseable function; proper coverage needs replay-usage learning (see docs/card-functions.md). Inline names are for humans only.",
  "17": [
   "discard_eot"
  ],
@@ -100,7 +100,8 @@
   "tutor_energy"
  ],
  "1142": [
-  "tutor_energy"
+  "tutor_energy",
+  "tutor_pokemon"
  ],
  "1194": [
   "tutor_energy"
@@ -115,7 +116,8 @@
   "tutor_energy"
  ],
  "1225": [
-  "tutor_energy"
+  "tutor_energy",
+  "tutor_pokemon"
  ],
  "1232": [
   "tutor_energy"
@@ -128,5 +130,20 @@
  ],
  "1240": [
   "energy_accel"
+ ],
+ "140": [
+  "draw"
+ ],
+ "305": [
+  "switch"
+ ],
+ "674": [
+  "gust"
+ ],
+ "675": [
+  "draw"
+ ],
+ "1152": [
+  "tutor_pokemon"
  ]
 }

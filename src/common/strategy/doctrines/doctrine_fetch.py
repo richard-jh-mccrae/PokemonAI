@@ -615,10 +615,14 @@ HYPOTHESES = [
                   "excludes a win-condition-LINE evolution (`card_is_line_preevo`, e.g. Drakloak's Recon "
                   "Directive): you tutor a mid-Line piece to EVOLVE it, not to bench it as a standalone engine "
                   "— crediting it as support double-counts its line-piece value and over-ranks it above a fresh "
-                  "body on an empty Bench (dragapult f14).",
+                  "body on an empty Bench (dragapult f14). STANDS DOWN at the energy famine (same predicate as "
+                  "`fetch-the-wincon`, honouring its own charter 'second only to … energy-when-starved': once "
+                  "Lunatone earned its `draw` tag (2026-07-17 audit) this stacked with a deck engine rung to 49 "
+                  "and out-ranked the +35 famine Energy, re-opening ml0705 f9).",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_support
         and not c.card_is_line_preevo
-        and not c.card_stranded_evolution and not c.board.support_in_play,
+        and not c.card_stranded_evolution and not c.board.support_in_play
+        and not (c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand),
         weight=15, status="testing"),
     Hypothesis(
         id="fetch-when-it-fills-a-need",

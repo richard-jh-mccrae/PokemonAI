@@ -32,11 +32,17 @@ HYPOTHESES = [
                   "Lillie's is exactly what made the Pilot shed an 8-card hand to redraw 4 (ml f111 "
                   "CRITICAL, ms f60, ms f94). A refresh's value is its card SWING — the `refresh_swing` "
                   "oracle owns that card class end to end and carries the `_REFRESH_CYCLE` credit this "
-                  "rung used to supply. ADR-0024's anti-hoarding finding survives INSIDE the oracle.",
+                  "rung used to supply. ADR-0024's anti-hoarding finding survives INSIDE the oracle. "
+                  "STANDS DOWN on a POKEMON play (2026-07-17 tag-completeness audit): benching a body "
+                  "whose Ability draws LATER (Lunatone Lunar Cycle, Fezandipiti Flip the Script) is not "
+                  "a dig — nothing resolves on the play, and the +20 out-ranked the wincon base "
+                  "(ml0703 f44). A play-triggered tutor body (Meowth ex) is owned by its dedicated "
+                  "`bench-the-supporter-tutor` rung, not double-credited here.",
         when=lambda c: c.option_type == _PLAY
         and ("draw" in c.tags or "search" in c.tags)
         and "cost_discard" not in c.tags
-        and "shuffle_hand" not in c.tags,
+        and "shuffle_hand" not in c.tags
+        and not (c.stat is not None and getattr(c.stat, "is_pokemon", False)),
         weight=20, status="assumed"),
     Hypothesis(
         id="dont-play-damage-boost-when-cant-attack",

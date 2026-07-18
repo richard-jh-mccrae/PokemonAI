@@ -242,7 +242,8 @@ class PlannerMixin:
         fp = self._plan_fingerprint(obs, select)
         if self._turn_plan is not None and self._turn_plan[0] == fp:
             return self._turn_plan[1]                 # cache hit: re-plan only on reveal (fingerprint change)
-        line = self._win_line(obs, select, board, options, traces)
+        self._gamble_trace = None                     # fresh plan: clear the gamble working-trace (the
+        line = self._win_line(obs, select, board, options, traces)   # sparse `gamble` telemetry block)
         if line is None:                              # ADR-0045 S4: the forgo-KO directive preempts the
             line = self._forgo_ko_line(obs, select, board, options, traces)   # KO-defer under its tight gate
         if line is None:
@@ -1486,18 +1487,37 @@ class PlannerMixin:
         switch off / mid-sim (the engine re-run stays deterministic policy) / turn 1 / attach already
         spent / a KO already on the tuned menu / a protected hand (wincon, line piece, ACE-SPEC Tool
         — the keep-value floors own those shuffles) / pre-anchor (no exact counts, mirroring
-        `dont-refresh-into-a-probable-miss`) / the hand already holds an enabler (just attach it)."""
-        if (not getattr(self, "gamble_lines", False) or self._planning
-                or board.turn <= 1 or board.energy_attached or board.active_can_ko):
+        `dont-refresh-into-a-probable-miss`) / the hand already holds an enabler (just attach it).
+
+        Records its full working — or WHY it stood down — on ``self._gamble_trace``, the sparse
+        `gamble` block of Decision Telemetry (ADR-0019): the blunder shell shows it as a dropdown so
+        a shuffle/fetch correction can see every number behind the (non-)gamble. Never recorded
+        mid-sim (an engine re-run must not clobber the live decision's trace)."""
+        def stand_down(why):
+            if not self._planning:
+                self._gamble_trace = {"considered": False, "why": why}
             return None
+        if self._planning:
+            return None                             # mid engine-sim: silent, never clobber the trace
+        if not getattr(self, "gamble_lines", False):
+            return stand_down("feature off (gamble_lines)")
+        if board.turn <= 1:
+            return stand_down("turn 1")
+        if board.energy_attached:
+            return stand_down("attach already spent this turn")
+        if board.active_can_ko:
+            return stand_down("active already reaches a KO")
         if any(t.tactical >= KO_SCORE for t in traces):
-            return None
-        if ((board.wincon_in_hand and not board.wincon_in_play) or board.line_preevo_in_hand
-                or board.irreplaceable_tool_in_hand):
-            return None
+            return stand_down("a KO is already on the tuned menu")
+        if board.wincon_in_hand and not board.wincon_in_play:
+            return stand_down("protected hand: wincon in hand")
+        if board.line_preevo_in_hand:
+            return stand_down("protected hand: line pre-evolution in hand")
+        if board.irreplaceable_tool_in_hand:
+            return stand_down("protected hand: ACE-SPEC Tool in hand")
         counts = board.deck_known_counts
         if not counts:
-            return None
+            return stand_down("pre-anchor: no exact deck counts")
         from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
         me = self._my_player(obs)
         hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
@@ -1509,11 +1529,12 @@ class PlannerMixin:
             return None
         classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand)
         if not classes:
-            return None
+            return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
         pool = sum(counts.values()) + max(0, len(hand) - 1)   # the shuffle-grown draw pool
         burst_copies = self._gamble_burst_copies(counts, hand, stat)   # the recovery class (below)
         best = None                                           # (ev, index, rationale)
+        evals = []                                            # per (refresh option × class) working rows
         for i, o in enumerate(options):
             if o.get("type") != _PLAY:
                 continue
@@ -1522,7 +1543,7 @@ class PlannerMixin:
             if (ns is None or cid is None or not self.functions
                     or "shuffle_hand" not in self.functions.tags(cid)):
                 continue
-            for copies, ko_value, label in classes:
+            for copies, ko_value, label, sought in classes:
                 from common.deck_odds import draw_hit_probability
                 p = sum(draw_hit_probability(copies, pool, n) for n in ns) / len(ns)
                 ev = p * ko_value
@@ -1534,9 +1555,17 @@ class PlannerMixin:
                     # errs small, and only ever ADDS honest EV to the miss side).
                     p_re = sum(draw_hit_probability(burst_copies, pool, n) for n in ns) / len(ns)
                     ev += (1 - p) * p_re * det
+                evals.append({"i": i, "cid": cid, "draws": max(ns), "label": label,
+                              "p": round(p, 3), "ev": round(ev, 1)})
                 if ev > det and (best is None or ev > best[0]):
                     best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
                                    f"for the KO (EV {ev:.0f} > held line {det:.0f})")
+        self._gamble_trace = {                     # the full working, win or stand-down (ADR-0019)
+            "considered": True, "pool": pool, "det": round(det, 1), "burst": burst_copies,
+            "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s}
+                        for c, v, la, s in classes],
+            "evals": evals,
+            "best": ([best[1], round(best[0], 1)] if best is not None else None)}
         if best is None:
             return None
         return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
@@ -1562,8 +1591,10 @@ class PlannerMixin:
         """The KO-enabling **Outcome Classes** of a refresh draw: for each of my Active's attacks
         exactly ONE Energy short whose damage fells the opponent's Active, the class of draws
         containing ≥1 Basic Energy that fills the missing slot (its specific type, or any Basic for
-        a colourless slot). Returns ``[(enabler_copies_in_pool, ko_value, label), …]``; an enabler
-        already in HAND voids the class (no gamble needed — attaching it is the deterministic line)."""
+        a colourless slot). Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]``
+        — ``sought_ids`` = the deck card ids that ARE the outs, for the `gamble` telemetry block; an
+        enabler already in HAND voids the class (no gamble needed — attaching it is the
+        deterministic line)."""
         out = []
         attached = self._attached_type_counts(ma)
         hand_ids = [c.get("id") for c in hand]
@@ -1592,11 +1623,12 @@ class PlannerMixin:
                 return (et == want) if want is not None else True
             if any(_enables(cid) for cid in hand_ids):
                 continue                                      # hand already holds the enabler
-            copies = sum(n for cid, n in counts.items() if n > 0 and _enables(cid))
+            sought = sorted(cid for cid, n in counts.items() if n > 0 and _enables(cid))
+            copies = sum(counts[cid] for cid in sought)
             if copies <= 0:
                 continue
             label = f"a type-{want} Basic Energy" if want is not None else "any Basic Energy"
-            out.append((copies, KO_SCORE + self._prize_value(opp), label))
+            out.append((copies, KO_SCORE + self._prize_value(opp), label, sought))
         return out
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
