@@ -442,3 +442,65 @@ def test_wp4_engine_windows_lift_the_anchored_gamble_price():
     assert "engine_copies" not in tr2["classes"][0]
     plain = sum(draw_hit_probability(4, pool, n) for n in ns) / len(ns)
     assert isclose(tr2["evals"][0]["p"], round(plain, 3))
+
+
+def _pump_obs(ma, opp):
+    return {"current": {"yourIndex": 0, "turn": 6,
+                        "players": [{"active": [ma], "bench": [], "hand": [], "discard": []},
+                                    {"active": [opp], "bench": [], "discard": []}]}}
+
+
+@pytest.mark.req("REQ-GAMBLE-0012")
+def test_wp5_damage_pump_ko_class():
+    """WP5: the DAMAGE-PUMP KO class — my Active's affordable attack is short of the KO by ≤ one boost,
+    and drawing a damageBoost Trainer lifts it over. Gates mirror `_boost_lethal_tactical` exactly
+    (attacker-type via `energyType`, defender `{ex}`). Premium Power Pro ({F}+30, Item) is always-live;
+    Black Belt's (+40-vs-ex, Supporter) rides the post-Item supplement and needs an ex defender."""
+    from common.pilot import Board
+    ml = _shipped_pilot("mega_lucario")
+    stat = ml.stats.get(678)                              # Mega Lucario ex, {F}=6, Mega Brave 270 at 2 E
+    ma = {"id": 678, "hp": 340, "energies": [6, 6]}
+    board = Board(turn=6, my_active_id=678, my_active_energy=2)
+    short = {"id": 666, "hp": 290, "energies": []}        # 270 < 290 ≤ 300 → one Power Pro crosses
+    obs = _pump_obs(ma, short)
+    cls = ml._gamble_pump_ko_classes(obs, board, stat, ma, short, 290, {1141: 4}, [{"id": 1227}])
+    assert cls and cls[0][3] == [1141] and cls[0][0] == 4          # Premium Power Pro is the out
+    # Too healthy for a single boost (270+30 < 320), an affordable KO already exists (≤270), and the
+    # boost already in hand (deterministic play) all yield NO class.
+    assert ml._gamble_pump_ko_classes(_pump_obs(ma, {"id": 666, "hp": 320, "energies": []}),
+                                      board, stat, ma, {"id": 666, "hp": 320}, 320, {1141: 4},
+                                      [{"id": 1227}]) == []
+    assert ml._gamble_pump_ko_classes(_pump_obs(ma, {"id": 666, "hp": 260, "energies": []}),
+                                      board, stat, ma, {"id": 666, "hp": 260}, 260, {1141: 4},
+                                      [{"id": 1227}]) == []
+    assert ml._gamble_pump_ko_classes(obs, board, stat, ma, short, 290, {1141: 4},
+                                      [{"id": 1141}]) == []
+    # Black Belt's (Supporter, +40 vs ex) rides the SUPPLEMENT slot and only vs an ex defender.
+    ex_opp = {"id": 678, "hp": 300, "energies": []}      # a Mega ex wall: 270 < 300 ≤ 310 (270+40)
+    exc = ml._gamble_pump_ko_classes(_pump_obs(ma, ex_opp), board, stat, ma, ex_opp, 300,
+                                     {1211: 4}, [{"id": 1227}])
+    assert exc and exc[0][3] == [] and exc[0][4] == (4, [1211])    # Belt's in the post-Item supplement
+    non_ex = {"id": 666, "hp": 300, "energies": []}      # Cinderace is not ex → the vsEx gate blocks
+    assert ml._gamble_pump_ko_classes(_pump_obs(ma, non_ex), board, stat, ma, non_ex, 300,
+                                      {1211: 4}, [{"id": 1227}]) == []
+
+
+@pytest.mark.req("REQ-GAMBLE-0013")
+def test_wp5_gust_ko_class():
+    """WP5: the GUST KO class — my Active can't KO the current opp Active but CAN KO a benched target
+    once it's dragged up (per-target weakness via the shared `_can_ko` oracle). Drawing Boss's Orders
+    (1182, a Supporter → post-Item-refresh only) enables it; value = the benched target's prize. No
+    KO-able benched target, or Boss's already in hand, yields no class."""
+    from common.pilot import Board
+    ml = _shipped_pilot("mega_lucario")
+    ma = {"id": 678, "hp": 340, "energies": [6, 6]}      # Mega Lucario ex, Aura Jab 130 / Mega Brave 270
+    board = Board(turn=6, my_active_id=678, my_active_energy=2)
+    obs = {"current": {"yourIndex": 0, "players": [{"active": [ma]}, {}]}}
+    reachable = {"active": [{"id": 678, "hp": 340, "energies": []}],   # a Mega ex wall (no direct KO)
+                 "bench": [{"id": 666, "hp": 60}]}                     # a 60-HP benched target → KOable
+    cls = ml._gamble_gust_ko_classes(obs, board, ma, reachable, [{"id": 1227}], {1182: 2})
+    assert cls and cls[0][3] == [] and cls[0][4] == (2, [1182])       # Boss's rides the supplement
+    assert cls[0][1] > 1000                                            # KO_SCORE + the benched prize
+    walls = {"active": [{"id": 678, "hp": 340}], "bench": [{"id": 678, "hp": 340}]}   # nothing KO-able
+    assert ml._gamble_gust_ko_classes(obs, board, ma, walls, [{"id": 1227}], {1182: 2}) == []
+    assert ml._gamble_gust_ko_classes(obs, board, ma, reachable, [{"id": 1182}], {1182: 2}) == []

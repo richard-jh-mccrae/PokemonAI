@@ -1559,6 +1559,9 @@ class PlannerMixin:
                 return stand_down("pre-anchor: deck bookkeeping unresolved")
         classes = self._gamble_ko_classes(board, stat, ma, opp, hp, class_counts, hand, discard_basic_types)
         classes = classes + self._gamble_evolution_ko_classes(obs, board, ma, opp, class_counts, hand)
+        classes = classes + self._gamble_pump_ko_classes(obs, board, stat, ma, opp, hp, class_counts, hand)
+        classes = classes + self._gamble_gust_ko_classes(obs, board, ma, self._opp_player(obs), hand,
+                                                         class_counts)
         if not classes:
             return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
@@ -1949,6 +1952,83 @@ class PlannerMixin:
                         f"the evolution {st.name}", sought,
                         (sum(counts[t] for t in sup_ids), sup_ids)))
         return out
+
+    def _gamble_pump_ko_classes(self, obs, board, stat, ma, opp, hp: int, counts: dict, hand: list):
+        """WP5: the **damage-pump** KO class — my Active's best AFFORDABLE attack (current Energy; the
+        boost is the missing piece, not Energy) is short of the KO by ≤ one boost, and drawing a
+        ``damageBoost`` Trainer (Premium Power Pro {F}+30 Item; Black Belt's +40-vs-ex Supporter) lifts
+        it over. Gates mirror `_boost_lethal_tactical` EXACTLY — the attacker-type gate (``energyType``
+        vs ``damageBoostType``, "your {F} Pokémon") and the defender ``{ex}`` gate — so the class never
+        over-credits a type-locked pump (provider.py:97-100, VERIFIED parsed). Item boosts are
+        always-live outs; Supporter boosts ride the post-Item-refresh supplement (5th slot). A held
+        boost that crosses voids the class (the deterministic play-it line). Single-copy only (short by
+        ≤ one boost — multi-copy stacking is a deeper hypergeometric, deferred); errs by under-counting."""
+        if board.turn <= 1:
+            return []
+        opp_stat = self.stats.get(opp.get("id")) if (self.stats and opp.get("id") is not None) else None
+        ctx = self._damage_context(obs)
+        hand_ids = {c.get("id") for c in hand}
+        best_dmg = 0
+        for aid in (stat.attacks or ()):
+            if self._attack_cost(aid) > board.my_active_energy:
+                continue                                      # not affordable with current Energy
+            dmg = self.predicted_damage(board.my_active_id, aid, opp, context=ctx)
+            if dmg >= hp:
+                return []                                     # an affordable KO already exists — attack
+            best_dmg = max(best_dmg, dmg)
+        if best_dmg <= 0:
+            return []
+
+        def _crosses(bst) -> bool:
+            if bst is None or not getattr(bst, "damageBoost", 0):
+                return False
+            if bst.damageBoostType is not None and getattr(stat, "energyType", None) != bst.damageBoostType:
+                return False                                  # attacker-type gate
+            if bst.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
+                return False                                  # defender {ex} gate
+            return best_dmg < hp <= best_dmg + bst.damageBoost   # short by ≤ this one boost
+        if any(_crosses(self.stats.get(cid) if self.stats else None) for cid in hand_ids):
+            return []                                         # held boost crosses -> deterministic line
+        item_ids = sorted(bid for bid, n in counts.items() if n > 0
+                          and getattr(self.stats.get(bid), "is_item", False)
+                          and _crosses(self.stats.get(bid)))
+        sup_ids = sorted(bid for bid, n in counts.items() if n > 0
+                         and getattr(self.stats.get(bid), "is_supporter", False)
+                         and _crosses(self.stats.get(bid)))
+        if not item_ids and not sup_ids:
+            return []
+        return [(sum(counts[b] for b in item_ids), KO_SCORE + self._prize_value(opp),
+                 "a damage boost for the KO", item_ids,
+                 (sum(counts[b] for b in sup_ids), sup_ids))]
+
+    def _gamble_gust_ko_classes(self, obs, board, ma, opp_player, hand: list, counts: dict):
+        """WP5: the **gust** KO class — my Active can't KO the current opp Active (else the rung stands
+        down upstream), but its affordable attack CAN KO a benched target once that target is dragged
+        up (per-target weakness via the shared `_gust_best_ko_prizes` / `_can_ko` oracle). Drawing a
+        gust Trainer (Boss's Orders 1182 — a Supporter, so it rides the post-Item-refresh supplement;
+        an Item gust would be always-live) enables it. Value = KO_SCORE + the BENCHED target's prize
+        (not the current Active's). A held gust that reaches voids the class (the deterministic
+        `gust-for-the-ko` line, already a KO on the menu). Errs by under-counting (cheapest-attack KO)."""
+        best_prizes = self._gust_best_ko_prizes(ma, opp_player, board.my_active_energy)
+        if best_prizes <= 0:
+            return []
+        hand_ids = {c.get("id") for c in hand}
+
+        def _is_gust_trainer(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return bool(st and (st.is_item or st.is_supporter) and self.functions
+                        and "gust" in self.functions.tags(cid))
+        if any(_is_gust_trainer(cid) for cid in hand_ids):
+            return []                                         # held gust -> deterministic gust-KO line
+        item_ids = sorted(bid for bid, n in counts.items() if n > 0 and _is_gust_trainer(bid)
+                          and getattr(self.stats.get(bid), "is_item", False))
+        sup_ids = sorted(bid for bid, n in counts.items() if n > 0 and _is_gust_trainer(bid)
+                         and getattr(self.stats.get(bid), "is_supporter", False))
+        if not item_ids and not sup_ids:
+            return []
+        return [(sum(counts[b] for b in item_ids), KO_SCORE + best_prizes,
+                 "a gust for the benched KO", item_ids,
+                 (sum(counts[b] for b in sup_ids), sup_ids))]
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
         """The DETERMINISTIC baseline a gamble must beat: the best tactical already on the menu, or
