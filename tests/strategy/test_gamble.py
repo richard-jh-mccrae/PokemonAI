@@ -294,3 +294,83 @@ def test_wp5_evolution_ko_gamble_class_prices_drawing_the_evolution():
     megalu = next(cid for cid in set(ml.deck) if (s := ml.stats.get(cid)) and getattr(s, "megaEx", False))
     assert ml._fetch_reaches_pokemon(megalu, 1152, {megalu: 1, 1152: 4}) is False   # Poké Pad: no Rule Box
     assert ml._fetch_reaches_pokemon(megalu, 1121, {megalu: 1, 1121: 4}) is True    # Ultra Ball: any Pokémon
+
+
+@pytest.mark.req("REQ-GAMBLE-0010")
+def test_supporter_tutors_reach_only_what_their_clauses_can_deliver():
+    """The post-Item-refresh Supporter closure (`_supporter_energy_tutor_reaches` /
+    `_supporter_evolution_tutor_reaches`): Hilda's `energy` fetch needs a matching Basic in deck;
+    Crispin's UNconditional accel counts, Rosa's prize-behind-conditioned accel fails closed; Petrel
+    is the 2-hop — live only while an energy-fetch ITEM (with a reachable target) is still in deck,
+    and never for a slot its Items are type-locked out of."""
+    ml = _shipped_pilot("mega_lucario")
+    F, W = 6, 3
+    assert ml._supporter_energy_tutor_reaches(1219, F, {F: 5, 1142: 4, 1219: 1}, set()) is True
+    assert ml._supporter_energy_tutor_reaches(1219, F, {F: 5, 1219: 1}, set()) is False   # no fetch Item
+    assert ml._supporter_energy_tutor_reaches(1219, W, {F: 5, 1142: 4, 1219: 1}, set()) is False  # {F}-lock
+    ms = _shipped_pilot("mega_starmie")
+    assert ms._supporter_energy_tutor_reaches(1225, W, {W: 5, 1225: 2}, set()) is True    # Hilda
+    assert ms._supporter_energy_tutor_reaches(1225, W, {1225: 2}, set()) is False         # deck dry
+    dx = _shipped_pilot("dragapult_ex")
+    assert dx._supporter_energy_tutor_reaches(1198, None, {2: 4, 1198: 3}, set()) is True   # Crispin
+    assert dx._supporter_energy_tutor_reaches(1240, None, {2: 4, 1240: 1}, set()) is False  # Rosa: gated
+    # Evolution side: Hilda (evolution fetch) and Salvatore (rush-evolve) both deliver Mega Starmie ex.
+    assert ms._supporter_evolution_tutor_reaches(1225, 1031, {1031: 3, 1225: 2}) is True
+    assert ms._supporter_evolution_tutor_reaches(1189, 1031, {1031: 3, 1189: 2}) is True
+    assert ms._supporter_evolution_tutor_reaches(1189, 1031, {1189: 2}) is False          # target gone
+    # A HELD Supporter tutor voids the class while the slot is live (play it now — the deterministic
+    # line); with the slot already spent it is dead paper, so the gamble class stands.
+    from common.pilot import Board
+    st = ms.stats.get(1031)
+    msa = {"id": 1031, "hp": 330, "energies": []}
+    low = {"id": 666, "hp": 40, "energies": []}
+    live = Board(my_active_id=1031, my_active_energy=0)
+    spent = Board(my_active_id=1031, my_active_energy=0, supporter_played=True)
+    assert ms._gamble_ko_classes(live, st, msa, low, 40, {W: 5, 1225: 2}, [{"id": 1225}], set()) == []
+    assert ms._gamble_ko_classes(spent, st, msa, low, 40, {W: 5, 1225: 2}, [{"id": 1225}], set()) != []
+
+
+@pytest.mark.req("REQ-GAMBLE-0010")
+def test_supporter_outs_count_only_when_the_refresh_is_an_item():
+    """The 4-of-5 rule (spec §Missing): a Supporter refresh spends the one-per-turn slot, so a drawn
+    Supporter tutor is dead in ITS window — the class's Supporter supplement (Petrel here) is applied
+    ONLY to the Unfair Stamp (Item) option's pricing, never to Lillie's, and not even to Stamp once a
+    Supporter was already played this turn."""
+    from math import isclose
+    from common.pilot import Board
+    from common.deck_odds import draw_hit_probability
+    from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
+    ml = _shipped_pilot("mega_lucario")
+    counts = {6: 5, 1142: 4, 1219: 1}                     # {F} Basics + Fighting Gong + Petrel in deck
+    hand = [1080, 1227]                                   # Unfair Stamp (Item) + Lillie's (Supporter)
+    me = {"active": [{"id": 673, "hp": 110, "energies": [6]}], "bench": [],
+          "hand": [{"id": c} for c in hand], "discard": [], "prize": [None] * 3}
+    opp = {"active": [{"id": 666, "hp": 30, "energies": []}], "bench": [], "prize": [None] * 3}
+    obs = {"current": {"yourIndex": 0, "turn": 6, "players": [me, opp], "energyAttached": False}}
+    from common.strategy.context import _PLAY
+    select = {"option": [{"type": _PLAY, "area": 2, "index": 0},
+                         {"type": _PLAY, "area": 2, "index": 1}]}
+    obs["select"] = select
+    board = Board(turn=6, my_active_id=673, my_active_energy=1, deck_known_counts=counts,
+                  my_prizes_remaining=3, opp_prizes_remaining=3)
+    ml._best_gamble_line(obs, select, board, select["option"], [])
+    tr = ml._gamble_trace
+    assert tr["classes"][0]["post_item_copies"] == 1      # the Petrel supplement, carried on the class
+    assert tr["classes"][0]["post_item_sought"] == [1219]
+    pool = tr["pool"]
+    stamp = next(e for e in tr["evals"] if e["cid"] == 1080)
+    lillies = next(e for e in tr["evals"] if e["cid"] == 1227)
+    b_stamp, b_lil = _draw_branches(1080, board), _draw_branches(1227, board)
+    assert stamp["post_item_sup"] == 1                    # supplement applied: 9 literal+Item outs + 1
+    assert isclose(stamp["p"], round(sum(draw_hit_probability(10, pool, n) for n in b_stamp)
+                                     / len(b_stamp), 3))
+    assert "post_item_sup" not in lillies                 # a Supporter refresh spends the slot
+    assert isclose(lillies["p"], round(sum(draw_hit_probability(9, pool, n) for n in b_lil)
+                                       / len(b_lil), 3))
+    # A Supporter already played this turn kills the supplement even for the Item refresh.
+    ml._gamble_trace = None
+    board2 = Board(turn=6, my_active_id=673, my_active_energy=1, deck_known_counts=counts,
+                   my_prizes_remaining=3, opp_prizes_remaining=3, supporter_played=True)
+    ml._best_gamble_line(obs, select, board2, select["option"], [])
+    stamp2 = next(e for e in ml._gamble_trace["evals"] if e["cid"] == 1080)
+    assert "post_item_sup" not in stamp2

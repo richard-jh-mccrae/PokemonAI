@@ -133,6 +133,15 @@ Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeome
   evolution is in hand (the deterministic evolve-KO owns it). The Pokémon-tutor closure reads the
   representation too (`_fetch_reaches_pokemon` over FETCH clauses): Poké Pad's `no_rule_box` clause
   correctly excludes a Rule-Box Mega ex — the parametric fact the `tutor_pokemon` tag can't carry.
+- **The Supporter-slot branch (2026-07-18):** each class now carries a post-Item-refresh Supporter
+  supplement — Hilda's energy/evolution fetch, Crispin's unconditional accel, Salvatore's
+  rush-evolve, and the Petrel 2-hop (→ an energy/Pokémon-fetch Item still in deck) — applied per
+  refresh option ONLY when the refresh is an ITEM (Unfair Stamp) with the one-per-turn Supporter
+  slot unspent. 4 of 5 refreshes are Supporters and spend the slot, so their windows price without
+  the Supporter outs; the Stamp window prices WITH them — the resource limit is priced, not assumed.
+  A held Supporter tutor with a live slot voids the class (the deterministic play-it-now line). The
+  trace carries the supplement (`post_item_sought` / `post_item_copies` per class, `post_item_sup`
+  per eval row).
 
 **Clause tier (WP3 — fetch, draw-engine, and accel clauses built):** every fetch/tutor/recycle,
 draw-ENGINE ability, and Trainer/Supporter accel mechanic the 3 agents use now lives in

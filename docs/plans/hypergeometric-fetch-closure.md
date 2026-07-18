@@ -393,8 +393,14 @@ minimum, tie-break equal fetch lines toward the one that anchors.
 - [x] ✅ **WP1** Closure includes the **recycle/discard branch** — BUILT (Night Stretcher / Energy
       Retrieval / Max Rod, from the visible discard; a class can now EXIST via the recycler alone).
 - [ ] **Hand-expansion** chains modeled — not built (first expansion only, via the Gamble window itself).
-- [~] **1 Supporter / 1 attach / costs** charged along the chain — WP1/WP5 scope Items only (the
-      refresh spends the Supporter slot); the Supporter-post-Unfair-Stamp branch is deferred.
+- [x] ✅ **1 Supporter / 1 attach** charged along the chain — BUILT 2026-07-18: the classes carry a
+      **post-Item-refresh Supporter supplement** (`_supporter_energy_tutor_reaches` /
+      `_supporter_evolution_tutor_reaches`: Hilda's energy/evolution fetch, Crispin's unconditional
+      accel — Rosa's prize-behind condition fails closed — Salvatore's rush-evolve, and the Petrel
+      2-hop via an energy/Pokémon-fetch Item still in deck), applied per refresh option ONLY when the
+      refresh is an ITEM (Unfair Stamp) and the Supporter slot is unspent — the 4-of-5 rule priced,
+      not assumed. A held Supporter tutor + a live slot voids the class (deterministic line).
+      Discard COSTS (Ultra Ball's discard-2 charged against the assembled set) remain deferred.
 - [x] ✅ **WP2** Entry-window × prize-split composition (NOT per-hop draws) — BUILT (`_prize_split_hit`).
 - [x] **Exact tracker when revealed, hypergeometric on counts** — already the codebase shape
       (`deck_known_counts` / `p_contains` collapse, ADR-0029 §3).

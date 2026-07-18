@@ -129,7 +129,9 @@ discard-as-resource.
   shapes; the shell dropdown renders whatever the record carries.
 - **plan_turn caches by fingerprint** — `_gamble_trace` is cleared per fingerprint, persists across
   same-turn decisions (intended). The replay-locked path never carries it.
-- **_gamble_ko_classes returns 4-tuples** `(copies, value, label, sought)` since round 14.
+- **_gamble_ko_classes returns 5-tuples** `(copies, value, label, sought, (sup_copies, sup_ids))`
+  since 2026-07-18 (4-tuples round 14 → the 5th slot is the post-Item-refresh Supporter supplement,
+  applied per refresh option in the pricing loop; the trace carries it as `post_item_*`).
 - **Synthetic fixtures and the famine gate:** a `state()` board with no Active energy IS the famine
   — power the Active in fixtures that aren't about famine (test_fetch_doctrine.py precedent), and
   don't make the support-in-play card the Active (self-defeating gap-gate).

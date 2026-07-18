@@ -1581,8 +1581,15 @@ class PlannerMixin:
             if (ns is None or cid is None or not self.functions
                     or "shuffle_hand" not in self.functions.tags(cid)):
                 continue
-            for copies, ko_value, label, sought in classes:
-                p = sum(hit(copies, n) for n in ns) / len(ns)
+            # The Supporter-tutor supplement is live only for an ITEM refresh (Unfair Stamp) with the
+            # one-per-turn Supporter slot unspent — a Supporter refresh spends the slot, so a drawn
+            # Supporter tutor is dead in ITS window (spec §Missing, the 4-of-5 rule).
+            rst = self.stats.get(cid) if self.stats else None
+            sup_live = bool(rst is not None and getattr(rst, "is_item", False)
+                            and not board.supporter_played)
+            for copies, ko_value, label, sought, (sup_copies, _sup_ids) in classes:
+                eff = copies + (sup_copies if sup_live else 0)
+                p = sum(hit(eff, n) for n in ns) / len(ns)
                 ev = p * ko_value
                 if burst_copies and det > 0:
                     # the RECOVERY class: the miss branch may still redraw the held burst Energy
@@ -1592,16 +1599,20 @@ class PlannerMixin:
                     # errs small, and only ever ADDS honest EV to the miss side).
                     p_re = sum(hit(burst_copies, n) for n in ns) / len(ns)
                     ev += (1 - p) * p_re * det
-                evals.append({"i": i, "cid": cid, "draws": max(ns), "label": label,
-                              "p": round(p, 3), "ev": round(ev, 1)})
+                row = {"i": i, "cid": cid, "draws": max(ns), "label": label,
+                       "p": round(p, 3), "ev": round(ev, 1)}
+                if sup_live and sup_copies:
+                    row["post_item_sup"] = sup_copies         # the Item-refresh Supporter supplement
+                evals.append(row)
                 if ev > det and (best is None or ev > best[0]):
                     best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
                                    f"for the KO (EV {ev:.0f} > held line {det:.0f})")
         self._gamble_trace = {                     # the full working, win or stand-down (ADR-0019)
             "considered": True, "anchored": anchored, "prizes_hidden": prizes_hidden,
             "pool": pool, "det": round(det, 1), "burst": burst_copies,
-            "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s}
-                        for c, v, la, s in classes],
+            "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s,
+                         **({"post_item_sought": si, "post_item_copies": sc} if sc else {})}
+                        for c, v, la, s, (sc, si) in classes],
             "evals": evals,
             "best": ([best[1], round(best[0], 1)] if best is not None else None)}
         if best is None:
@@ -1652,6 +1663,29 @@ class PlannerMixin:
             best = max(best, counts.get(cid, 0) + in_hand)
         return best
 
+    def _slot_basic_in_zone(self, want, lock, zone: str, counts: dict, discard_basic_types: set) -> bool:
+        """A Basic Energy that FILLS the missing slot ``want`` (``None`` = colourless: any Basic) AND
+        passes the fetch's type ``lock`` is still available in ``zone`` — the deck (``counts``) or the
+        visible discard (``discard_basic_types``). The shared availability predicate behind the
+        Item closure (`_fetch_reaches_slot`) and the post-Item-refresh Supporter closure."""
+        if lock is not None and want is not None and lock != want:
+            return False                                      # a type-locked fetch can't supply this slot
+
+        def _ok(et) -> bool:
+            if et is None:
+                return False
+            if want is not None and et != want:               # a specific slot needs its exact type
+                return False
+            return lock is None or et == lock                 # a locked fetch only finds its lock type
+
+        if zone == "deck":
+            return any((st := self.stats.get(c)) is not None and st.is_basic_energy
+                       and _ok(getattr(st, "energyType", None))
+                       for c, n in counts.items() if n > 0)
+        if zone == "discard":
+            return any(_ok(et) for et in discard_basic_types)
+        return False
+
     def _fetch_reaches_slot(self, want, cid: int, counts: dict, discard_basic_types: set) -> bool:
         """WP1: True iff card ``cid``'s **FETCH clauses** (``card_effects.json`` / ADR-0032 — the
         parametric tier a boolean Function Tag can't carry) can put a Basic Energy FILLING the missing
@@ -1661,29 +1695,58 @@ class PlannerMixin:
         predicate lives in the card representation, NOT a card-text parse: Fighting Gong's ``{F}`` lock
         is its ``energy_type: 6`` clause, which the generic ``tutor_energy`` tag can't express. () for a
         card with no fetch clause. Errs by under-counting only (an endorser)."""
-        for cl in (self.effects.clauses(cid) if self.effects else ()):
-            if cl.get("kind") != "fetch" or cl.get("target") != "basic_energy":
-                continue
-            lock = cl.get("energy_type")                      # the fetch's type lock (None = any Basic)
-            if lock is not None and want is not None and lock != want:
-                continue                                      # a type-locked fetch can't supply this slot
+        return any(cl.get("kind") == "fetch" and cl.get("target") == "basic_energy"
+                   and self._slot_basic_in_zone(want, cl.get("energy_type"), cl.get("zone"),
+                                                counts, discard_basic_types)
+                   for cl in (self.effects.clauses(cid) if self.effects else ()))
 
-            def _ok(et, lock=lock) -> bool:
-                if et is None:
-                    return False
-                if want is not None and et != want:           # a specific slot needs its exact type
-                    return False
-                return lock is None or et == lock             # a locked fetch only finds its lock type
-
-            if cl.get("zone") == "deck":
-                if any((st := self.stats.get(c)) is not None and st.is_basic_energy
-                       and _ok(getattr(st, "energyType", None))
-                       for c, n in counts.items() if n > 0):
+    def _supporter_energy_tutor_reaches(self, tid, want, counts: dict, discard_basic_types: set) -> bool:
+        """WP1 (Supporter branch): True iff Supporter ``tid`` can put a slot-filling Energy in hand or
+        attach it, its target still reachable — LIVE only while the one-per-turn Supporter slot is
+        unspent, which inside the refresh window means the refresh itself was an ITEM (Unfair Stamp;
+        4/5 refreshes are Supporters and spend the slot — the caller gates on that). Three clause
+        shapes (`card_effects.json`): an ``energy``/``basic_energy`` deck fetch (Hilda — Special
+        Energy ignored, Basics-only matching, under-count); an UNconditional ``accel`` (Crispin
+        attaches directly — bypasses nothing here, the manual attach is unspent anyway; a conditioned
+        accel like Rosa's fails closed); the ``trainer`` fetch 2-hop (Petrel → an energy-fetch ITEM
+        still in deck whose own target is reachable — spec-verified legal in one turn)."""
+        st = self.stats.get(tid) if self.stats else None
+        if st is None or not st.is_supporter:
+            return False
+        for cl in (self.effects.clauses(tid) if self.effects else ()):
+            kind = cl.get("kind")
+            if (kind == "fetch" and cl.get("zone") == "deck"
+                    and cl.get("target") in ("basic_energy", "energy")):
+                if self._slot_basic_in_zone(want, cl.get("energy_type"), "deck",
+                                            counts, discard_basic_types):
                     return True
-            elif cl.get("zone") == "discard":
-                if any(_ok(et) for et in discard_basic_types):
+            elif kind == "accel" and cl.get("energy") == "basic" and not cl.get("condition"):
+                if self._slot_basic_in_zone(want, None, cl.get("source"),
+                                            counts, discard_basic_types):
+                    return True
+            elif kind == "fetch" and cl.get("zone") == "deck" and cl.get("target") == "trainer":
+                if any(n > 0 and (ist := self.stats.get(t)) is not None and ist.is_item
+                       and self._fetch_reaches_slot(want, t, counts, discard_basic_types)
+                       for t, n in counts.items()):
                     return True
         return False
+
+    def _supporter_evolution_tutor_reaches(self, tid, eid, counts: dict) -> bool:
+        """WP5 (Supporter branch): True iff Supporter ``tid`` can deliver the evolution ``eid`` —
+        a deck fetch reaching it (Hilda's `evolution` clause; Salvatore's rush-evolve puts it
+        straight ONTO the body) or the Petrel 2-hop (→ an Item Pokémon-tutor still in deck that
+        reaches it). Live only post-Item-refresh (the caller gates on the Supporter slot)."""
+        st = self.stats.get(tid) if self.stats else None
+        if st is None or not st.is_supporter:
+            return False
+        if self._fetch_reaches_pokemon(eid, tid, counts):
+            return True
+        return any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
+                   and cl.get("target") == "trainer"
+                   and any(n > 0 and (ist := self.stats.get(t)) is not None and ist.is_item
+                           and self._fetch_reaches_pokemon(eid, t, counts)
+                           for t, n in counts.items())
+                   for cl in (self.effects.clauses(tid) if self.effects else ()))
 
     def _fetch_reaches_pokemon(self, target_id: int, cid: int, counts: dict) -> bool:
         """WP5: True iff card ``cid``'s ``zone: deck`` **FETCH clauses** can pull the Pokémon
@@ -1708,11 +1771,16 @@ class PlannerMixin:
         outs** (WP1): a drawable card with a `basic_energy` FETCH clause (`card_effects.json`, read by
         `_fetch_reaches_slot`) whose target is still reachable — a whole-deck search (Energy Search /
         Fighting Gong {F}-locked / Energy Search Pro) with a matching Basic still in deck, or a recycle
-        (Night Stretcher / Energy Retrieval / Max Rod) with a matching Basic in the visible discard. Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]`` —
-        ``sought_ids`` = the deck card ids that ARE the outs (literal ∪ closure), for the `gamble`
-        telemetry block. An enabler already in HAND — a held Basic OR a held fetch Item that reaches the
-        slot — voids the class (no gamble needed; playing it is the deterministic line). Errs by
-        UNDER-counting the outs only (an endorser: a gamble must never fire on garbage)."""
+        (Night Stretcher / Energy Retrieval / Max Rod) with a matching Basic in the visible discard.
+        Returns ``[(copies, ko_value, label, sought_ids, (sup_copies, sup_ids)), …]`` — ``sought_ids``
+        = the deck card ids that ARE the always-live outs (literal ∪ Item closure); the 5th slot is the
+        **post-Item-refresh Supporter supplement** (Hilda / Crispin / the Petrel 2-hop,
+        `_supporter_energy_tutor_reaches`), counted by the pricing loop ONLY when the refresh being
+        priced is an ITEM (Unfair Stamp) and the Supporter slot is unspent — after a Supporter refresh
+        the slot is spent and a drawn Supporter tutor is dead (spec §Missing, the 4-of-5 rule). An
+        enabler already in HAND — a held Basic, a held fetch Item that reaches the slot, or (slot
+        unspent) a held Supporter tutor that reaches it — voids the class (no gamble needed; playing it
+        is the deterministic line). Errs by UNDER-counting the outs only (an endorser)."""
         out = []
         attached = self._attached_type_counts(ma)
         hand_ids = [c.get("id") for c in hand]
@@ -1744,17 +1812,25 @@ class PlannerMixin:
             if any(self._fetch_reaches_slot(want, cid, counts, discard_basic_types)
                    for cid in hand_ids):                      # …or a held fetch card that reaches it:
                 continue                                      # deterministic tutor line — no gamble needed
+            if not board.supporter_played and any(
+                    self._supporter_energy_tutor_reaches(cid, want, counts, discard_basic_types)
+                    for cid in hand_ids):                     # a held Supporter tutor + a live slot is
+                continue                                      # the deterministic line too (play it now)
             out_ids = {cid for cid, n in counts.items() if n > 0 and _enables(cid)}   # literal Basics
             for tid, n in counts.items():                     # WP1 closure entry points (fetch clauses)
                 if n > 0 and tid not in out_ids and self._fetch_reaches_slot(
                         want, tid, counts, discard_basic_types):
                     out_ids.add(tid)
+            sup_ids = sorted(tid for tid, n in counts.items() if n > 0 and tid not in out_ids
+                             and self._supporter_energy_tutor_reaches(tid, want, counts,
+                                                                      discard_basic_types))
             sought = sorted(out_ids)
             copies = sum(counts[cid] for cid in sought)
             if copies <= 0:
                 continue
             label = f"a type-{want} Basic Energy" if want is not None else "any Basic Energy"
-            out.append((copies, KO_SCORE + self._prize_value(opp), label, sought))
+            out.append((copies, KO_SCORE + self._prize_value(opp), label, sought,
+                        (sum(counts[t] for t in sup_ids), sup_ids)))
         return out
 
     def _gamble_evolution_ko_classes(self, obs, board, ma, opp, counts: dict, hand: list):
@@ -1765,10 +1841,13 @@ class PlannerMixin:
         already gated upstream), keeps the attached Energy (rules.md §4 L98), and a Mega ex does NOT
         end the turn on evolving (rules.md §4 L103), so the evolved form attacks with the carried Energy
         plus this turn's one attach. Outs = the evolution's deck copies PLUS the Item Pokémon-tutor
-        closure that fetches it (Ultra Ball / Poké Pad / Mega Signal — Supporter tutors are slot-dead
-        after the refresh, so Items only, mirroring WP1's Stage-1 scope). An evolution already in HAND
-        voids the class (the deterministic evolve-KO owns it, and puts a KO on the menu → the rung
-        stands down upstream). Returns the same 4-tuples; errs by under-counting only."""
+        closure that fetches it (Ultra Ball / Poké Pad / Mega Signal). The 5th slot carries the
+        **post-Item-refresh Supporter supplement** (Hilda's evolution fetch, Salvatore's rush-evolve,
+        the Petrel 2-hop — `_supporter_evolution_tutor_reaches`), counted only when the refresh being
+        priced is an ITEM (Unfair Stamp) and the Supporter slot is unspent; after a Supporter refresh
+        those tutors are slot-dead. An evolution already in HAND voids the class (the deterministic
+        evolve-KO owns it, and puts a KO on the menu → the rung stands down upstream); so does a held
+        Supporter evolution-tutor while the slot is unspent. Same 5-tuples; errs by under-counting."""
         if ma.get("appearThisTurn"):                          # placed this turn -> can't evolve (§4 L96)
             return []
         base = self.stats.get(ma.get("id")) if (self.stats and ma.get("id") is not None) else None
@@ -1785,21 +1864,28 @@ class PlannerMixin:
                 continue
             if self._best_affordable_ko_value(obs, board, opp, eid, energy, body=ma) <= 0:
                 continue                                      # the evolved form doesn't reach a KO
+            if not board.supporter_played and any(
+                    self._supporter_evolution_tutor_reaches(cid, eid, counts) for cid in hand_ids):
+                continue                                      # held Supporter tutor + live slot: det line
             out_ids = {eid}
             for tid, n in counts.items():                     # Item Pokémon-tutor closure (fetch clauses)
                 if tid == eid or n <= 0 or tid in hand_ids:
                     continue
                 tst = self.stats.get(tid) if self.stats else None
                 if tst is None or not getattr(tst, "is_item", False):
-                    continue                                  # Supporter tutors are slot-dead post-refresh
+                    continue                                  # Supporter tutors join only post-Item-refresh
                 if self._fetch_reaches_pokemon(eid, tid, counts):   # honours no-Rule-Box / mega predicate
                     out_ids.add(tid)
+            sup_ids = sorted(tid for tid, n in counts.items()
+                             if n > 0 and tid != eid and tid not in out_ids and tid not in hand_ids
+                             and self._supporter_evolution_tutor_reaches(tid, eid, counts))
             sought = sorted(out_ids)
             copies = sum(counts.get(cid, 0) for cid in sought)
             if copies <= 0:
                 continue
             out.append((copies, KO_SCORE + self._prize_value(opp),
-                        f"the evolution {st.name}", sought))
+                        f"the evolution {st.name}", sought,
+                        (sum(counts[t] for t in sup_ids), sup_ids)))
         return out
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
