@@ -197,12 +197,15 @@ Supporter supplement — **energy** (WP1), **evolution-KO**, **damage-pump** (`_
 short by ≤ one boost, gates mirror `_boost_lethal_tactical`'s attacker-type + defender-{ex}; Premium
 Power Pro Item always-live, Black Belt's Supporter post-Item), **gust** (`_gamble_gust_ko_classes`:
 no direct KO but a benched target reachable — `_gust_best_ko_prizes`; Boss's Orders → supplement),
-and the **bench-fill anti-donk survival** class (`_gamble_survival_classes`: bench empty +
-`active_doomed` = a game loss, any benchable Basic or Poffin's fetch averts it, value KO_SCORE,
-exempt from the keep-value blocker). The `switch`/`heal`-margin survival outs and the accel-aware
-shortfall gate (`shortfall ≤ 1 + reachable accel attaches`) are the remaining WP5 refinements.
+and the **survival** class (`_gamble_survival_classes`: bench empty + `active_doomed` = a predicted
+game loss; averted by **bench-fill** — any benchable Basic or Poffin's fetch — or **heal** — a drawn
+heal that lifts the Active above `incoming_active_damage`, Wally's on a damaged Mega ex; value
+KO_SCORE, exempt from the keep-value blocker). The one remaining WP5 refinement is the accel-aware
+shortfall gate (`shortfall ≤ 1 + reachable accel attaches`); for the 3 agents the only Active-targeting
+accel is Crispin (post-Item, dragapult), so it's deferred as narrow + core-gate-touching (the other
+decks' accel is bench-targeting: Turbo Flare / Aura Jab).
 
-**Still designed, not built:** WP5's switch/heal-margin survival outs + the accel shortfall gate,
+**Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks),
 WP6 (the replaceability-floor keep-value — re-audits ADR-0060), WP7 (the `fetch_closure.py` +
 `card_worth.py` oracle cluster + skill loop), and the correction-seeded corpus.
 

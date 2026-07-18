@@ -2031,33 +2031,83 @@ class PlannerMixin:
                  "a gust for the benched KO", item_ids,
                  (sum(counts[b] for b in sup_ids), sup_ids))]
 
+    def _heal_restriction_ok(self, restriction, astat) -> bool:
+        """WP5 survival: can a heal clause with this ``restriction`` target my (doomed) Active
+        ``astat``? None / ``active_only`` always can; ``mega_only`` needs a Mega ex; ``psychic_only``
+        a {P} body. An unknown restriction fails CLOSED (under-count — the endorser never assumes a
+        heal it can't verify reaches my Active)."""
+        if restriction in (None, "active_only"):
+            return True
+        if restriction == "mega_only":
+            return bool(getattr(astat, "megaEx", False))
+        if restriction == "psychic_only":
+            return getattr(astat, "energyType", None) == 5
+        return False
+
+    def _heal_averts_doom(self, cid, astat, cur_hp: int, incoming: int) -> bool:
+        """WP5 survival: True iff card ``cid`` has a HEAL clause (`card_effects.json`) that lifts my
+        doomed Active from ``cur_hp`` ABOVE the ``incoming`` (so next turn's biggest attack no longer
+        KOs it) — ``amount: all`` heals to max HP. Only heals whose restriction can target my Active
+        count (`_heal_restriction_ok`); a conditional heal (a `condition` gate) fails closed."""
+        max_hp = getattr(astat, "hp", 0) or 0
+        for cl in (self.effects.clauses(cid) if self.effects else ()):
+            if cl.get("kind") != "heal" or cl.get("condition"):
+                continue                                      # a gated heal can't be promised
+            if not self._heal_restriction_ok(cl.get("restriction"), astat):
+                continue
+            amount = cl.get("amount")
+            healed = max_hp if amount == "all" else min(max_hp, cur_hp + int(amount or 0))
+            if healed > incoming:
+                return True
+        return False
+
     def _gamble_survival_classes(self, obs, board, me, counts: dict, hand: list):
-        """WP5 (survival): the BENCH-FILL anti-donk class — my Active is doomed (opp KOs it next turn,
-        ADR-0064 `active_doomed`) AND my Bench is EMPTY, so a KO of my only Pokémon LOSES the game
-        (no Pokémon in play → you lose). Drawing any benchable Basic — or Poffin, whose bench-fill
-        clause reaches a ≤70-HP Basic still in deck — averts it. Value = KO_SCORE (a game loss
-        averted is ±KO_SCORE-scale by the loss rung's definition; spec §Round 5), so the class is
-        EXEMPT from the keep-value blocker (loss-scale dwarfs any per-card shed). A benchable Basic
-        already in hand voids it (bench it — the deterministic line). Always-live (Basics are
-        Pokémon, Poffin an Item — no Supporter slot). Errs by under-counting."""
+        """WP5 (survival): the bench-empty PREDICTED-LOSS class — my Active is doomed (opp KOs it next
+        turn, ADR-0064 `active_doomed`) AND my Bench is EMPTY, so a KO of my only Pokémon LOSES the
+        game (no Pokémon in play → you lose). Two out families avert it: **bench-fill** — any benchable
+        Basic, or Poffin's bench-fill fetch of a ≤70-HP Basic still in deck (a KO is no longer
+        game-over); and **heal** — a drawn heal that lifts the Active above the incoming
+        (`_heal_averts_doom`, e.g. Wally's on a damaged Mega ex). Value = KO_SCORE (a game loss averted
+        is ±KO_SCORE-scale by the loss rung; spec §Round 5), EXEMPT from the keep-value blocker. Item
+        outs are always-live; Supporter heals ride the post-Item supplement. A held Basic (bench it) or
+        a held heal that averts (play it) voids the class — the deterministic line. Errs by
+        under-counting."""
         if not board.active_doomed or any(b for b in (me.get("bench") or [])):
             return []                                         # not doomed, or a bench body already exists
 
         def _benchable(cid) -> bool:
             st = self.stats.get(cid) if self.stats else None
             return bool(st and st.is_pokemon and not getattr(st, "evolvesFrom", None))
-        if any(_benchable(c.get("id")) for c in hand):
+        hand_ids = {c.get("id") for c in hand}
+        if any(_benchable(cid) for cid in hand_ids):
             return []                                         # a Basic in hand -> bench it, no gamble
+        # bench-fill outs (always-live): benchable Basics + Poffin's fetch of one.
         out_ids = {cid for cid, n in counts.items() if n > 0 and _benchable(cid)}
         for tid, n in counts.items():                         # Poffin: a bench-fill fetch reaching a Basic
             if n > 0 and tid not in out_ids and any(
                     _benchable(bid) and self._fetch_reaches_pokemon(bid, tid, counts) for bid in counts):
                 out_ids.add(tid)
+        # heal outs: lift the doomed Active above the incoming (Item -> always-live; Supporter -> supp).
+        sup_ids: set = set()
+        astat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        cur_hp = (ma or {}).get("hp", 0)
+        incoming = board.incoming_active_damage
+        if incoming and astat and ma and cur_hp < getattr(astat, "hp", 0):   # damage to heal + a threat
+            if any(self._heal_averts_doom(cid, astat, cur_hp, incoming) for cid in hand_ids):
+                return []                                     # a held heal averts -> deterministic line
+            for hid, n in counts.items():
+                if n <= 0 or hid in out_ids or not self._heal_averts_doom(hid, astat, cur_hp, incoming):
+                    continue
+                hst = self.stats.get(hid) if self.stats else None
+                (out_ids if getattr(hst, "is_item", False) else sup_ids).add(hid)
         sought = sorted(out_ids)
+        sup = sorted(sup_ids)
         copies = sum(counts[cid] for cid in sought)
-        if copies <= 0:
+        sup_copies = sum(counts[s] for s in sup)
+        if copies <= 0 and sup_copies <= 0:
             return []
-        return [(copies, KO_SCORE, "a Basic to avoid the donk loss", sought, (0, []))]
+        return [(copies, KO_SCORE, "a Basic or heal to avoid the loss", sought, (sup_copies, sup))]
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
         """The DETERMINISTIC baseline a gamble must beat: the best tactical already on the menu, or

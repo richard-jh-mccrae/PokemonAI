@@ -427,10 +427,13 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       `_boost_lethal_tactical` — attacker-type + defender-{ex}; Premium Power Pro Item always-live,
       Black Belt's Supporter post-Item), **gust** (`_gamble_gust_ko_classes`: no direct KO but a
       benched target reachable via `_gust_best_ko_prizes`; Boss's Orders → post-Item supplement).
-- [x] ✅ **WP5** **Survival class — bench-fill anti-donk** (`_gamble_survival_classes`): bench empty +
-      `active_doomed` = a game loss; drawing any benchable Basic (or Poffin's bench-fill fetch) averts
-      it, value KO_SCORE, exempt from the keep-value blocker. The `switch`/`heal`-margin outs of the
-      same survival class (heal ≥ incoming, a switch target on a non-empty bench) remain a refinement.
+- [x] ✅ **WP5** **Survival class** (`_gamble_survival_classes`): bench empty + `active_doomed` = a
+      predicted GAME loss; two out families avert it — **bench-fill** (any benchable Basic / Poffin's
+      fetch, so a KO is no longer game-over) and **heal** (`_heal_averts_doom`: a heal that lifts the
+      Active above `incoming_active_damage` — Wally's on a damaged Mega ex; restriction-matched,
+      gated heals fail closed). Value KO_SCORE, exempt from the keep-value blocker. Item outs
+      always-live, Supporter heals post-Item. The `switch`-to-a-non-empty-bench survival (saving a
+      wincon rather than averting a game loss) is a mid-value class that rides WP6's keep-value floor.
 - [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
       the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).

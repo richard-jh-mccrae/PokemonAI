@@ -527,3 +527,27 @@ def test_wp5_bench_fill_anti_donk_survival_class():
     assert ms._gamble_survival_classes({"current": {}}, doomed, occupied, counts, [{"id": 1227}]) == []
     safe = Board(active_doomed=False, my_active_id=1031)
     assert ms._gamble_survival_classes({"current": {}}, safe, me, counts, [{"id": 1227}]) == []
+
+
+@pytest.mark.req("REQ-GAMBLE-0014")
+def test_wp5_survival_heal_out_lifts_the_doomed_active_above_the_incoming():
+    """WP5 (survival): the same bench-empty predicted-loss class also counts a drawn HEAL that lifts
+    the doomed Active above the incoming — Wally's Compassion heals a damaged Mega ex to full, so it
+    survives when max HP > the incoming (a Supporter → post-Item supplement). Not an out when even a
+    full heal can't survive (incoming ≥ max HP), nor when the Active carries no damage to heal."""
+    from common.pilot import Board
+    ms = _shipped_pilot("mega_starmie")
+    ma = {"id": 1031, "hp": 100, "energies": [3]}        # Mega Starmie ex (max 330), 100 HP (damaged)
+    me = {"active": [ma], "bench": [], "hand": [{"id": 1227}]}
+    obs = {"current": {"yourIndex": 0, "players": [me, {}]}}
+    doomed = Board(active_doomed=True, incoming_active_damage=250, my_active_id=1031)
+    cls = ms._gamble_survival_classes(obs, doomed, me, {1229: 1}, [{"id": 1227}])
+    assert cls and cls[0][4] == (1, [1229])              # Wally's (330 > 250) rides the supplement
+    # Incoming ≥ max HP → even a full heal is KO'd; a full-HP Active has no damage to heal.
+    big = Board(active_doomed=True, incoming_active_damage=340, my_active_id=1031)
+    assert ms._gamble_survival_classes(obs, big, me, {1229: 1}, [{"id": 1227}]) == []
+    full = {**me, "active": [{"id": 1031, "hp": 330, "energies": [3]}]}
+    obs_full = {"current": {"yourIndex": 0, "players": [full, {}]}}
+    assert ms._gamble_survival_classes(obs_full, doomed, full, {1229: 1}, [{"id": 1227}]) == []
+    # A held heal that averts is the deterministic play → the class stands down.
+    assert ms._gamble_survival_classes(obs, doomed, me, {1229: 1}, [{"id": 1229}]) == []
