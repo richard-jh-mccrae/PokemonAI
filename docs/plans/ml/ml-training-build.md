@@ -16,7 +16,7 @@ as separate concurrent worktree sessions.
 |---------|----|-------|--------|-------|
 | S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
-| S2b | WP2 | Eval harness | ☐ blocked on S1 | |
+| S2b | WP2 | Eval harness | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2b.md](ml-training-design-s2b.md) |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
 | S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
 | S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
@@ -135,6 +135,13 @@ Fail → iterate WP1. WP3/WP4 **integration** stays blocked; their plumbing may 
 ## S2b — WP2: eval harness (parallel with S2a)
 
 **Owns:** `tools/sim/eval*` (new files only).
+
+> **Design is LOCKED in [ml-training-design-s2b.md](ml-training-design-s2b.md)** (Fable design
+> grill, 2026-07-19): arbitrary-spec common-opponent pairing; 3%-delta default power; flips_on
+> verdict + checkpoint regression tripwire (pool = submitted builds); duplicate-deal spike
+> reframed to duplicate-POSITION replay (aux mode only — fork reshuffles hidden zones and
+> playout agents can't nest forks); value-swing strata proxy; AIVAT seam frozen. Execute it —
+> the scope below is the summary, the design doc is the specification.
 
 **Scope:**
 1. **Matrix runner:** contestant set = working-tree agents + Build-Ledger build zips
