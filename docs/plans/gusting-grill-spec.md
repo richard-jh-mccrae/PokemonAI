@@ -143,6 +143,32 @@ already pass — several of these ids are in the hyperclosure corpus as pins.
   the right outcome may be a much SMALLER build than this doc imagines — or none. The grab/pitch
   investigation (ADR-0065) is the precedent for "measured, found already-subsumed, built nothing."
 
+## Sibling consumer — the disruptor swing (verified 2026-07-19; scope it in the SAME grill)
+
+The opponent-worth input layer this grill designs has a second, already-waiting consumer: the
+hand-refresh/disruptor evaluation (Judge / Harlequin / Unfair Stamp, ADR-0060's
+`pilot._refresh_swing_tactical`). It is **half-converged**: the MY-hand side is the graded
+`Σ keep_cost` (the refresh-SHED convergence), but the THEIR-hand side is still flat —
+`_REFRESH_STRIP = 4` / `_REFRESH_GIFT = 8` per card, price-blind to WHAT is stripped or gifted.
+Grading them = their_keep_cost per card in expectation over their hidden hand (their rep's
+composition) — the same inputs, hazards, and fail directions as the gust target.
+
+Also fold in the **hand-size-attacker damage leg** (Alakazam / Powerful Hand): today it is two flat
+rungs (`play-harlequin-vs-hand-size` +25; the surviving half of `disrupt-when-unfavored` +18,
+baseline_disruption.py) whose own rationale concedes it is "a proxy for an unmodelled value" — the
+strip denies DAMAGE, which IS computable: `CardStat.handSizeDamage × Δ(their hand)` (or ADR-0062's
+marginal with-vs-without via the incoming oracle). The flat rung has NO opponent-hand-size gate, so
+Judge into a SMALL Alakazam hand — which REFILLS them and arms Powerful Hand (+2 cards = +40) —
+still gets +25 (GIFT charges only the cards, not the damage). A signed damage-swing term is
+sign-correct by construction and REPLACES both rungs (currency-zone rule). Grill question: the
+damage↔worth-points exchange rate (shares Q1's prizes↔points problem).
+
+Survivors on their own axes (do NOT fold): `dont-refresh-into-a-probable-miss` (draw quality),
+the posture levers (`dont-gift-a-refresh-when-favored` / the unfavored boost — Read-gated variance
+policy), `unfair-stamp-comeback-posture` (opponent-model prior, double-inert), and the one-sided
+strip forward contracts (`strip-the-stacked-engine-hand`, `disrupt-the-tailored-hand` — inert until
+a one-sided card enters the pool).
+
 ## Build shape (IF the grill confirms)
 
 Mirror of the ADR-0065 arc: corpus family from Round 0 (pins + xfail targets) → an opponent-side
