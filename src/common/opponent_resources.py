@@ -124,6 +124,8 @@ class OpponentResourceModel:
         self._prev_discard: int | None = None   # opp discard size at the previous distinct turn
         self._my_prizes: int | None = None
         self._turn_start_my_prizes: int | None = None
+        self._turn_start_opp_prizes: int | None = None       # opp prize count at the current turn's start
+        self._prev_turn_start_opp_prizes: int | None = None  # … and at the previous distinct turn's start
         self._deck_samples: dict[int, int] = {}  # turn -> opp deckCount (latest that turn)
 
     def observe(self, obs: dict) -> None:
@@ -166,6 +168,8 @@ class OpponentResourceModel:
         my_prizes = len(me.get("prize") or []) if me else None
         if new_turn:
             self._turn_start_my_prizes = my_prizes
+            self._prev_turn_start_opp_prizes = self._turn_start_opp_prizes
+            self._turn_start_opp_prizes = len(opp.get("prize") or [])
         self._my_prizes = my_prizes
         self._last_turn = turn
 
@@ -209,6 +213,18 @@ class OpponentResourceModel:
         started. Sound whenever it fires; False when unknown (never a false certainty)."""
         return bool(self._turn_start_my_prizes is not None and self._my_prizes is not None
                     and self._my_prizes < self._turn_start_my_prizes)
+
+    @property
+    def my_pokemon_koed_last_turn(self) -> bool:
+        """Did the OPPONENT take ≥1 prize between the start of my previous distinct turn and the
+        start of the current one — i.e. one of MY Pokémon was Knocked Out during their last turn
+        (Unfair Stamp's own play condition; the attacker takes prize cards from their OWN pile on a
+        KO, rules.md §6). Sound-when-fired up to one rare edge: a self-recoil KO during my OWN turn
+        also lands in the measured interval (fail-open — the engine still legality-gates any actual
+        play). False when unknown."""
+        return bool(self._prev_turn_start_opp_prizes is not None
+                    and self._turn_start_opp_prizes is not None
+                    and self._turn_start_opp_prizes < self._prev_turn_start_opp_prizes)
 
     @property
     def deckout_in_turns(self) -> int | None:

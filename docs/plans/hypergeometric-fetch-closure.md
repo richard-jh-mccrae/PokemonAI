@@ -395,7 +395,17 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       `_fetch_reaches_slot`: Item energy-tutors join the class outs, verified against card text).
 - [x] ✅ **WP1** Closure includes the **recycle/discard branch** — BUILT (Night Stretcher / Energy
       Retrieval / Max Rod, from the visible discard; a class can now EXIST via the recycler alone).
-- [ ] **Hand-expansion** chains modeled — not built (first expansion only, via the Gamble window itself).
+- [x] ✅ **Hand-expansion refresh CHAIN** — BUILT 2026-07-19 (checklist grill, measured at source:
+      the live residue was the drawn-REFRESH leg). A drawn Unfair Stamp (Item — gated on the new
+      `Board.my_pokemon_koed_last_turn`, the card's own condition, tracked from the opponent's
+      turn-start prize drop in `opponent_resources`) or a drawn SUPPORTER refresh (post-Item-refresh
+      only, the slot rule) opens a fresh full window at the same outs:
+      `planner._gamble_chain_refreshes` + a DISJOINT additive branch (conditions on missing every
+      out AND engine; fresh window over the re-shuffled pool −1). Anchored-only; the trace carries
+      `chain_refresh`. Measured-dead legs recorded: Pokégear-class digs chain to a slot-dead
+      Supporter in every mega_starmie window (killed by the resource rule, not absence); Supporter
+      draws are slot-dead outside a Stamp window; the opponent side stays ADR-0064's pessimism.
+      Chains inside the chain are not modeled (an endorser under-counts).
 - [x] ✅ **1 Supporter / 1 attach** charged along the chain — BUILT 2026-07-18: the classes carry a
       **post-Item-refresh Supporter supplement** (`_supporter_energy_tutor_reaches` /
       `_supporter_evolution_tutor_reaches`: Hilda's energy/evolution fetch, Crispin's unconditional
@@ -409,7 +419,15 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       (`deck_known_counts` / `p_contains` collapse, ADR-0029 §3).
 - [x] ✅ **WP2** **Pre-anchor gambles NOT stood down** — BUILT: the `if not deck_known_counts: return
       None` gate is replaced by the prize-split-weighted window sum (`_prize_split_hit`, ≤ u+1 terms).
-- [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
+- [x] **First-reveal information credit** — CLOSED as refuted-for-now (checklist grill, 2026-07-19):
+      every shipped fetch is a whole-deck search, so ANY fetch anchors (the tracker rejects partial
+      reveals — a Pokégear-class dig never anchors); the fetch-EARLY direction is
+      correction-REFUTED (`85163634-17` → `dont-fetch-before-the-deadline` −60); search-before-
+      commitment sequencing is `dig-before-commit`'s jurisdiction. Anchoring's remaining unique
+      unlock is the WP4 engine windows + the refresh-chain stage (anchored-only sharpenings).
+      REVIVAL GATE: telemetry/corpus evidence of a gamble whose engine/chain stages were zeroed
+      pre-anchor while a near-free whole-deck search sat unplayed on the same menu, or a measured
+      tie against a non-anchoring dig.
 - [x] ✅ **WP4** **Engine depth = board-supported capacity** — BUILT 2026-07-18, test-first:
       `deck_odds.draw_hit_with_engines` (the two-window closed form, EXACT at depth 1 — pinned against
       exhaustive enumeration, not simulation; deeper stages the documented same-two-ratios loop with

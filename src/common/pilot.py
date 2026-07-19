@@ -419,6 +419,10 @@ class Board:
     opp_took_ko_this_turn: bool = False   # I took a prize (KO'd an opponent Pokémon) THIS turn — so I
                                           # have just ENABLED their post-KO comeback disruptor (Unfair
                                           # Stamp). Sound when True; False when unknown. `unfair-stamp-comeback-posture` gate.
+    my_pokemon_koed_last_turn: bool = False  # THE MIRROR: the opponent took ≥1 prize across their last
+                                          # turn (one of MY Pokémon was KO'd) — MY Unfair Stamp's own
+                                          # play condition; gates the gamble's drawn-Stamp refresh
+                                          # chain. Sound-when-fired (rare self-recoil edge fails open).
     opp_hand_size_delta: int | None = None  # change in opponent hand size since their previous distinct
                                           # turn; None until a prior turn is known. SIGN (settled ADR-0060,
                                           # the two docstrings used to contradict each other): POSITIVE = they
@@ -3476,6 +3480,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers — sourced from the tracker
             # observed at self.opponent.observe(obs) above; each read fails OPEN (unknown -> no-fire default).
             opp_took_ko_this_turn=bool(getattr(_opp_res, "took_ko_this_turn", False)),
+            my_pokemon_koed_last_turn=bool(getattr(_opp_res, "my_pokemon_koed_last_turn", False)),
             opp_hand_size_delta=getattr(_opp_res, "hand_size_delta", None),
             opp_last_turn_dumped=bool(getattr(_opp_res, "last_turn_dumped", False)),
             opp_deckout_in_turns=getattr(_opp_res, "deckout_in_turns", None),

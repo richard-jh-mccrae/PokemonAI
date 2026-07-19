@@ -1608,6 +1608,13 @@ class PlannerMixin:
             # stand-downs: a KO (≈ KO_SCORE) dwarfs it, an irreplaceable one-of raises the bar.
             hand_keep = self._hand_keep(hand_ids, cid, class_counts, pool, max(ns), board,
                                         prizes_hidden=prizes_hidden, deck_count=deck_count)
+            # The refresh CHAIN (spec failure mode B, hand-expansion — built 2026-07-19): a drawn
+            # shuffle-refresh inside this window is a fresh full window at the same outs — a drawn
+            # Unfair Stamp (Item; live iff one of MY Pokémon was KO'd during their last turn) or a
+            # drawn Supporter refresh (live only post-Item-refresh, the `sup_live` slot rule).
+            # Anchored-only, like the draw engines (never a guess about where the copies sit).
+            ch_c, ch_w = (self._gamble_chain_refreshes(class_counts, sup_live, board)
+                          if anchored else (0, 0))
             for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
                     in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
@@ -1617,6 +1624,17 @@ class PlannerMixin:
                     p = sum(draw_hit_with_engines(eff, pool, n, e_cp, e_ws) for n in ns) / len(ns)
                 else:
                     p = sum(hit(eff, n) for n in ns) / len(ns)
+                if ch_c and ch_w:
+                    # The chain branch conditions on missing EVERY counted out AND engine, so it is
+                    # DISJOINT from the mass above — exactly additive (clamped for safety). Its
+                    # fresh window prices the class's RAW copies (no Supporter supplement: a drawn
+                    # Supporter refresh spends the slot; conservative for a drawn Stamp) over the
+                    # re-shuffled pool (−1, the chain card itself is spent). Chains inside the
+                    # chain are not modeled — an endorser under-counts.
+                    boost = sum(max(0.0, draw_hit_probability(eff + e_cp + ch_c, pool, n)
+                                    - draw_hit_probability(eff + e_cp, pool, n))
+                                for n in ns) / len(ns)
+                    p = min(1.0, p + boost * draw_hit_probability(copies, max(0, pool - 1), ch_w))
                 ev = p * ko_value
                 if burst_copies and det > 0:
                     # the RECOVERY class: the miss branch may still redraw the held burst Energy
@@ -1630,6 +1648,8 @@ class PlannerMixin:
                        "p": round(p, 3), "ev": round(ev, 1)}
                 if sup_live and sup_copies:
                     row["post_item_sup"] = sup_copies         # the Item-refresh Supporter supplement
+                if ch_c and ch_w:
+                    row["chain_refresh"] = [ch_c, ch_w]       # drawn-refresh chain: copies, window
                 if hand_keep:
                     row["keep"] = round(hand_keep, 1)         # WP6: the shuffled-hand keep-cost floor
                 evals.append(row)
@@ -1892,6 +1912,41 @@ class PlannerMixin:
                        for t, n in counts.items()):
                     return True
         return False
+
+    def _gamble_chain_refreshes(self, counts: dict, sup_live: bool, board) -> tuple:
+        """The refresh CHAIN (hypergeometric-fetch-closure §failure mode B, the drawn-expander leg —
+        built 2026-07-19): USABLE shuffle-refresh copies still in my DECK whose draw opens a fresh
+        full window inside this refresh's window — ``(copies, min_window)``. A drawn Unfair Stamp
+        (Item) is usable iff one of MY Pokémon was KO'd during the opponent's last turn
+        (`Board.my_pokemon_koed_last_turn` — the card's own play condition); a drawn SUPPORTER
+        refresh (Judge / Lillie's / Harlequin) is usable iff the one-per-turn Supporter slot is
+        UNSPENT in this window, i.e. the played refresh was an Item (``sup_live`` — the 4-of-5
+        rule). Window = each card's own printed draw (`own_draw_count`), MIN across usable types
+        (the engine convention — conservative when types mix). ``(0, 0)`` when none usable. Errs by
+        under-counting: chains inside the chain, and the measured slot-dead cases (a Pokégear-class
+        dig fetching a slot-dead Supporter), are never counted."""
+        from common.strategy.refresh import own_draw_count
+        copies, window = 0, None
+        for tid, n in counts.items():
+            if n <= 0 or not self.functions or "shuffle_hand" not in self.functions.tags(tid):
+                continue
+            st = self.stats.get(tid) if self.stats else None
+            if st is None:
+                continue
+            if getattr(st, "is_item", False):
+                if not getattr(board, "my_pokemon_koed_last_turn", False):
+                    continue
+            elif getattr(st, "is_supporter", False):
+                if not sup_live:
+                    continue
+            else:
+                continue
+            w = own_draw_count(tid, board.my_prizes_remaining, board.opp_prizes_remaining)
+            if not w or w <= 0:
+                continue
+            copies += n
+            window = int(w) if window is None else min(window, int(w))
+        return (copies, window or 0)
 
     def _gamble_draw_engines(self, me: dict, counts: dict, exclude: set) -> tuple:
         """WP4: the refresh window's usable DRAW ENGINES — ``(engine_copies, stage_windows,

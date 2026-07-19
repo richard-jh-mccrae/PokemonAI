@@ -83,6 +83,16 @@ comparator) and ADR-0032 (Effect-Clause tier).
   `fetch_closure.reaccess_outs`'s blanket "errs by under-counting" claim softened to name its three
   accepted over-counting channels (type-locked Pokémon fetch fail-open, uncharged tutor costs,
   slot-less Supporter tutors). Suite + corpus green (3094).
+- **The refresh-chain stage + the first-reveal ruling (2026-07-19, the spec-checklist grill).** The
+  spec's two unbuilt checklist items were grilled at source. (a) **Hand-expansion chains — BUILT**,
+  narrowed to the measured live residue: a drawn Unfair Stamp (gated on the new
+  `Board.my_pokemon_koed_last_turn`, the opponent-turn-start prize mirror in
+  `opponent_resources`) or a drawn Supporter refresh (post-Item only) re-opens a full window at the
+  same outs — `planner._gamble_chain_refreshes` + a disjoint additive branch, anchored-only,
+  `chain_refresh` on the trace; Pokégear-class chains are provably slot-dead and the opponent side
+  stays ADR-0064's. (b) **First-reveal information credit — CLOSED refuted-for-now** (every shipped
+  fetch anchors; fetch-early is correction-refuted `85163634-17`; sequencing owned by
+  `dig-before-commit`), revival gate recorded on the spec checklist. Suite + corpus green (3096).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
