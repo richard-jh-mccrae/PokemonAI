@@ -1,6 +1,8 @@
 # Gusting — grill-session seed: one equation for the gust target
 
-**Status.** SEED for a grill session — NOT designed, NOT built. A future session picks this up, runs
+**Status.** SEED for a grill session — NOT designed, NOT built. **Round 0 MEASURED 2026-07-19 —
+results in `gusting-round0-measurement.md`: the cluster dissolved to 3 small targeted failures; the
+full keep-cost equation is unsupported by the current corpus.** A future session picks this up, runs
 the Round-0 measurement pass, then grills the open questions below with the user before any design is
 committed. Follows the hypergeometric-fetch-closure playbook (measure → grill → corpus-gate → converge
 under the currency-zone rule). Named plainly: gusting.
