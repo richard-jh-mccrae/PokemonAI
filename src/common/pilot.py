@@ -2299,10 +2299,37 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 row["closing"] = True
             reaccess = 1.0 if (dup or in_play or rec_hand) else 0.0
             row["keep"] = 0.0 if fuel else round(worth * deploy * (1.0 - reaccess), 1)
+            # The PITCH-PREFERENCE term (seam-D grill Finding 3): keep-cost is a KEEP floor and
+            # cannot RANK a discard — a dreg, a duplicate, and a DEAD card all price keep 0. The
+            # pitch side is `P(met | pitch) − P(met | keep)` going positive: a card whose role is
+            # EXPIRED/useless (or whose discard is progress) is actively best gone. Mirrors the
+            # ladder's positive-pitch premises at SOURCE (not their weights — the equation ranks):
+            # `discard-the-dead-opener` (opener role spent), `discard-the-redundant-tutor` (wincon in
+            # hand → the tutor's target is had), a stranded evolution (payoff with no base), the
+            # declared `discard_fodder`, and `fuel` (zone sign). `pitch` = the count; it breaks the
+            # zero-keep ties so dead weight sheds before a live spare. SHADOW-only, deciding nothing.
+            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
+            roles = self._roles_of(cid)
+            dead_opener = "opener" in tags
+            redundant_tutor = bool(getattr(board, "wincon_in_hand", False)
+                                   and ({"rush_evolve", "tutor_mega"} & set(tags)))
+            stranded = cid in self._stranded_evolution_set()
+            fodder = "discard_fodder" in roles
+            if dead_opener:
+                row["dead_opener"] = True
+            if redundant_tutor:
+                row["redundant_tutor"] = True
+            if stranded:
+                row["stranded"] = True
+            if fodder:
+                row["fodder"] = True
+            row["pitch"] = int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded) + int(fodder)
             rows.append(row)
         if not rows:
             return None
-        eq_pick = [r["i"] for r in sorted(rows, key=lambda r: (r["keep"], r["i"]))][:picks]
+        # Rank: cheapest keep first; among equal keep, the DEADEST (highest pitch) sheds first; index
+        # only as the last resort (Finding 3's raw-index fallback, now the tertiary key).
+        eq_pick = [r["i"] for r in sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["i"]))][:picks]
         return {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
                 "agree": set(eq_pick) == set(chosen)}
 

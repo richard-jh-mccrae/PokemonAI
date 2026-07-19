@@ -11,6 +11,12 @@ mechanism below verbatim (decision-point compute, full working + agreement bit, 
 plumbing, mid-sim guard) and its first corpus sweep produced disagreement rows on 9 of 12 recorded
 discard decisions — the evidence bridge working as designed. ADR ratification is now on the table.
 
+**The migration path this bridge feeds was RULED 2026-07-19** (see `seam-discard-convergence.md`
+§Grill RULING): *gates real, equation shadow, swap gated-last.* The generalisable insight for every
+future convergence — a GATE (a Worth factor) is built real and fires live under a corpus gate, while
+the DECISION SITE it feeds rides as a shadow until its agreement rate earns the swap. Factors and
+deciders are gated differently: the factor by its live consumers, the decider by the shadow.
+
 ## The ruling (user's words, lightly edited)
 
 > "What I want is general card/action value equations that solve related decisions gracefully,

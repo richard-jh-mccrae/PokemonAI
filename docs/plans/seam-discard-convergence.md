@@ -28,7 +28,75 @@ and it is why this was NOT hacked in as a rung during the gate-library Stage 1 b
 gate-library scope doc — retired 2026-07-19, all four gate legs built — recorded the deliberate
 deferral; see ADR-0065 §Build status and its grab/pitch finding).
 
-## Grill status: ⚠️ the keep-cost math is grilled — the LADDER-REPLACEMENT PATH IS NOT
+## Grill RULING (2026-07-19, with the user) — gates real, equation shadow, swap gated-last
+
+The migration grill ran on source-verified evidence (the 11-rung ladder mapped against the oracle;
+the current 3-agree/9-disagree shadow sweep). Three findings and the ruling:
+
+**Finding 1 — the oracle already prices most of the ladder's CONTENT.** `keep-key` ↔ TAG_TIER
+`discard_eot` 30 / wincon 30 / ACE_SPEC 25; `keep-line-base` ↔ `win_condition_base` 20 (incl. the
+derived Drakloak); `keep-gust-and-recovery` ↔ TAG_TIER gust/recycle 10; `discard-the-redundant` ↔
+`in_play` re-access; `discard-the-hand-duplicate` ↔ `dup_hand` re-access. The magnitudes are largely
+already in the currency.
+
+**Finding 2 — the ladder's irreplaceable content is its PREMISE GATES.** Five rungs carry a `when=`
+the oracle has no term for: `keep-key`'s `not active_fully_powered` (the burst floor DECAYS once the
+Active is powered), `keep-basic-energy-when-starved` (a −12 spike only at `my_active_energy == 0`),
+`discard-the-dead-opener` (the `opener` role expired), `discard-the-redundant-tutor` /
+`keep-the-evolution-tutor` (gated on `wincon_in_hand` — a need premise). "Every premise gate must
+land as a gate-library stage or it is LOST" is the operative constraint.
+
+**Finding 3 — keep-cost STRUCTURALLY cannot rank a discard.** The sweep's dominant disagreement cause
+is not wrong magnitudes — it is too many cards pricing to keep 0 (7/7 rows on `84071010-45`, 6/6 on
+`86091435-68`), so `eq_pick` falls to raw hand index. A discard is also "which card is actively BEST
+GONE" — the `P(met | pitch) − P(met | keep)` term going NEGATIVE when pitching HELPS (fuel / fodder /
+dead-role). A keep-FLOOR cannot produce that. **The oracle needs a pitch-preference / zone-signed
+term before it can decide a discard at all** — accepted by the user.
+
+**THE RULING (user, 2026-07-19): gates real, equation shadow, swap gated-last.** This refines the
+seam's "hybrid" (path 1 + 2) and drops path 2's permanent half-state:
+1. **Build the pitch-preference term** (Finding 3's prerequisite) into the SHADOW first — it makes
+   the shadow able to RANK; re-sweep and read the new agreement rate.
+2. **Build the premise gates (Finding 2) as REAL Worth×Gates factors.** A gate is a FACTOR of Worth,
+   not a decision — so each fires LIVE everywhere the equation is already consumed (the gamble
+   keep-floor, the refresh SHED) the moment it exists, and is therefore its OWN corpus-gated
+   behaviour change at those live sites (exactly how the pressure/quota gates landed — re-audit each,
+   re-baseline deliberately). The DISCARD decision site is the only thing that stays shadow.
+3. **Keep the full discard `keep_cost_gated` equation as a SHADOW emitter** — fully built, firing,
+   traceable in the dropdown, deciding nothing — until its agreement rate + the corpus justify the
+   swap (the shadow-equations ruling).
+4. **The swap is one gated move, LAST:** the equation replaces the ladder wholesale (path 1's end
+   state), NOT a permanent "rungs keep routing, weights derived" (path 2 rejected as a half-state).
+
+This matches every other keep_value convergence: the gamble keep-floor and refresh SHED each
+converged one at a time under corpus gates; the gate legs are built real-and-firing under corpus
+gates; the last/riskiest consumer (discard) rides as a shadow first. Set semantics (the duplicate-pair
+naivety) and the worth-0 tie-break are folded into steps 1–3, not separate work.
+
+### Step 1 BUILT 2026-07-19 — the pitch-preference term (into the shadow)
+
+`pilot._discard_shadow` gained the `P(met | pitch) − P(met | keep)` sign: a per-row `pitch` count
+over source-checked deadness/zone signals (`dead_opener` = `opener` role spent; `redundant_tutor` =
+`wincon_in_hand` + rush_evolve/tutor_mega; `stranded` = payoff with no base; `fodder` = declared
+`discard_fodder`; `fuel` = discard-source accel wants it), ranking zero-keep ties by DEADNESS instead
+of raw hand index. SHADOW-only, deciding nothing.
+
+**Measured against the HUMAN corpus** (`correct ⊆ picks` over the 12 recorded discard decisions), which
+is the metric the swap turns on — NOT equation-vs-ladder:
+
+| | matches human |
+|---|---|
+| tuned `_DISCARD` ladder | **9 / 12** |
+| the v1 equation (keep + pitch) | **8 / 12** |
+
+The equation went from "cannot rank" (raw index) to competitive, and **beats the ladder on 2 cases**
+— `84071010-45` and `83661652-30`, both discard-as-resource picks the `fuel`/deadness sign catches
+that the ladder missed. The **3 ladder-wins are the remaining prerequisites**, each mapping to a
+Finding-2 premise gate or set semantics: `83454549-36`, `83967840-54`, `82753102-16` (to be
+classified as the gate builds land). `86091435-68` both miss — the deploy-now spike, the gated
+evolution-gate extension. Step 2 (the premise gates as real factors) is next.
+
+## Grill status: ⚠️ the keep-cost math is grilled — the LADDER-REPLACEMENT PATH IS NOW RULED (above)
 
 What IS grilled (spec Rounds 6-8): `keep_cost = role_value × [P(need met by deadline | keep) −
 P(met | shuffle/pitch)]`, **sets not sums** (discard PAIRS valued jointly — `_shed_signals`'

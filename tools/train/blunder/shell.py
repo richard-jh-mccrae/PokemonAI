@@ -472,7 +472,11 @@ function show(n){
       `${r.recycler?` · recycler-held ${r.recycler}`:''}`+
       `${r.recycler_deck?` · recyclers-in-deck ${r.recycler_deck}`:''}`+
       `${r.fuel?' · <b>FUEL</b>':''}${r.closing?' · gate-closing':''}`+
-      ` &rarr; keep <b>${r.keep}</b></div>`).join('');
+      ` &rarr; keep <b>${r.keep}</b>`+
+      // the pitch-preference side (Finding 3): why this card is BEST GONE — breaks zero-keep ties
+      `${r.pitch?` · pitch ${r.pitch}`:''}`+
+      `${r.dead_opener?' [dead-opener]':''}${r.redundant_tutor?' [redundant-tutor]':''}`+
+      `${r.stranded?' [stranded]':''}${r.fodder?' [fodder]':''}</div>`).join('');
     h+=`<details class="live"><summary>&#9878;&#65039; discard shadow: `+
       (S.agree?`<b>agrees</b>`:`<b>DISAGREES</b>`)+
       ` — ladder pitched [${(S.picks||[]).join(', ')}], equation would pitch [${(S.eq_pick||[]).join(', ')}]</summary>`+

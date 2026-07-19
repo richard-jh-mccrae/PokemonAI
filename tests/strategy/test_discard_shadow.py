@@ -18,10 +18,11 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 REPO = Path(__file__).resolve().parents[2]
 DISCARD = 8
 MEGA, SALVATORE, HILDA, WALLYS, CAPE, WATER = 1031, 1189, 1225, 1229, 1159, 3
+CINDERACE, FILLER = 666, 999
 
 
-def _setup(hand_ids):
-    """The `test_discard_selection.py` fixture shape: a forced Discard-2 over ``hand_ids``."""
+def _setup(hand_ids, *, minc=2):
+    """The `test_discard_selection.py` fixture shape: a forced Discard over ``hand_ids``."""
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
@@ -29,9 +30,11 @@ def _setup(hand_ids):
         WALLYS: CardStat(WALLYS, name="Wally's", cardType=3),
         CAPE: CardStat(CAPE, name="Hero's Cape", aceSpec=True, hpBonus=100, cardType=2),
         WATER: CardStat(WATER, name="Water", energyType=2, cardType=5),   # 5 = BASIC_ENERGY
+        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, cardType=0),   # a dead opener
+        FILLER: CardStat(FILLER, name="Filler", cardType=1),              # a role-less Item spare
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
-                           WALLYS: ["heal", "clutch_heal"]})
+                           WALLYS: ["heal", "clutch_heal"], CINDERACE: ["opener"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -39,8 +42,26 @@ def _setup(hand_ids):
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
     obs = {"current": {"players": [{"active": [None], "bench": [], "hand": hand},
                                    {"active": [None], "bench": []}], "yourIndex": 0, "turn": 4},
-           "select": {"context": DISCARD, "minCount": 2, "maxCount": 2, "option": opts}}
+           "select": {"context": DISCARD, "minCount": minc, "maxCount": minc, "option": opts}}
     return pilot, obs
+
+
+@pytest.mark.req("REQ-SHADOW-0002")
+def test_pitch_term_ranks_dead_weight_ahead_of_a_live_spare_among_zero_keep():
+    """Finding 3 (the seam-D grill): keep-cost alone can't RANK a discard — a dreg, a duplicate, and a
+    dead card all correctly price keep 0, so `eq_pick` fell to raw hand index. The PITCH-PREFERENCE
+    term (the `P(met | pitch) − P(met | keep)` sign the ladder's positive rungs carry) breaks those
+    ties by DEADNESS: a spent `opener` (Cinderace, its role expired — `discard-the-dead-opener`) is
+    actively best gone, so it out-pitches a merely role-less spare that still prices keep 0. The
+    filler sits at index 0 so the OLD index tie-break would wrongly pitch it."""
+    pilot, obs = _setup([FILLER, CINDERACE], minc=1)               # both worth 0 -> both keep 0
+    s = pilot.explain(obs).discard_shadow
+    assert s is not None
+    by_cid = {r["cid"]: r for r in s["eq"]}
+    assert by_cid[FILLER]["keep"] == 0.0 and by_cid[CINDERACE]["keep"] == 0.0     # keep can't separate
+    assert by_cid[CINDERACE].get("dead_opener") is True
+    assert by_cid[CINDERACE]["pitch"] > by_cid[FILLER]["pitch"]     # deadness discriminates
+    assert s["eq_pick"] == [1]                                      # pitch the dead opener, not idx-0 filler
 
 
 @pytest.mark.req("REQ-SHADOW-0001")
