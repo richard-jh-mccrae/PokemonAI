@@ -1,6 +1,8 @@
 # Hand disruption — grill ruling: the disruptor swing stays half-flat until evidence
 
-**Status.** GRILLED and RESOLVED 2026-07-19. Round 0 measured first (below); four rulings (user,
+**Status.** GRILLED and RESOLVED 2026-07-19; the two measured build items are **BUILT the same day**
+(see "Build list" below, suite green 3084). The flats and the damage-leg replacement stay
+evidence-gated designs. Round 0 measured first (below); four rulings (user,
 2026-07-19). Sibling of the gusting grill — same opponent-worth input layer, disruptor jurisdiction:
 the two FLAT per-card prices on THEIR cards inside ADR-0060's closed-form refresh swing
 (`_REFRESH_STRIP = 4` / `_REFRESH_GIFT = 8`, `pilot._refresh_swing_tactical`) and the
@@ -97,17 +99,24 @@ is the DAMAGE armed.)
    not a fold. Re-audit its pinned tests in the same motion.
 4. **Doc home** — this file; `gusting-grill-spec.md` stays the gust record.
 
-## Build list — follow-up session ONLY (corpus + score-diff gate)
+## Build list — BUILT 2026-07-19 (corpus + score-diff gate, suite green 3084)
 
-1. **Swing-informed grab grading** (`doctrine_fetch.py:944` band): a refresh card's grab value in
-   setup reads its own draw branches (`refresh_branches`, prize-conditional — Lillie's 8 at six
-   prizes) rather than a three-way flat tie. Fixture: 86088989-29 (Lillie's ≻ Judge). File the
-   re-review request for the Petrel residual before pinning chosen==correct.
-2. **`dont-gift` opp_net gate** (`baseline_disruption.py:74`): add the refill test to `when`.
-   Re-audit surface: the lever's pins in `test_baseline_clusters.py` /
-   `test_deferred_disruption_cluster.py` / `test_posture_read.py` (re-point, never delete);
-   83664991-43's trace is the motivating exhibit, not a chosen==correct pin (its correct is the
-   attack — SHED jurisdiction).
+Both items are shipped, `status="testing"`/tie-break scale, default ON. The 80-correction
+disruption corpus re-replayed end-to-end: unchanged 57 pass / 23 residual (no regression); the six-pin
+net holds; the full suite is green (the only failures are the pre-existing `plotly`-missing
+meta_tracker dashboard tests, untouched by this change).
+
+1. **Swing-informed grab grading** — BUILT. `pilot._grab_refresh_draw_tactical` + `refresh.own_draw_count`
+   + `_GRAB_REFRESH_DRAW = 0.1`: at a setup TO_HAND draw-Supporter grab, a refresh's own-draw ceiling
+   (prize-conditional — Lillie's 8 at six prizes) is a sub-point tie-break within the +10 band, never
+   crossing the +15 chain opener. Pins: `test_grab_refresh_draw.py` (Lillie's ≻ Judge at 86088989-29;
+   the tie-break stays below the chain band). **The pick stays Petrel** (seam-C chain opener) — the
+   Petrel-vs-Lillie's residual is filed for human re-review, NOT pinned as chosen==correct.
+2. **`dont-gift` opp_net gate** — BUILT. `refresh.refills_opponent` added to the `when`
+   (`baseline_disruption.py`): the −15 fires only when the play grows the opponent's hand
+   (`opp_net > 0`). Re-audited `test_posture_read.py`'s two pins to the corrected sign semantics
+   (a strip at opp_hand 8 is now UNTAXED; the gift at opp_hand 2 fires). 83664991-43's trace was the
+   motivating exhibit, not a chosen==correct pin (its `correct` is the attack — SHED jurisdiction).
 
 ## The fold list
 

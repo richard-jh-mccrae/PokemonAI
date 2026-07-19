@@ -29,7 +29,7 @@ from common.strategy.planner import PlannerMixin, TurnLine
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 # (_EFFICIENCY/_BENCH_SNIPE* moved to the KO oracle, ADR-0052 — the one home for combat valuation.)
 from common.strategy.combat import _EFFICIENCY  # noqa: E402  (re-used by the tactical scorers)
-from common.strategy.refresh import fresh_cards, net_change  # noqa: E402  (ADR-0060 swing oracle)
+from common.strategy.refresh import fresh_cards, net_change, own_draw_count  # noqa: E402  (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
 from common.strategy.denial import coin_odds, denial_value  # noqa: E402  (ADR-0062 energy denial)
 # A shuffle-refresh moves cards in four directions and they are NOT worth the same per card. Pricing
@@ -50,6 +50,11 @@ _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card oppone
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
 _REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
                            # resources denied, versus cards they have demonstrably been unable to play.
+_GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter grab: prefer the refresh
+                           # with the bigger own-draw ceiling (Lillie's 8 early ≻ Judge 4). Scaled so a
+                           # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
+                           # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
+                           # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -1350,6 +1355,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
+                    + self._grab_refresh_draw_tactical(board, ctx)
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
@@ -2069,6 +2075,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 + _REFRESH_STRIP * stripped
                 + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
                 - _REFRESH_GIFT * max(opp_net, 0.0))
+
+    def _grab_refresh_draw_tactical(self, board: Board, ctx) -> float:
+        """Sub-point tie-break at a TO_HAND draw-Supporter grab: rank a refresh by its own-draw
+        ceiling (ADR-0060 facts), so among the `grab-a-draw-supporter-in-setup` band the bigger-ceiling
+        refresh is grabbed (Lillie's redraws 8 early ≻ Judge's 4 — ep86088989 f29, CRITICAL). The +10
+        band could not tell them apart, so the option INDEX decided.
+
+        Mirrors the rung's gate exactly (setup TO_HAND, a `draw` Supporter CARD), plus `own_draw_count`
+        knowing the card — so it only ever SEPARATES cards the rung already tied, never lifts one out of
+        the band. Silent (0) otherwise; re-values nothing — the PLAY swing is priced by
+        `_refresh_swing_tactical` when the card is actually played."""
+        if (board.line_ready or ctx.select_context != _TO_HAND or "draw" not in ctx.tags
+                or not (ctx.stat and getattr(ctx.stat, "is_supporter", False))):
+            return 0.0
+        draw = own_draw_count(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
+        return _GRAB_REFRESH_DRAW * draw if draw is not None else 0.0
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
         """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``
