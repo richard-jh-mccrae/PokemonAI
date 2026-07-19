@@ -143,6 +143,28 @@ already pass — several of these ids are in the hyperclosure corpus as pins.
   the right outcome may be a much SMALLER build than this doc imagines — or none. The grab/pitch
   investigation (ADR-0065) is the precedent for "measured, found already-subsumed, built nothing."
 
+## Sibling consumer — the disruptor swing: SUPERSEDED, see `hand-disruption-grill-spec.md`
+
+This section (drafted 2026-07-19, never merged — it sat orphaned on this branch after PR #113
+shipped without it, then was rebased back in alongside the doc that actually superseded it) is kept
+ONLY as a record of the initial, WRONG framing; do not read it as guidance. The independently-run
+hand-disruption grill measured 80 corrections and ruled differently on both claims below:
+
+- **STRIP/GIFT grading**: this section proposed building it now. The ruling is design-only,
+  evidence-gated — Round 0 found no correction motivates it (every strip/gift correction is
+  count-based and already priced by the closed-form swing). NOT built.
+- **The hand-size-attacker damage leg (Alakazam)**: this section framed it as OPPONENT-WORTH,
+  sharing gusting's open prizes↔points exchange-rate question. The ruling reframes it as **incoming
+  damage to MY OWN Active** (self-preservation, not denial) — it belongs in the
+  `active_doomed`/`forward_incoming_damage` oracle, already has a fixed exchange rate (ADR-0062's
+  damage↔points), and needs NO new rate and NO opponent-worth layer at all. Built 2026-07-19 as an
+  inert, telemetry-only signal (`pilot._hand_size_relief`) pending a promotion gate that has not
+  tripped.
+
+See `docs/plans/hand-disruption-grill-spec.md` for the actual Round-0 measurement, rulings, build
+list, and the one genuinely open failure it found (a different bug: flat grab-time refresh grading,
+not the damage leg).
+
 ## Build shape (IF the grill confirms)
 
 Mirror of the ADR-0065 arc: corpus family from Round 0 (pins + xfail targets) → an opponent-side
