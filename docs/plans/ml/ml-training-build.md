@@ -18,8 +18,8 @@ as separate concurrent worktree sessions.
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
 | S2b | WP2 | Eval harness | ☐ blocked on S1 | |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
-| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
-| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
+| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3a.md](ml-training-design-s3a.md); detector core in s3b D1/D2; detector code lives in `tools/train/label/` |
+| S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md); outer-loop re-detection invokes the S3a labeler CLI — land S3a first (fit-extension plumbing may parallelize) |
 | S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | design LOCKED → same doc, D3/D4 |
 | — | G2 | Adoption gate | ☐ | |
 | S4 | WP6 | Rotation-loop glue + orchestration | ☐ blocked on G2 | |
@@ -158,6 +158,15 @@ recorded here.
 ## S3a — WP3: blunder labeler (parallel with S3b, after G1)
 
 **Owns:** new labeler package under `tools/train/` (e.g. `tools/train/label/`).
+
+> **Design is LOCKED in [ml-training-design-s3a.md](ml-training-design-s3a.md)** (Fable design
+> grill, 2026-07-19): detector core per s3b D1/D2, detector code homed in `tools/train/label/`
+> (S3b consumes via store/CLI/thresholds, never an import); triage Φ-deltas rank but never emit;
+> θ set by a stratified precision review (≥ 0.80 gate, committed `thresholds.json`); machine
+> Corrections go direct-to-fit via gitignored `data/corrections/machine/` with caps + new
+> `value_delta` category; shared per-decision-P(win) reader (`vread`) also feeds S2b's AIVAT
+> stub; played-well-lost = report view over lost games. Execute it — the scope below is the
+> summary, the design doc is the specification.
 
 **Scope:**
 1. **v1 — consecutive-state deltas (no simulation):** re-derive V(s) per own MAIN decision
