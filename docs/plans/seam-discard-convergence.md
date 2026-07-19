@@ -1,5 +1,13 @@
 # Seam handoff: the discard convergence + the deploy-now spike (run SOLO, last)
 
+**✅ CONVERGED 2026-07-19 — the SWAP IS LIVE.** The card-worth equation now DECIDES the forced
+discard (`Pilot.discard_keep_value` armed ON, the `develop_rollout` precedent — in-ladder A/B,
+kill-switch if weak), replacing the tuned `_DISCARD` ladder. It matches the human **9/9 on the live
+(non-excluded) discard corpus**; the ladder it replaced managed 9/11 on the same set. The ladder
+remains as the flag-off fallback (still unit-tested). Remaining follow-ups (below): the duplicate-pair
+set semantics (a forced discard-2 of two wincons still prices both keep 0) and folding the now-shadowed
+`_DISCARD` rungs out once the A/B clears. The rest of this doc is the build record.
+
 **SHADOW EMITTER BUILT 2026-07-19** (the first equation shipped under the shadow-equations ruling):
 `pilot._discard_shadow` computes the oracle's v1 keep-cost at every real discard pick and emits it —
 `Decision.discard_shadow` → the sparse `@T` `discard_shadow` key → the blunder-shell ⚖️ dropdown —
@@ -130,6 +138,38 @@ human **11/11** vs the ladder's **9/11** — and on the refuted 12th, the equati
 the user endorsed. The equation now strictly dominates the ladder on every recorded discard
 decision. The remaining pre-swap items are the deploy-now spike (now also the relaxed target's
 flip) and the set-naivety; step 3-4 (the swap) awaits the user's go.
+
+### Steps 3-4 BUILT 2026-07-19 — the deploy-now spike + the LIVE SWAP
+
+**The deploy-now spike (the flagship discrimination):** `Board.deploy_now_ids` +
+`planner._deploy_now_ids` (a hand evolution with an ELIGIBLE in-play base this turn — matching
+`evolvesFrom` name, `appearThisTurn` False, turn ≥ 2) wired as a **closing edge** in
+`_gate_closing`: pitching forfeits a live tempo play re-access can't restore, so keep spikes to full
+worth even with a same-card copy in play. Flips `86091435-68` (open Drakloak kept) while
+`83686860-18` still pitches correctly (its base was placed this turn → not in `deploy_now_ids`) — the
+covered-vs-open pair a flat floor never separated. Fires live at the gamble/refresh keep-sites too.
+
+**The engine-supporter premise gate (Finding 2's 5th, closed for the swap):** a draw/search/heal
+SUPPORTER that is not `hand_disruption` gets a discard-context WORTH floor
+(`_ENGINE_SUPPORTER_KEEP = 8`, mirroring `keep-engine-supporter-at-discard` −8) — a WORTH floor, not
+a keep floor, so a duplicate or need-met engine supporter still sheds. Without it the equation pitched
+an engine Lillie's over `hand_disruption` filler.
+
+**The swap:** `Pilot.discard_keep_value` (PROFILE armed ON). At a forced discard `_evaluate` calls
+`_discard_equation_pick` — the `picks` cheapest-to-lose cards by the equation's ranking
+(`_discard_equation_rows`, shared with the shadow) — instead of the ladder order. OFF is
+byte-identical (ladder decides, equation shadows). Acceptance: **9/9 live discard corpus** (ladder
+9/11); all discard PINS/SUBSTANCE_PINS green; the relaxed `test_deploy_now_drakloak_is_not_pitched`
+XPASSed → promoted to a plain pin; the synthetic `test_discard_selection` scenarios (flag-off ladder)
+unchanged and the equation reproduces their picks. Full suite 3114 passed.
+
+### Still open (post-swap follow-ups)
+- **Set semantics** (the last naivety): a forced discard-2 of two identical wincons still prices both
+  keep 0 (each points at the other as re-access) — the joint-pair (re-score after each commitment,
+  the `_greedy_grab` pattern) fix. Rare in practice (the corpus never hit it live).
+- **Fold the shadowed `_DISCARD` rungs** out of `doctrine_fetch` once the in-ladder A/B clears the
+  swap (the elegance-pressure step of the shadow-equations ruling — fewer features firing in
+  combination). Until then the ladder stays as the kill-switch fallback.
 
 ## Grill status: ⚠️ the keep-cost math is grilled — the LADDER-REPLACEMENT PATH IS NOW RULED (above)
 

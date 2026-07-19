@@ -18,7 +18,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 REPO = Path(__file__).resolve().parents[2]
 DISCARD = 8
 MEGA, SALVATORE, HILDA, WALLYS, CAPE, WATER = 1031, 1189, 1225, 1229, 1159, 3
-CINDERACE, FILLER, IGNITION = 666, 999, 17
+CINDERACE, FILLER, IGNITION, LILLIES, HARLEQUIN = 666, 999, 17, 1227, 1223
 
 
 def _setup(hand_ids, *, minc=2, powered=False):
@@ -34,10 +34,13 @@ def _setup(hand_ids, *, minc=2, powered=False):
         CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, cardType=0),   # a dead opener
         FILLER: CardStat(FILLER, name="Filler", cardType=1),              # a role-less Item spare
         IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=0),  # a burst
+        LILLIES: CardStat(LILLIES, name="Lillie's", cardType=3),          # a draw engine Supporter
+        HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),     # hand_disruption filler
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
                            WALLYS: ["heal", "clutch_heal"], CINDERACE: ["opener"],
-                           IGNITION: ["discard_eot"]})
+                           IGNITION: ["discard_eot"], LILLIES: ["draw", "shuffle_hand"],
+                           HARLEQUIN: ["draw", "hand_disruption", "shuffle_hand"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -100,6 +103,21 @@ def test_shadow_pitches_the_lower_worth_duplicate_first():
     assert by[0]["cid"] == SALVATORE and by[0]["keep"] == 0.0 and by[0]["worth"] == 10.0
     assert by[1]["cid"] == FILLER and by[1]["keep"] == 0.0 and by[1]["worth"] == 0.0
     assert s["eq_pick"] == [1]                       # the worth-0 filler, not the worth-10 tutor at idx 0
+
+
+@pytest.mark.req("REQ-SHADOW-0004")
+def test_shadow_floors_an_engine_supporter_over_disruption_filler():
+    """The keep-engine-supporter premise (Finding 2's 5th gate, mirrored for the swap): an engine
+    draw/search/heal SUPPORTER (Lillie's) is worth keeping over `hand_disruption` FILLER (Harlequin)
+    even though both carry no ROLE/TAG worth. Discard-context (mirrors `keep-engine-supporter-at-
+    discard` −8), so a small keep FLOOR lifts the engine supporter above the filler the equation
+    would otherwise pitch by index. The filler sits at index 1 so the naive ranking would keep it."""
+    pilot, obs = _setup([LILLIES, HARLEQUIN], minc=1)
+    s = pilot.explain(obs).discard_shadow
+    by = {r["cid"]: r for r in s["eq"]}
+    assert by[LILLIES]["engine_supporter"] is True and by[LILLIES]["keep"] > 0.0
+    assert by[HARLEQUIN]["keep"] == 0.0 and not by[HARLEQUIN].get("engine_supporter")
+    assert s["eq_pick"] == [1]                         # pitch the disruption filler, keep the engine
 
 
 @pytest.mark.req("REQ-SHADOW-0001")

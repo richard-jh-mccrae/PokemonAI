@@ -471,15 +471,17 @@ function show(n){
       `${r.dup_hand?' · dup-in-hand':''}${r.in_play?' · copy-in-play':''}`+
       `${r.recycler?` · recycler-held ${r.recycler}`:''}`+
       `${r.recycler_deck?` · recyclers-in-deck ${r.recycler_deck}`:''}`+
-      `${r.fuel?' · <b>FUEL</b>':''}${r.closing?' · gate-closing':''}`+
+      `${r.fuel?' · <b>FUEL</b>':''}${r.closing?' · <b>DEPLOY-NOW</b>':''}`+
+      `${r.engine_supporter?' · engine-supporter':''}`+
       ` &rarr; keep <b>${r.keep}</b>`+
       // the pitch-preference side (Finding 3): why this card is BEST GONE — breaks zero-keep ties
       `${r.pitch?` · pitch ${r.pitch}`:''}`+
       `${r.dead_opener?' [dead-opener]':''}${r.redundant_tutor?' [redundant-tutor]':''}`+
-      `${r.stranded?' [stranded]':''}${r.fodder?' [fodder]':''}</div>`).join('');
-    h+=`<details class="live"><summary>&#9878;&#65039; discard shadow: `+
-      (S.agree?`<b>agrees</b>`:`<b>DISAGREES</b>`)+
-      ` — ladder pitched [${(S.picks||[]).join(', ')}], equation would pitch [${(S.eq_pick||[]).join(', ')}]</summary>`+
+      `${r.stranded?' [stranded]':''}${r.fodder?' [fodder]':''}${r.spent_burst?' [spent-burst]':''}</div>`).join('');
+    const verb=S.decided?`<b>DECIDED</b> (kill-switch on)`:(S.agree?`<b>agrees</b>`:`<b>DISAGREES</b>`);
+    h+=`<details class="live"><summary>&#9878;&#65039; discard equation: ${verb}`+
+      ` — ${S.decided?'pitched':'ladder pitched'} [${(S.picks||[]).join(', ')}]`+
+      `${S.decided?'':`, equation would pitch [${(S.eq_pick||[]).join(', ')}]`}</summary>`+
       `<div class="alt">keep_cost per candidate (the oracle pitches the cheapest):</div>`+rows+`</details>`;
   }
   $('now').innerHTML=h;

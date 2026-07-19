@@ -56,6 +56,11 @@ _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter gra
                            # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
                            # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
                            # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
+# The discard equation's engine-supporter keep floor (ADR-0065 seam-D) — mirrors the ladder's
+# `keep-engine-supporter-at-discard` (−8): a draw/search/heal SUPPORTER that is not hand_disruption
+# is a draw engine kept over pure filler. Discard-CONTEXT (not general worth), tuned to the −8 band.
+_ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
+_ENGINE_SUPPORTER_KEEP = 8.0
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -969,7 +974,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
-                 develop_rollout=False):
+                 develop_rollout=False, discard_keep_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1084,6 +1089,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # NOW (Supporter needs a free slot) and a Basic Energy
                                                         # is still fetchable. An ATTACK-based accel (a Pokemon)
                                                         # is NEVER counted (using it IS the attack)
+        self.discard_keep_value = discard_keep_value    # ADR-0065 seam-D kill-switch (default OFF): the
+                                                        # card-worth equation DECIDES a forced discard in
+                                                        # place of the `_DISCARD` ladder. OFF = the ladder
+                                                        # decides and the equation only shadows (telemetry).
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1184,7 +1193,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
         reordered = order != by_score
         grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
-        if grabbed:                                     # greedy gap-update + take-fewer
+        # ADR-0065 seam-D SWAP (kill-switch `discard_keep_value`): at a forced discard the card-worth
+        # equation DECIDES — the `picks` cheapest-to-lose cards — replacing the tuned `_DISCARD`
+        # ladder. OFF (default) leaves the ladder deciding and the equation only shadows.
+        eq_discard = (select.get("context") == _DISCARD and max_count > 0
+                      and getattr(self, "discard_keep_value", False)
+                      and self._discard_equation_pick(obs, select, board, options, max_count))
+        if eq_discard:
+            chosen = eq_discard
+        elif grabbed:                                   # greedy gap-update + take-fewer
             chosen = self._greedy_grab(obs, select, board, traces, options,
                                        select.get("minCount", 0), max_count)
         else:
@@ -2248,6 +2265,31 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         picks = len(chosen)
         if picks <= 0 or len(options) <= picks:
             return None                                  # no real choice — nothing to shadow
+        rows, order = self._discard_equation_rows(obs, select, board, options)
+        if not rows:
+            return None
+        eq_pick = order[:picks]
+        rec = {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
+               "agree": set(eq_pick) == set(chosen)}
+        if getattr(self, "discard_keep_value", False):
+            rec["decided"] = True                        # the equation IS the decider (kill-switch ON)
+        return rec
+
+    def _discard_equation_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
+        """The DECIDER under the `discard_keep_value` kill-switch (ADR-0065 seam-D, the SWAP): the
+        forced-discard pick IS the card-worth equation's ranking — the ``picks`` cheapest-to-lose
+        cards (`_discard_equation_rows`), replacing the tuned `_DISCARD` ladder wholesale. None when
+        the equation can't rank (no priceable rows), so the caller keeps the ladder order."""
+        _rows, order = self._discard_equation_rows(obs, select, board, options)
+        return order[:picks] if order else None
+
+    def _discard_equation_rows(self, obs: dict, select: dict, board: Board, options: list):
+        """The card-worth discard equation's per-candidate rows AND the full ranked index order — the
+        shared computation behind the SHADOW (`_discard_shadow`, telemetry) and the DECIDER
+        (`_discard_equation_pick`, under the kill-switch). Pure and deterministic (safe mid-sim). The
+        ranking is ``(keep asc, pitch desc, worth asc, index)``: cheapest-to-lose first, ties broken
+        by DEADNESS then by lower underlying worth then hand index. Returns ``([], [])`` when nothing
+        is priceable."""
         me = self._my_player(obs)
         from collections import Counter
         hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
@@ -2278,8 +2320,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if cid is None:
                 continue
             st = self.stats.get(cid) if self.stats else None
+            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
             worth = self._role_value(cid)
+            # The engine-supporter WORTH floor (Finding 2's 5th premise gate, mirrored for the swap):
+            # a draw/search/dig/heal SUPPORTER that is NOT hand_disruption (Lillie's, not Harlequin) is
+            # a draw engine worth keeping over pure filler, though it carries no ROLE/TAG worth.
+            # Discard-CONTEXT (mirrors `keep-engine-supporter-at-discard` −8). A WORTH floor, not a keep
+            # floor — it is still discounted by re-access (a duplicate engine supporter is covered) and
+            # by the gates (a need-met tutor still zeros), unlike a hard override.
+            engine_supporter = bool(st is not None and getattr(st, "is_supporter", False)
+                                    and (_ENGINE_KEEP_TAGS & set(tags)) and "hand_disruption" not in tags)
+            if engine_supporter and worth < _ENGINE_SUPPORTER_KEEP:
+                worth = _ENGINE_SUPPORTER_KEEP
+                row_engine = True
+            else:
+                row_engine = False
             row = {"i": i, "cid": cid, "worth": round(worth, 1)}
+            if row_engine:
+                row["engine_supporter"] = True
             dup = held.get(cid, 0) >= 2
             in_play = cid in board.in_play_ids
             rec_hand, rec_deck = _recyclers(st) if (st is not None and worth > 0) else (0, 0)
@@ -2311,7 +2369,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # Active is fully powered — then it self-discards at end of turn anyway, so it is fodder.
             # DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it lives in the shadow's
             # pitch term, not a general Worth gate.
-            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
             spent_burst = "discard_eot" in tags and getattr(board, "active_fully_powered", False)
             row["keep"] = 0.0 if (fuel or spent_burst) else round(worth * deploy * (1.0 - reaccess), 1)
             # The PITCH-PREFERENCE term (seam-D grill Finding 3): keep-cost is a KEEP floor and
@@ -2345,14 +2402,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             + int(fodder) + int(spent_burst))
             rows.append(row)
         if not rows:
-            return None
+            return [], []
         # Rank: cheapest keep first; among equal keep, the DEADEST (highest pitch) sheds first; then
         # the LOWER underlying worth (sets-not-sums — a worth-10 duplicate's redundancy is worth
         # preserving over a worth-0 dreg's, ladder-win 83967840-54); index only as the last resort.
-        eq_pick = [r["i"] for r in
-                   sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["worth"], r["i"]))][:picks]
-        return {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
-                "agree": set(eq_pick) == set(chosen)}
+        order = [r["i"] for r in
+                 sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["worth"], r["i"]))]
+        return rows, order
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can

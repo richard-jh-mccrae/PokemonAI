@@ -135,6 +135,18 @@ comparator) and ADR-0032 (Effect-Clause tier).
   **11/11** on surviving labels vs the ladder's **9/11**, and is user-endorsed on the refuted 12th
   — it now strictly dominates the ladder on every recorded discard decision. The swap awaits the
   user's go.
+- **Seam-D CONVERGED — the deploy-now spike + the LIVE SWAP (2026-07-19).** The fourth valuation
+  shadow is now the DECIDER. (a) **Deploy-now spike:** `Board.deploy_now_ids` (a hand evolution with
+  an eligible in-play base this turn) wired as a `_gate_closing` closing edge — keep spikes to full
+  worth, flipping `86091435-68` while `83686860-18` still pitches correctly (the covered-vs-open pair).
+  (b) **Engine-supporter gate** (Finding 2's 5th premise) closed as a discard-context worth floor.
+  (c) **The swap:** `Pilot.discard_keep_value` (PROFILE armed ON, `develop_rollout` precedent) — the
+  equation's ranking (`_discard_equation_rows`, shared with the shadow) decides the forced discard in
+  place of the `_DISCARD` ladder; OFF is byte-identical. Acceptance: **9/9 live discard corpus** (the
+  ladder 9/11); the relaxed deploy-now target promoted to a pin; all discard pins green; full suite
+  3114. The four-shadow disagreement (Round 7) is now fully retired — grab/pitch, refresh swing,
+  gamble keep-floor, AND discard all read the one currency. Open: the duplicate-pair set semantics,
+  and folding the shadowed `_DISCARD` rungs once the in-ladder A/B clears.
 - **Line-member worth derivation (2026-07-19, the shadow's first prerequisite closed).** The shadow
   sweep found an undeclared middle Line stage (the f68 Drakloak on Dreepy→Drakloak→Dragapult ex)
   pricing **0** — `_role_value` saw only the declared base. `planner._role_value` now derives

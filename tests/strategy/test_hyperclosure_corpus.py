@@ -264,16 +264,14 @@ def test_substance_pin_the_tagged_blunder_is_dead(cid):
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
-@pytest.mark.xfail(reason="the deploy-now spike (the gate-library extension / the seam-D swap): the "
-                          "ladder still pitches the sole Drakloak that can evolve the Active",
-                   strict=True)
 def test_deploy_now_drakloak_is_not_pitched():
     """The SURVIVING substance of the refuted `86091435-68` (user re-review 2026-07-19): whatever
     fills the other Ultra-Ball slot, the hand Drakloak — the ONLY card that can evolve the active
     Dreepy this turn (the benched Drakloak is a different Line instance and covers nothing) — must
     not be pitched. Relaxed from the refuted strict label, whose 2nd slot wrongly pitched the
-    Crushing Hammer the user now rules should hit the opponent's Active (Archaludon ex). An XPASS =
-    the deploy-now gate (or the equation swap) landed — promote to a plain pin."""
+    Crushing Hammer the user now rules should hit the opponent's Active (Archaludon ex). PROMOTED to
+    a plain pin 2026-07-19: the deploy-now spike + the seam-D swap (`discard_keep_value`) landed, so
+    the equation now keeps the Drakloak."""
     rec = _record("86091435-68")
     p = _pilot(rec["agent"])
     d = p.explain(rec["obs"])

@@ -67,6 +67,8 @@ EXPECTED_SHIPPED = {
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
     "play_accel_lethal": True,      # armed-ON 2026-07-14 (ladder-testing): play-based accel (Crispin) +1 KO attach
+    "discard_keep_value": True,     # ADR-0065 seam-D armed-ON 2026-07-19 (ladder-testing): the card-worth
+                                    # equation decides a forced discard, replacing the `_DISCARD` ladder
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
 }
 
