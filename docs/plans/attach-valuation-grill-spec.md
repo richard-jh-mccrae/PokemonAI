@@ -121,12 +121,15 @@ get converged. Build the corpus family (pins + xfail targets) in the hyperclosur
   live telemetry become the discovery channel for latent ladder bugs the corpus never caught.
 - Held-card-risk (B, now shipped) overlap on hold-vs-spend — read its landed shape first.
 
-## Sibling consumer — promote/retreat (scope in the SAME grill if it fits, else its own seed)
+## Sibling — promote/retreat (its own seed: `promote-retreat-grill-spec.md`)
 
-`baseline_promote`/`baseline_retreat` (12 rungs; 26 `bad_target` + 14 `bad_retreat` corrections)
-are shadows of `promote_value(B) = survival(B | incoming, ADR-0064) × threat(B's attacks, the KO
-oracle)` — a COMPOSITION of two existing oracles, no new machinery. Cheaper than the attach
-convergence; same unit question.
+RETRACTED (2026-07-19): this section originally called promote/retreat "a cheap composition of two
+existing oracles" — the user's counterexamples refuted that (a zero-Energy Cinderace with a fetcher
+in hand beats an energized benched wincon; the alternating sacrifice ladder). The real shape is a
+prize-trade DIFFERENTIAL with closure-aware readiness — seeded properly in
+`docs/plans/promote-retreat-grill-spec.md`. The two grills share the readiness machinery (the
+gamble's one-attach-short Outcome Classes) and the currency; ideally one session owns both
+agendas' readiness question.
 
 ## Build shape (per the shadow ruling)
 
