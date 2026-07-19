@@ -3,9 +3,11 @@ hypergeometric-fetch-closure §Rounds 6-9).
 
 This module owns the ONE tuned currency: the general ``role → points`` tier the
 keep-cost is measured in. Everything ELSE about a card's worth is DERIVED at the
-decision point — the re-access odds (the fetch/draw closure pointed backwards)
-and the gate deadlines live on the Pilot, which reads this table. deck-genie
-never invents numbers (spec §Round 9); corrections arbitrate the tiers.
+decision point — the re-access odds are the Closure pointed backwards
+(`fetch_closure` + `deck_odds`), the deadline factor is the Gates leg
+(`gate_library.deploy_odds`), and the Pilot resolves the board facts and reads
+this table. deck-genie never invents numbers (spec §Round 9); corrections
+arbitrate the tiers.
 
 The seed calibration anchors a mid card (a typed Basic Energy) near the retired
 ADR-0060 flat shed (−8), scaling UP for the plan pieces a shuffle must not
@@ -32,8 +34,8 @@ ROLE_TIER: dict[str, float] = {
 ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the old flat-shed anchor
 ACE_SPEC_TIER = 25.0              # a one-per-deck, unrecoverable ACE SPEC — high floor, closure-discounted
 
-# behavioural tag → worth points (combat-tempo findings §B): situational Trainers / special Energy
-# whose keep-value the DISCARD ladder already prices (`keep-key-cards-at-discard` −30 covers
+# behavioural tag → worth points (ADR-0065 §Build status, TAG_TIER): situational Trainers / special
+# Energy whose keep-value the DISCARD ladder already prices (`keep-key-cards-at-discard` −30 covers
 # `discard_eot`; `dont-waste-clutch-heal` −40; `keep-gust-and-recovery-at-discard` −10) but the worth
 # oracle could not see — a role-less Wally's / Ignition shuffled away for free. Mirrors the ladder's
 # bands into the ONE currency, scaled to ROLE_TIER (wincon 30 ↔ keep-key −30).

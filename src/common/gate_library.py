@@ -1,5 +1,5 @@
-"""Gate library — the DEADLINE leg of the card-worth oracle (ADR-0065 §Round 8-9;
-``docs/plans/gate-library-scope.md``).
+"""Gate library — the DEADLINE leg of the card-worth oracle (ADR-0065; grill Rounds 8-9 of
+``docs/plans/hypergeometric-fetch-closure.md``; scope + staging ``docs/plans/gate-library-scope.md``).
 
 `keep_cost = role_value × [P(need met by deadline | keep) − P(met | shuffle)]`. The keep-value sites
 already model the second bracket term as the closure re-access odds; this module supplies the FIRST —

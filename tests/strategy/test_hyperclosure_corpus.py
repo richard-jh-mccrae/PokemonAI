@@ -73,7 +73,7 @@ PINS = {
                    "`dont-shuffle-away-the-deferred-fetch` holds the Lillie's that would nuke the "
                    "deferred plan's vehicle. Promoted from a TARGET (tests/strategy/test_held_card_risk.py)",
     # shuffle timing & keep-value (the refresh side)
-    # Flipped by the TAG_TIER worth-coverage build (combat-tempo findings §B): the discard ladder's
+    # Flipped by the TAG_TIER worth-coverage build (ADR-0065 §Build status): the discard ladder's
     # keep-value tags (`discard_eot`, `clutch_heal`) now carry worth, so the graded shed charges for
     # shuffling them and the refresh stands down — the agent attacks instead.
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "

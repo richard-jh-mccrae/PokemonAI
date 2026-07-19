@@ -1,7 +1,10 @@
 # Hypergeometric odds must model FETCH-CHAIN closure + hand expansion
 
 **Status:** GRILLED 2026-07-17 (session grill — every claim source-verified; design corrected and
-re-scoped below). Build NOT started. Original note 2026-07-16.
+re-scoped below). Original note 2026-07-16. **BUILT 2026-07-18/19** — WP1–WP6 landed and WP7's core
+seam shipped suite-green; this file stays as the grill RECORD (rounds 1–14: the rulings and their
+provenance). The LIVING build status is ADR-0065 §Build status; the staged remainder is scoped in
+`gate-library-scope.md` (gate stages 2–4) and the `seam-*.md` docs.
 **Owner concern (user, 2026-07-16):** the naive "P(draw the energy)" hypergeometric **undercounts** the
 true probability of *assembling* what you need, because the outs are not just literal target cards — they
 include **tutor/fetch chains** and **hand-expanding draws**. This biases every downstream consumer
@@ -434,10 +437,14 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       gated heals fail closed). Value KO_SCORE, exempt from the keep-value blocker. Item outs
       always-live, Supporter heals post-Item. The `switch`-to-a-non-empty-bench survival (saving a
       wincon rather than averting a game loss) is a mid-value class that rides WP6's keep-value floor.
-- [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
-      the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
+- [x] ✅ **WP6** **Replaceability-floor keep-value** — BUILT 2026-07-18 (`common/card_worth.py` +
+      `planner._keep_cost`: the graded floor REPLACES the three binary protected-hand stand-downs);
+      unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).
-- [ ] **One card-worth oracle** (rounds 7–8): marginal (with-vs-without), set-capable, zone/deck-signed
+- [x] ✅ **WP7** **One card-worth oracle** (rounds 7–8) — CORE BUILT 2026-07-18, graduated to
+      **ADR-0065** (the living build status): the module seam + gamble keep-floor and refresh-SHED
+      convergences; grab/pitch measured already-subsumed; plan-tier credit + gate stages 2–4 staged.
+      Original design: marginal (with-vs-without), set-capable, zone/deck-signed
       (Kyogre discard-fuel flip); keep-cost = role value × ΔP(class need met by DEADLINE | keep vs
       shuffle) — proximity is the deadline (quota-aware, interval-valued for closing windows), never a
       multiplier; horizon = role tier only, match scale stays with the hard rungs; unifies fetch

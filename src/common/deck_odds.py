@@ -1,4 +1,15 @@
-"""Probabilistic own-deck content estimate — the COMPLEMENT to the sound deck tracker (ADR-0029).
+"""Odds — pure own-deck math (the ADR-0065 glossary term): the chance of drawing, reaching, or
+rebuilding something by a given draw window. No opinion about value (that is Worth, `card_worth.py`).
+
+Two families, two fail directions (grader safety — nothing here ever raises):
+
+* **Draw-window hypergeometrics** — `draw_hit_probability` (P(≥1 target in the drawn window), the
+  form behind a Gamble Line's Outcome Classes, ADR-0039) and `draw_hit_with_engines` (the Stage-2
+  draw-engine two-window closed form, WP4). ENDORSERS: bad input → **0.0** — a gamble must never
+  fire on garbage.
+* **The prize-split content estimate** — `p_contains` / `contains_odds`, the probabilistic
+  COMPLEMENT to the sound deck tracker (ADR-0029), detailed below. SUPPRESSORS: bad input → **1.0**
+  ("assume present") — a probabilistic suppressor must never stand a search down on garbage.
 
 `deck_tracker.OwnCardModel` is **certain-or-silent**: it resolves the prize split EXACTLY (only after a
 search reveals the whole deck) and otherwise reports the sound pigeonhole bounds — it never guesses
@@ -20,9 +31,8 @@ middle: ``u == 0`` → 0.0 (every copy seen ⇒ sound-empty), ``u > K`` → 1.0 
 prize slots ⇒ pigeonhole-present), ``K == 0`` → 1.0 (no hidden prizes ⇒ every unseen copy is in the
 deck), ``deck_count == 0`` → 0.0 (an empty deck holds nothing; all unseen copies are prized).
 
-Pure, lib-free (``math.comb``), **never raises** (grader safety): any bad input collapses to **1.0**
-("assume present"), the conservative direction — a probabilistic suppressor must never stand a search
-down on garbage. Stateless: a snapshot function of the visible board, not match-scoped state.
+Pure, lib-free (``math.comb``), stateless: snapshot functions of the visible board, never
+match-scoped state. Each function's docstring states its own conservative fail direction.
 """
 from __future__ import annotations
 

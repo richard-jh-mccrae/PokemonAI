@@ -29,8 +29,10 @@ comparator) and ADR-0032 (Effect-Clause tier).
   real decks).
 - **`src/common/card_worth.py`** — the WORTH backend: the ONE tuned currency (`ROLE_TIER` /
   `ENERGY_TIER` / `ACE_SPEC_TIER`), the `role_value(roles, is_ace_spec, is_typed_basic_energy)`
-  primitive (the Pilot's `_role_value` delegates), and the `keep_cost(role_value, reaccess_odds)`
-  primitive. The Pilot supplies card facts; the module owns the numbers.
+  primitive (the Pilot's `_role_value` delegates; later extended with `tags=` — the TAG_TIER bullet
+  below), and the `keep_cost(role_value, reaccess_odds)` primitive (later extended with the
+  `deadline_odds` gate factor — the gate-library bullet below). The Pilot supplies card facts; the
+  module owns the numbers.
 - **The gamble keep-floor consumes it (WP6):** `planner._keep_cost = role_value × (1 − re-access
   odds)`, the closure pointed backwards, replacing the binary protected-hand veto.
 - **The refresh SHED consumes it (2026-07-18):** `pilot._refresh_swing_tactical`'s flat
@@ -46,7 +48,8 @@ comparator) and ADR-0032 (Effect-Clause tier).
 - **The coverage lint (Round 9 §5):** `tests/strategy/test_role_coverage.py` — no card silently
   priced at zero from a typo (every declared role is known vocabulary; every ROLES key is a real
   deck card; every worth-roled card prices positive).
-- **The TAG_TIER worth coverage (2026-07-19, combat-tempo findings §B):** `role_value` = the MAX
+- **The TAG_TIER worth coverage (2026-07-19, the combat-tempo investigation — its plan doc is
+  retired, see git history):** `role_value` = the MAX
   claim across roles, behavioural tags (`TAG_TIER`: `discard_eot` 30 / `clutch_heal` 20 / `gust` 10
   / `recycle` 10 — the discard ladder's keep bands mirrored into the one currency), and the
   ACE-SPEC / energy fallbacks. Closes the gap where the DISCARD ladder priced Ignition / Wally's
@@ -88,8 +91,12 @@ already converged; its residue rides with the gate library.
   Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). Later stages
   (quota / recycler / pressure gates; the discard-side `86091435-68` which needs a principled discard
   convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
-- **The held-card-risk tier-2 seam (Round 8 §5)** and **the skill loop** (deck-genie Role Sheet /
-  deck-align fold — Round 9 §4). The oracle is the backend; the skill loop is how decks feed it.
+- ~~The held-card-risk tier-2 seam (Round 8 §5)~~ **BUILT 2026-07-19**
+  (`dont-fetch-before-the-deadline` + `dont-shuffle-away-the-deferred-fetch`,
+  `tests/strategy/test_held_card_risk.py`;
+  corpus target `85163634-17` promoted to a pin) — and **the skill loop** (deck-genie Role Sheet /
+  deck-align fold — Round 9 §4), still staged. The oracle is the backend; the skill loop is how
+  decks feed it.
 
 ## Context
 

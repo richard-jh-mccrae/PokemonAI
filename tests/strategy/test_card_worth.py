@@ -74,7 +74,7 @@ def test_role_value_pure_function_owns_the_tier_and_fallbacks():
 
 @pytest.mark.req("REQ-WORTH-0004")
 def test_role_value_reads_tag_derived_worth():
-    """The worth-coverage fix (combat-tempo findings §B): situational Trainers / special Energy carry
+    """The worth-coverage fix (ADR-0065 §Build status, TAG_TIER): situational Trainers / special Energy carry
     their keep-value in behavioural TAGS the discard ladder already trusts (`keep-key` −30 covers
     `discard_eot`; `dont-waste-clutch-heal`; `keep-gust-and-recovery` −10) — `role_value` now reads a
     TAG_TIER so the ONE currency covers them. Worth = the MAX claim across roles, tags, and the

@@ -1,4 +1,4 @@
-# Scope: the deadline gate library (ADR-0065 §Round 8-9, the deferred leg)
+# Scope: the deadline gate library (ADR-0065; grill Rounds 8-9, the deferred leg)
 
 **Status.** Scoped 2026-07-18. **Stage 1 (evolution gate) BUILT 2026-07-18** — `common/gate_library.py`
 + the `deploy_odds` factor in `card_worth.keep_cost`, wired on the gamble keep-floor and refresh SHED

@@ -1,10 +1,15 @@
-"""Fetch-closure — the tutor / recycle / search graph and its clause predicates (WP7, ADR-0065).
+"""Fetch-closure — the tutor / search graph and its clause predicates (WP7, ADR-0065).
 
 The oracle's GRAPH leg, lifted out of the Pilot into pure, Pilot-independent functions over the card
 REPRESENTATION only: ``card_effects.json`` FETCH clauses (ADR-0032) + ``CardStat`` — **never a card-text
 parse** (the Round-11 ruling). One implementation, called by both the gamble gain side
 (`planner._fetch_reaches_pokemon` / `_card_reaccess_outs`) and the card-worth keep-cost
 (`card_worth` via the Pilot) so the four valuation shadows read the SAME closure by construction.
+
+Scope: the clause predicate (`fetch_target_matches`) is zone-agnostic — it matches a recycler's
+``zone: discard`` clause as readily as a deck search — but the graph walks here (`reaccess_outs`,
+`fetch_reaches_pokemon`) deliberately cover only the ``zone: deck`` leg: a shuffled card lands in the
+DECK, and the gamble's recycle/discard leg lives with the slot closure (`planner._fetch_reaches_slot`).
 
 Each function takes small accessor callables instead of a Pilot:
   * ``stat_of(cid) -> CardStat | None`` — the card's stat row (``pilot.stats.get``)

@@ -1,4 +1,4 @@
-"""The deadline gate library (ADR-0065 §Round 8-9, `docs/plans/gate-library-scope.md`).
+"""The deadline gate library (ADR-0065; grill Rounds 8-9, `docs/plans/gate-library-scope.md`).
 
 `keep_cost = role_value × [P(need met by deadline | keep) − P(met | shuffle)]`. The gate supplies the
 first factor of that difference as ``deploy_odds`` — P(the card's ROLE is realisable by its deadline) —
