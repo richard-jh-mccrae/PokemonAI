@@ -1799,13 +1799,22 @@ class PlannerMixin:
         return keep_cost(role_value, reaccess, deadline)
 
     def _gate_closing(self, cid, board) -> bool:
-        """The pressure gate's resolver (the fold of `hold-successor-when-doomed`, ep83037962 f49):
-        True iff the Active is DOOMED (`Board.active_doomed`, the incoming-KO read) and held card
-        ``cid`` ANSWERS the doom — it is the SUCCESSOR (a win-condition with a Line pre-evolution in
-        play: the about-to-die Active's replacement attacker, not a redundant duplicate) or an
-        emergency answer (a `clutch_heal` / `switch` behavioural tag; the switch leg is inert until
-        TAG_TIER prices the tag). Sound facts only; False without doom — a healthy board keeps the
-        closure discount, so cycling stays free."""
+        """The closing-edge resolver (Round 8 §3: a closing gate SPIKES keep — re-access is not
+        bankable against a THIS-TURN deadline, so the card charges full worth). Two closing edges:
+
+        **Deploy-now (ep86091435 f68):** ``cid`` is a hand evolution with an ELIGIBLE in-play base
+        this turn (`Board.deploy_now_ids`) — evolving is a live tempo play; pitching/shuffling it
+        forfeits the play and re-access can't help (you need it NOW). Fires regardless of doom, and
+        REGARDLESS of a same-card copy in play (the benched copy does not cover THIS body's
+        evolution — the covered-vs-open discrimination a flat floor misses, ep83686860 f18 keeps
+        pitching correctly because its base was placed this turn, so it is NOT in ``deploy_now_ids``).
+
+        **Pressure (the fold of `hold-successor-when-doomed`, ep83037962 f49):** the Active is DOOMED
+        and ``cid`` ANSWERS the doom — the SUCCESSOR (a win-condition with a Line pre-evolution in
+        play) or an emergency `clutch_heal` / `switch`. Sound facts only; a healthy board with no
+        deploy-now keeps the closure discount, so cycling stays free."""
+        if cid is not None and cid in getattr(board, "deploy_now_ids", frozenset()):
+            return True
         if not getattr(board, "active_doomed", False):
             return False
         if cid in self._wincon_set() and getattr(board, "line_preevo_in_play", False):

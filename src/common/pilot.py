@@ -525,6 +525,10 @@ class Board:
                                           # PROVABLE famine still fires the stall-gust (dragapult f70)
     immediate_preevo_in_play: bool = False  # the payoff's immediate pre-evo (e.g. Drakloak) is ALREADY on
                                           # my board, so a hand copy of it is redundant — refuel over it
+    deploy_now_ids: frozenset = field(default_factory=frozenset)  # hand card ids that are evolutions with
+                                          # an ELIGIBLE in-play base THIS turn (deploy-now spike, ADR-0065):
+                                          # pitching/shuffling forfeits a live tempo play re-access can't
+                                          # restore, so keep spikes to full worth (`_gate_closing`)
     active_arm_available: bool = False    # go-down-swinging is on the table: the Active is a real ATTACKER
                                           # (not a utility body) whose biggest attack ONE more Energy would
                                           # COMPLETE, and no ready benched win-condition to retreat into —
@@ -2295,9 +2299,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 row["fuel"] = True
             if deploy != 1.0:
                 row["deploy"] = deploy
-            if self._gate_closing(cid, board):
+            # The DEPLOY-NOW spike (closing edge, ep86091435 f68): an in-play same-card copy does NOT
+            # cover THIS body's this-turn evolution, so re-access is not bankable — zero the credit
+            # and the card charges FULL worth. Distinguishes the open Drakloak (keep) from the
+            # just-benched-base one (ep83686860 f18, not in deploy_now_ids -> re-access still credited).
+            closing = self._gate_closing(cid, board)
+            if closing:
                 row["closing"] = True
-            reaccess = 1.0 if (dup or in_play or rec_hand) else 0.0
+            reaccess = 0.0 if closing else (1.0 if (dup or in_play or rec_hand) else 0.0)
             # A SPENT burst (ladder-win 83454549-36): a `discard_eot` Energy is precious until the
             # Active is fully powered — then it self-discards at end of turn anyway, so it is fodder.
             # DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it lives in the shadow's
@@ -3331,6 +3340,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return any(p and p.get("id") in preevos
                    for p in ((me.get("active") or []) + (me.get("bench") or [])))
 
+    def _deploy_now_ids(self, me: dict, turn: int) -> frozenset:
+        """Hand card ids that are evolutions able to be played onto an ELIGIBLE in-play base THIS turn
+        — a body matching the card's ``evolvesFrom`` name in play since last turn (``appearThisTurn``
+        False; rules.md §4: no evolving a body the turn it arrives, and no evolution at all on turn 1).
+        Pitching or shuffling such a card forfeits a live tempo play its re-access cannot restore (the
+        base is here and eligible NOW) — the DEPLOY-NOW closing edge (ep86091435 f68: a hand Drakloak
+        over the active Dreepy). A just-benched base does NOT qualify (ep83686860 f18: two Dreepy
+        placed this turn — no eligible base, so the hand Drakloak stays sheddable). Pure; empty on
+        turn ≤ 1 or without stats."""
+        if not self.stats or turn <= 1:
+            return frozenset()
+        eligible = {getattr(self.stats.get(b.get("id")), "name", None)
+                    for b in ((me.get("active") or []) + (me.get("bench") or []))
+                    if b and not b.get("appearThisTurn")}
+        eligible.discard(None)
+        out = set()
+        for c in (me.get("hand") or []):
+            cid = c.get("id") if c else None
+            st = self.stats.get(cid) if cid is not None else None
+            if st is not None and getattr(st, "evolvesFrom", None) in eligible:
+                out.add(cid)
+        return frozenset(out)
+
     def _attach_from_target_needs(self, obs: dict, select: dict, option: dict) -> bool:
         """At an ATTACH_FROM target-select (the engine's recipient-pick step for a multi-attach
         effect — e.g. Turbo Flare's 'attach a Basic Energy to a Benched Pokémon'), True if the
@@ -3562,6 +3594,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_attack_payable_via_accel=self._active_attack_payable_via_accel(
                 me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
             immediate_preevo_in_play=self._immediate_preevo_in_play(me),
+            deploy_now_ids=self._deploy_now_ids(me, state.get("turn", 0)),
             active_arm_available=self._active_arm_available(ma, self._bench_wincon_ready(me)),
             active_fully_powered=self._active_fully_powered(ma),
             energy_placeable=self._energy_placeable(me),

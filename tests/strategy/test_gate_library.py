@@ -106,6 +106,37 @@ def test_closing_gate_zeroes_the_reaccess_credit():
     assert gate_library.closing_gate_reaccess(0.0, gate_closing=True) == 0.0
 
 
+@pytest.mark.req("REQ-GATE-0006")
+def test_deploy_now_spike_keeps_a_hand_evolution_with_an_eligible_base():
+    """The DEPLOY-NOW spike (the discard convergence's flagship, ep86091435 f68): a hand evolution
+    whose `evolvesFrom` base is in play AND ELIGIBLE (a matching body in play since last turn,
+    `appearThisTurn` False, turn ≥ 2) can be played THIS turn — pitching/shuffling it forfeits a live
+    tempo play its re-access can't restore (you need it NOW). So its closing gate fires and its keep
+    spikes to FULL worth, even with a same-card copy in play. A JUST-benched base (ep83686860 f18: two
+    Dreepy placed this turn) is NOT eligible — no deploy-now, the card stays sheddable."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from train.tune import _build_pilot
+    from common.pilot import Board
+    from common.card_worth import ROLE_TIER
+    dx = _build_pilot("dragapult_ex")[0]
+    DREEPY, DRAKLOAK = 119, 120
+    elig = {"active": [{"id": DREEPY, "appearThisTurn": False}], "bench": [], "hand": [{"id": DRAKLOAK}]}
+    assert DRAKLOAK in dx._deploy_now_ids(elig, turn=10)          # eligible base active -> deploy-now
+    just_benched = {"active": [{"id": 1071}], "hand": [{"id": DRAKLOAK}],
+                    "bench": [{"id": DREEPY, "appearThisTurn": True}]}
+    assert DRAKLOAK not in dx._deploy_now_ids(just_benched, turn=2)   # base placed this turn -> not eligible
+    assert DRAKLOAK not in dx._deploy_now_ids(elig, turn=1)       # turn 1 -> no evolution at all
+    # the spike zeros re-access -> keep at FULL worth even with a same-card copy in play
+    counts = {DRAKLOAK: 1}
+    spike = Board(turn=10, deploy_now_ids=frozenset({DRAKLOAK}), in_play_ids=frozenset({DREEPY, DRAKLOAK}))
+    covered = Board(turn=10, in_play_ids=frozenset({DREEPY, DRAKLOAK}))
+    assert dx._gate_closing(DRAKLOAK, spike) is True
+    assert dx._keep_cost(DRAKLOAK, counts, 40, 6, spike) == ROLE_TIER["win_condition_base"]   # 20, spiked
+    assert dx._keep_cost(DRAKLOAK, counts, 40, 6, covered) < ROLE_TIER["win_condition_base"]  # re-access discount
+
+
 @pytest.mark.req("REQ-GATE-0003")
 def test_pressure_gate_spikes_the_doomed_successor_and_the_clutch_answers():
     """The fold of `hold-successor-when-doomed` (ep83037962 f49): under a DOOMED Active, the held

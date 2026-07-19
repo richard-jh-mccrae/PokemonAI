@@ -101,16 +101,23 @@ def test_pressure_gate_holds_the_successor_when_doomed():
     pilot = _pilot()
     play_harlequin = opt(PLAY, area=HAND, index=0)
     attack = attack_opt(JETTING)                                # Jetting Blow available (1 W attached)
-    doomed = state(active=poke(WINCON, energy=1, hp=100), bench=[poke(PREEVO, energy=0, hp=70)],
+    # The benched Staryu is JUST-benched (`appearThisTurn`) so it is NOT an eligible base this turn —
+    # isolating the PRESSURE gate from the separate DEPLOY-NOW spike (a deployable hand wincon, tested
+    # in test_gate_library). `line_preevo_in_play` still holds (a preevo IS in play, appearThisTurn
+    # aside), which is the pressure premise.
+    just_benched = {**poke(PREEVO, energy=0, hp=70), "appearThisTurn": True}
+    doomed = state(active=poke(WINCON, energy=1, hp=100), bench=[just_benched],
                    opp_active=poke(678, hp=210), hand=[HARLEQUIN, WINCON])
     obs = make_select([play_harlequin, attack], current=doomed)
     b = pilot._board(obs)
     assert b.active_doomed and b.wincon_in_hand and b.line_preevo_in_play  # the premise
-    assert pilot._gate_closing(WINCON, b)                       # the successor's gate is CLOSING
+    assert pilot._gate_closing(WINCON, b)                       # the successor's gate is CLOSING (pressure)
+    assert WINCON not in b.deploy_now_ids                       # …via pressure, not deploy-now (isolated)
     assert pilot.decide(obs) == [1]                             # attack; don't shuffle successor away
 
-    # Control — HEALTHY Active: the hand copy keeps its closure discount (no spike), shuffle's fine.
-    healthy = state(active=poke(WINCON, energy=1, hp=330), bench=[poke(PREEVO, energy=0, hp=70)],
+    # Control — HEALTHY Active, base just-benched: no doom AND no deploy-now, so no spike — the hand
+    # copy keeps its closure discount, shuffle's fine.
+    healthy = state(active=poke(WINCON, energy=1, hp=330), bench=[just_benched],
                     opp_active=poke(678, hp=210), hand=[HARLEQUIN, WINCON])
     obs_h = make_select([play_harlequin, attack], current=healthy)
     b_h = pilot._board(obs_h)
