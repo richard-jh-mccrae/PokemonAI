@@ -58,7 +58,9 @@ def test_role_value_pure_function_owns_the_tier_and_fallbacks():
     assert role_value([]) == 0.0
     assert role_value([], is_typed_basic_energy=True) == ENERGY_TIER
     assert role_value([], is_ace_spec=True) == ACE_SPEC_TIER
-    assert role_value(["engine"], is_ace_spec=True) == ROLE_TIER["engine"]   # a real role beats fallback
+    # MAX semantics (revised with the TAG_TIER build): the best claim wins — an ACE SPEC that also
+    # declares a modest role is still one-per-deck irreplaceable (25 > engine 12).
+    assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER
     assert role_value(["not_a_real_role"]) == 0.0                            # unknown role -> no worth
     # parity: the Pilot delegator reproduces the pure function on real cards
     ml = _shipped_pilot("mega_lucario")
@@ -68,6 +70,26 @@ def test_role_value_pure_function_owns_the_tier_and_fallbacks():
                             is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
                             is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)))
         assert ml._role_value(cid) == expect
+
+
+@pytest.mark.req("REQ-WORTH-0004")
+def test_role_value_reads_tag_derived_worth():
+    """The worth-coverage fix (combat-tempo findings §B): situational Trainers / special Energy carry
+    their keep-value in behavioural TAGS the discard ladder already trusts (`keep-key` −30 covers
+    `discard_eot`; `dont-waste-clutch-heal`; `keep-gust-and-recovery` −10) — `role_value` now reads a
+    TAG_TIER so the ONE currency covers them. Worth = the MAX claim across roles, tags, and the
+    ACE-SPEC / energy fallbacks."""
+    from common.card_worth import role_value, ROLE_TIER, TAG_TIER, ACE_SPEC_TIER
+    assert role_value([], tags=["discard_eot"]) == TAG_TIER["discard_eot"]      # the Ignition burst
+    assert role_value([], tags=["clutch_heal"]) == TAG_TIER["clutch_heal"]      # Wally's Compassion
+    assert role_value([], tags=["gust"]) == TAG_TIER["gust"]                    # Boss's Orders
+    assert role_value([], tags=["recycle"]) == TAG_TIER["recycle"]              # Night Stretcher
+    assert role_value([], tags=["hand_disruption"]) == 0.0                      # an untiered tag: no claim
+    # MAX-join: the best claim wins — a declared role does not CAP a higher tag/fallback worth.
+    assert role_value(["accel_source"], tags=["discard_eot"]) == max(
+        ROLE_TIER["accel_source"], TAG_TIER["discard_eot"])
+    assert role_value(["win_condition"], tags=["gust"]) == ROLE_TIER["win_condition"]
+    assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER            # 25 > engine 12
 
 
 @pytest.mark.req("REQ-WORTH-0001")

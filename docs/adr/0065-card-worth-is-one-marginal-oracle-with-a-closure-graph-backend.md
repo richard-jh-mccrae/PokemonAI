@@ -42,6 +42,13 @@ comparator) and ADR-0032 (Effect-Clause tier).
 - **The coverage lint (Round 9 §5):** `tests/strategy/test_role_coverage.py` — no card silently
   priced at zero from a typo (every declared role is known vocabulary; every ROLES key is a real
   deck card; every worth-roled card prices positive).
+- **The TAG_TIER worth coverage (2026-07-19, combat-tempo findings §B):** `role_value` = the MAX
+  claim across roles, behavioural tags (`TAG_TIER`: `discard_eot` 30 / `clutch_heal` 20 / `gust` 10
+  / `recycle` 10 — the discard ladder's keep bands mirrored into the one currency), and the
+  ACE-SPEC / energy fallbacks. Closes the gap where the DISCARD ladder priced Ignition / Wally's
+  but the worth oracle saw 0, so the graded refresh shed shuffled them away for free. Two corpus
+  targets flipped and promoted (`82749168-65`, `83969481-55`); ADR-0060's parked "hand QUALITY"
+  seam, now concretely covered for the tagged classes.
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

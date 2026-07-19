@@ -58,6 +58,13 @@ PINS = {
     "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
                    "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
     # shuffle timing & keep-value (the refresh side)
+    # Flipped by the TAG_TIER worth-coverage build (combat-tempo findings §B): the discard ladder's
+    # keep-value tags (`discard_eot`, `clutch_heal`) now carry worth, so the graded shed charges for
+    # shuffling them and the refresh stands down — the agent attacks instead.
+    "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
+                   "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
+    "83969481-55": "worth: Lillie's stands down (−1.9) holding the Wally's that answers next-turn "
+                   "Nebula — `clutch_heal` worth 20, promoted from a TARGET",
     "83686860-13": "keep: don't refresh a live hand — end the turn",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
@@ -85,15 +92,6 @@ TARGETS = {
     "85163634-17": "hold: fetch one turn early = Judge exposure — the held-card-risk tier-2 seam "
                    "(spec §Round 8 §5, explicitly deferred): fetch-late beats fetch-early when "
                    "disruption is live. Not keep-value, not the gate library.",
-    # worth-coverage: the refresh SHED under-prices situational Trainers/special Energy — their
-    # keep-value lives in the DISCARD ladder (keep-key −30 covers `discard_eot`; dont-waste-clutch-
-    # heal) but `role_value` prices them 0 (no ROLE, no tag fallback), so the graded shed lets the
-    # refresh stay positive and it plays (tier 3) before the deferred attack. The identified fix:
-    # tag-derived worth fallbacks (Round 9 'engine from Function Tags'), measured before flipping.
-    "82749168-65": "worth: Lillie's (+) shuffles back the Ignition burst before a KO attack — "
-                   "Ignition (`discard_eot`) prices 0 in role_value, so hand_keep can't see it",
-    "83969481-55": "worth: Lillie's (+10) shuffles back Wally's Compassion (clutch_heal, role 0) "
-                   "that answers next-turn Nebula Beam — same coverage gap + a pressure deadline",
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
 # the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the

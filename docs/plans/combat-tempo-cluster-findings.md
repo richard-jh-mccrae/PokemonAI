@@ -1,8 +1,14 @@
 # Findings: the combat/tempo corpus cluster (investigated 2026-07-18)
 
-**Status.** Investigation COMPLETE; corpus reclassified accordingly (substance pins + corrected
-diagnoses, `tests/strategy/test_hyperclosure_corpus.py`). One identified build follow-up (worth
-tag-fallbacks, below) — NOT yet built.
+**Status.** Investigation COMPLETE; corpus reclassified (substance pins + corrected diagnoses).
+**The worth tag-fallbacks (group B) are BUILT 2026-07-19** — `card_worth.TAG_TIER`
+(`discard_eot` 30 / `clutch_heal` 20 / `gust` 10 / `recycle` 10, mirroring the discard ladder's
+bands) + MAX-join semantics in `role_value`; the Pilot passes `functions.tags`. **Both group-B
+targets flipped** (`82749168-65`, `83969481-55` — Lillie's stands down, the agent attacks) and are
+promoted to corpus pins; the six ADR-0060 pins, the gamble suite, and the broad
+strategy/blunder/agents sweep all hold. Calibration note: `discard_eot` seeded at 20 flipped only
+the Wally's target; 30 — the ladder's own keep-key band (the burst sits in the same −30 floor as
+the wincon) — flips both, and is the faithful mirror rather than a fit.
 
 ## Method
 

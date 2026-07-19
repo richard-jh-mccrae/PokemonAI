@@ -29,20 +29,34 @@ ROLE_TIER: dict[str, float] = {
 ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the old flat-shed anchor
 ACE_SPEC_TIER = 25.0              # a one-per-deck, unrecoverable ACE SPEC — high floor, closure-discounted
 
+# behavioural tag → worth points (combat-tempo findings §B): situational Trainers / special Energy
+# whose keep-value the DISCARD ladder already prices (`keep-key-cards-at-discard` −30 covers
+# `discard_eot`; `dont-waste-clutch-heal` −40; `keep-gust-and-recovery-at-discard` −10) but the worth
+# oracle could not see — a role-less Wally's / Ignition shuffled away for free. Mirrors the ladder's
+# bands into the ONE currency, scaled to ROLE_TIER (wincon 30 ↔ keep-key −30).
+TAG_TIER: dict[str, float] = {
+    "discard_eot": 30.0,          # a burst Energy (Ignition) — the ladder keep-key band (same −30 as the wincon)
+    "clutch_heal": 20.0,          # the emergency heal (Wally's) — answers a specific incoming KO
+    "gust": 10.0,                 # reach (Boss's Orders) — the ladder's −10 keep floor
+    "recycle": 10.0,              # recovery (Night Stretcher / Super Rod) — same band
+}
 
-def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = False) -> float:
-    """A card's BASE worth = the tuned `ROLE_TIER` max over its declared / derived ``roles``, with the
-    ACE-SPEC and typed-Basic-Energy fallbacks for a card a deck leaves un-Roled (WP7, ADR-0065). The
+
+def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = False,
+               tags=()) -> float:
+    """A card's BASE worth = the MAX claim across its declared / derived ``roles`` (`ROLE_TIER`), its
+    behavioural ``tags`` (`TAG_TIER`), and the ACE-SPEC / typed-Basic-Energy fallbacks (WP7,
+    ADR-0065). Max, not sum — worth is the card's best job, and a declared modest role never CAPS a
+    higher tag/fallback claim (a declared-engine ACE SPEC is still one-per-deck irreplaceable). The
     ONE currency zone; deck-genie never invents numbers, the closure supplies the redundancy discount
-    (`keep_cost`). 0 for a role-less non-energy, non-ACE-SPEC card (priced by tag/CardStat rules, not
-    the worth oracle). Pure over card FACTS — the Pilot supplies ``roles`` / the two flags."""
-    base = max((ROLE_TIER.get(r, 0.0) for r in roles), default=0.0)
-    if base <= 0:
-        if is_ace_spec:
-            return ACE_SPEC_TIER                  # a one-per-deck, unrecoverable ACE SPEC
-        if is_typed_basic_energy:
-            return ENERGY_TIER
-    return base
+    (`keep_cost`). 0 for a card with no claim (priced by tag/CardStat rules, not the worth oracle).
+    Pure over card FACTS — the Pilot supplies ``roles`` / ``tags`` / the two flags."""
+    return max(
+        max((ROLE_TIER.get(r, 0.0) for r in roles), default=0.0),
+        max((TAG_TIER.get(t, 0.0) for t in tags), default=0.0),
+        ACE_SPEC_TIER if is_ace_spec else 0.0,
+        ENERGY_TIER if is_typed_basic_energy else 0.0,
+    )
 
 
 def keep_cost(role_value: float, reaccess_odds: float, deadline_odds: float = 1.0) -> float:

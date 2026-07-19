@@ -1711,15 +1711,17 @@ class PlannerMixin:
         return fetch_closure.reaccess_outs(cid, counts, self._closure_stat_of, self._closure_clauses_of)
 
     def _role_value(self, cid) -> float:
-        """WP6/WP7: card ``cid``'s base worth = the tuned tier max over its declared / derived Roles
-        (`_roles_of`), with the energy and ACE-SPEC fallbacks. Delegates to `card_worth.role_value`
-        (ADR-0065) — the ONE currency zone; the Pilot only supplies the card facts."""
+        """WP6/WP7: card ``cid``'s base worth = the MAX claim over its declared / derived Roles
+        (`_roles_of`), its behavioural tags (`TAG_TIER` — the worth-coverage fix for situational
+        Trainers/special Energy), and the energy / ACE-SPEC fallbacks. Delegates to
+        `card_worth.role_value` (ADR-0065) — the ONE currency zone; the Pilot only supplies facts."""
         from common.card_worth import role_value
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
         return role_value(
             self._roles_of(cid),
             is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
-            is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)))
+            is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)),
+            tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())
 
     def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None) -> float:
         """WP6/WP7: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it
