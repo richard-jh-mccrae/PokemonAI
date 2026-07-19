@@ -11,7 +11,6 @@ Role-Sheet pipeline (deck-genie declares / the deriver derives — the WP7 skill
 Trainers/Energy are legitimately un-Roled today and priced by tag/CardStat rules, not the worth oracle.
 This lint pins what is soundly checkable NOW: the declared vocabulary is well-formed and wired.
 """
-import importlib
 import sys
 from pathlib import Path
 
@@ -27,11 +26,6 @@ AGENTS = ["mega_lucario", "mega_starmie", "dragapult_ex"]
 BEHAVIOURAL_ROLES = frozenset({"gust", "retreat_tool", "disruption", "recovery", "starter"})
 
 
-def _strategy(agent):
-    sys.path.insert(0, str(REPO / "src"))
-    return importlib.import_module(f"agents.{agent}.strategy")
-
-
 def _shipped_pilot(agent):
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
@@ -41,12 +35,14 @@ def _shipped_pilot(agent):
 @pytest.mark.req("REQ-WORTH-0003")
 @pytest.mark.parametrize("agent", AGENTS)
 def test_every_declared_role_is_known_vocabulary(agent):
-    """No card silently priced at zero from a typo: every role string in `strategy.ROLES` is either a
-    `card_worth.ROLE_TIER` worth tier or a documented behavioural role."""
+    """No card silently priced at zero from a typo: every declared role (the compiled
+    `pilot.strategy.roles`) is either a `card_worth.ROLE_TIER` worth tier or a documented behavioural
+    role. Reads the roles through the built Pilot — NOT a bare ``import agents.<x>.strategy``, which
+    collides with `kaggle_environments`' own top-level ``agents`` module in the CI env."""
     from common.card_worth import ROLE_TIER
     known = set(ROLE_TIER) | BEHAVIOURAL_ROLES
-    strat = _strategy(agent)
-    unknown = {r for roles in strat.ROLES.values() for r in roles if r not in known}
+    roles_map = _shipped_pilot(agent).strategy.roles
+    unknown = {r for roles in roles_map.values() for r in roles if r not in known}
     assert not unknown, f"{agent}: unknown role string(s) {sorted(unknown)} — a typo prices the card 0"
 
 
