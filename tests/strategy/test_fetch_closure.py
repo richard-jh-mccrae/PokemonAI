@@ -46,6 +46,31 @@ def test_fetch_target_matches_is_the_one_clause_predicate():
 
 
 @pytest.mark.req("REQ-WORTH-0002")
+def test_trigger_and_dig_clauses_are_never_closure_edges():
+    """A ``trigger``-gated fetch (Meowth ex's on-bench-play Supporter grab) or a ``dig`` (Pokégear's
+    top-7 look) is NOT the unconditional whole-deck search the closure model assumes — the predicate
+    rejects such a clause outright, even when its target class would otherwise match. Previously both
+    carriers fell through only because no ``supporter`` branch existed; this pins the rejection as
+    load-bearing, so a future branch (or a new trigger/dig clause on a handled target) cannot silently
+    promote a conditional fetch to a deterministic out."""
+    from common import fetch_closure
+    ml = _shipped_pilot("mega_lucario")
+    ml_ex = ml.stats.get(678)
+    energy = ml.stats.get(6)
+    assert fetch_closure.fetch_target_matches({"target": "mega"}, ml_ex) is True
+    assert fetch_closure.fetch_target_matches({"target": "mega", "dig": 7}, ml_ex) is False
+    assert fetch_closure.fetch_target_matches({"target": "mega", "trigger": "on_bench_play"}, ml_ex) is False
+    assert fetch_closure.fetch_target_matches({"target": "basic_energy", "dig": 7}, energy) is False
+    # the real carriers (card_effects.json): Meowth ex 1071 (trigger) and Pokégear 1122 (dig) — a
+    # shuffled-away Supporter's re-access outs must not count either as a deck-search tutor
+    stat_of, clauses_of = _accessors(ml)
+    for cid in (1071, 1122):
+        for cl in clauses_of(cid):
+            if cl.get("kind") == "fetch":
+                assert fetch_closure.fetch_target_matches(cl, ml.stats.get(1182)) is False
+
+
+@pytest.mark.req("REQ-WORTH-0002")
 def test_reaccess_outs_pure_function_matches_the_pilot():
     """`fetch_closure.reaccess_outs(cid, counts, stat_of, clauses_of)` == the Pilot's
     `_card_reaccess_outs(cid, counts)` — the closure pointed backwards, now Pilot-free."""

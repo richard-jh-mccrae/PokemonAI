@@ -36,9 +36,17 @@ def fetch_target_matches(clause: dict, stat) -> bool:
     NOTE: ``energy_type`` on a POKÉMON target (Fighting Gong's "Basic {F} Pokémon") is NOT resolvable
     from ``CardStat`` (no Pokémon-type field), so it is applied only to ENERGY targets — a Pokémon
     target over-includes on type (fail-open; never false-suppresses a whiff; exact for a mono-type deck).
+
+    A clause carrying ``trigger`` (a play-gated ability, Meowth ex's on-bench fetch) or ``dig``
+    (a top-N look, Pokégear's dig-7) is REJECTED outright: neither is the unconditional whole-deck
+    search the closure's deterministic-interior-hop model assumes (spec §thesis), so counting one as
+    an out would over-claim. Today both carriers are ``target: supporter`` clauses that no branch
+    below matches anyway — this guard makes that rejection load-bearing instead of accidental.
     """
     if stat is None:
         return False
+    if clause.get("trigger") or clause.get("dig"):
+        return False                       # not an unconditional whole-deck search — never a closure edge
     target = clause.get("target")
     etype = clause.get("energy_type")
     if target == "basic_energy":
