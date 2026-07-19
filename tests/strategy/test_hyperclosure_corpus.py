@@ -57,6 +57,11 @@ PINS = {
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
     "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
                    "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
+    "85163634-17": "hold: attack (Turbo Flare) — fetch one turn early = disruption exposure; the "
+                   "held-card-risk build (spec §Round 8 §5): `dont-fetch-before-the-deadline` stands "
+                   "the Ultra Ball down (the Mega lands only next turn) and "
+                   "`dont-shuffle-away-the-deferred-fetch` holds the Lillie's that would nuke the "
+                   "deferred plan's vehicle. Promoted from a TARGET (tests/strategy/test_held_card_risk.py)",
     # shuffle timing & keep-value (the refresh side)
     # Flipped by the TAG_TIER worth-coverage build (combat-tempo findings §B): the discard ladder's
     # keep-value tags (`discard_eot`, `clutch_heal`) now carry worth, so the graded shed charges for
@@ -89,9 +94,6 @@ TARGETS = {
     "86091728-19": "attach: the {P} belongs on the benched Dreepy (2nd line), not the Active — the "
                    "Ultra Ball substance is FIXED; the residue is attach-target priority "
                    "(`prefer-active-attach-in-setup` +8 tips it Active). A minor separate axis.",
-    "85163634-17": "hold: fetch one turn early = Judge exposure — the held-card-risk tier-2 seam "
-                   "(spec §Round 8 §5, explicitly deferred): fetch-late beats fetch-early when "
-                   "disruption is live. Not keep-value, not the gate library.",
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
 # the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the
