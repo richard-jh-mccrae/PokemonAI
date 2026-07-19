@@ -10,8 +10,9 @@ seams merge, rebased on everything.
 - `83686860-18` (substance PIN) must HOLD: a Drakloak with a benched copy already covering the
   evolution is still correctly pitched.
 A flat keep-floor cannot tell these boards apart — that discrimination is the seam's whole point,
-and it is why this was NOT hacked in as a rung during the gate-library Stage 1 build (see
-`docs/plans/gate-library-scope.md` Stage 1 note and the ADR-0065 grab/pitch finding).
+and it is why this was NOT hacked in as a rung during the gate-library Stage 1 build (the
+gate-library scope doc — retired 2026-07-19, all four gate legs built — recorded the deliberate
+deferral; see ADR-0065 §Build status and its grab/pitch finding).
 
 ## Grill status: ⚠️ the keep-cost math is grilled — the LADDER-REPLACEMENT PATH IS NOT
 

@@ -3,8 +3,9 @@
 **Status:** GRILLED 2026-07-17 (session grill — every claim source-verified; design corrected and
 re-scoped below). Original note 2026-07-16. **BUILT 2026-07-18/19** — WP1–WP6 landed and WP7's core
 seam shipped suite-green; this file stays as the grill RECORD (rounds 1–14: the rulings and their
-provenance). The LIVING build status is ADR-0065 §Build status; the staged remainder is scoped in
-`gate-library-scope.md` (gate stages 2–4) and the `seam-*.md` docs.
+provenance). The LIVING build status is ADR-0065 §Build status; the staged remainder is
+`seam-discard-convergence.md` (the gate library itself completed 2026-07-19 — all four legs built,
+its scope doc retired).
 **Owner concern (user, 2026-07-16):** the naive "P(draw the energy)" hypergeometric **undercounts** the
 true probability of *assembling* what you need, because the outs are not just literal target cards — they
 include **tutor/fetch chains** and **hand-expanding draws**. This biases every downstream consumer

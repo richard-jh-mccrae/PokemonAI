@@ -93,6 +93,20 @@ comparator) and ADR-0032 (Effect-Clause tier).
   stays ADR-0064's. (b) **First-reveal information credit — CLOSED refuted-for-now** (every shipped
   fetch anchors; fetch-early is correction-refuted `85163634-17`; sequencing owned by
   `dig-before-commit`), revival gate recorded on the spec checklist. Suite + corpus green (3096).
+- **The pressure + quota gates — the gate library COMPLETE (2026-07-19, TDD).** Stage 3, the
+  **pressure gate** (`gate_library.closing_gate_reaccess` via `planner._gate_closing`): under a
+  doomed Active, the held cards that ANSWER the doom — the successor wincon with its Line
+  pre-evolution in play, and the `clutch_heal` / `switch` tags — charge FULL role worth (the
+  Round-8 §3 closing-edge spike: a probabilistic redraw is not bankable against the doom deadline).
+  This retired **`hold-successor-when-doomed` (−35), the LAST flat refresh guard**: at its anchor
+  (ep83037962 f49) Harlequin prices **−12.0 through the graded equation alone** (was −23.9 with
+  the rung; +11.1 with neither), the substance pin and the synthetic pair re-audited green. Stage
+  4, the **quota gate** (`gate_library.quota_window` in `_hand_keep`): the k-th held copy of a
+  once-per-turn card (Energy attach / Supporter slot, rules.md §3) has deadline k−1 turns (+1 on a
+  spent quota — `energy_attached` / `supporter_played` / the played refresh being a Supporter), so
+  each rank's re-access window widens by its turns of natural draws — "the 3rd hand Energy is
+  near-free" is now derived. The ADR-0060 keep pins and the TAG_TIER pins hold under both. Suite +
+  corpus green (3100).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
@@ -125,10 +139,11 @@ already converged; its residue rides with the gate library.
   unseen deck, so nothing is discounted — it bites only a genuinely dead card), unit- and
   synthetic-integration-tested (`test_gate_library.py`, `test_undeployable_wincon_is_cheap_to_shuffle_
   but_a_deployable_one_is_not`), zero regressions.
-  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). The
-  searcher/recycler leg landed 2026-07-19 (the fetcher gate — see the reconciliation bullet above);
-  later stages (quota / pressure gates; the discard-side `86091435-68` which needs a principled
-  discard convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
+  The scope/staging plan doc is retired — every stage it scoped is now BUILT: the fetcher gate
+  (2026-07-19, the reconciliation bullet above), the **pressure gate** and the **quota gate**
+  (2026-07-19, the bullet below). The one remaining gate-adjacent piece — the discard-side
+  deploy-now spike (`86091435-68`), which needs a principled discard convergence first, NOT a flat
+  rung — is owned by `docs/plans/seam-discard-convergence.md`.
 - ~~The held-card-risk tier-2 seam (Round 8 §5)~~ **BUILT 2026-07-19**
   (`dont-fetch-before-the-deadline` + `dont-shuffle-away-the-deferred-fetch`,
   `tests/strategy/test_held_card_risk.py`;

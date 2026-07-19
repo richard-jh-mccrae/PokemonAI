@@ -99,8 +99,12 @@ HYPOTHESES = [
     # = Σ keep_cost over the actual hand), so a held wincon/line-piece is priced by role value × how
     # UN-recoverable it is through the closure — the guards fold into that one currency (the
     # currency-zone rule: replace the family, never bolt on beside it). `hold-successor-when-doomed`
-    # (below) survives: its `active_doomed` premise is a DEADLINE the fixed re-access window doesn't
-    # yet model (the gate library, staged), not a pure keep-value the closure already prices.
+    # (−35) RETIRED 2026-07-19 — the LAST flat refresh guard: its `active_doomed` premise is now the
+    # PRESSURE GATE (`gate_library.closing_gate_reaccess` via `planner._gate_closing`, the Round-8 §3
+    # closing-edge spike): under doom the held successor / clutch answers charge FULL role worth in
+    # the graded SHED (re-access is not bankable against the doom deadline), so the fold is a
+    # parameter of the one equation, not a rung. Anchor ep83037962 f49 re-audited (the substance pin
+    # + the synthetic pair in test_blunder_20260701.py).
     # `dont-refresh-for-nothing` (−40, the sound deck_holds_a_need veto) was built THEN DELETED at the
     # 2026-07-03 A/B (43%/47% regressions): grab-rung "needs" under-count refresh VALUE for a deck
     # whose engine is the refresh itself, and the veto fired on that false premise all game. The
@@ -121,16 +125,4 @@ HYPOTHESES = [
     # `refresh-when-hand-is-dead` (+8) RETIRED 2026-07-03 (ADR-0024 amendment): post-refutation the
     # +20 `dig-before-commit` endorsement plays a dead-hand refresh anyway (nothing else is endorsed),
     # so the rung and its full-menu `hand_is_dead` scan added compute and test surface, no behavior.
-    Hypothesis(
-        id="hold-successor-when-doomed",
-        rationale="Don't shuffle away the hand when the Active win-condition is DOOMED and the hand holds "
-                  "the rebuild successor (`wincon_in_hand` PLUS `line_preevo_in_play`) — the case the "
-                  "other holds miss, since they stand down once the win-condition is in PLAY, but an "
-                  "about-to-be-KO'd in-play copy makes the hand copy the NEXT attacker, not a redundant "
-                  "duplicate: hold the successor and develop instead (ep83037962 f49 — Harlequin "
-                  "gambling away a benchable Mega Starmie ex + two Water). Weighted (−35) to net below "
-                  "0 against `dig-before-commit` (+20); narrow, so a healthy board still cycles freely.",
-        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.active_doomed and c.board.wincon_in_hand and c.board.line_preevo_in_play,
-        weight=-35, status="testing"),
 ]

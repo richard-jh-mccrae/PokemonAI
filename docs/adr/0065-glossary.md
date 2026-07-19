@@ -28,7 +28,7 @@ value = Worth × Odds
 
 | Term | Definition | Module | Aliases to avoid |
 | --- | --- | --- | --- |
-| **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a dead fetcher (every target provably gone) likewise; a deploy-now body spikes. Evolution + fetcher (searcher/recycler) gates built; quota/pressure gates scoped, not built. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
+| **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a dead fetcher (every target provably gone) likewise; a doom-answering card under pressure SPIKES to full worth (the closing edge); a duplicate of a once-per-turn card sheds by rank (the quota window). All four legs built 2026-07-18/19. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
 | **Closure** | WHAT can reach what — the tutor/recycle/search graph over the card REPRESENTATION (`card_effects.json` FETCH clauses + `CardStat`), never a text parse. Pure graph; carries no Odds or Worth of its own. | `common/fetch_closure.py` | reach (avoid as a noun — used adjectivally, "reachable"), the graph (fine in prose) |
 
 ## Relationships

@@ -1,4 +1,4 @@
-"""The deadline gate library (ADR-0065; grill Rounds 8-9, `docs/plans/gate-library-scope.md`).
+"""The deadline gate library (ADR-0065; grill Rounds 8-9; scope plan doc retired — all four legs built).
 
 `keep_cost = role_value × [P(need met by deadline | keep) − P(met | shuffle)]`. The gate supplies the
 first factor of that difference as ``deploy_odds`` — P(the card's ROLE is realisable by its deadline) —
@@ -58,6 +58,119 @@ def test_fetch_deploy_odds_gates_a_dead_fetcher():
     assert gate_library.fetch_deploy_odds(targets_exhausted=True) == 0.0
     assert gate_library.fetch_deploy_odds(targets_exhausted=False) == 1.0
     assert gate_library.fetch_deploy_odds() == 1.0
+
+
+@pytest.mark.req("REQ-GATE-0003")
+def test_closing_gate_zeroes_the_reaccess_credit():
+    """The pressure gate's primitive (spec Round 8 §3: gates CLOSE, and a closing edge SPIKES
+    keep-cost): P(met | shuffle) counts re-access only if it arrives before the gate closes. When
+    the card's gate is closing NOW, a probabilistic redraw is not an answer the plan can bank on —
+    the re-access credit is zeroed, so keep_cost charges the full role worth. Pass-through
+    otherwise."""
+    assert gate_library.closing_gate_reaccess(0.7) == 0.7
+    assert gate_library.closing_gate_reaccess(0.7, gate_closing=False) == 0.7
+    assert gate_library.closing_gate_reaccess(0.7, gate_closing=True) == 0.0
+    assert gate_library.closing_gate_reaccess(0.0, gate_closing=True) == 0.0
+
+
+@pytest.mark.req("REQ-GATE-0003")
+def test_pressure_gate_spikes_the_doomed_successor_and_the_clutch_answers():
+    """The fold of `hold-successor-when-doomed` (ep83037962 f49): under a DOOMED Active, the held
+    SUCCESSOR (a win-condition with its Line pre-evolution in play — the next attacker, not a
+    redundant duplicate) and the clutch answers (`clutch_heal` / `switch` Trainers) charge their
+    FULL role worth — the closure's re-access discount is a probabilistic redraw the doom deadline
+    cannot bank on. A healthy board keeps the graded discount; a non-answer card (an Energy) never
+    spikes; and a successor whose base is provably GONE stays dead (the evolution gate outranks —
+    dead is dead, doom or not)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from train.tune import _build_pilot
+    from common.pilot import Board
+    from common.card_worth import ROLE_TIER, TAG_TIER
+    ms = _build_pilot("mega_starmie")[0]
+    staryu = next(c for c in set(ms.deck)
+                  if getattr(ms.stats.get(c), "name", None) == "Staryu")
+    counts = {1031: 1, 1121: 4, 1145: 2, staryu: 3}     # successor + Ultra Ball + Mega Signal + bases
+    pool, draws = 40, 6
+    healthy = Board()
+    doomed = Board(active_doomed=True, line_preevo_in_play=True,
+                   in_play_ids=frozenset({staryu}))
+    graded = ms._keep_cost(1031, counts, pool, draws, healthy)
+    assert 0 < graded < ROLE_TIER["win_condition"]       # healthy: the closure discount applies
+    assert ms._keep_cost(1031, counts, pool, draws, doomed) == ROLE_TIER["win_condition"]
+    # the clutch heal spikes to its full TAG_TIER worth under doom
+    heal_counts = {1229: 2, 1121: 4}
+    assert ms._keep_cost(1229, heal_counts, pool, draws, healthy) < TAG_TIER["clutch_heal"]
+    assert ms._keep_cost(1229, heal_counts, pool, draws, doomed) == TAG_TIER["clutch_heal"]
+    # a non-answer card (typed Basic Energy) is untouched by the doom
+    e = next(c for c in set(ms.deck)
+             if getattr(ms.stats.get(c), "is_typed_basic_energy", False))
+    assert (ms._keep_cost(e, {e: 8}, pool, draws, doomed)
+            == ms._keep_cost(e, {e: 8}, pool, draws, healthy))
+    # dead is dead: no Staryu anywhere -> the evolution gate zeroes the successor, doom or not
+    dead = Board(active_doomed=True, line_preevo_in_play=False)
+    assert ms._keep_cost(1031, {1031: 1, 1121: 4}, pool, draws, dead) == 0.0
+
+
+@pytest.mark.req("REQ-GATE-0004")
+def test_quota_window_widens_with_copy_rank_and_spent_quota():
+    """The quota gate's primitive (spec Round 8 §2: resource quotas are gates — the k-th held copy
+    of a once-per-turn card has deadline k−1 turns, so every intervening turn adds its natural draw
+    of re-access before that copy is needed). Rank 1 with the quota live keeps the plain window;
+    a spent quota shifts every rank one turn further out."""
+    assert gate_library.quota_window(6, 1) == 6                  # the first copy: needed now
+    assert gate_library.quota_window(6, 2) == 7                  # 2nd copy: one turn of draws first
+    assert gate_library.quota_window(6, 3) == 8
+    assert gate_library.quota_window(6, 1, quota_spent=True) == 7    # attach/slot already used
+    assert gate_library.quota_window(6, 3, quota_spent=True) == 9
+    assert gate_library.quota_window(6, 0) == 6                  # a degenerate rank never narrows
+
+
+@pytest.mark.req("REQ-GATE-0004")
+def test_hand_keep_prices_quota_duplicates_by_their_deadline_rank():
+    """The quota gate wired into `_hand_keep`: duplicate copies of a ONCE-PER-TURN card (Energy —
+    1 manual attach; Supporter — 1 per turn, rules.md §3) charge by RANK — the k-th copy's
+    re-access window widens by its k−1 turns of natural draws, so the 3rd held Energy is cheaper to
+    shuffle than the 1st (the spec's own derivation). A lone copy with the quota live is unchanged;
+    a spent quota (`energy_attached`; a Supporter refresh being the played card) widens every rank;
+    non-quota duplicates (a Pokémon) are untouched."""
+    import sys
+    from math import isclose
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from train.tune import _build_pilot
+    from common.pilot import Board
+    ms = _build_pilot("mega_starmie")[0]
+    e = next(c for c in set(ms.deck)
+             if getattr(ms.stats.get(c), "is_typed_basic_energy", False))
+    counts, pool, draws = {e: 8}, 40, 6
+    live = Board()
+    # a lone held copy with the quota live: the plain window — unchanged by the gate
+    assert isclose(ms._hand_keep([e], None, counts, pool, draws, live),
+                   ms._keep_cost(e, counts, pool, draws, live))
+    # three held copies: rank-widened windows -> strictly cheaper than three uniform charges
+    uniform3 = 3 * ms._keep_cost(e, counts, pool, draws, live, shuffled_copies=3)
+    ranked3 = ms._hand_keep([e, e, e], None, counts, pool, draws, live)
+    expect3 = sum(ms._keep_cost(e, counts, pool, gate_library.quota_window(draws, j), live,
+                                shuffled_copies=3) for j in (1, 2, 3))
+    assert isclose(ranked3, expect3)
+    assert 0 < ranked3 < uniform3
+    # a spent attach quota widens every rank -> cheaper still
+    spent = Board(energy_attached=True)
+    assert ms._hand_keep([e, e, e], None, counts, pool, draws, spent) < ranked3
+    # the SUPPORTER leg: playing a Supporter refresh spends the slot, so even a lone held
+    # worth-carrying Supporter (Wally's, `clutch_heal` 20) shifts a turn out
+    wallys = 1229
+    sup_counts = {wallys: 2}
+    played_sup = 1223                                            # Harlequin, a Supporter refresh
+    one = ms._hand_keep([wallys], None, sup_counts, pool, draws, live)
+    one_after_sup = ms._hand_keep([wallys, played_sup], played_sup, sup_counts, pool, draws, live)
+    assert 0 < one_after_sup < one
+    # non-quota duplicates (the wincon, a Pokémon) keep the uniform marginal price
+    w_counts = {1031: 1, 1121: 4}
+    assert isclose(ms._hand_keep([1031, 1031], None, w_counts, pool, draws, live),
+                   2 * ms._keep_cost(1031, w_counts, pool, draws, live, shuffled_copies=2))
 
 
 @pytest.mark.req("REQ-GATE-0002")

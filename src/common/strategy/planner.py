@@ -1768,6 +1768,7 @@ class PlannerMixin:
         role_value = self._role_value(cid)
         if role_value <= 0:
             return 0.0
+        from common import gate_library
         from common.card_worth import keep_cost
         from common.deck_odds import draw_hit_probability
         outs = self._card_reaccess_outs(cid, counts)
@@ -1777,8 +1778,27 @@ class PlannerMixin:
             reaccess = self._prize_split_hit(outs, d, prizes_hidden, pool, draws, certain=certain)
         else:
             reaccess = draw_hit_probability(outs + certain, pool, draws)
+        # The pressure gate (Round 8 §3, the CLOSING edge): a doom-answering card's re-access is not
+        # bankable against its deadline — the credit zeroes and the card charges full worth.
+        reaccess = gate_library.closing_gate_reaccess(
+            reaccess, gate_closing=self._gate_closing(cid, board) if board is not None else False)
         deadline = self._deploy_odds(cid, board, counts) if board is not None else 1.0
         return keep_cost(role_value, reaccess, deadline)
+
+    def _gate_closing(self, cid, board) -> bool:
+        """The pressure gate's resolver (the fold of `hold-successor-when-doomed`, ep83037962 f49):
+        True iff the Active is DOOMED (`Board.active_doomed`, the incoming-KO read) and held card
+        ``cid`` ANSWERS the doom — it is the SUCCESSOR (a win-condition with a Line pre-evolution in
+        play: the about-to-die Active's replacement attacker, not a redundant duplicate) or an
+        emergency answer (a `clutch_heal` / `switch` behavioural tag; the switch leg is inert until
+        TAG_TIER prices the tag). Sound facts only; False without doom — a healthy board keeps the
+        closure discount, so cycling stays free."""
+        if not getattr(board, "active_doomed", False):
+            return False
+        if cid in self._wincon_set() and getattr(board, "line_preevo_in_play", False):
+            return True
+        tags = self.functions.tags(cid) if self.functions else ()
+        return "clutch_heal" in tags or "switch" in tags
 
     def _hand_keep(self, hand_ids, played_cid, counts: dict, pool: int, draws: int, board=None,
                    prizes_hidden: int = 0, deck_count=None) -> float:
@@ -1792,14 +1812,39 @@ class PlannerMixin:
         by the copies shuffled with it, neither k independent one-ofs (the pre-reconciliation gamble
         over-charge) nor free riders (the pre-reconciliation SHED's frozenset dedup). Pre-anchor,
         ``prizes_hidden`` / ``deck_count`` thread the prize-split weighting into each copy's re-access
-        odds (`_keep_cost`); anchored callers pass ``prizes_hidden=0``."""
+        odds (`_keep_cost`); anchored callers pass ``prizes_hidden=0``.
+
+        The QUOTA GATE (spec Round 8 §2, `gate_library.quota_window`): duplicate copies of a
+        once-per-turn card (Energy — the manual attach; Supporter — the slot, rules.md §3) charge by
+        RANK — the j-th copy's deadline sits j−1 turns away (+1 when this turn's quota is spent:
+        `energy_attached`; `supporter_played` or the played refresh itself being a Supporter), and
+        each intervening turn widens its re-access window by the natural draw. Rank 1 with the quota
+        live is the plain window; non-quota cards keep the uniform marginal price."""
         ids = list(hand_ids)
         if played_cid in ids:
             ids.remove(played_cid)
         from collections import Counter
-        return sum(k * self._keep_cost(cid, counts, pool, draws, board, shuffled_copies=k,
-                                       prizes_hidden=prizes_hidden, deck_count=deck_count)
-                   for cid, k in Counter(ids).items())
+        from common import gate_library
+        played_st = self.stats.get(played_cid) if (self.stats and played_cid is not None) else None
+        sup_spent = bool(getattr(board, "supporter_played", False)
+                         or (played_st is not None and getattr(played_st, "is_supporter", False)))
+        total = 0.0
+        for cid, k in Counter(ids).items():
+            st = self.stats.get(cid) if self.stats else None
+            if st is not None and getattr(st, "is_energy", False):
+                spent = bool(getattr(board, "energy_attached", False))
+            elif st is not None and getattr(st, "is_supporter", False):
+                spent = sup_spent
+            else:
+                total += k * self._keep_cost(cid, counts, pool, draws, board, shuffled_copies=k,
+                                             prizes_hidden=prizes_hidden, deck_count=deck_count)
+                continue
+            total += sum(self._keep_cost(cid, counts, pool,
+                                         gate_library.quota_window(draws, j, quota_spent=spent),
+                                         board, shuffled_copies=k,
+                                         prizes_hidden=prizes_hidden, deck_count=deck_count)
+                         for j in range(1, k + 1))
+        return total
 
     def _deploy_odds(self, cid, board, counts: dict) -> float:
         """The deadline gate (`common.gate_library`, ADR-0065): P(card ``cid``'s role is realisable

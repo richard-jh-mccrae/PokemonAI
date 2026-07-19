@@ -296,8 +296,9 @@ Four modules, four glossary terms ([0065-glossary](../../docs/adr/0065-glossary.
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
 probability), **Odds** ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
-([gate_library.py](gate_library.py) — WHEN a card's Worth is live, the `deploy_odds` deadline
-factor; built: the evolution and dead-fetcher gates), **Closure** ([fetch_closure.py](fetch_closure.py) — WHAT can
+([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
+factor, the closing-edge spike, the quota window; all four legs built — evolution, fetcher,
+pressure, quota), **Closure** ([fetch_closure.py](fetch_closure.py) — WHAT can
 reach what: the tutor/search graph over the card representation, never a text parse). Pure modules,
 no Pilot imports; the Pilot resolves board facts and delegates (`_role_value` / `_keep_cost` /
 `_deploy_odds` / `_card_reaccess_outs`). `keep_cost = Worth × Gates × (1 − re-access Odds over the

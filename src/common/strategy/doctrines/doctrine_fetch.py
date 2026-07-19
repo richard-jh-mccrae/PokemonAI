@@ -1155,8 +1155,9 @@ HYPOTHESES = [
                   "was next in line to nuke the very hand the plan needs). A refresh with REAL "
                   "certain value (a Judge stripping a tailored opponent hand) still clears it on its "
                   "strip credits; the graded shed's role-tier can't see this PLAN signal, which is "
-                  "what keeps the rung out of the keep-cost currency (the `hold-successor-when-doomed` "
-                  "precedent: a deadline premise the closure doesn't model).",
+                  "what keeps the rung out of the keep-cost currency (a PLAN premise, unlike the "
+                  "retired `hold-successor-when-doomed`, whose DEADLINE premise folded into the "
+                  "pressure gate 2026-07-19).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.refresh_shuffles_deferred_fetch,
         weight=-20, status="assumed"),
