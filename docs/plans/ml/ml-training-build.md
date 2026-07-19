@@ -16,7 +16,7 @@ as separate concurrent worktree sessions.
 |---------|----|-------|--------|-------|
 | S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
-| S2b | WP2 | Eval harness | ☐ blocked on S1 | design LOCKED 2026-07-19 → [ml-training-design-s2b.md](ml-training-design-s2b.md); grill reframed the spike to duplicate-POSITION replay (fork reshuffles hidden zones; no nested forks in playouts → planner fork tiers OFF) |
+| S2b | WP2 | Eval harness | ☑ harness built 2026-07-19 (corpus-free) | design LOCKED → [ml-training-design-s2b.md](ml-training-design-s2b.md); `tools/sim/eval_{run,report,strata,aivat,spike}.py` + CLI + guide (`tools/sim/EVAL.md`); 28 tests green. **Pending corpus/WP1:** the spike's variance-reduction verdict (driver built) + the AIVAT fill (null seam) |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
 | S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
 | S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
@@ -132,7 +132,22 @@ entry, contracts doc, background generation running, ledger updated.
 
 Fail → iterate WP1. WP3/WP4 **integration** stays blocked; their plumbing may proceed.
 
-## S2b — WP2: eval harness (parallel with S2a)
+## S2b — WP2: eval harness (parallel with S2a) — ☑ HARNESS BUILT 2026-07-19 (corpus-free)
+
+**Built:** `tools/sim/eval_run.py` (power presets + common-opponent matrix runner over arbitrary
+`battle.py` specs; corpus-pattern manifest, cell-granular resume, caps, filmed games; + CLI),
+`eval_report.py` (C3 report — `flips_on` verdict, checkpoint regression tripwire, pure pool
+resolution, H2H excluded from the delta), `eval_strata.py` (value-swing skill-sensitivity proxy),
+`eval_aivat.py` (frozen null seam → `aivat: null`), `eval_spike.py` (duplicate-POSITION replay
+plumbing: plain-MAIN opening extraction + `fork_playout` driver). CLI guide: `tools/sim/EVAL.md`.
+28 tests (`tests/sim/test_eval_*.py`, REQ-SIM-0018..0023); full `tools/sim` suite green (141
+passed). No `.github/filters.yml` change — `tools/sim/**`/`tests/sim/**` already map to `sim`.
+Verified live: a real-agent CLI run produces a valid C3 `report.json` with verdict + strata.
+
+**Pending (corpus/WP1-gated, NOT corpus-free):** the spike's variance-reduction **verdict** (does
+paired position-replay cut variance enough to ship as an aux mode? — the driver is built, the
+measurement needs a captured-opening pool) and the **AIVAT** implementation (fills after WP1's net
+passes G1). Run `python tools/sim/corpus.py` first — see the TODO in `tools/sim/EVAL.md`.
 
 **Owns:** `tools/sim/eval*` (new files only).
 
