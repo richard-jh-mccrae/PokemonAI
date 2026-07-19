@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0066.**
+**Next free number: 0067.**
 
 ## Index
 
