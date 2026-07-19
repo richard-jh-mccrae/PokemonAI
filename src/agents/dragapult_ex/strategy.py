@@ -54,12 +54,22 @@ ROLES = {
     CRISPIN:      ["accel_source"],                # primary un-gated accel: fetch+attach the Phantom Dive color
     BOSS_ORDERS:  ["gust"],                         # the `gust` TAG/Role drives the shipped Gust doctrine
     NIGHT_STRETCHER: ["recovery"],
+    BUDEW:        ["starter"],                     # the SACRIFICIAL item-lock starter (30 HP, free retreat,
+    #   0-cost Itchy Pollen): open it Active (`open-the-item-lock-starter` keys the `item_lock` TAG),
+    #   spend it — soak a hit for one prize (`interpose`/`promote-the-staller`), never fund it (free
+    #   attack → `attach_target_needs` False). The Role is behavioural (worth 0 — sacrificial, pinned)
+    #   and feeds `_hand_startable`; declared in STRATEGY.md §7 since 2026-07-09, wired 2026-07-19.
+    MUNKIDORI:    ["counter_mover"],               # Adrena-Brain: relay ≤3 counters ours→theirs each turn —
+    #   spreads extra damage to assemble multi-KO Phantom Dive turns AND heals our own (peel counters
+    #   off an Active Budew to keep the lock alive). A declared plan piece (user doctrine 2026-07-19):
+    #   worth = the engine band, and the attach seam reads the Role — a stuck-Active Munkidori may take
+    #   its {P} on top of the {D} fuel (Mind Bend 60 + Confusion) once the benched line is fed.
     # Meowth ex (1071): NO Role — the general `supporter_tutor` TAG + `bench-the-supporter-tutor`
     #   + `grab-a-gust-supporter-for-the-ko` drive it (a `tutor` Role would misfire as a WINCON dig).
     # Budew (235): opts into the pending general `open-the-item-lock-starter` via an `item_lock` TAG,
     #   not a Role (proposal deck-genie-20260709). Rosa's (1240): `energy_accel` TAG -> `use-acceleration`
     #   (NOT the `accel_source` Role — it would mis-boost the comeback accel at setup). Both pending.
-    # Munkidori / Fezandipiti / Risky Ruins / Crushing Hammer: driven by deck Hypotheses / infra / tags
+    # Fezandipiti / Risky Ruins / Crushing Hammer: driven by deck Hypotheses / infra / tags
     #   (Crushing Hammer -> general `play-energy-denial`), keyed on card_id / function tag — not a Role.
     # Dunsparce/Dudunsparce draw engine + tutors (Ultra Ball / Poké Pad / Poffin) + Lillie's: the Fetch /
     #   Shuffle-Refresh doctrines key on their function tags — no Role needed.

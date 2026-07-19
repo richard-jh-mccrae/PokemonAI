@@ -43,11 +43,21 @@ deferred attack). **Fix shape: tag-derived worth fallbacks** in `card_worth.role
 against the six ADR-0060 pins + the corpus before flipping. This is ADR-0060's explicitly-parked
 "hand QUALITY" seam made concrete.
 
-**C. Separate small axes (2, stay xfail with corrected diagnoses).**
+**C. Separate small axes (1 built + promoted, 1 stays xfail).**
 - `85163634-17` — fetch one turn early = Judge exposure: the held-card-risk tier-2 seam (spec
   §Round 8 §5), explicitly deferred there.
-- `86091728-19` — Ultra Ball substance FIXED; residue is attach-target priority ({P} to the Active
-  via `prefer-active-attach-in-setup` +8 vs the benched 2nd-line Dreepy).
+- `86091728-19` — **BUILT 2026-07-19 (the attach-target-priority seam) and PROMOTED to a corpus
+  pin.** Grilled ruling: GENERAL, not deck-specific — `prefer-active-attach-in-setup` (+8) stands
+  down when the Active is neither a Line member nor carries any attacker Role (declared or derived
+  `accel_source`) while a benched Line member still needs Energy (new `Board.bench_line_member_needs`);
+  the existing decide()-only `attach_to_needy_line` tie-break then develops the benched line — zero
+  new currency. The seam plan's sketched "Active's next-attack cost already covered" framing was
+  measured OUT (the f19 Active Munkidori is BARE, so it could never fire). The charter case keeps its
+  +8 (ep83007714 f7's Cinderace is `accel_source`); `attach-solrock-over-line-base` is bench-vs-bench
+  and untouched. Promotion needed one harness hardening (the 074df7c precedent): `correct=[3]` names
+  the SECOND of two byte-identical bare Dreepy, so the corpus matches attach picks up to
+  interchangeability (same Energy card onto an identical body). Focused mechanics pin:
+  `tests/strategy/test_attach_target_priority.py`.
 
 **D. Unchanged (1).** ~~`85059103-9` — the Petrel tutor-chain grab value (closure-reachable worth,
 Round 9 §3)~~ **BUILT 2026-07-19** (seam C, docs/plans/seam-tutor-chain-grab-value.md):

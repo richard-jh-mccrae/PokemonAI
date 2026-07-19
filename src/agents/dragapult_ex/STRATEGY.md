@@ -498,8 +498,14 @@ roles = {
   BOSS_ORDERS:     ["gust"],
   NIGHT_STRETCHER: ["recovery"],
   BUDEW:           ["starter"],                   # item-lock opener (drives open-the-item-lock-starter via the item_lock TAG)
+  MUNKIDORI:       ["counter_mover"],             # DECLARED 2026-07-19 (user doctrine): Adrena-Brain relays ≤3
+                                                  # counters ours→theirs — spreads toward multi-KO Phantom Dive
+                                                  # turns AND heals the lock body (peel an Active Budew). Worth =
+                                                  # engine band; the attach seam reads it: the {D} is FUEL (never
+                                                  # "wasted off-type"), and a stuck-Active Munkidori takes its {P}
+                                                  # on top once the benched line is fed (Mind Bend 60 + Confusion).
   # Rosa's (1240): NO Role — the energy_accel TAG drives use-acceleration (accel_source would mis-boost at SETUP).
-  # Munkidori / Fezandipiti / Risky Ruins / Crushing Hammer: deck Hypotheses / infra / tags — not a Role.
+  # Fezandipiti / Risky Ruins / Crushing Hammer: deck Hypotheses / infra / tags — not a Role.
   # Meowth ex: NO Role — supporter_tutor TAG drives it. Dunsparce/Dudunsparce: fetch/ability tags — not a Role.
   # Tutors + Lillie's: Fetch / Shuffle-Refresh doctrines key on their tags — no Role.
   # (CINDERACE role removed.)
