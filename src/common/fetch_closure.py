@@ -84,7 +84,12 @@ def reaccess_outs(cid, counts: dict, stat_of, clauses_of) -> int:
     Ball a Pokémon, Energy Search an energy, Fighting Gong a {F} Basic, Mega Signal a Mega ex …). The
     gamble's gain-side closure pointed BACKWARDS — the same predicate asked "can I get this card back?"
     A shuffled card lands in the DECK, so only deck re-access counts (no discard). 0 for an unknown
-    card. Errs by under-counting (a lower re-access → a higher, safer keep-cost)."""
+    card. MOSTLY errs by under-counting (a lower re-access → a higher, safer keep-cost) — held
+    tutors that shuffle in with the card, and the discard leg, are never counted. Three small
+    over-counting channels are accepted: a type-locked POKÉMON fetch over-includes off-type Basics
+    (the `fetch_target_matches` NOTE), tutor play-COSTS are not charged (an Ultra Ball counts even
+    when its discard-2 might be unpayable), and Supporter tutors count without the one-per-turn
+    slot. Each is per-card small and next-turn-horizon plausible; none is a sound bound."""
     xst = stat_of(cid) if cid is not None else None
     if xst is None:
         return 0

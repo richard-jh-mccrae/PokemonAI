@@ -2155,8 +2155,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         shuffle-grown pool across the refresh's own draw window — the closure pointed backwards,
         the SAME summation as the gamble's `hand_keep` (`_best_gamble_line`) by construction.
         Anchored deck counts when the tracker has them, else the pre-anchor unseen composition
-        (`decklist − visible − hidden prizes`, needs obs — the reason obs is threaded here). 0 when
-        the deck bookkeeping is unresolved (no shed charged — the CYCLE credit alone stands,
+        (`decklist − visible − hidden prizes`, needs obs — the reason obs is threaded here) with the
+        re-access odds PRIZE-SPLIT-WEIGHTED (`_prize_split_hit` via `_keep_cost` — the cost side
+        prices the split exactly like the gain side; the shuffled hand copies stay ``certain``).
+        0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit alone stands,
         matching the old flat term's floor)."""
         from common.strategy.refresh import refresh_branches
         branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
@@ -2167,6 +2169,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         counts = board.deck_known_counts
         if counts:
             deck_count = sum(counts.values())
+            prizes_hidden = 0                                    # anchored: the split is resolved
         else:
             from collections import Counter
             unseen = Counter(self.deck)
@@ -2179,7 +2182,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return 0.0
         hand = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
         pool = deck_count + max(0, len(hand) - 1)                # the shuffle-grown pool, per COPY
-        return self._hand_keep(hand, ctx.card_id, counts, pool, draws, board)
+        return self._hand_keep(hand, ctx.card_id, counts, pool, draws, board,
+                               prizes_hidden=prizes_hidden, deck_count=deck_count)
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can

@@ -145,6 +145,45 @@ def test_hand_keep_prices_duplicates_marginally_and_excludes_the_played_refresh_
     assert ml._hand_keep([999999, 999999], None, counts, pool, draws) == 0.0
 
 
+@pytest.mark.req("REQ-WORTH-0006")
+def test_pre_anchor_keep_cost_weights_the_prize_split():
+    """PRE-ANCHOR the cost side prices the prize split exactly like the gain side (`_prize_split_hit`):
+    the unseen re-access outs split hypergeometrically over deck + face-down prizes, while the
+    shuffled held copy joins the pool as a CERTAIN out (a hand card is never prize-assignable).
+    Before this, the cost side counted possibly-prized outs at full strength against a prize-free
+    pool — re-access overestimated, keep under-charged, a pre-anchor pro-gamble bias the
+    prize-weighted gain side never had. Weighting can only LOWER re-access, so keep-cost RISES
+    pre-anchor; with no hidden prizes the plain window draw is reproduced exactly."""
+    from math import comb, isclose
+    from common.card_worth import ROLE_TIER
+    from common.deck_odds import draw_hit_probability
+    ml = _shipped_pilot("mega_lucario")
+    pool, draws, k, d = 40, 6, 6, 34                     # 6 face-down prizes, 34 hidden deck cards
+    counts = {678: 1, 1121: 4, 1145: 2}                  # unseen outs: wincon + Ultra Ball + Mega Signal
+    u = ml._card_reaccess_outs(678, counts)
+    h = d + k
+    expect_re = sum(comb(d, j) * comb(k, u - j) / comb(h, u)
+                    * draw_hit_probability(j + 1, pool, draws)    # +1: the shuffled copy, certain
+                    for j in range(max(0, u - k), min(u, d) + 1))
+    expect = ROLE_TIER["win_condition"] * (1 - expect_re)
+    got = ml._keep_cost(678, counts, pool, draws, prizes_hidden=k, deck_count=d)
+    assert isclose(got, expect)
+    # the weighting only ever RAISES keep vs the unweighted read of the same unseen counts
+    assert got > ml._keep_cost(678, counts, pool, draws)
+    # prizes_hidden=0 → the plain window draw, byte-identical to the anchored path
+    assert ml._keep_cost(678, counts, pool, draws, prizes_hidden=0) == ml._keep_cost(678, counts, pool, draws)
+    # _hand_keep threads the split through to each copy
+    assert isclose(ml._hand_keep([678], None, counts, pool, draws,
+                                 prizes_hidden=k, deck_count=d), got)
+    # `certain` edges of the split primitive: the gain side (certain=0) is unchanged; zero unseen
+    # outs still redraw the certain shuffled copy
+    assert (ml._prize_split_hit(u, d, k, pool, draws)
+            == ml._prize_split_hit(u, d, k, pool, draws, certain=0))
+    assert isclose(ml._prize_split_hit(0, d, k, pool, draws, certain=1),
+                   draw_hit_probability(1, pool, draws))
+    assert ml._prize_split_hit(0, d, k, pool, draws) == 0.0
+
+
 @pytest.mark.req("REQ-WORTH-0001")
 def test_keep_cost_deadline_odds_gates_the_worth():
     """The gate library's deadline factor (ADR-0065 Stage 1): ``keep_cost`` scales by ``deadline_odds``

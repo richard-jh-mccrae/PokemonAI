@@ -1606,7 +1606,8 @@ class PlannerMixin:
             # via the shared `_hand_keep` (duplicates priced marginally; one summation with the SHED).
             # The gamble must beat det PLUS this graded floor, replacing the binary protected-hand
             # stand-downs: a KO (≈ KO_SCORE) dwarfs it, an irreplaceable one-of raises the bar.
-            hand_keep = self._hand_keep(hand_ids, cid, class_counts, pool, max(ns), board)
+            hand_keep = self._hand_keep(hand_ids, cid, class_counts, pool, max(ns), board,
+                                        prizes_hidden=prizes_hidden, deck_count=deck_count)
             for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
                     in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
@@ -1651,7 +1652,8 @@ class PlannerMixin:
             return None
         return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
 
-    def _prize_split_hit(self, u: int, deck_count: int, prizes_hidden: int, pool: int, draws: int) -> float:
+    def _prize_split_hit(self, u: int, deck_count: int, prizes_hidden: int, pool: int, draws: int,
+                         certain: int = 0) -> float:
         """WP2: P(≥1 enabler in the ``draws``-card refresh) PRE-ANCHOR — the decklist is fully known,
         only the prize assignment of the class's ``u`` unseen enabler copies is random. Sum over
         ``j`` = copies-that-landed-in-the-deck of the hypergeometric prize-split weight × the window
@@ -1659,23 +1661,28 @@ class PlannerMixin:
         — ≤ ``u+1`` plain ``math.comb`` terms (``u ≤ 4`` in practice). The exact closed form the
         ``if not deck_known_counts: return None`` gate replaced with a zero (the modeling-gap-as-
         caution failure the fetch-closure spec attacks). Never raises; bad input → 0.0 (an endorser
-        fails closed). Degenerates to the plain window draw when no prizes are hidden."""
+        fails closed). Degenerates to the plain window draw when no prizes are hidden.
+
+        ``certain`` = outs KNOWN to be in the drawn pool regardless of the split — the keep-cost
+        side's own held copies, shuffled in from HAND (never prize-assignable). They join every
+        branch's window draw (``hit(j + certain, …)``); the gain side passes the default 0."""
         from math import comb
         from common.deck_odds import draw_hit_probability
         try:
-            u, d, k = int(u), int(deck_count), int(prizes_hidden)
+            u, d, k, certain = int(u), int(deck_count), int(prizes_hidden), int(certain)
         except Exception:
             return 0.0
         if u <= 0 or d <= 0:
-            return 0.0
+            # no unseen outs to split (or no deck for them to sit in) — only the certain copies draw
+            return draw_hit_probability(certain, pool, draws) if certain > 0 else 0.0
         if k <= 0:
-            return draw_hit_probability(u, pool, draws)        # no hidden prizes -> every copy in deck
+            return draw_hit_probability(u + certain, pool, draws)   # no hidden prizes -> every copy in deck
         h = d + k
         u = min(u, h)                                          # can't split more copies than positions
         denom = comb(h, u)                                     # u ≤ h -> comb(h, u) > 0, no zero-div
         total = 0.0
         for j in range(max(0, u - k), min(u, d) + 1):          # j = enabler copies landing in the deck
-            total += comb(d, j) * comb(k, u - j) / denom * draw_hit_probability(j, pool, draws)
+            total += comb(d, j) * comb(k, u - j) / denom * draw_hit_probability(j + certain, pool, draws)
         return max(0.0, min(1.0, total))
 
     def _gamble_burst_copies(self, counts: dict, hand: list, stat) -> int:
@@ -1722,24 +1729,39 @@ class PlannerMixin:
             tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())
 
     def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None,
-                   shuffled_copies: int = 1) -> float:
+                   shuffled_copies: int = 1, prizes_hidden: int = 0, deck_count=None) -> float:
         """WP6/WP7: the cost of shuffling ONE held copy of card ``cid`` away = its role worth × how
         UN-recoverable it is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown
         ``pool``, +``shuffled_copies`` outs for the held copies rejoining the deck — 1 for a lone copy;
         a hand-wide summation passes the full duplicate count, `_hand_keep`) × how realisable its role
-        is by its deadline (`_deploy_odds`, the gate library — ADR-0065 Stage 1: an undeployable
-        evolution collapses to 0, a dead card shed freely). ``board`` supplies base presence for the
-        evolution gate; omitted → the deadline factor stays 1.0."""
+        is by its deadline (`_deploy_odds`, the gate library — ADR-0065: an undeployable evolution or
+        a dead fetcher collapses to 0, shed freely). ``board`` supplies the gate facts; omitted → the
+        deadline factor stays 1.0.
+
+        PRE-ANCHOR (``prizes_hidden`` > 0, ``counts`` = the unseen composition): the re-access odds
+        are PRIZE-SPLIT-WEIGHTED (`_prize_split_hit`) — the unseen outs split over deck + face-down
+        prizes exactly like the gamble's GAIN side, while the shuffled held copies join the pool as
+        ``certain`` outs (a hand card is never prize-assignable). Without the weighting the cost side
+        counted possibly-prized outs at full strength against a prize-free pool — re-access
+        overestimated, keep under-charged, a pre-anchor pro-gamble bias the gain side never had.
+        Anchored (``prizes_hidden`` = 0): the plain window draw, unchanged."""
         role_value = self._role_value(cid)
         if role_value <= 0:
             return 0.0
         from common.card_worth import keep_cost
         from common.deck_odds import draw_hit_probability
-        outs = self._card_reaccess_outs(cid, counts) + max(1, shuffled_copies)
+        outs = self._card_reaccess_outs(cid, counts)
+        certain = max(1, shuffled_copies)
+        if prizes_hidden > 0:
+            d = deck_count if deck_count is not None else max(0, sum(counts.values()) - prizes_hidden)
+            reaccess = self._prize_split_hit(outs, d, prizes_hidden, pool, draws, certain=certain)
+        else:
+            reaccess = draw_hit_probability(outs + certain, pool, draws)
         deadline = self._deploy_odds(cid, board, counts) if board is not None else 1.0
-        return keep_cost(role_value, draw_hit_probability(outs, pool, draws), deadline)
+        return keep_cost(role_value, reaccess, deadline)
 
-    def _hand_keep(self, hand_ids, played_cid, counts: dict, pool: int, draws: int, board=None) -> float:
+    def _hand_keep(self, hand_ids, played_cid, counts: dict, pool: int, draws: int, board=None,
+                   prizes_hidden: int = 0, deck_count=None) -> float:
         """Σ keep_cost over the hand a refresh shuffles away — the ONE summation BOTH keep-value sites
         read (the WP6 gamble keep-floor below and the refresh SHED, `pilot._refresh_shed_keepcost`), so
         the graded floor is identical by construction. ``hand_ids`` is the hand as a LIST — duplicate
@@ -1748,12 +1770,15 @@ class PlannerMixin:
         (sets-not-sums, spec §Round 7): all k held copies of a card land in the deck together, so each
         copy's re-access odds count all k shuffled siblings as outs — the k-th duplicate is discounted
         by the copies shuffled with it, neither k independent one-ofs (the pre-reconciliation gamble
-        over-charge) nor free riders (the pre-reconciliation SHED's frozenset dedup)."""
+        over-charge) nor free riders (the pre-reconciliation SHED's frozenset dedup). Pre-anchor,
+        ``prizes_hidden`` / ``deck_count`` thread the prize-split weighting into each copy's re-access
+        odds (`_keep_cost`); anchored callers pass ``prizes_hidden=0``."""
         ids = list(hand_ids)
         if played_cid in ids:
             ids.remove(played_cid)
         from collections import Counter
-        return sum(k * self._keep_cost(cid, counts, pool, draws, board, shuffled_copies=k)
+        return sum(k * self._keep_cost(cid, counts, pool, draws, board, shuffled_copies=k,
+                                       prizes_hidden=prizes_hidden, deck_count=deck_count)
                    for cid, k in Counter(ids).items())
 
     def _deploy_odds(self, cid, board, counts: dict) -> float:

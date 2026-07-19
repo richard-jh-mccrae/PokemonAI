@@ -72,6 +72,17 @@ comparator) and ADR-0032 (Effect-Clause tier).
   `dont-recycle-the-dead`'s `recycle_dead_only`), Trainer-only so a recycle-tagged BODY (Kyogre)
   stays priced. The pin's margin went −2.7 (broken) / ≈+2 (the lucky accident) → **+19.1**
   (honest: three dead cards shed free). Suite + corpus green (3092).
+- **The pre-anchor cost-side prize split (2026-07-19, behavioural-review Finding 2).** Pre-anchor,
+  keep-cost re-access counted possibly-prized unseen outs at full strength against a prize-free
+  pool, while the gamble's GAIN side was exactly prize-weighted — re-access overestimated, keep
+  under-charged, a pre-anchor pro-gamble bias from both directions at once. `_prize_split_hit`
+  gains a ``certain`` term (the shuffled hand copies, never prize-assignable, join every branch's
+  window draw) and `_keep_cost` / `_hand_keep` route the re-access through it when
+  ``prizes_hidden > 0`` — the ONE split primitive now prices both sides; the anchored path is
+  byte-identical, the gain side (``certain=0``) unchanged. Alongside (review Finding 3):
+  `fetch_closure.reaccess_outs`'s blanket "errs by under-counting" claim softened to name its three
+  accepted over-counting channels (type-locked Pokémon fetch fail-open, uncharged tutor costs,
+  slot-less Supporter tutors). Suite + corpus green (3094).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
