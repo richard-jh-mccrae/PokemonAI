@@ -143,31 +143,27 @@ already pass — several of these ids are in the hyperclosure corpus as pins.
   the right outcome may be a much SMALLER build than this doc imagines — or none. The grab/pitch
   investigation (ADR-0065) is the precedent for "measured, found already-subsumed, built nothing."
 
-## Sibling consumer — the disruptor swing (verified 2026-07-19; scope it in the SAME grill)
+## Sibling consumer — the disruptor swing: SUPERSEDED, see `hand-disruption-grill-spec.md`
 
-The opponent-worth input layer this grill designs has a second, already-waiting consumer: the
-hand-refresh/disruptor evaluation (Judge / Harlequin / Unfair Stamp, ADR-0060's
-`pilot._refresh_swing_tactical`). It is **half-converged**: the MY-hand side is the graded
-`Σ keep_cost` (the refresh-SHED convergence), but the THEIR-hand side is still flat —
-`_REFRESH_STRIP = 4` / `_REFRESH_GIFT = 8` per card, price-blind to WHAT is stripped or gifted.
-Grading them = their_keep_cost per card in expectation over their hidden hand (their rep's
-composition) — the same inputs, hazards, and fail directions as the gust target.
+This section (drafted 2026-07-19, never merged — it sat orphaned on this branch after PR #113
+shipped without it, then was rebased back in alongside the doc that actually superseded it) is kept
+ONLY as a record of the initial, WRONG framing; do not read it as guidance. The independently-run
+hand-disruption grill measured 80 corrections and ruled differently on both claims below:
 
-Also fold in the **hand-size-attacker damage leg** (Alakazam / Powerful Hand): today it is two flat
-rungs (`play-harlequin-vs-hand-size` +25; the surviving half of `disrupt-when-unfavored` +18,
-baseline_disruption.py) whose own rationale concedes it is "a proxy for an unmodelled value" — the
-strip denies DAMAGE, which IS computable: `CardStat.handSizeDamage × Δ(their hand)` (or ADR-0062's
-marginal with-vs-without via the incoming oracle). The flat rung has NO opponent-hand-size gate, so
-Judge into a SMALL Alakazam hand — which REFILLS them and arms Powerful Hand (+2 cards = +40) —
-still gets +25 (GIFT charges only the cards, not the damage). A signed damage-swing term is
-sign-correct by construction and REPLACES both rungs (currency-zone rule). Grill question: the
-damage↔worth-points exchange rate (shares Q1's prizes↔points problem).
+- **STRIP/GIFT grading**: this section proposed building it now. The ruling is design-only,
+  evidence-gated — Round 0 found no correction motivates it (every strip/gift correction is
+  count-based and already priced by the closed-form swing). NOT built.
+- **The hand-size-attacker damage leg (Alakazam)**: this section framed it as OPPONENT-WORTH,
+  sharing gusting's open prizes↔points exchange-rate question. The ruling reframes it as **incoming
+  damage to MY OWN Active** (self-preservation, not denial) — it belongs in the
+  `active_doomed`/`forward_incoming_damage` oracle, already has a fixed exchange rate (ADR-0062's
+  damage↔points), and needs NO new rate and NO opponent-worth layer at all. Built 2026-07-19 as an
+  inert, telemetry-only signal (`pilot._hand_size_relief`) pending a promotion gate that has not
+  tripped.
 
-Survivors on their own axes (do NOT fold): `dont-refresh-into-a-probable-miss` (draw quality),
-the posture levers (`dont-gift-a-refresh-when-favored` / the unfavored boost — Read-gated variance
-policy), `unfair-stamp-comeback-posture` (opponent-model prior, double-inert), and the one-sided
-strip forward contracts (`strip-the-stacked-engine-hand`, `disrupt-the-tailored-hand` — inert until
-a one-sided card enters the pool).
+See `docs/plans/hand-disruption-grill-spec.md` for the actual Round-0 measurement, rulings, build
+list, and the one genuinely open failure it found (a different bug: flat grab-time refresh grading,
+not the damage leg).
 
 ## Build shape (IF the grill confirms)
 
