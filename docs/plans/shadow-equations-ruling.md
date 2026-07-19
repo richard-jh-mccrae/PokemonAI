@@ -5,6 +5,12 @@ gusting `their_keep_cost` design, the hand-disruption build, the attach valuatio
 and any later convergence). Supersedes the narrow reading of the anti-speculation clause in the
 grill specs; candidate for ratification as an ADR when the next equation ships under it.
 
+**First equation shipped under this ruling (2026-07-19): the DISCARD keep-cost shadow**
+(`pilot._discard_shadow` — see `seam-discard-convergence.md` §Shadow emitter). It followed the
+mechanism below verbatim (decision-point compute, full working + agreement bit, the gamble-trace
+plumbing, mid-sim guard) and its first corpus sweep produced disagreement rows on 9 of 12 recorded
+discard decisions — the evidence bridge working as designed. ADR ratification is now on the table.
+
 ## The ruling (user's words, lightly edited)
 
 > "What I want is general card/action value equations that solve related decisions gracefully,

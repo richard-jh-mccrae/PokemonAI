@@ -937,6 +937,12 @@ class Decision:
                                      # correction reader sees WHAT the rung out-scored, not just its pick.
                                      # Sparse: None unless the develop rung fired — keeps a non-develop
                                      # record byte-identical to the pre-rung wire format
+    discard_shadow: dict | None = None  # the DISCARD keep-cost SHADOW (shadow-equations ruling,
+                                     # 2026-07-19): the card-worth oracle's per-candidate working
+                                     # (worth/gates/keep) + its pick + the agreement bit vs the tuned
+                                     # `_DISCARD` ladder, which stays the decider. Deciding NOTHING —
+                                     # the evidence bridge for the discard convergence (seam D).
+                                     # Sparse: None off a real discard choice
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1113,6 +1119,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._chain_target_cache: dict = {}             # memo: tutor card id -> FULL-scope deck fetch
                                                         # targets (the tutor-chain graph leg, seam C)
         self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
+        self._discard_fuel_cache = None                 # memo: energy types a discard-source accel attack
+                                                        # wants IN the discard (deck-fixed; Aura Jab class)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
         self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
@@ -1189,6 +1197,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
+                        discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -2188,6 +2197,114 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         pool = deck_count + max(0, len(hand) - 1)                # the shuffle-grown pool, per COPY
         return self._hand_keep(hand, ctx.card_id, counts, pool, draws, board,
                                prizes_hidden=prizes_hidden, deck_count=deck_count)
+
+    def _discard_fuel_types(self) -> frozenset:
+        """Energy types a DISCARD-SOURCE accel attack in this deck wants IN the discard — the
+        Aura-Jab class (``AttackStat.recoverN`` > 0, ``recoverSource == "discard"``; ``None`` in the
+        set = the attack takes any Basic). Pitching a matching Basic Energy is FUEL, not loss —
+        the zone-signed worth the spec's Round 7 ruled (Kyogre-class; correction 84071010-45 held
+        surplus Energy FOR the recycle). Memoised — deck-fixed. Empty without stats/deck."""
+        if self._discard_fuel_cache is None:
+            types = set()
+            for cid in set(self.deck):
+                st = self.stats.get(cid) if self.stats else None
+                for aid in (getattr(st, "attacks", None) or ()):
+                    ast = self._attack_stat(aid)
+                    if (ast is not None and getattr(ast, "recoverN", 0)
+                            and getattr(ast, "recoverSource", None) == "discard"):
+                        types.add(getattr(ast, "recoverEnergyType", None))
+            self._discard_fuel_cache = frozenset(types)
+        return self._discard_fuel_cache
+
+    def _discard_shadow(self, obs: dict, select: dict, board: Board, options: list, chosen: list):
+        """The DISCARD keep-cost SHADOW (the shadow-equations ruling, 2026-07-19 — the first
+        equation shipped under it): compute the card-worth oracle's answer at a real discard pick
+        and EMIT it beside the decision, deciding NOTHING. The tuned `_DISCARD` ladder stays the
+        decider; every disagreement row is either an oracle gap (a premise the gate library doesn't
+        carry yet) or a latent ladder bug — the evidence bridge the discard convergence (seam D,
+        `docs/plans/seam-discard-convergence.md`) swaps on.
+
+        The v1 equation per candidate card — grilled legs only, simplifications EMITTED as terms so
+        a reader can audit WHY (the ADR-0019 full-working standard):
+
+            keep = Worth × Gates × (1 − pitch re-access)
+
+        Worth = `_role_value` (roles / tags / ACE-SPEC / energy); Gates = `_deploy_odds` (the
+        evolution + fetcher legs; the pressure bit rides as ``closing``). PITCH re-access — the
+        DISCARD leg, deliberately distinct from the shuffle leg — is credited only when
+        DETERMINISTIC: a duplicate still in hand (``dup_hand``), a same-card copy already in play
+        (``in_play``), or a matching recycler HELD (``recycler`` — a ``zone: discard`` FETCH clause
+        reaching this card). Probabilistic recycler draws are emitted (``recycler_deck``) but
+        credited 0 — errs toward keep. ``fuel`` (`_discard_fuel_types`) floors the keep at 0 — the
+        zone sign's v1 (a negative keep is deferred). Known naiveties, by design: per-card (sets
+        not sums — a duplicate PAIR both price 0), and no probabilistic recycle window. None off a
+        real choice (no options beyond the forced picks) and never mid-sim (`self._planning`)."""
+        if self._planning or select.get("context") != _DISCARD:
+            return None
+        picks = len(chosen)
+        if picks <= 0 or len(options) <= picks:
+            return None                                  # no real choice — nothing to shadow
+        me = self._my_player(obs)
+        from collections import Counter
+        hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        held = Counter(hand_ids)
+        counts = board.deck_known_counts
+        if not counts:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        from common import fetch_closure
+        def _recyclers(stat):
+            in_hand = in_deck = 0
+            for rid, n in held.items():
+                if any(cl.get("kind") == "fetch" and cl.get("zone") == "discard"
+                       and fetch_closure.fetch_target_matches(cl, stat)
+                       for cl in (self.effects.clauses(rid) if self.effects else ())):
+                    in_hand += n
+            for rid, n in counts.items():
+                if n > 0 and any(cl.get("kind") == "fetch" and cl.get("zone") == "discard"
+                                 and fetch_closure.fetch_target_matches(cl, stat)
+                                 for cl in (self.effects.clauses(rid) if self.effects else ())):
+                    in_deck += n
+            return in_hand, in_deck
+        fuel_types = self._discard_fuel_types()
+        rows = []
+        for i, o in enumerate(options):
+            cid = self._option_card_id(obs, select, o)
+            if cid is None:
+                continue
+            st = self.stats.get(cid) if self.stats else None
+            worth = self._role_value(cid)
+            row = {"i": i, "cid": cid, "worth": round(worth, 1)}
+            dup = held.get(cid, 0) >= 2
+            in_play = cid in board.in_play_ids
+            rec_hand, rec_deck = _recyclers(st) if (st is not None and worth > 0) else (0, 0)
+            fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
+                        and (None in fuel_types
+                             or getattr(st, "energyType", None) in fuel_types))
+            deploy = self._deploy_odds(cid, board, counts)
+            if dup:
+                row["dup_hand"] = True
+            if in_play:
+                row["in_play"] = True
+            if rec_hand:
+                row["recycler"] = rec_hand
+            if rec_deck:
+                row["recycler_deck"] = rec_deck
+            if fuel:
+                row["fuel"] = True
+            if deploy != 1.0:
+                row["deploy"] = deploy
+            if self._gate_closing(cid, board):
+                row["closing"] = True
+            reaccess = 1.0 if (dup or in_play or rec_hand) else 0.0
+            row["keep"] = 0.0 if fuel else round(worth * deploy * (1.0 - reaccess), 1)
+            rows.append(row)
+        if not rows:
+            return None
+        eq_pick = [r["i"] for r in sorted(rows, key=lambda r: (r["keep"], r["i"]))][:picks]
+        return {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
+                "agree": set(eq_pick) == set(chosen)}
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can

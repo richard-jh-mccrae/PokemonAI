@@ -1,5 +1,17 @@
 # Seam handoff: the discard convergence + the deploy-now spike (run SOLO, last)
 
+**SHADOW EMITTER BUILT 2026-07-19** (the first equation shipped under the shadow-equations ruling):
+`pilot._discard_shadow` computes the oracle's v1 keep-cost at every real discard pick and emits it —
+`Decision.discard_shadow` → the sparse `@T` `discard_shadow` key → the blunder-shell ⚖️ dropdown —
+deciding NOTHING (the ladder chose; the agreement bit is the record). First corpus sweep (12
+recorded discard decisions): **3 agree / 9 disagree**, and the disagreements already localise the
+v1 gaps the migration grill needs: (a) a WORTH-DERIVATION gap — an undeclared Line MEMBER (the f68
+Drakloak) prices 0, so the deploy-now spike has no worth to spike (line-member derivation for
+ROLE_TIER's evolution band is prerequisite work); (b) the documented per-card set-naivety
+(duplicate pairs both price 0); (c) the `fuel` term SEES the 84071010-45 discard-as-resource pick
+the ladder missed, though the v1 index tie-break among worth-0 rows masks the ranking. These rows
+are the grill fodder for the migration-path ruling below.
+
 **Parallel-session slot D — do NOT run concurrently with seams B/C** (it re-baselines
 `doctrine_fetch.py`'s `_DISCARD` ladder and its whole test surface). Start it only after the other
 seams merge, rebased on everything.

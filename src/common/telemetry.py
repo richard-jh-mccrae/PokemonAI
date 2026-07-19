@@ -108,6 +108,10 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     posture = getattr(decision, "posture", None)  # the Read's belief about the opponent at this
     if posture:                                   # decision (ADR-0041): believed archetype(s), γ,
         rec["posture"] = posture                  # matched Brief. Sparse: only when a Scout was wired.
+    shadow = getattr(decision, "discard_shadow", None)  # the discard keep-cost SHADOW equation
+    if shadow:                                    # (shadow-equations ruling): per-card worth/gates/
+        rec["discard_shadow"] = shadow            # keep + the agreement bit vs the tuned ladder —
+                                                  # deciding nothing; disagreement rows are the gold
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
         rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung

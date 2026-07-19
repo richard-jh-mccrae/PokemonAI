@@ -107,6 +107,14 @@ comparator) and ADR-0032 (Effect-Clause tier).
   each rank's re-access window widens by its turns of natural draws — "the 3rd hand Energy is
   near-free" is now derived. The ADR-0060 keep pins and the TAG_TIER pins hold under both. Suite +
   corpus green (3100).
+- **The discard SHADOW emitter (2026-07-19)** — the fourth shadow's evidence bridge, the first
+  equation shipped under the shadow-equations ruling: `pilot._discard_shadow` computes the oracle's
+  v1 keep-cost (Worth × Gates × deterministic pitch re-access, `fuel` zone sign) at every real
+  discard pick and emits the full working + the agreement bit beside the ladder's decision —
+  `Decision.discard_shadow` → the `@T` key → the blunder-shell dropdown — deciding NOTHING. First
+  corpus sweep: 3 agree / 9 disagree over the recorded discard decisions; the rows localise the
+  migration's prerequisites (line-MEMBER worth derivation; set semantics; a worth-0 tie-break).
+  The swap stays gated per the ruling (seam D). Suite + corpus green (3104).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
