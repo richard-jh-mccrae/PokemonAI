@@ -128,6 +128,54 @@ def test_multi_clause_override_of_one_kind_ships_whole():
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
+    """WP3: the 3 agents' draw-ENGINE abilities and Trainer/Supporter accel carry parametric clauses in
+    the shipped `card_effects.json` (verified against engine ability/attack text) — so the mechanic lives
+    in the representation, never a card-text parse. Pins the load-bearing amount/condition/rider per card."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    # Draw engines (abilities): amount + the gating condition / self-effect rider.
+    assert eff.clauses(66) == ({"kind": "draw", "amount": 3, "condition": "once_per_turn_ability",
+                                "rider": "shuffle_self_in"},)                       # Dudunsparce
+    assert eff.clauses(120)[0] == {"kind": "draw", "amount": 1, "window": 2,        # Drakloak: look 2, take 1
+                                   "condition": "once_per_turn_ability", "rider": "other_to_bottom"}
+    assert eff.clauses(140)[0]["condition"] == "pokemon_ko_last_turn"               # Fezandipiti ex
+    assert eff.clauses(675)[0] == {"kind": "draw", "amount": 3, "condition": "solrock_in_play",
+                                   "rider": "discard_basic_f_energy"}               # Lunatone
+    assert eff.clauses(1080)[0]["amount"] == 5 and eff.clauses(1080)[0]["condition"] == "pokemon_ko_last_turn"
+    # Trainer / Supporter accel: Rosa's discard→Stage-2 (prize-behind gate); Crispin's deck→attach.
+    assert eff.clauses(1240)[0] == {"kind": "accel", "amount": 2, "source": "discard", "target": "stage2",
+                                    "energy": "basic", "condition": "more_prizes_remaining_than_opp"}
+    assert eff.clauses(1198)[0] == {"kind": "accel", "amount": 1, "source": "deck",
+                                    "target": "any_pokemon", "energy": "basic"}
+    # Crispin carries NO fetch clause — a Supporter is slot-dead after a Supporter refresh, so the gamble
+    # energy-closure (which counts any `basic_energy` fetch clause) must not treat it as an out.
+    assert all(c["kind"] != "fetch" for c in eff.clauses(1198))
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_supporter_trainer_coin_and_energy_provide_clauses():
+    """WP3 tail: the 3 agents' Supporter/Trainer tutors, the coin denial, and Ignition's on-Evolution
+    energy provision carry parametric clauses (verified against engine card text). The Supporter/Trainer
+    fetch targets are OUTSIDE `_FETCH_POKEMON_TARGETS`, so the Pokémon-only `_search_deck_set` ignores
+    them — they never disturb the whiff/redundancy signals; they are foundation for the Supporter-tutor
+    closure branch. Ultra Ball's discard-2 cost rides its Pokémon fetch clause (still Pokémon-typed)."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.clauses(1219) == ({"kind": "fetch", "target": "trainer", "zone": "deck"},)   # Petrel
+    assert eff.clauses(1122)[0] == {"kind": "fetch", "target": "supporter", "zone": "deck", "dig": 7}
+    assert eff.clauses(1071)[0] == {"kind": "fetch", "target": "supporter", "zone": "deck",
+                                    "trigger": "on_bench_play"}                              # Meowth ex
+    assert eff.clauses(1120) == ({"kind": "coin", "effect": "discard_opp_energy", "amount": 1},)
+    assert eff.clauses(17)[0] == {"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3,
+                                  "type": "colorless", "rider": "discard_eot"}               # Ignition
+    ultra = eff.clauses(1121)[0]                                                             # Ultra Ball
+    assert ultra["target"] == "pokemon" and ultra["cost"] == "discard_2"
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
 def test_override_only_card_needs_no_probe():
     ovr = [{"kind": "heal", "amount": 150}]
     assert classify_effect_clauses({}, overrides=ovr) == ovr

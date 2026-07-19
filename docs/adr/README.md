@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0065.**
+**Next free number: 0066.**
 
 ## Index
 
@@ -90,3 +90,4 @@ verification), and its filename prefix is correct.
 | [0062](0062-energy-denial-is-what-the-strip-actually-takes-away.md) | Energy denial is what the strip actually takes away, not whether Energy is present | Accepted (grilled 2026-07-14, `/grill-with-docs`) and **BUILT 2026-07-14 (`/tdd`)**, default |
 | [0063](0063-a-booster-scales-the-oracle-and-a-doomed-body-denies-nothing.md) | A booster scales the oracle; a doomed body denies nothing; banked Energy is worth what it will pay for | Accepted and **BUILT 2026-07-14 (`/tdd`)**, default ON — amends ADR-0062 |
 | [0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md) | Incoming counts the opponent's next development step, budgeted by the Read | Accepted (grilled 2026-07-16) and **BUILT 2026-07-16/17** — all six decisions, suite-green; deprecates+removes ADR-0043, amends the `incoming-affordability` WON'T-FIX |
+| [0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md) | Card worth is one marginal oracle with a closure-graph backend | Accepted (grilled 2026-07-17, Rounds 7–9) and **BUILT 2026-07-18** — the module seam (`fetch_closure.py` + `card_worth.py`); the four-shadow value convergence STAGED; amends ADR-0060 |

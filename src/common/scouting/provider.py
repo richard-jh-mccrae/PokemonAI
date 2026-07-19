@@ -50,8 +50,8 @@ class CardStat:
     megaEx: bool = False
     aceSpec: bool = False              # ACE SPEC — one/deck, irreplaceable; CardStat feeds
                                        # 'protect the ACE SPEC' rules (e.g. Hero's Cape)
-    hasAbility: bool = False           # Pokémon w/ Ability (CardData.skills, hp>0). Salvatore's
-                                       # fetch-filter excludes ability-bearing Evolution targets (cf _FETCH_FILTERS)
+    hasAbility: bool = False           # Pokémon w/ Ability (CardData.skills, hp>0). Salvatore's fetch
+                                       # clause excludes ability-bearing Evolutions (`no_ability`, card_effects.json)
     hpBonus: int = 0                   # flat HP a Tool grants holder (e.g. Hero's Cape +100),
                                        # parsed from skill text — engine has no structured field.
                                        # Primitive behind the general +HP-tool breakpoint model.
@@ -242,11 +242,14 @@ class AttackStat:
     hiddenSample: int = 0              # units unknowable closed-form — "max" assumes every sampled card
                                        # fuels (Incoming ceiling); "min"/"exact" 0 unless deck tracker has hidden_units
     hiddenEnergyType: int | None = None  # deck facts + Basic-{X} filter -> oracle computes pigeonhole floor/EV
-    recoverN: int = 0                  # energy-recover rider ("Attach up to N Basic {X} from discard"):
-                                       # max cards re-attached (Aura Jab / Regi Charge; pool-verified 6)
+    recoverN: int = 0                  # energy-accel rider ("Attach up to N Basic {X} from ZONE"):
+                                       # max cards attached (Aura Jab discard / Turbo Flare deck)
     recoverEnergyType: int | None = None   # the rider's Basic-{X} filter (None = any Basic Energy)
     recoverTarget: str | None = None   # scope "self"/"bench"/"any" — Tactical credits
-                                       # min(recoverN, matching discard fuel) as development
+                                       # min(recoverN, matching zone fuel, recipient need) as development
+    recoverSource: str | None = None   # the rider's fuel zone: "discard" (visible pile — Aura Jab) or
+                                       # "deck" (whole-deck search — Turbo Flare); None = no rider.
+                                       # The fuel bound branches on this (`_recover_units`)
     requiresBench: tuple | None = None  # attack does NOTHING unless ALL these names sit on attacker's
                                        # Bench (Cosmic Beam/Lunatone, Guardian Burst/Uxie+Azelf;
                                        # pool 2). Oracle zeroes exact/min on the live board; "max"
@@ -344,6 +347,7 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
             recoverN=(recover[0] if recover else 0),
             recoverEnergyType=(recover[1] if recover else None),
             recoverTarget=(recover[2] if recover else None),
+            recoverSource=(recover[3] if recover else None),
             requiresBench=requires_bench,
             selfReturn=parse_attack_self_return(text),
             nextTurnReduction=trans.get("reduction", 0),

@@ -104,6 +104,13 @@ _PLANNER_DECKOUT_TURNS = 3     # "near deck-out" horizon: fire only when they ex
 _RARE_CANDY_ID = 1079         # BUILD 1 (`enabler_item_composer`): Rare Candy (Item, SVI 191) — the Basic→
                               # Stage-2 evolve SKIP. Matched by id (no Function Tag): behaviorally unique,
                               # single card, no other consumer. Card text verified at EN_Card_Data.csv id 1079.
+# ═══ WP1/WP5 — Stage-1 fetch CLOSURE for the Gamble Rung (hypergeometric-fetch-closure spec) ═══════
+# The tutor/recycle PREDICATES a drawn card needs to enable a one-short KO (type-lock, source zone,
+# target class) live in the card REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032),
+# authored in `tools/meta_tracker/effect_overrides.json` and verified against engine card text, so the
+# closure NEVER parses card text (Round 11 ruling). Fighting Gong's generic `tutor_energy` tag can't
+# carry its {F}-lock; its `{"kind":"fetch","target":"basic_energy","energy_type":6}` clause does. The
+# consumers are `_fetch_reaches_slot` (energy, WP1) and `_fetch_reaches_pokemon` (Pokémon, WP5).
 _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal → the candidate line goals that
               "ko_on_path": {"ko_for_prizes", "ko_key_threat"},   # serve it (develop/close have no specific
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
@@ -1509,30 +1516,75 @@ class PlannerMixin:
             return stand_down("active already reaches a KO")
         if any(t.tactical >= KO_SCORE for t in traces):
             return stand_down("a KO is already on the tuned menu")
-        if board.wincon_in_hand and not board.wincon_in_play:
-            return stand_down("protected hand: wincon in hand")
-        if board.line_preevo_in_hand:
-            return stand_down("protected hand: line pre-evolution in hand")
-        if board.irreplaceable_tool_in_hand:
-            return stand_down("protected hand: ACE-SPEC Tool in hand")
-        counts = board.deck_known_counts
-        if not counts:
-            return stand_down("pre-anchor: no exact deck counts")
+        # WP6: the binary protected-hand stand-downs (wincon / line pre-evo / ACE-SPEC Tool in hand)
+        # are REPLACED by the graded keep-cost priced into the det baseline below — a wincon with its
+        # tutors live shuffles cheap, an irreplaceable one-of near its full role value (the currency-
+        # zone rule: replace the guard family, never bolt on beside it).
         from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
         me = self._my_player(obs)
         hand = [c for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        hand_ids = [c.get("id") for c in hand]                # WP6: for the shuffle keep-cost
         ma = next((p for p in (me.get("active") or []) if p), None)
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
         stat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
         if not (hp and stat and ma):
             return None
-        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, counts, hand)
+        discard_basic_types = {                               # WP1: Basic-Energy types in my visible
+            st.energyType for c in (me.get("discard") or [])  # discard — the recycle closure's source
+            if c and (st := self.stats.get(c.get("id"))) is not None
+            and st.is_basic_energy and st.energyType is not None}
+        # WP2 — the closure-COUNTS the classes are built over, and the window `hit` that prices them.
+        # ANCHORED (prizes resolved): exact deck counts, a plain window hypergeometric. PRE-ANCHOR:
+        # the decklist is still fully known (own deck) — only the prize assignment of unseen copies is
+        # random, so build the classes over the unseen counts (`decklist − visible`) and price with the
+        # prize-split-weighted window sum. The old `if not deck_known_counts: return None` priced EVERY
+        # pre-anchor gamble at ZERO — the modeling-gap-as-caution failure the whole spec attacks.
+        counts = board.deck_known_counts
+        anchored = bool(counts)
+        if anchored:
+            class_counts = counts
+            deck_count = sum(counts.values())
+            prizes_hidden = 0
+        else:
+            from collections import Counter as _Counter
+            unseen = _Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))    # copies provably outside deck+prizes
+            class_counts = {cid: n for cid, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(class_counts.values()) - prizes_hidden   # hidden deck cards (H − prizes)
+            if deck_count <= 0 or not class_counts:
+                return stand_down("pre-anchor: deck bookkeeping unresolved")
+        classes = self._gamble_ko_classes(board, stat, ma, opp, hp, class_counts, hand, discard_basic_types)
+        classes = classes + self._gamble_evolution_ko_classes(obs, board, ma, opp, class_counts, hand)
+        classes = classes + self._gamble_pump_ko_classes(obs, board, stat, ma, opp, hp, class_counts, hand)
+        classes = classes + self._gamble_gust_ko_classes(obs, board, ma, self._opp_player(obs), hand,
+                                                         class_counts)
+        classes = classes + self._gamble_survival_classes(obs, board, me, class_counts, hand)
         if not classes:
             return stand_down("no one-enabler-short KO class on this board")
         det = self._gamble_det_baseline(board, stat, ma, opp, hp, traces, hand)
-        pool = sum(counts.values()) + max(0, len(hand) - 1)   # the shuffle-grown draw pool
-        burst_copies = self._gamble_burst_copies(counts, hand, stat)   # the recovery class (below)
+        pool = deck_count + max(0, len(hand) - 1)             # the shuffle-grown draw pool
+        burst_copies = self._gamble_burst_copies(class_counts, hand, stat)   # the recovery class (below)
+        from common.deck_odds import draw_hit_probability, draw_hit_with_engines
+        if anchored:
+            def hit(cp, n):
+                return draw_hit_probability(cp, pool, n)
+        else:
+            def hit(cp, n):
+                return self._prize_split_hit(cp, deck_count, prizes_hidden, pool, n)
+        # WP4 — the Stage-2 draw-engine windows, per class (the class's own sought/supplement ids are
+        # EXCLUDED so a Drakloak that is itself the sought evolution never double-counts). Engines are
+        # an ANCHORED-only sharpening: pre-anchor the prize-split window stays plain (under-count,
+        # never a guess about where the engine copies sit).
+        class_engines = []
+        for _c, _v, _l, sought, (_sc, sup_ids) in classes:
+            if anchored:
+                class_engines.append(self._gamble_draw_engines(
+                    me, class_counts, set(sought) | set(sup_ids)))
+            else:
+                class_engines.append((0, (), []))
         best = None                                           # (ev, index, rationale)
         evals = []                                            # per (refresh option × class) working rows
         for i, o in enumerate(options):
@@ -1543,9 +1595,29 @@ class PlannerMixin:
             if (ns is None or cid is None or not self.functions
                     or "shuffle_hand" not in self.functions.tags(cid)):
                 continue
-            for copies, ko_value, label, sought in classes:
-                from common.deck_odds import draw_hit_probability
-                p = sum(draw_hit_probability(copies, pool, n) for n in ns) / len(ns)
+            # The Supporter-tutor supplement is live only for an ITEM refresh (Unfair Stamp) with the
+            # one-per-turn Supporter slot unspent — a Supporter refresh spends the slot, so a drawn
+            # Supporter tutor is dead in ITS window (spec §Missing, the 4-of-5 rule).
+            rst = self.stats.get(cid) if self.stats else None
+            sup_live = bool(rst is not None and getattr(rst, "is_item", False)
+                            and not board.supporter_played)
+            # WP6: the KEEP-COST of shuffling this refresh's hand away (the played refresh itself is
+            # discarded, not shuffled) — Σ role value × (1 − re-access odds) over the shuffle redraw.
+            # The gamble must beat det PLUS this graded floor, replacing the binary protected-hand
+            # stand-downs: a KO (≈ KO_SCORE) dwarfs it, an irreplaceable one-of raises the bar.
+            keep_ids = list(hand_ids)
+            if cid in keep_ids:
+                keep_ids.remove(cid)
+            hand_keep = sum(self._keep_cost(hid, class_counts, pool, max(ns), board) for hid in keep_ids)
+            for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
+                    in zip(classes, class_engines):
+                eff = copies + (sup_copies if sup_live else 0)
+                if e_cp:
+                    # WP4: the missed refresh may still hit a usable draw engine — its window digs
+                    # the SAME class outs over the thinned pool (the two-window closed form).
+                    p = sum(draw_hit_with_engines(eff, pool, n, e_cp, e_ws) for n in ns) / len(ns)
+                else:
+                    p = sum(hit(eff, n) for n in ns) / len(ns)
                 ev = p * ko_value
                 if burst_copies and det > 0:
                     # the RECOVERY class: the miss branch may still redraw the held burst Energy
@@ -1553,22 +1625,60 @@ class PlannerMixin:
                     # deterministic line held — the "no {W}, but the Ignition came back → Nebula
                     # anyway" branch. Independence approximation on the conditional (documented;
                     # errs small, and only ever ADDS honest EV to the miss side).
-                    p_re = sum(draw_hit_probability(burst_copies, pool, n) for n in ns) / len(ns)
+                    p_re = sum(hit(burst_copies, n) for n in ns) / len(ns)
                     ev += (1 - p) * p_re * det
-                evals.append({"i": i, "cid": cid, "draws": max(ns), "label": label,
-                              "p": round(p, 3), "ev": round(ev, 1)})
-                if ev > det and (best is None or ev > best[0]):
-                    best = (ev, i, f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} "
-                                   f"for the KO (EV {ev:.0f} > held line {det:.0f})")
+                row = {"i": i, "cid": cid, "draws": max(ns), "label": label,
+                       "p": round(p, 3), "ev": round(ev, 1)}
+                if sup_live and sup_copies:
+                    row["post_item_sup"] = sup_copies         # the Item-refresh Supporter supplement
+                if hand_keep:
+                    row["keep"] = round(hand_keep, 1)         # WP6: the shuffled-hand keep-cost floor
+                evals.append(row)
+                bar = det + hand_keep                         # WP6: beat the held line + the keep-cost
+                if ev > bar and (best is None or ev - hand_keep > best[0]):
+                    best = (ev - hand_keep, i,
+                            f"gamble: {p:.0%} the {max(ns)}-card draw finds {label} for the KO "
+                            f"(EV {ev:.0f} > held line {det:.0f} + keep {hand_keep:.0f})")
         self._gamble_trace = {                     # the full working, win or stand-down (ADR-0019)
-            "considered": True, "pool": pool, "det": round(det, 1), "burst": burst_copies,
-            "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s}
-                        for c, v, la, s in classes],
+            "considered": True, "anchored": anchored, "prizes_hidden": prizes_hidden,
+            "pool": pool, "det": round(det, 1), "burst": burst_copies,
+            "classes": [{"label": la, "copies": c, "value": round(v, 1), "sought": s,
+                         **({"post_item_sought": si, "post_item_copies": sc} if sc else {}),
+                         **({"engine_copies": ec, "engine_windows": list(ew), "engine_ids": ei}
+                            if ec else {})}
+                        for (c, v, la, s, (sc, si)), (ec, ew, ei) in zip(classes, class_engines)],
             "evals": evals,
             "best": ([best[1], round(best[0], 1)] if best is not None else None)}
         if best is None:
             return None
         return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
+
+    def _prize_split_hit(self, u: int, deck_count: int, prizes_hidden: int, pool: int, draws: int) -> float:
+        """WP2: P(≥1 enabler in the ``draws``-card refresh) PRE-ANCHOR — the decklist is fully known,
+        only the prize assignment of the class's ``u`` unseen enabler copies is random. Sum over
+        ``j`` = copies-that-landed-in-the-deck of the hypergeometric prize-split weight × the window
+        draw with ``j`` copies: ``Σ_j [C(deck,j)·C(prizes,u−j)/C(deck+prizes,u)] × hit(j, pool, n)``
+        — ≤ ``u+1`` plain ``math.comb`` terms (``u ≤ 4`` in practice). The exact closed form the
+        ``if not deck_known_counts: return None`` gate replaced with a zero (the modeling-gap-as-
+        caution failure the fetch-closure spec attacks). Never raises; bad input → 0.0 (an endorser
+        fails closed). Degenerates to the plain window draw when no prizes are hidden."""
+        from math import comb
+        from common.deck_odds import draw_hit_probability
+        try:
+            u, d, k = int(u), int(deck_count), int(prizes_hidden)
+        except Exception:
+            return 0.0
+        if u <= 0 or d <= 0:
+            return 0.0
+        if k <= 0:
+            return draw_hit_probability(u, pool, draws)        # no hidden prizes -> every copy in deck
+        h = d + k
+        u = min(u, h)                                          # can't split more copies than positions
+        denom = comb(h, u)                                     # u ≤ h -> comb(h, u) > 0, no zero-div
+        total = 0.0
+        for j in range(max(0, u - k), min(u, d) + 1):          # j = enabler copies landing in the deck
+            total += comb(d, j) * comb(k, u - j) / denom * draw_hit_probability(j, pool, draws)
+        return max(0.0, min(1.0, total))
 
     def _gamble_burst_copies(self, counts: dict, hand: list, stat) -> int:
         """Copies (pool-wide, INCLUDING the returned hand copy) of a held `discard_eot` burst Energy
@@ -1587,14 +1697,229 @@ class PlannerMixin:
             best = max(best, counts.get(cid, 0) + in_hand)
         return best
 
-    def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list):
+    def _closure_stat_of(self, cid):
+        return self.stats.get(cid) if (self.stats and cid is not None) else None
+
+    def _closure_clauses_of(self, cid):
+        return self.effects.clauses(cid) if self.effects else ()
+
+    def _card_reaccess_outs(self, cid, counts: dict) -> int:
+        """WP6/WP7: the copies in my DECK that re-access card ``cid`` once it is shuffled back in — the
+        `common.fetch_closure` graph pointed BACKWARDS. Delegates to the ONE shared closure module
+        (ADR-0065) so the gamble gain side and the keep-cost read the same implementation."""
+        from common import fetch_closure
+        return fetch_closure.reaccess_outs(cid, counts, self._closure_stat_of, self._closure_clauses_of)
+
+    def _role_value(self, cid) -> float:
+        """WP6/WP7: card ``cid``'s base worth = the MAX claim over its declared / derived Roles
+        (`_roles_of`), its behavioural tags (`TAG_TIER` — the worth-coverage fix for situational
+        Trainers/special Energy), and the energy / ACE-SPEC fallbacks. Delegates to
+        `card_worth.role_value` (ADR-0065) — the ONE currency zone; the Pilot only supplies facts."""
+        from common.card_worth import role_value
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        return role_value(
+            self._roles_of(cid),
+            is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
+            is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)),
+            tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())
+
+    def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None) -> float:
+        """WP6/WP7: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it
+        is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown ``pool``, +1 out for the
+        shuffled copy) × how realisable its role is by its deadline (`_deploy_odds`, the gate library —
+        ADR-0065 Stage 1: an undeployable evolution collapses to 0, a dead card shed freely). ``board``
+        supplies base presence for the evolution gate; omitted → the deadline factor stays 1.0."""
+        role_value = self._role_value(cid)
+        if role_value <= 0:
+            return 0.0
+        from common.card_worth import keep_cost
+        from common.deck_odds import draw_hit_probability
+        outs = self._card_reaccess_outs(cid, counts) + 1      # +1: the shuffled held copy rejoins deck
+        deadline = self._deploy_odds(cid, board, counts) if board is not None else 1.0
+        return keep_cost(role_value, draw_hit_probability(outs, pool, draws), deadline)
+
+    def _deploy_odds(self, cid, board, counts: dict) -> float:
+        """The evolution gate (`common.gate_library`, ADR-0065 Stage 1): P(card ``cid``'s role is
+        realisable by its deadline). 1.0 for a non-evolution or a deployable evolution — a bare base
+        (matched by ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0
+        for a provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
+        (keep): pre-anchor ``counts`` is the unseen deck, so a base still in the decklist keeps its
+        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega Lucario ex
+        with every Riolu evolved/gone)."""
+        from common import gate_library
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not gate_library.is_evolution(st):
+            return 1.0
+        base = getattr(st, "evolvesFrom", None)
+
+        def _named(ids) -> bool:
+            return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
+                       for i in (ids or ()))
+
+        base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
+                         and getattr(s, "name", None) == base
+                         for t, n in (counts or {}).items())
+        return gate_library.deploy_odds(
+            st,
+            base_in_play=_named(getattr(board, "in_play_ids", None)),
+            base_in_hand=_named(getattr(board, "hand_ids", None)),
+            base_reachable_in_deck=base_reach)
+
+    def _slot_basic_in_zone(self, want, lock, zone: str, counts: dict, discard_basic_types: set) -> bool:
+        """A Basic Energy that FILLS the missing slot ``want`` (``None`` = colourless: any Basic) AND
+        passes the fetch's type ``lock`` is still available in ``zone`` — the deck (``counts``) or the
+        visible discard (``discard_basic_types``). The shared availability predicate behind the
+        Item closure (`_fetch_reaches_slot`) and the post-Item-refresh Supporter closure."""
+        if lock is not None and want is not None and lock != want:
+            return False                                      # a type-locked fetch can't supply this slot
+
+        def _ok(et) -> bool:
+            if et is None:
+                return False
+            if want is not None and et != want:               # a specific slot needs its exact type
+                return False
+            return lock is None or et == lock                 # a locked fetch only finds its lock type
+
+        if zone == "deck":
+            return any((st := self.stats.get(c)) is not None and st.is_basic_energy
+                       and _ok(getattr(st, "energyType", None))
+                       for c, n in counts.items() if n > 0)
+        if zone == "discard":
+            return any(_ok(et) for et in discard_basic_types)
+        return False
+
+    def _fetch_reaches_slot(self, want, cid: int, counts: dict, discard_basic_types: set) -> bool:
+        """WP1: True iff card ``cid``'s **FETCH clauses** (``card_effects.json`` / ADR-0032 — the
+        parametric tier a boolean Function Tag can't carry) can put a Basic Energy FILLING the missing
+        slot ``want`` (``None`` = a colourless slot: any Basic) into hand, its target still reachable in
+        the clause's source zone — a whole-deck search (``zone: deck``, a matching Basic still in
+        ``counts``) or a recycle (``zone: discard``, a matching Basic type in the visible discard). The
+        predicate lives in the card representation, NOT a card-text parse: Fighting Gong's ``{F}`` lock
+        is its ``energy_type: 6`` clause, which the generic ``tutor_energy`` tag can't express. () for a
+        card with no fetch clause. Errs by under-counting only (an endorser)."""
+        return any(cl.get("kind") == "fetch" and cl.get("target") == "basic_energy"
+                   and self._slot_basic_in_zone(want, cl.get("energy_type"), cl.get("zone"),
+                                                counts, discard_basic_types)
+                   for cl in (self.effects.clauses(cid) if self.effects else ()))
+
+    def _supporter_energy_tutor_reaches(self, tid, want, counts: dict, discard_basic_types: set) -> bool:
+        """WP1 (Supporter branch): True iff Supporter ``tid`` can put a slot-filling Energy in hand or
+        attach it, its target still reachable — LIVE only while the one-per-turn Supporter slot is
+        unspent, which inside the refresh window means the refresh itself was an ITEM (Unfair Stamp;
+        4/5 refreshes are Supporters and spend the slot — the caller gates on that). Three clause
+        shapes (`card_effects.json`): an ``energy``/``basic_energy`` deck fetch (Hilda — Special
+        Energy ignored, Basics-only matching, under-count); an UNconditional ``accel`` (Crispin
+        attaches directly — bypasses nothing here, the manual attach is unspent anyway; a conditioned
+        accel like Rosa's fails closed); the ``trainer`` fetch 2-hop (Petrel → an energy-fetch ITEM
+        still in deck whose own target is reachable — spec-verified legal in one turn)."""
+        st = self.stats.get(tid) if self.stats else None
+        if st is None or not st.is_supporter:
+            return False
+        for cl in (self.effects.clauses(tid) if self.effects else ()):
+            kind = cl.get("kind")
+            if (kind == "fetch" and cl.get("zone") == "deck"
+                    and cl.get("target") in ("basic_energy", "energy")):
+                if self._slot_basic_in_zone(want, cl.get("energy_type"), "deck",
+                                            counts, discard_basic_types):
+                    return True
+            elif kind == "accel" and cl.get("energy") == "basic" and not cl.get("condition"):
+                if self._slot_basic_in_zone(want, None, cl.get("source"),
+                                            counts, discard_basic_types):
+                    return True
+            elif kind == "fetch" and cl.get("zone") == "deck" and cl.get("target") == "trainer":
+                if any(n > 0 and (ist := self.stats.get(t)) is not None and ist.is_item
+                       and self._fetch_reaches_slot(want, t, counts, discard_basic_types)
+                       for t, n in counts.items()):
+                    return True
+        return False
+
+    def _gamble_draw_engines(self, me: dict, counts: dict, exclude: set) -> tuple:
+        """WP4: the refresh window's usable DRAW ENGINES — ``(engine_copies, stage_windows,
+        engine_ids)`` for `deck_odds.draw_hit_with_engines`. A drawn engine copy is usable iff its
+        ability is unconditional-once-in-play (`draw` clause, ``condition: once_per_turn_ability`` —
+        Drakloak's Recon, Dudunsparce's Run Away Draw; Fezandipiti's post-KO gate and Lunatone's
+        Solrock+hand-discard gate fail CLOSED — the refresh empties the hand, the gate can't be
+        promised) AND an eligible base for it is already on board (rules.md §4: a body in play since
+        last turn, ``appearThisTurn`` False — evolving the drawn engine onto it is legal this turn;
+        turn ≥ 2 is gated upstream). Depth = board-supported capacity, Σ per line of min(copies in
+        pool, eligible bases) — never a hardcoded stage count (spec §recursion point 2). The stage
+        window = the MINIMUM usable window (Recon sees 2, take-1 greedy; Run Away Draw sees 3) —
+        conservative when lines mix. ``exclude`` drops ids the class already counts as outs (a
+        Drakloak that IS the sought evolution never double-counts). Errs by under-counting only."""
+        bases: dict = {}                                      # base name -> eligible bodies on board
+        for b in ((me.get("active") or []) + (me.get("bench") or [])):
+            if not b or b.get("appearThisTurn"):
+                continue
+            st = self.stats.get(b.get("id")) if self.stats else None
+            nm = getattr(st, "name", None)
+            if nm:
+                bases[nm] = bases.get(nm, 0) + 1
+        ids, copies_total, activations, min_window = [], 0, 0, None
+        for eid, n in counts.items():
+            if n <= 0 or eid in exclude:
+                continue
+            st = self.stats.get(eid) if self.stats else None
+            base = getattr(st, "evolvesFrom", None) if st else None
+            if not base or not bases.get(base):
+                continue
+            for cl in (self.effects.clauses(eid) if self.effects else ()):
+                if cl.get("kind") == "draw" and cl.get("condition") == "once_per_turn_ability":
+                    window = int(cl.get("window") or cl.get("amount") or 0)
+                    if window <= 0:
+                        break
+                    ids.append(eid)
+                    copies_total += n
+                    activations += min(n, bases[base])
+                    min_window = window if min_window is None else min(min_window, window)
+                    break
+        if not ids or not activations:
+            return 0, (), []
+        return copies_total, (min_window,) * activations, sorted(ids)
+
+    def _supporter_evolution_tutor_reaches(self, tid, eid, counts: dict) -> bool:
+        """WP5 (Supporter branch): True iff Supporter ``tid`` can deliver the evolution ``eid`` —
+        a deck fetch reaching it (Hilda's `evolution` clause; Salvatore's rush-evolve puts it
+        straight ONTO the body) or the Petrel 2-hop (→ an Item Pokémon-tutor still in deck that
+        reaches it). Live only post-Item-refresh (the caller gates on the Supporter slot)."""
+        st = self.stats.get(tid) if self.stats else None
+        if st is None or not st.is_supporter:
+            return False
+        if self._fetch_reaches_pokemon(eid, tid, counts):
+            return True
+        return any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
+                   and cl.get("target") == "trainer"
+                   and any(n > 0 and (ist := self.stats.get(t)) is not None and ist.is_item
+                           and self._fetch_reaches_pokemon(eid, t, counts)
+                           for t, n in counts.items())
+                   for cl in (self.effects.clauses(tid) if self.effects else ()))
+
+    def _fetch_reaches_pokemon(self, target_id: int, cid: int, counts: dict) -> bool:
+        """WP5/WP7: True iff card ``cid``'s ``zone: deck`` FETCH clauses can pull the Pokémon
+        ``target_id`` (still in ``counts``) — Poké Pad's ``no_rule_box`` never fetches a Rule-Box Mega
+        ex. Delegates to the shared `common.fetch_closure` graph (ADR-0065)."""
+        from common import fetch_closure
+        return fetch_closure.fetch_reaches_pokemon(
+            target_id, cid, counts, self._closure_stat_of, self._closure_clauses_of)
+
+    def _gamble_ko_classes(self, board, stat, ma, opp, hp: int, counts: dict, hand: list,
+                           discard_basic_types: set):
         """The KO-enabling **Outcome Classes** of a refresh draw: for each of my Active's attacks
-        exactly ONE Energy short whose damage fells the opponent's Active, the class of draws
-        containing ≥1 Basic Energy that fills the missing slot (its specific type, or any Basic for
-        a colourless slot). Returns ``[(enabler_copies_in_pool, ko_value, label, sought_ids), …]``
-        — ``sought_ids`` = the deck card ids that ARE the outs, for the `gamble` telemetry block; an
-        enabler already in HAND voids the class (no gamble needed — attaching it is the
-        deterministic line)."""
+        exactly ONE Energy short whose damage fells the opponent's Active, the class of draws whose
+        entry points ASSEMBLE a Basic Energy filling the missing slot (its specific type, or any Basic
+        for a colourless slot). Entry points = the literal Basic Energy copies PLUS the **fetch-closure
+        outs** (WP1): a drawable card with a `basic_energy` FETCH clause (`card_effects.json`, read by
+        `_fetch_reaches_slot`) whose target is still reachable — a whole-deck search (Energy Search /
+        Fighting Gong {F}-locked / Energy Search Pro) with a matching Basic still in deck, or a recycle
+        (Night Stretcher / Energy Retrieval / Max Rod) with a matching Basic in the visible discard.
+        Returns ``[(copies, ko_value, label, sought_ids, (sup_copies, sup_ids)), …]`` — ``sought_ids``
+        = the deck card ids that ARE the always-live outs (literal ∪ Item closure); the 5th slot is the
+        **post-Item-refresh Supporter supplement** (Hilda / Crispin / the Petrel 2-hop,
+        `_supporter_energy_tutor_reaches`), counted by the pricing loop ONLY when the refresh being
+        priced is an ITEM (Unfair Stamp) and the Supporter slot is unspent — after a Supporter refresh
+        the slot is spent and a drawn Supporter tutor is dead (spec §Missing, the 4-of-5 rule). An
+        enabler already in HAND — a held Basic, a held fetch Item that reaches the slot, or (slot
+        unspent) a held Supporter tutor that reaches it — voids the class (no gamble needed; playing it
+        is the deterministic line). Errs by UNDER-counting the outs only (an endorser)."""
         out = []
         attached = self._attached_type_counts(ma)
         hand_ids = [c.get("id") for c in hand]
@@ -1622,14 +1947,240 @@ class PlannerMixin:
                 et = getattr(est, "energyType", None)         # colourless slots — under-counted, safe)
                 return (et == want) if want is not None else True
             if any(_enables(cid) for cid in hand_ids):
-                continue                                      # hand already holds the enabler
-            sought = sorted(cid for cid, n in counts.items() if n > 0 and _enables(cid))
+                continue                                      # hand already holds the Basic enabler
+            if any(self._fetch_reaches_slot(want, cid, counts, discard_basic_types)
+                   for cid in hand_ids):                      # …or a held fetch card that reaches it:
+                continue                                      # deterministic tutor line — no gamble needed
+            if not board.supporter_played and any(
+                    self._supporter_energy_tutor_reaches(cid, want, counts, discard_basic_types)
+                    for cid in hand_ids):                     # a held Supporter tutor + a live slot is
+                continue                                      # the deterministic line too (play it now)
+            out_ids = {cid for cid, n in counts.items() if n > 0 and _enables(cid)}   # literal Basics
+            for tid, n in counts.items():                     # WP1 closure entry points (fetch clauses)
+                if n > 0 and tid not in out_ids and self._fetch_reaches_slot(
+                        want, tid, counts, discard_basic_types):
+                    out_ids.add(tid)
+            sup_ids = sorted(tid for tid, n in counts.items() if n > 0 and tid not in out_ids
+                             and self._supporter_energy_tutor_reaches(tid, want, counts,
+                                                                      discard_basic_types))
+            sought = sorted(out_ids)
             copies = sum(counts[cid] for cid in sought)
             if copies <= 0:
                 continue
             label = f"a type-{want} Basic Energy" if want is not None else "any Basic Energy"
-            out.append((copies, KO_SCORE + self._prize_value(opp), label, sought))
+            out.append((copies, KO_SCORE + self._prize_value(opp), label, sought,
+                        (sum(counts[t] for t in sup_ids), sup_ids)))
         return out
+
+    def _gamble_evolution_ko_classes(self, obs, board, ma, opp, counts: dict, hand: list):
+        """WP5: the **evolution-KO** Outcome Class — the highest-value un-built gamble class. Where
+        ``_gamble_ko_classes`` prices only the CURRENT Active's attacks, this prices "draw an evolution
+        of my (evolution-eligible) Active → evolve it → ITS attack KOs": evolving is legal the same
+        turn (Active in play since last turn — `appearThisTurn` False, rules.md §4 L96; turn ≥ 2 is
+        already gated upstream), keeps the attached Energy (rules.md §4 L98), and a Mega ex does NOT
+        end the turn on evolving (rules.md §4 L103), so the evolved form attacks with the carried Energy
+        plus this turn's one attach. Outs = the evolution's deck copies PLUS the Item Pokémon-tutor
+        closure that fetches it (Ultra Ball / Poké Pad / Mega Signal). The 5th slot carries the
+        **post-Item-refresh Supporter supplement** (Hilda's evolution fetch, Salvatore's rush-evolve,
+        the Petrel 2-hop — `_supporter_evolution_tutor_reaches`), counted only when the refresh being
+        priced is an ITEM (Unfair Stamp) and the Supporter slot is unspent; after a Supporter refresh
+        those tutors are slot-dead. An evolution already in HAND voids the class (the deterministic
+        evolve-KO owns it, and puts a KO on the menu → the rung stands down upstream); so does a held
+        Supporter evolution-tutor while the slot is unspent. Same 5-tuples; errs by under-counting."""
+        if ma.get("appearThisTurn"):                          # placed this turn -> can't evolve (§4 L96)
+            return []
+        base = self.stats.get(ma.get("id")) if (self.stats and ma.get("id") is not None) else None
+        if base is None or not getattr(base, "name", None):
+            return []
+        energy = board.my_active_energy + 1                   # carried Energy + this turn's one attach
+        hand_ids = {c.get("id") for c in hand}
+        out = []
+        for eid in set(self.deck):                            # DIRECT evolutions of the Active in my deck
+            st = self.stats.get(eid) if self.stats else None
+            if st is None or getattr(st, "evolvesFrom", None) != base.name:
+                continue
+            if counts.get(eid, 0) <= 0 or eid in hand_ids:    # none left to draw / in hand (deterministic)
+                continue
+            if self._best_affordable_ko_value(obs, board, opp, eid, energy, body=ma) <= 0:
+                continue                                      # the evolved form doesn't reach a KO
+            if not board.supporter_played and any(
+                    self._supporter_evolution_tutor_reaches(cid, eid, counts) for cid in hand_ids):
+                continue                                      # held Supporter tutor + live slot: det line
+            out_ids = {eid}
+            for tid, n in counts.items():                     # Item Pokémon-tutor closure (fetch clauses)
+                if tid == eid or n <= 0 or tid in hand_ids:
+                    continue
+                tst = self.stats.get(tid) if self.stats else None
+                if tst is None or not getattr(tst, "is_item", False):
+                    continue                                  # Supporter tutors join only post-Item-refresh
+                if self._fetch_reaches_pokemon(eid, tid, counts):   # honours no-Rule-Box / mega predicate
+                    out_ids.add(tid)
+            sup_ids = sorted(tid for tid, n in counts.items()
+                             if n > 0 and tid != eid and tid not in out_ids and tid not in hand_ids
+                             and self._supporter_evolution_tutor_reaches(tid, eid, counts))
+            sought = sorted(out_ids)
+            copies = sum(counts.get(cid, 0) for cid in sought)
+            if copies <= 0:
+                continue
+            out.append((copies, KO_SCORE + self._prize_value(opp),
+                        f"the evolution {st.name}", sought,
+                        (sum(counts[t] for t in sup_ids), sup_ids)))
+        return out
+
+    def _gamble_pump_ko_classes(self, obs, board, stat, ma, opp, hp: int, counts: dict, hand: list):
+        """WP5: the **damage-pump** KO class — my Active's best AFFORDABLE attack (current Energy; the
+        boost is the missing piece, not Energy) is short of the KO by ≤ one boost, and drawing a
+        ``damageBoost`` Trainer (Premium Power Pro {F}+30 Item; Black Belt's +40-vs-ex Supporter) lifts
+        it over. Gates mirror `_boost_lethal_tactical` EXACTLY — the attacker-type gate (``energyType``
+        vs ``damageBoostType``, "your {F} Pokémon") and the defender ``{ex}`` gate — so the class never
+        over-credits a type-locked pump (provider.py:97-100, VERIFIED parsed). Item boosts are
+        always-live outs; Supporter boosts ride the post-Item-refresh supplement (5th slot). A held
+        boost that crosses voids the class (the deterministic play-it line). Single-copy only (short by
+        ≤ one boost — multi-copy stacking is a deeper hypergeometric, deferred); errs by under-counting."""
+        if board.turn <= 1:
+            return []
+        opp_stat = self.stats.get(opp.get("id")) if (self.stats and opp.get("id") is not None) else None
+        ctx = self._damage_context(obs)
+        hand_ids = {c.get("id") for c in hand}
+        best_dmg = 0
+        for aid in (stat.attacks or ()):
+            if self._attack_cost(aid) > board.my_active_energy:
+                continue                                      # not affordable with current Energy
+            dmg = self.predicted_damage(board.my_active_id, aid, opp, context=ctx)
+            if dmg >= hp:
+                return []                                     # an affordable KO already exists — attack
+            best_dmg = max(best_dmg, dmg)
+        if best_dmg <= 0:
+            return []
+
+        def _crosses(bst) -> bool:
+            if bst is None or not getattr(bst, "damageBoost", 0):
+                return False
+            if bst.damageBoostType is not None and getattr(stat, "energyType", None) != bst.damageBoostType:
+                return False                                  # attacker-type gate
+            if bst.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
+                return False                                  # defender {ex} gate
+            return best_dmg < hp <= best_dmg + bst.damageBoost   # short by ≤ this one boost
+        if any(_crosses(self.stats.get(cid) if self.stats else None) for cid in hand_ids):
+            return []                                         # held boost crosses -> deterministic line
+        item_ids = sorted(bid for bid, n in counts.items() if n > 0
+                          and getattr(self.stats.get(bid), "is_item", False)
+                          and _crosses(self.stats.get(bid)))
+        sup_ids = sorted(bid for bid, n in counts.items() if n > 0
+                         and getattr(self.stats.get(bid), "is_supporter", False)
+                         and _crosses(self.stats.get(bid)))
+        if not item_ids and not sup_ids:
+            return []
+        return [(sum(counts[b] for b in item_ids), KO_SCORE + self._prize_value(opp),
+                 "a damage boost for the KO", item_ids,
+                 (sum(counts[b] for b in sup_ids), sup_ids))]
+
+    def _gamble_gust_ko_classes(self, obs, board, ma, opp_player, hand: list, counts: dict):
+        """WP5: the **gust** KO class — my Active can't KO the current opp Active (else the rung stands
+        down upstream), but its affordable attack CAN KO a benched target once that target is dragged
+        up (per-target weakness via the shared `_gust_best_ko_prizes` / `_can_ko` oracle). Drawing a
+        gust Trainer (Boss's Orders 1182 — a Supporter, so it rides the post-Item-refresh supplement;
+        an Item gust would be always-live) enables it. Value = KO_SCORE + the BENCHED target's prize
+        (not the current Active's). A held gust that reaches voids the class (the deterministic
+        `gust-for-the-ko` line, already a KO on the menu). Errs by under-counting (cheapest-attack KO)."""
+        best_prizes = self._gust_best_ko_prizes(ma, opp_player, board.my_active_energy)
+        if best_prizes <= 0:
+            return []
+        hand_ids = {c.get("id") for c in hand}
+
+        def _is_gust_trainer(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return bool(st and (st.is_item or st.is_supporter) and self.functions
+                        and "gust" in self.functions.tags(cid))
+        if any(_is_gust_trainer(cid) for cid in hand_ids):
+            return []                                         # held gust -> deterministic gust-KO line
+        item_ids = sorted(bid for bid, n in counts.items() if n > 0 and _is_gust_trainer(bid)
+                          and getattr(self.stats.get(bid), "is_item", False))
+        sup_ids = sorted(bid for bid, n in counts.items() if n > 0 and _is_gust_trainer(bid)
+                         and getattr(self.stats.get(bid), "is_supporter", False))
+        if not item_ids and not sup_ids:
+            return []
+        return [(sum(counts[b] for b in item_ids), KO_SCORE + best_prizes,
+                 "a gust for the benched KO", item_ids,
+                 (sum(counts[b] for b in sup_ids), sup_ids))]
+
+    def _heal_restriction_ok(self, restriction, astat) -> bool:
+        """WP5 survival: can a heal clause with this ``restriction`` target my (doomed) Active
+        ``astat``? None / ``active_only`` always can; ``mega_only`` needs a Mega ex; ``psychic_only``
+        a {P} body. An unknown restriction fails CLOSED (under-count — the endorser never assumes a
+        heal it can't verify reaches my Active)."""
+        if restriction in (None, "active_only"):
+            return True
+        if restriction == "mega_only":
+            return bool(getattr(astat, "megaEx", False))
+        if restriction == "psychic_only":
+            return getattr(astat, "energyType", None) == 5
+        return False
+
+    def _heal_averts_doom(self, cid, astat, cur_hp: int, incoming: int) -> bool:
+        """WP5 survival: True iff card ``cid`` has a HEAL clause (`card_effects.json`) that lifts my
+        doomed Active from ``cur_hp`` ABOVE the ``incoming`` (so next turn's biggest attack no longer
+        KOs it) — ``amount: all`` heals to max HP. Only heals whose restriction can target my Active
+        count (`_heal_restriction_ok`); a conditional heal (a `condition` gate) fails closed."""
+        max_hp = getattr(astat, "hp", 0) or 0
+        for cl in (self.effects.clauses(cid) if self.effects else ()):
+            if cl.get("kind") != "heal" or cl.get("condition"):
+                continue                                      # a gated heal can't be promised
+            if not self._heal_restriction_ok(cl.get("restriction"), astat):
+                continue
+            amount = cl.get("amount")
+            healed = max_hp if amount == "all" else min(max_hp, cur_hp + int(amount or 0))
+            if healed > incoming:
+                return True
+        return False
+
+    def _gamble_survival_classes(self, obs, board, me, counts: dict, hand: list):
+        """WP5 (survival): the bench-empty PREDICTED-LOSS class — my Active is doomed (opp KOs it next
+        turn, ADR-0064 `active_doomed`) AND my Bench is EMPTY, so a KO of my only Pokémon LOSES the
+        game (no Pokémon in play → you lose). Two out families avert it: **bench-fill** — any benchable
+        Basic, or Poffin's bench-fill fetch of a ≤70-HP Basic still in deck (a KO is no longer
+        game-over); and **heal** — a drawn heal that lifts the Active above the incoming
+        (`_heal_averts_doom`, e.g. Wally's on a damaged Mega ex). Value = KO_SCORE (a game loss averted
+        is ±KO_SCORE-scale by the loss rung; spec §Round 5), EXEMPT from the keep-value blocker. Item
+        outs are always-live; Supporter heals ride the post-Item supplement. A held Basic (bench it) or
+        a held heal that averts (play it) voids the class — the deterministic line. Errs by
+        under-counting."""
+        if not board.active_doomed or any(b for b in (me.get("bench") or [])):
+            return []                                         # not doomed, or a bench body already exists
+
+        def _benchable(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return bool(st and st.is_pokemon and not getattr(st, "evolvesFrom", None))
+        hand_ids = {c.get("id") for c in hand}
+        if any(_benchable(cid) for cid in hand_ids):
+            return []                                         # a Basic in hand -> bench it, no gamble
+        # bench-fill outs (always-live): benchable Basics + Poffin's fetch of one.
+        out_ids = {cid for cid, n in counts.items() if n > 0 and _benchable(cid)}
+        for tid, n in counts.items():                         # Poffin: a bench-fill fetch reaching a Basic
+            if n > 0 and tid not in out_ids and any(
+                    _benchable(bid) and self._fetch_reaches_pokemon(bid, tid, counts) for bid in counts):
+                out_ids.add(tid)
+        # heal outs: lift the doomed Active above the incoming (Item -> always-live; Supporter -> supp).
+        sup_ids: set = set()
+        astat = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
+        ma = next((p for p in (me.get("active") or []) if p), None)
+        cur_hp = (ma or {}).get("hp", 0)
+        incoming = board.incoming_active_damage
+        if incoming and astat and ma and cur_hp < getattr(astat, "hp", 0):   # damage to heal + a threat
+            if any(self._heal_averts_doom(cid, astat, cur_hp, incoming) for cid in hand_ids):
+                return []                                     # a held heal averts -> deterministic line
+            for hid, n in counts.items():
+                if n <= 0 or hid in out_ids or not self._heal_averts_doom(hid, astat, cur_hp, incoming):
+                    continue
+                hst = self.stats.get(hid) if self.stats else None
+                (out_ids if getattr(hst, "is_item", False) else sup_ids).add(hid)
+        sought = sorted(out_ids)
+        sup = sorted(sup_ids)
+        copies = sum(counts[cid] for cid in sought)
+        sup_copies = sum(counts[s] for s in sup)
+        if copies <= 0 and sup_copies <= 0:
+            return []
+        return [(copies, KO_SCORE, "a Basic or heal to avoid the loss", sought, (sup_copies, sup))]
 
     def _gamble_det_baseline(self, board, stat, ma, opp, hp: int, traces, hand: list) -> float:
         """The DETERMINISTIC baseline a gamble must beat: the best tactical already on the menu, or

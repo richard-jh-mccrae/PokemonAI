@@ -11,7 +11,8 @@ from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Hypothesis, Line, Plan, Strategy
 from pilot_helpers import (
-    ACTIVE, BENCH, CARD, DAMAGE, HAND, PLAY, attack_opt, card_opt, make_select, opt, poke, state)
+    ACTIVE, BENCH, CARD, DAMAGE, HAND, PLAY, attack_opt, card_opt, fetch_effects, make_select, opt,
+    poke, state)
 
 ATTACH = 8
 END = 14                # OptionType.END — end turn
@@ -51,7 +52,7 @@ def _pilot(**kw):
                  general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
                  functions=CardFunctions({IGNITION: ["discard_eot"], 1223: ["draw", "shuffle_hand"],
                                           1227: ["draw", "shuffle_hand"], 1189: ["search", "rush_evolve"]}),
-                 **kw)
+                 effects=fetch_effects({1189: ["search", "rush_evolve"]}), **kw)
 
 
 # ---------------------------------------------------------------- build-active-wincon
@@ -137,7 +138,8 @@ def test_dont_rush_evolve_without_a_preevolution_in_play():
     pilot2 = Pilot(Strategy(roles={WINCON: ["win_condition"]},
                             lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                    deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                   functions=CardFunctions({1189: ["search", "rush_evolve"]}))
+                   functions=CardFunctions({1189: ["search", "rush_evolve"]}),
+                   effects=fetch_effects({1189: ["search", "rush_evolve"]}))
     has_preevo = make_select([play_salvatore],
                              current=state(active=poke(WINCON, hp=330), bench=[poke(PREEVO, hp=70)], hand=[1189]))
     assert "dont-rush-evolve-without-target" not in _fired(pilot2.explain(has_preevo).options[0])
@@ -344,7 +346,7 @@ def _search_pilot(deck):
     WINCON the only Mega ex)."""
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}), deck=deck,
                  general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
-                 functions=CardFunctions(_FNS))
+                 functions=CardFunctions(_FNS), effects=fetch_effects(_FNS))
 
 
 def _board_of(pilot, current):
@@ -466,7 +468,7 @@ def _endorse_ultra_pilot():
                                             when=lambda c: c.card_id == ULTRA_BALL)])
     return Pilot(strat, deck=[WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54,
                  general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
-                 functions=CardFunctions(_FNS))
+                 functions=CardFunctions(_FNS), effects=fetch_effects(_FNS))
 
 
 @pytest.mark.req("REQ-GEN-0033")

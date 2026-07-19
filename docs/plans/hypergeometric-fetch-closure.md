@@ -387,23 +387,53 @@ for the rest of the match. Seam: a small, bounded first-reveal credit on deck-re
 kept well below a real fetch need so we never dig just to peek (the ADR-0023 over-play risk); at
 minimum, tie-break equal fetch lines toward the one that anchors.
 
-## Grill checklist → build checklist (verdicts as of 2026-07-17)
-- [ ] Outs count **tutor-closure entry points** — FAILS today (`_gamble_ko_classes` literal-only; v1 above).
-- [ ] Closure includes the **recycle/discard branch** — MISSING from code and from the original note.
+## Grill checklist → build checklist (verdicts as of 2026-07-17; ✅ = BUILT 2026-07-18, suite-green)
+- [x] ✅ **WP1** Outs count **tutor-closure entry points** — BUILT (`_ENERGY_FETCH_ITEMS` +
+      `_fetch_reaches_slot`: Item energy-tutors join the class outs, verified against card text).
+- [x] ✅ **WP1** Closure includes the **recycle/discard branch** — BUILT (Night Stretcher / Energy
+      Retrieval / Max Rod, from the visible discard; a class can now EXIST via the recycler alone).
 - [ ] **Hand-expansion** chains modeled — not built (first expansion only, via the Gamble window itself).
-- [ ] **1 Supporter / 1 attach / costs** charged along the chain — spec verified against rules.md §3.
-- [ ] Entry-window × prize-split composition (NOT per-hop draws) — corrected spec, not built.
+- [x] ✅ **1 Supporter / 1 attach** charged along the chain — BUILT 2026-07-18: the classes carry a
+      **post-Item-refresh Supporter supplement** (`_supporter_energy_tutor_reaches` /
+      `_supporter_evolution_tutor_reaches`: Hilda's energy/evolution fetch, Crispin's unconditional
+      accel — Rosa's prize-behind condition fails closed — Salvatore's rush-evolve, and the Petrel
+      2-hop via an energy/Pokémon-fetch Item still in deck), applied per refresh option ONLY when the
+      refresh is an ITEM (Unfair Stamp) and the Supporter slot is unspent — the 4-of-5 rule priced,
+      not assumed. A held Supporter tutor + a live slot voids the class (deterministic line).
+      Discard COSTS (Ultra Ball's discard-2 charged against the assembled set) remain deferred.
+- [x] ✅ **WP2** Entry-window × prize-split composition (NOT per-hop draws) — BUILT (`_prize_split_hit`).
 - [x] **Exact tracker when revealed, hypergeometric on counts** — already the codebase shape
       (`deck_known_counts` / `p_contains` collapse, ADR-0029 §3).
-- [ ] **Pre-anchor gambles NOT stood down** — the `if not deck_known_counts: return None` gate replaced
-      by the prize-split-weighted window sum (design point 4); decklist-known makes it exact closed-form.
+- [x] ✅ **WP2** **Pre-anchor gambles NOT stood down** — BUILT: the `if not deck_known_counts: return
+      None` gate is replaced by the prize-split-weighted window sum (`_prize_split_hit`, ≤ u+1 terms).
 - [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
-- [ ] **Engine depth = board-supported capacity** (eligible pre-evo/engine pairings), not a hardcoded
-      one stage; window-2 outs are the full Stage-1 union, not literal Energy.
-- [ ] **Evolution-KO class** added to `_gamble_ko_classes` (the Active's eligible evolutions' attacks,
-      energy carried over) — a missing KO class, not a non-KO extension.
-- [ ] **Survival class** (avert the ADR-0064 predicted-loss shape via `switch`/`heal` closure) —
-      KO_SCORE-scale, exempt from the keep-value blocker.
+- [x] ✅ **WP4** **Engine depth = board-supported capacity** — BUILT 2026-07-18, test-first:
+      `deck_odds.draw_hit_with_engines` (the two-window closed form, EXACT at depth 1 — pinned against
+      exhaustive enumeration, not simulation; deeper stages the documented same-two-ratios loop with
+      one engine consumed per stage) + `planner._gamble_draw_engines` (usable = unconditional
+      once-per-turn draw ability + an eligible base in play since last turn; depth = Σ min(copies,
+      eligible bases) per line; stage window = min usable window — Recon 2 take-1 greedy, Run Away
+      Draw 3; Fezandipiti/Lunatone's conditions fail closed). Window-2 outs = the SAME class outs
+      (the full Stage-1 union incl. the post-Item Supporter supplement), never literal Energy only.
+      A sought-evolution engine (Drakloak for a Dreepy Active) is excluded — no double-count.
+      Anchored-only sharpening (pre-anchor stays the plain prize-split window — under-count, safe);
+      the trace carries `engine_copies`/`engine_windows`/`engine_ids` per class. On-board engines
+      with UNUSED abilities stay the sequencing rung's jurisdiction (`use-the-draw-engine-ability`
+      fires them before the refresh deterministically — pricing them inside the gamble would
+      double-count the same window).
+- [x] ✅ **WP5** The enabler-taxonomy KO family — BUILT 2026-07-18, test-first: **evolution-KO**
+      (`_gamble_evolution_ko_classes`: eligible evolutions, Energy carried over, Item Pokémon-tutor
+      closure), **damage-pump** (`_gamble_pump_ko_classes`: short by ≤ one boost, gates MIRROR
+      `_boost_lethal_tactical` — attacker-type + defender-{ex}; Premium Power Pro Item always-live,
+      Black Belt's Supporter post-Item), **gust** (`_gamble_gust_ko_classes`: no direct KO but a
+      benched target reachable via `_gust_best_ko_prizes`; Boss's Orders → post-Item supplement).
+- [x] ✅ **WP5** **Survival class** (`_gamble_survival_classes`): bench empty + `active_doomed` = a
+      predicted GAME loss; two out families avert it — **bench-fill** (any benchable Basic / Poffin's
+      fetch, so a KO is no longer game-over) and **heal** (`_heal_averts_doom`: a heal that lifts the
+      Active above `incoming_active_damage` — Wally's on a damaged Mega ex; restriction-matched,
+      gated heals fail closed). Value KO_SCORE, exempt from the keep-value blocker. Item outs
+      always-live, Supporter heals post-Item. The `switch`-to-a-non-empty-bench survival (saving a
+      wincon rather than averting a game loss) is a mid-value class that rides WP6's keep-value floor.
 - [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
       the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).
@@ -413,8 +443,11 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       multiplier; horizon = role tier only, match scale stays with the hard rungs; unifies fetch
       grab/pitch, refresh swing, gamble keep-floors, and the plan-tier credit — graduates to its own
       ADR at build time.
-- [ ] Graph enumerated from **card text with predicates** (tags as index only) — Fighting Gong type-lock
-      is the canonical trap; re-verify per set.
+- [x] ✅ **WP1/WP5** Graph enumerated from the card **REPRESENTATION with predicates** (tags as index,
+      parametric predicate in `card_effects.json` FETCH clauses — NOT a text parse; Round-11 ruling).
+      Fighting Gong's {F}-lock is its `energy_type: 6` clause; Poké Pad's no-Rule-Box is `no_rule_box`.
+      Authored in `effect_overrides.json`, verified at source. (WP3's draw-engine/accel clauses +
+      `_FETCH_FILTERS` migration remain.)
 
 ## Anchors (verified 2026-07-16/17 from `EN_Card_Data.csv` + `card_functions.json`)
 | id | card | cat | tags | verified text fact (the load-bearing bit) |
@@ -524,14 +557,24 @@ and attack-based accel must stay excluded from one-step budgets (a card tag woul
 CardStat-parsed field like `damageBoost` is the recommended shape); 121 Dragapult ex benched-
 immunity = the known CardStat gap (rules.md §11).
 
-*Clause backlog (the card_effects.json extension the closure consumes — replaces
-`doctrine_fetch._FETCH_FILTERS`, the FIFTH private valuation shadow):* fetch/tutor predicates for
-1086 (≤70-HP Basics ×2 → BENCH), 1097/1110/1118 (recycle targets), 1121 (any Pokémon, cost
-discard-2), 1122, 1142 ({F}-locked), 1145, 1152 (no Rule Box), 1189 (no-Ability evolution,
-timing-exempt), 1198 (2 different-type Basics, 1 → attached), 1219, 1225 (evolution + ANY energy
-incl. Special), 1071 (Supporter, on-bench-play trigger); draw-engine clauses for 66 (3 +
-self-shuffle), 120 (top-2-take-1), 140/675 (conditional), 1080 (5/2, post-KO gate); accel clauses
-for 666/678 (via attack)/1240 (discard→Stage-2, prize-behind gate); 1120 (coin).
+*Clause backlog (the card_effects.json extension — replaced `doctrine_fetch._FETCH_FILTERS`, the FIFTH
+private valuation shadow). ✅ BUILT 2026-07-18 (`effect_overrides.json`, verified against engine card
+text; pinned by tests/cards/test_card_effects.py goldens):* fetch/tutor predicates for 1086 (≤70-HP
+Basics → BENCH), 1097/1110/1118 (recycle), 1121 (any Pokémon, cost discard-2), 1122 (dig-7 Supporter),
+1142 ({F}-locked), 1145 (mega), 1152 (no Rule Box), 1189 (no-Ability evolution), 1198 (accel: 1 →
+attached; NO fetch clause — slot-dead Supporter), 1219 (any Trainer), 1225 (evolution + energy),
+1071 (Supporter, on-bench-play trigger); draw-engine clauses for 66 (3 + self-shuffle), 120
+(look-2-take-1), 140/675 (conditional), 1080 (5, post-KO gate); accel clauses for 1240
+(discard→Stage-2, prize-behind); coin 1120; energy_provide 17 ({C}{C}{C}-on-Evolution). **Attack-based
+accel (666/678) stays the AttackStat tier** (ADR-0064 integrity): 678 Aura Jab already carries
+`recoverN`; 965 Turbo Flare's deck-source variant — CLOSED 2026-07-18: `AttackStat.recoverSource`
+("discard"/"deck") + the `_DECK_ACCEL_RE` parser (14 deck-source attacks incl. the Kaguras; coin/scope
+variants safely unmatched), the Tactical `_recover_units` fuel bound branching by zone (deck fuel =
+tracker-exact, else the sound pigeonhole floor), and the bench-accelerator DERIVED from the attack fact
+(`_derived_accel_body_ids` → `_roles_of` injects `accel_source`, `accel_recipient_missing` unions it) —
+so a NEW deck fielding Cinderace gets the whole bench-fill/accel rung family with no Role declaration
+(the Round-9 shape: the declaration is the confirm, never a parallel system). **Consumers of the
+draw/accel CLAUSES are WP4/WP5** (still additive and inert to today's kind-filtered readers).
 
 **The consumer recalibration (the round-7 currency-zone warning, live).** Three pinned tests flipped
 — each because a consumer was calibrated against the INCOMPLETE data: (1) `_is_draw_engine_body`

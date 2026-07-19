@@ -17,8 +17,13 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
-from common.strategy.doctrines.doctrine_fetch import _FETCH_FILTERS
+from common.effects import CardEffects
 from pilot_helpers import HAND, PLAY, make_select, opt, poke, state
+
+# Salvatore's rush-evolve predicate now lives in the card representation: an `evolution` FETCH clause
+# with `no_ability` (card_effects.json / ADR-0032, the tier that replaced `_FETCH_FILTERS`).
+_SALVATORE_EFFECTS = CardEffects(
+    {1189: [{"kind": "fetch", "target": "evolution", "zone": "deck", "no_ability": True}]})
 
 END = 14
 WINCON = 900       # ability-LESS Mega ex — Salvatore-fetchable (Staryu → Mega Starmie ex)
@@ -49,7 +54,8 @@ def _pilot(deck):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON, role="win_condition")]),
                  deck=deck, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({SALVATORE: ["search", "rush_evolve"]}))
+                 functions=CardFunctions({SALVATORE: ["search", "rush_evolve"]}),
+                 effects=_SALVATORE_EFFECTS)
 
 
 def _ctx(pilot, obs, i):
@@ -57,14 +63,15 @@ def _ctx(pilot, obs, i):
     return pilot._context(obs, select, pilot._board(obs, select), select["option"][i])
 
 
-# ---------------------------------------------------------------- the rush_evolve fetch-filter
+# ---------------------------------------------------------------- the rush_evolve fetch clause
 @pytest.mark.req("REQ-GEN-0032")
-def test_rush_evolve_filter_takes_ability_less_evolutions_only():
+def test_rush_evolve_clause_takes_ability_less_evolutions_only():
     st = _stats()
-    f = _FETCH_FILTERS["rush_evolve"]
-    assert f(st.get(WINCON)) is True        # ability-less Evolution — Salvatore can fetch it
-    assert f(st.get(ABIL_EVO)) is False     # has an Ability (Explosiveness) — excluded
-    assert f(st.get(PREEVO)) is False       # a Basic (no evolvesFrom) — not an evolution
+    pilot = _pilot([WINCON])
+    clause = {"kind": "fetch", "target": "evolution", "zone": "deck", "no_ability": True}
+    assert pilot._fetch_target_matches(clause, st.get(WINCON)) is True   # ability-less Evolution
+    assert pilot._fetch_target_matches(clause, st.get(ABIL_EVO)) is False  # has an Ability — excluded
+    assert pilot._fetch_target_matches(clause, st.get(PREEVO)) is False    # a Basic — not an evolution
 
 
 @pytest.mark.req("REQ-GEN-0032")
@@ -72,7 +79,7 @@ def test_search_deck_set_for_salvatore_is_the_ability_less_evolution_only():
     # Deck holds BOTH ability-less Mega and ability-bearing Cinderace; Salvatore reaches only
     # the former — ability-bearing one isn't a legal rush-evolve target.
     pilot = _pilot([WINCON] * 3 + [ABIL_EVO] * 4 + [PREEVO] * 3 + [FILLER] * 50)
-    assert pilot._search_deck_set(["search", "rush_evolve"]) == {WINCON}
+    assert pilot._search_deck_set(SALVATORE) == {WINCON}
 
 
 # ---------------------------------------------------------------- dont-search-an-empty-deck on Salvatore

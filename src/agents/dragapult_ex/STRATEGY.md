@@ -545,12 +545,12 @@ hypotheses = [   # deck rules that DON'T fold to general (unchanged from 2026-07
 - **Munkidori Adrena-Brain ACTIVATION** shares the draw-ability gap (its MAIN `_ABILITY` scores 0). Infra C covers
   the follow-up selects only. Planner may sequence it on a lethal/KO turn; a non-lethal **pre-load** activation is
   skipped. v1 `use-the-draw-engine-ability` scopes to draw/dig; extending to counter-move/heal is a deferred refinement.
-- **Poké Pad** (`search` tag only) has NO `_FETCH_FILTERS` entry → the Fetch doctrine's play/whiff signals never
-  fire for it; it's play-endorsed only by `dig-before-commit` (+20) and has **no whiff protection.** Pre-existing
-  general imprecision — note, don't fix here.
-- **`bench_fill` filter is HP-agnostic** (doesn't encode Poffin's ≤70 cap) → over-includes Munkidori/Fezandipiti/
-  Meowth in the search set; harmless for the grab (engine offers only legal targets) but can false-suppress the
-  `dont-search-an-empty-deck` whiff guard. Pre-existing general imprecision.
+- **Poké Pad** now carries a `no_rule_box` FETCH clause (`card_effects.json`, the tier that replaced
+  `_FETCH_FILTERS`) → the Fetch doctrine's play/whiff/redundancy signals fire for it and correctly EXCLUDE
+  Rule-Box targets (Dragapult ex / Fezandipiti ex / Meowth ex) — it no longer over-counts them as fetchable.
+- **The fetch-set predicates are exact** (`_fetch_target_matches` over FETCH clauses): Poffin's ≤70-HP cap
+  (`hp_max`), Poké Pad's no-Rule-Box, Fighting Gong's Basic-only Pokémon are encoded, so `dont-search-an-empty-deck`
+  and the confirmed-hit endorsement no longer false-fire on targets a card cannot actually reach.
 - **Unfair Stamp disruption facet** (opp draws only 2) is not rewarded generically (gated on
   `opp_has_hand_size_attacker`) → valued purely as self-refresh. The deferred general `hand_disruption` seam.
 

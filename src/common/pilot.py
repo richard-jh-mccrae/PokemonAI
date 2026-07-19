@@ -42,8 +42,9 @@ _REFRESH_CYCLE = 20        # the DRAW side, flat: cards I have not seen are spec
                            # `hold-*-dont-shuffle` / probable-miss guards adjudicate. Bounded and flat
                            # so those guards can still cancel it, exactly as they could cancel the +20
                            # `dig-before-commit` used to supply blindly.
-_REFRESH_SHED = 8          # per card I HOLD and lose (my hand beyond what I redraw). A certain loss of
-                           # a card I chose to keep — ml f111 CRITICAL ("8 good cards"), ms f60, ms f94.
+# _REFRESH_SHED (the flat −8/card-lost shed) RETIRED 2026-07-18 (ADR-0065): the shed side is now the
+# GRADED Σ keep_cost over the actual hand (`_refresh_shed_keepcost`) — a wincon costs its role value ×
+# how UN-recoverable it is, a dreg ~0. ENERGY_TIER (8, `common.card_worth`) is the old flat anchor.
 _REFRESH_STRIP = 4         # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
 _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card opponent hand REFILLS them to
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
@@ -786,8 +787,8 @@ class Context:
     context_card_id: int | None = None  # the select's OWNER (`select.contextCard`): the card whose effect/
                                    # Ability resolves (an ACTIVATE's bare YES/NO carries no card itself)
     search_targets_exhausted: bool = False  # this option PLAYS a deck-search/tutor whose every legal
-                                   # fetch target (see doctrine_fetch._FETCH_FILTERS) is PROVABLY gone from
-                                   # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / unknown filter
+                                   # fetch target (its FETCH clauses, `_search_deck_set`) is PROVABLY gone from
+                                   # deck — so it whiffs. SOUND (Board.deck_empty_ids); False off a search / no clause
     search_redundant_wincon: bool = False  # this option PLAYS a tutor that can fetch ONLY the
                                    # win-condition AND that payoff has no productive landing — wincon already in
                                    # hand, OR no deployable base for it (its immediate pre-evo neither in play nor
@@ -1046,7 +1047,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._turn_boosts = TurnBoostTracker(            # this-turn flat damage-boost plays (Power Pro
             lambda cid: self.stats.get(cid) if (self.stats and cid is not None) else None)
                                                         # class) — OHKO-line model's play half
-        self._fetch_cache: dict = {}                    # memo: fetch-filter tag -> deck ids it can fetch
+        self._fetch_cache: dict = {}                    # memo: search card id -> deck ids it can fetch
+        self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
         self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
@@ -1299,7 +1301,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # respects its ADR-0044 redundancy flags
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
-                    + self._refresh_swing_tactical(board, ctx)
+                    + self._refresh_swing_tactical(obs, board, ctx)
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
@@ -1983,24 +1985,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         st = self._attack_stat(attack_id)
         return st.recoil if st else 0
 
-    def _refresh_swing_tactical(self, board: Board, ctx) -> float:
-        """Closed-form value of a shuffle-refresh (ADR-0060). Judge/Harlequin are symmetric REFILLS,
-        not strips: each player shuffles their hand away and redraws to the card's printed count, so
-        the play is fully described by how many cards move, in which direction (strategy/refresh.py):
+    def _refresh_swing_tactical(self, obs: dict, board: Board, ctx) -> float:
+        """Closed-form value of a shuffle-refresh (ADR-0060, SHED graded by ADR-0065). Judge/Harlequin
+        are symmetric REFILLS, not strips: each player shuffles their hand away and redraws to the
+        card's printed count, so the play is fully described by how many cards move, in which direction
+        (strategy/refresh.py):
 
             CYCLE                                  the draw side — flat, speculative, guard-cancellable
-            - SHED  * max(-my_net, 0)              cards I hold and lose        (certain)
-            + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them     (certain)
-            - GIFT  * max(opp_net, 0)              cards handed to them         (certain)
+            - Σ keep_cost(held card)              the graded SHED — what shuffling my hand costs
+            + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them        (certain)
+            - GIFT  * max(opp_net, 0)              cards handed to them            (certain)
 
-        The card's own printed draw count is the break-even — which is why the retired
-        `_STACKED_HAND`/`_REFRESH_HAND_FLOOR`/`_TAILORED_HAND` constants matched no card.
+        The card's own printed draw count is the break-even. **The SHED side is now graded** (WP7): it
+        was a flat ``_REFRESH_SHED × cards-lost``, propped up by the hand-QUALITY guards
+        (`hold-wincon` / `hold-line-piece` / `hold-irreplaceable-tool`) — a wincon and a dreg cost the
+        same to shuffle. It is now ``Σ keep_cost`` over the actual hand (`_refresh_shed_keepcost`): the
+        SAME closure the gamble uses, so a live hand of wincons/engines is expensive to shuffle and a
+        dead hand is nearly free — the guards fold in, one currency (the closure supplies the
+        redundancy discount, so a wincon with its tutors live shuffles cheaper than a lone one-of).
 
-        The DRAW side stays flat on purpose. A per-card credit for cards I have not seen swamps the
-        hand-QUALITY guards (`hold-wincon-dont-shuffle`, `hold-irreplaceable-tool-dont-shuffle`,
-        `dont-refresh-into-a-probable-miss`), which are this codebase's only model of whether the
-        redraw is actually worth having — a spent deck returns dregs however many cards it returns.
-        Silent (0) on anything that is not the PLAY of a known refresh."""
+        The DRAW side stays flat (`dont-refresh-into-a-probable-miss` owns redraw quality, a separate
+        jurisdiction). Silent (0) on anything that is not the PLAY of a known refresh."""
         if ctx.option_type != _PLAY:
             return 0.0
         nets = net_change(ctx.card_id, my_hand=board.my_hand_size, opp_hand=board.opp_hand_size,
@@ -2008,39 +2013,102 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                           opp_prizes_remaining=board.opp_prizes_remaining)
         if nets is None:
             return 0.0
-        my_net, opp_net = nets
+        _my_net, opp_net = nets
         stripped = max(-opp_net, 0.0)
         fresh = fresh_cards(ctx.card_id, board.opp_hand_size, board.opp_hand_size_delta)
         return (_REFRESH_CYCLE
-                - _REFRESH_SHED * max(-my_net, 0.0)
+                - self._refresh_shed_keepcost(obs, board, ctx)
                 + _REFRESH_STRIP * stripped
                 + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
                 - _REFRESH_GIFT * max(opp_net, 0.0))
 
+    def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
+        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``
+        over every held card EXCEPT the refresh being played (it is discarded, not shuffled). Each
+        card's cost = role value × (1 − re-access odds) over the shuffle-grown pool across the refresh's
+        own draw window — the closure pointed backwards, exactly the gamble's `hand_keep`
+        (`_best_gamble_line`). Anchored deck counts when the tracker has them, else the pre-anchor
+        unseen composition (`decklist − visible − hidden prizes`, needs obs — the reason obs is
+        threaded here). 0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit
+        alone stands, matching the old flat term's floor)."""
+        from common.strategy.refresh import refresh_branches
+        branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
+        if not branches:
+            return 0.0
+        draws = max(my_draw for my_draw, _opp in branches)
+        counts = board.deck_known_counts
+        if counts:
+            deck_count = sum(counts.values())
+        else:
+            from collections import Counter
+            me = self._my_player(obs)
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(counts.values()) - prizes_hidden
+            if deck_count <= 0 or not counts:
+                return 0.0
+        pool = deck_count + max(0, len(board.hand_ids) - 1)      # the shuffle-grown draw pool
+        return sum(self._keep_cost(hid, counts, pool, draws, board)
+                   for hid in board.hand_ids if hid != ctx.card_id)
+
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
-        """Energy this attack's recover rider would actually re-attach AND that a recipient can
-        actually USE — the development the Tactical layer credits (Aura Jab: attack + accelerate).
+        """Energy this attack's accel rider would actually attach AND that a recipient can
+        actually USE — the development the Tactical layer credits (Aura Jab / Turbo Flare:
+        attack + accelerate).
 
         Three independent bounds, all closed-form:
           1. `recoverN`   — the card's printed ceiling (Aura Jab: "attach up to 3").
-          2. the matching Basic-Energy FUEL in my open discard (`my_discard_basic_energy`, ADR-0061:
-             re-sourced from the Board so it is the one truth for my discard fuel — `_damage_context`
-             keeps its own attacker-relative copy because it must also serve the Incoming direction).
+          2. the matching Basic-Energy FUEL in the rider's SOURCE zone (`recoverSource`):
+             "discard" → my open discard (`my_discard_basic_energy`, ADR-0061: re-sourced from the
+             Board so it is the one truth for my discard fuel — `_damage_context` keeps its own
+             attacker-relative copy because it must also serve the Incoming direction);
+             "deck" → the whole-deck search's pool (`_deck_basic_energy_fuel`: tracker-exact once
+             anchored, else the sound pigeonhole floor — an endorser never over-counts).
           3. the recipients' remaining NEED (ADR-0061). The old code checked only that the Bench was
              non-empty, so 3 {F} onto a Lunatone/Solrock support bench scored an identical +225 to 3
              {F} onto a Riolu that becomes the second Mega Lucario ex — and that +225 is exactly what
              tips Aura Jab (130) over Mega Brave (270). Energy nobody can pay an attack with is not
              development. Need is measured against each recipient's FORWARD form too, so a Riolu
              counts the {F}{F} its Mega Brave will cost, not the {F} its Quick Attack costs today.
+             The same need gate makes Turbo Flare on an EMPTY bench credit 0 — the "firing blanks"
+             signal the mega_starmie deck rules hand-encoded (hypergeometric-fetch-closure §Round 13).
         """
         st = self._attack_stat(attack_id)
         if not st or not getattr(st, "recoverN", 0):
             return 0
-        by_type = (board.my_discard_basic_energy or {})
-        fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
-                else sum(by_type.values()))
+        if getattr(st, "recoverSource", None) == "deck":
+            fuel = self._deck_basic_energy_fuel(board, obs, st.recoverEnergyType)
+        else:
+            by_type = (board.my_discard_basic_energy or {})
+            fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
+                    else sum(by_type.values()))
         need = self._recover_recipient_need(st, board, obs)
         return max(0, min(st.recoverN, fuel, need))
+
+    def _deck_basic_energy_fuel(self, board: Board, obs: dict, etype) -> int:
+        """Matching Basic-Energy copies a whole-deck search rider (Turbo Flare) can PROVABLY still
+        find in my deck. Tracker-anchored (`deck_known_counts`): the exact count. Pre-anchor: the
+        sound pigeonhole FLOOR — of the ``unseen`` matching copies (decklist − visible), at most
+        ``prizes_hidden`` can sit in the face-down prizes, so ≥ ``unseen − prizes_hidden`` are in
+        deck. An endorser must never over-count (grader safety); the floor typically saturates the
+        ``min(recoverN, …)`` anyway (9 Water unseen − 6 prizes ≥ 3). 0 without a decklist."""
+        def _matches(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return bool(st and st.is_basic_energy
+                        and (etype is None or getattr(st, "energyType", None) == etype))
+        if board.deck_known_counts:
+            return sum(n for cid, n in board.deck_known_counts.items() if n > 0 and _matches(cid))
+        if not self.deck:
+            return 0
+        me = self._my_player(obs)
+        visible = self._visible_card_counts(me)
+        unseen = sum(n - visible.get(cid, 0) for cid, n in Counter(self.deck).items() if _matches(cid))
+        prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                            if not (isinstance(p, dict) and p.get("id") is not None))
+        return max(0, unseen - prizes_hidden)
 
     def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
         """Total Energy the rider's recipients still LACK to pay an attack — theirs or their forward
@@ -2440,7 +2508,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                           # (`_board`), shared by every option; rules no longer gate
                                           # on it (the gate-ban migration), traces still record it
         cid = self._option_card_id(obs, select, option)
-        roles = self.strategy.roles.get(cid, []) if cid is not None else []
+        roles = self._roles_of(cid)
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         card_is_line_preevo = cid is not None and cid in self._line_preevo_set()
@@ -2460,7 +2528,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             select.get("context") == _TO_HAND and board.supporter_played
             and bool(stat and stat.is_supporter))
         fetch_fills_a_need = (option.get("type") == _PLAY
-                              and self._fetch_fills_a_need(board, tags, plan))
+                              and self._fetch_fills_a_need(board, cid, plan))
         target_energy = self._target_energy(obs, select, option)
         target_hp = self._target_hp(obs, select, option)
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
@@ -2497,7 +2565,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         promote_target_can_attack = self._promote_target_can_attack(obs, select, option)
         promote_target_hits_weakness = self._promote_target_hits_weakness(obs, select, option)
         at_target = self._attach_target(obs, option)   # Pokémon an attach option puts Energy on
-        at_roles = self.strategy.roles.get(at_target.get("id"), []) if at_target else []
+        at_roles = self._roles_of(at_target.get("id")) if at_target else []
         # the body an attach FUNDS, at either seam: the manual ATTACH (inPlayArea/inPlayIndex) or the
         # accel ATTACH_FROM recipient pick (area/index — cf `_option_pokemon`).
         fund_target = at_target
@@ -2521,9 +2589,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_completes_biggest_attack = (
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and self._attach_completes_biggest_attack(at_target, tags))
-        search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, tags, board)
-        search_unlikely = self._search_probable_whiff(option, tags, board)
-        search_confirmed = self._search_confirmed_hit(option, tags, board, plan)
+        search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, cid, board)
+        search_unlikely = self._search_probable_whiff(option, cid, board)
+        search_confirmed = self._search_confirmed_hit(option, cid, board, plan)
         sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
         refresh_miss = self._refresh_probable_miss(option, cid, tags, board, obs, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
@@ -3448,12 +3516,47 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         accelerator's recipient hunt (ADR-0048)."""
         return {cid for line in self._wincon_lines() for cid in line.path}
 
+    def _roles_of(self, cid) -> list:
+        """The Context's per-card Roles: the deck-DECLARED list (`strategy.roles`) plus the DERIVED
+        `accel_source` for a body whose attack carries a bench-target accel rider
+        (`_derived_accel_body_ids` — Turbo Flare / Aura Jab class). Derivation-first, declaration as
+        the confirm/override (Round 9): a new deck fielding Cinderace gets the whole accel rung
+        family (open-the-accelerator, develop-the-accel-recipient, feed-the-accelerator, promote)
+        with NO Role declaration; for the existing agents the union is a no-op (both declare it)."""
+        if cid is None:
+            return []
+        roles = self.strategy.roles.get(cid, [])
+        if cid in self._derived_accel_body_ids() and "accel_source" not in roles:
+            roles = [*roles, "accel_source"]
+        return roles
+
+    def _derived_accel_body_ids(self) -> frozenset:
+        """Deck Pokémon whose ATTACK carries a bench-target energy-accel rider (`recoverTarget ==
+        "bench"`, either zone: Turbo Flare deck-search, Aura Jab discard-recover) — the DERIVED
+        bench-accelerator set (hypergeometric-fetch-closure §Round 9: derive from the card
+        representation; the deck's `accel_source` Role declaration stays the override/confirm, never
+        a parallel system). Self-target chargers (Regi Charge) are NOT bench accelerators. Memoised
+        (deck-fixed). Empty without stats/deck."""
+        if self._derived_accel_cache is None:
+            ids = set()
+            for cid in set(self.deck):
+                st = self.stats.get(cid) if self.stats else None
+                for aid in (getattr(st, "attacks", None) or ()):
+                    ast = self._attack_stat(aid)
+                    if (ast is not None and getattr(ast, "recoverN", 0)
+                            and getattr(ast, "recoverTarget", None) == "bench"):
+                        ids.add(cid)
+                        break
+            self._derived_accel_cache = frozenset(ids)
+        return self._derived_accel_cache
+
     def _accel_recipient_missing(self, me: dict) -> bool:
-        """True if my Active is a bench-accelerator (an `accel_source`-Role Pokémon, e.g. Cinderace)
-        but NO Line member sits on my Bench to receive the accelerated Energy — so Turbo Flare would
-        attach to nothing. The trigger for developing a recipient first. False with no `accel_source`
-        Role declared, no such Active, or any Line member already benched."""
-        accel = {cid for cid, r in self.strategy.roles.items() if "accel_source" in r}
+        """True if my Active is a bench-accelerator (declared `accel_source` Role ∪ the DERIVED
+        bench-accel-attack set, e.g. Cinderace's Turbo Flare) but NO Line member sits on my Bench to
+        receive the accelerated Energy — so the accel attack would fire blanks. The trigger for
+        developing a recipient first. False with no accel body Active or any Line member benched."""
+        accel = ({cid for cid, r in self.strategy.roles.items() if "accel_source" in r}
+                 | self._derived_accel_body_ids())
         ma = next((p for p in (me.get("active") or []) if p), None)
         if not (accel and ma and ma.get("id") in accel):
             return False

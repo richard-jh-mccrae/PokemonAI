@@ -1,8 +1,93 @@
 {
+"17": [
+{
+"kind": "energy_provide",
+"amount": 1,
+"amount_on_evolution": 3,
+"type": "colorless",
+"rider": "discard_eot"
+}
+],
+"66": [
+{
+"kind": "draw",
+"amount": 3,
+"condition": "once_per_turn_ability",
+"rider": "shuffle_self_in"
+}
+],
+"120": [
+{
+"kind": "draw",
+"amount": 1,
+"window": 2,
+"condition": "once_per_turn_ability",
+"rider": "other_to_bottom"
+}
+],
+"140": [
+{
+"kind": "draw",
+"amount": 3,
+"condition": "pokemon_ko_last_turn"
+}
+],
+"675": [
+{
+"kind": "draw",
+"amount": 3,
+"condition": "solrock_in_play",
+"rider": "discard_basic_f_energy"
+}
+],
+"1071": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"trigger": "on_bench_play"
+}
+],
+"1080": [
+{
+"kind": "draw",
+"amount": 5,
+"condition": "pokemon_ko_last_turn",
+"rider": "shuffle_both_hands"
+}
+],
+"1086": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"hp_max": 70,
+"dest": "bench"
+}
+],
 "1096": [
 {
 "kind": "heal",
 "amount": 150
+}
+],
+"1097": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard"
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "discard"
+}
+],
+"1100": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck"
 }
 ],
 "1105": [
@@ -10,6 +95,18 @@
 "kind": "heal",
 "amount": 60,
 "restriction": "active_dragon_only"
+}
+],
+"1110": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard"
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "discard"
 }
 ],
 "1112": [
@@ -25,6 +122,43 @@
 "amount": 30
 }
 ],
+"1118": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard"
+}
+],
+"1119": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck"
+}
+],
+"1120": [
+{
+"kind": "coin",
+"effect": "discard_opp_energy",
+"amount": 1
+}
+],
+"1121": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"cost": "discard_2"
+}
+],
+"1122": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"dig": 7
+}
+],
 "1130": [
 {
 "kind": "heal",
@@ -37,12 +171,41 @@
 "restriction": "active_only"
 }
 ],
+"1142": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck",
+"energy_type": 6
+},
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"energy_type": 6
+}
+],
+"1145": [
+{
+"kind": "fetch",
+"target": "mega",
+"zone": "deck"
+}
+],
 "1147": [
 {
 "kind": "heal",
 "amount": 80,
 "restriction": "active_only",
 "condition": "energy_3_plus"
+}
+],
+"1152": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"no_rule_box": true
 }
 ],
 "1153": [
@@ -64,6 +227,15 @@
 "amount": 3
 }
 ],
+"1189": [
+{
+"kind": "fetch",
+"target": "evolution",
+"zone": "deck",
+"no_ability": true,
+"dest": "in_play"
+}
+],
 "1190": [
 {
 "kind": "heal",
@@ -75,6 +247,15 @@
 {
 "kind": "draw",
 "amount": 5
+}
+],
+"1198": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "deck",
+"target": "any_pokemon",
+"energy": "basic"
 }
 ],
 "1199": [
@@ -132,6 +313,13 @@
 "amount": 2
 }
 ],
+"1219": [
+{
+"kind": "fetch",
+"target": "trainer",
+"zone": "deck"
+}
+],
 "1222": [
 {
 "kind": "heal",
@@ -148,6 +336,18 @@
 {
 "kind": "draw",
 "amount": 3
+}
+],
+"1225": [
+{
+"kind": "fetch",
+"target": "energy",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "evolution",
+"zone": "deck"
 }
 ],
 "1227": [
@@ -180,6 +380,16 @@
 {
 "kind": "draw",
 "amount": 3
+}
+],
+"1240": [
+{
+"kind": "accel",
+"amount": 2,
+"source": "discard",
+"target": "stage2",
+"energy": "basic",
+"condition": "more_prizes_remaining_than_opp"
 }
 ],
 "1241": [

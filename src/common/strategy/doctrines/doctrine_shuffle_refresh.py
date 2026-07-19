@@ -92,52 +92,15 @@ HYPOTHESES = [
         and c.board.reusable_energy_in_hand and not c.board.energy_attached
         and c.board.energy_placeable,
         weight=-60, status="testing"),
-    Hypothesis(
-        id="hold-wincon-dont-shuffle",
-        rationale="Don't shuffle a usable win-condition (a Line payoff) out of hand with a `shuffle_hand` "
-                  "Supporter — refilling sends it back into the deck, costing the turn to deploy it, so "
-                  "hold it and dig another way. Moderate (nets negative against `dig-before-commit` but "
-                  "not absolute, so a genuinely dead hand still refills); stands down when the "
-                  "win-condition is already in PLAY (`wincon_in_play`) — a redundant hand duplicate is "
-                  "safe to shuffle (the ep82226759 Harlequin shape: Mega Starmie ex Active, second copy in "
-                  "hand) — AND when the held payoff is an UNDEPLOYABLE evolution: no base anywhere to evolve "
-                  "it onto (`wincon_in_hand_undeployable`), so it's a dead card worth shuffling away to dig "
-                  "for the base, not a piece to hold (ep83966336 f44: Mega Lucario ex held with no Riolu in "
-                  "play or hand — refill instead).",
-        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.wincon_in_hand and not c.board.wincon_in_play
-        and not c.board.wincon_in_hand_undeployable,
-        weight=-25, status="assumed"),
-    Hypothesis(
-        id="hold-line-piece-dont-shuffle",
-        rationale="Don't shuffle away a hand holding a win-condition LINE piece you just dug for — a base "
-                  "or mid-Line pre-evolution (`line_preevo_in_hand`, e.g. a fetched Drakloak) — with a "
-                  "`shuffle_hand` refresh: refilling sends it back into the deck, wasting the dig "
-                  "(ep83686860 f13: Ultra Ball'd 2 Energy for a Drakloak, then Lillie's shuffled it away "
-                  "for zero gain). The LINE-piece mirror of `hold-wincon-dont-shuffle` (the payoff case); "
-                  "−25 nets below `dig-before-commit` (+20). Stands down once the win-condition is IN PLAY "
-                  "(a redundant hand duplicate is safe to cycle) OR the held line piece is already "
-                  "REDUNDANT — the payoff's immediate pre-evo is on the board (`immediate_preevo_in_play`, "
-                  "e.g. a Drakloak already benched) AND the payoff itself is NOT in hand to deploy — so the "
-                  "hand copy is surplus and shuffling it to dig for the buried payoff is the setup play "
-                  "(dragapult f38: behind, Drakloak x2 benched, no Dragapult ex in hand → refill with "
-                  "Lillie's for 8).",
-        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.line_preevo_in_hand and not c.board.wincon_in_play
-        and not (c.board.immediate_preevo_in_play and not c.board.wincon_in_hand),
-        weight=-25, status="assumed"),
-    Hypothesis(
-        id="hold-wincon-with-base-dont-shuffle",
-        rationale="Strengthen `hold-wincon-dont-shuffle` when the win-condition's base is ALREADY IN PLAY "
-                  "to evolve onto next turn (`line_preevo_in_play`, e.g. benched Staryu under a Mega "
-                  "Starmie ex in hand) — this is a concrete imminent evolution, not just recoverable "
-                  "tempo, so hold firmly and develop instead. Stacks on the base hold (−25) to net the "
-                  "shuffle below 0 even against `dig-before-commit` (+20), tiering it below the attack "
-                  "(ep82867148 f52: 3 Mega in hand, benched Staryu, Turbo Flare available); narrow to "
-                  "base-in-play, else the moderate hold still allows a dead-hand refill.",
-        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
-        and c.board.wincon_in_hand and c.board.line_preevo_in_play and not c.board.wincon_in_play,
-        weight=-15, status="testing"),
+    # `hold-wincon-dont-shuffle` (−25), `hold-line-piece-dont-shuffle` (−25) and
+    # `hold-wincon-with-base-dont-shuffle` (−15) RETIRED 2026-07-18 (ADR-0065): they were the flat
+    # SHED's hand-QUALITY proxy — a fixed penalty for holding a specific good card that the flat
+    # `_REFRESH_SHED × cards-lost` couldn't see. The SHED is now GRADED (`pilot._refresh_shed_keepcost`
+    # = Σ keep_cost over the actual hand), so a held wincon/line-piece is priced by role value × how
+    # UN-recoverable it is through the closure — the guards fold into that one currency (the
+    # currency-zone rule: replace the family, never bolt on beside it). `hold-successor-when-doomed`
+    # (below) survives: its `active_doomed` premise is a DEADLINE the fixed re-access window doesn't
+    # yet model (the gate library, staged), not a pure keep-value the closure already prices.
     # `dont-refresh-for-nothing` (−40, the sound deck_holds_a_need veto) was built THEN DELETED at the
     # 2026-07-03 A/B (43%/47% regressions): grab-rung "needs" under-count refresh VALUE for a deck
     # whose engine is the refresh itself, and the veto fired on that false premise all game. The
