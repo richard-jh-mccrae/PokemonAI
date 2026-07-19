@@ -50,6 +50,12 @@ _CHAIN_HOP_DISCOUNT = 0.75
 _CHAIN_MAX_HOPS = 2
 _CHAIN_OPENER_FLOOR = 10.0
 
+# HELD-CARD-RISK exposure bar (hypergeometric-fetch-closure §Round 8 §5): a FREE fetch defers past
+# the deadline only when the matched Read prices a live opponent hand-strip — `Board.opp_hand_strip_odds`
+# (max `copies_left_odds` over the rep build's `hand_disruption` cards, fail-open 0.0) at least this.
+# "More likely than not still in their deck"; a costly fetch defers regardless (its cost is paid NOW).
+_STRIP_ODDS_BAR = 0.5
+
 
 def _is_reusable_energy(stat, tags) -> bool:
     """A reusable (non-discard) Energy card: hp 0 with a real `energyType`, not tagged
@@ -325,6 +331,89 @@ class FetchMixin:
             return False
         reachable = fetch_set - board.deck_empty_ids
         return any(self._grab_value_of(board, c, plan) > 0 for c in reachable)
+
+    def _fetched_playable_this_turn(self, obs: dict, cid, board) -> bool:
+        """Could the fetched Pokémon ``cid`` be PLAYED this turn once in hand? A Basic lands on the
+        Bench now (unless full); an evolution needs an ELIGIBLE base already on my board — a body of
+        its `evolvesFrom` name in play since last turn (`appearThisTurn` False) — and neither player
+        may evolve on their own first turn (rules.md §4, rulebook L123-128). Unknown facts fail OPEN
+        (playable), so the deferral veto reading this never fires on a guess. Exotic evolve-from-hand
+        shortcuts are not modelled (none exist in the pool's Items; Salvatore's rush-evolve fetches
+        from the DECK, bypassing the hand entirely)."""
+        st = self.stats.get(cid) if self.stats else None
+        if st is None or getattr(st, "hp", 0) <= 0:
+            return True                              # unknown / non-Pokémon: never claim a deferral
+        base = getattr(st, "evolvesFrom", None)
+        if not base:
+            return not board.bench_full              # a Basic benches right now (unless full)
+        state = obs.get("current") or {}
+        turn, first = state.get("turn"), state.get("firstPlayer")
+        yi = state.get("yourIndex", 0)
+        if turn is not None and first is not None and turn <= (1 if first == yi else 2):
+            return False                             # neither player evolves on their own first turn
+        players = state.get("players") or []
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        for body in (me.get("active") or []) + (me.get("bench") or []):
+            if not body or body.get("appearThisTurn"):
+                continue                             # new in play -> can't evolve this turn (§4 L96)
+            bs = self.stats.get(body.get("id")) if self.stats else None
+            if bs is not None and getattr(bs, "name", None) == base:
+                return True
+        return False
+
+    def _fetched_playable_next_turn(self, obs: dict, cid, board) -> bool:
+        """Is NEXT turn a CONCRETE deadline for the fetched Pokémon ``cid`` — i.e. will it provably
+        become playable then? Only an evolution has one: by next turn the `appearThisTurn` and
+        own-first-turn bans lapse, so a body of its base name already in play — or a held base
+        benched this turn (Bench space) — receives it. False for a Basic (a full Bench has no
+        modelled next-turn opening) and for an evolution with no base in play or hand (no deadline
+        AT ALL — the dead-grab/baseless rungs own that, never the deferral)."""
+        st = self.stats.get(cid) if self.stats else None
+        if st is None or getattr(st, "hp", 0) <= 0:
+            return False
+        base = getattr(st, "evolvesFrom", None)
+        if not base:
+            return False
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+        for body in (me.get("active") or []) + (me.get("bench") or []):
+            bs = self.stats.get(body.get("id")) if (body and self.stats) else None
+            if bs is not None and getattr(bs, "name", None) == base:
+                return True                          # eligible next turn whatever it is today
+        if board.bench_full:
+            return False
+        return any((hs := self.stats.get(hid)) is not None and getattr(hs, "name", None) == base
+                   for hid in board.hand_ids if self.stats)
+
+    def _fetch_target_deferred(self, obs: dict, cid, board, plan) -> bool:
+        """The DEADLINE leg of the held-card risk (spec §Round 8 §5): every still-reachable NEEDED
+        target of fetch ``cid`` (positive grab value — the same set `_fetch_fills_a_need` endorses)
+        is provably unplayable this turn BUT playable next turn — a concrete deadline, so fetching
+        now gains nothing over fetching then (a whole-deck search succeeds iff the target remains in
+        deck — identical next turn) while the fetched key would sit in hand exposed across the
+        opponent's turn. False when any needed target lands this turn, when a target has NO concrete
+        deadline (a baseless payoff waits on nothing — the dead-grab rungs' jurisdiction), when
+        nothing is needed, or on unknown facts (fail-open — a suppressor never fires on a guess)."""
+        fetch_set = self._search_deck_set(cid)
+        if not fetch_set:
+            return False
+        reachable = fetch_set - board.deck_empty_ids
+        needed = [c for c in reachable if self._grab_value_of(board, c, plan) > 0]
+        if not needed:
+            return False
+        return all(not self._fetched_playable_this_turn(obs, c, board)
+                   and self._fetched_playable_next_turn(obs, c, board) for c in needed)
+
+    def _held_fetch_deferred(self, obs: dict, refresh_cid, board, plan) -> bool:
+        """The fetch-LATE leg viewed from the hand: some fetch card I HOLD (other than the refresh
+        being priced) still fills a need whose every target is deferred past this turn
+        (`_fetch_target_deferred`). A self-refresh would shuffle that held plan-vehicle away — the
+        very strip the deferral is guarding against — so `dont-shuffle-away-the-deferred-fetch`
+        reads this to hold the hand instead. False with no such held fetch (fail-open)."""
+        return any(self._fetch_target_deferred(obs, hid, board, plan)
+                   for hid in board.hand_ids if hid != refresh_cid)
 
     def _pitch_value_of(self, board, cid: int, plan) -> tuple[float, bool]:
         """(pitch score, keep-key fired) of hand card `cid` at a virtual `_DISCARD` Context — the
@@ -1023,6 +1112,53 @@ HYPOTHESES = [
         and c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand
         and c.board.my_bench >= _THIN_BENCH,
         weight=-30, status="assumed"),
+    Hypothesis(
+        id="dont-fetch-before-the-deadline",
+        rationale="The held-card risk's fetch-EARLY leg (hypergeometric-fetch-closure §Round 8 §5; "
+                  "seam-held-card-risk). A whole-deck search succeeds iff its target remains in deck "
+                  "— identical next turn — so when EVERY needed target is provably unplayable this "
+                  "turn yet lands at a CONCRETE next-turn deadline (`Context.fetch_target_deferred`: "
+                  "an evolution whose base is down but new-in-play / blocked only by my own first "
+                  "turn, rules.md §4 — never a baseless payoff, which has no deadline and belongs to "
+                  "the dead-grab rungs), fetching NOW buys zero "
+                  "tempo while it (a) pays a `cost_discard` two-card price a turn early and (b) holds "
+                  "the fetched key across the opponent's turn, exposed to their symmetric refreshes "
+                  "(Judge/Harlequin — the Read's `opp_hand_strip_odds`). Fetch-late dominates: the "
+                  "target waits IN the deck where no hand-strip touches it (ep85163634 f17: turn-2 "
+                  "Ultra Ball for a Mega Starmie ex no Staryu can receive until next turn; the human: "
+                  "'no cost to just wait a turn'). Gated to a fetch that pays its cost now "
+                  "(`cost_discard`) OR a FREE fetch under a LIVE strip read (≥ `_STRIP_ODDS_BAR`, "
+                  "fail-open 0.0 — no rep → no exposure claimed → no veto). −60 cancels the whole "
+                  "endorsement stack (confirmed-hit 15 + need 8 + wincon-tutor 25 + junk-shed 12), "
+                  "driving the play ≤ 0 → tier 4 behind the attack (the "
+                  "`dont-tutor-the-baseless-wincon-turn-one` sizing idiom). The starved-and-developed "
+                  "board is EXCLUDED: `dont-costly-tutor-when-starved-and-developed` (−30) already "
+                  "prices that jurisdiction and the currency-zone rule forbids stacking a second "
+                  "deferral price beside it (replace, not stack).",
+        when=lambda c: c.option_type == _PLAY and c.fetch_target_deferred
+        and ("cost_discard" in c.tags or c.board.opp_hand_strip_odds >= _STRIP_ODDS_BAR)
+        and not ("cost_discard" in c.tags and "tutor_pokemon" in c.tags
+                 and c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand
+                 and c.board.my_bench >= _THIN_BENCH),
+        weight=-60, status="assumed"),
+    Hypothesis(
+        id="dont-shuffle-away-the-deferred-fetch",
+        rationale="The held-card risk's fetch-LATE leg realised by OUR OWN refresh (spec §Round 8 §5: "
+                  "fetch-late's re-access risk). While a held fetch's needed grab is DEFERRED to next "
+                  "turn (`Context.refresh_shuffles_deferred_fetch` — the same deadline predicate that "
+                  "just stood the fetch itself down), a `shuffle_hand` self-refresh shuffles the "
+                  "plan's vehicle into the deck: the exact strip the deferral guards against, "
+                  "self-inflicted. −20 cancels the flat speculative CYCLE credit (the refresh, like "
+                  "the fetch, can wait a turn), so a plan-holding hand attacks/develops instead "
+                  "(ep85163634 f17: with Ultra Ball correctly held, Lillie's Determination at +11.7 "
+                  "was next in line to nuke the very hand the plan needs). A refresh with REAL "
+                  "certain value (a Judge stripping a tailored opponent hand) still clears it on its "
+                  "strip credits; the graded shed's role-tier can't see this PLAN signal, which is "
+                  "what keeps the rung out of the keep-cost currency (the `hold-successor-when-doomed` "
+                  "precedent: a deadline premise the closure doesn't model).",
+        when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
+        and c.refresh_shuffles_deferred_fetch,
+        weight=-20, status="assumed"),
     Hypothesis(
         id="demote-needless-search-supporter-in-setup",
         rationale="During SETUP, a bare narrow `search` Supporter (Team Rocket's Petrel — search your deck for "

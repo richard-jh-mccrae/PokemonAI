@@ -418,6 +418,14 @@ class Board:
     opp_comeback_disruptor: bool = False  # Disposition: the recognized opponent runs a post-KO hand
                                           # disruptor (Unfair Stamp class) — `opp_comeback_disruptor` Brief
                                           # property (opponent_properties.json), γ-gated. False when unrecognized / no Brief asserts it.
+    opp_hand_strip_odds: float = 0.0      # P(the opponent's deck still holds a card that SHUFFLES MY HAND
+                                          # AWAY — `hand_disruption`: Judge/Harlequin/Unfair Stamp): max
+                                          # `copies_left_odds` over the matched Read's rep build (their
+                                          # observed plays already subtracted). The held-card-risk exposure
+                                          # leg (spec §Round 8 §5). Fails OPEN to 0.0 (no facade / no
+                                          # confident Read → no exposure claimed → no veto); a strip card
+                                          # held in their HAND is not in-deck, so this UNDER-counts — the
+                                          # safe direction for a suppressor.
     deck_empty_ids: frozenset = field(default_factory=frozenset)  # MY card ids the deck is PROVABLY
                                           # empty of. Stateless: every copy seen OUTSIDE the deck reaches the
                                           # 60-count. With `obs['own_prizes']` it's EXACT. Sound, never probabilistic. Queried by `deck_definitely_empty_of`.
@@ -718,6 +726,14 @@ class Context:
     fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
                                        # card I currently lack (best grab value > 0, same grab rungs) —
                                        # whether-to-play endorsement (`fetch-when-it-fills-a-need`). False off a non-fetch/need-less fetch
+    fetch_target_deferred: bool = False  # ...AND every needed target is provably UNPLAYABLE this turn
+                                       # (evolution with no eligible base / my first turn, rules.md §4; a
+                                       # Basic w/ Bench full) — fetch-late dominates fetch-early (held-card
+                                       # risk, spec §Round 8 §5). Gates `dont-fetch-before-the-deadline`
+    refresh_shuffles_deferred_fetch: bool = False  # this option PLAYS a shuffle_hand refresh while a HELD
+                                       # fetch's needed grab is deferred past this turn — the self-refresh
+                                       # would strip the deferred plan's vehicle exactly like the
+                                       # opponent's Judge would. Gates `dont-shuffle-away-the-deferred-fetch`
     target_energy: int | None = None  # attack-target snipe signal: Energy on the targeted benched
                                       # Pokémon (None off a Damage/bench-target option)
     target_is_threat: bool = False  # attack target already carries Energy -> closest to attacking
@@ -2545,6 +2561,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             card_chain_value > 0 and self._spends_last_evolution_route(select, board, cid))
         fetch_fills_a_need = (option.get("type") == _PLAY
                               and self._fetch_fills_a_need(board, cid, plan))
+        fetch_target_deferred = (fetch_fills_a_need
+                                 and self._fetch_target_deferred(obs, cid, board, plan))
+        refresh_shuffles_deferred = (option.get("type") == _PLAY and "shuffle_hand" in tags
+                                     and self._held_fetch_deferred(obs, cid, board, plan))
         target_energy = self._target_energy(obs, select, option)
         target_hp = self._target_hp(obs, select, option)
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
@@ -2672,6 +2692,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        card_chain_value=card_chain_value,
                        card_spends_last_evolution_route=card_spends_last_evolution_route,
                        fetch_fills_a_need=fetch_fills_a_need,
+                       fetch_target_deferred=fetch_target_deferred,
+                       refresh_shuffles_deferred_fetch=refresh_shuffles_deferred,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
                        target_is_strongest_forward=target_is_strongest_forward,
@@ -3327,6 +3349,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_deckout_in_turns=getattr(_opp_res, "deckout_in_turns", None),
             opp_comeback_disruptor=bool(brief is not None
                                         and self.opponent.disposition("opp_comeback_disruptor", False)),
+            opp_hand_strip_odds=self._opp_hand_strip_odds(),
             deck_empty_ids=deck_empty,
             deck_known_counts=deck_known,
             deck_contains_odds=deck_odds_map,
@@ -3357,6 +3380,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
         board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
         return board                                    # COMPUTE-ONLY here — nothing scores off it yet (S2)
+
+    def _opp_hand_strip_odds(self) -> float:
+        """`Board.opp_hand_strip_odds` — the held-card-risk exposure leg (hypergeometric-fetch-closure
+        §Round 8 §5): P(the opponent's deck still holds ≥1 card that shuffles MY hand away), read as
+        the max `copies_left_odds` over the matched Read's representative build restricted to
+        `hand_disruption`-tagged cards (Judge / Harlequin / Unfair Stamp — verified tags,
+        card_functions.json). `copies_left_odds` already nets out their tracker-observed plays (a
+        Judge in their discard is a Judge they no longer hold). Fails OPEN to 0.0 — no facade, no
+        functions table, no confident Read, or any error claims NO exposure, so the deferral veto
+        reading this never fires on a guess (the declared suppressor fail direction)."""
+        if self.opponent is None or not self.functions:
+            return 0.0
+        try:
+            odds = self.opponent.copies_left_odds()
+            return max((p for cid, p in odds.items()
+                        if "hand_disruption" in self.functions.tags(cid)), default=0.0)
+        except Exception:
+            return 0.0
 
     def _turn_goal_satisfied(self, board: Board, select: dict | None) -> bool:
         """BUILD 4 predicate — is THIS turn's directed goal already met, so a draw/gust/evolution Supporter
