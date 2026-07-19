@@ -39,6 +39,17 @@ _FETCH_POKEMON_TARGETS = frozenset({"pokemon", "basic_pokemon", "mega", "evoluti
 # hypergeometric P(still in deck) < this. Conservative (refuted ep82524455-f6: P~=0.98 stays above bar). SOUND whiff (P=0) is separate/unconditional.
 _WHIFF_PROB_THRESHOLD = 0.20
 
+# Tutor-chain grab value (seam C, docs/plans/seam-tutor-chain-grab-value.md; spec Round 9 §3: "a
+# tutor's held value = the closure-reachable value, recursively free"). Per-hop discount < 1 buys the
+# monotone-decay invariant — a direct target strictly outranks a tutor that merely reaches it at the
+# same select, and each extra hop (a play that reveals nothing until resolved) decays further. 2-hop
+# cap = the gamble's spec-verified one-turn Petrel → Item → target chain. The FLOOR is the flat
+# draw-Supporter band (`grab-a-draw-supporter-in-setup` +10) the chain must out-promise to fire —
+# it also silences noise chains (δ² × the +3 color tie-break ≈ 1.7).
+_CHAIN_HOP_DISCOUNT = 0.75
+_CHAIN_MAX_HOPS = 2
+_CHAIN_OPENER_FLOOR = 10.0
+
 
 def _is_reusable_energy(stat, tags) -> bool:
     """A reusable (non-discard) Energy card: hp 0 with a real `energyType`, not tagged
@@ -175,6 +186,71 @@ class FetchMixin:
                         ids.add(tid)
             self._fetch_cache[cid] = ids
         return self._fetch_cache[cid]
+
+    def _chain_fetch_targets(self, cid) -> set:
+        """The FULL-scope set of deck card ids card ``cid``'s ``zone: deck`` FETCH clauses can pull —
+        every clause class (`trainer` / energy / Pokémon), unlike `_search_deck_set`'s Pokémon-only
+        whiff scope. The tutor-chain GRAPH leg (seam C): deck-fixed, memoised per card id (the
+        `_search_deck_set` discipline); clauses only via `fetch_closure.fetch_target_matches`, never
+        a text parse (ADR-0065). Empty for a card with no such clause."""
+        if cid is None:
+            return set()
+        if cid not in self._chain_target_cache:
+            from common import fetch_closure
+            clauses = [cl for cl in (self.effects.clauses(cid) if self.effects else ())
+                       if cl.get("kind") == "fetch" and cl.get("zone") == "deck"]
+            ids: set = set()
+            if clauses:
+                for tid in set(self.deck):
+                    stat = self.stats.get(tid) if self.stats else None
+                    if any(fetch_closure.fetch_target_matches(cl, stat) for cl in clauses):
+                        ids.add(tid)
+            self._chain_target_cache[cid] = ids
+        return self._chain_target_cache[cid]
+
+    def _chain_grab_value(self, board, cid, plan) -> float:
+        """The discounted closure value of tutoring card ``cid`` into hand — spec Round 9 §3 ("a
+        tutor's held value = the closure-reachable value, recursively free"), backing
+        `grab-the-chain-opener`. δ × the best reachable target's `_grab_value_of` (MAX, never a sum
+        — a tutor fetches ONE card), recursing one more hop through ITEM tutors only (`_CHAIN_MAX_
+        HOPS` = 2; a fetched Item plays free the same turn, a fetched Supporter does not — the
+        gamble's `_supporter_*_tutor_reaches` post-Item precedent). A Supporter tutor with the
+        one-per-turn slot already spent prices 0 (fail-closed: the chain is not free this turn;
+        `card_unplayable_this_turn` additionally demotes). Reachability drops provably-gone targets
+        (`deck_empty_ids`) and non-Energy cards already in hand (the value must be value you LACK —
+        the chain-side mirror of `dont-grab-a-card-already-in-hand`). End values read the shared
+        oracle, so every need stand-down is inherited and the chain DECAYS as needs are met — incl.
+        `_greedy_grab`'s virtual board re-score. The chain rung itself never fires inside
+        `_grab_value_of` (its reduced Context leaves `card_chain_value` 0), so the recursion is
+        exactly this helper: cycle-safe via the path `seen` set (Petrel's `trainer` clause reaches
+        Petrel), Item-only descent, and the hop cap. Endorser fail direction: unknown card → 0."""
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if stat is None:
+            return 0.0
+        if stat.is_supporter and board.supporter_played:
+            return 0.0
+        return self._chain_value_from(board, cid, plan, _CHAIN_MAX_HOPS, {cid}, {})
+
+    def _chain_value_from(self, board, cid, plan, hops: int, seen: set, memo: dict) -> float:
+        """`_chain_grab_value`'s recursive leg: δ × max over card ``cid``'s reachable fetch targets
+        of (the target's own grab value | one more Item hop). ``memo`` caches `_grab_value_of` per
+        target for THIS call tree only — the value is board-bound, never cached across boards."""
+        if hops <= 0:
+            return 0.0
+        best = 0.0
+        for tid in self._chain_fetch_targets(cid):
+            if tid in seen or tid in board.deck_empty_ids:
+                continue
+            tst = self.stats.get(tid) if self.stats else None
+            if tid in board.hand_ids and not (tst is not None and tst.is_energy):
+                continue                                     # already held: not value you lack
+            if tid not in memo:
+                memo[tid] = self._grab_value_of(board, tid, plan)
+            v = memo[tid]
+            if tst is not None and tst.is_item:              # only an Item plays free the same turn
+                v = max(v, self._chain_value_from(board, tid, plan, hops - 1, seen | {tid}, memo))
+            best = max(best, v)
+        return _CHAIN_HOP_DISCOUNT * best
 
     def _grab_value_of(self, board, cid: int, plan) -> float:
         """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
@@ -745,6 +821,31 @@ HYPOTHESES = [
         when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "draw" in c.tags
         and bool(c.stat and getattr(c.stat, "is_supporter", False)),
         weight=10, status="assumed"),
+    Hypothesis(
+        id="grab-the-chain-opener",
+        rationale="At a TO_HAND grab, a tutor is worth what it REACHES: spec Round 9 §3, 'a tutor's "
+                  "held value = the closure-reachable value, recursively free' (seam C, "
+                  "docs/plans/seam-tutor-chain-grab-value.md). `Context.card_chain_value` is the "
+                  "exactly-computed discounted closure (`_chain_grab_value`: δ=0.75/hop × MAX over "
+                  "reachable targets, 2-hop cap, Item-only descent, Supporter-slot fail-closed, "
+                  "shared-oracle end values); the rung fires only when it clears the flat "
+                  "draw-Supporter band it competes with (`_CHAIN_OPENER_FLOOR` = the +10 below). "
+                  "ml 85059103 f9 (CRITICAL): 'I would have fetched a Petrel, which can be used to "
+                  "fetch a Fighting Gong, which can be used to fetch a Solrock' — the chain opener "
+                  "(δ² × Solrock's missing-engine-half 22 ≈ 12.4) out-values a third draw Supporter "
+                  "(Judge +10). +15 sits above that band and below every real DIRECT need "
+                  "(`prefer-wincon-line-piece` +18, `fetch-base-before-stranded-payoff` +20, "
+                  "`fetch-the-wincon` +30, `fetch-energy-when-starved` +35) — the monotone-decay "
+                  "invariant: a target on offer always outranks a tutor that merely reaches it. One "
+                  "currency zone: excludes a draw-tagged Supporter (a card rides the draw band OR "
+                  "the chain band, never both); the PLAY-side tutor endorsements "
+                  "(`play-a-tutor-for-the-unfound-wincon` +25) are a different decision and never "
+                  "co-fire; `dont-grab-a-card-already-in-hand` (−12) still nets a held tutor below "
+                  "a fresh draw Supporter. Decays to silence in `_greedy_grab` re-scoring once the "
+                  "chain's END target is acquired (the virtual board kills the end value).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_chain_value > _CHAIN_OPENER_FLOOR
+        and not ("draw" in c.tags and bool(c.stat and getattr(c.stat, "is_supporter", False))),
+        weight=15, status="assumed"),
     Hypothesis(
         id="dont-grab-a-card-already-in-hand",
         rationale="Don't tutor a card an identical copy of which is ALREADY in my hand — the second copy "

@@ -45,6 +45,10 @@ PINS = {
     # fetch-target valuation (role × gate × closure)
     "84890060-26": "ft: energy-over-body — the fetched {F} chains attach→retreat→KO",
     "84071010-53": "ft: fetch the Solrock line piece, pre-evos accounted",
+    "85059103-9":  "ft: fetch Petrel (→ Fighting Gong → Solrock chain) over a redundant draw "
+                   "Supporter — `grab-the-chain-opener` (+15, seam C: a tutor is worth the "
+                   "discounted closure it reaches) out-ranks the flat draw band (promoted from a "
+                   "TARGET by the tutor-chain grab-value build)",
     "83686860-33": "ft: fetch Munkidori over a redundant Drakloak",
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
     "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
@@ -82,9 +86,6 @@ TARGETS = {
     "86091435-68": "dp: don't pitch a Drakloak that can EVOLVE the active Dreepy this turn — a "
                    "deployability deadline (a benched-Drakloak board pitches it correctly, ep83686860 "
                    "f18), which a flat keep_cost floor can't tell apart. Gate library, not keep_cost.",
-    "85059103-9":  "ft: fetch Petrel (→ Fighting Gong → Solrock chain) over a redundant draw Supporter "
-                   "— the duplicate Lillie's is already avoided (`dont-grab-a-card-already-in-hand`); "
-                   "the gap is tutor-chain fetch-priority, not redundancy.",
     # whether-to-play / hold the fetch
     "86091728-19": "attach: the {P} belongs on the benched Dreepy (2nd line), not the Active — the "
                    "Ultra Ball substance is FIXED; the residue is attach-target priority "
