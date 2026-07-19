@@ -1737,13 +1737,26 @@ class PlannerMixin:
 
     def _role_value(self, cid) -> float:
         """WP6/WP7: card ``cid``'s base worth = the MAX claim over its declared / derived Roles
-        (`_roles_of`), its behavioural tags (`TAG_TIER` — the worth-coverage fix for situational
-        Trainers/special Energy), and the energy / ACE-SPEC fallbacks. Delegates to
-        `card_worth.role_value` (ADR-0065) — the ONE currency zone; the Pilot only supplies facts."""
+        (`_roles_of` + the line-member derivation below), its behavioural tags (`TAG_TIER` — the
+        worth-coverage fix for situational Trainers/special Energy), and the energy / ACE-SPEC
+        fallbacks. Delegates to `card_worth.role_value` (ADR-0065) — the ONE currency zone; the Pilot
+        only supplies facts.
+
+        **Line-member worth derivation (Round 9 'derive first'; the discard-shadow finding on
+        86091435-68).** A non-payoff win-condition Line member (`_line_preevo_set`: Dreepy AND the
+        middle Drakloak on Dreepy→Drakloak→Dragapult ex) is worth its `win_condition_base` tier even
+        when the deck declared only the base — a Line stage is a plan piece, not junk. WORTH-ONLY: the
+        Line-membership fact enters the value currency here but NOT `_roles_of` / `c.roles` — the
+        discard-ladder rungs keep their tuned routing (`_BASE_ROLES` exemptions, the covered-vs-
+        uncovered Drakloak discrimination on 83686860-18) as the GATED seam-D migration, never flipped
+        as a side effect of pricing worth."""
         from common.card_worth import role_value
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        roles = self._roles_of(cid)
+        if cid is not None and cid in self._line_preevo_set():
+            roles = [*roles, "win_condition_base"]      # derived worth only — not injected into c.roles
         return role_value(
-            self._roles_of(cid),
+            roles,
             is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
             is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)),
             tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())

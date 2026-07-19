@@ -5,9 +5,11 @@
 `Decision.discard_shadow` → the sparse `@T` `discard_shadow` key → the blunder-shell ⚖️ dropdown —
 deciding NOTHING (the ladder chose; the agreement bit is the record). First corpus sweep (12
 recorded discard decisions): **3 agree / 9 disagree**, and the disagreements already localise the
-v1 gaps the migration grill needs: (a) a WORTH-DERIVATION gap — an undeclared Line MEMBER (the f68
-Drakloak) prices 0, so the deploy-now spike has no worth to spike (line-member derivation for
-ROLE_TIER's evolution band is prerequisite work); (b) the documented per-card set-naivety
+v1 gaps the migration grill needs: (a) ~~a WORTH-DERIVATION gap — an undeclared Line MEMBER (the f68
+Drakloak) prices 0~~ **FIXED 2026-07-19** (`planner._role_value` derives `win_condition_base` worth
+for every `_line_preevo_set` member — the f68 Drakloak now prices 20; WORTH-ONLY, `c.roles` and the
+discard rungs untouched, so the deploy-now spike now has worth to spike but the covered-vs-uncovered
+DISCRIMINATION stays this seam's gated work); (b) the documented per-card set-naivety
 (duplicate pairs both price 0); (c) the `fuel` term SEES the 84071010-45 discard-as-resource pick
 the ladder missed, though the v1 index tie-break among worth-0 rows masks the ranking. These rows
 are the grill fodder for the migration-path ruling below.

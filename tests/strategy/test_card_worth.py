@@ -34,6 +34,26 @@ def test_reaccess_outs_are_the_closure_pointed_backwards():
     assert ml._card_reaccess_outs(999999, counts) == 0             # unknown card -> no outs
 
 
+@pytest.mark.req("REQ-WORTH-0007")
+def test_role_value_derives_worth_for_an_undeclared_line_member():
+    """Line-member worth DERIVATION (Round 9 'derive first', the discard-shadow finding on
+    86091435-68): a non-payoff win-condition Line member is worth its `win_condition_base` tier even
+    when the deck declared only the base — a middle Line stage (Drakloak on Dreepy→Drakloak→Dragapult
+    ex) is a plan piece, not junk. WORTH-ONLY: the Line-membership fact enters the value currency
+    (the keep-cost sites + the shadow) but NOT `_roles_of` / `c.roles` — the discard-ladder rungs keep
+    their tuned routing, so the covered-vs-uncovered Drakloak discrimination (83686860-18) stays the
+    gated seam-D migration, never flipped here."""
+    from common.card_worth import ROLE_TIER
+    dx = _shipped_pilot("dragapult_ex")
+    assert dx._role_value(121) == ROLE_TIER["win_condition"]        # payoff: unchanged (30)
+    assert dx._role_value(119) == ROLE_TIER["win_condition_base"]   # declared base: unchanged (20)
+    assert dx._role_value(120) == ROLE_TIER["win_condition_base"]   # DERIVED middle stage: was 0
+    # the derivation is WORTH-ONLY — `c.roles` (what the rungs read) is untouched
+    assert "win_condition_base" not in dx._roles_of(120)
+    # a non-Line card is still worth 0 (no spurious derivation)
+    assert dx._role_value(1120) == 0.0                             # Crushing Hammer: not a Line member
+
+
 @pytest.mark.req("REQ-WORTH-0001")
 def test_role_value_reads_the_tuned_tier_table():
     """Base worth = the general role→points tier (`common.card_worth.ROLE_TIER`), max over a card's

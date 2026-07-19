@@ -115,6 +115,15 @@ comparator) and ADR-0032 (Effect-Clause tier).
   corpus sweep: 3 agree / 9 disagree over the recorded discard decisions; the rows localise the
   migration's prerequisites (line-MEMBER worth derivation; set semantics; a worth-0 tie-break).
   The swap stays gated per the ruling (seam D). Suite + corpus green (3104).
+- **Line-member worth derivation (2026-07-19, the shadow's first prerequisite closed).** The shadow
+  sweep found an undeclared middle Line stage (the f68 Drakloak on Dreepy→Drakloak→Dragapult ex)
+  pricing **0** — `_role_value` saw only the declared base. `planner._role_value` now derives
+  `win_condition_base` worth for every `_line_preevo_set` member (Round 9 'derive first'), so the
+  Drakloak prices 20. WORTH-ONLY: the Line-membership fact enters the value currency (keep-cost
+  sites + the shadow) but NOT `_roles_of` / `c.roles` — injecting it there would flip the discard
+  ladder's `_BASE_ROLES` exemptions and REGRESS the covered-Drakloak pin `83686860-18`, so that
+  discrimination stays the gated seam-D migration. The gamble keep-floor / refresh SHED re-audit is
+  a no-op (no pin moved). Suite + corpus green (3105).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
