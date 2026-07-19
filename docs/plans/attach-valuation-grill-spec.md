@@ -1,12 +1,23 @@
 # Attach valuation — grill-session seed: one equation for the Energy attach
 
-**Status.** SEED for a grill session — NOT designed, NOT built. **Queue it BEHIND the gust and
-hand-disruption grills**: it shares their open exchange-rate question (worth-points ↔ prizes ↔
-damage ↔ tempo), and whatever unification they rule constrains this design.
-**Coordinate with parallel seam A** (`docs/plans/seam-attach-target-priority.md`, corpus target
-`86091728-19`): that is the NARROW single-correction question; this grill is the whole ladder. If
-seam A has landed a narrow rung fix, this grill inherits it as a fold candidate; if seam A's grill
-is still open, fold it into this one rather than answering it twice.
+**Status (updated 2026-07-19, post-rebase).** SEED for a grill session — NOT designed, NOT built —
+but the landscape moved and the blockers SOFTENED:
+- **The shadow ruling applies** (`docs/plans/shadow-equations-ruling.md`): the equation gets BUILT
+  and emitted in shadow (the gamble-trace pattern) once the grill settles the design — a passing
+  rung ladder no longer blocks construction, only the swap. Round 0 below now classifies
+  replacement PRIORITY rather than gating construction.
+- **The exchange-rate inheritance is partially IN**: the gusting grill resolved (ADR-0066) with a
+  ruled ceiling — denial may override at most ~1 effective prize — and the `their_keep_cost`
+  design (`gusting-keepcost-design.md`) owns the offensive rate. The hand-disruption build (in
+  flight) is landing the damage↔worth leg. Inherit both; a shadow oracle may emit in its own units
+  meanwhile.
+- **Seam A LANDED** (built & promoted): a general role-keyed stand-down of
+  `prefer-active-attach-in-setup` (off-Line Active, benched un-powered Line member → develop the
+  line), pinned in `test_attach_target_priority.py`. It is now a FOLD CANDIDATE of this grill, not
+  a coordination risk — the oracle's P-term should subsume it and its pin must survive the fold.
+- **Seam B LANDED** (held-card risk, fetch-late at a concrete deadline) — the deadline-term
+  precedent outside the gate library; agenda §2 should read its shipped shape before choosing a
+  home. Seam C's chain machinery also extended `fetch_closure` (the `trainer` branch).
 
 ## Why this is the flagship remaining convergence (survey, 2026-07-19)
 
@@ -100,13 +111,15 @@ get converged. Build the corpus family (pins + xfail targets) in the hyperclosur
 ## Hazards (paid for — don't re-buy)
 
 - The +76 shape: seed the calibration at the old currency's mid-band; full-family re-audit — the
-  attach pins span `test_blunder_*`, the deck-strategy tests, and the six ADR-0060 pins (attach
-  ordering feeds `attach-before-hand-shuffle`).
+  attach pins span `test_blunder_*`, the deck-strategy tests, the six ADR-0060 pins (attach
+  ordering feeds `attach-before-hand-shuffle`), and now seam A's `test_attach_target_priority.py`.
 - ml f87 (a Tool attached as if Energy) — option-type discipline.
-- Anti-speculation: if Round 0 shows the ladder already satisfies most of the 41 (plausible — it
-  is the most-tuned family in the repo), converge only the failing legs; the grab/pitch precedent
-  applies here more than anywhere.
-- Seam A double-design; held-card-risk (B) overlap on hold-vs-spend.
+- Anti-speculation, AS AMENDED by the shadow ruling: Round 0 no longer gates BUILDING the oracle —
+  it gates each family's SWAP. If the ladder already satisfies most of the 41 (plausible — it is
+  the most-tuned family in the repo), the oracle still ships as a shadow emitter; the passing
+  families swap last (or never), the failing legs swap first, and shadow/rung DISAGREEMENT rows on
+  live telemetry become the discovery channel for latent ladder bugs the corpus never caught.
+- Held-card-risk (B, now shipped) overlap on hold-vs-spend — read its landed shape first.
 
 ## Sibling consumer — promote/retreat (scope in the SAME grill if it fits, else its own seed)
 
@@ -115,9 +128,13 @@ are shadows of `promote_value(B) = survival(B | incoming, ADR-0064) × threat(B'
 oracle)` — a COMPOSITION of two existing oracles, no new machinery. Cheaper than the attach
 convergence; same unit question.
 
-## Build shape (IF the grill confirms)
+## Build shape (per the shadow ruling)
 
-Round-0 corpus family → the oracle as a signed tactical consuming
-predicted_damage/payable/deadline/worth → converge the fold list under corpus + score-diff, staged
-per family (target-choice first, portfolio last) → deck-rung folds via /deck-align (ADR-0034) →
-earns its own ADR (the fourth shadow's).
+**Phase 1 — the shadow oracle (after the grill settles the design; no swap gate needed):** build
+`attach_value` computing at the real decision point, emitting per-option in the trace (the
+gamble-trace pattern: inner terms — P-delta, deadline, the valued attack, `resource_cost` — plus
+the output and the AGREEMENT bit vs the rungs' pick). Mid-sim guard; memoise the deck-fixed legs.
+**Phase 2 — staged swaps:** Round-0 corpus family + shadow-telemetry disagreements rank the fold
+order (failing legs first, agreeing families last); each swap under corpus + score-diff + the
+currency-zone rule (the oracle REPLACES the rungs it shadowed). Deck-rung folds via /deck-align
+(ADR-0034). Earns its own ADR (the fourth shadow's) at the first swap.
