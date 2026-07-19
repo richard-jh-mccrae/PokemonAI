@@ -4,7 +4,8 @@ Pure-data General-Strategy Hypotheses that fire on an ATTACH select (or the ener
 feeds one). NO Pilot Mixin — the Tactical half of energy (readiness, will-it-die) lives in the Pilot
 per ADR-0016; this file is only the tunable positional weights.
 """
-from common.strategy.context import _ACTIVE, _ATTACH, _ATTACH_FROM, _BENCH, _PLAY, _WINCON_ROLES
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACH_FROM, _ATTACKER_ROLES, _BENCH,
+                                     _PLAY, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
@@ -80,10 +81,20 @@ HYPOTHESES = [
         rationale="Prefer the ACTIVE attacker over a benched pre-evolution for the turn's manual Energy — "
                   "the Active can use it THIS turn, fixing the dead-heat tie that left Active Cinderace "
                   "bare while Energy went to Staryu (ep83007714 f7). Fires only when the Active needs "
-                  "Energy and isn't doomed; small (+8), only breaks the Active-vs-Bench tie.",
+                  "Energy and isn't doomed; small (+8), only breaks the Active-vs-Bench tie. STANDS DOWN "
+                  "when the Active isn't the deck's attacker — no attacker Role (declared or derived "
+                  "accel), off every Line — while a benched Line member sits un-powered "
+                  "(`bench_line_member_needs`): a role-less tech Active (Munkidori, 86091728 f19) is "
+                  "Active incidentally, so the tie goes back to dead-heat and the decide()-only "
+                  "`attach_to_needy_line` tie-break develops the benched line instead. The charter case "
+                  "keeps its +8 (Cinderace is `accel_source`); the rejected 'next-attack cost already "
+                  "covered' framing is measured OUT (the f19 Active is bare — it would never fire).",
         when=lambda c: c.option_type == _ATTACH and c.attach_is_energy
         and c.attach_target_area == _ACTIVE and c.attach_target_needs
-        and not c.board.active_doomed,
+        and not c.board.active_doomed
+        and not (c.board.bench_line_member_needs                 # an un-powered line waits benched …
+                 and not c.attach_target_is_line_member          # … and the Active is off-Line …
+                 and not (_ATTACKER_ROLES & set(c.attach_target_roles))),  # … and not a deck attacker
         weight=8, status="testing"),
     Hypothesis(
         id="attach-energy-last",

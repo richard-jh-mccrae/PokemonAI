@@ -531,6 +531,10 @@ class Board:
     line_ready: bool = False              # a win-condition Line payoff is in play with enough Energy to
                                           # attack (the `choose_plan` readiness core) — the REAL signal the
                                           # old plan==SETUP/RACE gates migrated to (ADR-0040 gate ban)
+    bench_line_member_needs: bool = False  # a BENCHED win-condition Line-path body still needs Energy for
+                                          # its cheapest attack — an un-powered line waits on the bench, so
+                                          # `prefer-active-attach-in-setup` stands down for a role-less
+                                          # off-Line Active and the tie-break develops the line (86091728 f19)
     phase: Plan = Plan.SETUP              # the DERIVED advisory phase (ADR-0040): readiness SETUP→RACE +
                                           # objective overrides (behind+doomed→STABILIZE, ≤2-prizes+ready→
                                           # CLOSE), hysteretic, memoryless backwards. ADVISORY ONLY — small
@@ -3279,6 +3283,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             wincon_in_hand=self._wincon_in_hand(me),
             line_preevo_in_play=self._line_preevo_in_play(me),
             line_preevo_in_hand=self._line_preevo_in_hand(me),
+            bench_line_member_needs=self._bench_line_member_needs(me),
             wincon_base_deployable=self._payoff_immediate_preevo_available(me),
             wincon_in_hand_undeployable=self._wincon_in_hand_undeployable(me),
             accel_recipient_missing=self._accel_recipient_missing(me),
@@ -3530,6 +3535,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
+
+    def _bench_line_member_needs(self, me: dict) -> bool:
+        """True if a BENCHED body on a declared win-condition Line's path (pre-evolution or payoff,
+        `_line_member_set`) still needs Energy for its cheapest attack (`_attach_target_needs`) — an
+        un-powered line is waiting on the bench. The board-side gate of `prefer-active-attach-in-
+        setup`'s stand-down (86091728 f19: two bare benched Dreepy while the {P} went to Munkidori);
+        role-gated via `_wincon_lines`, so decks without a declared Line never trip it."""
+        members = self._line_member_set()
+        if not members:
+            return False
+        return any(p and p.get("id") in members and self._attach_target_needs(p)
+                   for p in (me.get("bench") or []))
 
     def _line_preevo_in_hand(self, me: dict) -> bool:
         """True if a Line pre-evolution (a base to evolve the payoff from) is in my hand — so I can

@@ -53,6 +53,12 @@ PINS = {
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
     "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
     # whether-to-play / hold the fetch (deadline + whiff)
+    "86091728-19": "attach: the {P} goes to the benched 2nd-line Dreepy, not the role-less off-Line "
+                   "Active Munkidori — `prefer-active-attach-in-setup` stands down when a benched "
+                   "Line member sits un-powered and the Active isn't a deck attacker; the "
+                   "`attach_to_needy_line` tie-break develops the line (promoted from a TARGET by "
+                   "the attach-target-priority seam build; either identical Dreepy satisfies it — "
+                   "`_matches_up_to_interchangeability`)",
     "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
     "83967841-17": "hold: hold the Ultra Ball, end the turn",
@@ -91,10 +97,8 @@ TARGETS = {
     "86091435-68": "dp: don't pitch a Drakloak that can EVOLVE the active Dreepy this turn — a "
                    "deployability deadline (a benched-Drakloak board pitches it correctly, ep83686860 "
                    "f18), which a flat keep_cost floor can't tell apart. Gate library, not keep_cost.",
-    # whether-to-play / hold the fetch
-    "86091728-19": "attach: the {P} belongs on the benched Dreepy (2nd line), not the Active — the "
-                   "Ultra Ball substance is FIXED; the residue is attach-target priority "
-                   "(`prefer-active-attach-in-setup` +8 tips it Active). A minor separate axis.",
+    # (the whether-to-play / hold-the-fetch family is fully pinned: 86091728-19 by the
+    #  attach-target-priority seam, 85163634-17 by the held-card-risk build)
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
 # the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the
@@ -159,6 +163,47 @@ def _pilot(agent: str):
     return mod._build_pilot(agent)[0]
 
 
+_ATTACH_TYPES = frozenset({8, "Attach"})    # option "type": engine enum (raw obs) / label (record mirror)
+_AREA_ZONE = {4: "active", 5: "bench"}      # engine area code → the obs player zone
+
+
+def _attach_fingerprint(obs: dict, opt: dict):
+    """The interchangeability key of an ATTACH option: (hand card, byte-identical target body). Two
+    attach options with the same fingerprint put the same Energy onto indistinguishable bodies (same
+    card id, hp, energies, tools — everything but the engine `serial`), so a human `correct` naming
+    one of them is satisfied by the other (the 074df7c lethal-recover precedent, stricter: identical
+    body state, not just card id). None for a non-attach option or an unresolvable target — those
+    keep exact-index matching."""
+    if opt.get("type") not in _ATTACH_TYPES:
+        return None
+    cur = obs.get("current") or {}
+    players = cur.get("players") or []
+    yi = cur.get("yourIndex", 0)
+    me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
+    bodies = me.get(_AREA_ZONE.get(opt.get("inPlayArea"), ""), []) or []
+    i = opt.get("inPlayIndex")
+    if not (isinstance(i, int) and 0 <= i < len(bodies)) or not isinstance(bodies[i], dict):
+        return None
+    body = {k: v for k, v in sorted(bodies[i].items()) if k != "serial"}
+    return json.dumps({"card": opt.get("index"), "body": body}, sort_keys=True, default=str)
+
+
+def _matches_up_to_interchangeability(obs: dict, chosen: set, correct: set) -> bool:
+    """Set equality where an attach index also matches a DIFFERENT attach index with the same
+    `_attach_fingerprint` — the multiset of picks is compared by fingerprint, with exact-index
+    identity for every non-attach (or unresolvable) pick."""
+    if chosen == correct:
+        return True
+    if len(chosen) != len(correct):
+        return False
+    opts = (obs.get("select") or {}).get("option") or []
+
+    def _keys(idxs):
+        return sorted((_attach_fingerprint(obs, opts[i]) or f"exact:{i}")
+                      if 0 <= i < len(opts) else f"exact:{i}" for i in idxs)
+    return _keys(chosen) == _keys(correct)
+
+
 def _replay_picks_correct(cid: str) -> bool:
     """Did the shipped Pilot make the human's pick? Set-valued (order-independent).
 
@@ -167,7 +212,9 @@ def _replay_picks_correct(cid: str) -> bool:
     a `correct` shorter than the pick count. Such a partial correction is satisfied iff every card it
     names IS discarded (`correct ⊆ chosen`): the flagged mistake is not made, whatever fills the
     remaining forced slot. A fully-specified correction (as many picks as the select forces) still
-    demands set equality."""
+    demands set equality — up to attach-target INTERCHANGEABILITY: a `correct` that names one of two
+    byte-identical bodies is satisfied by the other (86091728 f19 pins the SECOND of two bare benched
+    Dreepy; either receives the {P} identically — `_matches_up_to_interchangeability`)."""
     rec = _record(cid)
     d = _pilot(rec["agent"]).explain(rec["obs"])
     chosen, correct = set(d.chosen), set(rec["correct"])
@@ -175,7 +222,7 @@ def _replay_picks_correct(cid: str) -> bool:
     picks = sel.get("minCount") or sel.get("maxCount") or len(correct) or 1
     if 0 < len(correct) < picks:                 # a partial discard correction: the flagged card(s) only
         return correct <= chosen
-    return chosen == correct
+    return _matches_up_to_interchangeability(rec["obs"], chosen, correct)
 
 
 def _param(cid, reason, *, xfail):

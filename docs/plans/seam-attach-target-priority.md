@@ -1,5 +1,14 @@
 # Seam handoff: attach-target priority (setup — Active vs the 2nd line)
 
+**STATUS: BUILT & PROMOTED 2026-07-19.** The target flipped and is a corpus PIN; grill ruling and
+build record in `docs/plans/combat-tempo-cluster-findings.md` §C. Summary: GENERAL role-keyed
+stand-down of `prefer-active-attach-in-setup` (off-Line, no attacker Role, benched Line member
+un-powered → the `attach_to_needy_line` tie-break develops the line); the §Build-plan sketch
+"Active's next-attack cost already covered" was measured OUT in the grill (the f19 Active is bare).
+Promotion also hardened the corpus harness to match attach picks up to interchangeability (074df7c
+precedent — `correct` names the second of two identical Dreepy). Focused pin:
+`tests/strategy/test_attach_target_priority.py`. Full suite green (3070 passed, 3 xfailed).
+
 **Parallel-session slot A** (smallest; fully independent — see §Conflicts).
 **Corpus acceptance target:** `86091728-19` (dragapult_ex), xfail-strict in
 `tests/strategy/test_hyperclosure_corpus.py` — the XPASS is the finish line; promote to PIN on flip.
