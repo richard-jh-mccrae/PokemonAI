@@ -204,6 +204,17 @@ class Board:
     active_ko_prizes: int = 0      # prizes from KOing opponent's CURRENT Active with my cheapest
                                    # attack (0 if can't) — baseline a gust must beat (gusting
                                    # removes this Active, only worth the Supporter for a bigger KO)
+    gust_best_total_prizes: int = 0  # gust_best_ko_prizes PLUS the same-attack snipe rider on the
+                                   # post-gust bench — the gust line's FULL take (ADR-0066)
+    menu_attack_total_prizes: int = 0  # best one-attack total WITHOUT a gust: Active KO + that
+                                   # attack's own snipe/spread rider KOs — the snipe-aware baseline
+                                   # a gust must beat (ADR-0066; ep86091435 f119). ≥ active_ko_prizes
+    gust_ko_energy_swing: int = 0  # sunk Energy on the best-prize KO-able gust target MINUS the
+                                   # Energy the baseline Active KO destroys — what an equal-prize
+                                   # gust actually buys (ADR-0066; ep85163079 f30: +3)
+    stall_swap_pointless: bool = False  # the famine stall would swap one stranded wall for an
+                                   # equal-or-worse one — their Active is itself an energyless
+                                   # high-retreat body no tamer than any stall candidate (ADR-0066)
     my_prizes_remaining: int = 0   # prizes I still need to take (len of my prize pile); 0 when obs
                                    # doesn't populate it. A gust KO reaching this count WINS (ADR-0022)
     opp_prizes_remaining: int = 0  # prizes OPPONENT still needs (len of their prize pile); 0 when
@@ -1267,8 +1278,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             cid = traces[i].card_id
             return bool(self.functions) and cid is not None and "gust" in self.functions.tags(cid)
 
-        def _gust_enables_ko(i: int) -> bool:                        # a gust that fired `gust-for-the-ko`
-            return any(getattr(h, "id", None) == "gust-for-the-ko" for h, _w in traces[i].fired)
+        def _gust_enables_ko(i: int) -> bool:                        # a gust that fired a KO-converting rule
+            return any(getattr(h, "id", None) in ("gust-for-the-ko", "gust-for-the-loaded-equal-ko")
+                       for h, _w in traces[i].fired)
 
         def _retreat_walls_the_line(i: int) -> bool:                 # the sacrificial-wall maneuver step 1
             return any(getattr(h, "id", None) == "retreat-to-wall-the-line" for h, _w in traces[i].fired)
@@ -3293,6 +3305,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_maxed_kos=self._active_maxed_kos(ma, oa),
             gust_best_ko_prizes=self._gust_best_ko_prizes(ma, opp, payable),
             active_ko_prizes=self._active_ko_prizes(ma, oa, payable),
+            gust_best_total_prizes=self._gust_best_total_prizes(ma, opp, payable),
+            menu_attack_total_prizes=self._menu_attack_total_prizes(ma, oa, opp, payable),
+            gust_ko_energy_swing=self._gust_ko_energy_swing_calc(ma, oa, opp, payable),
+            stall_swap_pointless=self._stall_swap_pointless(opp),
             my_prizes_remaining=len(me.get("prize") or []),
             opp_prizes_remaining=len(opp.get("prize") or []),
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),

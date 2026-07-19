@@ -1,10 +1,22 @@
 # Gusting — grill-session seed: one equation for the gust target
 
-**Status.** SEED for a grill session — NOT designed, NOT built. **Round 0 MEASURED 2026-07-19 —
-results in `gusting-round0-measurement.md`: the cluster dissolved to 3 small targeted failures; the
-full keep-cost equation is unsupported by the current corpus.** A future session picks this up, runs
-the Round-0 measurement pass, then grills the open questions below with the user before any design is
-committed. Follows the hypergeometric-fetch-closure playbook (measure → grill → corpus-gate → converge
+**Status.** GRILLED and RESOLVED 2026-07-19. Round 0 measured first
+(`gusting-round0-measurement.md`): the cluster dissolved to 3 small targeted failures. The grill's
+three rulings (user, 2026-07-19):
+
+1. **Scope — small build + design the full equation.** The three targeted fixes are BUILT
+   (**ADR-0066**, suite-green); the full `their_keep_cost` equation is DESIGNED, not built —
+   `gusting-keepcost-design.md` — and waits for corpus evidence before any construction.
+2. **Denial ceiling — up to ~1 effective prize of override.** Denial credit may outweigh at most a
+   ~1-prize difference (the existing γ-gated `_WINCON_DENIAL_PRIZES = 1.5` band is the ceiling's
+   in-repo precedent); never more. ADR-0066 spends that allowance defensively (the threat-forfeit
+   premium); the design doc owns the offensive exchange rate and the refuted-pin re-audit.
+3. **Stall stays a separate small tactical + a marginality gate.** No currency conversion; the
+   famine stall gained the with-vs-without swap gate (ADR-0066 §2). The spec's own "not everything
+   must converge" branch, confirmed by measurement.
+
+The agenda below is kept for provenance; §1/§5/§6/§7 are answered by the rulings + ADR-0066, and
+§2/§3/§4 are deferred into the design doc's evidence gates. Follows the hypergeometric-fetch-closure playbook (measure → grill → corpus-gate → converge
 under the currency-zone rule). Named plainly: gusting.
 
 ## The musing (user, 2026-07-19)

@@ -32,6 +32,15 @@ _WINCON_DENIAL_PRIZES = 1.5  # ADR-0051 Phase 3b: extra effective prizes for gus
                              # prizes not 1. Sits ABOVE a +1 prize gap (drag the pre-evo over a bigger inert
                              # body) but BELOW the live-threat denial (`_gust_target_denial`, a full prize)
                              # and any lethal KO. γ-scaled + role-scoped; ladder-tunable.
+_ENERGY_DENIAL_PER = 0.2     # ADR-0066: sub-prize per SUNK Energy on a KO-able gust target — a KO
+_ENERGY_DENIAL_CAP = 0.8     # destroys everything attached (the ADR-0062 marginal strip, pointed across
+                             # the table), so among equal-prize targets prefer the loaded body. Capped
+                             # < 1 prize: breaks ties, never overrides a real prize difference.
+_LOADED_KO_SWING = 2         # ADR-0066: the Energy-denial margin (target's sunk Energy minus what the
+                             # baseline Active KO already destroys) that justifies spending the gust
+                             # Supporter on an EQUAL-prize KO (ep85163079 f30: the 4-Energy Staryu one
+                             # turn from Mega Starmie ex vs a 1-Energy Cinderace — same 1 prize, not the
+                             # same loss). ≥ 2 so a single-Energy edge never burns Boss's (ep82224509 f46).
 
 
 class GustMixin:
@@ -78,12 +87,36 @@ class GustMixin:
                                             else self._best_hand_attach_units(board.hand_ids, my_stat))
         if my_stat and not my_stat.can_pay_cheapest(payable):
             return 0                                     # the KO premise is unpayable this turn (f31)
-        if not self._can_ko(my_stat, target):
+        if not self._gust_can_ko(my_stat, target):
             return 0
         return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
                 + self._gust_forward_denial(target) + self._gust_matchup_priority(board, target)
                 + self._gust_wincon_denial(board, target)
+                + self._gust_energy_denial(target)
                 + self._gust_snipe_synergy(board, my_stat, target))
+
+    def _gust_energy_denial(self, target: dict) -> float:
+        """Sub-prize tie-break for the SUNK Energy a gust-KO destroys (ADR-0066): everything attached
+        to the target dies with it, so among equal-prize KO-able bodies prefer the loaded one — the
+        ADR-0062 marginal-strip ruling pointed across the table (ep85163079 f30: the 4-Energy Staryu
+        over any bare body). Capped < 1 prize so it never overrides a real prize difference."""
+        n = len((target or {}).get("energies") or [])
+        return min(_ENERGY_DENIAL_CAP, _ENERGY_DENIAL_PER * n)
+
+    def _gust_can_ko(self, my_stat, body: dict | None) -> bool:
+        """The gust oracle's KO test for a BENCH defender: the cheapest-attack summary (`_can_ko`)
+        OR any per-attack prediction reaching its HP — the `_active_ko_prizes` expensive-menu-KO
+        patch (Nebula Beam 210 vs 190 HP, ADR-0052) finished for the bench side (ADR-0066;
+        ep85046350 f79/f81: Phantom Dive's 200 KOs the 130-HP Roserade the cheap summary misses).
+        One test feeds the play gate, the totals, the energy swing AND the target pick, so the
+        play-reason and the picked target keep agreeing by construction."""
+        if self._can_ko(my_stat, body):
+            return True
+        hp = (body or {}).get("hp", 0)
+        if not (my_stat and hp):
+            return False
+        return any(self.predicted_damage(getattr(my_stat, "cardId", None), aid, body) >= hp
+                   for aid in (getattr(my_stat, "attacks", None) or ()))
 
     def _gust_snipe_synergy(self, board, my_stat, target: dict) -> int:
         """Extra prize when KOing the gusted target ALSO lets my bench-snipe rider finish a SECOND
@@ -101,12 +134,17 @@ class GustMixin:
         Returns:
             The best extra snipe-KO prize enabled by gusting this target (0 if none).
         """
+        return self._snipe_after_gust_prizes(board.opp_bench, my_stat, target)
+
+    def _snipe_after_gust_prizes(self, opp_bench, my_stat, target: dict) -> int:
+        """The bench-tuple core of `_gust_snipe_synergy`, shared with the Board-signal builders
+        (`_gust_best_total_prizes`) which run before a `Board` exists. ``opp_bench`` is the
+        ((cardId, hp), …) snapshot INCLUDING the target (it is removed here)."""
         t_hp = (target or {}).get("hp", 0)
-        t_stat = self.stats.get(target.get("id")) if (self.stats and target) else None
         if not (my_stat and t_hp):
             return 0
         others, removed = [], False                      # bench left after target is dragged Active
-        for entry in board.opp_bench:
+        for entry in opp_bench:
             if not removed and tuple(entry) == (target.get("id"), t_hp):
                 removed = True
                 continue
@@ -115,7 +153,11 @@ class GustMixin:
         for aid in (getattr(my_stat, "attacks", None) or ()):
             # per-attack oracle (ADR-0032): KO check honors the attack's own ignore flags
             if self.predicted_damage(getattr(my_stat, "cardId", None), aid, target) >= t_hp:
-                best = max(best, self._snipe_ko_prizes(others, self._rider_snipe(aid)))
+                best = max(best,
+                           self._snipe_ko_prizes(others, self._rider_snipe(aid)),
+                           # the spread rider is the same drag-and-finish synergy (ADR-0066;
+                           # ep85046350 f81: gust Roserade, Phantom Dive KOs it AND the Gible)
+                           self._spread_ko_prizes(others, self._rider_spread(aid)))
         return best
 
     def _gust_forward_denial(self, target: dict) -> float:
@@ -254,9 +296,121 @@ class GustMixin:
             return 0                                     # cheapest attack unpayable this turn
         best = 0
         for b in (opp.get("bench") or []):
-            if b and self._can_ko(my_stat, b):
+            if b and self._gust_can_ko(my_stat, b):
                 best = max(best, self._prize_value(b))
         return best
+
+    def _gust_best_total_prizes(self, ma: dict | None, opp: dict | None, payable: int = 99) -> int:
+        """`_gust_best_ko_prizes` PLUS the same-attack snipe rider on the bench that REMAINS after
+        the gust — the gust line's FULL prize take this turn, max over KO-able targets (ADR-0066).
+        Equals `gust_best_ko_prizes` for a rider-less attacker, so the plain-KO gate is unchanged;
+        with a rider it keeps the 2-prize gust+snipe firing past a snipe-aware baseline
+        (ep82523164 f55 vs ep86091435 f119)."""
+        if not (self.stats and ma and opp):
+            return 0
+        my_stat = self.stats.get(ma.get("id"))
+        if my_stat and not my_stat.can_pay_cheapest(payable):
+            return 0
+        bench = tuple((b.get("id"), b.get("hp", 0)) for b in (opp.get("bench") or []) if b)
+        best = 0
+        for b in (opp.get("bench") or []):
+            if b and self._gust_can_ko(my_stat, b):
+                best = max(best, self._prize_value(b)
+                           + self._snipe_after_gust_prizes(bench, my_stat, b))
+        return best
+
+    def _menu_attack_total_prizes(self, ma: dict | None, oa: dict | None, opp: dict | None,
+                                  payable: int = 99) -> int:
+        """Best TOTAL prizes ONE menu attack takes this turn WITHOUT a gust: its main KO of the
+        current Active (if any) plus its own bench rider's (snipe or spread) KOs — the snipe-aware
+        baseline a gust must beat (ADR-0066). ep86091435 f119: Phantom Dive's 60 spread already
+        collects the 40-HP Relicanth, so spending Boss's Orders to drag it up for the SAME prize is
+        a wasted Supporter. Never below `_active_ko_prizes` (the per-attack loop can miss a KO the
+        cheapest-attack summary sees), so the old baseline is strictly subsumed. Coarse
+        affordability (`can_pay_cheapest`, the gust signals' shared gate)."""
+        if not (self.stats and ma):
+            return 0
+        my_stat = self.stats.get(ma.get("id"))
+        if my_stat and not my_stat.can_pay_cheapest(payable):
+            return 0
+        bench = tuple((b.get("id"), b.get("hp", 0)) for b in ((opp or {}).get("bench") or []) if b)
+        oa_hp = (oa or {}).get("hp", 0)
+        best = 0
+        for aid in (getattr(my_stat, "attacks", None) or ()):
+            main = (self._prize_value(oa)
+                    if oa_hp and self.predicted_damage(getattr(my_stat, "cardId", None),
+                                                       aid, oa) >= oa_hp else 0)
+            rider = max(self._snipe_ko_prizes(bench, self._rider_snipe(aid)),
+                        self._spread_ko_prizes(bench, self._rider_spread(aid)))
+            best = max(best, main + rider)
+        return max(best, self._active_ko_prizes(ma, oa, payable))
+
+    def _gust_ko_energy_swing_calc(self, ma: dict | None, oa: dict | None, opp: dict | None,
+                                   payable: int = 99) -> int:
+        """Sunk-Energy margin of the gust-KO line over the baseline Active KO (ADR-0066): the most
+        Energy carried by a best-prize KO-able gust target, MINUS the Energy the direct Active KO
+        would already destroy (0 when no Active KO exists). A KO destroys everything attached — the
+        ADR-0062 marginal strip pointed across the table — so on an equal-prize tie a big positive
+        swing (ep85163079 f30: 4-Energy Staryu vs 1-Energy Cinderace → +3) is what the gust
+        Supporter actually buys. 0 when no gust KO exists."""
+        if not (self.stats and ma and opp):
+            return 0
+        my_stat = self.stats.get(ma.get("id"))
+        if my_stat and not my_stat.can_pay_cheapest(payable):
+            return 0
+        best_prize, loaded = 0, 0
+        for b in (opp.get("bench") or []):
+            if not (b and self._gust_can_ko(my_stat, b)):
+                continue
+            p = self._prize_value(b)
+            if p > best_prize:
+                best_prize, loaded = p, len(b.get("energies") or [])
+            elif p == best_prize:
+                loaded = max(loaded, len(b.get("energies") or []))
+        if best_prize == 0:
+            return 0
+        base = (len((oa or {}).get("energies") or [])
+                if self._active_ko_prizes(ma, oa, payable) > 0 else 0)
+        return loaded - base
+
+    def _forward_danger(self, body: dict | None) -> int:
+        """How dangerous this body is left IN PLACE: the max of its own printed ceiling and its
+        evolution line's forward ceiling (`forward_max_damage`, the ADR-0020 provider primitive) —
+        a body evolves in the Active Spot without retreating, so a Riolu-shaped wall is not a wall.
+        The comparator behind `_stall_swap_pointless` (ADR-0066)."""
+        if not (self.stats and body):
+            return 0
+        stat = self.stats.get(body.get("id"))
+        own = getattr(stat, "maxDamage", 0) or 0
+        fwd_fn = getattr(self.stats, "forward_max_damage", None)
+        fwd = (fwd_fn(body.get("id")) or 0) if fwd_fn else 0
+        return max(own, fwd)
+
+    def _stall_swap_pointless(self, opp: dict | None) -> bool:
+        """True when the famine stall-gust would swap one stranded wall for an equal-or-worse one
+        (ADR-0066): the opponent's CURRENT Active is ITSELF an energyless, high-retreat strand body,
+        and no stall candidate on their bench is strictly LESS dangerous in place than it — so the
+        gust denies nothing (ep86091435 f13: an energyless Duraludon dragged up over an energyless
+        Duraludon, 'doesnt really make a difference'). The ADR-0062/0063 marginality ruling applied
+        to tempo: stall value is with-vs-without the swap, never a flat strand bounty. False (swap
+        may gain) whenever their Active holds Energy, retreats free, or a tamer wall exists."""
+        if not (self.stats and opp):
+            return False
+        oa = (opp.get("active") or [None])[0]
+        if not oa or (oa.get("energies") or []):
+            return False
+        a_stat = self.stats.get(oa.get("id"))
+        if not (a_stat and a_stat.retreatCost >= _STALL_RETREAT):
+            return False
+        a_danger = self._forward_danger(oa)
+        for b in (opp.get("bench") or []):
+            if not b or (b.get("energies") or []):
+                continue
+            st = self.stats.get(b.get("id"))
+            if (st and st.retreatCost >= _STALL_RETREAT
+                    and self._forward_danger(b) < a_danger):
+                return False                     # a strictly tamer wall exists — the swap still gains
+        return True
 
     def _stall_target_exists(self, opp: dict | None) -> bool:
         """True if the opponent has an ENERGYLESS, high-retreat (>= `_STALL_RETREAT`) benched Pokémon —
@@ -297,15 +451,45 @@ HYPOTHESES = [
         rationale="Play a gust Supporter (Function Tag `gust`, e.g. Boss's Orders) only when it converts "
                   "to a Knock Out this turn (`Board.gust_best_ko_prizes > 0`) — otherwise HOLD it, since "
                   "gusting an un-KO-able target just benches the opponent's committed Active safely. Must "
-                  "beat any FREE KO of the current Active too (attack or poison/burn Checkup finish); the "
-                  "SETUP-before-wincon stand-down applies only to the Supporter gust, not a free ITEM gust "
-                  "(Pokémon Catcher). Whether-to-play only — target selection is the SWITCH rule (ADR-0022).",
+                  "beat the best MENU-attack total too — its Active KO, its poison/burn Checkup finish, "
+                  "AND its bench rider's snipe/spread KOs (ADR-0066; ep86091435 f119: Phantom Dive's 60 "
+                  "spread already collects the 40-HP Relicanth, so a gust reaching only that body is a "
+                  "wasted Supporter); the gust side counts its own gust+snipe synergy so a 2-prize "
+                  "drag-and-snipe still fires (ep82523164 f55). THREAT-FORFEIT premium (ADR-0066): "
+                  "when the menu KO would remove the very body dooming my Active (`active_doomed` "
+                  "with an Active KO on the menu), gusting benches that threat SAFELY and it comes "
+                  "back — the gust must then beat the menu by MORE than one prize, not tie-plus-one "
+                  "(ep82753102 f109: a 2-prize gust+snipe must not bench the hand-size Alakazam the "
+                  "menu could KO). The SETUP-before-wincon stand-down applies only to the Supporter "
+                  "gust, not a free ITEM gust (Pokémon Catcher). Whether-to-play only — target "
+                  "selection is the SWITCH rule (ADR-0022).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.gust_best_ko_prizes > max(c.board.active_ko_prizes,
-                                              c.board.active_condition_ko_prizes)
+        and c.board.gust_best_total_prizes > (
+            max(c.board.menu_attack_total_prizes, c.board.active_condition_ko_prizes)
+            + (1 if (c.board.active_doomed and c.board.active_ko_prizes > 0) else 0))
         and not (getattr(c.stat, "is_supporter", False)                # Supporter-economy damping only
                  and not c.board.line_ready and not c.board.wincon_in_play),
         weight=50, status="assumed"),
+    Hypothesis(
+        id="gust-for-the-loaded-equal-ko",
+        rationale="An EQUAL-prize gust-KO is normally a wasted Supporter (the direct/rider KO is free — "
+                  "the ep82224509 f46 refutation), but when the gust target carries ≥ "
+                  f"{_LOADED_KO_SWING} MORE sunk Energy than the baseline KO destroys, the tie is not a "
+                  "tie: the KO takes the body AND everything attached (ADR-0062's marginal strip pointed "
+                  "across the table), so break it toward the loaded body (ADR-0066; ep85163079 f30: KO "
+                  "the 4-Energy Staryu one turn from Mega Starmie ex over the 1-Energy Cinderace — same "
+                  "prize, nowhere near the same loss). Strictly an equal-prize tie-break: a bigger prize "
+                  "is `gust-for-the-ko`, a smaller one never fires. Never against a menu KO that removes "
+                  "my Active's doom (the same threat-forfeit guard). Same Supporter-economy damping.",
+        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
+        and c.board.gust_best_total_prizes > 0
+        and c.board.gust_best_total_prizes == max(c.board.menu_attack_total_prizes,
+                                                  c.board.active_condition_ko_prizes)
+        and c.board.gust_ko_energy_swing >= _LOADED_KO_SWING
+        and not (c.board.active_doomed and c.board.active_ko_prizes > 0)   # threat-forfeit guard
+        and not (getattr(c.stat, "is_supporter", False)
+                 and not c.board.line_ready and not c.board.wincon_in_play),
+        weight=50, status="testing"),
     Hypothesis(
         id="gust-for-the-stall",
         rationale="Defensive stall-gust (tier 5, LAST resort): Active doomed, no gustable/direct KO "
@@ -343,13 +527,17 @@ HYPOTHESES = [
                   "deny the evolve-and-KO a turn. Outranks a tutor's dig stack ONLY under the "
                   "energy-famine gate, so normal development is untouched (ep83457493 f20: Boss's "
                   "gust Makuhita ≻ Salvatore while Cinderace faces the Mega Lucario line with zero "
-                  "Energy anywhere). Stacks on `gust-for-the-stall`; same condition-gift guard.",
+                  "Energy anywhere). Stacks on `gust-for-the-stall`; same condition-gift guard. "
+                  "MARGINAL (ADR-0066): stands down when the swap is pointless — their current "
+                  "Active is itself an energyless high-retreat wall no more dangerous in place than "
+                  "any stall candidate (ep86091435 f13: Duraludon-for-Duraludon denies nothing).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
         and not c.board.active_attack_payable
         and not c.board.active_attack_payable_via_accel  # not a FALSE famine — an accel can power the Active (dp f70)
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
+        and not c.board.stall_swap_pointless             # wall-for-equal-wall denies nothing (ADR-0066)
         and not c.board.opp_active_condition_gift,
         weight=95, status="assumed"),
     Hypothesis(

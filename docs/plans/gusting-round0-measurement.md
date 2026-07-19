@@ -1,6 +1,13 @@
 # Gusting Round 0 — the measurement pass (results)
 
-**Status.** MEASURED 2026-07-19, per `gusting-grill-spec.md` §Round 0. All 29 gust-adjacent
+**Status.** MEASURED 2026-07-19; grilled and BUILT the same day — the three open failures below are
+fixed by **ADR-0066** (rider-aware baseline + threat-forfeit premium, marginal famine stall,
+loaded-equal-KO tie-break), pinned in `test_gust.py` (REQ-GUST-0015) +
+`test_gust_round0_corpus.py`. One deliberate residual: **ep86091435 f119** — the widened bench KO
+oracle now finds a 2-prize drag-and-spread line (gust a Duraludon → Phantom Dive KOs it AND the
+Relicanth) that supersedes the human's 1-prize development line; **needs human adjudication in
+`reviewed.json`** (suggested disposition: refuted-by-better-line, or uphold and the design doc's
+engine-denial term owns it). Measured per `gusting-grill-spec.md` §Round 0. All 29 gust-adjacent
 corrections replayed through the real `Pilot.explain()` with a FRESH pilot per replay
 (`train.tuner.retest.retest`, built via `tune._build_pilot` — the statefulness lesson honored).
 Grep reproduced exactly 29 unique keys: the spec's 25 plus `82867148-48`, `86089120-14`,
