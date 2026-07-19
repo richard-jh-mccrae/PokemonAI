@@ -252,6 +252,48 @@ class FetchMixin:
             best = max(best, v)
         return _CHAIN_HOP_DISCOUNT * best
 
+    def _spends_last_evolution_route(self, select: dict | None, board, cid) -> bool:
+        """True iff grabbing chain-hop candidate ``cid`` at this TO_HAND search would consume the
+        LAST free tutor reaching a WANTED evolution — an evolution still in the revealed pool whose
+        base is in my play or hand and which no other free (non-`cost_discard`) tutor in the pool or
+        my hand can still fetch. The scarcity-gated preserve-the-closure tie-break (seam C hop
+        audit): with Makuhita down, its Hariyama is the coming want, and Fighting Gong's
+        `basic_pokemon` clause can never reach a Stage 1 — spending the last Poké Pad as the hop
+        closes the only free route (Ultra Ball reaches it too, but at discard-2: not a preserve).
+        Count-aware via the revealed pool (a search select's exact within-frame deck), so it is
+        SILENT while copies abound — spending one of four Poké Pads closes nothing. False off a
+        TO_HAND reveal, for a non-tutor, and for a `cost_discard` candidate (already demoted;
+        its loss is priced). Endorser fail direction: unknown facts → False."""
+        if not select or select.get("context") != _TO_HAND or cid is None:
+            return False
+        tags = self.functions.tags(cid) if self.functions else []
+        if "cost_discard" in tags:
+            return False
+        reach = self._chain_fetch_targets(cid)
+        if not reach:
+            return False
+        pool = [c.get("id") for c in (select.get("deck") or []) if c]
+        if pool.count(cid) != 1:
+            return False                              # another copy remains: not the last route
+        pool_set = set(pool)
+        base_names = ({getattr(self.stats.get(b), "name", None)
+                       for b in (board.in_play_ids | board.hand_ids)} - {None}
+                      if self.stats else set())
+        for e in reach:
+            est = self.stats.get(e) if self.stats else None
+            if est is None or not getattr(est, "evolvesFrom", None):
+                continue                              # only an EVOLUTION names a future line want
+            if e not in pool_set or e in board.hand_ids:
+                continue                              # gone from the pool / already held
+            if est.evolvesFrom not in base_names:
+                continue                              # no base in play or hand: not (yet) wanted
+            if not any(tid != cid
+                       and "cost_discard" not in (self.functions.tags(tid) if self.functions else [])
+                       and e in self._chain_fetch_targets(tid)
+                       for tid in pool_set | board.hand_ids):
+                return True                           # no other free route to the wanted evolution
+        return False
+
     def _grab_value_of(self, board, cid: int, plan) -> float:
         """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
         positive TO_HAND grab Hypotheses that fire for it, scored with the SAME rungs as the real grab
@@ -858,6 +900,24 @@ HYPOTHESES = [
                   "where the +15 does), so it can never touch a non-chain grab.",
         when=lambda c: c.select_context == _TO_HAND and "cost_discard" in c.tags
         and c.card_chain_value > _CHAIN_OPENER_FLOOR,
+        weight=-2, status="assumed"),
+    Hypothesis(
+        id="dont-spend-the-last-route-to-a-wanted-evolution",
+        rationale="The chain-hop PRESERVE tie-break (seam C hop audit, human-grilled): a chain hop "
+                  "isn't just spent — it's REMOVED from the deck's future closure, and the hops "
+                  "differ in what they alone still reach. With Makuhita in play/hand its Hariyama "
+                  "is the coming want, and Fighting Gong (`basic_pokemon {F}`) can never fetch a "
+                  "Stage 1 — so when the pool's LAST Poké Pad is on offer as the hop, spending it "
+                  "closes the only FREE route to Hariyama (`Context.card_spends_last_evolution_"
+                  "route`; Ultra Ball reaches it too but at discard-2). −2 breaks the +15 tie "
+                  "toward the closure-cheap hop (Petrel → Gong → Solrock, preserving Poké Pad); a "
+                  "last-route-ONLY chain still clears the draw band (13 > 10) and is grabbed. "
+                  "SCARCITY-gated by construction (count-aware over the revealed pool): while "
+                  "copies abound, spending one closes nothing and the rung is silent — the "
+                  "preference is only real at the last copy. Need-gated like every fetch rung: no "
+                  "base down → no wanted evolution → silent.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_chain_value > _CHAIN_OPENER_FLOOR
+        and c.card_spends_last_evolution_route,
         weight=-2, status="assumed"),
     Hypothesis(
         id="dont-grab-a-card-already-in-hand",

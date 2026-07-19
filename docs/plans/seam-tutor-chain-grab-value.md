@@ -65,7 +65,19 @@ target), the static +15 cap, and the floor. The EXECUTED-chain audit (hop tests:
 select, then Gong's select) showed the flat band creates a TIE among every Item tutor reaching the
 same closure (Gong / Poké Pad / Ultra Ball, all +15) that the option index would break —
 `demote-the-costly-chain-opener` (−2, gated on the chain rung's own gate) nets the `cost_discard`
-hop below the free equivalents, while a costly-ONLY chain still clears the draw band and is grabbed. `fetch_closure.fetch_target_matches` gains the
+hop below the free equivalents, while a costly-ONLY chain still clears the draw band and is grabbed.
+
+**The free-hop pick (Gong vs Poké Pad — human-grilled):** the hops differ in what their LOSS
+removes from the deck's future closure. The human's simplification — "Makuhita benched/in hand? →
+you'll want Hariyama → spend Gong (Petrel → Gong → Solrock), else spend Poké Pad" — is right
+because Gong (`basic_pokemon {F}`) can never fetch a Stage 1, so Poké Pad is Hariyama's only FREE
+route (Ultra Ball reaches it at discard-2). But it only MATTERS at scarcity: at the audited select
+the pool held 4 Poké Pad / 3 Gong, where spending one copy closes nothing. Shipped as the
+scarcity-gated general rung `dont-spend-the-last-route-to-a-wanted-evolution` (−2, count-aware
+over the revealed pool: fires only when the LAST free tutor reaching an evolution whose base is in
+play/hand would be spent; need-gated — no base down, no want). The weaker No-branch default
+("prefer preserving Gong for its unique Energy-fetch closure even with copies abound") is NOT
+baked in — it is deck-overlay fodder for a Strategy Proposal if a blunder ever shows it. `fetch_closure.fetch_target_matches` gains the
 `trainer` target branch (the one shared predicate; also fixes `reaccess_outs`' under-count — Petrel
 genuinely re-accesses a shuffled-back Trainer).
 

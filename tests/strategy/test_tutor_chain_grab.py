@@ -187,6 +187,76 @@ def test_hop_three_gong_select_takes_the_solrock(pilot, rec):
     assert dec.options[dec.chosen[0]].card_id == SOLROCK
 
 
+MAKUHITA, HARIYAMA = 673, 674
+
+
+def _petrel_select(rec, pilot, *, makuhita_in_hand=False, poke_pads_in_pool=None):
+    """Petrel's Trainer select (hop 2), optionally with Makuhita in hand (Hariyama becomes the
+    wanted evolution) and the pool thinned to ``poke_pads_in_pool`` Poké Pad copies (None = all)."""
+    is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
+    obs = _hop_obs(rec["obs"], (PETREL, 55), is_trainer, pilot)
+    me = obs["current"]["players"][0]
+    sel = obs["select"]
+    if makuhita_in_hand:
+        me["hand"] = me["hand"] + [{"id": MAKUHITA, "playerIndex": 0, "serial": 99}]
+    if poke_pads_in_pool is not None:
+        kept, deck = 0, []
+        for c in sel["deck"]:
+            if c["id"] == POKE_PAD:
+                if kept >= poke_pads_in_pool:
+                    continue
+                kept += 1
+            deck.append(c)
+        sel["deck"] = deck
+        me["deckCount"] = len(deck)
+        sel["option"] = [{"area": 1, "index": i, "playerIndex": 0, "type": 3}
+                         for i, c in enumerate(deck) if is_trainer(pilot.stats.get(c["id"]))]
+    return obs
+
+
+@pytest.mark.req("REQ-GEN-0077")
+def test_dont_spend_the_last_route_to_a_wanted_evolution(pilot, rec):
+    """The Gong-vs-Poké-Pad hop pick, scarcity-gated: with Makuhita down (its Hariyama is now the
+    wanted evolution) and the pool's LAST Poké Pad on offer, spending it as the chain hop would
+    close the only FREE route to Hariyama (Gong's `basic_pokemon` clause cannot reach a Stage 1;
+    Ultra Ball reaches it but at discard-2, not free). `dont-spend-the-last-route-to-a-wanted-
+    evolution` (−2) breaks the +15 tie toward Gong: Petrel → GONG → Solrock, preserving Poké Pad."""
+    obs = _petrel_select(rec, pilot, makuhita_in_hand=True, poke_pads_in_pool=1)
+    dec = pilot.explain(obs)
+    picked = dec.options[dec.chosen[0]]
+    assert picked.card_id == FIGHTING_GONG
+    by_card = {}
+    for t in dec.options:
+        by_card.setdefault(t.card_id, t)
+    pad = by_card[POKE_PAD]
+    assert any(h.id == "dont-spend-the-last-route-to-a-wanted-evolution" for h, _ in pad.fired)
+    assert pad.score < by_card[FIGHTING_GONG].score
+
+
+@pytest.mark.req("REQ-GEN-0077")
+def test_abundant_copies_keep_the_hop_tie(pilot, rec):
+    """The scarcity gate: with Makuhita down but ALL FOUR Poké Pad copies still in the pool,
+    spending one closes nothing — the rung stays silent on every option and the free hops keep
+    their +15 tie (the preference is only real at scarcity)."""
+    obs = _petrel_select(rec, pilot, makuhita_in_hand=True)
+    dec = pilot.explain(obs)
+    for t in dec.options:
+        assert not any(h.id == "dont-spend-the-last-route-to-a-wanted-evolution"
+                       for h, _ in t.fired)
+    assert dec.options[dec.chosen[0]].card_id in (FIGHTING_GONG, POKE_PAD)
+
+
+@pytest.mark.req("REQ-GEN-0077")
+def test_no_wanted_evolution_no_preservation(pilot, rec):
+    """Without Makuhita in play or hand there is no wanted evolution (the recorded board): even the
+    LAST Poké Pad is spent freely — the rung is need-gated, not a blanket Poké-Pad floor."""
+    obs = _petrel_select(rec, pilot, poke_pads_in_pool=1)
+    dec = pilot.explain(obs)
+    for t in dec.options:
+        assert not any(h.id == "dont-spend-the-last-route-to-a-wanted-evolution"
+                       for h, _ in t.fired)
+
+
 @pytest.mark.req("REQ-GEN-0077")
 def test_chain_graph_is_full_scope_and_cycle_safe(pilot, board):
     """The graph leg: Petrel's `trainer` clause reaches the deck's Trainers — including Fighting

@@ -711,6 +711,10 @@ class Context:
                                        # what it reaches (ml f9: Petrel → Fighting Gong → Solrock). Stays
                                        # 0.0 in `_grab_value_of`'s reduced Context (no self-recursion);
                                        # gates `grab-the-chain-opener` above `_CHAIN_OPENER_FLOOR`
+    card_spends_last_evolution_route: bool = False  # this chain-hop grab would consume the LAST free
+                                       # tutor reaching an evolution whose base is in my play/hand
+                                       # (count-aware over the revealed pool) — preserve it, take the
+                                       # closure-cheap hop (`dont-spend-the-last-route-to-a-wanted-evolution`)
     fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
                                        # card I currently lack (best grab value > 0, same grab rungs) —
                                        # whether-to-play endorsement (`fetch-when-it-fills-a-need`). False off a non-fetch/need-less fetch
@@ -2537,6 +2541,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             and bool(stat and stat.is_supporter))
         card_chain_value = (self._chain_grab_value(board, cid, plan)
                             if select.get("context") == _TO_HAND and cid is not None else 0.0)
+        card_spends_last_evolution_route = (
+            card_chain_value > 0 and self._spends_last_evolution_route(select, board, cid))
         fetch_fills_a_need = (option.get("type") == _PLAY
                               and self._fetch_fills_a_need(board, cid, plan))
         target_energy = self._target_energy(obs, select, option)
@@ -2664,6 +2670,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        card_already_in_hand=card_already_in_hand,
                        card_unplayable_this_turn=card_unplayable_this_turn,
                        card_chain_value=card_chain_value,
+                       card_spends_last_evolution_route=card_spends_last_evolution_route,
                        fetch_fills_a_need=fetch_fills_a_need,
                        target_energy=target_energy, target_is_threat=bool(target_energy),
                        target_hp=target_hp, target_is_weakest=target_is_weakest,
