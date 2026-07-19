@@ -1,5 +1,9 @@
 # ADR-0065: Card worth is one marginal oracle with a closure-graph backend
 
+**Vocabulary.** See [`0065-glossary.md`](0065-glossary.md) for the agreed terms: **Worth**
+(`card_worth.py`), **Gates** (`gate_library.py`), **Odds** (`deck_odds.py`), **Closure**
+(`fetch_closure.py`). Every equation below is `value = Worth × Odds`.
+
 **Status.** Accepted (grilled 2026-07-17 across Rounds 7–9 of
 [`docs/plans/hypergeometric-fetch-closure.md`](../plans/hypergeometric-fetch-closure.md)) and
 **BUILT 2026-07-18 — the module seam + two consumers converged, suite-green.** The gamble keep-floor
