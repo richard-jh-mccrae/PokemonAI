@@ -847,6 +847,19 @@ HYPOTHESES = [
         and not ("draw" in c.tags and bool(c.stat and getattr(c.stat, "is_supporter", False))),
         weight=15, status="assumed"),
     Hypothesis(
+        id="demote-the-costly-chain-opener",
+        rationale="The chain-opener TIE-BREAK: `grab-the-chain-opener`'s flat +15 cannot see a "
+                  "tutor's own play cost (the seam doc's documented optimism — the chain VALUE is "
+                  "cost-blind), so at Petrel's Trainer select the free Fighting Gong / Poké Pad and "
+                  "the discard-2 Ultra Ball all tie at +15 and the option INDEX picks the hop. −2 "
+                  "nets a `cost_discard` tutor below a free equivalent reaching the same closure "
+                  "(free hop ≻ costly hop), while a costly-ONLY chain still clears the draw band "
+                  "(13 > 10) and is still grabbed. Gated on the chain rung's own gate (fires only "
+                  "where the +15 does), so it can never touch a non-chain grab.",
+        when=lambda c: c.select_context == _TO_HAND and "cost_discard" in c.tags
+        and c.card_chain_value > _CHAIN_OPENER_FLOOR,
+        weight=-2, status="assumed"),
+    Hypothesis(
         id="dont-grab-a-card-already-in-hand",
         rationale="Don't tutor a card an identical copy of which is ALREADY in my hand — the second copy "
                   "does nothing the first doesn't, and the search is the scarce resource. The FETCH-side "

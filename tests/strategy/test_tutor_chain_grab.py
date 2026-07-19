@@ -14,6 +14,7 @@ and the decay of the chain once its END target is acquired (the `_greedy_grab` i
 """
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 from dataclasses import replace
@@ -26,6 +27,8 @@ CORR = REPO / "data" / "corrections"
 
 PETREL, FIGHTING_GONG, JUDGE, LILLIES = 1219, 1142, 1213, 1227
 SOLROCK, MEGA_LUCARIO_EX = 676, 678
+POKE_PAD, ULTRA_BALL = 1152, 1121
+_FIGHTING = 6
 
 
 def _record() -> dict:
@@ -119,6 +122,69 @@ def test_chain_decays_once_the_end_target_is_acquired(pilot, board):
     plan = vboard.phase
     assert pilot._grab_value_of(vboard, SOLROCK, plan) == 0
     assert pilot._chain_grab_value(vboard, PETREL, plan) < _CHAIN_OPENER_FLOOR
+
+
+def _hop_obs(base: dict, pulled: tuple, option_pred, pilot) -> dict:
+    """The NEXT select after the grabbed tutor is PLAYED, synthesized from the recorded board: the
+    pulled card (id, serial) moves deck → my discard, the one-per-turn Supporter slot is spent
+    (Petrel opened the chain), and the new select's options are the deck entries matching
+    ``option_pred`` (the fetched tutor's clause targets, as the engine would offer them)."""
+    obs = copy.deepcopy(base)
+    state = obs["current"]
+    state["supporterPlayed"] = True
+    me = state["players"][0]
+    sel = obs["select"]
+    pid, pserial = pulled
+    sel["deck"] = [c for c in sel["deck"] if not (c["id"] == pid and c["serial"] == pserial)]
+    me["discard"] = (me.get("discard") or []) + [{"id": pid, "playerIndex": 0, "serial": pserial}]
+    me["deckCount"] = len(sel["deck"])
+    sel["option"] = [{"area": 1, "index": i, "playerIndex": 0, "type": 3}
+                     for i, c in enumerate(sel["deck"]) if option_pred(pilot.stats.get(c["id"]))]
+    return obs
+
+
+@pytest.mark.req("REQ-GEN-0077")
+def test_hop_two_petrel_select_takes_a_free_item_tutor(pilot, rec):
+    """The EXECUTED chain, hop 2: Petrel is played (Supporter slot spent), its Trainer select is
+    on the menu. The chain rung recurses — every Item tutor reaching Solrock fires it — and the
+    pick is a FREE one (Fighting Gong or the equivalent Poké Pad), with the discard-2 Ultra Ball
+    demoted below them (`demote-the-costly-chain-opener` −2: the flat band is cost-blind, the
+    tie-break is not). The Supporters are dead this turn (`grab-what-i-can-play-this-turn`)."""
+    is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
+    obs = _hop_obs(rec["obs"], (PETREL, 55), is_trainer, pilot)
+    dec = pilot.explain(obs)
+    assert len(dec.chosen) == 1
+    picked = dec.options[dec.chosen[0]]
+    assert picked.card_id in (FIGHTING_GONG, POKE_PAD)
+    assert any(h.id == "grab-the-chain-opener" for h, _ in picked.fired)
+    by_card = {}
+    for t in dec.options:
+        by_card.setdefault(t.card_id, t)
+    assert by_card[ULTRA_BALL].score < by_card[FIGHTING_GONG].score
+    assert any(h.id == "demote-the-costly-chain-opener" for h, _ in by_card[ULTRA_BALL].fired)
+
+
+@pytest.mark.req("REQ-GEN-0077")
+def test_hop_three_gong_select_takes_the_solrock(pilot, rec):
+    """The EXECUTED chain, hop 3: Fighting Gong is played, its select (Basic {F} Pokémon / Basic
+    {F} Energy) is on the menu — Solrock (`fetch-the-missing-engine-half` +22) wins over the
+    Makuhita line piece (+18), the {F} Energy (+3, a copy is already in hand) and the redundant
+    engine/base pieces. The chain the human named lands on its END target."""
+    is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
+    obs1 = _hop_obs(rec["obs"], (PETREL, 55), is_trainer, pilot)
+    gong = next(c for c in obs1["select"]["deck"] if c["id"] == FIGHTING_GONG)
+
+    def gong_target(st):
+        if st is None:
+            return False
+        if st.is_basic_energy and getattr(st, "energyType", None) == _FIGHTING:
+            return True
+        return st.is_pokemon and not getattr(st, "evolvesFrom", None)   # Basic ({F} — mono-type deck)
+
+    obs2 = _hop_obs(obs1, (FIGHTING_GONG, gong["serial"]), gong_target, pilot)
+    dec = pilot.explain(obs2)
+    assert len(dec.chosen) == 1
+    assert dec.options[dec.chosen[0]].card_id == SOLROCK
 
 
 @pytest.mark.req("REQ-GEN-0077")

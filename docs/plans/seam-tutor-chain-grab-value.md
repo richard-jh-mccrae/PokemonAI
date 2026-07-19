@@ -61,7 +61,11 @@ never reads it.
 
 Known, documented optimism: an intermediate Item's own cost (Ultra Ball's discard-2) is not priced
 inside the chain — mitigated by MAX (a free Fighting Gong dominates whenever both reach the same
-target), the static +15 cap, and the floor. `fetch_closure.fetch_target_matches` gains the
+target), the static +15 cap, and the floor. The EXECUTED-chain audit (hop tests: Petrel's Trainer
+select, then Gong's select) showed the flat band creates a TIE among every Item tutor reaching the
+same closure (Gong / Poké Pad / Ultra Ball, all +15) that the option index would break —
+`demote-the-costly-chain-opener` (−2, gated on the chain rung's own gate) nets the `cost_discard`
+hop below the free equivalents, while a costly-ONLY chain still clears the draw band and is grabbed. `fetch_closure.fetch_target_matches` gains the
 `trainer` target branch (the one shared predicate; also fixes `reaccess_outs`' under-count — Petrel
 genuinely re-accesses a shuffled-back Trainer).
 
