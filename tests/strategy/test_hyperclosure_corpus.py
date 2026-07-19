@@ -91,13 +91,12 @@ PINS = {
 }
 TARGETS = {
     # discard-pair valuation
-    # The two grab/pitch targets that survive as GENUINE gaps (the other five discard-pair records
-    # were malformed single-index fixtures now pinned above). Both need the DEADLINE/gate library, NOT
-    # the keep_cost oracle — the shipped ladder already prices roles + redundancy (ADR-0065 §grab/pitch):
-    "86091435-68": "dp: don't pitch a Drakloak that can EVOLVE the active Dreepy this turn — a "
-                   "deployability deadline (a benched-Drakloak board pitches it correctly, ep83686860 "
-                   "f18), which a flat keep_cost floor can't tell apart. Gate library, not keep_cost.",
-    # (the whether-to-play / hold-the-fetch family is fully pinned: 86091728-19 by the
+    # `86091435-68` (don't pitch the Drakloak that can EVOLVE the active Dreepy) was the last strict
+    # target here — REFUTED-AS-LABELED 2026-07-19 (reviewed.json: the recorded 2nd slot was wrong,
+    # the Hammer should be KEPT for the opponent's Active; the keep-value equation's pick endorsed).
+    # Its SURVIVING substance rides as the relaxed deploy-now target below
+    # (`test_deploy_now_drakloak_is_not_pitched`) — the card must not be pitched, whatever fills the
+    # other slot. (the whether-to-play / hold-the-fetch family is fully pinned: 86091728-19 by the
     #  attach-target-priority seam, 85163634-17 by the held-card-risk build)
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
@@ -121,6 +120,9 @@ EXCLUDED = {
     "82524455-6":   "refuted",
     "85058574-114": "refuted",
     "82756664-9":   "refuted",
+    "86091435-68":  "refuted",    # 2026-07-19 user re-review: the label's 2nd slot was wrong (keep the
+                                  # Hammer for the opponent's Active); the equation's pick endorsed. The
+                                  # surviving substance = `test_deploy_now_drakloak_is_not_pitched`.
     "83661652-30":  "covered",
     "83661652-31":  "covered",
     "83967840-54":  "covered",
@@ -259,6 +261,28 @@ def test_substance_pin_the_tagged_blunder_is_dead(cid):
         if t.index in blunder:
             assert t.score <= 0, (f"{cid}: the tagged blunder option [{t.index}] still prices "
                                   f"{t.score:+.1f} — the fix is an accident of ordering, not a floor")
+
+
+@pytest.mark.req("REQ-CORPUS-0001")
+@pytest.mark.xfail(reason="the deploy-now spike (the gate-library extension / the seam-D swap): the "
+                          "ladder still pitches the sole Drakloak that can evolve the Active",
+                   strict=True)
+def test_deploy_now_drakloak_is_not_pitched():
+    """The SURVIVING substance of the refuted `86091435-68` (user re-review 2026-07-19): whatever
+    fills the other Ultra-Ball slot, the hand Drakloak — the ONLY card that can evolve the active
+    Dreepy this turn (the benched Drakloak is a different Line instance and covers nothing) — must
+    not be pitched. Relaxed from the refuted strict label, whose 2nd slot wrongly pitched the
+    Crushing Hammer the user now rules should hit the opponent's Active (Archaludon ex). An XPASS =
+    the deploy-now gate (or the equation swap) landed — promote to a plain pin."""
+    rec = _record("86091435-68")
+    p = _pilot(rec["agent"])
+    d = p.explain(rec["obs"])
+    sel = rec["obs"]["select"]
+    drakloak = [i for i, o in enumerate(sel.get("option") or [])
+                if p._option_card_id(rec["obs"], sel, o) == 120]
+    assert drakloak, "fixture drift: no Drakloak option in the recorded select"
+    assert not (set(drakloak) & set(d.chosen)), \
+        f"the deploy-now Drakloak {drakloak} was pitched: chosen={d.chosen}"
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

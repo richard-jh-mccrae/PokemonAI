@@ -113,6 +113,24 @@ residual set-naivety (a duplicated wincon in a forced discard-2 still prices kee
 open prerequisite. **With the equation now out-scoring the ladder on the corpus, the swap
 (step 3-4: `keep_cost_gated` decides, corpus + score-diff gated) is the next decision.**
 
+### 2026-07-19 user re-review of the last miss: the EQUATION'S pick is ruled correct
+
+Reviewing `86091435-68` on the shadow's working, the user ruled the recorded label's 2nd slot
+WRONG: the Crushing Hammer should be KEPT and used on the opponent's Active (Archaludon ex, energy
+attached) — so the equation's pick (Risky Ruins + a Lillie's; Drakloak AND Hammer both kept) is the
+better play, and the recorded correction is REFUTED-as-labeled (reviewed.json; corpus target →
+excluded, per the standing corpus discipline). The SURVIVING substance — never pitch the sole
+Drakloak that can evolve the Active this turn (evolve first, use Recon Directive; whether Ultra
+Ball should be played at all is a separate whether-to-play question) — is preserved as the relaxed
+strict-xfail `test_deploy_now_drakloak_is_not_pitched` (the card must not be pitched, whatever
+fills the other slot; XPASS = the deploy-now gate or the swap landed → promote).
+
+**The scoreboard after the re-review:** on the surviving labeled decisions the equation matches the
+human **11/11** vs the ladder's **9/11** — and on the refuted 12th, the equation's pick is the one
+the user endorsed. The equation now strictly dominates the ladder on every recorded discard
+decision. The remaining pre-swap items are the deploy-now spike (now also the relaxed target's
+flip) and the set-naivety; step 3-4 (the swap) awaits the user's go.
+
 ## Grill status: ⚠️ the keep-cost math is grilled — the LADDER-REPLACEMENT PATH IS NOW RULED (above)
 
 What IS grilled (spec Rounds 6-8): `keep_cost = role_value × [P(need met by deadline | keep) −

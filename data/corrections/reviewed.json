@@ -707,5 +707,10 @@
     "disposition": "refuted",
     "reason": "refuted-by-better-line (human ack 2026-07-19, gusting grill): the ADR-0066 widened bench oracle finds gust-Duraludon -> Phantom Dive KOs it AND spread-KOs the 40HP Relicanth = 2 banked prizes (4->2) + kills a future Assemble-Alloy accel body. The correction's Night Stretcher line takes 1 prize + a 200 chip on the 400HP (tooled) Archaludon ex; clean projections win the same turn, the agent's line needs no future draws. Pinned: test_gust_round0_corpus.py ADJUDICATED.",
     "round": "2026-07-19"
+  },
+  "86091435-68": {
+    "disposition": "refuted",
+    "reason": "user re-review 2026-07-19 (seam-D shadow evidence): the recorded correct [Lillie's + Crushing Hammer] mis-specifies the 2nd slot — the Hammer should be KEPT and used on the opponent's Active (Archaludon ex, energy attached), so the keep-value equation's pick (Risky Ruins + a Lillie's; Drakloak AND Hammer kept) is endorsed over the label. The SURVIVING substance — never pitch the sole Drakloak that can evolve the Active this turn (evolve first, use Recon Directive; the Ultra Ball itself may be unnecessary — a whether-to-play question, out of this correction's scope) — is preserved as the relaxed deploy-now target in test_hyperclosure_corpus.py.",
+    "round": "2026-07-19"
   }
 }

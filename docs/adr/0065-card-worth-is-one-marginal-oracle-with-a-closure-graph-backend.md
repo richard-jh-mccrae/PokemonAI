@@ -126,6 +126,15 @@ comparator) and ADR-0032 (Effect-Clause tier).
   corpus, the equation went **8/12 → 11/12, now BEATING the tuned ladder's 9/12**; the only miss is
   `86091435-68` (the deploy-now spike). The swap (`keep_cost_gated` decides) is the next gated
   decision. Suite + corpus green (3110).
+- **The last miss re-reviewed — the equation's pick ruled CORRECT (2026-07-19).** On the shadow's
+  working the user re-reviewed `86091435-68` and refuted the recorded label's 2nd slot (the
+  Crushing Hammer should be KEPT for the opponent's Active) — the equation's pick endorsed over the
+  human label. Corpus: the strict target → refuted/excluded (reviewed.json), its surviving
+  substance relaxed into `test_deploy_now_drakloak_is_not_pitched` (strict-xfail: the sole
+  evolve-the-Active Drakloak must never be pitched). Scoreboard: the equation matches the human
+  **11/11** on surviving labels vs the ladder's **9/11**, and is user-endorsed on the refuted 12th
+  — it now strictly dominates the ladder on every recorded discard decision. The swap awaits the
+  user's go.
 - **Line-member worth derivation (2026-07-19, the shadow's first prerequisite closed).** The shadow
   sweep found an undeclared middle Line stage (the f68 Drakloak on Dreepy→Drakloak→Dragapult ex)
   pricing **0** — `_role_value` saw only the declared base. `planner._role_value` now derives
