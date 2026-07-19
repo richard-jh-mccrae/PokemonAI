@@ -16,7 +16,7 @@ as separate concurrent worktree sessions.
 |---------|----|-------|--------|-------|
 | S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
-| S2b | WP2 | Eval harness | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2b.md](ml-training-design-s2b.md) |
+| S2b | WP2 | Eval harness | ☐ blocked on S1 | design LOCKED 2026-07-19 → [ml-training-design-s2b.md](ml-training-design-s2b.md); grill reframed the spike to duplicate-POSITION replay (fork reshuffles hidden zones; no nested forks in playouts → planner fork tiers OFF) |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
 | S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
 | S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
@@ -272,3 +272,6 @@ compensations:
   both design grills ran on Fable 5; decisions locked in
   [ml-training-design-s2a.md](ml-training-design-s2a.md) and
   [ml-training-design-s3b.md](ml-training-design-s3b.md). Opus executes the locked designs.
+  2026-07-19: the S2b grill also ran on Fable 5 —
+  [ml-training-design-s2b.md](ml-training-design-s2b.md) locked; all three parallel-phase
+  designs are now specified and every remaining session is execution.
