@@ -80,11 +80,11 @@ def fork_playout(pilot, obs: dict, *, max_steps: int = 400, manual_coin: bool = 
     except Exception as e:                                   # engine unavailable -> no-op, not a crash
         return {"steps": 0, "terminal": False, "result": None, "error": f"no engine: {e}"}
 
-    yd, yp, od_, op_, oh = fork_seed(pilot, obs)
     steps, terminal, result, error = 0, False, None, None
     was_planning = getattr(pilot, "_planning", False)
     pilot._planning = True
     try:
+        yd, yp, od_, op_, oh = fork_seed(pilot, obs)         # inside try: _seed_zones can raise on a bad frame
         st = cgapi.search_begin(cgapi.to_observation_class(obs), yd, yp, od_, op_, oh, [],
                                 manual_coin=manual_coin)
         for _ in range(max_steps):

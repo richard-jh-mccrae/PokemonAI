@@ -24,16 +24,22 @@ python tools/sim/eval_run.py mega_starmie 42 --preset default
 | `--preset` | `default` | detectable win-delta: `quick` 5% · `default` 3% · `fine` 2% |
 | `--per-cell` | from preset | games per arm per opponent (overrides the preset) |
 | `--h2h` | 200 | informational head-to-head games (never enters the verdict) |
-| `--checkpoints` | — | extra build ids for the regression pool |
-| `--no-checkpoints` | off | skip the submitted-build checkpoint pool |
-| `--max-games` | — | hard cap (disk safety valve) |
+| `--checkpoints` | — | build ids **added** to the submitted-build regression pool |
+| `--no-checkpoints` | off | skip the checkpoint pool entirely |
+| `--max-games` | — | hard game cap (disk safety valve) |
+| `--max-gb` | — | hard film-bytes cap in GB |
+| `--resume <run_id>` | — | continue a crashed run (cell-granular) |
+
+Contestant specs accept `name@overlay.json` — the overlay (e.g. weights-on config) is applied to
+that arm and recorded in the report's `config` descriptor.
 
 ## Output
 
 `reports/eval/<run_id>/` — `manifest.json` (resumable, corpus-pattern), gzip films, and
 `report.json` (C3). The CLI prints the win-delta, its 95% CI, and the `PASS`/`FAIL`/`INCONCLUSIVE`
-verdict. Re-run with the same `run_id` machinery to resume; checkpoint regressions cap a pass at
-inconclusive and name the culprit.
+verdict; a capped/partial run is tagged `[CAPPED]` and can never PASS. Resume a crashed run with
+`--resume <run_id>` (the manifest flushes after every cell, so at most one cell is redone).
+Checkpoint regressions cap a pass at inconclusive and name the culprit.
 
 ## TODO
 

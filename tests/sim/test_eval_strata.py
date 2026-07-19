@@ -82,20 +82,21 @@ def one_film(tmp_path_factory):
         run_id="strata", created_at="2026-07-19T00:00:00", git_rev="x", agents=["mega_starmie"],
         agents_root=FIXTURE_AGENTS, out_root=out, agent_versions={"mega_starmie": "x"},
         per_pairing=1, extra_syspath=SRC)
-    films = sorted(run_dir.rglob("*.json.gz"))
-    return load_replay(films[0])
+    return load_replay(sorted(run_dir.rglob("*.json.gz"))[0])
 
 
 @pytest.mark.req("REQ-SIM-0021")
 def test_game_sensitivity_is_a_real_swing_over_a_real_film(one_film):
     """The proxy runs the shipped Pilot's _board over a real film through a value model and returns
-    a bounded, positive swing — the seat-0 trajectory spans a real range as prizes are taken."""
-    from sim.eval_strata import game_sensitivity, seat0_winprob
+    a bounded, positive swing — the arm's own-decision trajectory spans a real range as prizes are
+    taken. Only the arm's OWN (seat) frames are scored (D5), never the opponent's."""
+    from sim.eval_strata import game_sensitivity, own_winprob
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
-    traj = seat0_winprob(pilot, _RampModel(), one_film)
-    assert len(traj) > 10                                          # a real game -> many decision frames
-    swing = game_sensitivity(pilot, _RampModel(), one_film)
+    traj = own_winprob(pilot, _RampModel(), one_film, arm_seat=0)
+    assert len(traj) > 5                                           # a real game -> many own decisions
+    assert all(not isinstance(p, complex) for p in traj)
+    swing = game_sensitivity(pilot, _RampModel(), one_film, arm_seat=0)
     assert swing is not None and 0.0 < swing <= 1.0
 
 
@@ -106,4 +107,4 @@ def test_game_sensitivity_none_when_no_scorable_frame(one_film):
     from sim.eval_strata import game_sensitivity
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
-    assert game_sensitivity(pilot, _RampModel(), {"steps": []}) is None
+    assert game_sensitivity(pilot, _RampModel(), {"steps": []}, arm_seat=0) is None

@@ -129,6 +129,25 @@ three working-tree agents emitting a valid C3 report with verdict + strata popul
 `aivat: null`; the D4 spike verdict (success ratio + variance ratio, or the failure) recorded
 in the build plan's ledger notes.
 
+## Build deviations (recorded per the header rule)
+
+Discovered during the S2b build + `/code-review`; recorded here, not silently applied.
+
+- **D4 spike fidelity (v1 plumbing).** The playout driver seeds opponent zones via the planner's
+  `_seed_zones` (count-correct, not identity-correct) and drives an in-process `pilot.decide`, not
+  the design's "opponent zones from the opponent's own frames → `AgentServer.act`". Reason: v1 is
+  plumbing + a smoke test (the variance verdict is corpus-gated), and count-correct seeding is the
+  shipped `search_begin` precedent (`lethal_probe`); true-identity reconstruction + server-driven
+  playouts are the fidelity upgrade the measurement mode needs, tracked with the spike verdict.
+- **D5 strata scope.** `game_sensitivity` scores the **arm's own-seat decisions only** (matching
+  "swing across own decisions") rather than a both-seats seat-0 trajectory — an earlier both-seats
+  build scored the opponent's positions through the candidate's doctrine and was corrected.
+- **Verdict coverage guard (added).** Beyond the locked `flips_on` rule, a run that measured no
+  paired cells or was capped/partial (`status != "complete"`) caps the verdict at `inconclusive` —
+  a partial matrix must never PASS. Recorded because it strengthens the D3 verdict, not weakens it.
+- **`--max-gb` byte cap.** Kept as locked (the "corpus pattern wholesale" byte safety valve); the
+  runner tallies film bytes and `cap_hit` enforces it.
+
 ## Non-goals (v2 backlog, with triggers)
 
 - AIVAT implementation — trigger: G1 passes (WP1 net exists); fills the D5 seam.

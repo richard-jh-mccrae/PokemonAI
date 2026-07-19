@@ -18,7 +18,9 @@ MEGA = FIXTURE_AGENTS / "mega_starmie"
 
 def _mega():
     from sim.battle import read_deck
-    return {"label": "mega_starmie", "dir": MEGA, "deck": read_deck(MEGA)}
+    return {"label": "mega_starmie", "dir": MEGA, "deck": read_deck(MEGA), "overlay": None,
+            "agent": "mega_starmie",
+            "descriptor": {"agent": "mega_starmie", "label": "working-tree", "config": None}}
 
 
 @pytest.mark.req("REQ-SIM-0022")
@@ -30,8 +32,7 @@ def test_run_eval_end_to_end_writes_manifest_films_and_c3_report(tmp_path):
     cand = base = _mega()
     report = run_eval(run_id="e1", created_at="2026-07-19T00:00:00", git_rev="abc1234",
                       candidate=cand, baseline=base, opponents={"mega_starmie": _mega()},
-                      out_root=tmp_path, per_cell=2, extra_syspath=SRC, strata_agent="mega_starmie",
-                      preset="default")
+                      out_root=tmp_path, per_cell=2, extra_syspath=SRC, preset="default")
 
     run_dir = tmp_path / "eval" / "e1"
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -44,12 +45,27 @@ def test_run_eval_end_to_end_writes_manifest_films_and_c3_report(tmp_path):
     saved = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
     assert saved == report                                        # returned == written
     for field in ("report_version", "matchups", "paired_delta", "strata", "checkpoints",
-                  "aivat", "verdict"):
+                  "aivat", "verdict", "status", "coverage"):
         assert field in report
     assert report["verdict"] in ("pass", "fail", "inconclusive")
+    assert report["status"] == "complete"
+    assert report["candidate"]["agent"] == "mega_starmie" and "config" in report["candidate"]
     assert report["aivat"] is None
     assert len(report["matchups"]) == 2                           # one opponent x 2 seats
     assert report["strata"] and {c["name"] for c in report["strata"]} == {"high-swing", "low-swing"}
+
+
+@pytest.mark.req("REQ-SIM-0022")
+def test_capped_run_cannot_pass(tmp_path):
+    """A capped/partial run marks status=capped and can never read PASS, whatever the surviving
+    cells say — G2 must not adopt on a fraction of the powered matrix."""
+    from sim.eval_run import run_eval
+    report = run_eval(run_id="e4", created_at="2026-07-19T00:00:00", git_rev="abc1234",
+                      candidate=_mega(), baseline=_mega(),
+                      opponents={"a": _mega(), "b": _mega(), "c": _mega()}, out_root=tmp_path,
+                      per_cell=2, caps={"max_games": 2}, extra_syspath=SRC)
+    assert report["status"] == "capped"
+    assert report["verdict"] == "inconclusive"                    # partial run never passes
 
 
 @pytest.mark.req("REQ-SIM-0022")

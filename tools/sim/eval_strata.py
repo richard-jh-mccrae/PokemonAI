@@ -20,12 +20,13 @@ from sim.paired_ab import paired_delta
 from train.blunder.decisions import _film
 
 
-def seat0_winprob(pilot, model, replay) -> list[float]:
-    """P(win for seat 0) at each of the game's decision frames. Each frame's obs is seat-relative
-    to its actor, so ``model.predict`` gives P(win for the actor); frames where seat 1 acts are
-    flipped to seat 0's view (``1 − p``) to build ONE consistent trajectory. Mirrors the extractor's
-    frame walk (``train.value.extract``): the choice for frame ``i`` and its aligned obs live in
-    frame ``i+1``. Pure on the film — never touches the live engine, never raises."""
+def own_winprob(pilot, model, replay, arm_seat: int) -> list[float]:
+    """P(win for ``arm_seat``) at each of the arm's OWN decision frames — frames where the acting
+    seat IS ``arm_seat``. That frame's obs is seat-relative to the actor, so ``model.predict`` gives
+    P(win for the arm) directly (no flipping, no scoring the opponent's positions through the arm's
+    doctrine — D5's "swing across OWN decisions"). Mirrors the extractor's frame walk
+    (``train.value.extract``): the choice for frame ``i`` and its aligned obs live in frame ``i+1``.
+    Pure on the film — never touches the live engine, never raises."""
     film = _film(replay)
     traj: list[float] = []
     for i, frame in enumerate(film):
@@ -37,22 +38,23 @@ def seat0_winprob(pilot, model, replay) -> list[float]:
         if not obs:
             continue
         seat = (obs.get("current") or {}).get("yourIndex")
-        if seat is None:
-            continue
+        if seat != arm_seat:
+            continue                                   # only the arm's own decisions
         try:
             board = pilot._board(obs, obs.get("select"))
             p = model.predict(features_from_board(board))
         except Exception:
             continue                                   # a malformed frame is skipped, not fatal
-        traj.append(p if seat == 0 else 1.0 - p)
+        traj.append(p)
     return traj
 
 
-def game_sensitivity(pilot, model, replay) -> float | None:
-    """The value-swing sensitivity of one game: ``max − min`` of the seat-0 win-prob trajectory.
-    ``None`` when the film yields no scorable decision (excluded from stratification, not counted
-    as zero — a hole is not a blowout)."""
-    traj = seat0_winprob(pilot, model, replay)
+def game_sensitivity(pilot, model, replay, *, arm_seat: int = 0) -> float | None:
+    """The value-swing sensitivity of one game: ``max − min`` of the arm's own-decision win-prob
+    trajectory (``arm_seat`` = the engine seat the arm occupied). ``None`` when the film yields no
+    scorable own decision (excluded from stratification, not counted as zero — a hole is not a
+    blowout)."""
+    traj = own_winprob(pilot, model, replay, arm_seat)
     if not traj:
         return None
     return max(traj) - min(traj)

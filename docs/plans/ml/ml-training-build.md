@@ -16,7 +16,7 @@ as separate concurrent worktree sessions.
 |---------|----|-------|--------|-------|
 | S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
-| S2b | WP2 | Eval harness | ☑ harness built 2026-07-19 (corpus-free) | design LOCKED → [ml-training-design-s2b.md](ml-training-design-s2b.md); `tools/sim/eval_{run,report,strata,aivat,spike}.py` + CLI + guide (`tools/sim/EVAL.md`); 28 tests green. **Pending corpus/WP1:** the spike's variance-reduction verdict (driver built) + the AIVAT fill (null seam) |
+| S2b | WP2 | Eval harness | ☑ harness built 2026-07-19 (corpus-free) | design LOCKED → [ml-training-design-s2b.md](ml-training-design-s2b.md); `tools/sim/eval_{run,report,strata,aivat,spike}.py` + CLI + guide (`tools/sim/EVAL.md`); 32 tests green. **Pending corpus/WP1:** the spike's variance-reduction verdict (driver built) + the AIVAT fill (null seam) |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
 | S3a | WP3 | Blunder labeler | ☐ blocked on G1 | θ + detector shared with S3b (design D1/D2) |
 | S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md) |
@@ -140,7 +140,7 @@ Fail → iterate WP1. WP3/WP4 **integration** stays blocked; their plumbing may 
 resolution, H2H excluded from the delta), `eval_strata.py` (value-swing skill-sensitivity proxy),
 `eval_aivat.py` (frozen null seam → `aivat: null`), `eval_spike.py` (duplicate-POSITION replay
 plumbing: plain-MAIN opening extraction + `fork_playout` driver). CLI guide: `tools/sim/EVAL.md`.
-28 tests (`tests/sim/test_eval_*.py`, REQ-SIM-0018..0023); full `tools/sim` suite green (141
+32 tests (`tests/sim/test_eval_*.py`, REQ-SIM-0018..0023); full `tools/sim` suite green (144
 passed). No `.github/filters.yml` change — `tools/sim/**`/`tests/sim/**` already map to `sim`.
 Verified live: a real-agent CLI run produces a valid C3 `report.json` with verdict + strata.
 

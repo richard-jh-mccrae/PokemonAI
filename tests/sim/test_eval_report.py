@@ -41,6 +41,34 @@ def test_verdict_fail_when_ci_upper_below_zero():
 
 
 @pytest.mark.req("REQ-SIM-0019")
+def test_verdict_inconclusive_on_zero_pairs_and_on_capped_run():
+    """A run that measured NOTHING (no paired cells) can never pass; nor can a capped/partial run,
+    however strong the surviving cells — both cap at inconclusive so G2 can't adopt on a fraction
+    of the matrix."""
+    from sim.eval_report import build_report
+    empty = build_report(baseline={}, candidate={}, matchups=[])
+    assert empty["paired_delta"]["win_delta"] == 0.0
+    assert empty["verdict"] == "inconclusive"                     # measured nothing -> not a pass
+
+    strong = [_pair(1100, 1000, 2000), _pair(1150, 1000, 2000)]
+    capped = build_report(baseline={}, candidate={}, matchups=strong, status="capped")
+    assert capped["verdict"] == "inconclusive"                    # partial matrix -> not a pass
+
+
+@pytest.mark.req("REQ-SIM-0019")
+def test_per_arm_n_keeps_the_delta_sane_on_mismatched_sizes():
+    """When a resume leaves the arms different sizes, per-arm candidate_n/baseline_n keep every
+    win-rate in [0,1] — no p>1 / garbage CI from a shared min-n paired with full win counts."""
+    from sim.eval_report import build_report
+    row = {"opponent": "o", "seat": 0, "n": 5, "candidate_wins": 40, "candidate_n": 50,
+           "baseline_wins": 3, "baseline_n": 5, "draws": 0}                # arms differ: 50 vs 5
+    rep = build_report(baseline={}, candidate={}, matchups=[row])
+    pd = rep["paired_delta"]
+    assert -1.0 <= pd["win_delta"] <= 1.0                         # 40/50=0.8 vs 3/5=0.6, not 40/5=8
+    assert pd["ci_low"] <= pd["win_delta"] <= pd["ci_high"]
+
+
+@pytest.mark.req("REQ-SIM-0019")
 def test_verdict_inconclusive_on_crash_and_on_wide_ci():
     """A candidate crash blocks a pass (never ship on a crash); a straddling CI at low N is
     inconclusive, not a pass — the flip needs the interval, not just the point estimate."""
@@ -90,9 +118,10 @@ def test_checkpoint_within_noise_does_not_trip():
 
 
 @pytest.mark.req("REQ-SIM-0019")
-def test_checkpoint_pool_resolves_submitted_builds_and_warns_on_missing():
-    """Pool = submitted builds (agent_history rows) whose zip is on disk; a submitted build with no
-    local zip is skipped with a named warning; --checkpoints ids restrict to a pinned subset."""
+def test_checkpoint_pool_is_additive_and_warns_on_missing():
+    """Pool = ALL submitted builds (agent_history rows) whose zip is on disk; --checkpoints ids ADD
+    to that pool, never restrict it; a submitted build with no zip, or a pinned id not in history,
+    is skipped with a named warning."""
     from sim.eval_report import checkpoint_pool
     history = [{"submission_id": 3, "agent": "ms", "artifact": "ms-3"},
                {"submission_id": 5, "agent": "ml", "artifact": "ml-5"}]
@@ -100,8 +129,9 @@ def test_checkpoint_pool_resolves_submitted_builds_and_warns_on_missing():
     assert [p["submission_id"] for p in pool] == [3]                 # only the one with a zip
     assert any("#5" in w and "missing" in w for w in warnings)
 
-    pinned, warns2 = checkpoint_pool(history, available_artifacts={"ms-3", "ml-5"}, extra_ids=[5])
-    assert [p["submission_id"] for p in pinned] == [5]              # pin restricts to #5
+    # extra_ids ADD, they do not restrict: the full on-disk pool stays, #5 is not dropped
+    both, _ = checkpoint_pool(history, available_artifacts={"ms-3", "ml-5"}, extra_ids=[3])
+    assert [p["submission_id"] for p in both] == [3, 5]            # additive, no restriction
     unknown_pool, warns3 = checkpoint_pool(history, available_artifacts=set(), extra_ids=[9])
     assert unknown_pool == [] and any("#9" in w for w in warns3)
 
