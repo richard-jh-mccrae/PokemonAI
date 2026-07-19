@@ -29,7 +29,8 @@ from common.strategy.planner import PlannerMixin, TurnLine
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 # (_EFFICIENCY/_BENCH_SNIPE* moved to the KO oracle, ADR-0052 — the one home for combat valuation.)
 from common.strategy.combat import _EFFICIENCY  # noqa: E402  (re-used by the tactical scorers)
-from common.strategy.refresh import fresh_cards, net_change  # noqa: E402  (ADR-0060 swing oracle)
+from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
+                                     own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
 from common.strategy.denial import coin_odds, denial_value  # noqa: E402  (ADR-0062 energy denial)
 # A shuffle-refresh moves cards in four directions and they are NOT worth the same per card. Pricing
@@ -50,6 +51,11 @@ _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card oppone
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
 _REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
                            # resources denied, versus cards they have demonstrably been unable to play.
+_GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter grab: prefer the refresh
+                           # with the bigger own-draw ceiling (Lillie's 8 early ≻ Judge 4). Scaled so a
+                           # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
+                           # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
+                           # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -877,6 +883,13 @@ class OptionTrace:
     attach_to_needy_line: bool = False  # this option attaches Energy to a NEEDY win-condition Line body
                                  # (a base that builds the payoff) — decide()-only ORDERING tie-break: among
                                  # EQUAL-score attaches, feed Line base first. W-route-invisible, never enters weight fit. ep82867148 f87
+    hand_size_relief: float = 0.0  # REPORTING-ONLY (hand-disruption grill ruling, 2026-07-19): the signed
+                                 # incoming-damage delta of a `hand_disruption` refresh against a hand-size
+                                 # attacker in the opponent's forward line — `forward_incoming_damage` now
+                                 # vs at the card's redraw count (+ = damage DENIED off my Active, − = a
+                                 # refill that ARMS them). NOT in `score` — inert telemetry that makes the
+                                 # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
+                                 # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
 
 
 @dataclass
@@ -1350,6 +1363,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
+                    + self._grab_refresh_draw_tactical(board, ctx)
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
@@ -1368,7 +1382,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         score = sum(w for _, w in fired) + tactical
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
                            fired=fired, tactical=tactical,
-                           attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs)
+                           attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
+                           hand_size_relief=self._hand_size_relief(obs, ctx))   # REPORTING-ONLY, not in `score`
 
     def _weight(self, h) -> float:
         """Effective weight, resolved by id (0 disables): the learned override (tuned.json) over
@@ -2069,6 +2084,67 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 + _REFRESH_STRIP * stripped
                 + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
                 - _REFRESH_GIFT * max(opp_net, 0.0))
+
+    def _hand_size_relief(self, obs: dict, ctx) -> float:
+        """REPORTING-ONLY (hand-disruption grill, 2026-07-19): the signed Powerful-Hand damage swing a
+        `hand_disruption` refresh works on a hand-size attacker in the opponent's ACTIVE forward line
+        (Abra→Kadabra→Alakazam Powerful Hand = 20 dmg per card in THEIR hand, aimed at MY Active):
+
+            relief = handSizeDamage × (their hand now − their redraw count)
+
+        Positive = Powerful-Hand damage DENIED off my Active by shrinking their hand; negative = a
+        refill that ARMS them (the ep85709280-shaped hole: Judge an EMPTY Alakazam hand and you hand
+        them 20/card against your own board). Sign-correct by construction — the point of grill ruling
+        1a/2a. Uses the same `handSizeDamage` the incoming oracle reads (`_forward_hand_size_damage`);
+        the value is self-preservation (incoming), not opponent-worth.
+
+        This reports the ISOLATED hand-size damage swing — deliberately NOT the change in worst-case
+        `forward_incoming_damage`, which masks to 0 whenever a hand-INDEPENDENT forward threat (an
+        energy-scaler on the same line) already out-damages Powerful Hand. That masking IS the correct
+        MARGINAL decision value and belongs at promotion; the reported signal is the raw physical
+        quantity that feeds it. Scoped to the ACTIVE forward line (only it can attack next turn) — a
+        BENCHED hand-size attacker, which the flat +25 rung over-fires on, reads 0 here.
+
+        INERT: surfaced on the OptionTrace for telemetry, NEVER added to `score`. The flat
+        `play-harlequin-vs-hand-size` (+25) / `disrupt-when-unfavored` (+18) rungs still drive.
+        Promotion (functional, marginal vs my own KO, retire the rungs) waits on corpus evidence —
+        docs/plans/hand-disruption-grill-spec.md §Design B. 0 unless this is the PLAY of an
+        opponent-shuffling refresh (Judge / Harlequin / Unfair Stamp) facing such a line."""
+        if ctx.option_type != _PLAY or "hand_disruption" not in (ctx.tags or []) or not self.stats:
+            return 0.0
+        branches = refresh_branches(ctx.card_id, 0, 0)   # opp redraw count is board-independent for these
+        if branches is None or not opponent_shuffles(ctx.card_id):
+            return 0.0
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
+        oa = next((p for p in (opp.get("active") or []) if p), None)
+        oa_id = (oa or {}).get("id")
+        if oa_id is None:
+            return 0.0
+        line = {oa_id} | self._forward_card_ids(oa_id)
+        per_card = max((getattr(self.stats.get(i), "handSizeDamage", 0) or 0 for i in line), default=0)
+        if per_card <= 0:
+            return 0.0
+        redraw = sum(opp_draw for _my, opp_draw in branches) / len(branches)
+        return float(per_card * ((opp.get("handCount") or 0) - redraw))
+
+    def _grab_refresh_draw_tactical(self, board: Board, ctx) -> float:
+        """Sub-point tie-break at a TO_HAND draw-Supporter grab: rank a refresh by its own-draw
+        ceiling (ADR-0060 facts), so among the `grab-a-draw-supporter-in-setup` band the bigger-ceiling
+        refresh is grabbed (Lillie's redraws 8 early ≻ Judge's 4 — ep86088989 f29, CRITICAL). The +10
+        band could not tell them apart, so the option INDEX decided.
+
+        Mirrors the rung's gate exactly (setup TO_HAND, a `draw` Supporter CARD), plus `own_draw_count`
+        knowing the card — so it only ever SEPARATES cards the rung already tied, never lifts one out of
+        the band. Silent (0) otherwise; re-values nothing — the PLAY swing is priced by
+        `_refresh_swing_tactical` when the card is actually played."""
+        if (board.line_ready or ctx.select_context != _TO_HAND or "draw" not in ctx.tags
+                or not (ctx.stat and getattr(ctx.stat, "is_supporter", False))):
+            return 0.0
+        draw = own_draw_count(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
+        return _GRAB_REFRESH_DRAW * draw if draw is not None else 0.0
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
         """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``

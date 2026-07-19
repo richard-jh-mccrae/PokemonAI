@@ -20,7 +20,8 @@ re-running the implementation:
 """
 import pytest
 
-from common.strategy.refresh import fresh_cards, hand_swing, net_change, refresh_branches
+from common.strategy.refresh import (fresh_cards, hand_swing, net_change, own_draw_count,
+                                     refills_opponent, refresh_branches)
 
 FULL_PRIZES = 6          # nobody has taken a prize yet
 
@@ -139,3 +140,56 @@ def test_fresh_counts_only_the_stripped_cards_they_just_drew():
     assert fresh_cards(1213, opp_hand=9, opp_hand_size_delta=-5) == 0    # they SHRANK: stale
     assert fresh_cards(1213, opp_hand=9, opp_hand_size_delta=None) == 0  # no prior turn yet
     assert fresh_cards(1227, opp_hand=9, opp_hand_size_delta=4) == 0     # self-only: strips nothing
+
+
+# --- own draw count: the grab-time tie-break input (build item 1) ---------------------------------
+
+def test_own_draw_count_is_the_cards_averaged_self_draw():
+    """The card's OWN redraw count, averaged over its coin branches — the quantity that ranks a
+    bigger-ceiling refresh above a smaller one at a TO_HAND grab. Read from the printed card text,
+    never the implementation."""
+    assert own_draw_count(1213, my_prizes_remaining=6, opp_prizes_remaining=6) == 4   # Judge 4/4
+    assert own_draw_count(1223, my_prizes_remaining=6, opp_prizes_remaining=6) == 4   # Harlequin EV (5+3)/2
+    assert own_draw_count(1080, my_prizes_remaining=6, opp_prizes_remaining=6) == 5   # Unfair Stamp 5/2
+
+
+def test_own_draw_count_reads_the_prize_conditional_windows():
+    """Lillie's draws 8 at exactly six prizes, 6 otherwise; Lacey 8 once the opponent is at 3 prizes
+    or fewer — so a grab-time tie-break sees the same conditional window `hand_swing` does."""
+    assert own_draw_count(1227, my_prizes_remaining=6, opp_prizes_remaining=6) == 8   # Lillie's @ 6
+    assert own_draw_count(1227, my_prizes_remaining=5, opp_prizes_remaining=6) == 6   # Lillie's otherwise
+    assert own_draw_count(1199, my_prizes_remaining=6, opp_prizes_remaining=3) == 8   # Lacey @ opp≤3
+    assert own_draw_count(1199, my_prizes_remaining=6, opp_prizes_remaining=4) == 4
+
+
+def test_own_draw_count_is_none_for_a_non_refresh():
+    assert own_draw_count(9999, my_prizes_remaining=6, opp_prizes_remaining=6) is None
+
+
+def test_lillies_out_draws_judge_at_the_grab():
+    """The 86088989-29 claim, at the oracle: early (six prizes) Lillie's redraws 8 to Judge's 4, so
+    a grab-time tie-break that reads own-draw prefers Lillie's."""
+    assert (own_draw_count(1227, my_prizes_remaining=6, opp_prizes_remaining=6)
+            > own_draw_count(1213, my_prizes_remaining=6, opp_prizes_remaining=6))
+
+
+# --- refills_opponent: the dont-gift sign gate (build item 2) -------------------------------------
+
+def test_refills_opponent_is_true_only_when_the_symmetric_refresh_grows_their_hand():
+    """Judge redraws the opponent to 4: a GIFT when their hand is below 4, a STRIP at or above it.
+    The `dont-gift-a-refresh-when-favored` tax must fire only on the gift."""
+    assert refills_opponent(1213, opp_hand=1, my_prizes_remaining=6, opp_prizes_remaining=6) is True
+    assert refills_opponent(1213, opp_hand=3, my_prizes_remaining=6, opp_prizes_remaining=6) is True
+    assert refills_opponent(1213, opp_hand=4, my_prizes_remaining=6, opp_prizes_remaining=6) is False
+    assert refills_opponent(1213, opp_hand=8, my_prizes_remaining=6, opp_prizes_remaining=6) is False
+
+
+def test_refills_opponent_is_false_for_a_self_only_refresh():
+    """Lillie's / Lacey never touch the opponent's hand — they can never gift, whatever their hand."""
+    assert refills_opponent(1227, opp_hand=1, my_prizes_remaining=6, opp_prizes_remaining=6) is False
+    assert refills_opponent(1199, opp_hand=1, my_prizes_remaining=6, opp_prizes_remaining=6) is False
+
+
+def test_refills_opponent_is_false_for_an_unknown_card():
+    """Fail toward NOT taxing: an unknown card makes no gift claim (never over-suppress a strip)."""
+    assert refills_opponent(9999, opp_hand=1, my_prizes_remaining=6, opp_prizes_remaining=6) is False

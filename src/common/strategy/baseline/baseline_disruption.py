@@ -4,6 +4,7 @@ disruption mechanics — hand disruption, ability lock — land.)
 """
 from common.strategy.context import (_PLAY, _POSTURE_FAVORED, _POSTURE_MIN_COVERAGE,
                                      _POSTURE_UNFAVORED)
+from common.strategy.refresh import refills_opponent
 from common.strategy.strategy import Hypothesis
 _STACKED_HAND = 6             # opponent hand size at/above which a `draw` engine has visibly STACKED
                               # resources (opening hand 7, +1/turn) — worth a hand_disruption Supporter
@@ -79,11 +80,22 @@ HYPOTHESES = [
                   "Lillie's don't. −15 demotes it to a last resort (+20 dig → +5) without killing "
                   "targeted counterplay (`play-harlequin-vs-hand-size` +25 → net +30). Coverage-gated, "
                   "structurally exclusive with `disrupt-when-unfavored` (≥0.55 vs ≤0.45); "
-                  "board-dominated, never overrides a KO.",
+                  "board-dominated, never overrides a KO.\n\n"
+                  "**Sign-gated on the actual gift (2026-07-19, hand-disruption grill ruling 3).** The "
+                  "rung taxes GIFTING outs — but its bare `hand_disruption` gate was blind to which "
+                  "DIRECTION the refill points, so it also demoted a Harlequin that STRIPS a stacked "
+                  "opponent hand (ep83664991 f43: opp hand 8, Harlequin redraws them to ≈4 — a denial, "
+                  "not a gift). `refills_opponent` (the ADR-0060 swing facts) fires the tax only when the "
+                  "play actually grows their hand (`opp_net > 0`, i.e. their hand below the card's redraw "
+                  "count); a strip of a big hand is now untaxed, and a self-only Lillie's/Lacey never "
+                  "reaches this rung at all. Fail direction honored: an unknown refresh makes no gift "
+                  "claim, so it is never over-suppressed.",
         when=lambda c: c.option_type == _PLAY
         and "hand_disruption" in c.tags
         and c.board.matchup_coverage >= _POSTURE_MIN_COVERAGE
-        and c.board.favorability >= _POSTURE_FAVORED,
+        and c.board.favorability >= _POSTURE_FAVORED
+        and refills_opponent(c.card_id, c.board.opp_hand_size,
+                             c.board.my_prizes_remaining, c.board.opp_prizes_remaining),
         weight=-15, status="testing"),
     # RETIRED 2026-07-14 (ADR-0060): `dont-shuffle-away-the-bigger-hand` (−25). It required the
     # `hand_disruption` tag, so it could not reach Lillie's at ALL (ms f94, my 10 / opp 3: the shipped

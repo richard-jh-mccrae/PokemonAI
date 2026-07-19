@@ -270,29 +270,35 @@ def _favored_pilot(win_rate, funcs):
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
-def test_favored_half_downweights_the_symmetric_refresh_gift():
-    """Lever A's favored half (ADR-0026 amendment): favorability ≥ 0.55 fires
-    `dont-gift-a-refresh-when-favored` on a `hand_disruption` play (refilling a losing opponent's
-    hand gifts outs); the rung stays silent at even AND at unfavored (structural exclusion with the
-    shipped half)."""
+def test_favored_half_taxes_the_gift_but_never_the_strip():
+    """Lever A's favored half (ADR-0026 amendment), sign-gated (hand-disruption grill ruling 3,
+    2026-07-19): favorability ≥ 0.55 fires `dont-gift-a-refresh-when-favored` on a `hand_disruption`
+    play ONLY when it actually REFILLS the losing opponent (their hand below the card's redraw count).
+    It stays silent when the same play STRIPS a stacked hand (ep83664991 f43), and at even AND at
+    unfavored (structural exclusion with the shipped half)."""
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})
-    obs = _obs_judge_vs_mega_lucario()
-    favored = {h.id for h, _ in _favored_pilot(0.7, funcs).explain(obs).options[0].fired}
-    even = {h.id for h, _ in _favored_pilot(0.5, funcs).explain(obs).options[0].fired}
-    unfavored = {h.id for h, _ in _favored_pilot(0.3, funcs).explain(obs).options[0].fired}
-    assert "dont-gift-a-refresh-when-favored" in favored
+    gift = _obs_judge_vs_mega_lucario(opp_hand=2)    # Judge redraws them 2 → 4: a GIFT (opp_net +2)
+    strip = _obs_judge_vs_mega_lucario(opp_hand=8)   # Judge redraws them 8 → 4: a STRIP (opp_net −4)
+    favored_gift = {h.id for h, _ in _favored_pilot(0.7, funcs).explain(gift).options[0].fired}
+    favored_strip = {h.id for h, _ in _favored_pilot(0.7, funcs).explain(strip).options[0].fired}
+    even = {h.id for h, _ in _favored_pilot(0.5, funcs).explain(gift).options[0].fired}
+    unfavored = {h.id for h, _ in _favored_pilot(0.3, funcs).explain(gift).options[0].fired}
+    assert "dont-gift-a-refresh-when-favored" in favored_gift
+    assert "dont-gift-a-refresh-when-favored" not in favored_strip   # ruling 3: never tax a strip
     assert "dont-gift-a-refresh-when-favored" not in even
     assert "dont-gift-a-refresh-when-favored" not in unfavored
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_favored_half_never_kills_genuinely_triggered_disruption():
-    """Favored + the opponent runs a hand-size attacker: the targeted disruption endorsement (+25)
-    outweighs the gift rung (−15) — favored kills the gift, not the counterplay."""
+    """Favored + the opponent runs a hand-size attacker, on a board where the refresh genuinely
+    GIFTS (opp hand below the redraw count): both the gift tax (−15) and the targeted disruption
+    endorsement (+25) fire, and the counterplay outweighs the tax — favored kills the gift, not the
+    counterplay. (The refill-arms-the-attacker latent hole is design-B, unbuilt — see the grill spec.)"""
     HSATK = 4321
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"],
                            HSATK: ["hand_size_attacker"]})
-    obs = _obs_judge_vs_mega_lucario()
+    obs = _obs_judge_vs_mega_lucario(opp_hand=2)      # a genuine gift, so the tax actually fires
     obs["current"]["players"][1]["bench"].append({"id": HSATK})   # benched; ML stays recognized
     trace = _favored_pilot(0.7, funcs).explain(obs).options[0]
     fired = {h.id for h, _ in trace.fired}

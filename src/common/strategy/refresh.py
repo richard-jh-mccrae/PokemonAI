@@ -106,6 +106,36 @@ def net_change(card_id, my_hand: int, opp_hand: int,
     return mine, theirs
 
 
+def own_draw_count(card_id, my_prizes_remaining: int, opp_prizes_remaining: int) -> float | None:
+    """The card's OWN redraw count, averaged over its coin branches (``my_draw``), on this board.
+    ``None`` when the card is not a known refresh.
+
+    The grab-time ceiling: at a TO_HAND draw-Supporter grab, `hand_swing` cannot rank two refreshes
+    apart (it needs the hand sizes at PLAY time, unknown at the grab), but the card's own draw count
+    already separates them — Lillie's redraws 8 early, Judge only 4 (ep86088989 f29). Prize-conditional
+    exactly as `refresh_branches` (Lillie's 8 at six prizes; Lacey 8 once the opponent is at 3 or fewer)."""
+    branches = refresh_branches(card_id, my_prizes_remaining, opp_prizes_remaining)
+    if branches is None:
+        return None
+    return sum(my_draw for my_draw, _o in branches) / len(branches)
+
+
+def refills_opponent(card_id, opp_hand: int,
+                     my_prizes_remaining: int, opp_prizes_remaining: int) -> bool:
+    """True when playing this refresh GROWS the opponent's hand (``opp_net > 0``) — a symmetric
+    refill handing the losing opponent cards. ``False`` for a self-only refresh (Lillie's / Lacey
+    never touch their hand), an unknown card, or a STRIP that redraws them below their current hand.
+
+    The `dont-gift-a-refresh-when-favored` sign gate: the favored tax is for GIFTING outs, so it must
+    fire only when the play actually refills them — never on a strip of a stacked hand (ep83664991 f43:
+    Harlequin into an 8-card hand denies, it does not gift)."""
+    branches = refresh_branches(card_id, my_prizes_remaining, opp_prizes_remaining)
+    if branches is None or not opponent_shuffles(card_id):
+        return False
+    opp_net = sum(opp_draw - opp_hand for _m, opp_draw in branches) / len(branches)
+    return opp_net > 0
+
+
 def fresh_cards(card_id, opp_hand: int, opp_hand_size_delta: int | None) -> int:
     """How many of the cards we are about to strip arrived in the opponent's hand LAST TURN.
     0 for a self-only refresh (we strip nothing) and 0 until a prior turn is known."""
