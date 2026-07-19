@@ -49,8 +49,13 @@ against the six ADR-0060 pins + the corpus before flipping. This is ADR-0060's e
 - `86091728-19` — Ultra Ball substance FIXED; residue is attach-target priority ({P} to the Active
   via `prefer-active-attach-in-setup` +8 vs the benched 2nd-line Dreepy).
 
-**D. Unchanged (1).** `85059103-9` — the Petrel tutor-chain grab value (closure-reachable worth,
-Round 9 §3). `86091435-68` — the discard-side deploy-now spike (gate-library scope doc).
+**D. Unchanged (1).** ~~`85059103-9` — the Petrel tutor-chain grab value (closure-reachable worth,
+Round 9 §3)~~ **BUILT 2026-07-19** (seam C, docs/plans/seam-tutor-chain-grab-value.md):
+`grab-the-chain-opener` (+15) fires when `_chain_grab_value`'s discounted closure (δ=0.75/hop ×
+MAX reachable `_grab_value_of`, 2-hop cap, Item-only descent, Supporter-slot fail-closed) clears
+the flat draw band — Petrel (δ² × Solrock's missing-engine-half 22 ≈ 12.4 → +15) out-grabs Judge
+(+10); target promoted to a corpus pin, full sweep holds. `86091435-68` — the discard-side
+deploy-now spike (gate-library scope doc).
 
 ## Instrument finding (fixed)
 

@@ -713,6 +713,16 @@ class Context:
                                        # one-per-turn Supporter is already spent (`board.supporter_played`)
                                        # — it cannot be played until next turn, while an Item can be
                                        # played now (ml f71: took a Lillie's on the turn Petrel fetched it)
+    card_chain_value: float = 0.0      # at a TO_HAND search, the discounted tutor-chain closure value of
+                                       # this candidate (`_chain_grab_value`, seam C: δ/hop × MAX reachable
+                                       # `_grab_value_of`, 2-hop cap, Item-only descent) — a tutor is worth
+                                       # what it reaches (ml f9: Petrel → Fighting Gong → Solrock). Stays
+                                       # 0.0 in `_grab_value_of`'s reduced Context (no self-recursion);
+                                       # gates `grab-the-chain-opener` above `_CHAIN_OPENER_FLOOR`
+    card_spends_last_evolution_route: bool = False  # this chain-hop grab would consume the LAST free
+                                       # tutor reaching an evolution whose base is in my play/hand
+                                       # (count-aware over the revealed pool) — preserve it, take the
+                                       # closure-cheap hop (`dont-spend-the-last-route-to-a-wanted-evolution`)
     fetch_fills_a_need: bool = False   # this option PLAYS a fetch whose reachable deck set still holds a
                                        # card I currently lack (best grab value > 0, same grab rungs) —
                                        # whether-to-play endorsement (`fetch-when-it-fills-a-need`). False off a non-fetch/need-less fetch
@@ -1064,6 +1074,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             lambda cid: self.stats.get(cid) if (self.stats and cid is not None) else None)
                                                         # class) — OHKO-line model's play half
         self._fetch_cache: dict = {}                    # memo: search card id -> deck ids it can fetch
+        self._chain_target_cache: dict = {}             # memo: tutor card id -> FULL-scope deck fetch
+                                                        # targets (the tutor-chain graph leg, seam C)
         self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
@@ -2543,6 +2555,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         card_unplayable_this_turn = bool(
             select.get("context") == _TO_HAND and board.supporter_played
             and bool(stat and stat.is_supporter))
+        card_chain_value = (self._chain_grab_value(board, cid, plan)
+                            if select.get("context") == _TO_HAND and cid is not None else 0.0)
+        card_spends_last_evolution_route = (
+            card_chain_value > 0 and self._spends_last_evolution_route(select, board, cid))
         fetch_fills_a_need = (option.get("type") == _PLAY
                               and self._fetch_fills_a_need(board, cid, plan))
         fetch_target_deferred = (fetch_fills_a_need
@@ -2673,6 +2689,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        card_is_hand_duplicate=card_is_hand_duplicate,
                        card_already_in_hand=card_already_in_hand,
                        card_unplayable_this_turn=card_unplayable_this_turn,
+                       card_chain_value=card_chain_value,
+                       card_spends_last_evolution_route=card_spends_last_evolution_route,
                        fetch_fills_a_need=fetch_fills_a_need,
                        fetch_target_deferred=fetch_target_deferred,
                        refresh_shuffles_deferred_fetch=refresh_shuffles_deferred,

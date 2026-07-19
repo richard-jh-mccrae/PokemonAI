@@ -24,7 +24,9 @@ def fetch_target_matches(clause: dict, stat) -> bool:
     """True iff a card with ``stat`` matches a FETCH ``clause``'s target class (``card_effects.json``,
     ADR-0032) — the ONE predicate that REPLACED the tag-keyed ``_FETCH_FILTERS``. Targets:
     basic_energy / energy (± ``energy_type`` lock) · mega (Mega ex) · evolution (``evolvesFrom`` set,
-    ± ``no_ability``) · pokemon / basic_pokemon (± ``no_rule_box``, ``hp_max``).
+    ± ``no_ability``) · pokemon / basic_pokemon (± ``no_rule_box``, ``hp_max``) · trainer (any
+    non-Pokémon non-Energy card: Item / Supporter / Tool / Stadium — Team Rocket's Petrel; the
+    tutor-chain graph leg, seam C).
 
     NOTE: ``energy_type`` on a POKÉMON target (Fighting Gong's "Basic {F} Pokémon") is NOT resolvable
     from ``CardStat`` (no Pokémon-type field), so it is applied only to ENERGY targets — a Pokémon
@@ -38,6 +40,8 @@ def fetch_target_matches(clause: dict, stat) -> bool:
         return stat.is_basic_energy and (etype is None or getattr(stat, "energyType", None) == etype)
     if target == "energy":
         return stat.is_energy and (etype is None or getattr(stat, "energyType", None) == etype)
+    if target == "trainer":
+        return not stat.is_pokemon and not stat.is_energy
     if target == "mega":
         return bool(getattr(stat, "megaEx", False))
     if target == "evolution":
