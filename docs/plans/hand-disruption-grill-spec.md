@@ -151,23 +151,55 @@ claims; unrecognized opponent → flat. **Evidence gate:** a correction that tur
 stripped or gifted (content, not count) — none exist today; every strip/gift correction in the
 corpus is count-based and already priced by the closed-form swing.
 
-### B. The signed hand-size damage term — replaces both rungs
+### B. The signed hand-size damage term — GRILLED 2026-07-19 (rulings 1a/2a); reporting BUILT, scoring gated
 
-    damage_leg = _DENIAL_PLAY_W × handSizeDamage_rate × Δ(their expected hand size)
+**The reframe (verified at source).** The hand-size leg is NOT opponent-worth — Powerful Hand
+(Alakazam MEG 743: *"Place 2 damage counters … for each card in your hand"* = **20 dmg/card in
+THEIR hand, aimed at MY Active**; `parse_attack_hand_size` → `handSizeDamage = 20`) is **incoming
+damage to me**, i.e. self-preservation. The incoming oracle ALREADY models it:
+`combat.forward_incoming_damage` computes `handSizeDamage × (opp hand − 1)` over the opponent's
+Active forward line and feeds `active_doomed`. So the term belongs in the **incoming/`active_doomed`
+oracle, NOT the gust shared layer and NOT the STRIP/GIFT swing** (grill ruling 2a).
 
-Signed by construction: positive stripping a big hand, NEGATIVE when the refresh refills a small
-one (the latent hole closes for free). Marginal with-vs-without (ADR-0062); a hand-size attacker I
-am about to KO denies nothing (the ADR-0063 doomed discount); posture scales multiplicatively.
-Lives inside `_refresh_swing_tactical` (a property of the refresh play; the swing already owns the
-card-count legs), gated on the board-visible, γ-free `opp_has_hand_size_attacker`
-(`pilot.py:4491` — function-tag + forward-line, no Read required). `handSizeDamage` is engine
-vocabulary (`CardStat`, provider) — the rate is computable, no proxy. **Replaces +25 AND +18;
-re-audit, never stack** — and mind the double-tax: GIFT×8 already prices the refill's card count,
-so the term prices only the DAMAGE armed/denied. **Fail direction:** their next-turn hand size
-unknowable beyond the visible count → use the deterministic redraw count only, no speculation.
-**Evidence gate:** a correction demonstrating the refill misfire (a Judge/Stamp into a small hand
-vs a hand-size attacker endorsed and punished) or a mispriced strip against one — none exist
-today; f64, the only live exercise, is endorsed correctly.
+**Why the flat approach fails against Alakazam — three ways** (opp forward Alakazam, hand H;
+Powerful Hand next turn ≈ 20·(H−1)):
+1. **Undervaluation** — STRIP·4/card is ⅕ of the true 20/card; the +25 flat proxy papers over it.
+2. **Sign hole (latent)** — at H=1 the current terms net ≈ +1 (`+25 rung − GIFT·8·3`), so the Pilot
+   Judges an EMPTY Alakazam hand, refilling it 20→80 damage against its own Active. The +25 has no
+   opp-hand gate; the GIFT tax can't fully cancel it.
+3. **Flat 20/card is ALSO wrong** — 80 damage denied is worth ~0 if my Active survives either way
+   (ADR-0063 pointed at ME), a whole attacker if it flips `active_doomed`. **The correct currency is
+   MARGINAL vs my own KO** (grill ruling 1a) — which `active_doomed`/`forward_incoming_damage`
+   already compute if re-run at the reduced hand.
+
+**Ruling 1a/2a — the promotion form:** value = the change in whether my Active survives when their
+hand drops to the redraw count, via the incoming oracle. Sign-correct by construction (a refill
+raises incoming → negative → the H=1 hole closes for free). **Replaces +25 AND +18** (currency-zone;
++18's posture half returns as a multiplier, never a flat). STRIP/GIFT stay untouched as an
+orthogonal *resource* axis (no double-count — against a hand-size deck the cards are fungible
+count-ammo, low keep-cost, so design A grades that leg down while this term carries the damage).
+
+**Fork-3 ruling (user, 2026-07-19): report the calculation NOW, inert.** The card/hand-value
+calculations are meant to REPLACE the hard-coded rungs over time, so the signal must be VISIBLE
+while it earns promotion — the house telemetry-only pattern (`play-safe-when-ahead` at weight 0).
+**BUILT 2026-07-19** (suite green 3089):
+
+- `pilot._hand_size_relief(obs, ctx)` — the signed *isolated* Powerful-Hand swing
+  `handSizeDamage × (their hand now − redraw count)` over the opponent's ACTIVE forward line
+  (+ = damage denied, − = a refill that arms them). Reports the raw physical quantity, NOT the
+  worst-case `forward_incoming_damage` delta (which masks to 0 when a hand-independent forward threat
+  dominates — that masking IS the marginal decision value, applied at promotion). Active-line-scoped:
+  a BENCHED Alakazam (which the +25 rung over-fires on) reads 0, since it can't attack next turn.
+- Surfaced on `OptionTrace.hand_size_relief` + telemetry `hs_relief`; **NEVER added to `score`**
+  (pinned inert: `score == Σ fired weights + tactical`). Pins: `test_hand_size_relief.py`
+  (+80 at hand 8, −60 at hand 1, 0 at redraw/no-attacker/self-only, inert).
+
+**Promotion gate (still evidence-gated):** flip the inert signal into `score` (marginal vs
+`active_doomed`, posture-scaled) AND retire +25/+18 — waits on a correction demonstrating the refill
+misfire or a mispriced strip. None exist today; f64, the only live exercise of the +25, is endorsed
+correctly. Until then the rungs drive and the signal only reports. **Fail direction:** their
+next-turn hand size beyond the redraw count is unknowable → the reported swing uses the deterministic
+redraw count only, never a speculative refill projection.
 
 ## Re-baseline surface (whoever builds)
 
@@ -178,7 +210,9 @@ today; f64, the only live exercise, is endorsed correctly.
   `test_deferred_disruption_cluster.py`, `test_deferred_cluster_pins.py`,
   `test_posture_cardfacts.py`, `test_posture_read.py`, `test_shuffle_refresh.py`,
   `test_energy_denial_guards.py` (the ADR-0062 currency neighbors).
-- New pin on build item 1: 86088989-29.
+- New pins: `test_grab_refresh_draw.py` (item 1, 86088989-29); `test_hand_size_relief.py` (the
+  reporting-only Design-B signal — the inertness pin `score == Σ fired + tactical` MUST survive
+  promotion's rewiring, re-pointed not deleted when the signal enters `score`).
 - Routed residuals (recorded, not disruptor work): 86091435-96 → attach doctrine (off-type attach
   nets +3 while `attach-before-hand-shuffle` counts it as a reason to hold Lillie's);
   83664991-43 → ADR-0065 SHED (held Ignition Energy + strong-hand keep-cost underpriced at +10.70);

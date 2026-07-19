@@ -36,6 +36,8 @@ def _opt_record(o) -> dict:
         rec["deferred"] = True
     if getattr(o, "attach_to_needy_line", False):
         rec["needy"] = True
+    if getattr(o, "hand_size_relief", 0.0):        # REPORTING-ONLY hand-size-attacker relief (grill
+        rec["hs_relief"] = round(o.hand_size_relief, 1)   # 2026-07-19); signed, never in `score`
     return rec
 
 
