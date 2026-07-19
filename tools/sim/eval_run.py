@@ -348,27 +348,29 @@ def _assemble(manifest: dict, opponents: dict, checkpoints: dict, *, git_rev, cr
         per_cell_n=manifest.get("per_cell", 0), status=manifest["status"], coverage=coverage)
 
 
-def _descriptor(row: dict, label: str, overlay) -> dict:
+def _descriptor(row: dict, label: str, config) -> dict:
     """The frozen C3 contestant descriptor ``{agent, label, config}`` — one shape whatever the entry
-    point, so a G2 consumer reads the same fields for a name, a build id, or an overlay spec."""
-    return {"agent": row.get("agent", label), "label": row.get("label", label),
-            "config": (str(overlay) if overlay else None)}
+    point, so a G2 consumer reads the same fields for a name, a build id, or an overlay spec.
+    ``config`` is a concise label (the overlay's basename), not a machine-specific absolute path."""
+    return {"agent": row.get("agent", label), "label": row.get("label", label), "config": config}
 
 
 def _resolve_spec(spec, rows, *, agents_root, out, into):
     """A ``battle.resolve`` contestant -> a resolved-spec dict. A name is a working-tree agent, a
     digit is a Build-Ledger zip extracted under ``into``, and a trailing ``@overlay.json`` is the
-    config under test (threaded into the AgentServer and recorded in the C3 ``config`` descriptor)."""
+    config under test (threaded into the AgentServer and recorded in the C3 ``config`` descriptor).
+    A relative overlay resolves against the CWD (like ``battle.py``), NOT the bundle dir — the
+    bundle is a name's source dir or a build's ephemeral tempdir, neither of which holds the user's
+    experiment file."""
+    from pathlib import Path
+
     from sim.battle import parse_spec, read_deck, resolve
     base, overlay = parse_spec(spec)
     row, bundle = resolve(base, rows, agents_root=agents_root, out=out, into=into)
-    overlay_path = None
-    if overlay:
-        from pathlib import Path
-        overlay_path = str((Path(bundle) / overlay).resolve() if not Path(overlay).is_absolute()
-                           else Path(overlay))
+    overlay_path = str(Path(overlay).resolve()) if overlay else None
+    config = Path(overlay).name if overlay else None
     return {"label": base, "dir": bundle, "deck": read_deck(bundle), "overlay": overlay_path,
-            "agent": row.get("agent", base), "descriptor": _descriptor(row, base, overlay_path)}
+            "agent": row.get("agent", base), "descriptor": _descriptor(row, base, config)}
 
 
 def _resolve_checkpoint(entry: dict, *, out, into):
