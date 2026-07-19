@@ -188,9 +188,11 @@ def test_the_swing_oracle_owns_the_shuffle_refresh_and_dig_owns_the_plain_draw()
     endorsement OUT of `dig-before-commit`, which is hand-size-BLIND and so endorsed Judge just as
     warmly when we held 8 cards and the opponent held 1 (ml f111, CRITICAL).
 
-    The cycling credit is preserved EXACTLY (`_REFRESH_CYCLE` = 20, the same +20 dig used to give)
-    and now arrives as a tactical term that also prices what the shuffle actually moves. A plain
-    draw card is untouched: `dig-before-commit` still owns it."""
+    The cycling credit (`_REFRESH_CYCLE` = 20, the same +20 dig used to give) arrives as a tactical
+    term that also prices what the shuffle actually moves — since ADR-0066's `draw` worth band, that
+    includes the graded shed of the OTHER held draw Supporter (20 − 8×(1−re-access) here), so the
+    swing sits strictly between 0 and the full credit. A plain draw card is untouched:
+    `dig-before-commit` still owns it."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINDRAW: CardStat(PLAINDRAW, hp=0),
                                   PLAINMON: CardStat(PLAINMON, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
@@ -202,7 +204,7 @@ def test_the_swing_oracle_owns_the_shuffle_refresh_and_dig_owns_the_plain_draw()
     refresh, plain = pilot.explain(obs).options[0], pilot.explain(obs).options[1]
 
     assert "dig-before-commit" not in _fired(refresh)   # the hand-BLIND rung no longer reaches it
-    assert refresh.tactical == 20.0                     # ... the cycling credit is preserved, exactly
+    assert 0 < refresh.tactical < 20.0                  # cycle credit minus the graded draw-band shed
     assert refresh.score > 0                            # ... so the refresh is still the strong line
 
     assert "dig-before-commit" in _fired(plain)         # a plain draw card is unaffected

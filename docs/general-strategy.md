@@ -473,19 +473,18 @@ Gap-gated — silent once an engine is online. **Source:** F12 — JustInBasil (
 the search reveals (`card_is_top_fetch_priority`, resolved cross-option in `Board.top_fetch_priority_id`).
 Weighted above the derived rungs so the deck's stated order wins. Empty list → silent. **Source:** ADR-0023.
 
-#### `prefer-good-in-discard` · weight 25 · status: testing
-> Deck-override of the discard side: a card the deck marks Role `discard_fodder` (good in the bin for a
-recursion / discard-fed deck) is the preferred pitch. Outranks `discard-the-redundant`. **Source:** ADR-0023.
-
-#### `discard-the-redundant` · weight 20 · status: testing
-> At a forced discard, shed a card whose need is met first — v1 signal: a hand copy of a Pokémon already
-in play (`card_is_redundant`). The keep-value mirror of the grab side. **Source:** ADR-0023.
-
-#### `discard-the-hand-duplicate` · weight 12 · status: assumed
-> At a forced discard, pitch a card held in **2+ copies** (fungible Basic Energy excluded) before a
-singleton — a keep-value floor: the duplicate is the cheapest thing to lose. Ranks below the redundant/
-fodder rungs and above keeping a singleton disruptor. **Reads:** `_DISCARD` + `Context.card_is_hand_duplicate`
-(`Board.hand_duplicate_ids`). **Source:** PR#9 critical batch C4 (2026-07-01).
+#### The discard side — CONVERGED onto the keep-cost oracle (ADR-0066, 2026-07-19)
+> The forced-discard pick carries **no rungs**. Every `_DISCARD` card option is priced by the ONE
+keep-cost equation — `pitch_score = −role_value × role_met_bracket` (+ the `discard_fodder` zone
+sign), computed in `FetchMixin._discard_pitch_score` and entered as a tactical term; the multi-pick
+is greedy over the SET (`_greedy_discard` — a duplicate's second copy re-prices after the first is
+committed). The retired ladder (`prefer-good-in-discard` +25, `discard-the-redundant` +20,
+`discard-the-hand-duplicate` +12, `keep-key-cards-at-discard` −30, `keep-line-base-at-discard` −15,
+`keep-basic-energy-when-starved` −12, `keep-gust-and-recovery-at-discard` −10,
+`keep-engine-supporter-at-discard` −8, `keep-the-evolution-tutor-at-discard` −6,
+`discard-the-redundant-tutor` +20, `discard-the-dead-opener` +20) lives on as worth bands
+(`card_worth.ROLE_TIER`/`TAG_TIER`), gate premises (`gate_library.role_met_bracket`: the deploy-NOW
+spike, job-done, surplus-energy, cover), and the closure re-access odds. **Source:** ADR-0066.
 
 ### Shipped earlier — partial instances of the comparator (status: testing)
 
@@ -544,11 +543,11 @@ of 3 Staryu hideable in 6 prizes → P ≈ 0.98) stays above the bar, so it is *
 second copy* (satisfy-count met). **Reads:** `Context.search_redundant_wincon`. Stays silent for a
 flexible Ultra Ball (its fetch-set isn't ⊆ the wincon). **Source:** F1 — JustInBasil (Consistency).
 
-#### `keep-key-cards-at-discard` · weight −30 · status: testing
-> At a discard select, rank engine pieces and win-conditions **last** — the keep-value floor (the
-protected set). **Reads:** `_DISCARD` select + a `discard_eot`/win-condition card. The full
-keep-value ranking and `good-in-discard` term generalise it. **Source:** F12 — JustInBasil
-(Consistency: don't pitch your engine).
+#### `keep-key-cards-at-discard` — RETIRED into the keep-cost oracle (ADR-0066, 2026-07-19)
+> The −30 keep floor is now the worth bands themselves (`win_condition` 30 / `discard_eot` 30 /
+ACE SPEC 25) × the equation's bracket — the burst's `active_fully_powered` decay is the job-done
+gate. See the converged discard-side note above. **Source:** F12 — JustInBasil, converged by
+ADR-0066.
 
 ## Shuffle-Refresh doctrine — designed (ADR-0024)
 

@@ -17,10 +17,6 @@ MEGA, STARYU, CINDERACE, SALVATORE, HILDA, LILLIES, HARLEQUIN, WALLYS, CAPE, WAT
     1031, 1030, 666, 1189, 1225, 1227, 1223, 1229, 1159, 3)
 
 
-def _fired(t):
-    return {h.id for h, _ in t.fired}
-
-
 def _setup(hand_ids):
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True),
@@ -49,24 +45,23 @@ def _setup(hand_ids):
 
 @pytest.mark.req("REQ-GEN-0023")
 def test_discards_the_redundant_tutor_and_protects_the_ace_spec_and_engine():
-    # Mega in hand -> Salvatore (rush_evolve) redundant. Keep ACE SPEC + engine Supporters;
-    # pitch Salvatore + spare Water.
+    # Mega in hand -> Salvatore's job is DONE (job-done gate, was `discard-the-redundant-tutor`);
+    # the spare Water cycles free. Keep the ACE SPEC + clutch heal + wincon (their worth floors).
     pilot, obs = _setup([MEGA, CAPE, WALLYS, WATER, SALVATORE])           # idx: 0..4
-    sel = obs["select"]
     dec = pilot.explain(obs)
-    assert "discard-the-redundant-tutor" in _fired(dec.options[4])        # Salvatore
-    assert "keep-key-cards-at-discard" in _fired(dec.options[1])          # Hero's Cape (ACE SPEC)
+    assert dec.options[4].score == 0                                      # Salvatore: job done, free
+    assert dec.options[1].score < 0                                       # Hero's Cape: ACE-SPEC floor
     assert set(pilot.decide(obs)) == {4, 3}                               # Salvatore + Water, not Cape/Wally's
 
 
 @pytest.mark.req("REQ-GEN-0023")
 def test_discards_the_dead_opener_and_the_disruption_card_over_the_engine():
-    # Post-opening: Cinderace dead in hand; Harlequin (hand_disruption) is filler. Keep Lillie's + Hilda.
+    # Post-opening: Cinderace dead in hand (job-done gate); Harlequin claims no worth (the draw band
+    # excludes hand_disruption). Keep Lillie's + Hilda (draw band / tutor floor).
     pilot, obs = _setup([LILLIES, HILDA, HARLEQUIN, CINDERACE])           # idx: 0..3
     dec = pilot.explain(obs)
-    assert "discard-the-dead-opener" in _fired(dec.options[3])            # Cinderace
-    assert "keep-engine-supporter-at-discard" in _fired(dec.options[0])   # Lillie's: kept
-    assert "keep-engine-supporter-at-discard" not in _fired(dec.options[2])  # Harlequin: disruption, fodder
+    assert dec.options[3].score == 0 and dec.options[2].score == 0        # dead opener + disruptor: free
+    assert dec.options[0].score < 0 and dec.options[1].score < 0          # the engine: floored
     assert set(pilot.decide(obs)) == {3, 2}                               # Cinderace + Harlequin
 
 
@@ -96,7 +91,7 @@ def test_burst_energy_keep_decays_once_the_active_is_fully_powered():
     outkeeps it: pitch [dead opener, Ignition], keep Lillie's."""
     pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=3)
     dec = pilot.explain(obs)
-    assert "keep-key-cards-at-discard" not in _fired(dec.options[2])      # premise void: no keep
+    assert dec.options[2].score == 0                                      # job done: the burst is free
     assert set(pilot.decide(obs)) == {0, 2}                               # pitch opener + Ignition
 
 
@@ -106,5 +101,5 @@ def test_burst_energy_stays_protected_while_the_active_still_needs_it():
     attack, so `keep-key-cards-at-discard` protects Ignition and the pitch falls elsewhere."""
     pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=1)
     dec = pilot.explain(obs)
-    assert "keep-key-cards-at-discard" in _fired(dec.options[2])          # still protected
+    assert dec.options[2].score < 0                                       # still protected (key band)
     assert IGNITION not in {[CINDERACE, LILLIES, IGNITION][i] for i in pilot.decide(obs)}

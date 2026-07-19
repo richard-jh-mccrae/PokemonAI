@@ -183,7 +183,7 @@ def test_top_threat_picks_the_energized_body_over_a_bigger_latent_line():
     assert pilot.decide(obs) == [1]                       # energized threat sniped
 
 
-# ---------------------------------------------------------------- keep-key-cards-at-discard
+# ------------------------------------------------- the burst-Energy keep floor (ADR-0066 equation)
 @pytest.mark.req("REQ-GEN-0029")
 def test_keep_key_cards_at_discard_protects_the_burst_energy():
     pilot = _pilot()
@@ -191,7 +191,7 @@ def test_keep_key_cards_at_discard_protects_the_burst_energy():
     opts = [card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)]
     obs = make_select(opts, min_count=2, max_count=2, context=DISCARD_SEL,
                       current=state(hand=[IGNITION, 1182, 1229]))
-    assert "keep-key-cards-at-discard" in _fired(pilot.explain(obs).options[0])   # Ignition guarded
+    assert pilot.explain(obs).options[0].score < 0       # Ignition floored (`discard_eot` worth band)
     assert 0 not in pilot.decide(obs)                    # Ignition NOT among the discards
 
 

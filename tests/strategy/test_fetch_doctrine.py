@@ -90,19 +90,23 @@ def test_fetch_deck_priority_grabs_the_decks_top_listed_candidate():
     assert "fetch-deck-priority" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- discard-the-redundant: at a forced discard, shed a need-already-met card (keep-value floor) --
+# --- covered-in-play (ADR-0066): a forced discard sheds a copy whose job is already carried ------
 @pytest.mark.req("REQ-GEN-0038")
 def test_discard_the_redundant_sheds_a_duplicate_already_in_play():
-    """The discard side of the comparator: among cards you must pitch, shed the one whose need is
-    already satisfied — here a duplicate of a Pokémon already in play — over one you still lack."""
+    """The equation's cover discount (was `discard-the-redundant`): among two same-worth engine
+    bodies, the copy already in play carries the job — its hand duplicate pitches FREE (bracket 0)
+    while the still-lacking one keeps its full floor (ep83686860 f18's inverse)."""
     stats = DictCardStatProvider({DUP: CardStat(DUP, hp=90), NEEDED: CardStat(NEEDED, hp=90)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # forced to discard one of {DUP, NEEDED}: DUP already benched (redundant); NEEDED not in play.
+    funcs = CardFunctions({DUP: ["draw"], NEEDED: ["draw"]})          # same worth band for both
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                  functions=funcs)
+    # forced to discard one of {DUP, NEEDED}: DUP already benched (covered); NEEDED not in play.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(bench=[poke(DUP)], hand=[DUP, NEEDED]))
-    assert pilot.decide(obs) == [0]                                   # pitch redundant duplicate
-    assert "discard-the-redundant" in _fired(pilot.explain(obs).options[0])
-    assert "discard-the-redundant" not in _fired(pilot.explain(obs).options[1])
+    dec = pilot.explain(obs)
+    assert dec.options[0].score == 0                                  # covered: pitches free
+    assert dec.options[1].score < 0                                   # uncovered: floored
+    assert pilot.decide(obs) == [0]                                   # pitch the covered duplicate
 
 
 # --- fetch the deployable base over a payoff you can't yet evolve --------------------------------
@@ -159,47 +163,53 @@ def test_fetch_base_rule_never_zeroes_the_payoff():
     assert pilot.decide(obs) == [0]                                   # still grabs payoff
 
 
-# --- discard-the-hand-duplicate: shed a hand-internal duplicate before a singleton disruptor ------
+# --- hand-duplicate cover (ADR-0066): a second held copy pitches free, the singleton is floored --
 @pytest.mark.req("REQ-GEN-0038")
 def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singleton():
-    """The hand-internal mirror of `discard-the-redundant`: among cards you must pitch, shed one you
-    hold 2+ copies of in hand (keep one) before a SINGLETON — so a lone disruptor (which the flat
-    keep-floors miss, scoring 0) is never discarded over a duplicate engine card."""
+    """The hand-internal cover (was `discard-the-hand-duplicate`, now the equation's marginal): a
+    card held in 2+ copies pitches its spare FREE (the kept copy carries the job), while the same-
+    band SINGLETON keeps its floor — so a lone engine card is never discarded over a duplicate."""
     stats = DictCardStatProvider({HANDDUP: CardStat(HANDDUP, hp=0, cardType=SUPPORTER_CT),
                                   HSINGLE: CardStat(HSINGLE, hp=0, cardType=SUPPORTER_CT)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
+    funcs = CardFunctions({HANDDUP: ["draw"], HSINGLE: ["draw"]})     # same worth band for both
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                  functions=funcs)
     # forced to discard one of {HANDDUP, HANDDUP, HSINGLE}: pitch a dup copy, keep the singleton.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)], context=DISCARD_SEL,
                       current=state(hand=[HANDDUP, HANDDUP, HSINGLE]))
+    dec = pilot.explain(obs)
+    assert dec.options[0].score == 0 and dec.options[1].score == 0    # spares: free
+    assert dec.options[2].score < 0                                   # singleton: floored
     assert pilot.decide(obs) in ([0], [1])                            # dup copy, not singleton
-    assert "discard-the-hand-duplicate" in _fired(pilot.explain(obs).options[0])
-    assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[2])
 
 
 @pytest.mark.req("REQ-GEN-0038")
 def test_discard_the_hand_duplicate_excludes_fungible_energy():
     """A spare Basic Energy is fungible — always a future attach, never a redundant pitch — so the
-    hand-duplicate floor excludes it even when several are held."""
+    cover discount never distinguishes two held copies (both price identically; on a board with no
+    starved Active they cycle free)."""
     stats = DictCardStatProvider({DUPENERGY: CardStat(DUPENERGY, hp=0, cardType=BASIC_ENERGY_CT)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(hand=[DUPENERGY, DUPENERGY]))
-    assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[0])
+    dec = pilot.explain(obs)
+    assert dec.options[0].score == dec.options[1].score               # fungible: no dup penalty
 
 
-# --- prefer-good-in-discard: a deck redirects the pitch to its discard-synergy fodder ------------
+# --- the fodder zone sign (ADR-0066): a deck redirects the pitch to its discard-synergy fodder ----
 @pytest.mark.req("REQ-GEN-0039")
 def test_prefer_good_in_discard_pitches_the_decks_fodder_card():
-    """The deck-override term: a recursion / discard-fed deck flags a card `discard_fodder` (good to
-    have in the bin); at a forced discard, prefer pitching it over a generic card."""
+    """The zone sign (was `prefer-good-in-discard`): a recursion / discard-fed deck flags a card
+    `discard_fodder` (its value is realised IN the bin); at a forced discard it scores POSITIVE —
+    pitched ahead of any merely-free card."""
     stats = DictCardStatProvider({FODDER: CardStat(FODDER, hp=90), KEEPCARD: CardStat(KEEPCARD, hp=90)})
     strat = Strategy(roles={FODDER: ["discard_fodder"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(hand=[FODDER, KEEPCARD]))
+    dec = pilot.explain(obs)
+    assert dec.options[0].score > 0                                   # the bin is an asset
     assert pilot.decide(obs) == [0]                                   # pitch deck's discard-synergy card
-    assert "prefer-good-in-discard" in _fired(pilot.explain(obs).options[0])
-    assert "prefer-good-in-discard" not in _fired(pilot.explain(obs).options[1])
 
 
 # --- multi-pick (greedy gap-update): a single max>1 grab dedups a satisfied need -----------------
@@ -470,23 +480,29 @@ def test_fetch_the_support_never_endorses_a_stranded_support():
 JUNKMON = 660           # a Basic duplicated in play AND hand -> a provably-junk shed
 
 
-def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None):
+STARYU = 1030           # WINC's base — in the decklist so the wincon is DEPLOYABLE (its keep floor
+                        # is live; without it the Stage-1 gate prices an undeployable evolution free)
+
+
+def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None, extra_roles=None):
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  STARYU: CardStat(STARYU, name="Staryu", hp=70),
                                   JUNKMON: CardStat(JUNKMON, hp=70), **(extra_stats or {})})
     fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"], **(extra_funcs or {})}
     funcs = CardFunctions(fmap)
-    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"], **(extra_roles or {})})
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
                  effects=_fetch_effects(fmap))
 
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_costly_fetch_sheds_junk_boosts_ultra_ball_to_the_free_dig_band():
-    """Two provably-junk sheds (hand copies of a benched Pokémon) + a needed grab in deck lift the
-    cost_discard fetch into the free-dig band: `costly-fetch-sheds-junk` rides on
-    `fetch-when-it-fills-a-need` and the fetch is played."""
-    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    """Two actively-wanted sheds (the deck's `discard_fodder` — the zone sign, ADR-0066) + a needed
+    grab in deck lift the cost_discard fetch into the free-dig band: `costly-fetch-sheds-junk` rides
+    on `fetch-when-it-fills-a-need` and the fetch is played. (Merely-FREE sheds — covered duplicates
+    — are neutral, not junk: the pessimism-baseline test below.)"""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON], extra_roles={JUNKMON: ["discard_fodder"]})
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),
                                     bench=[poke(JUNKMON), poke(702)],
@@ -522,11 +538,12 @@ def test_dont_shed_a_live_card_suppresses_the_fetch_below_end():
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_dont_shed_a_key_card_stacks_the_fetch_unliftably_negative():
-    """A KEY card (the win-condition) forced into the predicted sheds fires `dont-shed-a-key-card`
-    ON TOP of the live suppressor (−45 total): never pitch the wincon to dig — no normal-band
-    endorsement stack can lift it back."""
-    pilot = _netting_pilot(deck=[WINC, JUNKMON])
-    # only two shed candidates: one junk, one the WIN-CONDITION (keep-key floor fires on it).
+    """A KEY card (the win-condition, worth ≥ the key band and floored) forced into the predicted
+    sheds fires `dont-shed-a-key-card` ON TOP of the live suppressor (−45 total): never pitch the
+    wincon to dig — no normal-band endorsement stack can lift it back. Staryu rides in the decklist
+    so the wincon is DEPLOYABLE — an undeployable one pitches free by design (the Stage-1 gate)."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON, STARYU])
+    # only two shed candidates: one covered/free, one the WIN-CONDITION (the key floor).
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),
                                     bench=[poke(JUNKMON), poke(702)],

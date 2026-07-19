@@ -28,9 +28,15 @@ ROLE_TIER: dict[str, float] = {
                                   # multi-KO turns AND heals the lock body) — the engine band: a plan
                                   # piece, not pitchable junk, below every attacker tier
     "tutor": 10.0,                # a wincon tutor (deck-relative — the closure discounts it)
+    "infrastructure": 8.0,        # a deck-declared engine fixture (Risky Ruins — the Stadium the deck
+                                  # keeps a re-placement copy of); kept over a claim-less coin-flip
+                                  # item at a forced pitch (ADR-0066, arbitrated by ep86091435 f68)
 }
 ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the old flat-shed anchor
 ACE_SPEC_TIER = 25.0              # a one-per-deck, unrecoverable ACE SPEC — high floor, closure-discounted
+DISCARD_FODDER_PITCH = 10.0       # the zone SIGN (ADR-0066): a `discard_fodder`-Roled card's value is
+                                  # realised IN the bin, so a forced pitch scores it positive — ranked
+                                  # above every free (0) pitch, competing only with other fodder
 
 # behavioural tag → worth points (combat-tempo findings §B): situational Trainers / special Energy
 # whose keep-value the DISCARD ladder already prices (`keep-key-cards-at-discard` −30 covers
@@ -42,6 +48,12 @@ TAG_TIER: dict[str, float] = {
     "clutch_heal": 20.0,          # the emergency heal (Wally's) — answers a specific incoming KO
     "gust": 10.0,                 # reach (Boss's Orders) — the ladder's −10 keep floor
     "recycle": 10.0,              # recovery (Night Stretcher / Super Rod) — same band
+    "energy_accel": 10.0,         # an accel Trainer (Rosa's Encouragement) — the tempo the deck can't
+                                  # replay; ADR-0066 (the accel_source ROLE band, Trainer form)
+    "draw": 8.0,                  # engine fuel (Lillie's; a Recon-Directive Drakloak) — the retired
+                                  # `keep-engine-supporter-at-discard` −8 band written into the one
+                                  # currency (ADR-0066). Suppressed for a `hand_disruption` carrier —
+                                  # see `role_value`: Judge/Harlequin are symmetric disruption, not fuel.
 }
 
 
@@ -53,10 +65,15 @@ def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = F
     higher tag/fallback claim (a declared-engine ACE SPEC is still one-per-deck irreplaceable). The
     ONE currency zone; deck-genie never invents numbers, the closure supplies the redundancy discount
     (`keep_cost`). 0 for a card with no claim (priced by tag/CardStat rules, not the worth oracle).
+    The `draw` tag claims nothing on a `hand_disruption` carrier (Judge / Harlequin): a symmetric
+    shuffle-disruptor is situational reach, not engine fuel — the retired keep-engine rung's own
+    exclusion, preserved in the currency (ADR-0066).
     Pure over card FACTS — the Pilot supplies ``roles`` / ``tags`` / the two flags."""
+    tags = tuple(tags)
     return max(
         max((ROLE_TIER.get(r, 0.0) for r in roles), default=0.0),
-        max((TAG_TIER.get(t, 0.0) for t in tags), default=0.0),
+        max((TAG_TIER.get(t, 0.0) for t in tags
+             if not (t == "draw" and "hand_disruption" in tags)), default=0.0),
         ACE_SPEC_TIER if is_ace_spec else 0.0,
         ENERGY_TIER if is_typed_basic_energy else 0.0,
     )

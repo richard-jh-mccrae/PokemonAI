@@ -4,7 +4,10 @@
 + the `deploy_odds` factor in `card_worth.keep_cost`, wired on the gamble keep-floor and refresh SHED
 (`planner._deploy_odds`). A PARAMETER of the one keep-value equation, not a new rung; latent on the
 current pins (bites only a genuinely dead evolution), unit + synthetic-integration tested, zero
-regressions. Stages 2–4 below remain. Under ADR-0065.
+regressions. **The discard-side spike + floor BUILT 2026-07-19 (ADR-0066):** `role_met_bracket`
+carries the deploy-NOW spike, the job-done gates, the surplus-energy gate and the cover discounts;
+the `_DISCARD` ladder is fully converged onto the oracle (`_discard_pitch_score`, greedy set pick)
+— `86091435-68` flipped and promoted, `83686860-18` held. Stages 2–4 below remain. Under ADR-0065.
 
 ## The one-line problem
 

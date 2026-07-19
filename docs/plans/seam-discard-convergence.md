@@ -1,5 +1,13 @@
 # Seam handoff: the discard convergence + the deploy-now spike (run SOLO, last)
 
+**Status: BUILT 2026-07-19.** The migration grill ran with the user; the ruling — **full
+replacement** (all 11 discard rungs retired into the computed keep-cost term, gates as
+`gate_library.role_met_bracket` parameters, greedy SET pick) — is recorded with the replay-arithmetic
+refutation of the other paths in
+[ADR-0066](../adr/0066-the-discard-pick-consumes-the-oracle-premises-live-in-the-gate-library.md).
+`86091435-68` flipped and promoted; `83686860-18` held; the whole discard surface re-authored to
+behaviour. The doc below stands as the original handoff brief.
+
 **Parallel-session slot D — do NOT run concurrently with seams B/C** (it re-baselines
 `doctrine_fetch.py`'s `_DISCARD` ladder and its whole test surface). Start it only after the other
 seams merge, rebased on everything.

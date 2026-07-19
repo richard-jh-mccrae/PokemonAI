@@ -50,6 +50,11 @@ PINS = {
                    "discounted closure it reaches) out-ranks the flat draw band (promoted from a "
                    "TARGET by the tutor-chain grab-value build)",
     "83686860-33": "ft: fetch Munkidori over a redundant Drakloak",
+    "86091435-68": "dp: don't pitch a Drakloak that can EVOLVE the active Dreepy THIS turn — the "
+                   "deploy-now spike (`gate_library.role_met_bracket`: evolvable-now + sole cover → "
+                   "full worth) floors it while the duplicate Lillie's pitches free and the "
+                   "claim-less Crushing Hammer fills the pair (promoted from a TARGET by the "
+                   "ADR-0066 discard convergence; the ep83686860-f18 covered board still pitches).",
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
     "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
     # whether-to-play / hold the fetch (deadline + whiff)
@@ -90,14 +95,8 @@ PINS = {
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
 }
 TARGETS = {
-    # discard-pair valuation
-    # The two grab/pitch targets that survive as GENUINE gaps (the other five discard-pair records
-    # were malformed single-index fixtures now pinned above). Both need the DEADLINE/gate library, NOT
-    # the keep_cost oracle — the shipped ladder already prices roles + redundancy (ADR-0065 §grab/pitch):
-    "86091435-68": "dp: don't pitch a Drakloak that can EVOLVE the active Dreepy this turn — a "
-                   "deployability deadline (a benched-Drakloak board pitches it correctly, ep83686860 "
-                   "f18), which a flat keep_cost floor can't tell apart. Gate library, not keep_cost.",
-    # (the whether-to-play / hold-the-fetch family is fully pinned: 86091728-19 by the
+    # (empty — the grab/pitch family is fully pinned: 86091435-68 by the ADR-0066 discard
+    #  convergence, 85059103-9 by the tutor-chain grab-value build, 86091728-19 by the
     #  attach-target-priority seam, 85163634-17 by the held-card-risk build)
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —

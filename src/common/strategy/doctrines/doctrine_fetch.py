@@ -13,20 +13,26 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
+from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _CARD, _ENGINE_TAGS, _OPENER_TAG,
                                       _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
                                       _TO_HAND, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis
-
-# Reliable-engine Supporter (draw/search/heal) = fuel, keep it at a forced discard, unlike a
-# situational `hand_disruption` one (Harlequin: symmetric shuffle refills opponent too).
-_KEEP_ENGINE_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 
 # Win-condition LINE bases (a deck's Line pre-evolutions: Riolu, Dreepy, Makuhita) — the pieces an
 # evolution deck must keep to field its attackers. Deck-declared Roles, so the discard side can floor
 # them above a spent draw Supporter and exempt them from the redundant/duplicate pitch endorsement (a
 # 2nd Dreepy is a 2nd LINE, not junk). ep83661652 f30 / ep83686860 f18.
 _BASE_ROLES = frozenset({"win_condition_base", "evolution_base"})
+
+# The pitch-side re-access window (ADR-0066): how many cards I expect to see while a pitched card's
+# role could still be re-met — about one engine turn of draw+dig. A fixed constant of the one
+# equation (proximity is the deadline PARAMETER, never a multiplier — ADR-0065 Round 8); corrections
+# arbitrate it like any band.
+_REACCESS_DRAWS = 4
+
+# A predicted shed whose keep-cost reaches this band is a KEY shed (wincon 30 / ACE SPEC 25 /
+# burst 30 class — `card_worth`): the `fetch_sheds_key` signal, band-tested instead of rung-probed.
+_KEY_SHED_COST = 25.0
 
 # The Pokémon target classes a `_search_deck_set` whiff/redundancy question ranges over — the scope
 # the retired `_FETCH_FILTERS` covered (bench_fill / tutor_mega / tutor_pokemon / rush_evolve). Energy
@@ -415,32 +421,107 @@ class FetchMixin:
         return any(self._fetch_target_deferred(obs, hid, board, plan)
                    for hid in board.hand_ids if hid != refresh_cid)
 
-    def _pitch_value_of(self, board, cid: int, plan) -> tuple[float, bool]:
-        """(pitch score, keep-key fired) of hand card `cid` at a virtual `_DISCARD` Context — the
-        discard side's FULL signed sum (unlike `_grab_value_of`, negatives count: a keep-floor makes a
-        card expensive to shed). The shed predictor behind cost-netting (ADR-0023 amendment): scoring
-        with the SAME rungs the real discard select uses keeps prediction and pick agreeing."""
-        from common.pilot import Context, _fires   # lazy: Context/Board live in pilot (cycle-free import)
-        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
-        ctx = Context(
-            plan=plan, select_context=_DISCARD, option_type=_CARD, card_id=cid,
-            card_is_wincon=cid in self._wincon_set(),
-            card_is_redundant=cid is not None and cid in board.in_play_ids,
-            card_is_hand_duplicate=cid is not None and cid in board.hand_duplicate_ids,
-            roles=self.strategy.roles.get(cid, []), tags=tags, stat=stat, board=board)
-        score, key = 0.0, False
-        for h in (*self.general.hypotheses, *self.strategy.hypotheses):
-            if _fires(h, ctx):
-                score += self._weight(h)
-                key = key or h.id == "keep-key-cards-at-discard"
-        return score, key
+    def _deck_reaccess_facts(self, obs: dict, board) -> tuple[dict, int]:
+        """(deck counts, deck size) for the pitch-side re-access odds: the tracker's anchored counts
+        when it has them, else the pre-anchor unseen composition (decklist − visible − hidden prizes)
+        — the same resolution `_refresh_shed_keepcost` uses. ({}, 0) when unresolved: re-access reads
+        0 (fully irreplaceable), the conservative keep."""
+        counts = board.deck_known_counts
+        if counts:
+            return counts, sum(counts.values())
+        from collections import Counter
+        me = self._my_player(obs)
+        unseen = Counter(self.deck)
+        unseen.subtract(self._visible_card_counts(me))
+        counts = {cid: n for cid, n in unseen.items() if n > 0}
+        prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                            if not (isinstance(p, dict) and p.get("id") is not None))
+        deck_count = sum(counts.values()) - prizes_hidden
+        if deck_count <= 0 or not counts:
+            return {}, 0
+        return counts, deck_count
+
+    def _discard_pitch_score(self, obs: dict, board, cid, committed=()) -> float:
+        """The forced-discard pitch value of hand card ``cid`` under the ONE keep-cost equation
+        (ADR-0066): POSITIVE = good to pitch, NEGATIVE = a keep.
+
+            score = −role_value × role_met_bracket        (a `discard_fodder` Role instead scores
+                                                           +DISCARD_FODDER_PITCH — the zone sign:
+                                                           the bin is where its value is realised)
+
+        `card_worth` supplies the worth; `gate_library.role_met_bracket` supplies the premise gates
+        (deploy-NOW spike / job-done / surplus-energy / cover residue / Stage-1 deployability) from
+        facts resolved here; the closure supplies the re-access odds over `_REACCESS_DRAWS`.
+        ``committed`` = card ids already pitched this select (sets not sums — a duplicate's second
+        copy re-prices once the first is committed, and the spike's sole-cover flips)."""
+        from common import gate_library
+        from common.card_worth import DISCARD_FODDER_PITCH
+        from common.deck_odds import draw_hit_probability
+        if cid is None:
+            return 0.0
+        roles = self._roles_of(cid)
+        if "discard_fodder" in roles:
+            return DISCARD_FODDER_PITCH
+        worth = self._role_value(cid)
+        if worth <= 0:
+            return 0.0
+        st = self.stats.get(cid) if self.stats else None
+        tags = self.functions.tags(cid) if self.functions else []
+        counts, deck_count = self._deck_reaccess_facts(obs, board)
+        # remaining hand copies of `cid` besides the one being priced, after prior commitments
+        me = self._my_player(obs)
+        in_hand = sum(1 for c in (me.get("hand") or []) if c and c.get("id") == cid)
+        others = in_hand - 1 - sum(1 for k in committed if k == cid)
+        line_base = bool(_BASE_ROLES & set(roles))
+        is_energy = bool(st is not None and getattr(st, "is_typed_basic_energy", False))
+        is_evo = gate_library.is_evolution(st)
+        job_done = ((("rush_evolve" in tags or "tutor_mega" in tags) and board.wincon_in_hand)
+                    or _OPENER_TAG in tags                       # setup-only: dead once under way
+                    or ("discard_eot" in tags and board.active_fully_powered))
+        starved = board.my_active_id is not None and board.my_active_energy == 0
+        reaccess = (draw_hit_probability(self._card_reaccess_outs(cid, counts), deck_count,
+                                         _REACCESS_DRAWS) if deck_count > 0 else 0.0)
+        bracket = gate_library.role_met_bracket(
+            job_done=job_done,
+            deployable=self._deploy_odds(cid, board, counts) > 0.0,
+            evolvable_now=is_evo and self._fetched_playable_this_turn(obs, cid, board),
+            sole_cover=others <= 0,
+            energy_surplus=is_energy and "discard_eot" not in tags and not starved,
+            covered=(not line_base and not is_energy
+                     and (cid in board.in_play_ids or others > 0)),
+            reaccess_odds=reaccess)
+        return -(worth * bracket)
+
+    def _greedy_discard(self, obs: dict, board, traces, min_count: int, max_count: int) -> list[int]:
+        """The multi-discard pick as a SET (ADR-0066, the `_greedy_grab` virtual-commitment pattern):
+        commit the best pitch, re-score the remainder with the committed copy gone — a duplicate's
+        second copy re-prices as the sole survivor, and a sole-cover spike can arm mid-pick. Ties
+        break toward the lower option index (the ascending scan). Above ``min_count`` the pick stops
+        rather than shed a card the equation floors (score < 0) — the take-fewer analog."""
+        committed, chosen = [], []
+        remaining = list(range(len(traces)))
+        while remaining and len(chosen) < max_count:
+            best, best_score = None, None
+            for i in remaining:
+                s = self._discard_pitch_score(obs, board, traces[i].card_id, committed)
+                if best_score is None or s > best_score:
+                    best, best_score = i, s
+            if len(chosen) >= min_count and best_score < 0:
+                break
+            chosen.append(best)
+            remaining.remove(best)
+            committed.append(traces[best].card_id)
+        return chosen
 
     def _shed_signals(self, obs: dict, option: dict, tags: list, board, plan) -> tuple[bool, bool, bool]:
         """(sheds_junk, sheds_live, sheds_key) for a `cost_discard` fetch PLAY: pitch-score the hand
-        minus the fetch card, take the top-2 (what the later `_DISCARD` select will shed — same rungs,
-        argmax alignment). junk = both > 0; live = any < 0; key = `keep-key-cards-at-discard` fires on
-        a forced shed. All False off a PLAY / a free fetch / with < 2 other cards (engine legality)."""
+        minus the fetch card and take the greedy top-2 — the SAME equation + set semantics the real
+        `_DISCARD` select uses (`_discard_pitch_score`, ADR-0066), so prediction and pick agree.
+        junk = both predicted sheds score STRICTLY positive (actively wanted gone — the fodder zone
+        sign; a free 0-shed is neutral, not junk); live = a shed is floored (score < 0); key = a
+        FLOORED shed's worth reaches the key band (`_KEY_SHED_COST` — wincon / ACE SPEC / burst
+        class; a covered/job-done copy of one pitches free and does not flag). All False off a
+        PLAY / a free fetch / with < 2 other cards (engine legality)."""
         if option.get("type") != _PLAY or "cost_discard" not in tags:
             return False, False, False
         state = obs.get("current") or {}
@@ -459,11 +540,20 @@ class FetchMixin:
             cands.append(cid)
         if len(cands) < 2:
             return False, False, False
-        top2 = sorted((self._pitch_value_of(board, cid, plan) for cid in cands),
-                      key=lambda t: t[0], reverse=True)[:2]
-        return (all(s > 0 for s, _ in top2),
-                any(s < 0 for s, _ in top2),
-                any(k for _, k in top2))
+        committed, sheds = [], []
+        for _ in range(2):
+            best_pos, best_score = None, None
+            for pos, cid in enumerate(cands):
+                if pos in (p for p, _ in sheds):
+                    continue
+                s = self._discard_pitch_score(obs, board, cid, committed)
+                if best_score is None or s > best_score:
+                    best_pos, best_score = pos, s
+            sheds.append((best_pos, best_score))
+            committed.append(cands[best_pos])
+        return (all(s > 0 for _, s in sheds),
+                any(s < 0 for _, s in sheds),
+                any(s < 0 and self._role_value(cands[p]) >= _KEY_SHED_COST for p, s in sheds))
 
     def _top_fetch_priority_id(self, select: dict | None, exclude: frozenset = frozenset()) -> int | None:
         """The highest-priority card id the deck WANTS most among a search's revealed candidates — the
@@ -1187,138 +1277,10 @@ HYPOTHESES = [
                   "list (most decks).",
         when=lambda c: c.select_context == _TO_HAND and c.card_is_top_fetch_priority,
         weight=40, status="testing"),
-    # ── discard side (decision C): keep-value = `fetch_value` inverted, so you never pitch a card
-    #    you'd immediately fetch back. Pitch the redundant / deck-wanted; floor the key cards. ──
-    Hypothesis(
-        id="prefer-good-in-discard",
-        rationale="Deck-override of the discard side (ADR-0023): a recursion/discard-fed deck marks cards it "
-                  "WANTS in the bin via Role `discard_fodder` — prefer pitching those (bin is an asset, keep-value "
-                  "low). Reads the Role directly, silent with no `discard_fodder`; outranks the generic "
-                  "`discard-the-redundant`.",
-        when=lambda c: c.select_context == _DISCARD and "discard_fodder" in c.roles,
-        weight=25, status="testing"),
-    Hypothesis(
-        id="discard-the-redundant",
-        rationale="At a forced discard, shed the lowest keep-value card first — v1's redundancy signal is a "
-                  "hand copy of a Pokémon already in play (`Context.card_is_redundant`). Positive weight ranks "
-                  "it above a still-needed card (mirrors the grab comparator: shed what you'd not fetch back); "
-                  "pairs with `keep-key-cards-at-discard` to protect the key while pitching the redundant. "
-                  "Exempts a win-condition LINE base (`_BASE_ROLES`): a 2nd Dreepy in play is a 2nd LINE to "
-                  "field, not junk — pitching it drops you below your line count (ep83686860 f18).",
-        when=lambda c: c.select_context == _DISCARD and c.card_is_redundant
-        and not (_BASE_ROLES & set(c.roles)),
-        weight=20, status="testing"),
-    Hypothesis(
-        id="discard-the-hand-duplicate",
-        rationale="At a forced discard, shed a card held in MULTIPLE hand copies before a singleton — the "
-                  "extra is redundant this turn (`Context.card_is_hand_duplicate`, 2+ in hand, fungible Energy "
-                  "excluded). Hand-internal mirror of `discard-the-redundant`; protects lone disruptors (a "
-                  "single Boss's Orders scoring 0 would otherwise lose the index tie-break) over a duplicate "
-                  "engine Supporter, and pairs with `keep-key-cards-at-discard` so a 3rd wincon still nets negative. "
-                  "Exempts a win-condition LINE base (`_BASE_ROLES`): two Dreepy in hand are two LINES you want, "
-                  "not a redundant duplicate — `keep-line-base-at-discard` floors them instead (ep83686860 f18).",
-        when=lambda c: c.select_context == _DISCARD and c.card_is_hand_duplicate
-        and not (_BASE_ROLES & set(c.roles)),
-        weight=12, status="testing"),
-    Hypothesis(
-        id="keep-key-cards-at-discard",
-        rationale="At a cost-discard, don't throw away irreplaceable pieces — a `discard_eot` burst Energy "
-                  "(Ignition), the win-condition, or an ACE SPEC (`CardStat.aceSpec`, never recoverable). "
-                  "Negative weight ranks those last, so the agent sheds a redundant Supporter instead (this "
-                  "guards what a cost DISCARDS; `fetch-the-wincon` handles what a search FETCHES). The "
-                  "burst-Energy keep is PREMISE-GATED: once my Active already carries its biggest attack's "
-                  "cost (`active_fully_powered`) the burst has no urgent job, and a hand-refresh engine "
-                  "Supporter outkeeps it (ep83454549 f36: pitch Ignition, keep Lillie's Determination).",
-        when=lambda c: c.select_context == _DISCARD
-        and (("discard_eot" in c.tags and not c.board.active_fully_powered) or c.card_is_wincon
-             or bool(c.stat and getattr(c.stat, "aceSpec", False))),
-        weight=-30, status="testing"),
-    Hypothesis(
-        id="keep-line-base-at-discard",
-        rationale="At a forced discard, keep a win-condition LINE base (`_BASE_ROLES`: Riolu / Dreepy / "
-                  "Makuhita — a Line pre-evolution you must field to attack) over a spent draw Supporter. "
-                  "`keep-key-cards-at-discard` (−30) protects only the PAYOFF / burst / ACE SPEC, so the "
-                  "deep-evolution decks pitched their own bases (ep83661652 f30: discarded Riolu+Makuhita "
-                  "over Lillie's; ep83686860 f18: discarded both Dreepy over Judge). −15 nets a base below "
-                  "a `keep-engine-supporter-at-discard` Supporter (−8) so the Supporter is shed first; "
-                  "combined with the `_BASE_ROLES` exemption on `discard-the-redundant`/`-hand-duplicate` "
-                  "(else a 2nd line body scores +32 junk), it keeps the lines. Milder than the key floor: "
-                  "a base is recoverable in principle, so a forced 2nd shed can still take one.",
-        when=lambda c: c.select_context == _DISCARD and bool(_BASE_ROLES & set(c.roles)),
-        weight=-15, status="assumed"),
-    Hypothesis(
-        id="keep-basic-energy-when-starved",
-        rationale="At a forced discard, keep a reusable Basic Energy when the board is energy-STARVED "
-                  "(my Active carries none) over a spent draw Supporter — with no Energy in play the "
-                  "next attach is the whole turn's tempo, so shedding Energy 'when we otherwise have no "
-                  "energy is a bad trade' (ep83686860 f11: discarded the Fire Energy the wincon needs). "
-                  "−12 nets it below a `keep-engine-supporter-at-discard` Supporter (−8); gated on a "
-                  "real Active carrying zero Energy (`my_active_id` set, `my_active_energy == 0`) so a "
-                  "powered board — or an empty-Active setup state — still cycles a surplus Energy freely. "
-                  "Basic Energy only (typed, non-`discard_eot`) — a burst is `keep-key-cards`' job.",
-        when=lambda c: c.select_context == _DISCARD and c.board.my_active_id is not None
-        and c.board.my_active_energy == 0
-        and bool(c.stat and getattr(c.stat, "hp", 0) == 0
-                 and getattr(c.stat, "energyType", None) not in (None, 0))
-        and "discard_eot" not in c.tags,
-        weight=-12, status="assumed"),
-    Hypothesis(
-        id="keep-the-evolution-tutor-at-discard",
-        rationale="At a forced discard BEFORE the win-condition line is assembled (`not wincon_in_hand`), "
-                  "floor a scarce evolution tutor (`rush_evolve`/`tutor_mega` — Salvatore, the deck's "
-                  "only way to field a 2nd Mega Starmie) below a redundant DRAW duplicate: a held-in-2 "
-                  "Salvatore and a held-in-2 Lillie's Determination both tie at `discard-the-hand-"
-                  "duplicate` (+12) + `keep-engine-supporter-at-discard` (−8) = +4, so the index tie-"
-                  "break shed the line-enabling tutor first (ep83967840 f54: kept both Salvatore, the "
-                  "human wanted a plentiful Lillie's pitched instead). −6 nets the tutor below the tied "
-                  "draw duplicate so the redundant draw Supporter is shed. Gated to `not wincon_in_hand` "
-                  "so it never fights `discard-the-redundant-tutor` (+20), which correctly sheds a tutor "
-                  "whose job is DONE once the wincon is already in hand.",
-        when=lambda c: c.select_context == _DISCARD
-        and ("rush_evolve" in c.tags or "tutor_mega" in c.tags)
-        and not c.board.wincon_in_hand,
-        weight=-6, status="assumed"),
-    Hypothesis(
-        id="discard-the-redundant-tutor",
-        rationale="At a forced discard, shed a `rush_evolve`/`tutor_mega` search whose job is done once the "
-                  "win-condition is already in hand (`board.wincon_in_hand`) — a second dig for it is dead "
-                  "weight. Positive weight ranks it among the discards; silent for a flexible Supporter "
-                  "(e.g. Hilda, plain `search`, also finds Energy).",
-        when=lambda c: c.select_context == _DISCARD and c.board.wincon_in_hand
-        and ("rush_evolve" in c.tags or "tutor_mega" in c.tags),
-        weight=20, status="testing"),
-    Hypothesis(
-        id="discard-the-dead-opener",
-        rationale="At a forced discard, shed a setup-only `opener`-tagged card you can no longer play (once "
-                  "the game is under way a held copy is dead) — mirrors `dont-fetch-the-setup-only-opener`, "
-                  "which never takes one. Positive weight ranks it among the discards.",
-        when=lambda c: c.select_context == _DISCARD and "opener" in c.tags,
-        weight=20, status="testing"),
-    Hypothesis(
-        id="keep-gust-and-recovery-at-discard",
-        rationale="At a forced discard, floor a `gust` (Boss's Orders / Counter Catcher — the deck's "
-                  "reach to close a KO or gust around a wall) or `recycle` (Super Rod / Night Stretcher — "
-                  "the deck's recovery) card below neutral filler: the existing keep-floors "
-                  "(`keep-key-cards-at-discard` −30, `keep-engine-supporter-at-discard` −8) protect the "
-                  "wincon / burst / ACE SPEC / draw-search-heal Supporters but NOT the Item-form gust and "
-                  "recovery cards (`_KEEP_ENGINE_TAGS` omits `gust`/`recycle` and the −8 rung gates on "
-                  "`cardType == SUPPORTER`), so a lone Boss's / Counter Catcher / Super Rod / Night "
-                  "Stretcher scored 0 and could fall to the option-index tie-break — pitched over filler. "
-                  "These are irreplaceable reach/recovery: the digest's 'Never-discard' bucket. −10 (just "
-                  "under the −8 engine floor: a gust/recovery is at least as irreplaceable as a draw "
-                  "Supporter) so filler is shed first; still below the −30 key floor and −15 line-base so "
-                  "a genuinely forced multi-shed can still take one. seed-ladder (ADR-0018).",
-        when=lambda c: c.select_context == _DISCARD
-        and bool({"gust", "recycle"} & set(c.tags)),
-        weight=-10, status="assumed"),
-    Hypothesis(
-        id="keep-engine-supporter-at-discard",
-        rationale="At a forced discard, keep reliable engine Supporters (draw/search/heal) below a neutral "
-                  "card or a situational `hand_disruption` Supporter (Harlequin) as the pitch — they're the fuel "
-                  "that keeps the deck running. Small negative, so junk rules (dead opener/redundant tutor) still "
-                  "out-pitch it; only protects the engine over filler.",
-        when=lambda c: c.select_context == _DISCARD and c.stat is not None
-        and getattr(c.stat, "is_supporter", False)
-        and bool(_KEEP_ENGINE_TAGS & set(c.tags)) and "hand_disruption" not in c.tags,
-        weight=-8, status="testing"),
+    # ── discard side (decision C): NO rungs. The forced-discard pitch is priced by the ONE keep-cost
+    #    equation (ADR-0066) — `FetchMixin._discard_pitch_score`, entering every option's score as a
+    #    computed term (`Pilot._discard_keepcost_tactical`) and picked greedily as a SET
+    #    (`_greedy_discard`). The 11 retired rungs' knowledge lives on as worth bands
+    #    (`card_worth.ROLE_TIER`/`TAG_TIER`), gate premises (`gate_library.role_met_bracket`), the
+    #    closure re-access odds, and the fodder zone sign — never a flat weight. ──
 ]

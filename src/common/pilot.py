@@ -1143,10 +1143,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # trace reader doesn't misread "top-score not chosen" as a scoring bug. `reordered` = attack-last
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
         reordered = order != by_score
-        grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
-        if grabbed:                                     # greedy gap-update + take-fewer
-            chosen = self._greedy_grab(obs, select, board, traces, options,
-                                       select.get("minCount", 0), max_count)
+        grabbed = max_count > 1 and (select.get("context") in _GRAB_CONTEXTS
+                                     or select.get("context") == _DISCARD)
+        if grabbed:                                     # greedy gap-update / set-priced pitch + take-fewer
+            if select.get("context") == _DISCARD:       # ADR-0066: the discard pair is priced as a SET
+                chosen = self._greedy_discard(obs, board, traces,
+                                              select.get("minCount", 0), max_count)
+            else:
+                chosen = self._greedy_grab(obs, select, board, traces, options,
+                                           select.get("minCount", 0), max_count)
         else:
             chosen = order[:max_count]
             # take-fewer at an OPTIONAL select (minCount 0): DECLINE a pick a Hypothesis actively
@@ -1337,6 +1342,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # respects its ADR-0044 redundancy flags
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
+                    + self._discard_keepcost_tactical(obs, board, ctx)
                     + self._refresh_swing_tactical(obs, board, ctx)
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
@@ -2057,6 +2063,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 + _REFRESH_STRIP * stripped
                 + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
                 - _REFRESH_GIFT * max(opp_net, 0.0))
+
+    def _discard_keepcost_tactical(self, obs: dict, board: Board, ctx) -> float:
+        """The forced-discard pitch value as a COMPUTED term of the one keep-cost equation
+        (ADR-0066): `FetchMixin._discard_pitch_score` — worth × gate bracket × closure, zone-signed.
+        The whole `_DISCARD` valuation lives here (the 11-rung ladder is retired); the multi-pick
+        set semantics live in `_greedy_discard`, which re-runs the same scorer per commitment.
+        Silent (0) off a `_DISCARD` card option."""
+        if ctx.select_context != _DISCARD or ctx.option_type != _CARD or ctx.card_id is None:
+            return 0.0
+        return self._discard_pitch_score(obs, board, ctx.card_id)
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
         """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``

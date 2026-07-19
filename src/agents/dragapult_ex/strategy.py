@@ -59,6 +59,11 @@ ROLES = {
     #   spend it — soak a hit for one prize (`interpose`/`promote-the-staller`), never fund it (free
     #   attack → `attach_target_needs` False). The Role is behavioural (worth 0 — sacrificial, pinned)
     #   and feeds `_hand_startable`; declared in STRATEGY.md §7 since 2026-07-09, wired 2026-07-19.
+    RISKY_RUINS:  ["infrastructure"],              # the deck's engine Stadium: worth the ADR-0066 infra
+    #   band so a forced pitch sheds a claim-less coin-flip item (Crushing Hammer) before the
+    #   re-placement Stadium copy (ep86091435 f68 — the human kept Ruins with one already down; the
+    #   opponent can bump it). Amends the earlier "not a Role" stance below for Ruins ONLY — the
+    #   play-timing doctrine still rides the deck Hypothesis, the Role prices its keep-value.
     MUNKIDORI:    ["counter_mover"],               # Adrena-Brain: relay ≤3 counters ours→theirs each turn —
     #   spreads extra damage to assemble multi-KO Phantom Dive turns AND heals our own (peel counters
     #   off an Active Budew to keep the lock alive). A declared plan piece (user doctrine 2026-07-19):
@@ -69,8 +74,9 @@ ROLES = {
     # Budew (235): opts into the pending general `open-the-item-lock-starter` via an `item_lock` TAG,
     #   not a Role (proposal deck-genie-20260709). Rosa's (1240): `energy_accel` TAG -> `use-acceleration`
     #   (NOT the `accel_source` Role — it would mis-boost the comeback accel at setup). Both pending.
-    # Fezandipiti / Risky Ruins / Crushing Hammer: driven by deck Hypotheses / infra / tags
-    #   (Crushing Hammer -> general `play-energy-denial`), keyed on card_id / function tag — not a Role.
+    # Fezandipiti / Crushing Hammer: driven by deck Hypotheses / tags (Crushing Hammer -> general
+    #   `play-energy-denial`), keyed on card_id / function tag — not a Role (energy_denial deliberately
+    #   carries NO worth band: the coin-flip item is the cheapest forced pitch, ADR-0066).
     # Dunsparce/Dudunsparce draw engine + tutors (Ultra Ball / Poké Pad / Poffin) + Lillie's: the Fetch /
     #   Shuffle-Refresh doctrines key on their function tags — no Role needed.
 }

@@ -50,7 +50,12 @@ comparator) and ADR-0032 (Effect-Clause tier).
   targets flipped and promoted (`82749168-65`, `83969481-55`); ADR-0060's parked "hand QUALITY"
   seam, now concretely covered for the tagged classes.
 
-**Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
+**Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18). ⚠ AMENDED by
+ADR-0066 (2026-07-19): the ladder is now fully CONVERGED onto the oracle — the 11 discard rungs are
+retired into the computed `keep_cost` term (`_discard_pitch_score` + `gate_library.role_met_bracket`
++ the greedy set pick), `86091435-68` flipped and promoted, `83686860-18` held. The paragraph below
+stands as the historical finding that correctly deferred the flip to a principled convergence.**
+Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles
 (`keep-key −30` wincon/ACE-SPEC/burst, `keep-line-base −15`, `keep-engine −8`, …) AND redundancy
@@ -81,9 +86,10 @@ already converged; its residue rides with the gate library.
   unseen deck, so nothing is discounted — it bites only a genuinely dead card), unit- and
   synthetic-integration-tested (`test_gate_library.py`, `test_undeployable_wincon_is_cheap_to_shuffle_
   but_a_deployable_one_is_not`), zero regressions.
-  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). Later stages
-  (quota / recycler / pressure gates; the discard-side `86091435-68` which needs a principled discard
-  convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
+  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). The discard-side
+  `86091435-68` landed 2026-07-19 as ADR-0066's `role_met_bracket` (the deploy-now spike + job-done
+  + surplus-energy + cover gates — parameters of the one equation, the discard ladder fully
+  converged). Later stages (quota / recycler / pressure gates) extend the same seam.
 - **The held-card-risk tier-2 seam (Round 8 §5)** and **the skill loop** (deck-genie Role Sheet /
   deck-align fold — Round 9 §4). The oracle is the backend; the skill loop is how decks feed it.
 
