@@ -115,6 +115,17 @@ comparator) and ADR-0032 (Effect-Clause tier).
   corpus sweep: 3 agree / 9 disagree over the recorded discard decisions; the rows localise the
   migration's prerequisites (line-MEMBER worth derivation; set semantics; a worth-0 tie-break).
   The swap stays gated per the ruling (seam D). Suite + corpus green (3104).
+- **Seam-D grill RULED + steps 1-2 built (2026-07-19).** Ruling (with the user): *gates real,
+  equation shadow, swap gated-last* — a GATE is a Worth factor (built real, fires live at the
+  gamble/refresh sites, corpus-gated), while the discard DECISION SITE rides as a shadow until its
+  agreement earns the swap. Built: the **pitch-preference term** (`_discard_shadow` gained a
+  deadness/zone `pitch` count — dead-opener/redundant-tutor/stranded/fodder/fuel/spent-burst —
+  ranking the zero-keep ties keep-cost can't), the **need-met gate** (`gate_library.need_met_odds`:
+  a wincon-tutor whose wincon is in hand collapses to 0, live at gamble/refresh), and the shadow's
+  **worth tie-break** (lower-worth duplicate sheds first — sets-not-sums). Measured vs the HUMAN
+  corpus, the equation went **8/12 → 11/12, now BEATING the tuned ladder's 9/12**; the only miss is
+  `86091435-68` (the deploy-now spike). The swap (`keep_cost_gated` decides) is the next gated
+  decision. Suite + corpus green (3110).
 - **Line-member worth derivation (2026-07-19, the shadow's first prerequisite closed).** The shadow
   sweep found an undeclared middle Line stage (the f68 Drakloak on Dreepy→Drakloak→Dragapult ex)
   pricing **0** — `_role_value` saw only the declared base. `planner._role_value` now derives

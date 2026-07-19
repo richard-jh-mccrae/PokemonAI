@@ -1875,7 +1875,13 @@ class PlannerMixin:
         `Board.deck_empty_ids`, the SOUND predicate behind `dont-search-an-empty-deck`) or its
         recycle pool all-dead (`Board.recycle_dead_only`, behind `dont-recycle-the-dead`) — realises
         no role, so it sheds freely instead of propping up the SHED at its tutor/recovery worth.
-        Trainer-only: a Pokémon carrying a `recycle` tag (Kyogre) is a playable body regardless."""
+        Trainer-only: a Pokémon carrying a `recycle` tag (Kyogre) is a playable body regardless.
+
+        **Need-met gate (the fetcher gate's cousin — ladder-win case ep82753102 f16):** a
+        `rush_evolve` / `tutor_mega` WINCON-tutor whose wincon is already in hand
+        (`Board.wincon_in_hand`) has its role SATISFIED — nothing left worth fetching — so it too
+        collapses to 0. Fires live everywhere `keep_cost` is consumed (gamble keep-floor, refresh
+        SHED), mirroring the ladder's `discard-the-redundant-tutor` premise as a Worth factor."""
         from common import gate_library
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
         if gate_library.is_evolution(st):
@@ -1894,12 +1900,14 @@ class PlannerMixin:
                 base_in_hand=_named(getattr(board, "hand_ids", None)),
                 base_reachable_in_deck=base_reach)
         if st is not None and not st.is_pokemon and not st.is_energy:
+            tags = self.functions.tags(cid) if self.functions else ()
+            if ({"rush_evolve", "tutor_mega"} & set(tags)) and getattr(board, "wincon_in_hand", False):
+                return gate_library.need_met_odds(need_met=True)   # wincon-tutor, wincon already in hand
             fetch_set = self._search_deck_set(cid)
             empty = getattr(board, "deck_empty_ids", None) or frozenset()
             if fetch_set and all(t in empty for t in fetch_set):
                 return gate_library.fetch_deploy_odds(targets_exhausted=True)
-            if ("recycle" in (self.functions.tags(cid) if self.functions else ())
-                    and getattr(board, "recycle_dead_only", False)):
+            if "recycle" in tags and getattr(board, "recycle_dead_only", False):
                 return gate_library.fetch_deploy_odds(targets_exhausted=True)
         return 1.0
 

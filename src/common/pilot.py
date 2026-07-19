@@ -2298,7 +2298,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if self._gate_closing(cid, board):
                 row["closing"] = True
             reaccess = 1.0 if (dup or in_play or rec_hand) else 0.0
-            row["keep"] = 0.0 if fuel else round(worth * deploy * (1.0 - reaccess), 1)
+            # A SPENT burst (ladder-win 83454549-36): a `discard_eot` Energy is precious until the
+            # Active is fully powered — then it self-discards at end of turn anyway, so it is fodder.
+            # DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it lives in the shadow's
+            # pitch term, not a general Worth gate.
+            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
+            spent_burst = "discard_eot" in tags and getattr(board, "active_fully_powered", False)
+            row["keep"] = 0.0 if (fuel or spent_burst) else round(worth * deploy * (1.0 - reaccess), 1)
             # The PITCH-PREFERENCE term (seam-D grill Finding 3): keep-cost is a KEEP floor and
             # cannot RANK a discard — a dreg, a duplicate, and a DEAD card all price keep 0. The
             # pitch side is `P(met | pitch) − P(met | keep)` going positive: a card whose role is
@@ -2306,9 +2312,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # ladder's positive-pitch premises at SOURCE (not their weights — the equation ranks):
             # `discard-the-dead-opener` (opener role spent), `discard-the-redundant-tutor` (wincon in
             # hand → the tutor's target is had), a stranded evolution (payoff with no base), the
-            # declared `discard_fodder`, and `fuel` (zone sign). `pitch` = the count; it breaks the
-            # zero-keep ties so dead weight sheds before a live spare. SHADOW-only, deciding nothing.
-            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
+            # declared `discard_fodder`, `fuel` (zone sign), and the SPENT burst above. `pitch` = the
+            # count; it breaks the zero-keep ties so dead weight sheds before a live spare. The
+            # `redundant_tutor` case is now ALSO priced keep 0 by the need-met gate (`_deploy_odds`);
+            # the flag stays for the pitch tie-break + display. SHADOW-only, deciding nothing.
             roles = self._roles_of(cid)
             dead_opener = "opener" in tags
             redundant_tutor = bool(getattr(board, "wincon_in_hand", False)
@@ -2323,13 +2330,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 row["stranded"] = True
             if fodder:
                 row["fodder"] = True
-            row["pitch"] = int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded) + int(fodder)
+            if spent_burst:
+                row["spent_burst"] = True
+            row["pitch"] = (int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded)
+                            + int(fodder) + int(spent_burst))
             rows.append(row)
         if not rows:
             return None
-        # Rank: cheapest keep first; among equal keep, the DEADEST (highest pitch) sheds first; index
-        # only as the last resort (Finding 3's raw-index fallback, now the tertiary key).
-        eq_pick = [r["i"] for r in sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["i"]))][:picks]
+        # Rank: cheapest keep first; among equal keep, the DEADEST (highest pitch) sheds first; then
+        # the LOWER underlying worth (sets-not-sums — a worth-10 duplicate's redundancy is worth
+        # preserving over a worth-0 dreg's, ladder-win 83967840-54); index only as the last resort.
+        eq_pick = [r["i"] for r in
+                   sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["worth"], r["i"]))][:picks]
         return {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
                 "agree": set(eq_pick) == set(chosen)}
 

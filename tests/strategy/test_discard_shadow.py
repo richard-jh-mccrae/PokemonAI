@@ -18,13 +18,14 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 REPO = Path(__file__).resolve().parents[2]
 DISCARD = 8
 MEGA, SALVATORE, HILDA, WALLYS, CAPE, WATER = 1031, 1189, 1225, 1229, 1159, 3
-CINDERACE, FILLER = 666, 999
+CINDERACE, FILLER, IGNITION = 666, 999, 17
 
 
-def _setup(hand_ids, *, minc=2):
-    """The `test_discard_selection.py` fixture shape: a forced Discard over ``hand_ids``."""
+def _setup(hand_ids, *, minc=2, powered=False):
+    """The `test_discard_selection.py` fixture shape: a forced Discard over ``hand_ids``.
+    ``powered`` gives my Active its full attack cost (so ``active_fully_powered``)."""
     stats = DictCardStatProvider({
-        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True),
+        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
         HILDA: CardStat(HILDA, name="Hilda", cardType=3),
         WALLYS: CardStat(WALLYS, name="Wally's", cardType=3),
@@ -32,15 +33,18 @@ def _setup(hand_ids, *, minc=2):
         WATER: CardStat(WATER, name="Water", energyType=2, cardType=5),   # 5 = BASIC_ENERGY
         CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, cardType=0),   # a dead opener
         FILLER: CardStat(FILLER, name="Filler", cardType=1),              # a role-less Item spare
+        IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=0),  # a burst
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
-                           WALLYS: ["heal", "clutch_heal"], CINDERACE: ["opener"]})
+                           WALLYS: ["heal", "clutch_heal"], CINDERACE: ["opener"],
+                           IGNITION: ["discard_eot"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     hand = [{"id": cid} for cid in hand_ids]
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
-    obs = {"current": {"players": [{"active": [None], "bench": [], "hand": hand},
+    active = [{"id": MEGA, "hp": 330, "energies": [0] * 3}] if powered else [None]
+    obs = {"current": {"players": [{"active": active, "bench": [], "hand": hand},
                                    {"active": [None], "bench": []}], "yourIndex": 0, "turn": 4},
            "select": {"context": DISCARD, "minCount": minc, "maxCount": minc, "option": opts}}
     return pilot, obs
@@ -64,6 +68,40 @@ def test_pitch_term_ranks_dead_weight_ahead_of_a_live_spare_among_zero_keep():
     assert s["eq_pick"] == [1]                                      # pitch the dead opener, not idx-0 filler
 
 
+@pytest.mark.req("REQ-SHADOW-0003")
+def test_shadow_spent_burst_is_fodder_when_the_active_is_fully_powered():
+    """Ladder-win case `83454549-36`: a `discard_eot` burst (Ignition) is precious UNTIL the Active is
+    fully powered — then it is SPENT and self-discards at end of turn anyway, so it is dead weight the
+    human pitches. Discard-context (at a refresh it is a future attach — this is NOT a general worth
+    gate): the shadow zeros its keep and flags `spent_burst` as a pitch signal only when the Active
+    already carries its attack cost. FILLER at index 0 so the old ranking would mis-pitch it."""
+    unpowered, obs_u = _setup([FILLER, IGNITION], minc=1, powered=False)
+    ru = {r["cid"]: r for r in unpowered.explain(obs_u).discard_shadow["eq"]}
+    assert ru[IGNITION]["keep"] == 30.0 and not ru[IGNITION].get("spent_burst")   # protected
+    powered, obs_p = _setup([FILLER, IGNITION], minc=1, powered=True)
+    s = powered.explain(obs_p).discard_shadow
+    rp = {r["cid"]: r for r in s["eq"]}
+    assert rp[IGNITION]["keep"] == 0.0 and rp[IGNITION]["spent_burst"] is True     # spent -> fodder
+    assert rp[IGNITION]["pitch"] > rp[FILLER]["pitch"]
+    assert s["eq_pick"] == [1]                                                     # pitch the spent burst
+
+
+@pytest.mark.req("REQ-SHADOW-0003")
+def test_shadow_pitches_the_lower_worth_duplicate_first():
+    """Ladder-win case `83967840-54` (sets-not-sums): two hand-DUPLICATE cards both price keep 0 (a
+    sibling copies each), but a worth-10 tutor's redundancy is worth preserving over a worth-0 draw
+    Supporter's — so among equal (keep, pitch) the LOWER underlying worth sheds first. Salvatore
+    (worth 10) sits at index 0 so the old index tie-break would wrongly pitch it over the worth-0
+    Lillie's at index 1."""
+    # two copies each of Salvatore (tutor, worth 10) and a worth-0 filler -> all keep 0 via the dup
+    pilot, obs = _setup([SALVATORE, FILLER, SALVATORE, FILLER], minc=1)
+    s = pilot.explain(obs).discard_shadow
+    by = {r["i"]: r for r in s["eq"]}
+    assert by[0]["cid"] == SALVATORE and by[0]["keep"] == 0.0 and by[0]["worth"] == 10.0
+    assert by[1]["cid"] == FILLER and by[1]["keep"] == 0.0 and by[1]["worth"] == 0.0
+    assert s["eq_pick"] == [1]                       # the worth-0 filler, not the worth-10 tutor at idx 0
+
+
 @pytest.mark.req("REQ-SHADOW-0001")
 def test_shadow_emits_the_full_working_and_the_agreement_bit():
     """Worth-ranked hand: the ladder pitches the redundant Salvatore + the Water; the equation ranks
@@ -78,23 +116,29 @@ def test_shadow_emits_the_full_working_and_the_agreement_bit():
     assert by_cid[MEGA]["worth"] == 30.0 and by_cid[MEGA]["keep"] == 30.0
     assert by_cid[CAPE]["keep"] == 25.0                        # ACE SPEC fallback
     assert by_cid[WALLYS]["keep"] == 20.0                      # clutch_heal TAG_TIER
-    assert by_cid[WATER]["keep"] == 8.0 and by_cid[SALVATORE]["keep"] == 10.0
+    # Salvatore is a rush_evolve wincon-tutor and the Mega (wincon) is in hand -> the NEED-MET gate
+    # zeros its keep (worth 10 gated to 0), and it carries the redundant_tutor pitch flag.
+    assert by_cid[WATER]["keep"] == 8.0
+    assert by_cid[SALVATORE]["worth"] == 10.0 and by_cid[SALVATORE]["keep"] == 0.0
+    assert by_cid[SALVATORE].get("redundant_tutor") is True
 
 
 @pytest.mark.req("REQ-SHADOW-0001")
 def test_shadow_disagreement_is_recorded_and_decides_nothing():
-    """A duplicated wincon: the v1 per-card equation prices BOTH copies at 0 (dup-in-hand — the
-    sets-not-sums naivety, deliberately emitted) so it would pitch the two Megas; the ladder keeps
-    key cards and pitches the fodder. The disagreement is RECORDED — and the ladder's pick stands
-    untouched (the shadow decides nothing)."""
+    """The RESIDUAL set-naivety (deliberately emitted): a duplicated wincon still prices BOTH copies
+    at keep 0 (dup-in-hand — each points at the other as re-access), so a key Mega is still WRONGLY
+    pitchable. The worth tie-break softens it (the redundant Salvatore sheds first, then the LOWER-
+    worth of the remaining), but with two Megas in a forced discard-2 one still gets pitched — the
+    open prerequisite for the true joint-pair (sets-not-sums) fix. The disagreement is RECORDED and
+    the ladder's pick stands untouched (the shadow decides nothing)."""
     pilot, obs = _setup([MEGA, MEGA, CAPE, WATER, SALVATORE])
     dec = pilot.explain(obs)
     s = dec.discard_shadow
     assert s is not None and s["agree"] is False
     megas = [r for r in s["eq"] if r["cid"] == MEGA]
     assert len(megas) == 2 and all(r["dup_hand"] and r["keep"] == 0.0 for r in megas)
-    assert set(s["eq_pick"]) == {0, 1}                         # the equation's naive pick: both Megas
-    assert set(dec.chosen) != {0, 1}                           # the ladder still decided
+    assert 0 in s["eq_pick"]                                   # a key Mega is STILL (wrongly) pitched
+    assert set(s["eq_pick"]) != set(dec.chosen)               # …and the ladder disagrees, deciding it
 
 
 @pytest.mark.req("REQ-SHADOW-0001")

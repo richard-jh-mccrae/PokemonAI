@@ -50,6 +50,39 @@ def test_deploy_odds_is_zero_when_the_base_is_provably_gone():
                                     base_reachable_in_deck=False) == 0.0
 
 
+@pytest.mark.req("REQ-GATE-0005")
+def test_need_met_odds_gates_a_satisfied_role():
+    """The need-met gate (the fetcher gate's cousin — a role SATISFIED rather than a target dead):
+    0.0 when a card's reason-to-keep is already fulfilled by the board, 1.0 otherwise; errs toward
+    keep."""
+    assert gate_library.need_met_odds(need_met=True) == 0.0
+    assert gate_library.need_met_odds(need_met=False) == 1.0
+    assert gate_library.need_met_odds() == 1.0
+
+
+@pytest.mark.req("REQ-GATE-0005")
+def test_pilot_deploy_odds_gates_a_redundant_wincon_tutor():
+    """The redundant-tutor need gate (ladder-win case 82753102-16): a `rush_evolve` / `tutor_mega`
+    wincon-tutor whose wincon is already IN HAND has its role MET — it has nothing left worth
+    fetching — so `_deploy_odds` collapses to 0 and its keep-cost with it. A REAL gate: it fires
+    live wherever `keep_cost` is consumed (the gamble keep-floor, the refresh SHED), not only the
+    discard shadow. 1.0 when the wincon is not in hand (the tutor is still live)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from train.tune import _build_pilot
+    from common.pilot import Board
+    ms = _build_pilot("mega_starmie")[0]
+    sal = 1189                                                    # Salvatore: a rush_evolve wincon-tutor
+    assert "rush_evolve" in ms.functions.tags(sal)
+    assert ms._role_value(sal) > 0                                # it has worth to gate away
+    counts = {sal: 1}
+    assert ms._deploy_odds(sal, Board(wincon_in_hand=False), counts) == 1.0
+    assert ms._deploy_odds(sal, Board(wincon_in_hand=True), counts) == 0.0
+    assert ms._keep_cost(sal, counts, 40, 6, Board(wincon_in_hand=True)) == 0.0
+    assert ms._keep_cost(sal, counts, 40, 6, Board(wincon_in_hand=False)) > 0.0
+
+
 @pytest.mark.req("REQ-GATE-0002")
 def test_fetch_deploy_odds_gates_a_dead_fetcher():
     """The fetcher gate (searcher/recycler leg — acceptance pin ep83457493 f31): a fetch Trainer whose

@@ -84,17 +84,34 @@ of raw hand index. SHADOW-only, deciding nothing.
 **Measured against the HUMAN corpus** (`correct ⊆ picks` over the 12 recorded discard decisions), which
 is the metric the swap turns on — NOT equation-vs-ladder:
 
-| | matches human |
-|---|---|
-| tuned `_DISCARD` ladder | **9 / 12** |
-| the v1 equation (keep + pitch) | **8 / 12** |
+| | matches human | after step 2 |
+|---|---|---|
+| tuned `_DISCARD` ladder | 9 / 12 | 9 / 12 |
+| the equation (keep + pitch) | 8 / 12 | **11 / 12** |
 
-The equation went from "cannot rank" (raw index) to competitive, and **beats the ladder on 2 cases**
-— `84071010-45` and `83661652-30`, both discard-as-resource picks the `fuel`/deadness sign catches
-that the ladder missed. The **3 ladder-wins are the remaining prerequisites**, each mapping to a
-Finding-2 premise gate or set semantics: `83454549-36`, `83967840-54`, `82753102-16` (to be
-classified as the gate builds land). `86091435-68` both miss — the deploy-now spike, the gated
-evolution-gate extension. Step 2 (the premise gates as real factors) is next.
+Step 1 took the equation from "cannot rank" (raw index) to competitive, beating the ladder on 2
+discard-as-resource cases (`84071010-45`, `83661652-30`).
+
+### Step 2 BUILT 2026-07-19 — the 3 ladder-wins closed; the equation now BEATS the ladder 11/12 vs 9/12
+
+Each ladder-win was classified at source and fixed by its true mechanism:
+- **`82753102-16` → a REAL gate.** `gate_library.need_met_odds` + a `_deploy_odds` branch: a
+  `rush_evolve`/`tutor_mega` wincon-tutor whose wincon is IN HAND has its role SATISFIED (the
+  fetcher gate's cousin) → deploy_odds 0 → keep 0. Fires LIVE at the gamble keep-floor + refresh
+  SHED (corpus-gated: re-audit clean, no pin moved).
+- **`83454549-36` → a shadow pitch signal.** `spent_burst` (`discard_eot` + `active_fully_powered`):
+  a burst Energy is precious until the Active is powered, then it self-discards at end of turn
+  anyway — dead weight. DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it stays in the
+  shadow's pitch term, NOT a general Worth gate.
+- **`83967840-54` → the worth tie-break.** Among equal (keep, pitch), the LOWER underlying worth
+  sheds first — a worth-10 duplicate's redundancy is worth preserving over a worth-0 dreg's
+  (sets-not-sums, the first honest step of the joint-pair fix).
+
+The equation now matches the human on **11/12**, beating the tuned ladder's **9/12**; the only
+remaining miss is `86091435-68` — the deploy-now spike (the gated evolution-gate extension). The
+residual set-naivety (a duplicated wincon in a forced discard-2 still prices keep 0) is the last
+open prerequisite. **With the equation now out-scoring the ladder on the corpus, the swap
+(step 3-4: `keep_cost_gated` decides, corpus + score-diff gated) is the next decision.**
 
 ## Grill status: ⚠️ the keep-cost math is grilled — the LADDER-REPLACEMENT PATH IS NOW RULED (above)
 

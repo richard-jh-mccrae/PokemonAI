@@ -66,6 +66,15 @@ def fetch_deploy_odds(*, targets_exhausted: bool = False) -> float:
     return 0.0 if targets_exhausted else 1.0
 
 
+def need_met_odds(*, need_met: bool = False) -> float:
+    """The need-met gate — the fetcher gate's COUSIN, for a role already SATISFIED rather than a
+    target provably dead. 0.0 when the card's reason-to-keep is already fulfilled by the board (a
+    wincon-tutor whose wincon is IN HAND — its fetch has nothing left worth finding; ladder-win
+    case ep82753102 f16), 1.0 otherwise. Errs toward keep — an uncertain 'need met' read stays
+    ``False`` upstream."""
+    return 0.0 if need_met else 1.0
+
+
 def closing_gate_reaccess(reaccess: float, *, gate_closing: bool = False) -> float:
     """The pressure gate — the CLOSING edge (spec Round 8 §3: "a closing edge SPIKES keep-cost;
     decay constants are wrong-shaped for cliffs").
