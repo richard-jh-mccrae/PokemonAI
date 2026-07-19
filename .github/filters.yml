@@ -43,6 +43,7 @@ submit:
 train:
   - 'tools/train/**'
   - 'tests/train/**'
+  - 'tests/label/**'
 meta:
   - 'tools/meta_tracker/**'
   - 'tools/deck_convert.py'

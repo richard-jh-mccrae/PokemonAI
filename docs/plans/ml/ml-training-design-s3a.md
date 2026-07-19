@@ -185,6 +185,27 @@ manifest, the §D6 report over the same run, and a `tune.py --dry-run` smoke sho
 records load through the rails (per-record gate absent by design; live fitting waits for S3b-1
 per §D1 sequencing). Tests land in `tests/label/` with a corpus-film fixture.
 
+## Build notes (recorded during the 2026-07-19 TDD build — deviations & clarifications)
+
+- **Expert forks the PROMPT obs, not `Decision.obs`.** The cabt +1 offset means `Decision.obs` is
+  `film[i+1].obs` — the state AFTER the choice, whose select menu differs from `decision.options`.
+  vread/triage read that post-choice obs (the value-training convention `extract.py` fixes, verified
+  by a parity test). But the counterfactual expert MUST fork `film[i].obs` (the state AT the
+  decision), whose menu the recorded `chosen` indexes — `detect._prompt_frames` supplies it. Feeding
+  the post-obs would score the wrong menu.
+- **`own_prizes` is absent on corpus films** (they carry `steps[0][0].visualize` only, no per-seat
+  step stream for `backfill_seed`'s content-join), so the expert's fork falls to `_seed_zones`'
+  sound decklist-prefix path rather than the exact anchored own-split. Acceptable for value sampling
+  (the design already accepts one-sample fork noise absorbed by θ); the exact split is a v2 lever if
+  a fetch line's sampling noise proves to matter.
+- **Seat-consistent value read.** `_read_v` flips to `1 − P(opp wins)` when a turn-ender's resulting
+  obs belongs to the opponent (features are seat-relative) — sharpening the design's "features are
+  seat-relative to my obs" phrasing. Terminal override reads engine `result` (0/1 seat win, 2 draw).
+- **Per-seat detection** (`detect_disagreements(..., seat=)`) so a cross-deck game is driven once per
+  seat with that seat's own Pilot; a mirror needs one pass.
+- **`thresholds.json` is intentionally uncommitted** — it is authored by the §D3 human precision
+  review, which needs the G1 net. Until then `--mode emit` fail-safes to report-only.
+
 ## Non-goals (v2 backlog, with triggers)
 
 - **Ladder/peer film labeling** — seeds need the `backfill_seed.py:37` content-join and peer

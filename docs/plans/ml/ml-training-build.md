@@ -18,7 +18,7 @@ as separate concurrent worktree sessions.
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
 | S2b | WP2 | Eval harness | ☐ blocked on S1 | |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
-| S3a | WP3 | Blunder labeler | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3a.md](ml-training-design-s3a.md); detector core in s3b D1/D2; detector code lives in `tools/train/label/` |
+| S3a | WP3 | Blunder labeler | ☑ plumbing built 2026-07-19 (integration G1-gated) | `tools/train/label/` (vread/triage/expert/detect/emit/report/run) + `tests/label/` (31 tests, real corpus fixture); `value_delta` category; `data/corrections/machine/` gitignored; filters.yml+ci.yml `tests/label`. θ calibration + mass emit wait on G1 (design §Acceptance). |
 | S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md); outer-loop re-detection invokes the S3a labeler CLI — land S3a first (fit-extension plumbing may parallelize) |
 | S3b-2 | WP4 | Matchup tables + integration | ☐ blocked on S3b-1 | design LOCKED → same doc, D3/D4 |
 | — | G2 | Adoption gate | ☐ | |
