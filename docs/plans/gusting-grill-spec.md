@@ -1,8 +1,31 @@
 # Gusting — grill-session seed: one equation for the gust target
 
-**Status.** SEED for a grill session — NOT designed, NOT built. A future session picks this up, runs
-the Round-0 measurement pass, then grills the open questions below with the user before any design is
-committed. Follows the hypergeometric-fetch-closure playbook (measure → grill → corpus-gate → converge
+**Status.** GRILLED and RESOLVED 2026-07-19. Round 0 measured first
+(`gusting-round0-measurement.md`): the cluster dissolved to 3 small targeted failures. The grill's
+three rulings (user, 2026-07-19):
+
+1. **Scope — small build + design the full equation.** The three targeted fixes are BUILT
+   (**ADR-0066**, suite-green); the full `their_keep_cost` equation is DESIGNED, not built —
+   `gusting-keepcost-design.md` — and waits for corpus evidence before any construction.
+2. **Denial ceiling — up to ~1 effective prize of override.** Denial credit may outweigh at most a
+   ~1-prize difference (the existing γ-gated `_WINCON_DENIAL_PRIZES = 1.5` band is the ceiling's
+   in-repo precedent); never more. ADR-0066 spends that allowance defensively (the threat-forfeit
+   premium); the design doc owns the offensive exchange rate and the refuted-pin re-audit.
+3. **Stall stays a separate small tactical + a marginality gate.** No currency conversion; the
+   famine stall gained the with-vs-without swap gate (ADR-0066 §2). The spec's own "not everything
+   must converge" branch, confirmed by measurement.
+
+**Follow-up grill (same day), two more rulings:**
+
+4. **ep86091435 f119 — refuted-by-better-line.** The ADR-0066 widened oracle's 2-prize
+   drag-and-spread line supersedes the correction's 1-prize development line; recorded in
+   `reviewed.json`, pinned as the ADJUDICATED case in `test_gust_round0_corpus.py`.
+5. **`gust-for-the-loaded-equal-ko` ships at status `testing`** — the next /blunder-buster round
+   over fresh ladder games adjudicates promotion (the house precedent; a gauntlet A/B on a
+   rare-trigger rule would be underpowered).
+
+The agenda below is kept for provenance; §1/§5/§6/§7 are answered by the rulings + ADR-0066, and
+§2/§3/§4 are deferred into the design doc's evidence gates. Follows the hypergeometric-fetch-closure playbook (measure → grill → corpus-gate → converge
 under the currency-zone rule). Named plainly: gusting.
 
 ## The musing (user, 2026-07-19)

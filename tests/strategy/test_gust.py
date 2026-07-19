@@ -49,6 +49,11 @@ MY_FRAGILE = 908   # my Active: 130 HP — KO'd by opp's FORWARD hand-size evolu
 KADA = 911         # opp Active: weak pre-evo (30 dmg) that EVOLVES into a hand-size attacker
 ALAK = 912         # hand_size_attacker KADA evolves into (Alakazam: 20 dmg/card via handSizeDamage)
 STALL1 = 711       # opp benched body: energyless, retreat 1 — valid stall target (can't pay retreat)
+SPREADER = 909     # my Active: 200-damage attacker with a 60 bench SPREAD rider (Phantom Dive-like)
+A_SPREAD = 9090    # its attack id
+KOABLE_DOOM = 812  # opp Active: KO-able by my 120 AND dooms my Active next turn (200 incoming)
+DURA_W = 730       # opp energyless retreat-2 wall PRE-EVO whose line becomes a 270 attacker (Duraludon-like)
+EVO_DURA = 731     # the attacker DURA_W evolves into (forward danger, ADR-0066 wall-swap tests)
 PSYCHIC = 7        # energy type for the opp pre-evo
 WATER, LIGHTNING, FIRE, FIGHTING = 3, 4, 2, 6
 SUPPORTER, ITEM = 3, 1   # CardType values (cg/api.py)
@@ -90,8 +95,15 @@ _CARDS = {
     ALAK: CardStat(ALAK, name="TAlakazam", evolvesFrom="TKadabra", hp=140, minAttackCost=1,
                    handSizeDamage=20),                                  # …evolves into hand-size KO
     STALL1: CardStat(STALL1, hp=70, retreatCost=1),                     # energyless retreat-1 stall body
+    SPREADER: CardStat(SPREADER, energyType=WATER, minAttackCost=1, minCostDamage=200,
+                       attacks=(A_SPREAD,)),
+    KOABLE_DOOM: CardStat(KOABLE_DOOM, hp=100, energyType=FIRE, maxDamage=200,
+                          attacks=(DOOM_ATK,)),
+    DURA_W: CardStat(DURA_W, name="TDura", hp=130, retreatCost=2),
+    EVO_DURA: CardStat(EVO_DURA, name="TArcha", evolvesFrom="TDura", maxDamage=270),
 }
 _ATTACKS = {   # every attacker's cheapest attack as a real record (fallback retired, ADR-0052)
+    A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=1, benchSpread=60),
     A_WIN: AttackStat(A_WIN, damage=120, cost=1),
     A_OFF: AttackStat(A_OFF, damage=120, cost=1),
     A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),
@@ -579,4 +591,131 @@ def test_gust_stall_target_picks_the_energyless_high_retreat_body():
                       opp_bench=[poke(LIVE_ATTACKER, hp=200, energy=2),    # energized: would gift tempo
                                  poke(STALL_TARGET, hp=200, energy=0)]))   # energyless, retreat 2: stall
     p = _pilot()
+    assert p.decide(obs) == [1]
+
+
+# --- ADR-0066 (gusting Round 0): snipe-aware baseline / marginal stall / loaded-equal-KO ----------
+
+@pytest.mark.req("REQ-GUST-0015")
+def test_gust_for_the_ko_stands_down_when_the_menu_rider_already_collects_the_body():
+    """ep86091435 f119: my attack's bench rider (50 snipe) already KOs the 40-HP benched body WITHOUT
+    a gust — spending Boss's Orders to drag it up for the SAME single prize is a wasted Supporter.
+    The whether-to-play baseline is snipe-aware: the gust must beat the best menu-attack TOTAL.
+    Raise the body to 60 HP (out of the rider's reach) and the same gust fires again."""
+    def _obs(bench_hp):
+        return make_select(
+            [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+            context=MAIN,
+            current=state(active=poke(SNIPER_WINCON, energy=1, hp=200),
+                          opp_active=poke(WALL, hp=330),
+                          opp_bench=[poke(BENCHIE, hp=bench_hp)],
+                          hand=[BOSS]))
+    p = Pilot(Strategy(roles={SNIPER_WINCON: ["win_condition"]}), deck=[1] * 60,
+              general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
+    assert "gust-for-the-ko" not in _fired(p.explain(_obs(40)).options[1])   # rider collects it free
+    assert p.decide(_obs(40)) != [1]
+    p2 = Pilot(Strategy(roles={SNIPER_WINCON: ["win_condition"]}), deck=[1] * 60,
+               general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
+    assert "gust-for-the-ko" in _fired(p2.explain(_obs(60)).options[1])      # out of reach: gust again
+
+
+@pytest.mark.req("REQ-GUST-0015")
+def test_gust_plus_spread_synergy_fires_past_the_rider_baseline():
+    """ep85046350 f81: gust the 130-HP body up, the 200 main KOs it AND the 60 spread finishes the
+    40-HP one — 2 prizes, vs the rider's lone 1-prize KO without the gust. The gust side counts its
+    own drag-and-finish synergy (spread riders too), so the 2-prize line beats the snipe-aware
+    baseline. Also proves the bench KO oracle sees the EXPENSIVE 200 attack the cheapest-attack
+    summary would on other decks miss (the ADR-0052 patch finished for the bench side)."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(SPREADER, energy=1, hp=200),
+                      opp_active=poke(WALL, hp=330),
+                      opp_bench=[poke(BENCHIE, hp=130), poke(BENCHIE, hp=40)],
+                      hand=[BOSS]))
+    p = Pilot(Strategy(roles={SPREADER: ["win_condition"]}), deck=[1] * 60,
+              general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
+    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-GUST-0015")
+def test_gust_pays_the_threat_forfeit_premium_when_the_menu_ko_removes_the_doom():
+    """ep82753102 f109: the opponent's Active both DOOMS my Active (200 incoming ≥ 200 HP) and is
+    KO-able on the menu — the direct KO removes the threat, while a gust benches it SAFELY to come
+    back. A 2-prize gust must then beat the menu by MORE than one prize, so it stands down and the
+    agent kills the threat. The same 2-prize gust over a harmless KO-able Active (no doom) fires —
+    that control is `test_gust_for_the_ko_fires_to_reach_a_higher_prize_than_the_current_active`."""
+    obs = make_select(
+        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+        context=MAIN,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_active=poke(KOABLE_DOOM, hp=100, energy=1),
+                      opp_bench=[poke(EX_BENCHIE, hp=60)],
+                      hand=[BOSS]))
+    p = _pilot()
+    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    assert p.decide(obs) != [1]
+
+
+@pytest.mark.req("REQ-GUST-0015")
+def test_starved_stall_stands_down_on_a_pointless_wall_swap():
+    """ep86091435 f13: full energy famine, but the opponent's CURRENT Active is itself an energyless
+    retreat-2 wall and the only stall candidate is the IDENTICAL wall — the swap changes nothing
+    ('doesnt really make a difference'), so `stall-gust-over-dev-when-starved` stands down instead of
+    wasting Boss's. Add a strictly TAMER wall (no forward line) to the bench and the famine stall
+    fires again — the swap now denies the forward attacker its spot."""
+    def _obs(bench):
+        return make_select(
+            [opt(PLAY, area=HAND, index=0), opt(END)], context=MAIN,
+            current=state(active=poke(MY_FRAGILE, energy=0, hp=130),
+                          opp_active=poke(DURA_W, energy=0, hp=130),
+                          opp_bench=bench, hand=[BOSS], opp_hand_count=4))
+    p = _pilot()
+    same_wall = _obs([poke(DURA_W, hp=130, energy=0)])                  # wall-for-equal-wall
+    assert p._board(same_wall).active_doomed is True                    # the famine premise holds
+    assert "stall-gust-over-dev-when-starved" not in _fired(p.explain(same_wall).options[0])
+    p2 = _pilot()
+    tamer = _obs([poke(DURA_W, hp=130, energy=0), poke(STALL_TARGET, hp=200, energy=0)])
+    assert "stall-gust-over-dev-when-starved" in _fired(p2.explain(tamer).options[0])
+
+
+@pytest.mark.req("REQ-GUST-0015")
+def test_gust_fires_on_the_equal_prize_ko_toward_the_loaded_body():
+    """ep85163079 f30: the direct Active KO and the gust-KO are the SAME 1 prize, but the benched
+    body carries 4 sunk Energy the KO would destroy with it (vs 1 on the Active) — the tie is not a
+    tie, so `gust-for-the-loaded-equal-ko` spends Boss's on the loaded body. Strip the target's
+    Energy (the ep82224509 f46 refutation shape) or shrink the swing below 2 and it stands down —
+    an equal KO with nothing extra attached never burns the Supporter."""
+    def _obs(bench_energy):
+        return make_select(
+            [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
+            context=MAIN,
+            current=state(active=poke(WINCON, energy=1, hp=200),
+                          opp_active=poke(KOABLE_ACTIVE, hp=100, energy=1),
+                          opp_bench=[poke(BENCHIE, hp=60, energy=bench_energy)],
+                          hand=[BOSS]))
+    p = _pilot()
+    loaded = _obs(4)
+    assert "gust-for-the-loaded-equal-ko" in _fired(p.explain(loaded).options[1])
+    assert p.decide(loaded) == [1]
+    p2 = _pilot()
+    assert "gust-for-the-loaded-equal-ko" not in _fired(p2.explain(_obs(0)).options[1])  # bare: f46
+    p3 = _pilot()
+    assert "gust-for-the-loaded-equal-ko" not in _fired(p3.explain(_obs(2)).options[1])  # swing 1
+
+
+@pytest.mark.req("REQ-GUST-0015")
+def test_gust_target_breaks_ties_toward_the_loaded_body():
+    """SWITCH tie-break mirror of the loaded-equal play rule: two equal-prize KO-able bodies, one
+    carrying 3 sunk Energy — drag up the loaded one (the KO destroys everything attached; ADR-0062's
+    marginal strip pointed across the table). Sub-prize: it never overrides a real prize gap."""
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_bench=[poke(DEAD_END, hp=60), poke(DEAD_END, hp=60, energy=3)]))
+    p = _pilot()
+    opts = p.explain(obs).options
+    assert opts[1].tactical > opts[0].tactical
     assert p.decide(obs) == [1]

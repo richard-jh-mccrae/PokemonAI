@@ -702,5 +702,10 @@
     "disposition": "covered",
     "reason": "wasted_resource 'no plan to retreat solrock, waste (Air Balloon on Solrock)': the flagged waste is COVERED. retest_one: live chosen=[0] Attach Air Balloon->Solrock is demoted by hold-the-retreat-tool-with-no-retreat (-12) to score 8; real decide()=[2]=attach energy to arm Cosmic Beam (score 30) -- the 'attaching one energy to solrock was a good move' the human explicitly endorsed in the SAME rationale. Tagged correct=[1] Ultra Ball is a soft draw-engine card-economy preference the human relaxed; tune.py flags the correction contradictory (UNSATISFIED, 'not a weight'). No proposal.",
     "round": "20260715"
+  },
+  "86091435-119": {
+    "disposition": "refuted",
+    "reason": "refuted-by-better-line (human ack 2026-07-19, gusting grill): the ADR-0066 widened bench oracle finds gust-Duraludon -> Phantom Dive KOs it AND spread-KOs the 40HP Relicanth = 2 banked prizes (4->2) + kills a future Assemble-Alloy accel body. The correction's Night Stretcher line takes 1 prize + a 200 chip on the 400HP (tooled) Archaludon ex; clean projections win the same turn, the agent's line needs no future draws. Pinned: test_gust_round0_corpus.py ADJUDICATED.",
+    "round": "2026-07-19"
   }
 }
