@@ -113,6 +113,38 @@ def test_keep_cost_is_role_value_scaled_by_irreplaceability():
     assert ml._keep_cost(999999, live, pool, draws) == 0.0   # a role-less card is free to shuffle
 
 
+@pytest.mark.req("REQ-WORTH-0005")
+def test_hand_keep_prices_duplicates_marginally_and_excludes_the_played_refresh_once():
+    """The duplicate-copy reconciliation (ADR-0065 §Build status): BOTH keep-value sites (the gamble
+    keep-floor, the refresh SHED) read the ONE `_hand_keep` summation. k held copies of a card each
+    charge with all k shuffled siblings as outs (the first sets-not-sums step, spec §Round 7) — dearer
+    than the retired SHED frozenset dedup (one charge per distinct card, duplicates free) and cheaper
+    than the retired gamble form (k independent one-ofs at +1 out each). The played refresh is
+    excluded ONCE — a second held copy of it still shuffles and still charges. A duplicate-free hand
+    prices exactly as before the reconciliation."""
+    from math import isclose
+    from common.card_worth import ROLE_TIER
+    from common.deck_odds import draw_hit_probability
+    ml = _shipped_pilot("mega_lucario")
+    pool, draws = 40, 6
+    counts = {678: 1, 1121: 4, 1145: 2}                   # wincon + Ultra Ball + Mega Signal in deck
+    single = ml._keep_cost(678, counts, pool, draws)      # the lone-copy charge (+1 out), unchanged
+    assert single > 0
+    # duplicate-free hand: the summation IS the old per-copy sum — behaviour unchanged
+    assert isclose(ml._hand_keep([678], None, counts, pool, draws), single)
+    # two held copies: each charges with BOTH shuffled siblings as outs — 2 × the (+2 outs) charge,
+    # strictly between one dedup charge and two independent one-of charges
+    outs2 = ml._card_reaccess_outs(678, counts) + 2
+    per_copy2 = ROLE_TIER["win_condition"] * (1 - draw_hit_probability(outs2, pool, draws))
+    dup = ml._hand_keep([678, 678], None, counts, pool, draws)
+    assert isclose(dup, 2 * per_copy2)
+    assert single < dup < 2 * single
+    # the played refresh is excluded ONCE — its duplicate held copy still charges (as a lone copy)
+    assert isclose(ml._hand_keep([678, 678], 678, counts, pool, draws), single)
+    # a role-less hand stays free regardless of duplication
+    assert ml._hand_keep([999999, 999999], None, counts, pool, draws) == 0.0
+
+
 @pytest.mark.req("REQ-WORTH-0001")
 def test_keep_cost_deadline_odds_gates_the_worth():
     """The gate library's deadline factor (ADR-0065 Stage 1): ``keep_cost`` scales by ``deadline_odds``

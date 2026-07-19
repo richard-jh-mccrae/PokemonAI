@@ -2147,25 +2147,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return _GRAB_REFRESH_DRAW * draw if draw is not None else 0.0
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
-        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``
-        over every held card EXCEPT the refresh being played (it is discarded, not shuffled). Each
-        card's cost = role value × (1 − re-access odds) over the shuffle-grown pool across the refresh's
-        own draw window — the closure pointed backwards, exactly the gamble's `hand_keep`
-        (`_best_gamble_line`). Anchored deck counts when the tracker has them, else the pre-anchor
-        unseen composition (`decklist − visible − hidden prizes`, needs obs — the reason obs is
-        threaded here). 0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit
-        alone stands, matching the old flat term's floor)."""
+        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = the shared
+        ``planner._hand_keep`` summation — ``Σ keep_cost`` over every held COPY except the played
+        refresh itself (excluded once: it is discarded, not shuffled; a second held copy still
+        charges), duplicates priced marginally (each copy's re-access odds count its shuffled
+        siblings as outs). Each copy's cost = role value × (1 − re-access odds) over the
+        shuffle-grown pool across the refresh's own draw window — the closure pointed backwards,
+        the SAME summation as the gamble's `hand_keep` (`_best_gamble_line`) by construction.
+        Anchored deck counts when the tracker has them, else the pre-anchor unseen composition
+        (`decklist − visible − hidden prizes`, needs obs — the reason obs is threaded here). 0 when
+        the deck bookkeeping is unresolved (no shed charged — the CYCLE credit alone stands,
+        matching the old flat term's floor)."""
         from common.strategy.refresh import refresh_branches
         branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
         if not branches:
             return 0.0
         draws = max(my_draw for my_draw, _opp in branches)
+        me = self._my_player(obs)
         counts = board.deck_known_counts
         if counts:
             deck_count = sum(counts.values())
         else:
             from collections import Counter
-            me = self._my_player(obs)
             unseen = Counter(self.deck)
             unseen.subtract(self._visible_card_counts(me))
             counts = {cid: n for cid, n in unseen.items() if n > 0}
@@ -2174,9 +2177,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             deck_count = sum(counts.values()) - prizes_hidden
             if deck_count <= 0 or not counts:
                 return 0.0
-        pool = deck_count + max(0, len(board.hand_ids) - 1)      # the shuffle-grown draw pool
-        return sum(self._keep_cost(hid, counts, pool, draws, board)
-                   for hid in board.hand_ids if hid != ctx.card_id)
+        hand = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        pool = deck_count + max(0, len(hand) - 1)                # the shuffle-grown pool, per COPY
+        return self._hand_keep(hand, ctx.card_id, counts, pool, draws, board)
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can

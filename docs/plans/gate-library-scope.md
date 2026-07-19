@@ -4,7 +4,12 @@
 + the `deploy_odds` factor in `card_worth.keep_cost`, wired on the gamble keep-floor and refresh SHED
 (`planner._deploy_odds`). A PARAMETER of the one keep-value equation, not a new rung; latent on the
 current pins (bites only a genuinely dead evolution), unit + synthetic-integration tested, zero
-regressions. Stages 2–4 below remain. Under ADR-0065.
+regressions. **The recycler gate's KEEP-side leg BUILT 2026-07-19** as the **fetcher gate**
+(`fetch_deploy_odds`, plus the searcher analog): a fetch Trainer whose every target is provably dead
+(`_search_deck_set` ⊆ `deck_empty_ids`; `recycle_dead_only`) collapses in `keep_cost` — pulled
+forward by the duplicate-copy reconciliation, acceptance pin ep83457493 f31 (see ADR-0065 §Build
+status); the play-side rungs (−60/−40) keep their jurisdiction. Quota / pressure stages below
+remain. Under ADR-0065.
 
 ## The one-line problem
 

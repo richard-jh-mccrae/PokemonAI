@@ -56,6 +56,22 @@ comparator) and ADR-0032 (Effect-Clause tier).
   but the worth oracle saw 0, so the graded refresh shed shuffled them away for free. Two corpus
   targets flipped and promoted (`82749168-65`, `83969481-55`); ADR-0060's parked "hand QUALITY"
   seam, now concretely covered for the tagged classes.
+- **The duplicate-copy reconciliation + the fetcher gate (2026-07-19).** The two keep-value
+  consumers priced duplicate held copies differently by container accident: the gamble summed per
+  copy at +1 out each; the refresh SHED iterated the deduped `Board.hand_ids` frozenset — one
+  charge per distinct card, duplicates free, and EVERY copy of the played refresh excluded. Both
+  now read ONE summation, `planner._hand_keep`: duplicates price MARGINALLY (each of the k held
+  copies charges with all k shuffled siblings as outs — the first sets-not-sums step, spec
+  §Round 7), the played refresh is excluded once, and duplicate-free hands price identically by
+  construction. The reconciliation exposed a latent mispricing the dedup accident had masked
+  (pin `83457493-31`: two dead Poffins + a dead Night Stretcher held at worth ~10 each — the second
+  Poffin rode free), fixed the honest way: the **fetcher gate**, the gate library's
+  searcher/recycler leg (`gate_library.fetch_deploy_odds` via `planner._deploy_odds`), collapses a
+  fetch TRAINER whose every target is provably dead — the SAME sound predicates the play-side
+  rungs trust (`dont-search-an-empty-deck`'s deck whiff-set ⊆ `deck_empty_ids`;
+  `dont-recycle-the-dead`'s `recycle_dead_only`), Trainer-only so a recycle-tagged BODY (Kyogre)
+  stays priced. The pin's margin went −2.7 (broken) / ≈+2 (the lucky accident) → **+19.1**
+  (honest: three dead cards shed free). Suite + corpus green (3092).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
@@ -88,9 +104,10 @@ already converged; its residue rides with the gate library.
   unseen deck, so nothing is discounted — it bites only a genuinely dead card), unit- and
   synthetic-integration-tested (`test_gate_library.py`, `test_undeployable_wincon_is_cheap_to_shuffle_
   but_a_deployable_one_is_not`), zero regressions.
-  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). Later stages
-  (quota / recycler / pressure gates; the discard-side `86091435-68` which needs a principled discard
-  convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
+  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). The
+  searcher/recycler leg landed 2026-07-19 (the fetcher gate — see the reconciliation bullet above);
+  later stages (quota / pressure gates; the discard-side `86091435-68` which needs a principled
+  discard convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
 - ~~The held-card-risk tier-2 seam (Round 8 §5)~~ **BUILT 2026-07-19**
   (`dont-fetch-before-the-deadline` + `dont-shuffle-away-the-deferred-fetch`,
   `tests/strategy/test_held_card_risk.py`;

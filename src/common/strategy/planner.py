@@ -1602,13 +1602,11 @@ class PlannerMixin:
             sup_live = bool(rst is not None and getattr(rst, "is_item", False)
                             and not board.supporter_played)
             # WP6: the KEEP-COST of shuffling this refresh's hand away (the played refresh itself is
-            # discarded, not shuffled) — Σ role value × (1 − re-access odds) over the shuffle redraw.
+            # discarded, not shuffled) — Σ role value × (1 − re-access odds) over the shuffle redraw,
+            # via the shared `_hand_keep` (duplicates priced marginally; one summation with the SHED).
             # The gamble must beat det PLUS this graded floor, replacing the binary protected-hand
             # stand-downs: a KO (≈ KO_SCORE) dwarfs it, an irreplaceable one-of raises the bar.
-            keep_ids = list(hand_ids)
-            if cid in keep_ids:
-                keep_ids.remove(cid)
-            hand_keep = sum(self._keep_cost(hid, class_counts, pool, max(ns), board) for hid in keep_ids)
+            hand_keep = self._hand_keep(hand_ids, cid, class_counts, pool, max(ns), board)
             for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
                     in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
@@ -1723,47 +1721,84 @@ class PlannerMixin:
             is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)),
             tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())
 
-    def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None) -> float:
-        """WP6/WP7: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it
-        is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown ``pool``, +1 out for the
-        shuffled copy) × how realisable its role is by its deadline (`_deploy_odds`, the gate library —
-        ADR-0065 Stage 1: an undeployable evolution collapses to 0, a dead card shed freely). ``board``
-        supplies base presence for the evolution gate; omitted → the deadline factor stays 1.0."""
+    def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None,
+                   shuffled_copies: int = 1) -> float:
+        """WP6/WP7: the cost of shuffling ONE held copy of card ``cid`` away = its role worth × how
+        UN-recoverable it is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown
+        ``pool``, +``shuffled_copies`` outs for the held copies rejoining the deck — 1 for a lone copy;
+        a hand-wide summation passes the full duplicate count, `_hand_keep`) × how realisable its role
+        is by its deadline (`_deploy_odds`, the gate library — ADR-0065 Stage 1: an undeployable
+        evolution collapses to 0, a dead card shed freely). ``board`` supplies base presence for the
+        evolution gate; omitted → the deadline factor stays 1.0."""
         role_value = self._role_value(cid)
         if role_value <= 0:
             return 0.0
         from common.card_worth import keep_cost
         from common.deck_odds import draw_hit_probability
-        outs = self._card_reaccess_outs(cid, counts) + 1      # +1: the shuffled held copy rejoins deck
+        outs = self._card_reaccess_outs(cid, counts) + max(1, shuffled_copies)
         deadline = self._deploy_odds(cid, board, counts) if board is not None else 1.0
         return keep_cost(role_value, draw_hit_probability(outs, pool, draws), deadline)
 
+    def _hand_keep(self, hand_ids, played_cid, counts: dict, pool: int, draws: int, board=None) -> float:
+        """Σ keep_cost over the hand a refresh shuffles away — the ONE summation BOTH keep-value sites
+        read (the WP6 gamble keep-floor below and the refresh SHED, `pilot._refresh_shed_keepcost`), so
+        the graded floor is identical by construction. ``hand_ids`` is the hand as a LIST — duplicate
+        copies are real cards. The played refresh ``played_cid`` is excluded ONCE (it is discarded, not
+        shuffled; a second held copy still shuffles and still charges). Duplicates price MARGINALLY
+        (sets-not-sums, spec §Round 7): all k held copies of a card land in the deck together, so each
+        copy's re-access odds count all k shuffled siblings as outs — the k-th duplicate is discounted
+        by the copies shuffled with it, neither k independent one-ofs (the pre-reconciliation gamble
+        over-charge) nor free riders (the pre-reconciliation SHED's frozenset dedup)."""
+        ids = list(hand_ids)
+        if played_cid in ids:
+            ids.remove(played_cid)
+        from collections import Counter
+        return sum(k * self._keep_cost(cid, counts, pool, draws, board, shuffled_copies=k)
+                   for cid, k in Counter(ids).items())
+
     def _deploy_odds(self, cid, board, counts: dict) -> float:
-        """The evolution gate (`common.gate_library`, ADR-0065 Stage 1): P(card ``cid``'s role is
-        realisable by its deadline). 1.0 for a non-evolution or a deployable evolution — a bare base
-        (matched by ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0
-        for a provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
+        """The deadline gate (`common.gate_library`, ADR-0065): P(card ``cid``'s role is realisable
+        by its deadline). Two card classes are gated today; everything else stays 1.0.
+
+        **Evolution gate (Stage 1):** 1.0 for a deployable evolution — a bare base (matched by
+        ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0 for a
+        provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
         (keep): pre-anchor ``counts`` is the unseen deck, so a base still in the decklist keeps its
-        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega Lucario ex
-        with every Riolu evolved/gone)."""
+        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega
+        Lucario ex with every Riolu evolved/gone).
+
+        **Fetcher gate (searcher/recycler leg — acceptance pin ep83457493 f31):** a fetch TRAINER
+        whose every target is provably dead — its deck whiff-set exhausted (`_search_deck_set` ⊆
+        `Board.deck_empty_ids`, the SOUND predicate behind `dont-search-an-empty-deck`) or its
+        recycle pool all-dead (`Board.recycle_dead_only`, behind `dont-recycle-the-dead`) — realises
+        no role, so it sheds freely instead of propping up the SHED at its tutor/recovery worth.
+        Trainer-only: a Pokémon carrying a `recycle` tag (Kyogre) is a playable body regardless."""
         from common import gate_library
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if not gate_library.is_evolution(st):
-            return 1.0
-        base = getattr(st, "evolvesFrom", None)
+        if gate_library.is_evolution(st):
+            base = getattr(st, "evolvesFrom", None)
 
-        def _named(ids) -> bool:
-            return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
-                       for i in (ids or ()))
+            def _named(ids) -> bool:
+                return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
+                           for i in (ids or ()))
 
-        base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
-                         and getattr(s, "name", None) == base
-                         for t, n in (counts or {}).items())
-        return gate_library.deploy_odds(
-            st,
-            base_in_play=_named(getattr(board, "in_play_ids", None)),
-            base_in_hand=_named(getattr(board, "hand_ids", None)),
-            base_reachable_in_deck=base_reach)
+            base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
+                             and getattr(s, "name", None) == base
+                             for t, n in (counts or {}).items())
+            return gate_library.deploy_odds(
+                st,
+                base_in_play=_named(getattr(board, "in_play_ids", None)),
+                base_in_hand=_named(getattr(board, "hand_ids", None)),
+                base_reachable_in_deck=base_reach)
+        if st is not None and not st.is_pokemon and not st.is_energy:
+            fetch_set = self._search_deck_set(cid)
+            empty = getattr(board, "deck_empty_ids", None) or frozenset()
+            if fetch_set and all(t in empty for t in fetch_set):
+                return gate_library.fetch_deploy_odds(targets_exhausted=True)
+            if ("recycle" in (self.functions.tags(cid) if self.functions else ())
+                    and getattr(board, "recycle_dead_only", False)):
+                return gate_library.fetch_deploy_odds(targets_exhausted=True)
+        return 1.0
 
     def _slot_basic_in_zone(self, want, lock, zone: str, counts: dict, discard_basic_types: set) -> bool:
         """A Basic Energy that FILLS the missing slot ``want`` (``None`` = colourless: any Basic) AND

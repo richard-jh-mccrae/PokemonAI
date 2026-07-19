@@ -242,10 +242,13 @@ deadline factor (`common/gate_library.py`) on both converged keep-value sites �
 evolution sheds freely.
 
 **Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks), the
-plan-tier-credit convergence (the last WP7 shadow), gate-library stages 2–4 (quota / recycler /
-pressure — `hold-successor-when-doomed` still carries the one deadline the pressure gate will fold),
-and the skill loop (deck-genie Role Sheet / deck-align fold). The held-card-risk seam and the
-tutor-chain grab value both landed 2026-07-19 (corpus targets `85163634-17` / `85059103-9` promoted).
+plan-tier-credit convergence (the last WP7 shadow), the gate library's quota / pressure stages
+(`hold-successor-when-doomed` still carries the one deadline the pressure gate will fold), and the
+skill loop (deck-genie Role Sheet / deck-align fold). Landed 2026-07-19: the held-card-risk seam and
+the tutor-chain grab value (corpus targets `85163634-17` / `85059103-9` promoted), the keep-cost
+duplicate-copy reconciliation (`planner._hand_keep` — one summation for the gamble keep-floor and
+the refresh SHED), and the fetcher gate (a provably-dead searcher/recycler sheds free — ADR-0065
+§Build status).
 
 ## Acceptance — met 2026-07-05
 

@@ -11,8 +11,12 @@ base. If that base is provably gone (not in play, hand, or the deck), the card i
 collapses, so a refresh / gamble sheds it freely to dig, instead of hoarding it (ep83966336 f44, the
 retired ``hold-wincon-dont-shuffle`` ``wincon_in_hand_undeployable`` stand-down, now graded).
 
-Pure over card FACTS: the caller resolves base presence from the Board / deck and passes the three
-booleans. Later stages (quota / recycler / pressure gates) extend the same ``deploy_odds`` seam.
+The **fetcher gate** (`fetch_deploy_odds`) is the searcher/recycler leg (scope doc stage 3, pulled
+forward 2026-07-19 by the duplicate-copy reconciliation — acceptance pin ep83457493 f31): a fetch
+Trainer whose EVERY target is provably dead realises no role either.
+
+Pure over card FACTS: the caller resolves base presence / target deadness from the Board / deck and
+passes booleans. Later stages (quota / pressure gates) extend the same ``deploy_odds`` seam.
 """
 from __future__ import annotations
 
@@ -35,3 +39,15 @@ def deploy_odds(stat, *, base_in_play: bool = False, base_in_hand: bool = False,
     if not is_evolution(stat):
         return 1.0
     return 1.0 if (base_in_play or base_in_hand or base_reachable_in_deck) else 0.0
+
+
+def fetch_deploy_odds(*, targets_exhausted: bool = False) -> float:
+    """P(a fetch TRAINER's role is realisable) — the searcher/recycler leg of the deadline gate.
+
+    0.0 when EVERY target the card can pull is PROVABLY dead — the caller resolves that from the
+    SAME sound predicates the play-side rungs already trust (`dont-search-an-empty-deck`'s
+    deck-whiff set, `dont-recycle-the-dead`'s all-dead discard pool): a fetcher that can fetch
+    nothing realises no role, so it sheds freely (its residual worth is Ultra-Ball fodder —
+    corrections 85046350-79 / 85058574-16). 1.0 otherwise — errs toward keep, exactly like the
+    evolution gate; an unsound or uncertain deadness read must stay ``False`` upstream."""
+    return 0.0 if targets_exhausted else 1.0
