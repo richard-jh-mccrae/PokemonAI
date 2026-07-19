@@ -54,6 +54,11 @@ ROLES = {
     CRISPIN:      ["accel_source"],                # primary un-gated accel: fetch+attach the Phantom Dive color
     BOSS_ORDERS:  ["gust"],                         # the `gust` TAG/Role drives the shipped Gust doctrine
     NIGHT_STRETCHER: ["recovery"],
+    BUDEW:        ["starter"],                     # the SACRIFICIAL item-lock starter (30 HP, free retreat,
+    #   0-cost Itchy Pollen): open it Active (`open-the-item-lock-starter` keys the `item_lock` TAG),
+    #   spend it — soak a hit for one prize (`interpose`/`promote-the-staller`), never fund it (free
+    #   attack → `attach_target_needs` False). The Role is behavioural (worth 0 — sacrificial, pinned)
+    #   and feeds `_hand_startable`; declared in STRATEGY.md §7 since 2026-07-09, wired 2026-07-19.
     MUNKIDORI:    ["counter_mover"],               # Adrena-Brain: relay ≤3 counters ours→theirs each turn —
     #   spreads extra damage to assemble multi-KO Phantom Dive turns AND heals our own (peel counters
     #   off an Active Budew to keep the lock alive). A declared plan piece (user doctrine 2026-07-19):
