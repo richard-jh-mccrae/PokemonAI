@@ -83,10 +83,11 @@ strip pointed across the table (a KO destroys everything attached):
 - `gust_best_ko_prizes` (the lethal gust + stall `== 0` gates) keeps its original semantics; only
   its KO test widened. The lethal gust (`_gust_tactical`) still counts target-only prizes — a
   rider-completed lethal is a design-doc item, unforced by any correction.
-- ep86091435 f119's residual divergence is DELIBERATE, pending adjudication: the widened oracle
-  found a 2-prize drag-and-spread line (gust Duraludon → Phantom Dive KOs it AND Relicanth) that
-  supersedes the human's 1-prize development line. Flagged for `reviewed.json`, not pinned either
-  way (`test_gust_round0_corpus.py` docstring).
+- ep86091435 f119's residual divergence was ADJUDICATED in the follow-up grill (same day):
+  refuted-by-better-line in `reviewed.json` — the widened oracle's 2-prize drag-and-spread line
+  (gust Duraludon → Phantom Dive KOs it AND Relicanth, banking 2 of the 4 needed prizes and
+  killing a future Assemble-Alloy accel body) supersedes the human's 1-prize development line.
+  Pinned as the ADJUDICATED case in `test_gust_round0_corpus.py`.
 
 ## Consequences
 

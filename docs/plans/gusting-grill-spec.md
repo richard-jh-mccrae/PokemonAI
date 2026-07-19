@@ -15,6 +15,15 @@ three rulings (user, 2026-07-19):
    famine stall gained the with-vs-without swap gate (ADR-0066 §2). The spec's own "not everything
    must converge" branch, confirmed by measurement.
 
+**Follow-up grill (same day), two more rulings:**
+
+4. **ep86091435 f119 — refuted-by-better-line.** The ADR-0066 widened oracle's 2-prize
+   drag-and-spread line supersedes the correction's 1-prize development line; recorded in
+   `reviewed.json`, pinned as the ADJUDICATED case in `test_gust_round0_corpus.py`.
+5. **`gust-for-the-loaded-equal-ko` ships at status `testing`** — the next /blunder-buster round
+   over fresh ladder games adjudicates promotion (the house precedent; a gauntlet A/B on a
+   rare-trigger rule would be underpowered).
+
 The agenda below is kept for provenance; §1/§5/§6/§7 are answered by the rulings + ADR-0066, and
 §2/§3/§4 are deferred into the design doc's evidence gates. Follows the hypergeometric-fetch-closure playbook (measure → grill → corpus-gate → converge
 under the currency-zone rule). Named plainly: gusting.

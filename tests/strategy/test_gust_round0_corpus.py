@@ -11,10 +11,11 @@ Three roles here:
   * **REFUTED guards** — reviewed.json-refuted corrections whose boards prove a gate HOLDS (the
     loaded-equal tie-break must not fire on a bare pre-evo, ep82224509 f46).
 
-Deliberately NOT here: ep86091435 f119 — the widened bench KO oracle now finds a 2-prize
-drag-and-spread line (gust a 130-HP Duraludon, Phantom Dive KOs it AND the 40-HP Relicanth) that
-SUPERSEDES the human's 1-prize development line. That divergence awaits human adjudication in
-reviewed.json (see the Round-0 report §f119); pinning either side now would prejudge it.
+ep86091435 f119 was ADJUDICATED 2026-07-19 (reviewed.json: refuted-by-better-line): the widened
+bench KO oracle finds a 2-prize drag-and-spread line (gust a 130-HP Duraludon, Phantom Dive KOs it
+AND the 40-HP Relicanth) that supersedes the human's 1-prize development line — banks 2 of the 4
+needed prizes and kills a future Assemble-Alloy accel body, needing no future draws. The ADJUDICATED
+pin below locks that line in.
 """
 from __future__ import annotations
 
@@ -45,6 +46,12 @@ SUBSTANCE = {
 REFUTED_GUARDS = {
     "82224509-46": "equal-prize gust of a BARE Riolu pre-evo: gust-for-the-loaded-equal-ko must "
                    "stay silent (energy swing −1 < 2) — the refutation that sized the swing gate",
+}
+# Human-adjudicated divergences (reviewed.json refuted-by-better-line): pin the AGENT's line.
+ADJUDICATED = {
+    "86091435-119": "gust-for-the-ko endorses Boss's and it is chosen — the 2-prize "
+                    "drag-and-spread line (gust Duraludon, Phantom Dive KOs it AND Relicanth), "
+                    "adjudicated over the correction's 1-prize development line 2026-07-19",
 }
 
 
@@ -111,3 +118,15 @@ def test_round0_refuted_board_keeps_the_gate_shut(cid):
     _rec, d = _explain(cid)
     for o in _boss_options(d):
         assert "gust-for-the-loaded-equal-ko" not in {h.id for h, _ in o.fired}
+
+
+@pytest.mark.req("REQ-CORPUS-0002")
+@pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in ADJUDICATED])
+def test_round0_adjudicated_line_is_taken(cid):
+    """The human-adjudicated agent line: Boss's Orders is ENDORSED by gust-for-the-ko (the 2-prize
+    drag-and-finish beats the 1-prize menu rider) and chosen at the frame."""
+    _rec, d = _explain(cid)
+    boss = _boss_options(d)
+    assert boss, f"{cid}: no Boss's Orders option on the menu"
+    assert any("gust-for-the-ko" in {h.id for h, _ in o.fired} for o in boss)
+    assert any(o.index in d.chosen for o in boss)
