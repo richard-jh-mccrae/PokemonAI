@@ -656,6 +656,10 @@ class Context:
     attach_type_wasted: bool = False       # this ATTACH provides an Energy TYPE the target already has
                                            # enough of for its attack, while a DIFFERENT specific type is
                                            # still short — a wasted off-type attach (Phantom Dive needs Fire+Psychic; 2nd Psychic wasted). Gates `dont-waste-off-type-energy`
+    attach_fuels_dormant_ability: bool = False  # this ATTACH's typed Basic Energy is a colour the target's
+                                           # ABILITY needs as fuel (CardStat.abilityEnergyTypes) and none is
+                                           # attached — the attach switches a dormant Ability on (Adrena-Brain's
+                                           # {D}). Attach-side sibling of `fetch-the-ability-fuel-color`
     attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
                                            # survival-turns picker chose (== board.tool_deploy_slot) —
                                            # proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
@@ -2675,6 +2679,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_completes_biggest_attack=attach_completes_biggest_attack,
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_type_wasted=self._attach_type_wasted(stat, at_target),
+                       attach_fuels_dormant_ability=self._attach_fuels_dormant_ability(stat, at_target),
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
                        attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
@@ -2811,6 +2816,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return True
         return not (stat is not None and stat.is_tool)
 
+    def _attach_fuels_dormant_ability(self, energy_stat, target: dict | None) -> bool:
+        """True iff this ATTACH's typed Basic Energy is a colour the TARGET's Ability needs as fuel
+        (`CardStat.abilityEnergyTypes`) and the target carries NONE of it — the attach switches a
+        dormant Ability on (the {D} for a bare Munkidori's Adrena-Brain). The attach-target-level
+        mirror of `_in_play_unfueled_ability_colors` (which backs the fetch side); backs
+        `fuel-the-dormant-ability` and exempts the fuel from `_attach_type_wasted`, whose attack-cost
+        read called Adrena-Brain's {D} 'wasted' (86091728 f19, measured −12). Sound-or-silent:
+        False for an untyped/colourless Energy, a targetless option, or missing stats."""
+        etype = getattr(energy_stat, "energyType", None) if energy_stat else None
+        if etype in (None, 0) or getattr(energy_stat, "hp", 1) != 0:   # a typed Basic Energy only
+            return False
+        if not target:
+            return False
+        tst = self.stats.get(target.get("id")) if self.stats else None
+        fuels = [t for t in (getattr(tst, "abilityEnergyTypes", ()) or ()) if t not in (0, None)]
+        if etype not in fuels:
+            return False
+        return self._attached_type_counts(target).get(etype, 0) == 0
+
     def _attach_type_wasted(self, energy_stat, target: dict | None) -> bool:
         """True iff this ATTACH puts an Energy of a TYPE the target already has ENOUGH of for its
         most type-demanding attack, while that attack still LACKS a DIFFERENT specific type — a wasted
@@ -2818,12 +2842,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         holds its Psychic but needs the Fire for Phantom Dive [Fire, Psychic]). Sound-or-silent: False
         for an untyped/colourless Energy, a targetless option, or a target whose attack type-costs can't
         be resolved. Colourless (type-0) cost slots never make an attach wasted — only an unmet SPECIFIC
-        type on another slot does."""
+        type on another slot does. A colour that switches the target's DORMANT Ability on is FUEL, not
+        waste (`_attach_fuels_dormant_ability`): the attack-cost read alone called Adrena-Brain's {D}
+        wasted while it is the whole point of the body (86091728 f19)."""
         etype = getattr(energy_stat, "energyType", None) if energy_stat else None
         if etype in (None, 0) or getattr(energy_stat, "hp", 1) != 0:   # a typed Basic Energy only
             return False
         if not target:
             return False
+        if self._attach_fuels_dormant_ability(energy_stat, target):
+            return False                       # the "off-type" colour switches an Ability on — fuel
         tst = self.stats.get(target.get("id")) if self.stats else None
         aids = getattr(tst, "attacks", ()) if tst else ()
         if not aids:

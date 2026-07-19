@@ -24,6 +24,9 @@ ROLE_TIER: dict[str, float] = {
     "evolution_base": 20.0,
     "engine": 12.0,               # a draw/accel engine body
     "accel_source": 12.0,
+    "counter_mover": 12.0,        # a damage-relay Ability body (Munkidori's Adrena-Brain: spreads for
+                                  # multi-KO turns AND heals the lock body) — the engine band: a plan
+                                  # piece, not pitchable junk, below every attacker tier
     "tutor": 10.0,                # a wincon tutor (deck-relative — the closure discounts it)
 }
 ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the old flat-shed anchor

@@ -279,6 +279,22 @@ HYPOTHESES = [
         and c.board.turn <= 1,
         weight=-60, status="testing"),
     Hypothesis(
+        id="fuel-the-dormant-ability",
+        rationale="Attach the colour that switches a DORMANT in-play Ability on — the {D} a bare "
+                  "Munkidori needs for Adrena-Brain (relay ≤3 counters ours→theirs each turn: spreads "
+                  "toward multi-KO Phantom Dive turns AND heals the lock body) — over a fungible "
+                  "attach elsewhere. The attach-side sibling of `fetch-the-ability-fuel-color` (+5), "
+                  "keyed on `attach_fuels_dormant_ability` (the target's `abilityEnergyTypes` colour, "
+                  "none attached), whose predicate ALSO exempts the fuel from `dont-waste-off-type-"
+                  "energy`'s attack-cost read (86091728 f19: the {D}→Munkidori attach measured −12 "
+                  "'wasted'). STANDS DOWN while a benched Line member sits un-powered "
+                  "(`bench_line_member_needs`): in setup the line eats first — the 86091728-19 pin's "
+                  "priority — and the fuel follows once the line is fed. +5 breaks the tie among "
+                  "needy bodies toward the pairing that spends the otherwise-dead colour.",
+        when=lambda c: c.option_type == _ATTACH and c.attach_fuels_dormant_ability
+        and not c.board.bench_line_member_needs,
+        weight=5, status="assumed"),
+    Hypothesis(
         id="dont-power-the-draw-engine",
         rationale="Don't sink the turn's Energy into a DRAW-ENGINE body — one carrying a `draw`/`stall` "
                   "tag OR evolving into one (`attach_target_is_draw_engine`: Dunsparce → Dudunsparce) — "
