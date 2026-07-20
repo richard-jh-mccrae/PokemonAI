@@ -67,6 +67,14 @@ _ENGINE_SUPPORTER_KEEP = 8.0
 # leaf's bench position weight (`_READINESS_BENCH_DISCOUNT` 0.45 — a hand card is ~one deploy away,
 # like a benched body). De-duplicated by the assignment (one slot per distinct card).
 _GENERAL_WORTH_W = 0.45
+# WP-N5b (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD hand at
+# end-of-turn = its needs-assignment slot coverage (`needs.set_keep_v2`), the SAME valuation the
+# keep-value sites use (readiness CONSUMES needs — one vocabulary, not a rival). Small + capped: a
+# held card is worth LESS than a deployed body (the `_GENERAL_WORTH_W` discount is already inside the
+# resolver), so the term nudges toward keeping live resources without rewarding HOARDING over
+# deploying (the develop rung's whole job). Sized/capped by the leaf-lab bench.
+_HAND_READINESS_W = 0.5
+_HAND_READINESS_CAP = 40.0
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -987,7 +995,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
-                 develop_rollout=False, discard_keep_value=False, needs_keep_value=False):
+                 develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
+                 leaf_hand_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1106,6 +1115,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # card-worth equation DECIDES a forced discard in
                                                         # place of the `_DISCARD` ladder. OFF = the ladder
                                                         # decides and the equation only shadows (telemetry).
+        self.leaf_hand_value = leaf_hand_value          # ADR-0065 WP-N5b kill-switch (default OFF): the
+                                                        # develop-rung LEAF's actionable-resource term —
+                                                        # readiness CONSUMES the needs module (the hand's
+                                                        # slot coverage), the board-state-valuation fold.
+                                                        # Needs the sim to plumb my end-of-turn hand into
+                                                        # the (opponent-perspective) end obs. Gated on the
+                                                        # leaf-lab bench (SOLE-top / distinct-values / Gate 0).
         self.needs_keep_value = needs_keep_value        # ADR-0065 WP-N4 kill-switch (default OFF): the
                                                         # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`,
                                                         # `eq2_pick`) decides the forced discard in place of
@@ -2648,6 +2664,37 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rows.append({"i": k, "cid": cid, "worth": round(self._role_value(cid), 1),
                          "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
         return rows
+
+    def _hand_readiness(self, end_obs: dict, my_index: int) -> float:
+        """WP-N5b (armed OFF, `leaf_hand_value`): the develop-rung LEAF's actionable-resource term —
+        readiness CONSUMES the needs module. The value of my HELD hand on the simmed end-of-turn
+        board = its slot coverage under the exact assignment (`needs.set_keep_v2` over the resolved
+        hand), the SAME valuation the keep-value sites use — one vocabulary, not a rival (the grill's
+        "do NOT build a rival" ruling). Requires the sim to have INJECTED my hand into the
+        (opponent-perspective) end obs — 0 without it (fail-safe: no plumbing → no term). Capped
+        under the sub-prize budget (`_HAND_READINESS_CAP`); the held-card `_GENERAL_WORTH_W` discount
+        already lives inside the resolver, so the term nudges toward keeping live resources without
+        rewarding hoarding over deploying (the develop rung's whole job). Never raises."""
+        cur = (end_obs or {}).get("current") or {}
+        players = cur.get("players") or []
+        me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
+        if not me.get("hand"):
+            return 0.0
+        # a MY-perspective view of the (opponent-perspective) end obs — the resolver reads
+        # `_my_player`/board facts off `yourIndex`; the injected hand is already on players[my_index].
+        mobs = {**end_obs, "current": {**cur, "yourIndex": my_index}}
+        try:
+            board = self._board_hypothetical(mobs)
+            rows = self._needs_hand_rows(mobs, board)
+            if not rows:
+                return 0.0
+            slots, elig = self._resolve_needs(mobs, board, rows)
+            resupply = [0.0] * len(slots)
+            from common import needs
+            val = needs.set_keep_v2(slots, elig, resupply, range(len(rows)))
+        except Exception:
+            return 0.0                                   # a featurize/resolve slip never crashes ranking
+        return min(_HAND_READINESS_CAP, val * _HAND_READINESS_W)
 
     def _refresh_shed_shadow(self, obs: dict, select: dict, board: Board, options: list,
                              traces: list, chosen: list):

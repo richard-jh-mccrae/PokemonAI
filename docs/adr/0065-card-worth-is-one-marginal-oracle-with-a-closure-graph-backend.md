@@ -225,14 +225,27 @@ comparator) and ADR-0032 (Effect-Clause tier).
   (39/267 SOLE-top, 71% shared, avg-tie 3.0)** — the enrichment touched only the keep-value resolver,
   not the leaf, so no accidental coupling (the discipline check, run `tools/train/leaf_lab.py`). Suite
   green (3057).
-- **WP-N5b — the readiness-leaf fold is BLOCKED on hand-visibility plumbing (2026-07-20).** Round 5's
-  actual "readiness consumes the needs module" fold — the leaf's own deferred v2 "actionable-resource
-  term" (`board-state-valuation-grill.md` §v1→v2: "credit only held cards with a LIVE use") IS the
-  needs assignment — cannot be built yet: the sim end-obs HIDES my hand (`_readiness` reads
-  active/bench only; grill §"What the grade does NOT see"), so the leaf has no hand to value. The
-  fold needs the hand-visibility plumbing FIRST (the grill names it the v2 enabler). Staged; the
-  general-worth slots (WP-N5) already moved the shared vocabulary onto the leaf's terms, so the fold
-  is a wiring + bench-gated swap once the hand is plumbed, not a re-derivation.
+- **WP-N5b — the readiness-leaf fold: BUILT behind a flag, MEASURED, verdict MIXED → armed OFF
+  (2026-07-20).** Round 5's "readiness consumes the needs module" fold — the leaf's own deferred v2
+  "actionable-resource term" (`board-state-valuation-grill.md` §v1→v2) IS the needs assignment. Two
+  pieces built behind `Pilot.leaf_hand_value` (PROFILE armed OFF — flag-off is byte-identical, suite
+  3057): (a) the HAND-VISIBILITY PLUMBING the grill named the v2 enabler — the sim end-obs is
+  OPPONENT-perspective so my hand is hidden (verified empirically: `handCount` present, no `hand`
+  key; `SearchState` exposes only the perspective-filtered `observation`, no full-state accessor),
+  so `_simulate_line` now CAPTURES my hand from the last my-perspective step and INJECTS it into the
+  end obs; (b) `pilot._hand_readiness` — the leaf's resource term = the held hand's slot coverage
+  (`needs.set_keep_v2` via `_resolve_needs`, the SAME valuation the keep-value sites use — one
+  vocabulary, not a rival), capped, added to `_readiness` in `_engine_leaf_value`. **Bench verdict
+  (the discipline gate, `leaf_lab.py` + `gate0_ab.py`): MIXED, does not clear.** Full leaf-lab (267):
+  SOLE-top 39→50–54 (15%→20%, the honest headline UP) and avg top-tie 3.0→2.2 (the 36→5 granularity
+  gap TIGHTER) — but "correct at top at all" 190→148 (the term breaks ties ~15 toward correct, ~42
+  AGAINST — real ranking errors), and the drop is NOT W-sensitive (0.2→0.5 all ~53–55% shared), so
+  it is intrinsic, not miscalibration. Gate-0 (lucario ctx-0 subset, CAP 2500): SOLE-top flat, 1-ply
+  at-top 75%→50%. The grill's "a big new positive term VOIDS every guard" warning, materialized: a
+  raw hand-value term rewards HOARDING over deploying — the opposite of the develop rung's job. Kept
+  armed OFF; the plumbing + the bench methodology stay as the enabler. The refined shape (value only
+  the held cards that CAN'T deploy this turn — actionable, not all latent worth) is the next
+  iteration, not this one.
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

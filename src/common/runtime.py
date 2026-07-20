@@ -80,6 +80,12 @@ PROFILE = {
                                     # replayable discard corpus, and the duplicate-pair set case flips
                                     # WITHOUT a new gate (v1's naivety, structurally gone). Kill-switch
                                     # (the develop_rollout precedent); OFF falls back to v1.
+    "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung LEAF's
+                                    # actionable-resource term — readiness consumes the needs module
+                                    # (the held-hand slot coverage), the board-state-valuation fold.
+                                    # Gated on the leaf-lab bench (SOLE-top / distinct-values / Gate 0);
+                                    # arms only when the bench clears it — a new positive leaf term can
+                                    # void guards sized against the old scale (the grill's builder-gotcha).
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): the within-turn
                                     # rollout rung — cost-measured affordable + crash-safe (60 games, 0
                                     # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off

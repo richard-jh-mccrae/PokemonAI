@@ -241,14 +241,21 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    missing resupply discount); discard corpus held 12/12; the **leaf-lab bench unchanged (39/267
    SOLE-top)** — the enrichment touched the resolver, not the leaf. This is the shared vocabulary
    moving onto the leaf's `contribution × saturation` terms.
-6. **WP-N5b — the readiness-leaf fold** (Round 5's fold; BLOCKED on plumbing): readiness consumes
-   the needs module — the leaf's own deferred v2 "actionable-resource term" IS the needs assignment.
-   BLOCKED: the sim end-obs hides my hand (`_readiness` reads active/bench only), so the leaf has no
-   hand to value; the hand-visibility plumbing is the prerequisite (the grill names it the v2
-   enabler). Once plumbed, the fold is a wiring + bench-gated swap (no regression on SOLE-top /
-   distinct-values / Gate 0), not a re-derivation — WP-N5 already put the vocabulary on the leaf's
-   terms. The refresh/gamble keep-value swaps follow once their shadows clear under the enriched
-   resolver (the refresh's residual is now the resupply discount, its own next piece).
+6. **WP-N5b — the readiness-leaf fold — BUILT behind a flag, MEASURED, verdict MIXED → armed OFF
+   2026-07-20.** Round 5's "readiness consumes the needs module" fold, behind `Pilot.leaf_hand_value`
+   (armed OFF, byte-identical when off): (a) the hand-visibility PLUMBING the grill named the v2
+   enabler — the sim end-obs is opponent-perspective (my hand hidden; `SearchState` has no full-state
+   accessor), so `_simulate_line` now captures my hand from the last my-perspective step and injects
+   it into the end obs; (b) `_hand_readiness` — the leaf term = the held hand's slot coverage
+   (`needs.set_keep_v2`, the shared valuation), capped, added to `_readiness`. **Bench verdict: MIXED,
+   does not clear.** leaf-lab (267): SOLE-top 15%→20% and avg-tie 3.0→2.2 (both UP — sharper), BUT
+   "correct at-top" 190→148 (the term breaks ties ~15 for / ~42 against correct — real ranking
+   errors, not W-sensitive); Gate-0 subset SOLE flat, 1-ply at-top 75%→50%. The grill's "a big
+   positive term voids guards" warning: a raw hand-value term rewards HOARDING over deploying. Kept
+   OFF; the plumbing + methodology stay. Next iteration (WP-N5c, not built): value only the held
+   cards that CAN'T deploy this turn (actionable, not all latent worth). The refresh/gamble keep-value
+   swaps follow once their shadows clear under the enriched resolver (the refresh's residual is now
+   the resupply discount, its own next piece).
 
 ## Acceptance (pre-committed)
 

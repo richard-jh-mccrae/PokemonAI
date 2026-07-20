@@ -2977,8 +2977,11 @@ class PlannerMixin:
         if active and active.get("hp"):
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
+        readiness = self._readiness(me)
+        if getattr(self, "leaf_hand_value", False):        # WP-N5b (armed OFF): readiness CONSUMES the
+            readiness += self._hand_readiness(end, my_index)  # needs module — the held-hand slot coverage
         return (self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                 readiness=self._readiness(me),
+                                 readiness=readiness,
                                  value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
                                  line=(line_val if spend_account else 0.0))
                 + self._predicted_loss(me, opp))                 # ADR-0064: bench-empty-doom loss rung
@@ -3312,6 +3315,13 @@ class PlannerMixin:
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))
             crossed_my_turn_end = False
+            # WP-N5b: the end obs is OPPONENT-perspective (my turn passed), so my hand is hidden. To
+            # let the leaf value it (`_hand_readiness`), capture my hand from the LAST my-perspective
+            # step and inject it into the end obs. Seeded from the live start-of-turn hand (fallback
+            # if the turn ends before any my-select). v1 caveat: the last capture is BEFORE my final
+            # action, so it can overcount by that one card. Gated — off = the sim is byte-identical.
+            capture_hand = getattr(self, "leaf_hand_value", False)
+            my_hand = (me.get("hand") if capture_hand else None)
             for _ in range(max_steps):
                 o = st.observation
                 c = o.current
@@ -3326,11 +3336,21 @@ class PlannerMixin:
                     break                                 # back to MY next turn — the depth-2 leaf
                 if not budget_ok():
                     break                                 # per-move engine budget spent
-                dec = self._evaluate(_prune_none(asdict(o)))
+                odict = _prune_none(asdict(o))
+                if capture_hand and mine and not crossed_my_turn_end:
+                    ph = (odict.get("current") or {}).get("players") or []
+                    meh = ph[my_index] if 0 <= my_index < len(ph) and ph[my_index] else {}
+                    if meh.get("hand"):
+                        my_hand = meh["hand"]              # my last-visible end-of-turn hand
+                dec = self._evaluate(odict)
                 if mine and not crossed_my_turn_end:       # only MY within-turn actions carry a line term
                     line_val += self._line_account(dec.options, dec.chosen)
                 st = cgapi.search_step(st.searchId, list(dec.chosen))
             end = _prune_none(asdict(st.observation))
+            if capture_hand and my_hand:                  # inject my hidden hand into the end obs
+                epl = (end.get("current") or {}).get("players") or []
+                if 0 <= my_index < len(epl) and isinstance(epl[my_index], dict):
+                    epl[my_index]["hand"] = my_hand
             result = st.observation.current.result if st.observation.current else -1
             cgapi.search_end()
             return (end, my_index, start_prizes, result, line_val)

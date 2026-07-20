@@ -71,6 +71,8 @@ EXPECTED_SHIPPED = {
                                     # equation decides a forced discard, replacing the `_DISCARD` ladder
     "needs_keep_value": True,       # ADR-0065 WP-N4 armed-ON 2026-07-20 (dev-window): the keep-value v2
                                     # needs-assignment decides the forced discard, superseding v1 (12/12 corpus)
+    "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
+                                    # term (readiness consumes needs), gated on the leaf-lab bench before arming
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
 }
 
