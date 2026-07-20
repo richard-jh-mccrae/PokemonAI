@@ -83,6 +83,12 @@ PROFILE = {
     "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung LEAF's
                                     # actionable-resource term — readiness consumes the needs module
                                     # (the held-hand slot coverage), the board-state-valuation fold.
+                                    # Since the who's-Active build (thread 3, 2026-07-20) this flag ALSO
+                                    # arms the hand-entangled who's-Active facets: the Active-quality
+                                    # micro-credit (`_READINESS_MOBILITY_W`, mobility/energized-preevo)
+                                    # and the switch-in-hand promotion ease — measured hand-blind they
+                                    # trade shared-top frames whose labels pivot on hidden-hand context.
+                                    # (The board-fact promotion-ease LIFT ships unconditionally.)
                                     # Gated on the leaf-lab bench (SOLE-top / distinct-values / Gate 0);
                                     # arms only when the bench clears it — a new positive leaf term can
                                     # void guards sized against the old scale (the grill's builder-gotcha).
