@@ -266,6 +266,17 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    shape is the non-deployable complement or a pure small tie-breaker. The refresh/gamble keep-value
    swaps follow once their shadows clear under the enriched resolver (the refresh's residual is now
    the resupply discount, its own next piece).
+8. **WP-N5d + the ε tie-breaker — BUILT, measured, the hand fold CLOSED at its ceiling
+   2026-07-20.** The deployability counterfactual (`_held_undeployable` + the sim's `heldCtx`
+   snapshot): the leaf credits only held cards that COULD NOT deploy this turn — the diagnostic
+   frame's hoarding reward collapsed +23→+3. The ε sizing (term < the smallest genuine leaf gap)
+   measured ≈ full weight (46/165/2.50 vs 45/163/2.51), CONFIRMING tie-splits are the entire
+   mechanism. Decisive: **E[correct picks] (Σ 1/tie-size — what the order-tie-broken argmax rung
+   actually delivers) is a WASH, 83.5 → 84.5 of 267.** The residual mis-split ties differ by the
+   leaf's other named blindnesses (who's-Active, tools) — positional discriminators a hand term
+   cannot read, so any hand-based tie-split there is noise. `leaf_hand_value` stays armed OFF;
+   N5d+ε committed as the best-behaved shape; the fold re-opens only after the who's-Active/tool
+   leaf terms land (leaf-native work, outside this spec).
 
 ## Acceptance (pre-committed)
 

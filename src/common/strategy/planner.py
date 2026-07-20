@@ -3315,13 +3315,28 @@ class PlannerMixin:
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))
             crossed_my_turn_end = False
-            # WP-N5b: the end obs is OPPONENT-perspective (my turn passed), so my hand is hidden. To
-            # let the leaf value it (`_hand_readiness`), capture my hand from the LAST my-perspective
-            # step and inject it into the end obs. Seeded from the live start-of-turn hand (fallback
-            # if the turn ends before any my-select). v1 caveat: the last capture is BEFORE my final
-            # action, so it can overcount by that one card. Gated — off = the sim is byte-identical.
+            # WP-N5b/N5d: the end obs is OPPONENT-perspective (my turn passed), so my hand is hidden.
+            # To let the leaf value it (`_hand_readiness`), capture a HELD-CONTEXT snapshot from the
+            # LAST my-perspective step — the hand, plus the turn facts the N5d deployability
+            # counterfactual reads (`_held_undeployable`): the attach/Supporter quotas, my bodies
+            # with their fresh `appearThisTurn` bits (the end board may reset them), bench fullness.
+            # Injected into the end obs (the `heldCtx` private key beside the injected `hand`).
+            # Seeded from the live start-of-turn state (fallback if the turn ends before any
+            # my-select). v1 caveat: the capture is BEFORE my final action, so it is one action
+            # stale. Gated — off = the sim is byte-identical.
             capture_hand = getattr(self, "leaf_hand_value", False)
-            my_hand = (me.get("hand") if capture_hand else None)
+
+            def _held_snapshot(player: dict, current: dict):
+                if not player.get("hand"):
+                    return None
+                return {"hand": player["hand"],
+                        "supporterPlayed": bool(current.get("supporterPlayed")),
+                        "energyAttached": bool(current.get("energyAttached")),
+                        "bodies": (player.get("active") or []) + (player.get("bench") or []),
+                        "benchFull": len([b for b in (player.get("bench") or []) if b])
+                                     >= (player.get("benchMax") or 5)}
+
+            my_ctx = _held_snapshot(me, cur) if capture_hand else None
             for _ in range(max_steps):
                 o = st.observation
                 c = o.current
@@ -3338,19 +3353,20 @@ class PlannerMixin:
                     break                                 # per-move engine budget spent
                 odict = _prune_none(asdict(o))
                 if capture_hand and mine and not crossed_my_turn_end:
-                    ph = (odict.get("current") or {}).get("players") or []
+                    pcur = odict.get("current") or {}
+                    ph = pcur.get("players") or []
                     meh = ph[my_index] if 0 <= my_index < len(ph) and ph[my_index] else {}
-                    if meh.get("hand"):
-                        my_hand = meh["hand"]              # my last-visible end-of-turn hand
+                    my_ctx = _held_snapshot(meh, pcur) or my_ctx
                 dec = self._evaluate(odict)
                 if mine and not crossed_my_turn_end:       # only MY within-turn actions carry a line term
                     line_val += self._line_account(dec.options, dec.chosen)
                 st = cgapi.search_step(st.searchId, list(dec.chosen))
             end = _prune_none(asdict(st.observation))
-            if capture_hand and my_hand:                  # inject my hidden hand into the end obs
+            if capture_hand and my_ctx:                   # inject my hidden hand + held-context
                 epl = (end.get("current") or {}).get("players") or []
                 if 0 <= my_index < len(epl) and isinstance(epl[my_index], dict):
-                    epl[my_index]["hand"] = my_hand
+                    epl[my_index]["hand"] = my_ctx["hand"]
+                    epl[my_index]["heldCtx"] = {k: v for k, v in my_ctx.items() if k != "hand"}
             result = st.observation.current.result if st.observation.current else -1
             cgapi.search_end()
             return (end, my_index, start_prizes, result, line_val)

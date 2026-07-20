@@ -262,6 +262,27 @@ comparator) and ADR-0032 (Effect-Clause tier).
   term or a pure small tie-breaker (break the 36→5 exact-value ties without overturning real gaps).
   N5c is committed as the better term (halves the regression, matches the grill's spec); the arming
   bar (SOLE-top AND shared-top both up, like the v1 leaf) is not met.
+- **WP-N5d + the ε tie-breaker — the hand fold's CEILING reached; CLOSED as measured-and-parked
+  (2026-07-20).** Both staged shapes built and measured. (a) **N5d, the deployability
+  counterfactual** (`_held_undeployable` + the `heldCtx` sim snapshot — attach/Supporter quotas,
+  bodies with fresh `appearThisTurn`, bench fullness, captured at the last my-perspective step):
+  the leaf credits ONLY held cards that COULD NOT have been deployed this turn (an Energy past the
+  attach quota, a Supporter past the slot, an evolution with no eligible base, a Basic on a full
+  bench; Items always deployable → never credited); deployable held cards still participate in the
+  assignment (covering slots, shrinking undeployable siblings' marginals) but earn nothing. On the
+  diagnostic frame the hoarding reward collapsed +23 → +3. (b) **The ε tie-break sizing**
+  (`_HAND_TIEBREAK_W/_CAP`: term < the ~0.025 smallest genuine leaf gap, so it can ONLY split
+  exact-value ties). **Measured (leaf-lab 267): N5d-full 45/163/2.51, N5d-ε 46/165/2.50 — ε ≈ full,
+  CONFIRMING N5b's W-insensitivity: tie-splits are the entire mechanism, magnitude irrelevant. The
+  decisive metric — E[correct picks] = Σ 1/tie-size over at-top frames (what the argmax rung with
+  order-broken ties actually delivers): baseline 83.5/267 vs N5d-ε 84.5/267 — a WASH** (+7 SOLE-top
+  exactly offset by mis-split ties). Root cause, now fully explained: the residual tied boards
+  differ by the leaf's OTHER named blindnesses (who's-Active, tools — the grill's own collision
+  dissection); when the true discriminator is positional, ANY hand-based tie-split is noise. **A
+  hand term structurally cannot clear the bar — the next SOLE-top gains belong to who's-Active and
+  tool terms in the leaf itself (leaf-native work, not the needs fold).** N5d+ε committed as the
+  best-behaved shape; `leaf_hand_value` stays armed OFF; the fold re-opens only after those
+  blindnesses are read. Suite green (3057).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

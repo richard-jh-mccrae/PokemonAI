@@ -67,14 +67,20 @@ _ENGINE_SUPPORTER_KEEP = 8.0
 # leaf's bench position weight (`_READINESS_BENCH_DISCOUNT` 0.45 — a hand card is ~one deploy away,
 # like a benched body). De-duplicated by the assignment (one slot per distinct card).
 _GENERAL_WORTH_W = 0.45
-# WP-N5b (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD hand at
-# end-of-turn = its needs-assignment slot coverage (`needs.set_keep_v2`), the SAME valuation the
-# keep-value sites use (readiness CONSUMES needs — one vocabulary, not a rival). Small + capped: a
-# held card is worth LESS than a deployed body (the `_GENERAL_WORTH_W` discount is already inside the
-# resolver), so the term nudges toward keeping live resources without rewarding HOARDING over
-# deploying (the develop rung's whole job). Sized/capped by the leaf-lab bench.
+# WP-N5b/N5d (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD
+# hand at end-of-turn = the needs-assignment slot coverage (`needs.set_keep_v2`) of the held cards
+# that COULD NOT have been deployed this turn (`_held_undeployable` — the N5d complement: a card I
+# chose not to play is a fumble, not future value; crediting it rewarded HOARDING, the N5b/N5c
+# regression). The SAME valuation the keep-value sites use (readiness CONSUMES needs — one
+# vocabulary, not a rival). Sized/capped by the leaf-lab bench.
 _HAND_READINESS_W = 0.5
 _HAND_READINESS_CAP = 40.0
+# The ε TIE-BREAK scale (the alternative sizing): shrink the whole term below the smallest genuine
+# leaf gap (~0.025, the line account's smallest spend increment), so it can ONLY split exact-value
+# ties (the 36→5 collapse) and can never overturn a real ranking gap. N5b's W-insensitivity proved
+# the damage was tie-splits, not magnitude — so the ε only helps once the VALUATION is right (N5d).
+_HAND_TIEBREAK_W = 0.0001
+_HAND_TIEBREAK_CAP = 0.02
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -2676,20 +2682,54 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                          "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
         return rows
 
+    def _held_undeployable(self, cid, ctx: dict) -> bool:
+        """WP-N5d — the deployability COUNTERFACTUAL: could this held card NOT have been deployed
+        during the turn that just ended? Only such cards are FUTURE VALUE the leaf may credit; a
+        deployable card still in hand is a card I CHOSE not to play — a fumble or a deliberate hold,
+        both already priced elsewhere (the spend account / the keep sites) — and crediting it
+        rewards hoarding (the N5b/N5c regression: two held deployables at +23 beat the line that
+        played them). ``ctx`` = the sim's `heldCtx` snapshot (the last my-perspective turn facts;
+        `_simulate_line`). Per class, rules.md quotas at source: an Energy is undeployable iff the
+        one manual attach was already spent (§3); a Supporter iff the Supporter slot was spent (§3);
+        an evolution iff NO eligible base was in play (matching ``evolvesFrom`` name, in play since
+        last turn — no evolving a just-arrived body, §4); a Basic iff the bench was full. Items /
+        Tools / Stadiums are always deployable → never credited (a deliberate hold — e.g. a switch
+        banked under doom — is the survival/keep sites' jurisdiction, not board readiness). Unknown
+        stats → False (err toward NOT rewarding a hold)."""
+        st = self.stats.get(cid) if self.stats else None
+        if st is None:
+            return False
+        if getattr(st, "is_energy", False):
+            return bool(ctx.get("energyAttached"))
+        if getattr(st, "is_supporter", False):
+            return bool(ctx.get("supporterPlayed"))
+        base = getattr(st, "evolvesFrom", None)
+        if base:
+            eligible = any(b and not b.get("appearThisTurn")
+                           and getattr(self.stats.get(b.get("id")), "name", None) == base
+                           for b in (ctx.get("bodies") or ()))
+            return not eligible
+        if getattr(st, "is_pokemon", False):
+            return bool(ctx.get("benchFull"))
+        return False
+
     def _hand_readiness(self, end_obs: dict, my_index: int) -> float:
-        """WP-N5b (armed OFF, `leaf_hand_value`): the develop-rung LEAF's actionable-resource term —
-        readiness CONSUMES the needs module. The value of my HELD hand on the simmed end-of-turn
-        board = its slot coverage under the exact assignment (`needs.set_keep_v2` over the resolved
-        hand), the SAME valuation the keep-value sites use — one vocabulary, not a rival (the grill's
-        "do NOT build a rival" ruling). Requires the sim to have INJECTED my hand into the
-        (opponent-perspective) end obs — 0 without it (fail-safe: no plumbing → no term). Capped
-        under the sub-prize budget (`_HAND_READINESS_CAP`); the held-card `_GENERAL_WORTH_W` discount
-        already lives inside the resolver, so the term nudges toward keeping live resources without
-        rewarding hoarding over deploying (the develop rung's whole job). Never raises."""
+        """WP-N5b/N5d (armed OFF, `leaf_hand_value`): the develop-rung LEAF's actionable-resource
+        term — readiness CONSUMES the needs module. The value of the held cards that COULD NOT have
+        been deployed this turn (`_held_undeployable` — the N5d complement) = their JOINT slot
+        coverage under the exact assignment (`needs.set_keep_v2` over the resolved hand, specific
+        needs only — `include_general=False`, N5c), the SAME valuation the keep-value sites use —
+        one vocabulary, not a rival (the grill's "do NOT build a rival" ruling). Deployable held
+        cards still PARTICIPATE in the assignment (a deployable copy covering a slot correctly
+        shrinks an undeployable sibling's marginal) — they just earn no credit themselves. Requires
+        the sim's injected hand + `heldCtx` (fail-safe 0 without either — no plumbing → no term).
+        Capped under the sub-prize budget; `_HAND_TIEBREAK_W/_CAP` is the ε sizing alternative
+        (split only exact ties). Never raises."""
         cur = (end_obs or {}).get("current") or {}
         players = cur.get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
-        if not me.get("hand"):
+        ctx = me.get("heldCtx")
+        if not me.get("hand") or not ctx:
             return 0.0
         # a MY-perspective view of the (opponent-perspective) end obs — the resolver reads
         # `_my_player`/board facts off `yourIndex`; the injected hand is already on players[my_index].
@@ -2699,10 +2739,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rows = self._needs_hand_rows(mobs, board)
             if not rows:
                 return 0.0
+            held = [k for k, r in enumerate(rows) if self._held_undeployable(r["cid"], ctx)]
+            if not held:
+                return 0.0
             slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
             resupply = [0.0] * len(slots)
             from common import needs
-            val = needs.set_keep_v2(slots, elig, resupply, range(len(rows)))
+            val = needs.set_keep_v2(slots, elig, resupply, held)
         except Exception:
             return 0.0                                   # a featurize/resolve slip never crashes ranking
         return min(_HAND_READINESS_CAP, val * _HAND_READINESS_W)
