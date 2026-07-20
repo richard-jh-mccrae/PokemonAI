@@ -73,10 +73,26 @@ def deploy_now_slot(key: str, *, value: float) -> Slot:
     return Slot("deploy_now", float(value), 0, key)
 
 
-def line_slot(key: str, *, value: float, deadline: int = 99) -> Slot:
-    """A Line member still to be assembled — no this-turn deadline unless a deploy-now slot
-    supersedes it for the same hop."""
-    return Slot("line", float(value), int(deadline), key)
+#: Roles whose line carries a SUCCESSION need (see `line_slots`): the plan's payoff class, whose
+#: attrition (KOs, prizing) the plan must survive — a spare copy's marginal is real, never 0.
+SUCCESSION_ROLES = frozenset({"win_condition", "primary_attacker"})
+
+
+def line_slots(key: str, *, value: float, succession: bool = False,
+               primary_met: bool = False) -> list:
+    """The line slots for ONE card class: the primary assembly slot at the full tier (absent when a
+    copy is already IN PLAY — ``primary_met``, the in_play gate re-derived as slot absence), plus —
+    for a wincon class (``succession=True``, `SUCCESSION_ROLES`) — a half-tier SUCCESSION slot: the
+    plan needs the line to survive attrition (KOs and prizing take bodies), so a spare copy's solo
+    marginal is the half tier, never 0 — "copy 2's marginal = its next-best slot" (the grill spec's
+    own sets-not-sums answer). Halving mirrors `draw_engine_slot` saturation; no this-turn deadline
+    (a deploy-now slot supersedes for the same hop)."""
+    out = []
+    if not primary_met:
+        out.append(Slot("line", float(value), 99, key))
+    if succession:
+        out.append(Slot("line", float(value) / 2.0, 99, f"{key}:succ"))
+    return out
 
 
 def answer_doom_slot(*, value: float, deadline: int = 0) -> Slot:
@@ -85,12 +101,14 @@ def answer_doom_slot(*, value: float, deadline: int = 0) -> Slot:
     return Slot("answer_doom", float(value), int(deadline), "answer_doom")
 
 
-def draw_engine_slot(*, engines_online: int) -> Slot:
+def draw_engine_slot(*, engines_online: int, value: float | None = None) -> Slot:
     """The recurring draw need, SATURATING (the readiness leaf's term, and the engine-supporter
     premise re-derived): with an engine already online the marginal engine's value halves — kept
-    over filler, but never stacking linearly."""
-    value = ROLE_TIER["engine"] if engines_online <= 0 else ROLE_TIER["engine"] / 2.0
-    return Slot("draw_engine", value, 0, "draw_engine")
+    over filler, but never stacking linearly. ``value`` overrides the engine-ROLE tier for the band
+    the resolver reads off the eligible suppliers (a supporter-only engine need is the v1 tuned
+    engine-supporter band, not the engine-body tier — corpus 83686860-11)."""
+    base = ROLE_TIER["engine"] if value is None else float(value)
+    return Slot("draw_engine", base if engines_online <= 0 else base / 2.0, 0, "draw_engine")
 
 
 def supply_wincon_slot(*, wincon_in_hand: bool, target_reachable: bool):
@@ -239,7 +257,8 @@ def pitch_gain(slots, eligibility, index: int) -> float:
     return best
 
 
-def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int) -> list:
+def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
+                     tiebreak=None) -> list:
     """The discard decider's objective (WP-N3/N4 consume this): the ``picks``-subset with the
     lowest removal score, where
 
@@ -248,18 +267,25 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int) -> li
     — the joint keep loss (exact set marginal), floored by the most-protected member's hedge (a
     MAX, not a sum: summing intrinsics would re-introduce the double-count sets-not-sums kills),
     minus what pitching actively gains (fuel). Brute-force over C(n, picks) (n ≤ ~10 ⇒ ≤ ~250
-    subsets — trivial). Ties break toward lower indices; returns a sorted list."""
+    subsets — trivial).
+
+    ``tiebreak`` (optional, per-card): among EQUAL-score removals the set with the lower Σ tiebreak
+    sheds first — the resolver passes residual worth (worth × deploy), so a worth-10 redundancy is
+    preserved over a worth-8 one and a deploy-dead card sheds before either (the 83967840-54 corpus
+    ruling, v1's worth tie-break re-derived). Final tie → lower indices; returns a sorted list."""
     from itertools import combinations
     n = len(eligibility)
     k = max(0, min(int(picks), n))
-    best_set, best_score = None, None
+    tb = list(tiebreak) if tiebreak is not None else [0.0] * n
+    best_set, best_key = None, None
     for combo in combinations(range(n), k):
         floor = max((float(intrinsics[i]) if i < len(intrinsics) else 0.0 for i in combo),
                     default=0.0)
         score = (max(set_keep_v2(slots, eligibility, resupply, combo), floor)
                  - sum(pitch_gain(slots, eligibility, i) for i in combo))
-        if best_score is None or score < best_score:
-            best_set, best_score = combo, score
+        key = (score, sum(tb[i] for i in combo if i < len(tb)))
+        if best_key is None or key < best_key:
+            best_set, best_key = combo, key
     return sorted(best_set or ())
 
 

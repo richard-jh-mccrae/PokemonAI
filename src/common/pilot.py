@@ -2259,7 +2259,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         credited 0 — errs toward keep. ``fuel`` (`_discard_fuel_types`) floors the keep at 0 — the
         zone sign's v1 (a negative keep is deferred). Known naiveties, by design: per-card (sets
         not sums — a duplicate PAIR both price 0), and no probabilistic recycle window. None off a
-        real choice (no options beyond the forced picks) and never mid-sim (`self._planning`)."""
+        real choice (no options beyond the forced picks) and never mid-sim (`self._planning`).
+
+        WP-N3 (keep-value v2): each row also carries ``keep_v2`` — the needs-assignment raw
+        counterfactual marginal (`_needs_v2`) — and the record carries ``eq2_pick`` (the v2
+        decider's cheapest removal, hedged at v1's post-gate keep) + ``agree_v2`` (v2 vs the
+        DECIDED picks): the v1-vs-v2 evidence bridge the WP-N4 family swaps ride, deciding
+        nothing."""
         if self._planning or select.get("context") != _DISCARD:
             return None
         picks = len(chosen)
@@ -2269,8 +2275,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not rows:
             return None
         eq_pick = order[:picks]
+        keeps_v2, eq2_pick = self._needs_v2(obs, board, rows, picks)
+        for r, kv in zip(rows, keeps_v2):
+            r["keep_v2"] = kv
         rec = {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
-               "agree": set(eq_pick) == set(chosen)}
+               "agree": set(eq_pick) == set(chosen),
+               "eq2_pick": eq2_pick, "agree_v2": set(eq2_pick) == set(chosen)}
         if getattr(self, "discard_keep_value", False):
             rec["decided"] = True                        # the equation IS the decider (kill-switch ON)
         return rec
@@ -2409,6 +2419,130 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         order = [r["i"] for r in
                  sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["worth"], r["i"]))]
         return rows, order
+
+    def _needs_v2(self, obs: dict, board: Board, rows: list, picks: int):
+        """WP-N3 (keep-value v2, `keep-value-needs-assignment-grill-spec.md`): the Pilot-side needs
+        RESOLVER — the live board resolved into `common.needs` slots / per-candidate eligibility /
+        resupply, pricing the v2 shadow: per-row ``keep_v2`` (the raw counterfactual marginal,
+        `needs.keep_v2`) and the v2 decider's pick (`needs.cheapest_removal`), hedged at v1's
+        POST-GATE keep — the WP-N3 refinement: v2 never prices below the shipped decider (a
+        raw-tier floor would undo the gate knowledge), and a firing floor telemeters a missing
+        slot. SHADOW-ONLY (Round 6): nothing here decides. Returns ``(keep_v2 per row, eq2_pick
+        as OPTION indices)``.
+
+        v0 resolver scope (the discard bench's needs — the rest joins in WP-N4):
+          * LINE slots per held card class at its line-role tier × the v1 deploy gate (dead
+            evolution / dead-fetcher / need-met knowledge CONSUMED per the dissolution ledger); an
+            in-play copy MEETS the primary slot; a wincon class adds the half-tier SUCCESSION slot
+            (`needs.line_slots` — a spare wincon insures the line, never free).
+          * DEPLOY-NOW slots off `Board.deploy_now_ids` (the spike, re-derived: the in-play copy
+            does not cover THIS body's evolution).
+          * FUND-ATTACK slots = the Active's biggest-attack cost remaining (the spent burst
+            re-derived as slot ABSENCE; deadlines from the quota structure).
+          * one saturating DRAW-ENGINE slot (engine Roles + the engine-supporter predicate).
+          * SUPPLY-WINCON via `needs.supply_wincon_slot` (need-met = slot absence).
+          * ANSWER-DOOM under the pressure read (successor / clutch_heal / switch).
+          * FUEL slots ride the pitch side (`needs.pitch_gain` — pitching a matching Energy is
+            progress).
+        Deferred, documented: opponent DENY slots (await the visible turns-to-ready read wiring),
+        probabilistic slot RESUPPLY over the closure (0.0 here — errs toward keep), non-Active
+        fund bodies, and non-option hand cards as fixed coverage (a real forced discard offers the
+        whole hand)."""
+        from common import needs
+        from common.card_worth import ROLE_TIER, ACE_SPEC_TIER, ENERGY_TIER, TAG_TIER
+        me = self._my_player(obs)
+        line_roles = {r for r, kinds in needs.SUPPLIES.items() if "line" in kinds and r in ROLE_TIER}
+        slots: list = []
+        elig: list = [set() for _ in rows]
+
+        def _emit(slot, members) -> None:
+            j = len(slots)
+            slots.append(slot)
+            for m in members:
+                elig[m].add(j)
+
+        def _tags(cid) -> set:
+            return set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
+
+        by_cid: dict = {}
+        for k, r in enumerate(rows):
+            by_cid.setdefault(r["cid"], []).append(k)
+        for cid, members in by_cid.items():
+            st = self.stats.get(cid) if self.stats else None
+            roles = self._roles_of(cid)
+            if cid in self._line_preevo_set():
+                roles = [*roles, "win_condition_base"]   # the derived line-member worth (WORTH-ONLY)
+            # A LINE slot is a BODY to assemble — Pokémon only (an ACE-SPEC Trainer keeps its
+            # one-per-deck line claim). An Energy with a line-class derived role (Ignition as
+            # `accel_source`) must NOT reopen a line: it resurrects the spent burst the fund-attack
+            # absence just re-derived (corpus 83454549-36).
+            worth = 0.0
+            if st is not None and getattr(st, "is_pokemon", False):
+                worth = max((ROLE_TIER[r] for r in roles if r in line_roles), default=0.0)
+            if st is not None and getattr(st, "aceSpec", False):
+                worth = max(worth, ACE_SPEC_TIER)
+            deploy = rows[members[0]].get("deploy", 1.0)
+            if worth * deploy > 0:
+                for s in needs.line_slots(f"line:{cid}", value=worth * deploy,
+                                          succession=bool(set(roles) & needs.SUCCESSION_ROLES),
+                                          primary_met=cid in board.in_play_ids):
+                    _emit(s, members)
+            if cid in getattr(board, "deploy_now_ids", frozenset()):
+                _emit(needs.deploy_now_slot(f"deploy:{cid}", value=self._role_value(cid)), members)
+        tutors = [k for k, r in enumerate(rows)
+                  if r.get("deploy", 1.0) > 0
+                  and ("tutor" in self._roles_of(r["cid"])
+                       or ({"rush_evolve", "tutor_mega"} & _tags(r["cid"])))]
+        supply = needs.supply_wincon_slot(
+            wincon_in_hand=bool(getattr(board, "wincon_in_hand", False)), target_reachable=True)
+        if supply is not None and tutors:
+            _emit(supply, tutors)
+
+        def _engine(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return ("engine" in self._roles_of(cid)
+                    or bool(st is not None and getattr(st, "is_supporter", False)
+                            and (_ENGINE_KEEP_TAGS & _tags(cid))
+                            and "hand_disruption" not in _tags(cid)))
+
+        engines = [k for k, r in enumerate(rows) if _engine(r["cid"])]
+        if engines:
+            online = sum(1 for pid in board.in_play_ids if "engine" in self._roles_of(pid))
+            # The band reads off the eligible suppliers: an engine BODY need is the engine-role
+            # tier; a supporter-only need is v1's tuned engine-supporter band (corpus 83686860-11
+            # — a 12-point Lillie's out-priced the fund Energies the human keeps).
+            band = (ROLE_TIER["engine"]
+                    if any("engine" in self._roles_of(rows[k]["cid"]) for k in engines)
+                    else _ENGINE_SUPPORTER_KEEP)
+            _emit(needs.draw_engine_slot(engines_online=online, value=band), engines)
+        active = next((p for p in (me.get("active") or []) if p), None)
+        if active is not None:
+            ast = self.stats.get(active.get("id")) if self.stats else None
+            remaining = max(0, (getattr(ast, "maxDamageCost", 0) or 0)
+                            - len(active.get("energies") or []))
+            funders = [k for k, r in enumerate(rows)
+                       if getattr(self.stats.get(r["cid"]) if self.stats else None,
+                                  "is_basic_energy", False) or "discard_eot" in _tags(r["cid"])]
+            if remaining and funders:
+                for s in needs.fund_attack_slots("active", remaining,
+                                                 quota_spent=bool(board.energy_attached)):
+                    _emit(s, funders)
+        if board.active_doomed:
+            wincons = self._wincon_set()
+            answers = [k for k, r in enumerate(rows)
+                       if ({"clutch_heal", "switch"} & _tags(r["cid"]))
+                       or (r["cid"] in wincons and getattr(board, "line_preevo_in_play", False))]
+            if answers:
+                _emit(needs.answer_doom_slot(value=TAG_TIER["clutch_heal"]), answers)
+        fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
+        if fuels:
+            _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
+        resupply = [0.0] * len(slots)
+        keeps = [round(needs.keep_v2(slots, elig, resupply, k), 1) for k in range(len(rows))]
+        pick = needs.cheapest_removal(
+            slots, elig, resupply, [r["keep"] for r in rows], picks,
+            tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
+        return keeps, sorted(rows[k]["i"] for k in pick)
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can

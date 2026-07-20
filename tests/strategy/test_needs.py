@@ -36,6 +36,20 @@ def test_deploy_now_slot_is_a_this_turn_deadline():
 
 
 @pytest.mark.req("REQ-NEEDS-0001")
+def test_line_slots_carry_succession_for_the_wincon_class():
+    """"Copy 2's marginal = its next-best slot" (the grill spec): a wincon-class line opens the
+    primary assembly slot at full tier PLUS a half-tier SUCCESSION slot — the plan must survive
+    attrition, so a spare copy is never free. An in-play copy MEETS the primary (the in_play gate
+    as slot absence) but the succession need stands; a non-wincon class gets the primary only."""
+    both = needs.line_slots("line:1031", value=30.0, succession=True)
+    assert [s.value for s in both] == [30.0, 15.0] and all(s.kind == "line" for s in both)
+    met = needs.line_slots("line:1031", value=30.0, succession=True, primary_met=True)
+    assert [s.value for s in met] == [15.0] and met[0].key.endswith(":succ")
+    plain = needs.line_slots("line:1159", value=25.0)
+    assert [s.value for s in plain] == [25.0]
+
+
+@pytest.mark.req("REQ-NEEDS-0001")
 def test_answer_doom_slot_from_the_threat_read():
     """The pressure gate re-derived: a doomed Active opens an answer slot (heal/switch/successor)
     with the threat's deadline."""
@@ -175,6 +189,21 @@ def test_hedge_floors_the_marginal_at_the_intrinsic_tier():
     assert needs.keep_v2(slots, elig, [0.0], 1) == 0.0
     assert needs.keep_v2(slots, elig, [0.0], 1, intrinsic=12.0) == 12.0
     assert needs.keep_v2(slots, elig, [0.0], 0, intrinsic=5.0) == 20.0   # marginal already higher
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_cheapest_removal_ties_break_by_residual_worth():
+    """The 83967840-54 corpus ruling, re-derived (v1's worth tie-break): among EQUAL-marginal
+    removals the lower Σ tiebreak (residual worth) sheds first — a worth-10 redundancy is worth
+    preserving over a worth-8 one; raw index order never decides while a tiebreak discriminates."""
+    slots = [needs.Slot("line", 10.0, 99, "s1"), needs.Slot("line", 8.0, 99, "s2")]
+    elig = [{0}, {0}, {1}, {1}]                         # dup pair A (10), dup pair B (8)
+    resupply = [0.0, 0.0]
+    intrinsics = [0.0] * 4
+    assert needs.cheapest_removal(slots, elig, resupply, intrinsics, 1) == [0]   # index fallback
+    picks = needs.cheapest_removal(slots, elig, resupply, intrinsics, 1,
+                                   tiebreak=[10.0, 10.0, 8.0, 8.0])
+    assert picks == [2]                                 # the lower-worth redundancy sheds first
 
 
 @pytest.mark.req("REQ-NEEDS-0004")

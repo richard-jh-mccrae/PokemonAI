@@ -1,7 +1,7 @@
 # Ubiquitous Language — the card-worth oracle (ADR-0065)
 
 Companion vocabulary doc for ADR-0065 (not an ADR itself — same convention as `0050-glossary.md`).
-Five plain words for the oracle's independent features (Needs ratified 2026-07-19, module pending);
+Five plain words for the oracle's independent features (Needs ratified 2026-07-19, built WP-N1–N3);
 use these in code, tests, commits, and
 grill docs. Agreed with the user 2026-07-19.
 
@@ -31,7 +31,7 @@ value = Worth × Odds
 | --- | --- | --- | --- |
 | **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a dead fetcher (every target provably gone) likewise; a doom-answering card under pressure SPIKES to full worth (the closing edge); a duplicate of a once-per-turn card sheds by rank (the quota window). All four legs built 2026-07-18/19. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
 | **Closure** | WHAT can reach what — the tutor/recycle/search graph over the card REPRESENTATION (`card_effects.json` FETCH clauses + `CardStat`), never a text parse. Pure graph; carries no Odds or Worth of its own. | `common/fetch_closure.py` | reach (avoid as a noun — used adjectivally, "reachable"), the graph (fine in prose) |
-| **Needs** | WHAT the position requires — deadline-tagged slots derived from board state (fund-attack, evolve-now, answer-the-doom, quota turns, discard-fuel; opponent-side from visible zones + turns-to-ready lookahead). A card's keep-value is its MARGINAL slot coverage under exact assignment; Gates re-derive as "a slot with a deadline" and dissolve as each re-derives. **Ratified 2026-07-19 (keep-value v2 grill); module pending** — `keep-value-needs-assignment-grill-spec.md`. | `common/needs.py` (pending) | needs list / wants (say Needs/slots), gate (during the transition — a gate is a derived VIEW of a slot) |
+| **Needs** | WHAT the position requires — deadline-tagged slots derived from board state (fund-attack, evolve-now, answer-the-doom, quota turns, discard-fuel; opponent-side from visible zones + turns-to-ready lookahead). A card's keep-value is its MARGINAL slot coverage under exact assignment (`keep_v2` — the counterfactual with re-assignment); Gates re-derive as "a slot with a deadline" and dissolve as each re-derives (the DISSOLUTION LEDGER). **Ratified 2026-07-19 (keep-value v2 grill); WP-N1–N3 built** — the module, the exact-assignment engine, and the Pilot resolver + `discard_shadow` v2 columns (`pilot._needs_v2`); swaps staged per family (WP-N4) — `keep-value-needs-assignment-grill-spec.md`. | `common/needs.py` | needs list / wants (say Needs/slots), gate (during the transition — a gate is a derived VIEW of a slot) |
 
 ## Relationships
 

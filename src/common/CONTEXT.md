@@ -292,16 +292,21 @@ seam this composes), combat module (bare)
 
 **Card-Worth Oracle** (ADR-0065):
 The ONE closed-form home for card keep/shed valuation — every equation is `value = Worth × Odds`.
-Four modules, four glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority):
+Five modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority):
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
 probability), **Odds** ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
 ([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
 factor, the closing-edge spike, the quota window; all four legs built — evolution, fetcher,
 pressure, quota), **Closure** ([fetch_closure.py](fetch_closure.py) — WHAT can
-reach what: the tutor/search graph over the card representation, never a text parse). Pure modules,
+reach what: the tutor/search graph over the card representation, never a text parse), and **Needs**
+([needs.py](needs.py) — WHAT the position requires: deadline-tagged slots + the exact-assignment
+marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives as "a slot with a
+deadline" and dissolves per the ledger — shadow-only today, `pilot._needs_v2` emits it beside every
+discard pick). Pure modules,
 no Pilot imports; the Pilot resolves board facts and delegates (`_role_value` / `_keep_cost` /
-`_deploy_odds` / `_card_reaccess_outs`). `keep_cost = Worth × Gates × (1 − re-access Odds over the
+`_deploy_odds` / `_card_reaccess_outs` / `_needs_v2`). `keep_cost = Worth × Gates × (1 − re-access
+Odds over the
 Closure)` — consumed by the gamble keep-floor and the refresh SHED; the doctrines stay the deciders.
 _Avoid_: value bare (ambiguous — Worth, the Worth×Odds product, or the Tier-0 tactical score; see
 the glossary), "the reachability module" (say Closure), gate for a rung-level deadline predicate

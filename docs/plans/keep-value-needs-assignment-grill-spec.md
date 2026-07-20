@@ -3,8 +3,9 @@
 **Status:** SEEDED and GRILLED the same day, post the seam-D swap. All six rounds are now ruled
 (three settled by evidence, three ruled by the user — see §Grill run). Per the shadow-equations
 ruling the design is SETTLED → construction proceeds shadow-first; the live v1 equation (9/9 on
-the discard corpus) keeps deciding meanwhile. Build order at the bottom. **WP-N1 BUILT 2026-07-19**
-(see §Build order).
+the discard corpus) keeps deciding meanwhile. Build order at the bottom. **WP-N1/N2 BUILT
+2026-07-19; WP-N3 BUILT 2026-07-20** (see §Build order) — the v2 shadow rides every discard
+decision (`keep_v2` / `eq2_pick` / `agree_v2`), 12/12 with the live decider on the discard corpus.
 
 **Development window (user, 2026-07-19):** no new Kaggle submission for ~a week; the week's work is
 hashing the keep_value equations out against the existing corrections corpus (the corpus is the
@@ -173,9 +174,35 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    sets-not-sums). The Round-2 counterexample, the resupply-derived re-access discount, and the
    deploy-now full-loss spike are the pinned proofs (`test_needs.py`). Memoization by
    hand-fingerprint arrives with the WP-N3 resolver (the stateful side).
-3. **WP-N3 — shadow columns** (Round 6): `keep_v2` per row + a v1-vs-v2 agreement bit inside the
-   existing `discard_shadow`, plus the refresh-SHED site; sweep the corpus, adjudicate every
-   v1-vs-v2 disagreement (each = a v2 bug or a v1 gate artifact).
+3. **WP-N3 — the resolver + shadow columns** (Round 6) — **BUILT 2026-07-20.** `pilot._needs_v2`
+   (the Pilot-side resolver: line / deploy-now / fund-attack / draw-engine / supply-wincon /
+   answer-doom / fuel slots from the live board, v1's deploy gates consumed per the ledger;
+   resupply 0.0 — errs toward keep — and opponent DENY slots deferred to WP-N4) + `keep_v2` per
+   shadow row and `eq2_pick` / `agree_v2` on the record, deciding nothing.
+   **Build-time hedge refinement (2026-07-19):**
+   the Round-1 hedge floor is **v1's KEEP value (post-gates), not the raw intrinsic tier** — a
+   raw-tier floor would re-price the spent burst at 30 / the redundant tutor at 10, undoing the
+   gate knowledge v1 encodes; "v2 never prices below the shipped decider" preserves it, and floor
+   firings still telemeter missing slots. The refresh-SHED shadow site is DEFERRED to WP-N4 (the
+   discard corpus is this week's bench; the refresh families join when their sites swap).
+   **Build-time derivations (2026-07-20, from the first sweep's 4 disagreements — each adjudicated
+   to a v2 resolver gap, none to the design):**
+   * the **SUCCESSION slot** (`needs.line_slots`): a wincon-class line opens a second half-tier
+     slot — "copy 2's marginal = its next-best slot" made concrete; a spare wincon insures the
+     line against attrition, never free. The duplicate-pair headline case now picks the true
+     spares (`test_v2_prices_duplicate_wincons_as_a_set_not_a_sum`).
+   * **line slots are Pokémon/ACE-SPEC only**: an Energy with a line-class derived role (Ignition
+     as `accel_source`) must not reopen a line slot — it resurrected the spent burst that
+     fund-attack absence had just re-derived (83454549-36).
+   * the **draw-engine band** reads off the eligible suppliers: engine-ROLE tier for a body need,
+     v1's tuned engine-supporter band (8) when only supporters can fill it (83686860-11 — a
+     12-point Lillie's out-priced the fund Energies the human keeps).
+   * `needs.cheapest_removal` gained a **residual-worth tiebreak** (worth × deploy): among
+     equal-marginal removals the lower residual worth sheds first — v1's worth tie-break
+     re-derived (83967840-54), and the deploy-dead Cinderace sheds before a live spare.
+   Post-adjudication sweep: **agree_v2 12/12** against the live decider over every replayable
+   discard correction — every human `correct` the decider satisfies, v2 satisfies. Suite green
+   (3133); needs + shadow suites 27.
 4. **WP-N4 — per-family swaps + gate dissolution**: as v2 clears each family (corpus + agreement),
    swap the site and retire the gates that family used, per the ledger; the hedge retires with them.
 5. **WP-N5 — the readiness fold** (Round 5's condition): readiness consumes the needs module ONLY

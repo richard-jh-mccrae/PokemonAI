@@ -201,3 +201,31 @@ def test_shadow_rides_telemetry_and_respects_the_midsim_guard():
     # no real choice (forced full pick) -> nothing to shadow
     forced = {**sel, "minCount": 5, "maxCount": 5}
     assert pilot._discard_shadow(obs, forced, board, sel["option"], [0, 1, 2, 3, 4]) is None
+
+
+# ============================================================ WP-N3: the keep_v2 shadow columns
+@pytest.mark.req("REQ-NEEDS-0005")
+def test_v2_columns_ride_the_shadow_with_the_agreement_bit():
+    """WP-N3: every shadow row carries the needs-assignment `keep_v2` (raw counterfactual marginal),
+    and the record carries `eq2_pick` (the v2 decider's cheapest removal, hedged at v1's keep) and
+    `agree_v2` (v2 vs the DECIDED picks) — the v1-vs-v2 evidence bridge, deciding nothing."""
+    pilot, obs = _setup([MEGA, CAPE, WALLYS, WATER, SALVATORE])
+    s = pilot.explain(obs).discard_shadow
+    assert s is not None and all("keep_v2" in r for r in s["eq"])
+    assert isinstance(s["eq2_pick"], list) and len(s["eq2_pick"]) == 2
+    assert isinstance(s["agree_v2"], bool)
+
+
+@pytest.mark.req("REQ-NEEDS-0005")
+def test_v2_prices_duplicate_wincons_as_a_set_not_a_sum():
+    """THE v2 headline (the naivety v1 cannot fix): v1's per-card dup_hand read BOTH duplicate
+    wincons as free (keep 0 each — the sibling covers), so a forced discard-2 pitched a Mega. v2:
+    each copy's solo marginal is the half-tier SUCCESSION slot ("copy 2's marginal = its next-best
+    slot" — a spare wincon insures the line against attrition, never free), the pair's set marginal
+    is full+half, and the assignment pitches the true spares instead."""
+    pilot, obs = _setup([MEGA, MEGA, CAPE, WATER, SALVATORE])
+    s = pilot.explain(obs).discard_shadow
+    megas = [r for r in s["eq"] if r["cid"] == MEGA]
+    assert len(megas) == 2 and all(r["keep_v2"] == 15.0 for r in megas)  # the succession marginal
+    assert not {0, 1} <= set(s["eq2_pick"])                              # NEVER pitch the pair
+    assert set(s["eq2_pick"]) == {3, 4}                                  # the spares go instead
