@@ -1,5 +1,5 @@
 """Held-card risk — fetch-early vs fetch-late (hypergeometric-fetch-closure §Round 8 §5;
-docs/plans/seam-held-card-risk.md).
+built 2026-07-19, its `seam-held-card-risk.md` plan doc retired — git history).
 
 Fetching a key card the turn BEFORE it can be played buys nothing this turn (the fetch succeeds
 identically next turn — a whole-deck search cares only that the target remains in deck) while it

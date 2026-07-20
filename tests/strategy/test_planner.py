@@ -705,7 +705,8 @@ def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypa
         opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 2}
         me = me_dev if first_step == [1] else me_bare
         end = {"current": {"turn": 3, "yourIndex": 0, "players": [me, opp]}}
-        return (end, 0, 2, -1, 0.0)                     # both lines banked 1 prize (2 -> 1), no result; 0 line
+        return (end, 0, 2, -1, 0.0, False)              # both lines banked 1 prize (2 -> 1), no result;
+                                                        # 0 line account; coin-free (the win-trust bit)
 
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim)
     d = pilot.explain(_two_candidate_obs())
@@ -718,6 +719,54 @@ def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypa
                                                     threat_removed=10_000, development=10_000)
     assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True,
                                                     threat_removed=10_000, readiness=10_000, line=10_000)
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeypatch):
+    """The f24 phantom-win regression (CI, 2026-07-20): `_simulate_line` auto-resolves coins, so a
+    line can sim to an outright \"win\" on one lucky RNG stream (7000) and to an ordinary board on
+    another (162) — and the dominant win short-circuit let that mirage preempt the tuned scoring.
+    The 6th sim-tuple element (``coins``) demotes it: a simmed win is dominant ONLY when the line
+    consumed no coin flips; a coin-dependent one ranks as its ordinary end board (prizes banked
+    still count), so only the SOUND win rung may claim wins."""
+    pilot = _pilot()
+    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
+    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
+    end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
+
+    def fake_sim(coins):
+        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 2, 0, 0.0, coins)
+
+    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False))
+    clean = pilot._engine_leaf_value({}, [0])
+    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(True))
+    coined = pilot._engine_leaf_value({}, [0])
+    from common.strategy.context import KO_SCORE
+    assert clean == KO_SCORE * 3                        # coin-free win: dominant (prizes+1)
+    assert coined < KO_SCORE * 3                        # coin-won "win": ordinary board ranking
+    assert coined < clean
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_develop_rollout_never_ranks_a_coin_contaminated_sim(monkeypatch):
+    """The other half of the f24 heisenbug: the develop rollout's OVERRIDE authority comes from a
+    reproducible end-board — a coin-riding sim's value swings across RNG streams (162 vs a phantom
+    win on the same line), so it is excluded from the ranking like a failed fork. All-coined →
+    defer (the tuned scoring keeps the turn); a coin-free line still ranks and commits."""
+    pilot = _pilot()
+    values = {0: (50.0, True), 1: (40.0, False), 2: (45.0, True)}   # [0]/[2] coined, [1] clean
+
+    def fake_leaf(obs, first_step, spend_account=True, with_coins=False):
+        val, coined = values[first_step[0]]
+        return (val, coined) if with_coins else val
+
+    monkeypatch.setattr(pilot, "_engine_leaf_value", fake_leaf)
+    traces = [type("T", (), {"score": 0.0, "card_id": None})() for _ in range(3)]
+    line = pilot._develop_rollout_line({}, {}, None, [{}, {}, {}], traces)
+    assert line is not None and line.next_step == [1]   # the clean 40 beats the coined 50/45
+    values.update({1: (40.0, True)})                    # now everything is coin-noise
+    line = pilot._develop_rollout_line({}, {}, None, [{}, {}, {}], traces)
+    assert line is None                                 # all-coined -> defer to the tuned scoring
 
 
 # --------------------------------- heal-before-attach (corpus 6858 shape): the attach-carried KO

@@ -34,6 +34,26 @@ def test_reaccess_outs_are_the_closure_pointed_backwards():
     assert ml._card_reaccess_outs(999999, counts) == 0             # unknown card -> no outs
 
 
+@pytest.mark.req("REQ-WORTH-0007")
+def test_role_value_derives_worth_for_an_undeclared_line_member():
+    """Line-member worth DERIVATION (Round 9 'derive first', the discard-shadow finding on
+    86091435-68): a non-payoff win-condition Line member is worth its `win_condition_base` tier even
+    when the deck declared only the base — a middle Line stage (Drakloak on Dreepy→Drakloak→Dragapult
+    ex) is a plan piece, not junk. WORTH-ONLY: the Line-membership fact enters the value currency
+    (the keep-cost sites + the shadow) but NOT `_roles_of` / `c.roles` — the discard-ladder rungs keep
+    their tuned routing, so the covered-vs-uncovered Drakloak discrimination (83686860-18) stays the
+    gated seam-D migration, never flipped here."""
+    from common.card_worth import ROLE_TIER
+    dx = _shipped_pilot("dragapult_ex")
+    assert dx._role_value(121) == ROLE_TIER["win_condition"]        # payoff: unchanged (30)
+    assert dx._role_value(119) == ROLE_TIER["win_condition_base"]   # declared base: unchanged (20)
+    assert dx._role_value(120) == ROLE_TIER["win_condition_base"]   # DERIVED middle stage: was 0
+    # the derivation is WORTH-ONLY — `c.roles` (what the rungs read) is untouched
+    assert "win_condition_base" not in dx._roles_of(120)
+    # a non-Line card is still worth 0 (no spurious derivation)
+    assert dx._role_value(1120) == 0.0                             # Crushing Hammer: not a Line member
+
+
 @pytest.mark.req("REQ-WORTH-0001")
 def test_role_value_reads_the_tuned_tier_table():
     """Base worth = the general role→points tier (`common.card_worth.ROLE_TIER`), max over a card's
@@ -74,7 +94,7 @@ def test_role_value_pure_function_owns_the_tier_and_fallbacks():
 
 @pytest.mark.req("REQ-WORTH-0004")
 def test_role_value_reads_tag_derived_worth():
-    """The worth-coverage fix (combat-tempo findings §B): situational Trainers / special Energy carry
+    """The worth-coverage fix (ADR-0065 §Build status, TAG_TIER): situational Trainers / special Energy carry
     their keep-value in behavioural TAGS the discard ladder already trusts (`keep-key` −30 covers
     `discard_eot`; `dont-waste-clutch-heal`; `keep-gust-and-recovery` −10) — `role_value` now reads a
     TAG_TIER so the ONE currency covers them. Worth = the MAX claim across roles, tags, and the
@@ -111,6 +131,77 @@ def test_keep_cost_is_role_value_scaled_by_irreplaceability():
     dear = ml._keep_cost(678, gone, pool, draws)
     assert cheap < dear <= ROLE_TIER["win_condition"]
     assert ml._keep_cost(999999, live, pool, draws) == 0.0   # a role-less card is free to shuffle
+
+
+@pytest.mark.req("REQ-WORTH-0005")
+def test_hand_keep_prices_duplicates_marginally_and_excludes_the_played_refresh_once():
+    """The duplicate-copy reconciliation (ADR-0065 §Build status): BOTH keep-value sites (the gamble
+    keep-floor, the refresh SHED) read the ONE `_hand_keep` summation. k held copies of a card each
+    charge with all k shuffled siblings as outs (the first sets-not-sums step, spec §Round 7) — dearer
+    than the retired SHED frozenset dedup (one charge per distinct card, duplicates free) and cheaper
+    than the retired gamble form (k independent one-ofs at +1 out each). The played refresh is
+    excluded ONCE — a second held copy of it still shuffles and still charges. A duplicate-free hand
+    prices exactly as before the reconciliation."""
+    from math import isclose
+    from common.card_worth import ROLE_TIER
+    from common.deck_odds import draw_hit_probability
+    ml = _shipped_pilot("mega_lucario")
+    pool, draws = 40, 6
+    counts = {678: 1, 1121: 4, 1145: 2}                   # wincon + Ultra Ball + Mega Signal in deck
+    single = ml._keep_cost(678, counts, pool, draws)      # the lone-copy charge (+1 out), unchanged
+    assert single > 0
+    # duplicate-free hand: the summation IS the old per-copy sum — behaviour unchanged
+    assert isclose(ml._hand_keep([678], None, counts, pool, draws), single)
+    # two held copies: each charges with BOTH shuffled siblings as outs — 2 × the (+2 outs) charge,
+    # strictly between one dedup charge and two independent one-of charges
+    outs2 = ml._card_reaccess_outs(678, counts) + 2
+    per_copy2 = ROLE_TIER["win_condition"] * (1 - draw_hit_probability(outs2, pool, draws))
+    dup = ml._hand_keep([678, 678], None, counts, pool, draws)
+    assert isclose(dup, 2 * per_copy2)
+    assert single < dup < 2 * single
+    # the played refresh is excluded ONCE — its duplicate held copy still charges (as a lone copy)
+    assert isclose(ml._hand_keep([678, 678], 678, counts, pool, draws), single)
+    # a role-less hand stays free regardless of duplication
+    assert ml._hand_keep([999999, 999999], None, counts, pool, draws) == 0.0
+
+
+@pytest.mark.req("REQ-WORTH-0006")
+def test_pre_anchor_keep_cost_weights_the_prize_split():
+    """PRE-ANCHOR the cost side prices the prize split exactly like the gain side (`_prize_split_hit`):
+    the unseen re-access outs split hypergeometrically over deck + face-down prizes, while the
+    shuffled held copy joins the pool as a CERTAIN out (a hand card is never prize-assignable).
+    Before this, the cost side counted possibly-prized outs at full strength against a prize-free
+    pool — re-access overestimated, keep under-charged, a pre-anchor pro-gamble bias the
+    prize-weighted gain side never had. Weighting can only LOWER re-access, so keep-cost RISES
+    pre-anchor; with no hidden prizes the plain window draw is reproduced exactly."""
+    from math import comb, isclose
+    from common.card_worth import ROLE_TIER
+    from common.deck_odds import draw_hit_probability
+    ml = _shipped_pilot("mega_lucario")
+    pool, draws, k, d = 40, 6, 6, 34                     # 6 face-down prizes, 34 hidden deck cards
+    counts = {678: 1, 1121: 4, 1145: 2}                  # unseen outs: wincon + Ultra Ball + Mega Signal
+    u = ml._card_reaccess_outs(678, counts)
+    h = d + k
+    expect_re = sum(comb(d, j) * comb(k, u - j) / comb(h, u)
+                    * draw_hit_probability(j + 1, pool, draws)    # +1: the shuffled copy, certain
+                    for j in range(max(0, u - k), min(u, d) + 1))
+    expect = ROLE_TIER["win_condition"] * (1 - expect_re)
+    got = ml._keep_cost(678, counts, pool, draws, prizes_hidden=k, deck_count=d)
+    assert isclose(got, expect)
+    # the weighting only ever RAISES keep vs the unweighted read of the same unseen counts
+    assert got > ml._keep_cost(678, counts, pool, draws)
+    # prizes_hidden=0 → the plain window draw, byte-identical to the anchored path
+    assert ml._keep_cost(678, counts, pool, draws, prizes_hidden=0) == ml._keep_cost(678, counts, pool, draws)
+    # _hand_keep threads the split through to each copy
+    assert isclose(ml._hand_keep([678], None, counts, pool, draws,
+                                 prizes_hidden=k, deck_count=d), got)
+    # `certain` edges of the split primitive: the gain side (certain=0) is unchanged; zero unseen
+    # outs still redraw the certain shuffled copy
+    assert (ml._prize_split_hit(u, d, k, pool, draws)
+            == ml._prize_split_hit(u, d, k, pool, draws, certain=0))
+    assert isclose(ml._prize_split_hit(0, d, k, pool, draws, certain=1),
+                   draw_hit_probability(1, pool, draws))
+    assert ml._prize_split_hit(0, d, k, pool, draws) == 0.0
 
 
 @pytest.mark.req("REQ-WORTH-0001")

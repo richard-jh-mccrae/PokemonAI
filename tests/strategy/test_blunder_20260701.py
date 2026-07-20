@@ -90,27 +90,41 @@ def test_dont_overbuild_the_doomed_wincon_feeds_the_bench_successor():
     assert pilot.decide(obs_h) == [0]                                       # keep building Active
 
 
-# ---------------------------------------------------------- f49: hold-successor-when-doomed
+# ------------------------------------- f49: the pressure gate (fold of hold-successor-when-doomed)
 @pytest.mark.req("REQ-GEN-0035")
-def test_hold_successor_when_doomed_refuses_to_shuffle_away_the_next_attacker():
+def test_pressure_gate_holds_the_successor_when_doomed():
     """The Active wincon is doomed, the hand holds the successor Mega + a benched Staryu to evolve it
-    onto — refuse the Harlequin shuffle (it would gamble the rebuild away) and attack instead (f49)."""
+    onto — refuse the Harlequin shuffle (it would gamble the rebuild away) and attack instead (f49).
+    The flat `hold-successor-when-doomed` (−35) is RETIRED into the PRESSURE GATE (2026-07-19): under
+    doom the successor's re-access credit zeroes (`gate_library.closing_gate_reaccess`), so the graded
+    SHED charges its FULL role worth — the hold rides the one keep-cost equation, no rung."""
     pilot = _pilot()
     play_harlequin = opt(PLAY, area=HAND, index=0)
     attack = attack_opt(JETTING)                                # Jetting Blow available (1 W attached)
-    doomed = state(active=poke(WINCON, energy=1, hp=100), bench=[poke(PREEVO, energy=0, hp=70)],
+    # The benched Staryu is JUST-benched (`appearThisTurn`) so it is NOT an eligible base this turn —
+    # isolating the PRESSURE gate from the separate DEPLOY-NOW spike (a deployable hand wincon, tested
+    # in test_gate_library). `line_preevo_in_play` still holds (a preevo IS in play, appearThisTurn
+    # aside), which is the pressure premise.
+    just_benched = {**poke(PREEVO, energy=0, hp=70), "appearThisTurn": True}
+    doomed = state(active=poke(WINCON, energy=1, hp=100), bench=[just_benched],
                    opp_active=poke(678, hp=210), hand=[HARLEQUIN, WINCON])
     obs = make_select([play_harlequin, attack], current=doomed)
     b = pilot._board(obs)
     assert b.active_doomed and b.wincon_in_hand and b.line_preevo_in_play  # the premise
-    assert "hold-successor-when-doomed" in _fired(pilot.explain(obs).options[0])
+    assert pilot._gate_closing(WINCON, b)                       # the successor's gate is CLOSING (pressure)
+    assert WINCON not in b.deploy_now_ids                       # …via pressure, not deploy-now (isolated)
     assert pilot.decide(obs) == [1]                             # attack; don't shuffle successor away
 
-    # Control — HEALTHY Active: hand copy is a redundant dupe, shuffle's fine (rule stands down).
-    healthy = state(active=poke(WINCON, energy=1, hp=330), bench=[poke(PREEVO, energy=0, hp=70)],
+    # Control — HEALTHY Active, base just-benched: no doom AND no deploy-now, so no spike — the hand
+    # copy keeps its closure discount, shuffle's fine.
+    healthy = state(active=poke(WINCON, energy=1, hp=330), bench=[just_benched],
                     opp_active=poke(678, hp=210), hand=[HARLEQUIN, WINCON])
     obs_h = make_select([play_harlequin, attack], current=healthy)
-    assert "hold-successor-when-doomed" not in _fired(pilot.explain(obs_h).options[0])
+    b_h = pilot._board(obs_h)
+    assert not b_h.active_doomed and not pilot._gate_closing(WINCON, b_h)
+    counts = {WINCON: 1}
+    assert (pilot._keep_cost(WINCON, counts, 40, 6, b_h)
+            < pilot._keep_cost(WINCON, counts, 40, 6, b))       # doom charges strictly more
 
 
 # ---------------------------------------------------------- f78: active_can_ko + winning-attack-first

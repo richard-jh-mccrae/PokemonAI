@@ -56,6 +56,31 @@ _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter gra
                            # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
                            # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
                            # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
+# The discard equation's engine-supporter keep floor (ADR-0065 seam-D) — mirrors the ladder's
+# `keep-engine-supporter-at-discard` (−8): a draw/search/heal SUPPORTER that is not hand_disruption
+# is a draw engine kept over pure filler. Discard-CONTEXT (not general worth), tuned to the −8 band.
+_ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
+_ENGINE_SUPPORTER_KEEP = 8.0
+# WP-N5 (keep-value v2): the LATENT-worth discount on a held card that fills no specific need — its
+# role tier is real board value even without an open slot (the readiness leaf's `contribution` for
+# the HAND), but a not-yet-deployed card is worth less than one filling a live need. Sized at the
+# leaf's bench position weight (`_READINESS_BENCH_DISCOUNT` 0.45 — a hand card is ~one deploy away,
+# like a benched body). De-duplicated by the assignment (one slot per distinct card).
+_GENERAL_WORTH_W = 0.45
+# WP-N5b/N5d (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD
+# hand at end-of-turn = the needs-assignment slot coverage (`needs.set_keep_v2`) of the held cards
+# that COULD NOT have been deployed this turn (`_held_undeployable` — the N5d complement: a card I
+# chose not to play is a fumble, not future value; crediting it rewarded HOARDING, the N5b/N5c
+# regression). The SAME valuation the keep-value sites use (readiness CONSUMES needs — one
+# vocabulary, not a rival). Sized/capped by the leaf-lab bench.
+_HAND_READINESS_W = 0.5
+_HAND_READINESS_CAP = 40.0
+# The ε TIE-BREAK scale (the alternative sizing): shrink the whole term below the smallest genuine
+# leaf gap (~0.025, the line account's smallest spend increment), so it can ONLY split exact-value
+# ties (the 36→5 collapse) and can never overturn a real ranking gap. N5b's W-insensitivity proved
+# the damage was tie-splits, not magnitude — so the ε only helps once the VALUATION is right (N5d).
+_HAND_TIEBREAK_W = 0.0001
+_HAND_TIEBREAK_CAP = 0.02
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -419,6 +444,10 @@ class Board:
     opp_took_ko_this_turn: bool = False   # I took a prize (KO'd an opponent Pokémon) THIS turn — so I
                                           # have just ENABLED their post-KO comeback disruptor (Unfair
                                           # Stamp). Sound when True; False when unknown. `unfair-stamp-comeback-posture` gate.
+    my_pokemon_koed_last_turn: bool = False  # THE MIRROR: the opponent took ≥1 prize across their last
+                                          # turn (one of MY Pokémon was KO'd) — MY Unfair Stamp's own
+                                          # play condition; gates the gamble's drawn-Stamp refresh
+                                          # chain. Sound-when-fired (rare self-recoil edge fails open).
     opp_hand_size_delta: int | None = None  # change in opponent hand size since their previous distinct
                                           # turn; None until a prior turn is known. SIGN (settled ADR-0060,
                                           # the two docstrings used to contradict each other): POSITIVE = they
@@ -521,6 +550,10 @@ class Board:
                                           # PROVABLE famine still fires the stall-gust (dragapult f70)
     immediate_preevo_in_play: bool = False  # the payoff's immediate pre-evo (e.g. Drakloak) is ALREADY on
                                           # my board, so a hand copy of it is redundant — refuel over it
+    deploy_now_ids: frozenset = field(default_factory=frozenset)  # hand card ids that are evolutions with
+                                          # an ELIGIBLE in-play base THIS turn (deploy-now spike, ADR-0065):
+                                          # pitching/shuffling forfeits a live tempo play re-access can't
+                                          # restore, so keep spikes to full worth (`_gate_closing`)
     active_arm_available: bool = False    # go-down-swinging is on the table: the Active is a real ATTACKER
                                           # (not a utility body) whose biggest attack ONE more Energy would
                                           # COMPLETE, and no ready benched win-condition to retreat into —
@@ -933,6 +966,19 @@ class Decision:
                                      # correction reader sees WHAT the rung out-scored, not just its pick.
                                      # Sparse: None unless the develop rung fired — keeps a non-develop
                                      # record byte-identical to the pre-rung wire format
+    discard_shadow: dict | None = None  # the DISCARD keep-cost SHADOW (shadow-equations ruling,
+                                     # 2026-07-19): the card-worth oracle's per-candidate working
+                                     # (worth/gates/keep) + its pick + the agreement bit vs the tuned
+                                     # `_DISCARD` ladder, which stays the decider. Deciding NOTHING —
+                                     # the evidence bridge for the discard convergence (seam D).
+                                     # Sparse: None off a real discard choice
+    refresh_shadow: dict | None = None  # the REFRESH-SHED keep-value v2 MAGNITUDE shadow (ADR-0065
+                                     # WP-N4b): v1's Σ keep_cost (`_refresh_shed_keepcost`) beside
+                                     # v2's whole-hand assignment marginal (`needs.set_keep_v2`) + the
+                                     # resulting refresh swings and the SIGN-agreement bit (does
+                                     # swapping the shed flip play/don't-play?). Deciding NOTHING — the
+                                     # sets-not-sums evidence the refresh swap rides. Sparse: None off
+                                     # a real refresh PLAY option / mid-sim
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -955,7 +1001,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
-                 develop_rollout=False):
+                 develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
+                 leaf_hand_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1070,6 +1117,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # NOW (Supporter needs a free slot) and a Basic Energy
                                                         # is still fetchable. An ATTACK-based accel (a Pokemon)
                                                         # is NEVER counted (using it IS the attack)
+        self.discard_keep_value = discard_keep_value    # ADR-0065 seam-D kill-switch (default OFF): the
+                                                        # card-worth equation DECIDES a forced discard in
+                                                        # place of the `_DISCARD` ladder. OFF = the ladder
+                                                        # decides and the equation only shadows (telemetry).
+        self.leaf_hand_value = leaf_hand_value          # ADR-0065 WP-N5b kill-switch (default OFF): the
+                                                        # develop-rung LEAF's actionable-resource term —
+                                                        # readiness CONSUMES the needs module (the hand's
+                                                        # slot coverage), the board-state-valuation fold.
+                                                        # Needs the sim to plumb my end-of-turn hand into
+                                                        # the (opponent-perspective) end obs. Gated on the
+                                                        # leaf-lab bench (SOLE-top / distinct-values / Gate 0).
+        self.needs_keep_value = needs_keep_value        # ADR-0065 WP-N4 kill-switch (default OFF): the
+                                                        # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`,
+                                                        # `eq2_pick`) decides the forced discard in place of
+                                                        # v1 — the per-family swap for the cleared discard
+                                                        # family (agree_v2 12/12 + the duplicate-pair flip).
+                                                        # Takes precedence over `discard_keep_value`; OFF =
+                                                        # v1 decides (or the ladder) and v2 only shadows.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1109,6 +1174,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._chain_target_cache: dict = {}             # memo: tutor card id -> FULL-scope deck fetch
                                                         # targets (the tutor-chain graph leg, seam C)
         self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
+        self._discard_fuel_cache = None                 # memo: energy types a discard-source accel attack
+                                                        # wants IN the discard (deck-fixed; Aura Jab class)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
         self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
@@ -1168,7 +1235,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
         reordered = order != by_score
         grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
-        if grabbed:                                     # greedy gap-update + take-fewer
+        # ADR-0065 SWAP: at a forced discard the card-worth equation DECIDES — the `picks`
+        # cheapest-to-lose cards — replacing the tuned `_DISCARD` ladder. Precedence (each a
+        # kill-switch, OFF falls through): WP-N4 `needs_keep_value` (the v2 needs-assignment,
+        # `_needs_v2`/`eq2_pick`) > seam-D `discard_keep_value` (v1, `_discard_equation_pick`) >
+        # the ladder. Both OFF leaves the ladder deciding and both equations only shadow.
+        eq_discard = None
+        if select.get("context") == _DISCARD and max_count > 0:
+            if getattr(self, "needs_keep_value", False):
+                eq_discard = self._discard_needs_pick(obs, select, board, options, max_count)
+            elif getattr(self, "discard_keep_value", False):
+                eq_discard = self._discard_equation_pick(obs, select, board, options, max_count)
+        if eq_discard:
+            chosen = eq_discard
+        elif grabbed:                                   # greedy gap-update + take-fewer
             chosen = self._greedy_grab(obs, select, board, traces, options,
                                        select.get("minCount", 0), max_count)
         else:
@@ -1185,6 +1265,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
+                        discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
+                        refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -2147,25 +2229,31 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return _GRAB_REFRESH_DRAW * draw if draw is not None else 0.0
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
-        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = ``Σ keep_cost``
-        over every held card EXCEPT the refresh being played (it is discarded, not shuffled). Each
-        card's cost = role value × (1 − re-access odds) over the shuffle-grown pool across the refresh's
-        own draw window — the closure pointed backwards, exactly the gamble's `hand_keep`
-        (`_best_gamble_line`). Anchored deck counts when the tracker has them, else the pre-anchor
-        unseen composition (`decklist − visible − hidden prizes`, needs obs — the reason obs is
-        threaded here). 0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit
-        alone stands, matching the old flat term's floor)."""
+        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = the shared
+        ``planner._hand_keep`` summation — ``Σ keep_cost`` over every held COPY except the played
+        refresh itself (excluded once: it is discarded, not shuffled; a second held copy still
+        charges), duplicates priced marginally (each copy's re-access odds count its shuffled
+        siblings as outs). Each copy's cost = role value × (1 − re-access odds) over the
+        shuffle-grown pool across the refresh's own draw window — the closure pointed backwards,
+        the SAME summation as the gamble's `hand_keep` (`_best_gamble_line`) by construction.
+        Anchored deck counts when the tracker has them, else the pre-anchor unseen composition
+        (`decklist − visible − hidden prizes`, needs obs — the reason obs is threaded here) with the
+        re-access odds PRIZE-SPLIT-WEIGHTED (`_prize_split_hit` via `_keep_cost` — the cost side
+        prices the split exactly like the gain side; the shuffled hand copies stay ``certain``).
+        0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit alone stands,
+        matching the old flat term's floor)."""
         from common.strategy.refresh import refresh_branches
         branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
         if not branches:
             return 0.0
         draws = max(my_draw for my_draw, _opp in branches)
+        me = self._my_player(obs)
         counts = board.deck_known_counts
         if counts:
             deck_count = sum(counts.values())
+            prizes_hidden = 0                                    # anchored: the split is resolved
         else:
             from collections import Counter
-            me = self._my_player(obs)
             unseen = Counter(self.deck)
             unseen.subtract(self._visible_card_counts(me))
             counts = {cid: n for cid, n in unseen.items() if n > 0}
@@ -2174,9 +2262,540 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             deck_count = sum(counts.values()) - prizes_hidden
             if deck_count <= 0 or not counts:
                 return 0.0
-        pool = deck_count + max(0, len(board.hand_ids) - 1)      # the shuffle-grown draw pool
-        return sum(self._keep_cost(hid, counts, pool, draws, board)
-                   for hid in board.hand_ids if hid != ctx.card_id)
+        hand = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        pool = deck_count + max(0, len(hand) - 1)                # the shuffle-grown pool, per COPY
+        return self._hand_keep(hand, ctx.card_id, counts, pool, draws, board,
+                               prizes_hidden=prizes_hidden, deck_count=deck_count)
+
+    def _discard_fuel_types(self) -> frozenset:
+        """Energy types a DISCARD-SOURCE accel attack in this deck wants IN the discard — the
+        Aura-Jab class (``AttackStat.recoverN`` > 0, ``recoverSource == "discard"``; ``None`` in the
+        set = the attack takes any Basic). Pitching a matching Basic Energy is FUEL, not loss —
+        the zone-signed worth the spec's Round 7 ruled (Kyogre-class; correction 84071010-45 held
+        surplus Energy FOR the recycle). Memoised — deck-fixed. Empty without stats/deck."""
+        if self._discard_fuel_cache is None:
+            types = set()
+            for cid in set(self.deck):
+                st = self.stats.get(cid) if self.stats else None
+                for aid in (getattr(st, "attacks", None) or ()):
+                    ast = self._attack_stat(aid)
+                    if (ast is not None and getattr(ast, "recoverN", 0)
+                            and getattr(ast, "recoverSource", None) == "discard"):
+                        types.add(getattr(ast, "recoverEnergyType", None))
+            self._discard_fuel_cache = frozenset(types)
+        return self._discard_fuel_cache
+
+    def _discard_shadow(self, obs: dict, select: dict, board: Board, options: list, chosen: list):
+        """The DISCARD keep-cost SHADOW (the shadow-equations ruling, 2026-07-19 — the first
+        equation shipped under it): compute the card-worth oracle's answer at a real discard pick
+        and EMIT it beside the decision, deciding NOTHING. The tuned `_DISCARD` ladder stays the
+        decider; every disagreement row is either an oracle gap (a premise the gate library doesn't
+        carry yet) or a latent ladder bug — the evidence bridge the discard convergence (seam D,
+        `docs/plans/seam-discard-convergence.md`) swaps on.
+
+        The v1 equation per candidate card — grilled legs only, simplifications EMITTED as terms so
+        a reader can audit WHY (the ADR-0019 full-working standard):
+
+            keep = Worth × Gates × (1 − pitch re-access)
+
+        Worth = `_role_value` (roles / tags / ACE-SPEC / energy); Gates = `_deploy_odds` (the
+        evolution + fetcher legs; the pressure bit rides as ``closing``). PITCH re-access — the
+        DISCARD leg, deliberately distinct from the shuffle leg — is credited only when
+        DETERMINISTIC: a duplicate still in hand (``dup_hand``), a same-card copy already in play
+        (``in_play``), or a matching recycler HELD (``recycler`` — a ``zone: discard`` FETCH clause
+        reaching this card). Probabilistic recycler draws are emitted (``recycler_deck``) but
+        credited 0 — errs toward keep. ``fuel`` (`_discard_fuel_types`) floors the keep at 0 — the
+        zone sign's v1 (a negative keep is deferred). Known naiveties, by design: per-card (sets
+        not sums — a duplicate PAIR both price 0), and no probabilistic recycle window. None off a
+        real choice (no options beyond the forced picks) and never mid-sim (`self._planning`).
+
+        WP-N3 (keep-value v2): each row also carries ``keep_v2`` — the needs-assignment raw
+        counterfactual marginal (`_needs_v2`) — and the record carries ``eq2_pick`` (the v2
+        decider's cheapest removal, hedged at v1's post-gate keep) + ``agree_v2`` (v2 vs the
+        DECIDED picks): the v1-vs-v2 evidence bridge the WP-N4 family swaps ride, deciding
+        nothing."""
+        if self._planning or select.get("context") != _DISCARD:
+            return None
+        picks = len(chosen)
+        if picks <= 0 or len(options) <= picks:
+            return None                                  # no real choice — nothing to shadow
+        rows, order = self._discard_equation_rows(obs, select, board, options)
+        if not rows:
+            return None
+        eq_pick = order[:picks]
+        keeps_v2, eq2_pick = self._needs_v2(obs, board, rows, picks)
+        for r, kv in zip(rows, keeps_v2):
+            r["keep_v2"] = kv
+        rec = {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
+               "agree": set(eq_pick) == set(chosen),
+               "eq2_pick": eq2_pick, "agree_v2": set(eq2_pick) == set(chosen)}
+        if getattr(self, "needs_keep_value", False):
+            rec["decided_v2"] = True                     # v2 needs-assignment IS the decider (WP-N4)
+        elif getattr(self, "discard_keep_value", False):
+            rec["decided"] = True                        # v1 IS the decider (seam-D kill-switch ON)
+        return rec
+
+    def _discard_equation_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
+        """The DECIDER under the `discard_keep_value` kill-switch (ADR-0065 seam-D, the SWAP): the
+        forced-discard pick IS the card-worth equation's ranking — the ``picks`` cheapest-to-lose
+        cards (`_discard_equation_rows`), replacing the tuned `_DISCARD` ladder wholesale. None when
+        the equation can't rank (no priceable rows), so the caller keeps the ladder order."""
+        _rows, order = self._discard_equation_rows(obs, select, board, options)
+        return order[:picks] if order else None
+
+    def _discard_needs_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
+        """The DECIDER under the `needs_keep_value` kill-switch (ADR-0065 WP-N4, the per-family swap):
+        the forced-discard pick IS the keep-value v2 needs-assignment's cheapest removal (`_needs_v2`
+        → `eq2_pick`, `needs.cheapest_removal` over the resolved slots, hedged at v1's post-gate
+        keep), replacing v1's per-card gate composition with the global assignment. Same rows as
+        v1's ranking (`_discard_equation_rows` — the deploy gates + fuel/burst flags v2 consumes);
+        None when nothing is priceable, so the caller falls through to v1 / the ladder."""
+        rows, _order = self._discard_equation_rows(obs, select, board, options)
+        if not rows:
+            return None
+        _keeps, eq2_pick = self._needs_v2(obs, board, rows, picks)
+        return eq2_pick or None
+
+    def _discard_equation_rows(self, obs: dict, select: dict, board: Board, options: list):
+        """The card-worth discard equation's per-candidate rows AND the full ranked index order — the
+        shared computation behind the SHADOW (`_discard_shadow`, telemetry) and the DECIDER
+        (`_discard_equation_pick`, under the kill-switch). Pure and deterministic (safe mid-sim). The
+        ranking is ``(keep asc, pitch desc, worth asc, index)``: cheapest-to-lose first, ties broken
+        by DEADNESS then by lower underlying worth then hand index. Returns ``([], [])`` when nothing
+        is priceable."""
+        me = self._my_player(obs)
+        from collections import Counter
+        hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        held = Counter(hand_ids)
+        counts = board.deck_known_counts
+        if not counts:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        from common import fetch_closure
+        def _recyclers(stat):
+            in_hand = in_deck = 0
+            for rid, n in held.items():
+                if any(cl.get("kind") == "fetch" and cl.get("zone") == "discard"
+                       and fetch_closure.fetch_target_matches(cl, stat)
+                       for cl in (self.effects.clauses(rid) if self.effects else ())):
+                    in_hand += n
+            for rid, n in counts.items():
+                if n > 0 and any(cl.get("kind") == "fetch" and cl.get("zone") == "discard"
+                                 and fetch_closure.fetch_target_matches(cl, stat)
+                                 for cl in (self.effects.clauses(rid) if self.effects else ())):
+                    in_deck += n
+            return in_hand, in_deck
+        fuel_types = self._discard_fuel_types()
+        rows = []
+        for i, o in enumerate(options):
+            cid = self._option_card_id(obs, select, o)
+            if cid is None:
+                continue
+            st = self.stats.get(cid) if self.stats else None
+            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
+            worth = self._role_value(cid)
+            # The engine-supporter WORTH floor (Finding 2's 5th premise gate, mirrored for the swap):
+            # a draw/search/dig/heal SUPPORTER that is NOT hand_disruption (Lillie's, not Harlequin) is
+            # a draw engine worth keeping over pure filler, though it carries no ROLE/TAG worth.
+            # Discard-CONTEXT (mirrors `keep-engine-supporter-at-discard` −8). A WORTH floor, not a keep
+            # floor — it is still discounted by re-access (a duplicate engine supporter is covered) and
+            # by the gates (a need-met tutor still zeros), unlike a hard override.
+            engine_supporter = bool(st is not None and getattr(st, "is_supporter", False)
+                                    and (_ENGINE_KEEP_TAGS & set(tags)) and "hand_disruption" not in tags)
+            if engine_supporter and worth < _ENGINE_SUPPORTER_KEEP:
+                worth = _ENGINE_SUPPORTER_KEEP
+                row_engine = True
+            else:
+                row_engine = False
+            row = {"i": i, "cid": cid, "worth": round(worth, 1)}
+            if row_engine:
+                row["engine_supporter"] = True
+            dup = held.get(cid, 0) >= 2
+            in_play = cid in board.in_play_ids
+            rec_hand, rec_deck = _recyclers(st) if (st is not None and worth > 0) else (0, 0)
+            fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
+                        and (None in fuel_types
+                             or getattr(st, "energyType", None) in fuel_types))
+            deploy = self._deploy_odds(cid, board, counts)
+            if dup:
+                row["dup_hand"] = True
+            if in_play:
+                row["in_play"] = True
+            if rec_hand:
+                row["recycler"] = rec_hand
+            if rec_deck:
+                row["recycler_deck"] = rec_deck
+            if fuel:
+                row["fuel"] = True
+            if deploy != 1.0:
+                row["deploy"] = deploy
+            # The DEPLOY-NOW spike (closing edge, ep86091435 f68): an in-play same-card copy does NOT
+            # cover THIS body's this-turn evolution, so re-access is not bankable — zero the credit
+            # and the card charges FULL worth. Distinguishes the open Drakloak (keep) from the
+            # just-benched-base one (ep83686860 f18, not in deploy_now_ids -> re-access still credited).
+            closing = self._gate_closing(cid, board)
+            if closing:
+                row["closing"] = True
+            reaccess = 0.0 if closing else (1.0 if (dup or in_play or rec_hand) else 0.0)
+            # A SPENT burst (ladder-win 83454549-36): a `discard_eot` Energy is precious until the
+            # Active is fully powered — then it self-discards at end of turn anyway, so it is fodder.
+            # DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it lives in the shadow's
+            # pitch term, not a general Worth gate.
+            spent_burst = "discard_eot" in tags and getattr(board, "active_fully_powered", False)
+            row["keep"] = 0.0 if (fuel or spent_burst) else round(worth * deploy * (1.0 - reaccess), 1)
+            # The PITCH-PREFERENCE term (seam-D grill Finding 3): keep-cost is a KEEP floor and
+            # cannot RANK a discard — a dreg, a duplicate, and a DEAD card all price keep 0. The
+            # pitch side is `P(met | pitch) − P(met | keep)` going positive: a card whose role is
+            # EXPIRED/useless (or whose discard is progress) is actively best gone. Mirrors the
+            # ladder's positive-pitch premises at SOURCE (not their weights — the equation ranks):
+            # `discard-the-dead-opener` (opener role spent), `discard-the-redundant-tutor` (wincon in
+            # hand → the tutor's target is had), a stranded evolution (payoff with no base), the
+            # declared `discard_fodder`, `fuel` (zone sign), and the SPENT burst above. `pitch` = the
+            # count; it breaks the zero-keep ties so dead weight sheds before a live spare. The
+            # `redundant_tutor` case is now ALSO priced keep 0 by the need-met gate (`_deploy_odds`);
+            # the flag stays for the pitch tie-break + display. SHADOW-only, deciding nothing.
+            roles = self._roles_of(cid)
+            dead_opener = "opener" in tags
+            redundant_tutor = bool(getattr(board, "wincon_in_hand", False)
+                                   and ({"rush_evolve", "tutor_mega"} & set(tags)))
+            stranded = cid in self._stranded_evolution_set()
+            fodder = "discard_fodder" in roles
+            if dead_opener:
+                row["dead_opener"] = True
+            if redundant_tutor:
+                row["redundant_tutor"] = True
+            if stranded:
+                row["stranded"] = True
+            if fodder:
+                row["fodder"] = True
+            if spent_burst:
+                row["spent_burst"] = True
+            row["pitch"] = (int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded)
+                            + int(fodder) + int(spent_burst))
+            rows.append(row)
+        if not rows:
+            return [], []
+        # Rank: cheapest keep first; among equal keep, the DEADEST (highest pitch) sheds first; then
+        # the LOWER underlying worth (sets-not-sums — a worth-10 duplicate's redundancy is worth
+        # preserving over a worth-0 dreg's, ladder-win 83967840-54); index only as the last resort.
+        order = [r["i"] for r in
+                 sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["worth"], r["i"]))]
+        return rows, order
+
+    def _needs_v2(self, obs: dict, board: Board, rows: list, picks: int):
+        """WP-N3 (keep-value v2, `keep-value-needs-assignment-grill-spec.md`): the Pilot-side needs
+        RESOLVER — the live board resolved into `common.needs` slots / per-candidate eligibility /
+        resupply, pricing the v2 shadow: per-row ``keep_v2`` (the raw counterfactual marginal,
+        `needs.keep_v2`) and the v2 decider's pick (`needs.cheapest_removal`), hedged at v1's
+        POST-GATE keep — the WP-N3 refinement: v2 never prices below the shipped decider (a
+        raw-tier floor would undo the gate knowledge), and a firing floor telemeters a missing
+        slot. SHADOW-ONLY (Round 6): nothing here decides. Returns ``(keep_v2 per row, eq2_pick
+        as OPTION indices)``.
+
+        v0 resolver scope (the discard bench's needs — the rest joins in WP-N4):
+          * LINE slots per held card class at its line-role tier × the v1 deploy gate (dead
+            evolution / dead-fetcher / need-met knowledge CONSUMED per the dissolution ledger); an
+            in-play copy MEETS the primary slot; a wincon class adds the half-tier SUCCESSION slot
+            (`needs.line_slots` — a spare wincon insures the line, never free).
+          * DEPLOY-NOW slots off `Board.deploy_now_ids` (the spike, re-derived: the in-play copy
+            does not cover THIS body's evolution).
+          * FUND-ATTACK slots = the Active's biggest-attack cost remaining (the spent burst
+            re-derived as slot ABSENCE; deadlines from the quota structure).
+          * one saturating DRAW-ENGINE slot (engine Roles + the engine-supporter predicate).
+          * SUPPLY-WINCON via `needs.supply_wincon_slot` (need-met = slot absence).
+          * ANSWER-DOOM under the pressure read (successor / clutch_heal / switch).
+          * FUEL slots ride the pitch side (`needs.pitch_gain` — pitching a matching Energy is
+            progress).
+        Deferred, documented: opponent DENY slots (await the visible turns-to-ready read wiring),
+        probabilistic slot RESUPPLY over the closure (0.0 here — errs toward keep), non-Active
+        fund bodies, and non-option hand cards as fixed coverage (a real forced discard offers the
+        whole hand)."""
+        from common import needs
+        slots, elig = self._resolve_needs(obs, board, rows)
+        resupply = [0.0] * len(slots)
+        keeps = [round(needs.keep_v2(slots, elig, resupply, k), 1) for k in range(len(rows))]
+        pick = needs.cheapest_removal(
+            slots, elig, resupply, [r["keep"] for r in rows], picks,
+            tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
+        return keeps, sorted(rows[k]["i"] for k in pick)
+
+    def _resolve_needs(self, obs: dict, board: Board, rows: list, *, include_general: bool = True):
+        """The shared keep-value v2 RESOLVER: the live board + the held-card ``rows`` resolved into
+        `common.needs` slots and per-row eligibility (which slot indices each row can supply). The
+        ONE slot derivation behind BOTH the discard decider (`_needs_v2`) and the refresh-SHED
+        magnitude shadow (`_refresh_shed_shadow`) — rows need only ``cid``, ``deploy`` (the v1
+        gate factor v2 consumes), and ``fuel``. Returns ``(slots, elig)``; the caller owns
+        ``resupply`` (all-0.0 in v0 — errs toward keep). The slot vocabulary, the corpus-adjudicated
+        derivations (the succession slot, Pokémon-only lines, the engine band, the fund/doom/fuel
+        legs) and the deferred legs are documented on `_needs_v2`.
+
+        ``include_general=False`` (WP-N5c, the develop-rung LEAF's term) drops the GENERAL-worth
+        slots — a card's latent tier where it fills no SPECIFIC need. Keep-value WANTS them (deciding
+        what to shed prices a spare by its latent worth), but the LEAF must NOT: at end-of-turn a
+        generically-good card still IN hand is a card I chose not to deploy, so crediting its latent
+        worth rewards HOARDING over deploying (the WP-N5b regression — 676/677 held for +23 beat the
+        line that played them). The grill's own term is "held cards with a LIVE use" = the SPECIFIC
+        needs only (deploy-now / fund / answer-doom / supply-wincon / fuel / line), not latent worth."""
+        from common import needs
+        from common.card_worth import ROLE_TIER, ACE_SPEC_TIER, ENERGY_TIER, TAG_TIER
+        me = self._my_player(obs)
+        line_roles = {r for r, kinds in needs.SUPPLIES.items() if "line" in kinds and r in ROLE_TIER}
+        slots: list = []
+        elig: list = [set() for _ in rows]
+
+        def _emit(slot, members) -> None:
+            j = len(slots)
+            slots.append(slot)
+            for m in members:
+                elig[m].add(j)
+
+        def _tags(cid) -> set:
+            return set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
+
+        by_cid: dict = {}
+        for k, r in enumerate(rows):
+            by_cid.setdefault(r["cid"], []).append(k)
+        for cid, members in by_cid.items():
+            st = self.stats.get(cid) if self.stats else None
+            roles = self._roles_of(cid)
+            if cid in self._line_preevo_set():
+                roles = [*roles, "win_condition_base"]   # the derived line-member worth (WORTH-ONLY)
+            # A LINE slot is a BODY to assemble — Pokémon only (an ACE-SPEC Trainer keeps its
+            # one-per-deck line claim). An Energy with a line-class derived role (Ignition as
+            # `accel_source`) must NOT reopen a line: it resurrects the spent burst the fund-attack
+            # absence just re-derived (corpus 83454549-36).
+            worth = 0.0
+            if st is not None and getattr(st, "is_pokemon", False):
+                worth = max((ROLE_TIER[r] for r in roles if r in line_roles), default=0.0)
+            if st is not None and getattr(st, "aceSpec", False):
+                worth = max(worth, ACE_SPEC_TIER)
+            deploy = rows[members[0]].get("deploy", 1.0)
+            if worth * deploy > 0:
+                for s in needs.line_slots(f"line:{cid}", value=worth * deploy,
+                                          succession=bool(set(roles) & needs.SUCCESSION_ROLES),
+                                          primary_met=cid in board.in_play_ids):
+                    _emit(s, members)
+            if cid in getattr(board, "deploy_now_ids", frozenset()):
+                _emit(needs.deploy_now_slot(f"deploy:{cid}", value=self._role_value(cid)), members)
+        tutors = [k for k, r in enumerate(rows)
+                  if r.get("deploy", 1.0) > 0
+                  and ("tutor" in self._roles_of(r["cid"])
+                       or ({"rush_evolve", "tutor_mega"} & _tags(r["cid"])))]
+        supply = needs.supply_wincon_slot(
+            wincon_in_hand=bool(getattr(board, "wincon_in_hand", False)), target_reachable=True)
+        if supply is not None and tutors:
+            _emit(supply, tutors)
+
+        def _engine(cid) -> bool:
+            st = self.stats.get(cid) if self.stats else None
+            return ("engine" in self._roles_of(cid)
+                    or bool(st is not None and getattr(st, "is_supporter", False)
+                            and (_ENGINE_KEEP_TAGS & _tags(cid))
+                            and "hand_disruption" not in _tags(cid)))
+
+        engines = [k for k, r in enumerate(rows) if _engine(r["cid"])]
+        if engines:
+            online = sum(1 for pid in board.in_play_ids if "engine" in self._roles_of(pid))
+            # The band reads off the eligible suppliers: an engine BODY need is the engine-role
+            # tier; a supporter-only need is v1's tuned engine-supporter band (corpus 83686860-11
+            # — a 12-point Lillie's out-priced the fund Energies the human keeps).
+            band = (ROLE_TIER["engine"]
+                    if any("engine" in self._roles_of(rows[k]["cid"]) for k in engines)
+                    else _ENGINE_SUPPORTER_KEEP)
+            _emit(needs.draw_engine_slot(engines_online=online, value=band), engines)
+        active = next((p for p in (me.get("active") or []) if p), None)
+        if active is not None:
+            ast = self.stats.get(active.get("id")) if self.stats else None
+            remaining = max(0, (getattr(ast, "maxDamageCost", 0) or 0)
+                            - len(active.get("energies") or []))
+            funders = [k for k, r in enumerate(rows)
+                       if getattr(self.stats.get(r["cid"]) if self.stats else None,
+                                  "is_basic_energy", False) or "discard_eot" in _tags(r["cid"])]
+            if remaining and funders:
+                for s in needs.fund_attack_slots("active", remaining,
+                                                 quota_spent=bool(board.energy_attached)):
+                    _emit(s, funders)
+        if board.active_doomed:
+            wincons = self._wincon_set()
+            answers = [k for k, r in enumerate(rows)
+                       if ({"clutch_heal", "switch"} & _tags(r["cid"]))
+                       or (r["cid"] in wincons and getattr(board, "line_preevo_in_play", False))]
+            if answers:
+                _emit(needs.answer_doom_slot(value=TAG_TIER["clutch_heal"]), answers)
+        fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
+        if fuels:
+            _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
+        # GENERAL-WORTH slots (WP-N5): a held card with role worth that fills no SPECIFIC need still
+        # carries LATENT board value — its tier, discounted (`_GENERAL_WORTH_W`, the leaf's bench
+        # position weight) and DE-DUPLICATED (one slot per distinct cid, so spare copies price
+        # marginally). Below every specific slot, so a need-filler assigns to its need first; the
+        # floor the refresh-SHED sweep (WP-N4b) proved missing — a hand of playable pieces is no
+        # longer shuffle-priced at ~0. The readiness leaf's `contribution × saturation` for the HAND.
+        # The LEAF opts OUT (`include_general=False`, WP-N5c): at end-of-turn latent worth rewards
+        # HOARDING over deploying (676/677 held for +23 beat the line that played them) — the leaf's
+        # actionable-resource term is "held cards with a LIVE use" (the specific needs above) only.
+        seen_general: set = set()
+        for cid, members in (by_cid.items() if include_general else ()):
+            if cid in seen_general:
+                continue
+            seen_general.add(cid)
+            # A row the PITCH term flags as dead-weight (spent_burst / fuel / dead_opener / stranded
+            # / redundant_tutor / fodder) is fodder NOW — no LATENT worth, no general slot (else the
+            # general worth RESURRECTS a spent burst v1 correctly zeroed — c4f5, the 83454549-36 trap
+            # again). Context-correct: refresh rows carry no pitch flag (a SHUFFLED burst IS a future
+            # attach), so they keep their general worth.
+            live = [m for m in members if rows[m].get("pitch", 0) == 0]
+            if not live:
+                continue
+            worth = self._role_value(cid)
+            deploy = rows[live[0]].get("deploy", 1.0)
+            if worth * deploy > 0:
+                _emit(needs.general_worth_slot(f"general:{cid}",
+                                               value=worth * deploy * _GENERAL_WORTH_W), live)
+        return slots, elig
+
+    def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
+        """The whole-hand v2 rows for the refresh-SHED shadow: one row per held card (minus ONE copy
+        of ``exclude_cid`` — the played refresh, discarded not shuffled, exactly as v1's
+        `_hand_keep`), carrying the fields `_resolve_needs` reads (``cid``, ``deploy`` — the v1 gate
+        factor v2 consumes — and ``fuel``) plus ``worth`` for display. The refresh analog of
+        `_discard_equation_rows`' per-card facts, over the hand instead of the discard options."""
+        from collections import Counter
+        me = self._my_player(obs)
+        hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        ids = list(hand_ids)
+        if exclude_cid in ids:
+            ids.remove(exclude_cid)
+        counts = board.deck_known_counts
+        if not counts:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        fuel_types = self._discard_fuel_types()
+        rows = []
+        for k, cid in enumerate(ids):
+            st = self.stats.get(cid) if self.stats else None
+            fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
+                        and (None in fuel_types or getattr(st, "energyType", None) in fuel_types))
+            rows.append({"i": k, "cid": cid, "worth": round(self._role_value(cid), 1),
+                         "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
+        return rows
+
+    def _held_undeployable(self, cid, ctx: dict) -> bool:
+        """WP-N5d — the deployability COUNTERFACTUAL: could this held card NOT have been deployed
+        during the turn that just ended? Only such cards are FUTURE VALUE the leaf may credit; a
+        deployable card still in hand is a card I CHOSE not to play — a fumble or a deliberate hold,
+        both already priced elsewhere (the spend account / the keep sites) — and crediting it
+        rewards hoarding (the N5b/N5c regression: two held deployables at +23 beat the line that
+        played them). ``ctx`` = the sim's `heldCtx` snapshot (the last my-perspective turn facts;
+        `_simulate_line`). Per class, rules.md quotas at source: an Energy is undeployable iff the
+        one manual attach was already spent (§3); a Supporter iff the Supporter slot was spent (§3);
+        an evolution iff NO eligible base was in play (matching ``evolvesFrom`` name, in play since
+        last turn — no evolving a just-arrived body, §4); a Basic iff the bench was full. Items /
+        Tools / Stadiums are always deployable → never credited (a deliberate hold — e.g. a switch
+        banked under doom — is the survival/keep sites' jurisdiction, not board readiness). Unknown
+        stats → False (err toward NOT rewarding a hold)."""
+        st = self.stats.get(cid) if self.stats else None
+        if st is None:
+            return False
+        if getattr(st, "is_energy", False):
+            return bool(ctx.get("energyAttached"))
+        if getattr(st, "is_supporter", False):
+            return bool(ctx.get("supporterPlayed"))
+        base = getattr(st, "evolvesFrom", None)
+        if base:
+            eligible = any(b and not b.get("appearThisTurn")
+                           and getattr(self.stats.get(b.get("id")), "name", None) == base
+                           for b in (ctx.get("bodies") or ()))
+            return not eligible
+        if getattr(st, "is_pokemon", False):
+            return bool(ctx.get("benchFull"))
+        return False
+
+    def _hand_readiness(self, end_obs: dict, my_index: int) -> float:
+        """WP-N5b/N5d (armed OFF, `leaf_hand_value`): the develop-rung LEAF's actionable-resource
+        term — readiness CONSUMES the needs module. The value of the held cards that COULD NOT have
+        been deployed this turn (`_held_undeployable` — the N5d complement) = their JOINT slot
+        coverage under the exact assignment (`needs.set_keep_v2` over the resolved hand, specific
+        needs only — `include_general=False`, N5c), the SAME valuation the keep-value sites use —
+        one vocabulary, not a rival (the grill's "do NOT build a rival" ruling). Deployable held
+        cards still PARTICIPATE in the assignment (a deployable copy covering a slot correctly
+        shrinks an undeployable sibling's marginal) — they just earn no credit themselves. Requires
+        the sim's injected hand + `heldCtx` (fail-safe 0 without either — no plumbing → no term).
+        Capped under the sub-prize budget; `_HAND_TIEBREAK_W/_CAP` is the ε sizing alternative
+        (split only exact ties). Never raises."""
+        cur = (end_obs or {}).get("current") or {}
+        players = cur.get("players") or []
+        me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
+        ctx = me.get("heldCtx")
+        if not me.get("hand") or not ctx:
+            return 0.0
+        # a MY-perspective view of the (opponent-perspective) end obs — the resolver reads
+        # `_my_player`/board facts off `yourIndex`; the injected hand is already on players[my_index].
+        mobs = {**end_obs, "current": {**cur, "yourIndex": my_index}}
+        try:
+            board = self._board_hypothetical(mobs)
+            rows = self._needs_hand_rows(mobs, board)
+            if not rows:
+                return 0.0
+            held = [k for k, r in enumerate(rows) if self._held_undeployable(r["cid"], ctx)]
+            if not held:
+                return 0.0
+            slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
+            resupply = [0.0] * len(slots)
+            from common import needs
+            val = needs.set_keep_v2(slots, elig, resupply, held)
+        except Exception:
+            return 0.0                                   # a featurize/resolve slip never crashes ranking
+        return min(_HAND_READINESS_CAP, val * _HAND_READINESS_W)
+
+    def _refresh_shed_shadow(self, obs: dict, select: dict, board: Board, options: list,
+                             traces: list, chosen: list):
+        """WP-N4b: the refresh-SHED keep-value v2 MAGNITUDE shadow — the refresh analog of the
+        discard shadow, deciding NOTHING (the SHED still uses v1's Σ keep_cost). At the refresh PLAY
+        option the agent would actually play (top tactical among refreshes), emit v1's shed
+        (`_refresh_shed_keepcost`) beside v2's whole-hand assignment marginal (`needs.set_keep_v2`
+        over the held hand) — the site where sets-not-sums bites: v1 SUMS duplicate wincons and
+        OVER-charges the shed (refresh looks too costly), v2 prices the pair as one line + the
+        succession slot. Since the shed is the ONLY term that changes between the two, the refresh
+        swing follows by ``swing_v2 = swing_v1 + (v1_shed − v2_shed)``; the decision-relevant
+        agreement is the SIGN bit (would swapping the shed flip play/don't-play?), the magnitude
+        analog of the discard's pick agreement. None off a real refresh PLAY option or mid-sim
+        (`self._planning`)."""
+        if self._planning:
+            return None
+        from common import needs
+        from common.strategy.refresh import refresh_branches
+        refresh_opts = []
+        for i, o in enumerate(options):
+            if o.get("type") != _PLAY:
+                continue
+            cid = self._option_card_id(obs, select, o)
+            if cid is not None and refresh_branches(cid, board.my_prizes_remaining,
+                                                    board.opp_prizes_remaining):
+                refresh_opts.append((i, cid))
+        if not refresh_opts:
+            return None
+        i, cid = max(refresh_opts, key=lambda ic: traces[ic[0]].tactical)
+        # A MINIMAL ctx — only the two fields `_refresh_shed_keepcost` / `_refresh_swing_tactical`
+        # read (card_id, option_type) — so the shadow never re-runs the heavyweight `_context`
+        # (already built per-option in the trace loop); both helpers are pure reads.
+        from types import SimpleNamespace
+        ctx = SimpleNamespace(card_id=cid, option_type=_PLAY)
+        v1_shed = self._refresh_shed_keepcost(obs, board, ctx)
+        swing_v1 = self._refresh_swing_tactical(obs, board, ctx)
+        rows = self._needs_hand_rows(obs, board, exclude_cid=cid)
+        slots, elig = self._resolve_needs(obs, board, rows)
+        resupply = [0.0] * len(slots)
+        v2_shed = needs.set_keep_v2(slots, elig, resupply, range(len(rows))) if rows else 0.0
+        for k, r in enumerate(rows):
+            r["keep_v2"] = round(needs.keep_v2(slots, elig, resupply, k), 1)
+        swing_v2 = swing_v1 + (v1_shed - v2_shed)
+        return {"i": i, "cid": cid, "v1_shed": round(v1_shed, 1), "v2_shed": round(v2_shed, 1),
+                "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
+                "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
+                "played": i in (chosen or []), "eq": rows}
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can
@@ -3164,6 +3783,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return any(p and p.get("id") in preevos
                    for p in ((me.get("active") or []) + (me.get("bench") or [])))
 
+    def _deploy_now_ids(self, me: dict, turn: int) -> frozenset:
+        """Hand card ids that are evolutions able to be played onto an ELIGIBLE in-play base THIS turn
+        — a body matching the card's ``evolvesFrom`` name in play since last turn (``appearThisTurn``
+        False; rules.md §4: no evolving a body the turn it arrives, and no evolution at all on turn 1).
+        Pitching or shuffling such a card forfeits a live tempo play its re-access cannot restore (the
+        base is here and eligible NOW) — the DEPLOY-NOW closing edge (ep86091435 f68: a hand Drakloak
+        over the active Dreepy). A just-benched base does NOT qualify (ep83686860 f18: two Dreepy
+        placed this turn — no eligible base, so the hand Drakloak stays sheddable). Pure; empty on
+        turn ≤ 1 or without stats."""
+        if not self.stats or turn <= 1:
+            return frozenset()
+        eligible = {getattr(self.stats.get(b.get("id")), "name", None)
+                    for b in ((me.get("active") or []) + (me.get("bench") or []))
+                    if b and not b.get("appearThisTurn")}
+        eligible.discard(None)
+        out = set()
+        for c in (me.get("hand") or []):
+            cid = c.get("id") if c else None
+            st = self.stats.get(cid) if cid is not None else None
+            if st is not None and getattr(st, "evolvesFrom", None) in eligible:
+                out.add(cid)
+        return frozenset(out)
+
     def _attach_from_target_needs(self, obs: dict, select: dict, option: dict) -> bool:
         """At an ATTACH_FROM target-select (the engine's recipient-pick step for a multi-attach
         effect — e.g. Turbo Flare's 'attach a Basic Energy to a Benched Pokémon'), True if the
@@ -3395,6 +4037,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_attack_payable_via_accel=self._active_attack_payable_via_accel(
                 me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
             immediate_preevo_in_play=self._immediate_preevo_in_play(me),
+            deploy_now_ids=self._deploy_now_ids(me, state.get("turn", 0)),
             active_arm_available=self._active_arm_available(ma, self._bench_wincon_ready(me)),
             active_fully_powered=self._active_fully_powered(ma),
             energy_placeable=self._energy_placeable(me),
@@ -3469,6 +4112,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers — sourced from the tracker
             # observed at self.opponent.observe(obs) above; each read fails OPEN (unknown -> no-fire default).
             opp_took_ko_this_turn=bool(getattr(_opp_res, "took_ko_this_turn", False)),
+            my_pokemon_koed_last_turn=bool(getattr(_opp_res, "my_pokemon_koed_last_turn", False)),
             opp_hand_size_delta=getattr(_opp_res, "hand_size_delta", None),
             opp_last_turn_dumped=bool(getattr(_opp_res, "last_turn_dumped", False)),
             opp_deckout_in_turns=getattr(_opp_res, "deckout_in_turns", None),

@@ -82,7 +82,7 @@ def dump_frame(pilot, c):
         if sim is None:
             rows.append((i, val, played, "NO-SIM", None))
             continue
-        end, mi2, sp, result = sim
+        end, mi2, sp, result, *_rest = sim              # tail: line account (+ the coins bit)
         players = (end.get("current") or {}).get("players") or []
         me = players[mi2] if 0 <= mi2 < len(players) and players[mi2] else {}
         bodies = board_bodies(me)

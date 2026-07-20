@@ -78,7 +78,7 @@ The right choice is EV equality over those classes — board-dependent, not "P >
 4. T0 fallback EV terms for non-MAIN contexts.
 5. Pre-anchor gambles via the ADR-0029 prize-split hypergeometric — now fully SPECIFIED (below).
 
-## Fetch-chain closure & card worth — the 2026-07-17 grill (designed; observability built)
+## Fetch-chain closure & card worth — the 2026-07-17 grill (BUILT 2026-07-18/19; living status: ADR-0065)
 
 **Background (the writeup story).** The v1 gamble counts *literal* enabling cards as outs — 4 Water
 Energy in a 30-card deck is a 4-out draw. The owner's insight (2026-07-16): the real outs are the
@@ -113,7 +113,8 @@ consumers recalibrated — the audit itself demonstrated the calibrated-currency
 **full gamble observability**: the rung emits its complete working (pool, det, classes with sought
 out-card ids, per-option p·EV) or its named stand-down reason on the `@T` stderr record, rendered
 as a dropdown in the blunder shell — so every future closure stage lands observable from day one.
-Build order: [hypergeometric-fetch-closure-build-handoff.md](../plans/hypergeometric-fetch-closure-build-handoff.md).
+Living build status: [ADR-0065](../adr/0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)
+§Build status (the build-handoff plan doc is retired — git history).
 
 **Built (2026-07-18) — the gamble GAIN side, suite-green:**
 - **WP1 — Stage-1 fetch-closure outs** (`_fetch_reaches_slot`): a KO class's outs are no longer
@@ -232,13 +233,22 @@ delegate, so the fetch doctrine, the gamble gain side, and the keep-cost read ON
 delegates). The **refresh SHED** convergence has landed (2026-07-18): `_refresh_swing_tactical`'s flat
 `_REFRESH_SHED × cards-lost` is now `Σ keep_cost` over the actual hand (`_refresh_shed_keepcost`), and
 the four `hold-*` hand-quality guards fold into it — all six ADR-0060 corrections hold, one corpus
-target flipped to a pin. The remaining shadows (fetch grab/pitch, plan-tier credit) stay staged.
+target flipped to a pin. The **fetch grab/pitch** shadow was measured and found ALREADY subsumed
+(2026-07-18 — its tuned discard ladder prices roles + redundancy; the residue is the gate library's,
+see ADR-0065); **TAG_TIER worth coverage** landed 2026-07-19 (`role_value` reads behavioural tags, so
+a role-less Ignition / Wally's is no longer shuffled for free — two corpus targets flipped); and the
+**gate library Stage 1** (evolution gate) landed 2026-07-18: `keep_cost` gains its `deploy_odds`
+deadline factor (`common/gate_library.py`) on both converged keep-value sites — an undeployable
+evolution sheds freely.
 
 **Still designed, not built:** the accel-aware shortfall gate (WP5, narrow for these decks), the
-remaining WP7 value-convergence flips (fetch grab/pitch, plan-tier credit), the gate library +
-deadlines (no consumer yet — `hold-successor-when-doomed` still carries the one deadline the fixed
-window can't model), the held-card-risk tier-2 seam, and the skill loop (deck-genie Role Sheet /
-deck-align fold).
+plan-tier-credit convergence (the last WP7 shadow), and the skill loop (deck-genie Role Sheet /
+deck-align fold). Landed 2026-07-19: the held-card-risk seam and the tutor-chain grab value (corpus
+targets `85163634-17` / `85059103-9` promoted), the keep-cost duplicate-copy reconciliation
+(`planner._hand_keep` — one summation for the gamble keep-floor and the refresh SHED), and the
+**gate library completed** — fetcher (a provably-dead searcher/recycler sheds free), pressure (the
+closing-edge spike; retired `hold-successor-when-doomed`, the last flat refresh guard), and quota
+(duplicate once-per-turn cards shed by deadline rank) — ADR-0065 §Build status.
 
 ## Acceptance — met 2026-07-05
 

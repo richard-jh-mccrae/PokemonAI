@@ -172,3 +172,21 @@ def test_deckout_is_silent_when_the_deck_is_not_declining():
     m.observe(_obs(_opp(deck_count=30), turn=2))
     m.observe(_obs(_opp(deck_count=33), turn=4))         # grew (shuffle-in) -> no sound rate -> None
     assert m.deckout_in_turns is None
+
+
+@pytest.mark.req("REQ-OPP-0007")
+def test_my_pokemon_koed_last_turn_reads_the_opp_prize_drop_across_turns():
+    """The mirror of `took_ko_this_turn` (Unfair Stamp's own play condition, rules.md §6: the
+    attacker prizes from their OWN pile): the OPPONENT's prize count at the start of my current
+    turn is below its count at the start of my previous distinct turn — they took a prize in
+    between, so one of MY Pokémon was Knocked Out during their last turn. False until two distinct
+    turns are seen; a quiet turn clears it; within-turn changes wait for the next turn start."""
+    m = OpponentResourceModel()
+    m.observe(_obs(_opp(prizes_hidden=6), turn=5))
+    assert m.my_pokemon_koed_last_turn is False          # no previous turn to compare against
+    m.observe(_obs(_opp(prizes_hidden=6), turn=7))       # their turn passed with no KO on me
+    assert m.my_pokemon_koed_last_turn is False
+    m.observe(_obs(_opp(prizes_hidden=5), turn=9))       # they took a prize during their turn
+    assert m.my_pokemon_koed_last_turn is True
+    m.observe(_obs(_opp(prizes_hidden=5), turn=11))      # a quiet turn -> the flag clears
+    assert m.my_pokemon_koed_last_turn is False

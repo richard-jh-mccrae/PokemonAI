@@ -1,7 +1,8 @@
 # Ubiquitous Language — the card-worth oracle (ADR-0065)
 
 Companion vocabulary doc for ADR-0065 (not an ADR itself — same convention as `0050-glossary.md`).
-Four plain words for the oracle's two independent features; use these in code, tests, commits, and
+Five plain words for the oracle's independent features (Needs ratified 2026-07-19, built WP-N1–N3);
+use these in code, tests, commits, and
 grill docs. Agreed with the user 2026-07-19.
 
 ## The two features (do not conflate)
@@ -28,8 +29,9 @@ value = Worth × Odds
 
 | Term | Definition | Module | Aliases to avoid |
 | --- | --- | --- | --- |
-| **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a deploy-now body spikes. Stage 1 (evolution gate) built; quota/recycler/pressure gates scoped, not built. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
+| **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a dead fetcher (every target provably gone) likewise; a doom-answering card under pressure SPIKES to full worth (the closing edge); a duplicate of a once-per-turn card sheds by rank (the quota window). All four legs built 2026-07-18/19. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
 | **Closure** | WHAT can reach what — the tutor/recycle/search graph over the card REPRESENTATION (`card_effects.json` FETCH clauses + `CardStat`), never a text parse. Pure graph; carries no Odds or Worth of its own. | `common/fetch_closure.py` | reach (avoid as a noun — used adjectivally, "reachable"), the graph (fine in prose) |
+| **Needs** | WHAT the position requires — deadline-tagged slots derived from board state (fund-attack, evolve-now, answer-the-doom, quota turns, discard-fuel; opponent-side from visible zones + turns-to-ready lookahead). A card's keep-value is its MARGINAL slot coverage under exact assignment (`keep_v2` — the counterfactual with re-assignment); Gates re-derive as "a slot with a deadline" and dissolve as each re-derives (the DISSOLUTION LEDGER). **Ratified 2026-07-19 (keep-value v2 grill); WP-N1–N5 built** — the module, the exact-assignment engine, the Pilot resolver (`pilot._needs_v2`/`_resolve_needs`), the DISCARD DECIDER SWAP (`Pilot.needs_keep_value` armed ON — v2 decides the forced discard, superseding v1), the refresh-SHED MAGNITUDE shadow (which proved v2 not-yet-ready there), and the general-worth slot (latent hand worth on the leaf's `contribution × saturation` terms, halving the refresh under-pricing). The readiness-leaf fold (WP-N5b, blocked on hand-visibility plumbing) + the gamble/refresh swaps stay staged; the gate stack stays live for those sites — `keep-value-needs-assignment-grill-spec.md`. | `common/needs.py` | needs list / wants (say Needs/slots), gate (during the transition — a gate is a derived VIEW of a slot) |
 
 ## Relationships
 

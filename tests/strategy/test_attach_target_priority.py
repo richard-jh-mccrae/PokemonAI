@@ -1,6 +1,7 @@
 """Attach-target priority in setup: Active vs the benched 2nd line (corpus target 86091728-19).
 
-The seam (docs/plans/seam-attach-target-priority.md, grilled 2026-07-19): at a setup attach,
+The seam (grilled 2026-07-19; its plan doc `seam-attach-target-priority.md` retired after the
+build — git history): at a setup attach,
 `prefer-active-attach-in-setup` (+8) tipped the {P} onto the Active Munkidori — a body the deck never
 declared as an attacker (no Role, off-Line; its Adrena-Brain wants {D}) — while two bare Dreepy
 (the declared win-condition Line base) sat benched. The human wants the line developed.

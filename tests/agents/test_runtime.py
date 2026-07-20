@@ -67,6 +67,12 @@ EXPECTED_SHIPPED = {
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
     "play_accel_lethal": True,      # armed-ON 2026-07-14 (ladder-testing): play-based accel (Crispin) +1 KO attach
+    "discard_keep_value": True,     # ADR-0065 seam-D armed-ON 2026-07-19 (ladder-testing): the card-worth
+                                    # equation decides a forced discard, replacing the `_DISCARD` ladder
+    "needs_keep_value": True,       # ADR-0065 WP-N4 armed-ON 2026-07-20 (dev-window): the keep-value v2
+                                    # needs-assignment decides the forced discard, superseding v1 (12/12 corpus)
+    "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
+                                    # term (readiness consumes needs), gated on the leaf-lab bench before arming
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
 }
 

@@ -353,7 +353,15 @@ class PlannerMixin:
         can be simmed — nothing to rank, so the tuned scoring keeps the turn rather than a blind pick.
         Stashes the full ranking on ``_develop_candidates_pending`` for the sparse ``plan_candidates``
         telemetry (top-K sorted desc, committed + greedy flagged), so a correction reader sees what the
-        rung out-scored. ``diverged`` marks an override of greedy's argmax — the key A/B signal."""
+        rung out-scored. ``diverged`` marks an override of greedy's argmax — the key A/B signal.
+
+        COIN-CONTAMINATED sims are excluded from the ranking (treated like failed forks): the rung's
+        authority to OVERRIDE the tuned scoring comes from a reproducible end-board, and a line whose
+        sim consumed auto-resolved coins is one lucky RNG stream, not a plan — its value provably
+        swings across streams (ml f24: the bench-Meowth line simmed 162 on one stream and a phantom
+        outright WIN on another, and whether the rung overrode the human's lethal-enabling attach
+        depended on the process's RNG position — the CI heisenbug). Coin-free line values are
+        stream-invariant, so the surviving ranking is deterministic."""
         self._develop_candidates_pending = None
         if not options:
             return None
@@ -362,15 +370,16 @@ class PlannerMixin:
         for i in range(len(options)):
             self._planning = True                        # per-sim reentrancy guard (never nest a search)
             try:
-                val = self._engine_leaf_value(obs, [i])
+                val, coined = self._engine_leaf_value(obs, [i], with_coins=True)
             except Exception:
-                val = None                               # a failed fork never crashes the decision
+                val, coined = None, False                # a failed fork never crashes the decision
             finally:
                 self._planning = False
-            if val is not None:
+            if val is not None and not coined:
                 ranked.append((val, i))
         if not ranked:
-            return None                                  # nothing simmable — defer to the tuned scoring
+            return None                                  # nothing simmable coin-free — defer to the
+                                                         # tuned scoring (never rank on coin noise)
         ranked.sort(key=lambda t: t[0], reverse=True)
         best_val, best_i = ranked[0]
         if best_val >= KO_SCORE:
@@ -1602,13 +1611,19 @@ class PlannerMixin:
             sup_live = bool(rst is not None and getattr(rst, "is_item", False)
                             and not board.supporter_played)
             # WP6: the KEEP-COST of shuffling this refresh's hand away (the played refresh itself is
-            # discarded, not shuffled) — Σ role value × (1 − re-access odds) over the shuffle redraw.
+            # discarded, not shuffled) — Σ role value × (1 − re-access odds) over the shuffle redraw,
+            # via the shared `_hand_keep` (duplicates priced marginally; one summation with the SHED).
             # The gamble must beat det PLUS this graded floor, replacing the binary protected-hand
             # stand-downs: a KO (≈ KO_SCORE) dwarfs it, an irreplaceable one-of raises the bar.
-            keep_ids = list(hand_ids)
-            if cid in keep_ids:
-                keep_ids.remove(cid)
-            hand_keep = sum(self._keep_cost(hid, class_counts, pool, max(ns), board) for hid in keep_ids)
+            hand_keep = self._hand_keep(hand_ids, cid, class_counts, pool, max(ns), board,
+                                        prizes_hidden=prizes_hidden, deck_count=deck_count)
+            # The refresh CHAIN (spec failure mode B, hand-expansion — built 2026-07-19): a drawn
+            # shuffle-refresh inside this window is a fresh full window at the same outs — a drawn
+            # Unfair Stamp (Item; live iff one of MY Pokémon was KO'd during their last turn) or a
+            # drawn Supporter refresh (live only post-Item-refresh, the `sup_live` slot rule).
+            # Anchored-only, like the draw engines (never a guess about where the copies sit).
+            ch_c, ch_w = (self._gamble_chain_refreshes(class_counts, sup_live, board)
+                          if anchored else (0, 0))
             for (copies, ko_value, label, sought, (sup_copies, _sup_ids)), (e_cp, e_ws, _e_ids) \
                     in zip(classes, class_engines):
                 eff = copies + (sup_copies if sup_live else 0)
@@ -1618,6 +1633,17 @@ class PlannerMixin:
                     p = sum(draw_hit_with_engines(eff, pool, n, e_cp, e_ws) for n in ns) / len(ns)
                 else:
                     p = sum(hit(eff, n) for n in ns) / len(ns)
+                if ch_c and ch_w:
+                    # The chain branch conditions on missing EVERY counted out AND engine, so it is
+                    # DISJOINT from the mass above — exactly additive (clamped for safety). Its
+                    # fresh window prices the class's RAW copies (no Supporter supplement: a drawn
+                    # Supporter refresh spends the slot; conservative for a drawn Stamp) over the
+                    # re-shuffled pool (−1, the chain card itself is spent). Chains inside the
+                    # chain are not modeled — an endorser under-counts.
+                    boost = sum(max(0.0, draw_hit_probability(eff + e_cp + ch_c, pool, n)
+                                    - draw_hit_probability(eff + e_cp, pool, n))
+                                for n in ns) / len(ns)
+                    p = min(1.0, p + boost * draw_hit_probability(copies, max(0, pool - 1), ch_w))
                 ev = p * ko_value
                 if burst_copies and det > 0:
                     # the RECOVERY class: the miss branch may still redraw the held burst Energy
@@ -1631,6 +1657,8 @@ class PlannerMixin:
                        "p": round(p, 3), "ev": round(ev, 1)}
                 if sup_live and sup_copies:
                     row["post_item_sup"] = sup_copies         # the Item-refresh Supporter supplement
+                if ch_c and ch_w:
+                    row["chain_refresh"] = [ch_c, ch_w]       # drawn-refresh chain: copies, window
                 if hand_keep:
                     row["keep"] = round(hand_keep, 1)         # WP6: the shuffled-hand keep-cost floor
                 evals.append(row)
@@ -1653,7 +1681,8 @@ class PlannerMixin:
             return None
         return TurnLine(next_step=[best[1]], goal="gamble", value=best[0], rationale=best[2])
 
-    def _prize_split_hit(self, u: int, deck_count: int, prizes_hidden: int, pool: int, draws: int) -> float:
+    def _prize_split_hit(self, u: int, deck_count: int, prizes_hidden: int, pool: int, draws: int,
+                         certain: int = 0) -> float:
         """WP2: P(≥1 enabler in the ``draws``-card refresh) PRE-ANCHOR — the decklist is fully known,
         only the prize assignment of the class's ``u`` unseen enabler copies is random. Sum over
         ``j`` = copies-that-landed-in-the-deck of the hypergeometric prize-split weight × the window
@@ -1661,23 +1690,28 @@ class PlannerMixin:
         — ≤ ``u+1`` plain ``math.comb`` terms (``u ≤ 4`` in practice). The exact closed form the
         ``if not deck_known_counts: return None`` gate replaced with a zero (the modeling-gap-as-
         caution failure the fetch-closure spec attacks). Never raises; bad input → 0.0 (an endorser
-        fails closed). Degenerates to the plain window draw when no prizes are hidden."""
+        fails closed). Degenerates to the plain window draw when no prizes are hidden.
+
+        ``certain`` = outs KNOWN to be in the drawn pool regardless of the split — the keep-cost
+        side's own held copies, shuffled in from HAND (never prize-assignable). They join every
+        branch's window draw (``hit(j + certain, …)``); the gain side passes the default 0."""
         from math import comb
         from common.deck_odds import draw_hit_probability
         try:
-            u, d, k = int(u), int(deck_count), int(prizes_hidden)
+            u, d, k, certain = int(u), int(deck_count), int(prizes_hidden), int(certain)
         except Exception:
             return 0.0
         if u <= 0 or d <= 0:
-            return 0.0
+            # no unseen outs to split (or no deck for them to sit in) — only the certain copies draw
+            return draw_hit_probability(certain, pool, draws) if certain > 0 else 0.0
         if k <= 0:
-            return draw_hit_probability(u, pool, draws)        # no hidden prizes -> every copy in deck
+            return draw_hit_probability(u + certain, pool, draws)   # no hidden prizes -> every copy in deck
         h = d + k
         u = min(u, h)                                          # can't split more copies than positions
         denom = comb(h, u)                                     # u ≤ h -> comb(h, u) > 0, no zero-div
         total = 0.0
         for j in range(max(0, u - k), min(u, d) + 1):          # j = enabler copies landing in the deck
-            total += comb(d, j) * comb(k, u - j) / denom * draw_hit_probability(j, pool, draws)
+            total += comb(d, j) * comb(k, u - j) / denom * draw_hit_probability(j + certain, pool, draws)
         return max(0.0, min(1.0, total))
 
     def _gamble_burst_copies(self, counts: dict, hand: list, stat) -> int:
@@ -1712,58 +1746,188 @@ class PlannerMixin:
 
     def _role_value(self, cid) -> float:
         """WP6/WP7: card ``cid``'s base worth = the MAX claim over its declared / derived Roles
-        (`_roles_of`), its behavioural tags (`TAG_TIER` — the worth-coverage fix for situational
-        Trainers/special Energy), and the energy / ACE-SPEC fallbacks. Delegates to
-        `card_worth.role_value` (ADR-0065) — the ONE currency zone; the Pilot only supplies facts."""
+        (`_roles_of` + the line-member derivation below), its behavioural tags (`TAG_TIER` — the
+        worth-coverage fix for situational Trainers/special Energy), and the energy / ACE-SPEC
+        fallbacks. Delegates to `card_worth.role_value` (ADR-0065) — the ONE currency zone; the Pilot
+        only supplies facts.
+
+        **Line-member worth derivation (Round 9 'derive first'; the discard-shadow finding on
+        86091435-68).** A non-payoff win-condition Line member (`_line_preevo_set`: Dreepy AND the
+        middle Drakloak on Dreepy→Drakloak→Dragapult ex) is worth its `win_condition_base` tier even
+        when the deck declared only the base — a Line stage is a plan piece, not junk. WORTH-ONLY: the
+        Line-membership fact enters the value currency here but NOT `_roles_of` / `c.roles` — the
+        discard-ladder rungs keep their tuned routing (`_BASE_ROLES` exemptions, the covered-vs-
+        uncovered Drakloak discrimination on 83686860-18) as the GATED seam-D migration, never flipped
+        as a side effect of pricing worth."""
         from common.card_worth import role_value
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        roles = self._roles_of(cid)
+        if cid is not None and cid in self._line_preevo_set():
+            roles = [*roles, "win_condition_base"]      # derived worth only — not injected into c.roles
         return role_value(
-            self._roles_of(cid),
+            roles,
             is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
             is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)),
             tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())
 
-    def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None) -> float:
-        """WP6/WP7: the cost of shuffling held card ``cid`` away = its role worth × how UN-recoverable it
-        is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown ``pool``, +1 out for the
-        shuffled copy) × how realisable its role is by its deadline (`_deploy_odds`, the gate library —
-        ADR-0065 Stage 1: an undeployable evolution collapses to 0, a dead card shed freely). ``board``
-        supplies base presence for the evolution gate; omitted → the deadline factor stays 1.0."""
+    def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None,
+                   shuffled_copies: int = 1, prizes_hidden: int = 0, deck_count=None) -> float:
+        """WP6/WP7: the cost of shuffling ONE held copy of card ``cid`` away = its role worth × how
+        UN-recoverable it is (``1 − P(re-draw or re-fetch it in `draws`)`` over the shuffle-grown
+        ``pool``, +``shuffled_copies`` outs for the held copies rejoining the deck — 1 for a lone copy;
+        a hand-wide summation passes the full duplicate count, `_hand_keep`) × how realisable its role
+        is by its deadline (`_deploy_odds`, the gate library — ADR-0065: an undeployable evolution or
+        a dead fetcher collapses to 0, shed freely). ``board`` supplies the gate facts; omitted → the
+        deadline factor stays 1.0.
+
+        PRE-ANCHOR (``prizes_hidden`` > 0, ``counts`` = the unseen composition): the re-access odds
+        are PRIZE-SPLIT-WEIGHTED (`_prize_split_hit`) — the unseen outs split over deck + face-down
+        prizes exactly like the gamble's GAIN side, while the shuffled held copies join the pool as
+        ``certain`` outs (a hand card is never prize-assignable). Without the weighting the cost side
+        counted possibly-prized outs at full strength against a prize-free pool — re-access
+        overestimated, keep under-charged, a pre-anchor pro-gamble bias the gain side never had.
+        Anchored (``prizes_hidden`` = 0): the plain window draw, unchanged."""
         role_value = self._role_value(cid)
         if role_value <= 0:
             return 0.0
+        from common import gate_library
         from common.card_worth import keep_cost
         from common.deck_odds import draw_hit_probability
-        outs = self._card_reaccess_outs(cid, counts) + 1      # +1: the shuffled held copy rejoins deck
+        outs = self._card_reaccess_outs(cid, counts)
+        certain = max(1, shuffled_copies)
+        if prizes_hidden > 0:
+            d = deck_count if deck_count is not None else max(0, sum(counts.values()) - prizes_hidden)
+            reaccess = self._prize_split_hit(outs, d, prizes_hidden, pool, draws, certain=certain)
+        else:
+            reaccess = draw_hit_probability(outs + certain, pool, draws)
+        # The pressure gate (Round 8 §3, the CLOSING edge): a doom-answering card's re-access is not
+        # bankable against its deadline — the credit zeroes and the card charges full worth.
+        reaccess = gate_library.closing_gate_reaccess(
+            reaccess, gate_closing=self._gate_closing(cid, board) if board is not None else False)
         deadline = self._deploy_odds(cid, board, counts) if board is not None else 1.0
-        return keep_cost(role_value, draw_hit_probability(outs, pool, draws), deadline)
+        return keep_cost(role_value, reaccess, deadline)
+
+    def _gate_closing(self, cid, board) -> bool:
+        """The closing-edge resolver (Round 8 §3: a closing gate SPIKES keep — re-access is not
+        bankable against a THIS-TURN deadline, so the card charges full worth). Two closing edges:
+
+        **Deploy-now (ep86091435 f68):** ``cid`` is a hand evolution with an ELIGIBLE in-play base
+        this turn (`Board.deploy_now_ids`) — evolving is a live tempo play; pitching/shuffling it
+        forfeits the play and re-access can't help (you need it NOW). Fires regardless of doom, and
+        REGARDLESS of a same-card copy in play (the benched copy does not cover THIS body's
+        evolution — the covered-vs-open discrimination a flat floor misses, ep83686860 f18 keeps
+        pitching correctly because its base was placed this turn, so it is NOT in ``deploy_now_ids``).
+
+        **Pressure (the fold of `hold-successor-when-doomed`, ep83037962 f49):** the Active is DOOMED
+        and ``cid`` ANSWERS the doom — the SUCCESSOR (a win-condition with a Line pre-evolution in
+        play) or an emergency `clutch_heal` / `switch`. Sound facts only; a healthy board with no
+        deploy-now keeps the closure discount, so cycling stays free."""
+        if cid is not None and cid in getattr(board, "deploy_now_ids", frozenset()):
+            return True
+        if not getattr(board, "active_doomed", False):
+            return False
+        if cid in self._wincon_set() and getattr(board, "line_preevo_in_play", False):
+            return True
+        tags = self.functions.tags(cid) if self.functions else ()
+        return "clutch_heal" in tags or "switch" in tags
+
+    def _hand_keep(self, hand_ids, played_cid, counts: dict, pool: int, draws: int, board=None,
+                   prizes_hidden: int = 0, deck_count=None) -> float:
+        """Σ keep_cost over the hand a refresh shuffles away — the ONE summation BOTH keep-value sites
+        read (the WP6 gamble keep-floor below and the refresh SHED, `pilot._refresh_shed_keepcost`), so
+        the graded floor is identical by construction. ``hand_ids`` is the hand as a LIST — duplicate
+        copies are real cards. The played refresh ``played_cid`` is excluded ONCE (it is discarded, not
+        shuffled; a second held copy still shuffles and still charges). Duplicates price MARGINALLY
+        (sets-not-sums, spec §Round 7): all k held copies of a card land in the deck together, so each
+        copy's re-access odds count all k shuffled siblings as outs — the k-th duplicate is discounted
+        by the copies shuffled with it, neither k independent one-ofs (the pre-reconciliation gamble
+        over-charge) nor free riders (the pre-reconciliation SHED's frozenset dedup). Pre-anchor,
+        ``prizes_hidden`` / ``deck_count`` thread the prize-split weighting into each copy's re-access
+        odds (`_keep_cost`); anchored callers pass ``prizes_hidden=0``.
+
+        The QUOTA GATE (spec Round 8 §2, `gate_library.quota_window`): duplicate copies of a
+        once-per-turn card (Energy — the manual attach; Supporter — the slot, rules.md §3) charge by
+        RANK — the j-th copy's deadline sits j−1 turns away (+1 when this turn's quota is spent:
+        `energy_attached`; `supporter_played` or the played refresh itself being a Supporter), and
+        each intervening turn widens its re-access window by the natural draw. Rank 1 with the quota
+        live is the plain window; non-quota cards keep the uniform marginal price."""
+        ids = list(hand_ids)
+        if played_cid in ids:
+            ids.remove(played_cid)
+        from collections import Counter
+        from common import gate_library
+        played_st = self.stats.get(played_cid) if (self.stats and played_cid is not None) else None
+        sup_spent = bool(getattr(board, "supporter_played", False)
+                         or (played_st is not None and getattr(played_st, "is_supporter", False)))
+        total = 0.0
+        for cid, k in Counter(ids).items():
+            st = self.stats.get(cid) if self.stats else None
+            if st is not None and getattr(st, "is_energy", False):
+                spent = bool(getattr(board, "energy_attached", False))
+            elif st is not None and getattr(st, "is_supporter", False):
+                spent = sup_spent
+            else:
+                total += k * self._keep_cost(cid, counts, pool, draws, board, shuffled_copies=k,
+                                             prizes_hidden=prizes_hidden, deck_count=deck_count)
+                continue
+            total += sum(self._keep_cost(cid, counts, pool,
+                                         gate_library.quota_window(draws, j, quota_spent=spent),
+                                         board, shuffled_copies=k,
+                                         prizes_hidden=prizes_hidden, deck_count=deck_count)
+                         for j in range(1, k + 1))
+        return total
 
     def _deploy_odds(self, cid, board, counts: dict) -> float:
-        """The evolution gate (`common.gate_library`, ADR-0065 Stage 1): P(card ``cid``'s role is
-        realisable by its deadline). 1.0 for a non-evolution or a deployable evolution — a bare base
-        (matched by ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0
-        for a provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
+        """The deadline gate (`common.gate_library`, ADR-0065): P(card ``cid``'s role is realisable
+        by its deadline). Two card classes are gated today; everything else stays 1.0.
+
+        **Evolution gate (Stage 1):** 1.0 for a deployable evolution — a bare base (matched by
+        ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0 for a
+        provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
         (keep): pre-anchor ``counts`` is the unseen deck, so a base still in the decklist keeps its
-        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega Lucario ex
-        with every Riolu evolved/gone)."""
+        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega
+        Lucario ex with every Riolu evolved/gone).
+
+        **Fetcher gate (searcher/recycler leg — acceptance pin ep83457493 f31):** a fetch TRAINER
+        whose every target is provably dead — its deck whiff-set exhausted (`_search_deck_set` ⊆
+        `Board.deck_empty_ids`, the SOUND predicate behind `dont-search-an-empty-deck`) or its
+        recycle pool all-dead (`Board.recycle_dead_only`, behind `dont-recycle-the-dead`) — realises
+        no role, so it sheds freely instead of propping up the SHED at its tutor/recovery worth.
+        Trainer-only: a Pokémon carrying a `recycle` tag (Kyogre) is a playable body regardless.
+
+        **Need-met gate (the fetcher gate's cousin — ladder-win case ep82753102 f16):** a
+        `rush_evolve` / `tutor_mega` WINCON-tutor whose wincon is already in hand
+        (`Board.wincon_in_hand`) has its role SATISFIED — nothing left worth fetching — so it too
+        collapses to 0. Fires live everywhere `keep_cost` is consumed (gamble keep-floor, refresh
+        SHED), mirroring the ladder's `discard-the-redundant-tutor` premise as a Worth factor."""
         from common import gate_library
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if not gate_library.is_evolution(st):
-            return 1.0
-        base = getattr(st, "evolvesFrom", None)
+        if gate_library.is_evolution(st):
+            base = getattr(st, "evolvesFrom", None)
 
-        def _named(ids) -> bool:
-            return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
-                       for i in (ids or ()))
+            def _named(ids) -> bool:
+                return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
+                           for i in (ids or ()))
 
-        base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
-                         and getattr(s, "name", None) == base
-                         for t, n in (counts or {}).items())
-        return gate_library.deploy_odds(
-            st,
-            base_in_play=_named(getattr(board, "in_play_ids", None)),
-            base_in_hand=_named(getattr(board, "hand_ids", None)),
-            base_reachable_in_deck=base_reach)
+            base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
+                             and getattr(s, "name", None) == base
+                             for t, n in (counts or {}).items())
+            return gate_library.deploy_odds(
+                st,
+                base_in_play=_named(getattr(board, "in_play_ids", None)),
+                base_in_hand=_named(getattr(board, "hand_ids", None)),
+                base_reachable_in_deck=base_reach)
+        if st is not None and not st.is_pokemon and not st.is_energy:
+            tags = self.functions.tags(cid) if self.functions else ()
+            if ({"rush_evolve", "tutor_mega"} & set(tags)) and getattr(board, "wincon_in_hand", False):
+                return gate_library.need_met_odds(need_met=True)   # wincon-tutor, wincon already in hand
+            fetch_set = self._search_deck_set(cid)
+            empty = getattr(board, "deck_empty_ids", None) or frozenset()
+            if fetch_set and all(t in empty for t in fetch_set):
+                return gate_library.fetch_deploy_odds(targets_exhausted=True)
+            if "recycle" in tags and getattr(board, "recycle_dead_only", False):
+                return gate_library.fetch_deploy_odds(targets_exhausted=True)
+        return 1.0
 
     def _slot_basic_in_zone(self, want, lock, zone: str, counts: dict, discard_basic_types: set) -> bool:
         """A Basic Energy that FILLS the missing slot ``want`` (``None`` = colourless: any Basic) AND
@@ -1832,6 +1996,41 @@ class PlannerMixin:
                        for t, n in counts.items()):
                     return True
         return False
+
+    def _gamble_chain_refreshes(self, counts: dict, sup_live: bool, board) -> tuple:
+        """The refresh CHAIN (hypergeometric-fetch-closure §failure mode B, the drawn-expander leg —
+        built 2026-07-19): USABLE shuffle-refresh copies still in my DECK whose draw opens a fresh
+        full window inside this refresh's window — ``(copies, min_window)``. A drawn Unfair Stamp
+        (Item) is usable iff one of MY Pokémon was KO'd during the opponent's last turn
+        (`Board.my_pokemon_koed_last_turn` — the card's own play condition); a drawn SUPPORTER
+        refresh (Judge / Lillie's / Harlequin) is usable iff the one-per-turn Supporter slot is
+        UNSPENT in this window, i.e. the played refresh was an Item (``sup_live`` — the 4-of-5
+        rule). Window = each card's own printed draw (`own_draw_count`), MIN across usable types
+        (the engine convention — conservative when types mix). ``(0, 0)`` when none usable. Errs by
+        under-counting: chains inside the chain, and the measured slot-dead cases (a Pokégear-class
+        dig fetching a slot-dead Supporter), are never counted."""
+        from common.strategy.refresh import own_draw_count
+        copies, window = 0, None
+        for tid, n in counts.items():
+            if n <= 0 or not self.functions or "shuffle_hand" not in self.functions.tags(tid):
+                continue
+            st = self.stats.get(tid) if self.stats else None
+            if st is None:
+                continue
+            if getattr(st, "is_item", False):
+                if not getattr(board, "my_pokemon_koed_last_turn", False):
+                    continue
+            elif getattr(st, "is_supporter", False):
+                if not sup_live:
+                    continue
+            else:
+                continue
+            w = own_draw_count(tid, board.my_prizes_remaining, board.opp_prizes_remaining)
+            if not w or w <= 0:
+                continue
+            copies += n
+            window = int(w) if window is None else min(window, int(w))
+        return (copies, window or 0)
 
     def _gamble_draw_engines(self, me: dict, counts: dict, exclude: set) -> tuple:
         """WP4: the refresh window's usable DRAW ENGINES — ``(engine_copies, stage_windows,
@@ -2762,7 +2961,8 @@ class PlannerMixin:
         return players[oi] if 0 <= oi < len(players) and players[oi] else {}
 
     # ---- Tier-1 Engine Search (ADR-0031 phase 3): simulate a line to its end-of-turn board -----------
-    def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True) -> float | None:
+    def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True,
+                           with_coins: bool = False):
         """The leaf-eval value of a candidate line computed on its ENGINE-SIMULATED end-of-turn board
         (ADR-0031 phase 3): the exact prizes taken and my Active's survival vs Incoming, read off the
         board the simulator produces rather than closed-form-approximated, PLUS the MY-side ``readiness``
@@ -2771,27 +2971,44 @@ class PlannerMixin:
         + Σ ability-fire − Σ spend``. A line that finishes the game in my favour scores above any prize
         count (dominant). None when the search is unavailable — the caller then keeps the closed-form leaf
         value (never crashes, decision 7). ``spend_account=False`` drops the line term (a pure-readiness
-        terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on)."""
+        terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on).
+        ``with_coins=True`` returns ``(value, coins)`` — the sim's coin bit beside the value, so a
+        caller whose OVERRIDE authority needs a reproducible board (the develop rollout) can treat a
+        coin-riding value as unrankable noise."""
         sim = self._simulate_line(obs, first_step)
         if sim is None:
-            return None
-        end, my_index, start_prizes, result, line_val = sim
+            return (None, False) if with_coins else None
+        end, my_index, start_prizes, result, line_val, coins = sim
+
+        def _out(val):
+            return (val, coins) if with_coins else val
+
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
-        if result == my_index:                            # line wins outright — dominant
-            return KO_SCORE * (start_prizes + 1)
+        if result == my_index and not coins:              # line wins outright, COIN-FREE — dominant.
+            return _out(KO_SCORE * (start_prizes + 1))    # A win through auto-resolved coins is one
+                                                          # lucky RNG stream, not a guarantee — it falls
+                                                          # through to ordinary board ranking (prizes
+                                                          # actually banked still count), so a phantom
+                                                          # win can never preempt the tuned scoring /
+                                                          # the SOUND win rung (the f24 Meowth mirage;
+                                                          # `_commit_best`'s below-one-prize veto then
+                                                          # defers exactly as designed)
         prizes_taken = max(0, start_prizes - len(me.get("prize") or []))
         active = next((p for p in (me.get("active") or []) if p), None)
         survives = False
         if active and active.get("hp"):
             bodies = (opp.get("active") or []) + (opp.get("bench") or [])
             survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
-        return (self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                 readiness=self._readiness(me),
-                                 value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
-                                 line=(line_val if spend_account else 0.0))
-                + self._predicted_loss(me, opp))                 # ADR-0064: bench-empty-doom loss rung
+        readiness = self._readiness(me)
+        if getattr(self, "leaf_hand_value", False):        # WP-N5b (armed OFF): readiness CONSUMES the
+            readiness += self._hand_readiness(end, my_index)  # needs module — the held-hand slot coverage
+        return _out(self._leaf_value(prizes=prizes_taken, active_survives=survives,
+                                     readiness=readiness,
+                                     value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
+                                     line=(line_val if spend_account else 0.0))
+                    + self._predicted_loss(me, opp))             # ADR-0064: bench-empty-doom loss rung
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
@@ -3083,7 +3300,17 @@ class PlannerMixin:
         Heuristic, not sound (ADR-0031): coins auto-resolve (``manual_coin=False``) and the opponent's
         hidden zones are predicted from my own deck list, so the end-of-turn board is trusted for
         ranking, not as a guarantee. The live game is untouched (the search forks an independent sim).
-        Lazy DLL import keeps the fast unit suite from ever loading the native engine."""
+        Lazy DLL import keeps the fast unit suite from ever loading the native engine.
+
+        The 6th tuple element is ``coins``: True iff any ``LogType.COIN`` log appeared along the
+        stepped line — the sim consumed engine-RNG coin flips, so its outcome (including a "win")
+        is one lucky stream among many, NOT a guarantee. `_engine_leaf_value` reads it to demote a
+        coin-dependent simmed win from the dominant short-circuit to ordinary board ranking (the
+        f24 phantom: a coin-blessed Meowth-ex line simmed to an outright "win" — 7000 on one RNG
+        stream, 162 on another — and preempted the human's sound lethal-enabling attach). Errs
+        toward demotion (a stray coin log only costs the SHORT-CIRCUIT, never the ranking); absent
+        under a backend without COIN logs (cgpy), where detection finds nothing and behavior is
+        unchanged."""
         if not (obs or {}).get("search_begin_input") or not first_step:
             return None
         cgapi = getattr(self, "_search_api", None)     # injectable search backend (leaf-lab harness sets
@@ -3122,8 +3349,38 @@ class PlannerMixin:
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))
             crossed_my_turn_end = False
+            # WP-N5b/N5d: the end obs is OPPONENT-perspective (my turn passed), so my hand is hidden.
+            # To let the leaf value it (`_hand_readiness`), capture a HELD-CONTEXT snapshot from the
+            # LAST my-perspective step — the hand, plus the turn facts the N5d deployability
+            # counterfactual reads (`_held_undeployable`): the attach/Supporter quotas, my bodies
+            # with their fresh `appearThisTurn` bits (the end board may reset them), bench fullness.
+            # Injected into the end obs (the `heldCtx` private key beside the injected `hand`).
+            # Seeded from the live start-of-turn state (fallback if the turn ends before any
+            # my-select). v1 caveat: the capture is BEFORE my final action, so it is one action
+            # stale. Gated — off = the sim is byte-identical.
+            capture_hand = getattr(self, "leaf_hand_value", False)
+
+            def _held_snapshot(player: dict, current: dict):
+                if not player.get("hand"):
+                    return None
+                return {"hand": player["hand"],
+                        "supporterPlayed": bool(current.get("supporterPlayed")),
+                        "energyAttached": bool(current.get("energyAttached")),
+                        "bodies": (player.get("active") or []) + (player.get("bench") or []),
+                        "benchFull": len([b for b in (player.get("bench") or []) if b])
+                                     >= (player.get("benchMax") or 5)}
+
+            my_ctx = _held_snapshot(me, cur) if capture_hand else None
+            coin_t = getattr(getattr(cgapi, "LogType", None), "COIN", None)
+
+            def _saw_coin(ob) -> bool:
+                return coin_t is not None and any(getattr(lg, "type", None) == coin_t
+                                                  for lg in (getattr(ob, "logs", None) or ()))
+
+            coins = False
             for _ in range(max_steps):
                 o = st.observation
+                coins = coins or _saw_coin(o)
                 c = o.current
                 if c is None or c.result != -1 or o.select is None:
                     break                                 # game over
@@ -3136,14 +3393,26 @@ class PlannerMixin:
                     break                                 # back to MY next turn — the depth-2 leaf
                 if not budget_ok():
                     break                                 # per-move engine budget spent
-                dec = self._evaluate(_prune_none(asdict(o)))
+                odict = _prune_none(asdict(o))
+                if capture_hand and mine and not crossed_my_turn_end:
+                    pcur = odict.get("current") or {}
+                    ph = pcur.get("players") or []
+                    meh = ph[my_index] if 0 <= my_index < len(ph) and ph[my_index] else {}
+                    my_ctx = _held_snapshot(meh, pcur) or my_ctx
+                dec = self._evaluate(odict)
                 if mine and not crossed_my_turn_end:       # only MY within-turn actions carry a line term
                     line_val += self._line_account(dec.options, dec.chosen)
                 st = cgapi.search_step(st.searchId, list(dec.chosen))
+            coins = coins or _saw_coin(st.observation)    # the final step's logs (a coin-won attack)
             end = _prune_none(asdict(st.observation))
+            if capture_hand and my_ctx:                   # inject my hidden hand + held-context
+                epl = (end.get("current") or {}).get("players") or []
+                if 0 <= my_index < len(epl) and isinstance(epl[my_index], dict):
+                    epl[my_index]["hand"] = my_ctx["hand"]
+                    epl[my_index]["heldCtx"] = {k: v for k, v in my_ctx.items() if k != "hand"}
             result = st.observation.current.result if st.observation.current else -1
             cgapi.search_end()
-            return (end, my_index, start_prizes, result, line_val)
+            return (end, my_index, start_prizes, result, line_val, coins)
         except Exception:
             try:
                 cgapi.search_end()

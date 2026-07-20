@@ -1,10 +1,15 @@
-"""Fetch-closure — the tutor / recycle / search graph and its clause predicates (WP7, ADR-0065).
+"""Fetch-closure — the tutor / search graph and its clause predicates (WP7, ADR-0065).
 
 The oracle's GRAPH leg, lifted out of the Pilot into pure, Pilot-independent functions over the card
 REPRESENTATION only: ``card_effects.json`` FETCH clauses (ADR-0032) + ``CardStat`` — **never a card-text
 parse** (the Round-11 ruling). One implementation, called by both the gamble gain side
 (`planner._fetch_reaches_pokemon` / `_card_reaccess_outs`) and the card-worth keep-cost
 (`card_worth` via the Pilot) so the four valuation shadows read the SAME closure by construction.
+
+Scope: the clause predicate (`fetch_target_matches`) is zone-agnostic — it matches a recycler's
+``zone: discard`` clause as readily as a deck search — but the graph walks here (`reaccess_outs`,
+`fetch_reaches_pokemon`) deliberately cover only the ``zone: deck`` leg: a shuffled card lands in the
+DECK, and the gamble's recycle/discard leg lives with the slot closure (`planner._fetch_reaches_slot`).
 
 Each function takes small accessor callables instead of a Pilot:
   * ``stat_of(cid) -> CardStat | None`` — the card's stat row (``pilot.stats.get``)
@@ -31,9 +36,17 @@ def fetch_target_matches(clause: dict, stat) -> bool:
     NOTE: ``energy_type`` on a POKÉMON target (Fighting Gong's "Basic {F} Pokémon") is NOT resolvable
     from ``CardStat`` (no Pokémon-type field), so it is applied only to ENERGY targets — a Pokémon
     target over-includes on type (fail-open; never false-suppresses a whiff; exact for a mono-type deck).
+
+    A clause carrying ``trigger`` (a play-gated ability, Meowth ex's on-bench fetch) or ``dig``
+    (a top-N look, Pokégear's dig-7) is REJECTED outright: neither is the unconditional whole-deck
+    search the closure's deterministic-interior-hop model assumes (spec §thesis), so counting one as
+    an out would over-claim. Today both carriers are ``target: supporter`` clauses that no branch
+    below matches anyway — this guard makes that rejection load-bearing instead of accidental.
     """
     if stat is None:
         return False
+    if clause.get("trigger") or clause.get("dig"):
+        return False                       # not an unconditional whole-deck search — never a closure edge
     target = clause.get("target")
     etype = clause.get("energy_type")
     if target == "basic_energy":
@@ -71,7 +84,12 @@ def reaccess_outs(cid, counts: dict, stat_of, clauses_of) -> int:
     Ball a Pokémon, Energy Search an energy, Fighting Gong a {F} Basic, Mega Signal a Mega ex …). The
     gamble's gain-side closure pointed BACKWARDS — the same predicate asked "can I get this card back?"
     A shuffled card lands in the DECK, so only deck re-access counts (no discard). 0 for an unknown
-    card. Errs by under-counting (a lower re-access → a higher, safer keep-cost)."""
+    card. MOSTLY errs by under-counting (a lower re-access → a higher, safer keep-cost) — held
+    tutors that shuffle in with the card, and the discard leg, are never counted. Three small
+    over-counting channels are accepted: a type-locked POKÉMON fetch over-includes off-type Basics
+    (the `fetch_target_matches` NOTE), tutor play-COSTS are not charged (an Ultra Ball counts even
+    when its discard-2 might be unpayable), and Supporter tutors count without the one-per-turn
+    slot. Each is per-card small and next-turn-horizon plausible; none is a sound bound."""
     xst = stat_of(cid) if cid is not None else None
     if xst is None:
         return 0

@@ -29,8 +29,10 @@ comparator) and ADR-0032 (Effect-Clause tier).
   real decks).
 - **`src/common/card_worth.py`** — the WORTH backend: the ONE tuned currency (`ROLE_TIER` /
   `ENERGY_TIER` / `ACE_SPEC_TIER`), the `role_value(roles, is_ace_spec, is_typed_basic_energy)`
-  primitive (the Pilot's `_role_value` delegates), and the `keep_cost(role_value, reaccess_odds)`
-  primitive. The Pilot supplies card facts; the module owns the numbers.
+  primitive (the Pilot's `_role_value` delegates; later extended with `tags=` — the TAG_TIER bullet
+  below), and the `keep_cost(role_value, reaccess_odds)` primitive (later extended with the
+  `deadline_odds` gate factor — the gate-library bullet below). The Pilot supplies card facts; the
+  module owns the numbers.
 - **The gamble keep-floor consumes it (WP6):** `planner._keep_cost = role_value × (1 − re-access
   odds)`, the closure pointed backwards, replacing the binary protected-hand veto.
 - **The refresh SHED consumes it (2026-07-18):** `pilot._refresh_swing_tactical`'s flat
@@ -46,13 +48,241 @@ comparator) and ADR-0032 (Effect-Clause tier).
 - **The coverage lint (Round 9 §5):** `tests/strategy/test_role_coverage.py` — no card silently
   priced at zero from a typo (every declared role is known vocabulary; every ROLES key is a real
   deck card; every worth-roled card prices positive).
-- **The TAG_TIER worth coverage (2026-07-19, combat-tempo findings §B):** `role_value` = the MAX
+- **The TAG_TIER worth coverage (2026-07-19, the combat-tempo investigation — its plan doc is
+  retired, see git history):** `role_value` = the MAX
   claim across roles, behavioural tags (`TAG_TIER`: `discard_eot` 30 / `clutch_heal` 20 / `gust` 10
   / `recycle` 10 — the discard ladder's keep bands mirrored into the one currency), and the
   ACE-SPEC / energy fallbacks. Closes the gap where the DISCARD ladder priced Ignition / Wally's
   but the worth oracle saw 0, so the graded refresh shed shuffled them away for free. Two corpus
   targets flipped and promoted (`82749168-65`, `83969481-55`); ADR-0060's parked "hand QUALITY"
   seam, now concretely covered for the tagged classes.
+- **The duplicate-copy reconciliation + the fetcher gate (2026-07-19).** The two keep-value
+  consumers priced duplicate held copies differently by container accident: the gamble summed per
+  copy at +1 out each; the refresh SHED iterated the deduped `Board.hand_ids` frozenset — one
+  charge per distinct card, duplicates free, and EVERY copy of the played refresh excluded. Both
+  now read ONE summation, `planner._hand_keep`: duplicates price MARGINALLY (each of the k held
+  copies charges with all k shuffled siblings as outs — the first sets-not-sums step, spec
+  §Round 7), the played refresh is excluded once, and duplicate-free hands price identically by
+  construction. The reconciliation exposed a latent mispricing the dedup accident had masked
+  (pin `83457493-31`: two dead Poffins + a dead Night Stretcher held at worth ~10 each — the second
+  Poffin rode free), fixed the honest way: the **fetcher gate**, the gate library's
+  searcher/recycler leg (`gate_library.fetch_deploy_odds` via `planner._deploy_odds`), collapses a
+  fetch TRAINER whose every target is provably dead — the SAME sound predicates the play-side
+  rungs trust (`dont-search-an-empty-deck`'s deck whiff-set ⊆ `deck_empty_ids`;
+  `dont-recycle-the-dead`'s `recycle_dead_only`), Trainer-only so a recycle-tagged BODY (Kyogre)
+  stays priced. The pin's margin went −2.7 (broken) / ≈+2 (the lucky accident) → **+19.1**
+  (honest: three dead cards shed free). Suite + corpus green (3092).
+- **The pre-anchor cost-side prize split (2026-07-19, behavioural-review Finding 2).** Pre-anchor,
+  keep-cost re-access counted possibly-prized unseen outs at full strength against a prize-free
+  pool, while the gamble's GAIN side was exactly prize-weighted — re-access overestimated, keep
+  under-charged, a pre-anchor pro-gamble bias from both directions at once. `_prize_split_hit`
+  gains a ``certain`` term (the shuffled hand copies, never prize-assignable, join every branch's
+  window draw) and `_keep_cost` / `_hand_keep` route the re-access through it when
+  ``prizes_hidden > 0`` — the ONE split primitive now prices both sides; the anchored path is
+  byte-identical, the gain side (``certain=0``) unchanged. Alongside (review Finding 3):
+  `fetch_closure.reaccess_outs`'s blanket "errs by under-counting" claim softened to name its three
+  accepted over-counting channels (type-locked Pokémon fetch fail-open, uncharged tutor costs,
+  slot-less Supporter tutors). Suite + corpus green (3094).
+- **The refresh-chain stage + the first-reveal ruling (2026-07-19, the spec-checklist grill).** The
+  spec's two unbuilt checklist items were grilled at source. (a) **Hand-expansion chains — BUILT**,
+  narrowed to the measured live residue: a drawn Unfair Stamp (gated on the new
+  `Board.my_pokemon_koed_last_turn`, the opponent-turn-start prize mirror in
+  `opponent_resources`) or a drawn Supporter refresh (post-Item only) re-opens a full window at the
+  same outs — `planner._gamble_chain_refreshes` + a disjoint additive branch, anchored-only,
+  `chain_refresh` on the trace; Pokégear-class chains are provably slot-dead and the opponent side
+  stays ADR-0064's. (b) **First-reveal information credit — CLOSED refuted-for-now** (every shipped
+  fetch anchors; fetch-early is correction-refuted `85163634-17`; sequencing owned by
+  `dig-before-commit`), revival gate recorded on the spec checklist. Suite + corpus green (3096).
+- **The pressure + quota gates — the gate library COMPLETE (2026-07-19, TDD).** Stage 3, the
+  **pressure gate** (`gate_library.closing_gate_reaccess` via `planner._gate_closing`): under a
+  doomed Active, the held cards that ANSWER the doom — the successor wincon with its Line
+  pre-evolution in play, and the `clutch_heal` / `switch` tags — charge FULL role worth (the
+  Round-8 §3 closing-edge spike: a probabilistic redraw is not bankable against the doom deadline).
+  This retired **`hold-successor-when-doomed` (−35), the LAST flat refresh guard**: at its anchor
+  (ep83037962 f49) Harlequin prices **−12.0 through the graded equation alone** (was −23.9 with
+  the rung; +11.1 with neither), the substance pin and the synthetic pair re-audited green. Stage
+  4, the **quota gate** (`gate_library.quota_window` in `_hand_keep`): the k-th held copy of a
+  once-per-turn card (Energy attach / Supporter slot, rules.md §3) has deadline k−1 turns (+1 on a
+  spent quota — `energy_attached` / `supporter_played` / the played refresh being a Supporter), so
+  each rank's re-access window widens by its turns of natural draws — "the 3rd hand Energy is
+  near-free" is now derived. The ADR-0060 keep pins and the TAG_TIER pins hold under both. Suite +
+  corpus green (3100).
+- **The discard SHADOW emitter (2026-07-19)** — the fourth shadow's evidence bridge, the first
+  equation shipped under the shadow-equations ruling: `pilot._discard_shadow` computes the oracle's
+  v1 keep-cost (Worth × Gates × deterministic pitch re-access, `fuel` zone sign) at every real
+  discard pick and emits the full working + the agreement bit beside the ladder's decision —
+  `Decision.discard_shadow` → the `@T` key → the blunder-shell dropdown — deciding NOTHING. First
+  corpus sweep: 3 agree / 9 disagree over the recorded discard decisions; the rows localise the
+  migration's prerequisites (line-MEMBER worth derivation; set semantics; a worth-0 tie-break).
+  The swap stays gated per the ruling (seam D). Suite + corpus green (3104).
+- **Seam-D grill RULED + steps 1-2 built (2026-07-19).** Ruling (with the user): *gates real,
+  equation shadow, swap gated-last* — a GATE is a Worth factor (built real, fires live at the
+  gamble/refresh sites, corpus-gated), while the discard DECISION SITE rides as a shadow until its
+  agreement earns the swap. Built: the **pitch-preference term** (`_discard_shadow` gained a
+  deadness/zone `pitch` count — dead-opener/redundant-tutor/stranded/fodder/fuel/spent-burst —
+  ranking the zero-keep ties keep-cost can't), the **need-met gate** (`gate_library.need_met_odds`:
+  a wincon-tutor whose wincon is in hand collapses to 0, live at gamble/refresh), and the shadow's
+  **worth tie-break** (lower-worth duplicate sheds first — sets-not-sums). Measured vs the HUMAN
+  corpus, the equation went **8/12 → 11/12, now BEATING the tuned ladder's 9/12**; the only miss is
+  `86091435-68` (the deploy-now spike). The swap (`keep_cost_gated` decides) is the next gated
+  decision. Suite + corpus green (3110).
+- **The last miss re-reviewed — the equation's pick ruled CORRECT (2026-07-19).** On the shadow's
+  working the user re-reviewed `86091435-68` and refuted the recorded label's 2nd slot (the
+  Crushing Hammer should be KEPT for the opponent's Active) — the equation's pick endorsed over the
+  human label. Corpus: the strict target → refuted/excluded (reviewed.json), its surviving
+  substance relaxed into `test_deploy_now_drakloak_is_not_pitched` (strict-xfail: the sole
+  evolve-the-Active Drakloak must never be pitched). Scoreboard: the equation matches the human
+  **11/11** on surviving labels vs the ladder's **9/11**, and is user-endorsed on the refuted 12th
+  — it now strictly dominates the ladder on every recorded discard decision. The swap awaits the
+  user's go.
+- **Seam-D CONVERGED — the deploy-now spike + the LIVE SWAP (2026-07-19).** The fourth valuation
+  shadow is now the DECIDER. (a) **Deploy-now spike:** `Board.deploy_now_ids` (a hand evolution with
+  an eligible in-play base this turn) wired as a `_gate_closing` closing edge — keep spikes to full
+  worth, flipping `86091435-68` while `83686860-18` still pitches correctly (the covered-vs-open pair).
+  (b) **Engine-supporter gate** (Finding 2's 5th premise) closed as a discard-context worth floor.
+  (c) **The swap:** `Pilot.discard_keep_value` (PROFILE armed ON, `develop_rollout` precedent) — the
+  equation's ranking (`_discard_equation_rows`, shared with the shadow) decides the forced discard in
+  place of the `_DISCARD` ladder; OFF is byte-identical. Acceptance: **9/9 live discard corpus** (the
+  ladder 9/11); the relaxed deploy-now target promoted to a pin; all discard pins green; full suite
+  3114. The four-shadow disagreement (Round 7) is now fully retired — grab/pitch, refresh swing,
+  gamble keep-floor, AND discard all read the one currency. Open: the duplicate-pair set semantics,
+  and folding the shadowed `_DISCARD` rungs once the in-ladder A/B clears.
+- **Line-member worth derivation (2026-07-19, the shadow's first prerequisite closed).** The shadow
+  sweep found an undeclared middle Line stage (the f68 Drakloak on Dreepy→Drakloak→Dragapult ex)
+  pricing **0** — `_role_value` saw only the declared base. `planner._role_value` now derives
+  `win_condition_base` worth for every `_line_preevo_set` member (Round 9 'derive first'), so the
+  Drakloak prices 20. WORTH-ONLY: the Line-membership fact enters the value currency (keep-cost
+  sites + the shadow) but NOT `_roles_of` / `c.roles` — injecting it there would flip the discard
+  ladder's `_BASE_ROLES` exemptions and REGRESS the covered-Drakloak pin `83686860-18`, so that
+  discrimination stays the gated seam-D migration. The gamble keep-floor / refresh SHED re-audit is
+  a no-op (no pin moved). Suite + corpus green (3105).
+- **Keep-value v2 (Needs) WP-N1–N3 built (2026-07-19/20; `keep-value-needs-assignment-grill-spec.md`).**
+  The successor to the gate stack the user flagged as brittle ("more and more gates that begin to
+  undermine each other"): needs reified as deadline-tagged SLOTS (`common/needs.py`, the fifth
+  glossary term), a card's keep-value its MARGINAL slot coverage under EXACT bitmask-DP assignment —
+  so multi-copies, energy-attached, doom, quotas, fuel and deploy-now are slot PROPERTIES resolved
+  GLOBALLY in one assignment, not pairwise-composed gates. WP-N1 the module + the two soundness nets
+  (the COVERAGE LINT: every worth source names ≥1 slot; the DISSOLUTION LEDGER: every v1 gate names
+  its re-deriving slot); WP-N2 the assignment engine (`assignment_value` / `keep_v2` / `set_keep_v2`
+  / `cheapest_removal`); WP-N3 the Pilot resolver (`pilot._needs_v2`: the live board → slots /
+  eligibility / resupply) + `keep_v2` / `eq2_pick` / `agree_v2` columns on `discard_shadow`,
+  shadow-only. The sweep's four disagreements each adjudicated to a resolver gap (the half-tier
+  SUCCESSION slot for a wincon line — "copy 2's marginal = its next-best slot"; line slots
+  Pokémon/ACE-SPEC only; the draw-engine band off the eligible suppliers; a residual-worth
+  tiebreak), never the design; post-adjudication **agree_v2 12/12** with the live v1 decider.
+- **WP-N4 — the discard decider swap (2026-07-20, dev-window ruling).** The per-family swap for the
+  cleared discard family: `Pilot.needs_keep_value` (PROFILE armed ON, the `develop_rollout`/seam-D
+  precedent) makes the v2 needs-assignment (`_needs_v2` → `eq2_pick`, `needs.cheapest_removal` over
+  the resolved slots) the forced-discard DECIDER, superseding v1's per-card gate composition;
+  precedence `needs_keep_value` > `discard_keep_value` > the ladder, each a kill-switch, OFF falls
+  through. Corpus-safe BY CONSTRUCTION (agree_v2 12/12 → every human `correct` v1 satisfied, v2
+  satisfies), and the **duplicate-wincon pair flips WITHOUT a new gate** — the naivety v1 could not
+  fix (both copies read keep-0) is structurally gone: each copy's solo marginal is the succession
+  slot, the pair's set marginal is full+half. **Gate dissolution, precisely:** the discard DECISION
+  no longer runs v1's brittle pairwise gate composition — it flows through the global assignment.
+  The gate code is NOT deleted: `_deploy_odds` (evolution + fetcher + need-met), the fuel/burst
+  flags and the quota window are CONSUMED by the resolver (a dead evolution's line slot is valued
+  ×0 — the ledger's "dead evolution = no line slot," derived not asserted) AND still price the
+  gamble keep-floor + refresh SHED, which have not swapped. **The hedge is RETAINED** (v2 never
+  prices below v1's post-gate keep): the resolver is still v0-scope — resupply 0.0 (errs toward
+  keep) and opponent DENY slots deferred — so trusting v2 raw is premature; the hedge retires with
+  the resolver's completion. Staged next (WP-N4b): the refresh-SHED shadow join (a MAGNITUDE shadow,
+  distinct from the discard's pick-agreement — the discard corpus is this week's bench per the
+  user). Suite + corpus green (3055); the corpus discard pins hold under v2 as the live decider.
+- **WP-N4b — the refresh-SHED MAGNITUDE shadow, and its verdict: the refresh family is NOT cleared
+  (2026-07-20).** The refresh SHED is a scalar (`_refresh_shed_keepcost` = Σ keep_cost), not a pick,
+  so its shadow is a MAGNITUDE comparison, not the discard's pick-agreement: `pilot._refresh_shed_shadow`
+  emits v1's Σ keep_cost beside v2's whole-hand assignment marginal (`needs.set_keep_v2` over the
+  held hand, resolved through the shared `_resolve_needs` core factored out of `_needs_v2`), and —
+  since the shed is the ONLY term that changes — the two refresh SWINGS
+  (`swing_v2 = swing_v1 + (v1_shed − v2_shed)`) and the decision-relevant SIGN-agreement bit (would
+  swapping the shed flip play/don't-play?). Rides `Decision.refresh_shadow` → the `@T` key, deciding
+  NOTHING. **The sweep's verdict (83 refresh decisions): 18 sign-flips, and v2 UNDER-prices the shed
+  in 46 (vs over-prices in 35), the UNSAFE direction — it would shuffle away hands v1 correctly
+  keeps.** The cause is diagnostic, not a bug: v2's v0 resolver is DISCARD-bench-scoped — its slots
+  price a card's LINE / fund-attack / answer-doom / fuel NEED, but not a card kept for GENERAL worth
+  (a spare engine/attacker/backup body with no open line slot, an energy on a powered Active). The
+  discard family cleared 12/12 because the discard corpus lived within that scope; the refresh's
+  whole-hand valuation exposes the gap. So the refresh site does NOT swap — the shadow did its job,
+  and its telemetry stages the prerequisite: general-worth slot coverage, which is the readiness
+  leaf's board-value terms (`board-state-valuation-grill.md`) — i.e. WP-N5's fold, not a bolt-on
+  gate. v1 stays the refresh/gamble keep-value spine meanwhile. Suite + corpus green (3055).
+- **WP-N5 — the general-worth slot: the resolver enrichment WP-N4b demanded (2026-07-20).** The
+  refresh sweep proved the v0 resolver blind to a card's LATENT worth (a spare engine/attacker with
+  no open need slot priced ~0). The fix is the readiness leaf's own vocabulary applied to the HAND:
+  a `general` slot kind (`needs.general_worth_slot`) — a held card's role tier × `_GENERAL_WORTH_W`
+  (0.45, the leaf's `_READINESS_BENCH_DISCOUNT`: a hand card is ~one deploy away, like a benched
+  body), emitted ONE per distinct card (so spare COPIES price marginally — sets-not-sums, the
+  assignment de-duplicates) and BELOW every specific need (a need-filler assigns to its need first).
+  PITCH-GATED: a row the pitch term flags dead-weight (spent_burst / fuel / dead_opener / stranded /
+  redundant_tutor / fodder) has no latent worth — context-correct, since refresh rows carry no pitch
+  flag so a SHUFFLED burst keeps its future-attach worth (the gate caught c4f5, where an ungated
+  general slot RESURRECTED the spent Ignition v1 correctly zeroed — the 83454549-36 trap again).
+  **Measured: refresh under-pricing (the UNSAFE direction — shuffling away a kept hand) more than
+  HALVED, 46 → 19 of 83; sign-flips 18 → 13; the residual flipped to over-pricing (35 → 62, the SAFE
+  direction), cleanly isolating the one remaining gap as the missing resupply/re-access discount.**
+  The discard corpus held **12/12** under v2 as the live decider; the **leaf-lab bench is UNCHANGED
+  (39/267 SOLE-top, 71% shared, avg-tie 3.0)** — the enrichment touched only the keep-value resolver,
+  not the leaf, so no accidental coupling (the discipline check, run `tools/train/leaf_lab.py`). Suite
+  green (3057).
+- **WP-N5b — the readiness-leaf fold: BUILT behind a flag, MEASURED, verdict MIXED → armed OFF
+  (2026-07-20).** Round 5's "readiness consumes the needs module" fold — the leaf's own deferred v2
+  "actionable-resource term" (`board-state-valuation-grill.md` §v1→v2) IS the needs assignment. Two
+  pieces built behind `Pilot.leaf_hand_value` (PROFILE armed OFF — flag-off is byte-identical, suite
+  3057): (a) the HAND-VISIBILITY PLUMBING the grill named the v2 enabler — the sim end-obs is
+  OPPONENT-perspective so my hand is hidden (verified empirically: `handCount` present, no `hand`
+  key; `SearchState` exposes only the perspective-filtered `observation`, no full-state accessor),
+  so `_simulate_line` now CAPTURES my hand from the last my-perspective step and INJECTS it into the
+  end obs; (b) `pilot._hand_readiness` — the leaf's resource term = the held hand's slot coverage
+  (`needs.set_keep_v2` via `_resolve_needs`, the SAME valuation the keep-value sites use — one
+  vocabulary, not a rival), capped, added to `_readiness` in `_engine_leaf_value`. **Bench verdict
+  (the discipline gate, `leaf_lab.py` + `gate0_ab.py`): MIXED, does not clear.** Full leaf-lab (267):
+  SOLE-top 39→50–54 (15%→20%, the honest headline UP) and avg top-tie 3.0→2.2 (the 36→5 granularity
+  gap TIGHTER) — but "correct at top at all" 190→148 (the term breaks ties ~15 toward correct, ~42
+  AGAINST — real ranking errors), and the drop is NOT W-sensitive (0.2→0.5 all ~53–55% shared), so
+  it is intrinsic, not miscalibration. Gate-0 (lucario ctx-0 subset, CAP 2500): SOLE-top flat, 1-ply
+  at-top 75%→50%. The grill's "a big new positive term VOIDS every guard" warning, materialized: a
+  raw hand-value term rewards HOARDING over deploying — the opposite of the develop rung's job. Kept
+  armed OFF; the plumbing + the bench methodology stay as the enabler.
+- **WP-N5c — the hand term narrowed to "live use" (specific needs only); STILL armed OFF, ceiling
+  diagnosed (2026-07-20).** Dissecting the 51 regressed frames (`ep83661652`: every option reaches
+  the SAME board 93, so the hand term is the only discriminator, and it hands the lines holding two
+  extra cards 676/677 **+23** vs the correct line that PLAYED them **+2** — pure hoarding, driven by
+  the GENERAL-worth slots). Fix: `_resolve_needs(..., include_general=False)` for the leaf only —
+  keep-value keeps latent worth (deciding what to shed prices a spare), but the leaf's term is the
+  grill's "held cards with a LIVE use" = the SPECIFIC needs, not latent worth. **Measured: recovered
+  ~⅓ of the lost shared-top (leaf-lab 141→153 of 267) while keeping the SOLE-top gain (50→48, still
+  18% vs 15% baseline).** But shared-top stays below baseline (153 vs 190): the specific-need slots
+  THEMSELVES still credit fumbles — a `deploy_now` evolution HELD at end-of-turn is a card I didn't
+  evolve. **The ceiling, now precise:** keep-value credits "held cards with a use," but the LEAF
+  wants the COMPLEMENT — resources I COULDN'T deploy this turn (future value), not ones I chose not
+  to. At a static end-of-turn board those are indistinguishable without a per-card "was this
+  deployable" counterfactual. So the needs valuation (built for keep decisions) does not cleanly map
+  to the leaf's end-of-turn board value; the fold is PARKED armed-OFF pending either that complement
+  term or a pure small tie-breaker (break the 36→5 exact-value ties without overturning real gaps).
+  N5c is committed as the better term (halves the regression, matches the grill's spec); the arming
+  bar (SOLE-top AND shared-top both up, like the v1 leaf) is not met.
+- **WP-N5d + the ε tie-breaker — the hand fold's CEILING reached; CLOSED as measured-and-parked
+  (2026-07-20).** Both staged shapes built and measured. (a) **N5d, the deployability
+  counterfactual** (`_held_undeployable` + the `heldCtx` sim snapshot — attach/Supporter quotas,
+  bodies with fresh `appearThisTurn`, bench fullness, captured at the last my-perspective step):
+  the leaf credits ONLY held cards that COULD NOT have been deployed this turn (an Energy past the
+  attach quota, a Supporter past the slot, an evolution with no eligible base, a Basic on a full
+  bench; Items always deployable → never credited); deployable held cards still participate in the
+  assignment (covering slots, shrinking undeployable siblings' marginals) but earn nothing. On the
+  diagnostic frame the hoarding reward collapsed +23 → +3. (b) **The ε tie-break sizing**
+  (`_HAND_TIEBREAK_W/_CAP`: term < the ~0.025 smallest genuine leaf gap, so it can ONLY split
+  exact-value ties). **Measured (leaf-lab 267): N5d-full 45/163/2.51, N5d-ε 46/165/2.50 — ε ≈ full,
+  CONFIRMING N5b's W-insensitivity: tie-splits are the entire mechanism, magnitude irrelevant. The
+  decisive metric — E[correct picks] = Σ 1/tie-size over at-top frames (what the argmax rung with
+  order-broken ties actually delivers): baseline 83.5/267 vs N5d-ε 84.5/267 — a WASH** (+7 SOLE-top
+  exactly offset by mis-split ties). Root cause, now fully explained: the residual tied boards
+  differ by the leaf's OTHER named blindnesses (who's-Active, tools — the grill's own collision
+  dissection); when the true discriminator is positional, ANY hand-based tie-split is noise. **A
+  hand term structurally cannot clear the bar — the next SOLE-top gains belong to who's-Active and
+  tool terms in the leaf itself (leaf-native work, not the needs fold).** N5d+ε committed as the
+  best-behaved shape; `leaf_hand_value` stays armed OFF; the fold re-opens only after those
+  blindnesses are read. Suite green (3057).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
@@ -85,11 +315,17 @@ already converged; its residue rides with the gate library.
   unseen deck, so nothing is discounted — it bites only a genuinely dead card), unit- and
   synthetic-integration-tested (`test_gate_library.py`, `test_undeployable_wincon_is_cheap_to_shuffle_
   but_a_deployable_one_is_not`), zero regressions.
-  Scoped in [`docs/plans/gate-library-scope.md`](../plans/gate-library-scope.md). Later stages
-  (quota / recycler / pressure gates; the discard-side `86091435-68` which needs a principled discard
-  convergence first, NOT a flat rung) extend the same `deploy_odds` seam.
-- **The held-card-risk tier-2 seam (Round 8 §5)** and **the skill loop** (deck-genie Role Sheet /
-  deck-align fold — Round 9 §4). The oracle is the backend; the skill loop is how decks feed it.
+  The scope/staging plan doc is retired — every stage it scoped is now BUILT: the fetcher gate
+  (2026-07-19, the reconciliation bullet above), the **pressure gate** and the **quota gate**
+  (2026-07-19, the bullet below). The one remaining gate-adjacent piece — the discard-side
+  deploy-now spike (`86091435-68`), which needs a principled discard convergence first, NOT a flat
+  rung — is owned by `docs/plans/seam-discard-convergence.md`.
+- ~~The held-card-risk tier-2 seam (Round 8 §5)~~ **BUILT 2026-07-19**
+  (`dont-fetch-before-the-deadline` + `dont-shuffle-away-the-deferred-fetch`,
+  `tests/strategy/test_held_card_risk.py`;
+  corpus target `85163634-17` promoted to a pin) — and **the skill loop** (deck-genie Role Sheet /
+  deck-align fold — Round 9 §4), still staged. The oracle is the backend; the skill loop is how
+  decks feed it.
 
 ## Context
 

@@ -39,7 +39,7 @@ _FETCH_POKEMON_TARGETS = frozenset({"pokemon", "basic_pokemon", "mega", "evoluti
 # hypergeometric P(still in deck) < this. Conservative (refuted ep82524455-f6: P~=0.98 stays above bar). SOUND whiff (P=0) is separate/unconditional.
 _WHIFF_PROB_THRESHOLD = 0.20
 
-# Tutor-chain grab value (seam C, docs/plans/seam-tutor-chain-grab-value.md; spec Round 9 §3: "a
+# Tutor-chain grab value (seam C, built 2026-07-19 — plan doc retired; spec Round 9 §3: "a
 # tutor's held value = the closure-reachable value, recursively free"). Per-hop discount < 1 buys the
 # monotone-decay invariant — a direct target strictly outranks a tutor that merely reaches it at the
 # same select, and each extra hop (a play that reveals nothing until resolved) decays further. 2-hop
@@ -955,8 +955,8 @@ HYPOTHESES = [
     Hypothesis(
         id="grab-the-chain-opener",
         rationale="At a TO_HAND grab, a tutor is worth what it REACHES: spec Round 9 §3, 'a tutor's "
-                  "held value = the closure-reachable value, recursively free' (seam C, "
-                  "docs/plans/seam-tutor-chain-grab-value.md). `Context.card_chain_value` is the "
+                  "held value = the closure-reachable value, recursively free' (seam C). "
+                  "`Context.card_chain_value` is the "
                   "exactly-computed discounted closure (`_chain_grab_value`: δ=0.75/hop × MAX over "
                   "reachable targets, 2-hop cap, Item-only descent, Supporter-slot fail-closed, "
                   "shared-oracle end values); the rung fires only when it clears the flat "
@@ -1115,7 +1115,8 @@ HYPOTHESES = [
     Hypothesis(
         id="dont-fetch-before-the-deadline",
         rationale="The held-card risk's fetch-EARLY leg (hypergeometric-fetch-closure §Round 8 §5; "
-                  "seam-held-card-risk). A whole-deck search succeeds iff its target remains in deck "
+                  "the held-card-risk seam, built 2026-07-19). A whole-deck search succeeds iff its "
+                  "target remains in deck "
                   "— identical next turn — so when EVERY needed target is provably unplayable this "
                   "turn yet lands at a CONCRETE next-turn deadline (`Context.fetch_target_deferred`: "
                   "an evolution whose base is down but new-in-play / blocked only by my own first "
@@ -1154,8 +1155,9 @@ HYPOTHESES = [
                   "was next in line to nuke the very hand the plan needs). A refresh with REAL "
                   "certain value (a Judge stripping a tailored opponent hand) still clears it on its "
                   "strip credits; the graded shed's role-tier can't see this PLAN signal, which is "
-                  "what keeps the rung out of the keep-cost currency (the `hold-successor-when-doomed` "
-                  "precedent: a deadline premise the closure doesn't model).",
+                  "what keeps the rung out of the keep-cost currency (a PLAN premise, unlike the "
+                  "retired `hold-successor-when-doomed`, whose DEADLINE premise folded into the "
+                  "pressure gate 2026-07-19).",
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.refresh_shuffles_deferred_fetch,
         weight=-20, status="assumed"),

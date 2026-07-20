@@ -1,4 +1,4 @@
-"""Tutor-chain grab value (seam C, docs/plans/seam-tutor-chain-grab-value.md) — spec Round 9 §3:
+"""Tutor-chain grab value (seam C, built 2026-07-19, its plan doc retired) — spec Round 9 §3:
 "a tutor's held value = the closure-reachable value, recursively free."
 
 The acceptance board is the recorded ml 85059103 f9 (CRITICAL): at Meowth ex's Last-Ditch Catch

@@ -1,7 +1,11 @@
 # Hypergeometric odds must model FETCH-CHAIN closure + hand expansion
 
 **Status:** GRILLED 2026-07-17 (session grill — every claim source-verified; design corrected and
-re-scoped below). Build NOT started. Original note 2026-07-16.
+re-scoped below). Original note 2026-07-16. **BUILT 2026-07-18/19** — WP1–WP6 landed and WP7's core
+seam shipped suite-green; this file stays as the grill RECORD (rounds 1–14: the rulings and their
+provenance). The LIVING build status is ADR-0065 §Build status; the staged remainder is
+`seam-discard-convergence.md` (the gate library itself completed 2026-07-19 — all four legs built,
+its scope doc retired).
 **Owner concern (user, 2026-07-16):** the naive "P(draw the energy)" hypergeometric **undercounts** the
 true probability of *assembling* what you need, because the outs are not just literal target cards — they
 include **tutor/fetch chains** and **hand-expanding draws**. This biases every downstream consumer
@@ -392,7 +396,17 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       `_fetch_reaches_slot`: Item energy-tutors join the class outs, verified against card text).
 - [x] ✅ **WP1** Closure includes the **recycle/discard branch** — BUILT (Night Stretcher / Energy
       Retrieval / Max Rod, from the visible discard; a class can now EXIST via the recycler alone).
-- [ ] **Hand-expansion** chains modeled — not built (first expansion only, via the Gamble window itself).
+- [x] ✅ **Hand-expansion refresh CHAIN** — BUILT 2026-07-19 (checklist grill, measured at source:
+      the live residue was the drawn-REFRESH leg). A drawn Unfair Stamp (Item — gated on the new
+      `Board.my_pokemon_koed_last_turn`, the card's own condition, tracked from the opponent's
+      turn-start prize drop in `opponent_resources`) or a drawn SUPPORTER refresh (post-Item-refresh
+      only, the slot rule) opens a fresh full window at the same outs:
+      `planner._gamble_chain_refreshes` + a DISJOINT additive branch (conditions on missing every
+      out AND engine; fresh window over the re-shuffled pool −1). Anchored-only; the trace carries
+      `chain_refresh`. Measured-dead legs recorded: Pokégear-class digs chain to a slot-dead
+      Supporter in every mega_starmie window (killed by the resource rule, not absence); Supporter
+      draws are slot-dead outside a Stamp window; the opponent side stays ADR-0064's pessimism.
+      Chains inside the chain are not modeled (an endorser under-counts).
 - [x] ✅ **1 Supporter / 1 attach** charged along the chain — BUILT 2026-07-18: the classes carry a
       **post-Item-refresh Supporter supplement** (`_supporter_energy_tutor_reaches` /
       `_supporter_evolution_tutor_reaches`: Hilda's energy/evolution fetch, Crispin's unconditional
@@ -406,7 +420,15 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       (`deck_known_counts` / `p_contains` collapse, ADR-0029 §3).
 - [x] ✅ **WP2** **Pre-anchor gambles NOT stood down** — BUILT: the `if not deck_known_counts: return
       None` gate is replaced by the prize-split-weighted window sum (`_prize_split_hit`, ≤ u+1 terms).
-- [ ] **First-reveal information credit** — bounded, tie-break-level; never dig just to peek.
+- [x] **First-reveal information credit** — CLOSED as refuted-for-now (checklist grill, 2026-07-19):
+      every shipped fetch is a whole-deck search, so ANY fetch anchors (the tracker rejects partial
+      reveals — a Pokégear-class dig never anchors); the fetch-EARLY direction is
+      correction-REFUTED (`85163634-17` → `dont-fetch-before-the-deadline` −60); search-before-
+      commitment sequencing is `dig-before-commit`'s jurisdiction. Anchoring's remaining unique
+      unlock is the WP4 engine windows + the refresh-chain stage (anchored-only sharpenings).
+      REVIVAL GATE: telemetry/corpus evidence of a gamble whose engine/chain stages were zeroed
+      pre-anchor while a near-free whole-deck search sat unplayed on the same menu, or a measured
+      tie against a non-anchoring dig.
 - [x] ✅ **WP4** **Engine depth = board-supported capacity** — BUILT 2026-07-18, test-first:
       `deck_odds.draw_hit_with_engines` (the two-window closed form, EXACT at depth 1 — pinned against
       exhaustive enumeration, not simulation; deeper stages the documented same-two-ratios loop with
@@ -434,10 +456,14 @@ minimum, tie-break equal fetch lines toward the one that anchors.
       gated heals fail closed). Value KO_SCORE, exempt from the keep-value blocker. Item outs
       always-live, Supporter heals post-Item. The `switch`-to-a-non-empty-bench survival (saving a
       wincon rather than averting a game loss) is a mid-value class that rides WP6's keep-value floor.
-- [ ] **Replaceability-floor keep-value** — cost of shuffling = Σ role value × (1 − re-access odds via
-      the closure); unblocks the mid-value classes under the correction/score-diff gate; synergy
+- [x] ✅ **WP6** **Replaceability-floor keep-value** — BUILT 2026-07-18 (`common/card_worth.py` +
+      `planner._keep_cost`: the graded floor REPLACES the three binary protected-hand stand-downs);
+      unblocks the mid-value classes under the correction/score-diff gate; synergy
       residue stays on the value model (ADR-0007/0042/0053).
-- [ ] **One card-worth oracle** (rounds 7–8): marginal (with-vs-without), set-capable, zone/deck-signed
+- [x] ✅ **WP7** **One card-worth oracle** (rounds 7–8) — CORE BUILT 2026-07-18, graduated to
+      **ADR-0065** (the living build status): the module seam + gamble keep-floor and refresh-SHED
+      convergences; grab/pitch measured already-subsumed; plan-tier credit + gate stages 2–4 staged.
+      Original design: marginal (with-vs-without), set-capable, zone/deck-signed
       (Kyogre discard-fuel flip); keep-cost = role value × ΔP(class need met by DEADLINE | keep vs
       shuffle) — proximity is the deadline (quota-aware, interval-valued for closing windows), never a
       multiplier; horizon = role tier only, match scale stays with the hard rungs; unifies fetch
