@@ -353,7 +353,15 @@ class PlannerMixin:
         can be simmed — nothing to rank, so the tuned scoring keeps the turn rather than a blind pick.
         Stashes the full ranking on ``_develop_candidates_pending`` for the sparse ``plan_candidates``
         telemetry (top-K sorted desc, committed + greedy flagged), so a correction reader sees what the
-        rung out-scored. ``diverged`` marks an override of greedy's argmax — the key A/B signal."""
+        rung out-scored. ``diverged`` marks an override of greedy's argmax — the key A/B signal.
+
+        COIN-CONTAMINATED sims are excluded from the ranking (treated like failed forks): the rung's
+        authority to OVERRIDE the tuned scoring comes from a reproducible end-board, and a line whose
+        sim consumed auto-resolved coins is one lucky RNG stream, not a plan — its value provably
+        swings across streams (ml f24: the bench-Meowth line simmed 162 on one stream and a phantom
+        outright WIN on another, and whether the rung overrode the human's lethal-enabling attach
+        depended on the process's RNG position — the CI heisenbug). Coin-free line values are
+        stream-invariant, so the surviving ranking is deterministic."""
         self._develop_candidates_pending = None
         if not options:
             return None
@@ -362,15 +370,16 @@ class PlannerMixin:
         for i in range(len(options)):
             self._planning = True                        # per-sim reentrancy guard (never nest a search)
             try:
-                val = self._engine_leaf_value(obs, [i])
+                val, coined = self._engine_leaf_value(obs, [i], with_coins=True)
             except Exception:
-                val = None                               # a failed fork never crashes the decision
+                val, coined = None, False                # a failed fork never crashes the decision
             finally:
                 self._planning = False
-            if val is not None:
+            if val is not None and not coined:
                 ranked.append((val, i))
         if not ranked:
-            return None                                  # nothing simmable — defer to the tuned scoring
+            return None                                  # nothing simmable coin-free — defer to the
+                                                         # tuned scoring (never rank on coin noise)
         ranked.sort(key=lambda t: t[0], reverse=True)
         best_val, best_i = ranked[0]
         if best_val >= KO_SCORE:
@@ -2952,7 +2961,8 @@ class PlannerMixin:
         return players[oi] if 0 <= oi < len(players) and players[oi] else {}
 
     # ---- Tier-1 Engine Search (ADR-0031 phase 3): simulate a line to its end-of-turn board -----------
-    def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True) -> float | None:
+    def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True,
+                           with_coins: bool = False):
         """The leaf-eval value of a candidate line computed on its ENGINE-SIMULATED end-of-turn board
         (ADR-0031 phase 3): the exact prizes taken and my Active's survival vs Incoming, read off the
         board the simulator produces rather than closed-form-approximated, PLUS the MY-side ``readiness``
@@ -2961,16 +2971,30 @@ class PlannerMixin:
         + Σ ability-fire − Σ spend``. A line that finishes the game in my favour scores above any prize
         count (dominant). None when the search is unavailable — the caller then keeps the closed-form leaf
         value (never crashes, decision 7). ``spend_account=False`` drops the line term (a pure-readiness
-        terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on)."""
+        terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on).
+        ``with_coins=True`` returns ``(value, coins)`` — the sim's coin bit beside the value, so a
+        caller whose OVERRIDE authority needs a reproducible board (the develop rollout) can treat a
+        coin-riding value as unrankable noise."""
         sim = self._simulate_line(obs, first_step)
         if sim is None:
-            return None
-        end, my_index, start_prizes, result, line_val = sim
+            return (None, False) if with_coins else None
+        end, my_index, start_prizes, result, line_val, coins = sim
+
+        def _out(val):
+            return (val, coins) if with_coins else val
+
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
-        if result == my_index:                            # line wins outright — dominant
-            return KO_SCORE * (start_prizes + 1)
+        if result == my_index and not coins:              # line wins outright, COIN-FREE — dominant.
+            return _out(KO_SCORE * (start_prizes + 1))    # A win through auto-resolved coins is one
+                                                          # lucky RNG stream, not a guarantee — it falls
+                                                          # through to ordinary board ranking (prizes
+                                                          # actually banked still count), so a phantom
+                                                          # win can never preempt the tuned scoring /
+                                                          # the SOUND win rung (the f24 Meowth mirage;
+                                                          # `_commit_best`'s below-one-prize veto then
+                                                          # defers exactly as designed)
         prizes_taken = max(0, start_prizes - len(me.get("prize") or []))
         active = next((p for p in (me.get("active") or []) if p), None)
         survives = False
@@ -2980,11 +3004,11 @@ class PlannerMixin:
         readiness = self._readiness(me)
         if getattr(self, "leaf_hand_value", False):        # WP-N5b (armed OFF): readiness CONSUMES the
             readiness += self._hand_readiness(end, my_index)  # needs module — the held-hand slot coverage
-        return (self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                 readiness=readiness,
-                                 value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
-                                 line=(line_val if spend_account else 0.0))
-                + self._predicted_loss(me, opp))                 # ADR-0064: bench-empty-doom loss rung
+        return _out(self._leaf_value(prizes=prizes_taken, active_survives=survives,
+                                     readiness=readiness,
+                                     value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
+                                     line=(line_val if spend_account else 0.0))
+                    + self._predicted_loss(me, opp))             # ADR-0064: bench-empty-doom loss rung
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
@@ -3276,7 +3300,17 @@ class PlannerMixin:
         Heuristic, not sound (ADR-0031): coins auto-resolve (``manual_coin=False``) and the opponent's
         hidden zones are predicted from my own deck list, so the end-of-turn board is trusted for
         ranking, not as a guarantee. The live game is untouched (the search forks an independent sim).
-        Lazy DLL import keeps the fast unit suite from ever loading the native engine."""
+        Lazy DLL import keeps the fast unit suite from ever loading the native engine.
+
+        The 6th tuple element is ``coins``: True iff any ``LogType.COIN`` log appeared along the
+        stepped line — the sim consumed engine-RNG coin flips, so its outcome (including a "win")
+        is one lucky stream among many, NOT a guarantee. `_engine_leaf_value` reads it to demote a
+        coin-dependent simmed win from the dominant short-circuit to ordinary board ranking (the
+        f24 phantom: a coin-blessed Meowth-ex line simmed to an outright "win" — 7000 on one RNG
+        stream, 162 on another — and preempted the human's sound lethal-enabling attach). Errs
+        toward demotion (a stray coin log only costs the SHORT-CIRCUIT, never the ranking); absent
+        under a backend without COIN logs (cgpy), where detection finds nothing and behavior is
+        unchanged."""
         if not (obs or {}).get("search_begin_input") or not first_step:
             return None
         cgapi = getattr(self, "_search_api", None)     # injectable search backend (leaf-lab harness sets
@@ -3337,8 +3371,16 @@ class PlannerMixin:
                                      >= (player.get("benchMax") or 5)}
 
             my_ctx = _held_snapshot(me, cur) if capture_hand else None
+            coin_t = getattr(getattr(cgapi, "LogType", None), "COIN", None)
+
+            def _saw_coin(ob) -> bool:
+                return coin_t is not None and any(getattr(lg, "type", None) == coin_t
+                                                  for lg in (getattr(ob, "logs", None) or ()))
+
+            coins = False
             for _ in range(max_steps):
                 o = st.observation
+                coins = coins or _saw_coin(o)
                 c = o.current
                 if c is None or c.result != -1 or o.select is None:
                     break                                 # game over
@@ -3361,6 +3403,7 @@ class PlannerMixin:
                 if mine and not crossed_my_turn_end:       # only MY within-turn actions carry a line term
                     line_val += self._line_account(dec.options, dec.chosen)
                 st = cgapi.search_step(st.searchId, list(dec.chosen))
+            coins = coins or _saw_coin(st.observation)    # the final step's logs (a coin-won attack)
             end = _prune_none(asdict(st.observation))
             if capture_hand and my_ctx:                   # inject my hidden hand + held-context
                 epl = (end.get("current") or {}).get("players") or []
@@ -3369,7 +3412,7 @@ class PlannerMixin:
                     epl[my_index]["heldCtx"] = {k: v for k, v in my_ctx.items() if k != "hand"}
             result = st.observation.current.result if st.observation.current else -1
             cgapi.search_end()
-            return (end, my_index, start_prizes, result, line_val)
+            return (end, my_index, start_prizes, result, line_val, coins)
         except Exception:
             try:
                 cgapi.search_end()

@@ -93,6 +93,17 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
   this session and was caught only by re-checking).
 - **Adding a Pilot ctor flag** requires the PROFILE entry AND `tests/agents/test_runtime.py`'s
   `EXPECTED_SHIPPED` mirror (the wiring test enforces both directions).
+- **Engine-RNG knife-edge flakiness (diagnosed 2026-07-20, the PR #121 CI failure):** the native
+  engine's coins/shuffles are UNSEEDED and process-global — `search_begin` has no seed param — so
+  a handful of engine-driven tests sit on RNG knife edges and can flake run-to-run in the FULL
+  suite while passing standalone (ml f24 / `test_lethal_engine`'s own retry loop admits this).
+  Two SOUND fixes landed from the f24 dissection: `_engine_leaf_value`'s win short-circuit is
+  COIN-GATED (a simmed "win" that consumed coin flips ranks as an ordinary board — only the sound
+  win rung claims wins), and the develop rollout EXCLUDES coin-contaminated sims from its ranking
+  (override authority requires a reproducible end-board; ml f24's bench-Meowth line simmed 162 on
+  one stream and a phantom outright win on another). A residual environmental flake (a test whose
+  own retries lose the RNG lottery) is possible on any CI run — re-run before diagnosing; a
+  standalone-passing failure in an engine test is this class.
 - The user's **dev window** (declared 2026-07-19): no Kaggle submission for ~a week; the corpus is
   the bench, ladder penalty-free, forward-leaning arming acceptable — but every arm still cleared
   its bench this session; keep that bar.

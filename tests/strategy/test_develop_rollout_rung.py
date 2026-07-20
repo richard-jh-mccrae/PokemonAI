@@ -36,8 +36,13 @@ def _trace(index, score):
 
 
 def _stub_leaf(pilot, by_step):
-    """Stub ``_engine_leaf_value`` to a fixed value per first-step (bypasses the native engine)."""
-    pilot._engine_leaf_value = lambda obs, step: by_step.get(tuple(step))
+    """Stub ``_engine_leaf_value`` to a fixed value per first-step (bypasses the native engine).
+    Mirrors the real signature: ``with_coins=True`` returns ``(value, coins)`` — always coin-free
+    here (the coin-exclusion path has its own test, `test_a_coin_dependent_simmed_win_...`)."""
+    def leaf(obs, step, spend_account=True, with_coins=False):
+        val = by_step.get(tuple(step))
+        return (val, False) if with_coins else val
+    pilot._engine_leaf_value = leaf
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
