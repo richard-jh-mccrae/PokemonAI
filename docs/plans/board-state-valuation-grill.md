@@ -284,6 +284,39 @@ search, not a substitute for it.
   (distinct-boards vs distinct-values) — `tools/train/probes/transposition_probe.py`; per-frame leaf
   dumps `tools/train/probes/leaf_diag.py`; the Gate-0 A/B `tools/train/probes/gate0_ab.py`.
 
+## Build log — who's-Active + tool terms (2026-07-20, thread 3 of the keep-value-v2 line)
+
+**Step-1 dissection (the measured ceiling; N5d diagnosis CONFIRMED).** Per-option end-board
+signatures over the 267 scorable leaf-lab frames: 39 sole-top / 151 at-top-tied / 77 miss. Of the
+151 tied groups, **77 are pure transpositions** (every tied rival board byte-identical — no board
+term can ever split them; the hard cap on leaf enrichment), 50 differ on who's-Active, 5 on tool
+deployment. Perfect-split ceiling for active+tool terms: +37.9 E[correct].
+
+**Shipped (unconditional): the PROMOTION-EASE lift** — `_bench_position_w` lifts the 0.45 bench
+weight toward `_READINESS_PROMO_MAX` (0.5) via `_promotion_ease` (free effective retreat = printed
+cost − attached `retreatReduction` tools — the retreat-tool → position routing; or a `switch`-tag
+card in the VISIBLE hand at 0.9; a merely PAYABLE retreat is NOT ease — paying discards the Energy,
+rulebook L142, and crediting it regressed ep86091435), applied to the SINGLE best benched attacker
+(one retreat/turn). Measured frontier: ceiling 1.0 / per-body lifts let "hide the attacker behind a
+free-retreat wall" boards beat the human's attacker-in-front lines (37/184); 0.5 single-best is the
+zero-regression point. **Bench: SOLE-top 39→40/267, E[correct] 83.8→84.7, avg-tie 3.02→2.99,
+shared-top flat 190; Gate-0 (lucario ctx-0, CAP=2500) 1-ply SOLE 8→9, exhaustive 9→10, no
+regression; suite green.** HP-tools need no term (engine bakes `hpBonus` into body hp → survival
+already reads Hero's Cape); damage-tools skipped as bench-inert (Brave Bangle's conditional parses
+to 0; no shipped deck runs a parseable damage tool).
+
+**HAND-ARMED (rides `leaf_hand_value`, still OFF): the who's-Active mobility micro-credit**
+(`_READINESS_MOBILITY_W` × `_active_quality` — a mobile Active or an energized declared-line
+pre-evo with a REACHABLE payoff). Hand-blind it nets SOLE +4 but trades shared-top frames whose
+labels pivot on hidden-hand context (held Lunar-Cycle fuel, the Mega-in-hand attach) — so it arms
+with the hand plumbing, correctly scenario-1-gated.
+
+**The N5d hand-fold re-measure with the new terms: 52 SOLE / 164 shared / 2.40 tie / 88.0 E —
+still NOT cleared (shared-top down); `leaf_hand_value` stays parked.** The verdict against the
+letter of the bar (SOLE AND shared both up): NOT CLEARED — shipped anyway as a strictly-≥ Pareto
+step (zero regressed frames, four metrics up, shared flat); the residual shared-top movement lives
+in hand-context frames the transposition finding caps.
+
 ## Related
 [[value-model-needs-nonmirror-gauntlet]] · [[ml-build-plan-adr-0053]] · [[leaf-lab-develop-rung]] ·
 [[turn-planner-develop-rung]]. ADRs: 0031 (Turn Planner), 0042 (value model, parked), 0053 (ML value net).

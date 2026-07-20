@@ -300,6 +300,26 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    closing spike 30 — 83037962-49), and the saturating engine band under-prices a two-supporter
    engine hand v1 sums in full (82522698-36). Those valuations feed the DISCARD decider too, so
    re-pricing them is its own adjudicated piece, not a resupply patch.
+10. **WP-N7 — opponent DENY slots — BUILT + MEASURED 2026-07-20 (thread 2).** The Round-3 ruled
+   read wired into `_resolve_needs`: one slot per opponent in-play body a strip actually bites,
+   VALUE = the SHIPPED ADR-0062 denial oracle consumed intact (Active ×1.0 with the
+   `active_can_ko` drop, bench ×0.25 — never re-derived), graded by `needs.deny_slot` over the
+   visible turns-to-ready (`pilot._opp_turns_to_ready`: energy deficit at the 1-attach quota vs
+   forward `evolvesFrom` hops, max of legs; unknown stats → no slot, fail-closed). Eligibility
+   derives from the SUPPLIES net itself (`"gust"` + the NEW `"energy_denial"` entry — Crushing
+   1120 / Enhanced 1081 Hammer); no new flag (the WP-N5 unflagged-enrichment precedent — the
+   hedge floors v2). A deadline-0 deny takes resupply 0.0 at the refresh site (the closing edge —
+   applied to `_refresh_slot_resupply` at integration). **Measured:** discard corpus 12/12 with
+   every `eq2_pick` byte-identical (the live decider unmoved); the Hammer/gust classes get their
+   first v2 pricing (82867148-48's Boss's Orders raw marginal 4.5→8.8, still hedge-floored).
+   **Hedge-floor firings (the thread-5 feed): 13/68 rows before AND after — deny retires ZERO
+   floor firings on this corpus**, so the hedge STAYS. Integrated refresh shadow (with WP-N6):
+   fired=83, flips=13, under=38, over=40 — the deny slots' DAMAGE-denominated oracle values
+   (up to ~140) sit above the worth-tier slots (~8–30) and drive the added flips (safe,
+   over-pricing direction). **The named next adjudicated piece is therefore ONE currency
+   question:** the flat `answer_doom` TAG tier, the saturating engine band, and the
+   damage-denominated deny scale all need a ruled mapping into the slot currency before the
+   refresh swap or hedge retirement can clear.
 
 ## Acceptance (pre-committed)
 

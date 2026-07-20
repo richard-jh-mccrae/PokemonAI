@@ -61,17 +61,32 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
    saturating engine band vs v1's per-supporter sum (82522698-36). Re-pricing those is the NEW
    next piece — it feeds the discard bench too, so it needs its own adjudication (the 12/12 must
    hold through it).
-2. **Opponent DENY slots**: `needs.deny_slot` + `turns_to_ready` exist (WP-N1, tested) but the
-   resolver never emits them — needs the visible opponent read (their bodies' energy deficit +
-   forward hops) wired into `_resolve_needs`. The Hammer/gust cards currently ride the hedge.
-3. **Leaf-native who's-Active + tool terms** (board-state-valuation-grill.md) — the measured
-   prerequisite for ever arming `leaf_hand_value` (§Closed below). This is LEAF work, not needs
-   work; it re-opens the hand fold afterward.
-4. **Fold the shadowed `_DISCARD` rungs** out of `doctrine_fetch` once the in-ladder A/B clears
-   (seam-D follow-up; the rungs are dead code under the swap but still shipped).
-5. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Retire only when
-   resupply (1) and deny (2) land — "v2 never prices below the shipped decider" until the resolver
-   is complete.
+2. ~~**Opponent DENY slots**~~ **DONE 2026-07-20 (WP-N7, grill spec #10)** — wired into
+   `_resolve_needs`, valued by the shipped ADR-0062 oracle, graded by `_opp_turns_to_ready`
+   (visible read, fail-closed). `SUPPLIES` gained `energy_denial` (the Hammers). Discard 12/12
+   byte-identical; deadline-0 deny = resupply 0.0 (closing edge). NOTE the oracle is
+   DAMAGE-denominated (~140 vs the ~8–30 worth tiers) — folded into the currency piece below.
+3. ~~**Leaf-native who's-Active + tool terms**~~ **DONE 2026-07-20 (board-state grill §Build
+   log)** — the promotion-ease lift SHIPPED (leaf-lab 40/190/2.99/84.7, zero regressed frames,
+   Gate-0 up); the mobility micro-credit is HAND-ARMED behind `leaf_hand_value`. The N5d
+   hand-fold re-measure with the new terms: 52/164 — STILL not cleared, stays parked. Hard cap
+   found: 77/151 residual leaf ties are pure transpositions no board term can split.
+4. **THE slot-currency adjudication (the new head of the queue):** three magnitudes need ONE
+   ruled mapping into the slot currency — the flat `answer_doom` TAG tier (over-prices a worth-0
+   switch at 20: 83661652-40; under-prices the doomed successor vs v1's closing spike:
+   83037962-49), the saturating engine band (82522698-36), and the damage-denominated deny scale
+   (WP-N7). They feed the LIVE discard decider, so this is grill-adjudication work (user rulings),
+   not a patch; the 12/12 must hold through it. It gates BOTH the refresh-SHED swap (integrated
+   shadow: flips=13, under=38, over=40) and hedge retirement.
+5. **Fold the shadowed `_DISCARD` rungs** out of `doctrine_fetch` once the in-ladder A/B clears
+   (seam-D follow-up). **Assessed 2026-07-20: NOT satisfiable offline** — the A/B is a LIVE
+   Kaggle-ladder measure (the `develop_rollout` precedent), `needs_keep_value` has zero ladder
+   games behind it (armed 2026-07-20, dev window = no submissions ~a week), and folding deletes
+   the kill-switch fallback. Stays gated until ladder evidence accrues post-window.
+6. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Resupply (1)
+   and deny (2) have now LANDED, but the WP-N7 measurement says deny retires ZERO of the 13/68
+   floor firings (the residual firers are engine supporters / burst rows / far-out denies — all
+   legitimate fail-closures), so retirement now rides the currency adjudication (4).
 
 ## Closed this session — do not reopen without new evidence
 
@@ -79,7 +94,10 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
   83.5 → 84.5 of 267 — a WASH. Root cause proven: residual ties differ by who's-Active/tools (the
   leaf's other blindnesses); a hand term cannot read positional discriminators, so its tie-splits
   there are noise. The best shape (N5d deployability counterfactual + ε sizing) is committed and
-  parked behind `leaf_hand_value`. Re-measure ONLY after thread 3 lands.
+  parked behind `leaf_hand_value`. **Re-measured 2026-07-20 after thread 3 landed: 52 SOLE / 164
+  shared — shared-top still down, STILL PARKED.** The transposition cap (77/151 ties unsplittable
+  by any board term) bounds what any further leaf/hand term can recover; next evidence would have
+  to come from outside the leaf (search shape, not valuation).
 - **86091435-68** is refuted-as-labeled (user re-review): the Hammer should be KEPT; the surviving
   substance is `test_deploy_now_drakloak_is_not_pitched`.
 

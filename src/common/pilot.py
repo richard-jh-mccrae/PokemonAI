@@ -2809,7 +2809,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Fail directions, all toward KEEP (a lower r → a higher shed price — the sweep's measured
         SAFE side): ``deploy_now`` / ``answer_doom`` slots stay 0.0 (the closing edge,
         `gate_library.closing_gate_reaccess` — re-access is not bankable against a this-turn
-        deadline); the supplier classes are read off the HELD eligibility only (a deck-only filler
+        deadline), and so does a ``deny`` slot at deadline 0 (the thread-2 ruling: a strip needed
+        NOW is not re-drawable in time; a deny with slack banks re-access like any other slot);
+        the supplier classes are read off the HELD eligibility only (a deck-only filler
         class is not counted); the no-deadline (99) slots take the plain window, only
         ``fund_attack`` widens by its quota deadline (`gate_library.quota_window` re-derived:
         window = draws + deadline, one natural draw per intervening turn); unresolved deck
@@ -2849,7 +2851,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 members[j].append(k)
         for j, s in enumerate(slots):
             if (s.supplied_by_pitch or s.kind in ("deploy_now", "answer_doom", "general")
-                    or not members[j]):
+                    or (s.kind == "deny" and s.deadline <= 0) or not members[j]):
                 continue
             classes = {rows[k]["cid"] for k in members[j]}
             u = fetch_closure.class_reaccess_outs(classes, counts, self._closure_stat_of,

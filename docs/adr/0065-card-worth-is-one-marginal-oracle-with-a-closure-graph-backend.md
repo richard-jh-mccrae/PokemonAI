@@ -305,6 +305,33 @@ comparator) and ADR-0032 (Effect-Clause tier).
   the saturating engine band vs v1's per-supporter sum — so re-pricing them is its own
   adjudicated piece. The hedge (v2 floors at v1's post-gate keep) stays.
 
+- **WP-N7 — opponent DENY slots (2026-07-20, thread 2): built + measured; the hedge stays.** The
+  Round-3 ruled opponent read wired into `_resolve_needs` (unflagged, the WP-N5 enrichment
+  precedent): one deny slot per opponent in-play body a strip bites, valued by the SHIPPED
+  ADR-0062 denial oracle (consumed intact — Active ×1.0 with the `active_can_ko` drop, bench
+  ×0.25) and graded by `needs.deny_slot` over the visible turns-to-ready
+  (`pilot._opp_turns_to_ready` — energy deficit at the 1-attach quota vs forward hops, max of
+  legs, fail-closed on unknowns). `needs.SUPPLIES` gained `"energy_denial"` (the Hammers);
+  eligibility derives from SUPPLIES itself so vocabulary and routing cannot drift. A deadline-0
+  deny takes resupply 0.0 (the closing edge, applied in `_refresh_slot_resupply`). **Measured:
+  discard 12/12 byte-identical (the live decider unmoved); the Hammer/gust classes get their
+  first v2 pricing but the hedge-floor firing count is UNCHANGED (13/68 rows) — deny retires
+  zero firings, so the hedge stays.** With WP-N6 integrated the refresh shadow reads flips=13 /
+  under=38 / over=40: the oracle's DAMAGE-denominated values (~140) sit above the worth tiers
+  (~8–30), which folds the deny scale into the same open CURRENCY adjudication as the flat
+  `answer_doom` tier and the engine band — the named prerequisite for the refresh swap and
+  hedge retirement.
+
+- **Leaf-native who's-Active + tool terms (2026-07-20, thread 3 — the board-state grill's build,
+  logged there in full):** the promotion-ease bench-position lift shipped in the readiness leaf
+  (`planner._bench_position_w` / `_promotion_ease`; retreat-tools route to position, HP-tools
+  already reach survival via engine `hpBonus`), a zero-regression Pareto step — leaf-lab SOLE-top
+  39→40/267, E[correct picks] 83.8→84.7, shared-top flat 190, Gate-0 subset up. The who's-Active
+  mobility micro-credit is HAND-ARMED (rides `leaf_hand_value`, still OFF). **The N5d hand-fold
+  re-measure with the new terms: 52 SOLE / 164 shared — still does NOT clear (shared-top down);
+  the fold stays parked.** The step-1 dissection capped the ceiling: 77/151 residual leaf ties
+  are pure transpositions no board term can split.
+
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles
