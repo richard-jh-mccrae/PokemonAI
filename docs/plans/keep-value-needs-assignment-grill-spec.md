@@ -320,6 +320,38 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    question:** the flat `answer_doom` TAG tier, the saturating engine band, and the
    damage-denominated deny scale all need a ruled mapping into the slot currency before the
    refresh swap or hedge retirement can clear.
+11. **WP-N8 — the slot-CURRENCY adjudication — GRILLED + BUILT 2026-07-20.** The user ruled the
+   three currency seams frame-by-frame (grill session on 83661652-40 / 83037962-49 / 82522698-36 /
+   83457493-31). All three land INSIDE the assignment as value DERIVATIONS — no new gates/rungs/
+   flags; one is a deletion. Discard held 12/12 byte-identical through all three; leaf-lab unmoved
+   at 40/190 (the global-`role_value` ripple was caught and scoped out); refresh sign-flips
+   13→11.
+   * **Ruling 1 — answer-doom is a plan, not a flat tier.** The switch/heal answer slot is valued
+     at the DOOMED BODY'S OWN preserved worth (`_role_value(active)` — a worth-0 Switch rescuing a
+     12-point engine Lunatone earns 12; a filler active earns ~0, no slot), NOT the flat
+     `TAG_TIER["clutch_heal"]` 20 nor the swap card's catalog worth. The SUCCESSOR leaves the
+     answer-doom slot and rides an URGENT succession slot (`needs.line_slots` `succession_urgent`):
+     FULL tier at deadline 0 when the Active is doomed and its base is in play — the old full-30
+     spike re-derived as the line's own worth (83037962-49: the second Mega Starmie is not
+     Harlequin fodder the turn its Staryu benched; refresh swing now negative). The urgent
+     succession is a `line` slot at deadline 0, so `_refresh_slot_resupply`'s closing edge
+     generalized to ANY `line`/`deny` slot at deadline ≤ 0.
+   * **Ruling 2 — a duplicate saturating-need Supporter is worth 0** (a DELETION). A cid eligible
+     for the saturating draw-engine need gets NO general-worth slot — one copy fills the
+     one-per-turn need, the SPARE covers nothing and prices keep_v2 0 (the WP-N5 ~9 latent credit
+     for a spare is refuted; "you lose the second Supporter in a shuffle for free" — 82522698-36,
+     two Wally's). The residual-worth tiebreak still ranks the spare above dead cards in pitch
+     order.
+   * **Ruling 3 — the deny slot is card-tier, not the damage swing.** The value drops from the
+     ADR-0062 oracle's ~140 to the disruption band (`TAG_TIER["gust"]` ≈ 10), graded by
+     turns-to-ready; the oracle becomes a GATE only (the strip bites). The damage math stays on
+     the play-side gust rungs (whether to FIRE a gust is a line evaluation, not a keep price —
+     83457493-31: Boss's is a good card, never a whole-hand anchor). Scoped to the deny slot: a
+     role-less Hammer keeps global worth 0, so the leaf and every other worth site are untouched.
+   Two items the grill surfaced as PLANNER-domain (recorded, NOT built — line-evaluation, not
+   pricing): **threshold-race snipe targeting** ("get their Mega under Nebula's 210 before my
+   successor lands"; Riolu-vs-Makuhita off their discard fuel — 83037962-49) and **gust-line
+   tempo evaluation** (KO-behind-the-gust vs what promotes back at full health — 83457493-31).
 
 ## Acceptance (pre-committed)
 

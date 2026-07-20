@@ -71,13 +71,17 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
    Gate-0 up); the mobility micro-credit is HAND-ARMED behind `leaf_hand_value`. The N5d
    hand-fold re-measure with the new terms: 52/164 — STILL not cleared, stays parked. Hard cap
    found: 77/151 residual leaf ties are pure transpositions no board term can split.
-4. **THE slot-currency adjudication (the new head of the queue):** three magnitudes need ONE
-   ruled mapping into the slot currency — the flat `answer_doom` TAG tier (over-prices a worth-0
-   switch at 20: 83661652-40; under-prices the doomed successor vs v1's closing spike:
-   83037962-49), the saturating engine band (82522698-36), and the damage-denominated deny scale
-   (WP-N7). They feed the LIVE discard decider, so this is grill-adjudication work (user rulings),
-   not a patch; the 12/12 must hold through it. It gates BOTH the refresh-SHED swap (integrated
-   shadow: flips=13, under=38, over=40) and hedge retirement.
+4. ~~**THE slot-currency adjudication**~~ **DONE 2026-07-20 (WP-N8, grill spec #11)** — grilled
+   with the user frame-by-frame, all three rulings built inside the assignment (no new
+   gates/rungs/flags; one deletion): (1) answer-doom = the doomed body's preserved worth + the
+   URGENT full-tier deadline-0 succession slot for the successor (not flat 20); (2) a duplicate
+   saturating-need Supporter = 0 (no general slot for an engine-eligible cid); (3) the deny slot =
+   `TAG_TIER["gust"]` disruption band graded by turns-to-ready, NOT the ADR-0062 damage swing
+   (oracle → gate only; scoped so the leaf is untouched). Discard 12/12 byte-identical; leaf-lab
+   40/190 unmoved; refresh flips 13→11. Four frames pinned (`test_needs_currency_rulings.py`).
+   **The refresh-SHED swap and hedge retirement are UNBLOCKED of the currency question** — but
+   still gated on their own benches (the swap bar = refresh flips ≈ 0, currently 11; hedge
+   retirement still needs the sweep to show v2 never prices below the decider without the floor).
 5. **Fold the shadowed `_DISCARD` rungs** out of `doctrine_fetch` once the in-ladder A/B clears
    (seam-D follow-up). **Assessed 2026-07-20: NOT satisfiable offline** — the A/B is a LIVE
    Kaggle-ladder measure (the `develop_rollout` precedent), `needs_keep_value` has zero ladder
@@ -86,7 +90,16 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
 6. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Resupply (1)
    and deny (2) have now LANDED, but the WP-N7 measurement says deny retires ZERO of the 13/68
    floor firings (the residual firers are engine supporters / burst rows / far-out denies — all
-   legitimate fail-closures), so retirement now rides the currency adjudication (4).
+   legitimate fail-closures), so retirement rides its own sweep — measure whether v2 ever prices
+   below the decider once the floor is removed.
+7. **PLANNER-domain threads (surfaced in the WP-N8 grill, NOT keep-value — line evaluation, not
+   pricing; each needs its own bench + build):**
+   a. **Threshold-race snipe targeting** — pick the snipe that gets an opponent body under my
+      finisher's damage threshold before my successor comes online ("Mega under Nebula's 210 in
+      one more snipe from 230; but from 330 snipe the KO-able Staryu instead" — 83037962-49;
+      Riolu-vs-Makuhita off their discard fuel gauge). All numbers visible.
+   b. **Gust-line tempo evaluation** — a gust+KO on a bare bench body that returns their
+      full-health fueled attacker to the Active is a bad trade (83457493-31: don't Boss here).
 
 ## Closed this session — do not reopen without new evidence
 

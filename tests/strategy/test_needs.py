@@ -50,6 +50,19 @@ def test_line_slots_carry_succession_for_the_wincon_class():
 
 
 @pytest.mark.req("REQ-NEEDS-0001")
+def test_urgent_succession_is_full_tier_at_a_this_turn_deadline():
+    """The answer-doom ruling (2026-07-20): when MY Active is doomed and this class is the
+    successor with its base in play, the succession slot goes FULL tier at deadline 0 (the old
+    answer-doom successor spike, re-derived as the line's own worth) instead of the half-tier
+    no-deadline insurance — a doomed wincon's replacement is needed imminently, not banked."""
+    urgent = needs.line_slots("line:1031", value=30.0, succession=True,
+                              primary_met=True, succession_urgent=True)
+    assert len(urgent) == 1 and urgent[0].value == 30.0 and urgent[0].deadline == 0
+    normal = needs.line_slots("line:1031", value=30.0, succession=True, primary_met=True)
+    assert normal[0].value == 15.0 and normal[0].deadline == 99
+
+
+@pytest.mark.req("REQ-NEEDS-0001")
 def test_answer_doom_slot_from_the_threat_read():
     """The pressure gate re-derived: a doomed Active opens an answer slot (heal/switch/successor)
     with the threat's deadline."""

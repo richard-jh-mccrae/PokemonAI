@@ -332,6 +332,26 @@ comparator) and ADR-0032 (Effect-Clause tier).
   the fold stays parked.** The step-1 dissection capped the ceiling: 77/151 residual leaf ties
   are pure transpositions no board term can split.
 
+- **WP-N8 — the slot-CURRENCY adjudication (2026-07-20): grilled with the user, built, all inside
+  the assignment.** Three seams where a slot value spoke the wrong unit, ruled frame-by-frame and
+  folded into the value derivations (no new gates/rungs/flags; discard held 12/12 byte-identical,
+  leaf-lab unmoved 40/190, refresh sign-flips 13→11):
+  * **Answer-doom is a plan, not a flat tier.** The switch/heal answer slot is valued at the doomed
+    body's OWN preserved worth (`_role_value(active)`), and the successor rides a new URGENT
+    succession slot (`needs.line_slots(succession_urgent=…)` — full tier, deadline 0 when the Active
+    is doomed with its base in play; the old flat-20 successor spike re-derived as the line's own
+    worth). The closing edge in `_refresh_slot_resupply` generalized to any `line`/`deny` slot at
+    deadline ≤ 0.
+  * **A duplicate saturating-need Supporter is worth 0** (a deletion): a cid eligible for the
+    draw-engine need gets no general-worth slot, so the spare copy prices 0 (the WP-N5 ~9 latent
+    credit for a spare, refuted).
+  * **The deny slot is the disruption card-tier** (`TAG_TIER["gust"]` ≈ 10, graded by
+    turns-to-ready), not the ADR-0062 damage swing (~140) — the oracle becomes a GATE only; the
+    damage magnitude stays on the play-side gust rungs. Scoped to the deny slot (a role-less Hammer
+    keeps global worth 0), so the leaf is untouched.
+  Two items the grill surfaced belong to the TURN/MATCH PLANNER, not keep-value, and are recorded
+  unbuilt: threshold-race snipe targeting and gust-line tempo evaluation.
+
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles

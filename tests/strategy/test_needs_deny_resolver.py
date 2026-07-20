@@ -1,14 +1,15 @@
 """The resolver's opponent DENY leg (keep-value v2 thread 2; the grill's Round-3 ruling).
 
-`pilot._resolve_needs` emits DENY slots for the opponent's IN-PLAY bodies from VISIBLE facts only:
-value CONSUMED from the shipped ADR-0062 denial oracle (`_denial_at` under `_opp_denial_best`'s
-Active/Bench tiers — never re-derived), deadline from the ruled basic lookahead
-(`_opp_turns_to_ready` → `needs.turns_to_ready`: energy deficit at the 1-attach/turn quota,
-rules.md §3, in parallel with the forward evolution hops still owed, rules.md §4). Eligibility
-routes through the `needs.SUPPLIES` net (the deny-supplying tags: gust / energy_denial), so the
-Hammer/gust classes stop riding the WP-N3 hedge. Fail-closed everywhere: unknown stats, absent
-opponent read, a 0-priced strip, or no deny-capable held row → NO slot (the shipped hedge keeps
-pricing those rows — the pre-thread-2 behavior).
+`pilot._resolve_needs` emits DENY slots for the opponent's IN-PLAY bodies from VISIBLE facts only.
+VALUE = the disruption CARD-tier (`TAG_TIER["gust"]` ≈ 10 in the ONE currency — the grill's
+currency ruling, 2026-07-20), GRADED by the ruled basic lookahead (`_opp_turns_to_ready` →
+`needs.turns_to_ready`: energy deficit at the 1-attach/turn quota, rules.md §3, in parallel with
+the forward evolution hops still owed, rules.md §4). The shipped ADR-0062 oracle (`_denial_at`) is
+now a GATE only (`> 0` = the strip bites this body); its DAMAGE magnitude (~140) stays on the
+play-side gust rungs, never the keep price. Eligibility routes through the `needs.SUPPLIES` net (the
+deny-supplying tags: gust / energy_denial), so the Hammer/gust classes stop riding the WP-N3 hedge.
+Fail-closed everywhere: unknown stats, absent opponent read, a strip that bites nothing, or no
+deny-capable held row → NO slot (the shipped hedge keeps pricing those rows).
 
 Synthetic boards mirror `test_discard_shadow._setup`; the captured-board case replays a REAL
 recorded correction through the real shipped pilot (`test_gust_round0_corpus` pattern — fresh
@@ -24,8 +25,9 @@ from pathlib import Path
 import pytest
 
 from common import needs
+from common.card_worth import TAG_TIER
 from common.cards import CardFunctions
-from common.pilot import Pilot, _DENIAL_BENCH
+from common.pilot import Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
@@ -90,22 +92,22 @@ def test_opp_turns_to_ready_is_the_visible_parallel_lookahead():
 
 # ============================================================ the deny leg in the resolver
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_resolver_emits_a_graded_deny_slot_priced_by_the_shipped_oracle():
-    """The graded Hammer, wired: a banked opponent Riolu (1 Energy toward Mega Lucario ex) opens
-    ONE deny slot — value = the ADR-0062 oracle's strip price (`_denial_at`: max(30 now, 0.5 × 130
-    forward) = 65), graded by turns-to-ready (1 turn out → halved to 32.5, `needs.deny_slot`) —
-    and ONLY the deny-supplying rows (energy_denial Hammer, gust Boss's) are eligible, via the
-    `needs.SUPPLIES` net."""
+def test_resolver_emits_a_graded_deny_slot_at_the_disruption_card_tier():
+    """The graded Hammer, wired at the CURRENCY ruling: a banked opponent Riolu (1 Energy toward
+    Mega Lucario ex) opens ONE deny slot — value = the disruption CARD-tier (`TAG_TIER["gust"]` =
+    10), graded by turns-to-ready (1 turn out → halved to 5.0, `needs.deny_slot`), NOT the ADR-0062
+    damage swing. The oracle only GATES (the strip bites). ONLY the deny-supplying rows
+    (energy_denial Hammer, gust Boss's) are eligible, via the `needs.SUPPLIES` net."""
     pilot, obs = _setup([HAMMER, FILLER, BOSS],
                         opp_active={"id": RIOLU, "hp": 70, "energies": [0]})
     rows, slots, elig, denys = _deny_slots(pilot, obs)
     assert len(denys) == 1
     j, slot = denys[0]
-    assert slot.value == pytest.approx(32.5) and slot.deadline == 1
+    assert slot.value == pytest.approx(TAG_TIER["gust"] / 2.0) and slot.deadline == 1  # 10 / 2¹
     suppliers = [rows[k]["cid"] for k in range(len(rows)) if j in elig[k]]
     assert sorted(suppliers) == [HAMMER, BOSS]                # the FILLER is never deny-eligible
     # the deny credit reaches keep_v2 through the assignment (sets-not-sums: with the Boss's also
-    # covering, the Hammer's solo marginal is the Boss's displaced next-best slot, not the full 32.5)
+    # covering, the Hammer's solo marginal is the Boss's displaced next-best slot, not the full 5.0)
     keeps, pick = pilot._needs_v2(obs, pilot._board(obs), rows, 1)
     assert keeps[0] > 0.0 and pick == [1]                     # the filler sheds, never the Hammer
 
@@ -130,31 +132,36 @@ def test_deny_leg_is_fail_closed():
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_deny_drops_the_doomed_active_and_discounts_the_bench():
-    """`_opp_denial_best`'s tiers, consumed intact: with my Active able to KO theirs
-    (`board.active_can_ko`) the doomed Active denies nothing and emits NO slot, while a benched
-    banking body still prices at the promote discount (`_DENIAL_BENCH`) — Hammer the bench, then
-    take the KO (ms 82748422 f26)."""
+def test_deny_drops_the_doomed_active_and_grades_by_timing():
+    """The `active_can_ko` drop, consumed intact: with my Active able to KO theirs the doomed Active
+    denies nothing and emits NO slot, while every biting body still opens a card-tier slot graded by
+    its OWN turns-to-ready — the ready Mega Lucario ex Active at the full band (10 / 2⁰), the banked
+    bench Riolu one turn out at half (10 / 2¹). Bench vs Active is now a TIMING grade, not a fixed
+    weight (the damage-model `_DENIAL_BENCH` discount is retired from the keep price)."""
     bench_body = {"id": RIOLU, "hp": 70, "energies": [0]}
     pilot, obs = _setup([HAMMER], opp_active={"id": MLUC, "hp": 340, "energies": [0, 0]},
                         opp_bench=[bench_body])
     board = pilot._board(obs)
     _rows, _slots, _elig, denys = _deny_slots(pilot, obs, board)
-    assert {s.key for _j, s in denys} == {f"deny:active0:{MLUC}", f"deny:bench0:{RIOLU}"}
+    by_key = {s.key: s for _j, s in denys}
+    assert set(by_key) == {f"deny:active0:{MLUC}", f"deny:bench0:{RIOLU}"}
+    assert by_key[f"deny:active0:{MLUC}"].value == pytest.approx(TAG_TIER["gust"])        # ready → 10
+    assert by_key[f"deny:bench0:{RIOLU}"].value == pytest.approx(TAG_TIER["gust"] / 2.0)  # 1 out → 5
     doomed = dataclasses.replace(board, active_can_ko=True)
     _rows, _slots, _elig, denys = _deny_slots(pilot, obs, doomed)
     assert [s.key for _j, s in denys] == [f"deny:bench0:{RIOLU}"]
-    assert denys[0][1].value == pytest.approx(_DENIAL_BENCH * 65.0 / 2.0)
+    assert denys[0][1].value == pytest.approx(TAG_TIER["gust"] / 2.0)
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_deny_lifts_the_gust_card_off_the_hedge_on_a_captured_board():
-    """The handoff's 'Hammer/gust cards currently ride the hedge', closed on a REAL recorded board
-    (82867148-48, mega_starmie: the opponent's Active is a developing Dreepy banking 1 Energy —
-    denial 35, two turns from ready): the resolver emits the graded deny slot (35 / 2² = 8.75) and
-    the held Boss's Orders' raw v2 marginal rises above its general-worth floor (4.5) to the deny
-    credit — the hedge floor narrows from below without moving the DECIDED pick (the discard
-    corpus stays 12/12)."""
+def test_deny_prices_a_far_threat_below_the_cards_general_worth():
+    """The currency ruling on a REAL recorded board (82867148-48, mega_starmie: the opponent's Active
+    is a developing Dreepy banking 1 Energy — two turns from ready): the resolver emits a card-tier
+    deny slot GRADED down for the distance (10 / 2² = 2.5), which sits BELOW the held Boss's Orders'
+    own general worth (4.5) — so a far-off threat's strip does NOT tower over the card; the Boss's
+    prices at its general floor and the DECIDED pick is unmoved (the discard corpus stays 12/12).
+    Under the old damage-denominated value the same board priced the deny at 35/4 ≈ 8.8 and lifted
+    the Boss's above everything — the exact over-pricing the ruling retired."""
     rec = None
     for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
         for line in jf.read_text(encoding="utf-8").splitlines():
@@ -172,6 +179,11 @@ def test_deny_lifts_the_gust_card_off_the_hedge_on_a_captured_board():
     dec = pilot.explain(rec["obs"])
     s = dec.discard_shadow
     assert s is not None and s["agree_v2"] is True           # the decided pick is unmoved
+    board = pilot._board(rec["obs"])
+    rows, _ = pilot._discard_equation_rows(rec["obs"], rec["obs"]["select"], board,
+                                           rec["obs"]["select"]["option"])
+    slots, _elig = pilot._resolve_needs(rec["obs"], board, rows)
+    deny = [x for x in slots if x.kind == "deny"]
+    assert deny and max(x.value for x in deny) == pytest.approx(TAG_TIER["gust"] / 4.0)  # 10 / 2²
     boss = next(r for r in s["eq"] if r["cid"] == BOSS)
-    assert boss["keep_v2"] == pytest.approx(8.8)             # the graded deny credit (35/4, rounded)
-    assert boss["keep_v2"] > 4.5                             # above the general-worth-only floor
+    assert boss["keep_v2"] == pytest.approx(4.5)             # its general floor — the far deny is below it

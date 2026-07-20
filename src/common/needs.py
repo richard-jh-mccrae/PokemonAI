@@ -81,25 +81,43 @@ SUCCESSION_ROLES = frozenset({"win_condition", "primary_attacker"})
 
 
 def line_slots(key: str, *, value: float, succession: bool = False,
-               primary_met: bool = False) -> list:
+               primary_met: bool = False, succession_urgent: bool = False) -> list:
     """The line slots for ONE card class: the primary assembly slot at the full tier (absent when a
     copy is already IN PLAY — ``primary_met``, the in_play gate re-derived as slot absence), plus —
-    for a wincon class (``succession=True``, `SUCCESSION_ROLES`) — a half-tier SUCCESSION slot: the
-    plan needs the line to survive attrition (KOs and prizing take bodies), so a spare copy's solo
-    marginal is the half tier, never 0 — "copy 2's marginal = its next-best slot" (the grill spec's
-    own sets-not-sums answer). Halving mirrors `draw_engine_slot` saturation; no this-turn deadline
-    (a deploy-now slot supersedes for the same hop)."""
+    for a wincon class (``succession=True``, `SUCCESSION_ROLES`) — a SUCCESSION slot: the plan needs
+    the line to survive attrition (KOs and prizing take bodies), so a spare copy's solo marginal is
+    real, never 0 — "copy 2's marginal = its next-best slot" (the grill spec's own sets-not-sums
+    answer).
+
+    Two grades of succession (the answer-doom grill ruling, 2026-07-20):
+      * NORMAL (``succession_urgent=False``) — a HALF-tier slot at no this-turn deadline: attrition
+        is a future concern, so the insurance is discounted (mirrors `draw_engine_slot` saturation),
+        and a deploy-now slot supersedes for the same hop.
+      * URGENT (``succession_urgent=True``) — the doomed-payoff spike: when MY Active is doomed and
+        this class is the successor with its base already in play, the replacement is needed
+        IMMINENTLY, so the slot goes FULL tier at deadline 0 (a closing edge — re-access can't bank
+        against a this-turn need). This re-derives the old flat answer-doom successor value
+        (`TAG_TIER["clutch_heal"]`) AS the line's own worth: a doomed wincon's successor is not
+        shuffle fodder (ep83037962 f49 — don't Harlequin away the second Mega Starmie the turn its
+        Staryu hit the bench)."""
     out = []
     if not primary_met:
         out.append(Slot("line", float(value), 99, key))
     if succession:
-        out.append(Slot("line", float(value) / 2.0, 99, f"{key}:succ"))
+        succ_val = float(value) if succession_urgent else float(value) / 2.0
+        succ_deadline = 0 if succession_urgent else 99
+        out.append(Slot("line", succ_val, succ_deadline, f"{key}:succ"))
     return out
 
 
 def answer_doom_slot(*, value: float, deadline: int = 0) -> Slot:
     """The pressure gate re-derived: the threat read (`active_doomed` / incoming) opens an answer
-    slot — heal / switch / the successor — at the threat's deadline."""
+    slot — heal / switch — at the threat's deadline. ``value`` is the DOOMED BODY'S OWN PRESERVED
+    worth (the grill's answer-doom ruling, 2026-07-20): a switch/heal is worth exactly what saving
+    the Active preserves — a worth-0 Switch that rescues a 12-point engine Lunatone is worth 12
+    (ep83661652 f40), a filler active worth ~0 is not worth a card to save. NOT a flat tier, and
+    NOT the swap card's own catalog worth. The SUCCESSOR is no longer priced here — a doomed
+    wincon's replacement rides the URGENT succession slot (`line_slots`, full tier at deadline 0)."""
     return Slot("answer_doom", float(value), int(deadline), "answer_doom")
 
 
