@@ -217,12 +217,22 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    AND still price the gamble keep-floor + refresh SHED, which have not swapped. **The hedge is
    RETAINED**, not retired: the resolver is still v0-scope (resupply 0.0; opponent DENY slots
    deferred), so "v2 never prices below the shipped decider" stays until the resolver completes.
-   **Staged next (WP-N4b):** the refresh-SHED shadow join — a MAGNITUDE shadow (v2 hand-valuation
-   beside `_refresh_shed_keepcost`), distinct from the discard's pick-agreement and needing its own
-   agreement design; the discard corpus is this week's bench per the dev-window ruling, so the
-   refresh families join when their site's shadow clears.
-5. **WP-N5 — the readiness fold** (Round 5's condition): readiness consumes the needs module ONLY
-   under the 267-frame leaf-lab bench (no regression on SOLE-top / distinct-values / Gate 0).
+   **WP-N4b BUILT 2026-07-20 — the refresh-SHED MAGNITUDE shadow, verdict: refresh NOT cleared.**
+   `pilot._refresh_shed_shadow` emits v1's Σ keep_cost beside v2's whole-hand assignment marginal
+   (`needs.set_keep_v2` over the held hand, via the shared `_resolve_needs` core), the two refresh
+   swings (`swing_v2 = swing_v1 + (v1_shed − v2_shed)` — the shed is the only term that moves) and
+   the SIGN-agreement bit — the magnitude analog of the discard's pick-agreement, deciding nothing.
+   **Sweep (83 refresh decisions): 18 sign-flips, v2 UNDER-prices the shed in 46 / over-prices 35 —
+   the unsafe direction (it would shuffle away hands v1 keeps).** Diagnostic, not a bug: v2's v0
+   resolver is DISCARD-bench-scoped — it prices a card's line/fund/doom/fuel NEED, not its GENERAL
+   worth (a spare engine/attacker/backup with no open slot; an energy on a powered Active). So the
+   refresh site does NOT swap; the shadow's telemetry stages the prerequisite below.
+5. **WP-N5 — general-worth slots + the readiness fold** (Round 5's condition; now also the WP-N4b
+   prerequisite): the resolver gains the GENERAL-worth slots the refresh sweep proved missing — a
+   card's board value where it isn't a specific line/fund/doom/fuel need — which are exactly the
+   readiness leaf's board-value terms (`board-state-valuation-grill.md`), so readiness consumes the
+   needs module ONLY under the 267-frame leaf-lab bench (no regression on SOLE-top / distinct-values
+   / Gate 0). The refresh/gamble swaps follow once their shadows clear under the enriched resolver.
 
 ## Acceptance (pre-committed)
 

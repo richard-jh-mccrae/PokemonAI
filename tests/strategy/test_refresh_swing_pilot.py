@@ -114,3 +114,22 @@ def test_the_refresh_oracle_owns_the_shuffle_refresh_value():
     _, traces = _refresh_traces(_shipped_pilot("mega_starmie"), fx, HARLEQUIN)
     fired = {h.id for t in traces for h, _ in t.fired}
     assert "dig-before-commit" not in fired, "dig-before-commit still endorses a shuffle-refresh"
+
+
+@pytest.mark.req("REQ-NEEDS-0007")
+def test_refresh_shed_v2_shadow_rides_the_decision_with_the_swing_identity():
+    """WP-N4b: at a real shuffle-refresh the keep-value v2 MAGNITUDE shadow rides the Decision — v1's
+    Σ keep_cost (`_refresh_shed_keepcost`) beside v2's whole-hand assignment marginal
+    (`needs.set_keep_v2`), the two refresh swings, and the SIGN-agreement bit. Deciding NOTHING: the
+    shed still uses v1. The swing identity `swing_v2 = swing_v1 + (v1_shed − v2_shed)` holds exactly
+    (the shed is the only term that changes), and every held row carries its `keep_v2`."""
+    fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
+    s = _shipped_pilot("mega_starmie").explain(fx["obs"]).refresh_shadow
+    assert s is not None and isinstance(s["sign_agree"], bool)
+    assert s["swing_v2"] == pytest.approx(s["swing_v1"] + s["v1_shed"] - s["v2_shed"], abs=0.05)
+    assert s["cid"] == LILLIES and all("keep_v2" in r for r in s["eq"])
+    # The two magnitudes measure different things by v0 scope: v1 discounts each copy by its
+    # re-access odds; v2 (resupply 0.0 — WP-N3 deferred) does not, but prices the hand as an
+    # ASSIGNMENT (sets-not-sums). So a divergence in EITHER direction is real telemetry — v2 < v1 is
+    # over-counted duplicates, v2 > v1 is the missing resupply leg (WP-N5). Both are non-negative.
+    assert s["v1_shed"] >= 0.0 and s["v2_shed"] >= 0.0

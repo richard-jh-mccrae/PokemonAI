@@ -189,6 +189,24 @@ comparator) and ADR-0032 (Effect-Clause tier).
   the resolver's completion. Staged next (WP-N4b): the refresh-SHED shadow join (a MAGNITUDE shadow,
   distinct from the discard's pick-agreement — the discard corpus is this week's bench per the
   user). Suite + corpus green (3055); the corpus discard pins hold under v2 as the live decider.
+- **WP-N4b — the refresh-SHED MAGNITUDE shadow, and its verdict: the refresh family is NOT cleared
+  (2026-07-20).** The refresh SHED is a scalar (`_refresh_shed_keepcost` = Σ keep_cost), not a pick,
+  so its shadow is a MAGNITUDE comparison, not the discard's pick-agreement: `pilot._refresh_shed_shadow`
+  emits v1's Σ keep_cost beside v2's whole-hand assignment marginal (`needs.set_keep_v2` over the
+  held hand, resolved through the shared `_resolve_needs` core factored out of `_needs_v2`), and —
+  since the shed is the ONLY term that changes — the two refresh SWINGS
+  (`swing_v2 = swing_v1 + (v1_shed − v2_shed)`) and the decision-relevant SIGN-agreement bit (would
+  swapping the shed flip play/don't-play?). Rides `Decision.refresh_shadow` → the `@T` key, deciding
+  NOTHING. **The sweep's verdict (83 refresh decisions): 18 sign-flips, and v2 UNDER-prices the shed
+  in 46 (vs over-prices in 35), the UNSAFE direction — it would shuffle away hands v1 correctly
+  keeps.** The cause is diagnostic, not a bug: v2's v0 resolver is DISCARD-bench-scoped — its slots
+  price a card's LINE / fund-attack / answer-doom / fuel NEED, but not a card kept for GENERAL worth
+  (a spare engine/attacker/backup body with no open line slot, an energy on a powered Active). The
+  discard family cleared 12/12 because the discard corpus lived within that scope; the refresh's
+  whole-hand valuation exposes the gap. So the refresh site does NOT swap — the shadow did its job,
+  and its telemetry stages the prerequisite: general-worth slot coverage, which is the readiness
+  leaf's board-value terms (`board-state-valuation-grill.md`) — i.e. WP-N5's fold, not a bolt-on
+  gate. v1 stays the refresh/gamble keep-value spine meanwhile. Suite + corpus green (3055).
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

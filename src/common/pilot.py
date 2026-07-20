@@ -952,6 +952,13 @@ class Decision:
                                      # `_DISCARD` ladder, which stays the decider. Deciding NOTHING —
                                      # the evidence bridge for the discard convergence (seam D).
                                      # Sparse: None off a real discard choice
+    refresh_shadow: dict | None = None  # the REFRESH-SHED keep-value v2 MAGNITUDE shadow (ADR-0065
+                                     # WP-N4b): v1's Σ keep_cost (`_refresh_shed_keepcost`) beside
+                                     # v2's whole-hand assignment marginal (`needs.set_keep_v2`) + the
+                                     # resulting refresh swings and the SIGN-agreement bit (does
+                                     # swapping the shed flip play/don't-play?). Deciding NOTHING — the
+                                     # sets-not-sums evidence the refresh swap rides. Sparse: None off
+                                     # a real refresh PLAY option / mid-sim
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1231,6 +1238,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
+                        refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -2476,6 +2484,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         fund bodies, and non-option hand cards as fixed coverage (a real forced discard offers the
         whole hand)."""
         from common import needs
+        slots, elig = self._resolve_needs(obs, board, rows)
+        resupply = [0.0] * len(slots)
+        keeps = [round(needs.keep_v2(slots, elig, resupply, k), 1) for k in range(len(rows))]
+        pick = needs.cheapest_removal(
+            slots, elig, resupply, [r["keep"] for r in rows], picks,
+            tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
+        return keeps, sorted(rows[k]["i"] for k in pick)
+
+    def _resolve_needs(self, obs: dict, board: Board, rows: list):
+        """The shared keep-value v2 RESOLVER: the live board + the held-card ``rows`` resolved into
+        `common.needs` slots and per-row eligibility (which slot indices each row can supply). The
+        ONE slot derivation behind BOTH the discard decider (`_needs_v2`) and the refresh-SHED
+        magnitude shadow (`_refresh_shed_shadow`) — rows need only ``cid``, ``deploy`` (the v1
+        gate factor v2 consumes), and ``fuel``. Returns ``(slots, elig)``; the caller owns
+        ``resupply`` (all-0.0 in v0 — errs toward keep). The slot vocabulary, the corpus-adjudicated
+        derivations (the succession slot, Pokémon-only lines, the engine band, the fund/doom/fuel
+        legs) and the deferred legs are documented on `_needs_v2`."""
+        from common import needs
         from common.card_worth import ROLE_TIER, ACE_SPEC_TIER, ENERGY_TIER, TAG_TIER
         me = self._my_player(obs)
         line_roles = {r for r, kinds in needs.SUPPLIES.items() if "line" in kinds and r in ROLE_TIER}
@@ -2564,12 +2590,81 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
         if fuels:
             _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
+        return slots, elig
+
+    def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
+        """The whole-hand v2 rows for the refresh-SHED shadow: one row per held card (minus ONE copy
+        of ``exclude_cid`` — the played refresh, discarded not shuffled, exactly as v1's
+        `_hand_keep`), carrying the fields `_resolve_needs` reads (``cid``, ``deploy`` — the v1 gate
+        factor v2 consumes — and ``fuel``) plus ``worth`` for display. The refresh analog of
+        `_discard_equation_rows`' per-card facts, over the hand instead of the discard options."""
+        from collections import Counter
+        me = self._my_player(obs)
+        hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        ids = list(hand_ids)
+        if exclude_cid in ids:
+            ids.remove(exclude_cid)
+        counts = board.deck_known_counts
+        if not counts:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        fuel_types = self._discard_fuel_types()
+        rows = []
+        for k, cid in enumerate(ids):
+            st = self.stats.get(cid) if self.stats else None
+            fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
+                        and (None in fuel_types or getattr(st, "energyType", None) in fuel_types))
+            rows.append({"i": k, "cid": cid, "worth": round(self._role_value(cid), 1),
+                         "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
+        return rows
+
+    def _refresh_shed_shadow(self, obs: dict, select: dict, board: Board, options: list,
+                             traces: list, chosen: list):
+        """WP-N4b: the refresh-SHED keep-value v2 MAGNITUDE shadow — the refresh analog of the
+        discard shadow, deciding NOTHING (the SHED still uses v1's Σ keep_cost). At the refresh PLAY
+        option the agent would actually play (top tactical among refreshes), emit v1's shed
+        (`_refresh_shed_keepcost`) beside v2's whole-hand assignment marginal (`needs.set_keep_v2`
+        over the held hand) — the site where sets-not-sums bites: v1 SUMS duplicate wincons and
+        OVER-charges the shed (refresh looks too costly), v2 prices the pair as one line + the
+        succession slot. Since the shed is the ONLY term that changes between the two, the refresh
+        swing follows by ``swing_v2 = swing_v1 + (v1_shed − v2_shed)``; the decision-relevant
+        agreement is the SIGN bit (would swapping the shed flip play/don't-play?), the magnitude
+        analog of the discard's pick agreement. None off a real refresh PLAY option or mid-sim
+        (`self._planning`)."""
+        if self._planning:
+            return None
+        from common import needs
+        from common.strategy.refresh import refresh_branches
+        refresh_opts = []
+        for i, o in enumerate(options):
+            if o.get("type") != _PLAY:
+                continue
+            cid = self._option_card_id(obs, select, o)
+            if cid is not None and refresh_branches(cid, board.my_prizes_remaining,
+                                                    board.opp_prizes_remaining):
+                refresh_opts.append((i, cid))
+        if not refresh_opts:
+            return None
+        i, cid = max(refresh_opts, key=lambda ic: traces[ic[0]].tactical)
+        # A MINIMAL ctx — only the two fields `_refresh_shed_keepcost` / `_refresh_swing_tactical`
+        # read (card_id, option_type) — so the shadow never re-runs the heavyweight `_context`
+        # (already built per-option in the trace loop); both helpers are pure reads.
+        from types import SimpleNamespace
+        ctx = SimpleNamespace(card_id=cid, option_type=_PLAY)
+        v1_shed = self._refresh_shed_keepcost(obs, board, ctx)
+        swing_v1 = self._refresh_swing_tactical(obs, board, ctx)
+        rows = self._needs_hand_rows(obs, board, exclude_cid=cid)
+        slots, elig = self._resolve_needs(obs, board, rows)
         resupply = [0.0] * len(slots)
-        keeps = [round(needs.keep_v2(slots, elig, resupply, k), 1) for k in range(len(rows))]
-        pick = needs.cheapest_removal(
-            slots, elig, resupply, [r["keep"] for r in rows], picks,
-            tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
-        return keeps, sorted(rows[k]["i"] for k in pick)
+        v2_shed = needs.set_keep_v2(slots, elig, resupply, range(len(rows))) if rows else 0.0
+        for k, r in enumerate(rows):
+            r["keep_v2"] = round(needs.keep_v2(slots, elig, resupply, k), 1)
+        swing_v2 = swing_v1 + (v1_shed - v2_shed)
+        return {"i": i, "cid": cid, "v1_shed": round(v1_shed, 1), "v2_shed": round(v2_shed, 1),
+                "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
+                "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
+                "played": i in (chosen or []), "eq": rows}
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can
