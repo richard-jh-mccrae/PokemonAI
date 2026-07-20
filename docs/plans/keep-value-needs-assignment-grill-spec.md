@@ -2,8 +2,16 @@
 
 **Status:** SEEDED and GRILLED the same day, post the seam-D swap. All six rounds are now ruled
 (three settled by evidence, three ruled by the user — see §Grill run). Per the shadow-equations
-ruling the design is SETTLED → construction proceeds shadow-first when the user gives the go; the
-live v1 equation (9/9 on the discard corpus) keeps deciding meanwhile. Build order at the bottom.
+ruling the design is SETTLED → construction proceeds shadow-first; the live v1 equation (9/9 on
+the discard corpus) keeps deciding meanwhile. Build order at the bottom. **WP-N1 BUILT 2026-07-19**
+(see §Build order).
+
+**Development window (user, 2026-07-19):** no new Kaggle submission for ~a week; the week's work is
+hashing the keep_value equations out against the existing corrections corpus (the corpus is the
+bench, not the ladder). Post-submission ladder performance carries NO penalty — iterate
+aggressively; swap gates may be more forward-leaning than the usual armed-off discipline. The
+Round-1 hedge is accordingly DISCRETIONARY (kept because it costs nothing and its firings are
+missing-slot telemetry), not a safety requirement.
 
 **Owner concern (user, 2026-07-19, verbatim substance):** the keep_value equation now carries "a
 bunch of gates … in essence hypothesis/features/rungs tacked on the equation. That feels brittle …
