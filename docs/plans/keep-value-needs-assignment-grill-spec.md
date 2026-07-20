@@ -1,8 +1,9 @@
-# Keep-value v2: needs-assignment — GRILL SPEC (seeded, NOT grilled)
+# Keep-value v2: needs-assignment — GRILLED 2026-07-19 (all six rounds ruled; build NOT started)
 
-**Status:** SEEDED 2026-07-19 from a user concern, immediately post the seam-D swap. Design NOT
-settled — grill before code (the shadow-equations ruling repeals construction-waits only for settled
-designs). The live equation (9/9 on the discard corpus) keeps deciding meanwhile.
+**Status:** SEEDED and GRILLED the same day, post the seam-D swap. All six rounds are now ruled
+(three settled by evidence, three ruled by the user — see §Grill run). Per the shadow-equations
+ruling the design is SETTLED → construction proceeds shadow-first when the user gives the go; the
+live v1 equation (9/9 on the discard corpus) keeps deciding meanwhile. Build order at the bottom.
 
 **Owner concern (user, 2026-07-19, verbatim substance):** the keep_value equation now carries "a
 bunch of gates … in essence hypothesis/features/rungs tacked on the equation. That feels brittle …
@@ -80,14 +81,15 @@ rejected: "just soften the booleans" (graded gates fix cliffs, not composition �
 
 ## GRILL RUN 2026-07-19 — three rounds settled by evidence, three rulings pending
 
-**Round 1 (slot soundness) — evidence in; RULING PENDING.** The needs vocabulary already exists in
-the codebase IN TRIPLICATE — the gamble's five Outcome Classes (needs-as-GAINS: energy / evolution /
-pump / gust / survival), the gate library + ladder premises (needs-as-KEEPS), and the readiness
-leaf's terms (needs-as-BOARD: cost-progress, ability, saturation, preconditions) — so enumeration is
-unification, not invention. The adversarial finding: a MISSED slot sheds a good card (the wrong fail
-direction — every gate erred toward keep). Pending ruling: coverage lint only, or lint + a
-transitional `keep = max(marginal, intrinsic tier)` hedge retiring per-family. Recommended: lint +
-hedge.
+**Round 1 (slot soundness) — RULED (user, 2026-07-19): lint + transitional hedge.** The needs
+vocabulary already exists in the codebase IN TRIPLICATE — the gamble's five Outcome Classes
+(needs-as-GAINS: energy / evolution / pump / gust / survival), the gate library + ladder premises
+(needs-as-KEEPS), and the readiness leaf's terms (needs-as-BOARD: cost-progress, ability,
+saturation, preconditions) — so enumeration is unification, not invention. Because a MISSED slot
+sheds a good card (the wrong fail direction — every gate erred toward keep), v2 ships BOTH: the
+coverage lint (every ROLE_TIER/TAG_TIER key → ≥1 slot class it supplies; every retired gate/rung →
+its deriving slot — the dissolution ledger, CI-gated) AND the transitional hedge
+`keep = max(marginal, intrinsic tier)`, retiring per-family as shadow evidence clears each.
 
 **Round 2 (assignment algorithm) — SETTLED: greedy REFUTED, exact bitmask DP.** Counterexample: A
 supplies S1(20)+S2(15), B supplies S1 only — greedy prices marginal(B)=0, optimal 15 (two hand
@@ -96,23 +98,33 @@ Drakloaks vs {evolve-Active-now, line-2}). Exact assignment is lib-free trivial 
 hand-fingerprint for the mid-sim SHED). Bonus: a forced discard-2 asks for the PAIR minimizing
 `V(H) − V(H − pair)` — exact SET semantics natively; the duplicate-wincon naivety dies here.
 
-**Round 3 (opponent-facing slots) — evidence in; RULING PENDING.** My-side-only is REFUTED by the
-user's own Hammer ruling (86091435-68: the Hammer's keep-value IS its denial use); full opponent
-modeling is ADR-0064-blocked. Recommended middle: opponent-derived slots exist ONLY where a shipped
-oracle already prices them (denial = ADR-0062 `_opp_denial_best`/`denial_value`; doom-answers = the
-ADR-0064 threat read; gust-reach = `_gust_best_ko_prizes`) — the needs model consumes those values,
-never re-derives them.
+**Round 3 (opponent-facing slots) — RULED (user, 2026-07-19): VISIBLE state + basic lookahead of
+their IN-PLAY Pokémon.** Opponent-side needs derive from what we can SEE — their board (bodies,
+attached energy, forward evolution from the representation), their DISCARD contents, their hand
+COUNT (never hidden contents) — plus a basic forward projection of their in-play bodies: the derived
+**turns-to-ready** per body — turns until their wincon and backup Pokémon are fully energized
+(energy deficit at the attach quota, accel-aware via the Read) and evolved (forward-index hops,
+one per turn). Richer than the seeded existing-oracles-only recommendation, and it is what gives
+opponent-facing slots their DEADLINES: a denial/disruption/answer card's slot value is graded by how
+close their threat is to online (a Hammer is worth more the closer their attacker is to ready —
+the user's own 86091435-68 Hammer ruling, now derivable with timing). Discipline preserved:
+visible facts + representation-derived projection only — no hidden-hand guessing; ADR-0064's
+pessimism still owns the threat CEILING (safety direction untouched). Existing oracles are consumed
+for slot VALUES where they already price them (ADR-0062 `_opp_denial_best`/`denial_value`,
+`_gust_best_ko_prizes`, the threat read, `CombatMath.turns_to_ko`, opponent Resources); the
+lookahead supplies the deadline structure. Kinship noted for one-vocabulary discipline: the gusting
+design's `their_keep_cost` (Worth across the table) gets this read as its natural backend.
 
 **Round 4 (recurring-needs horizon) — SETTLED.** Deadlines, not decay (Round 8 §3 stands). Slots
 materialize only where a signal resolves them: deadline-0 and deadline-1 concretely; quota rank k>2
 keeps the shipped window treatment; Σ slot values capped < KO_SCORE (the readiness invariant — the
 horizon discipline preserved).
 
-**Round 5 (vocabulary + the readiness seam) — RULING PENDING.** Proposed: **Needs** becomes the
-fifth Ubiquitous Language term (Worth · Odds · Gates · Closure · Needs); one pure needs module;
-keep_value consumes it first; the readiness leaf folds in LATER and only under its 267-frame
-leaf-lab bench; the gate library becomes a derived view (a gate = a slot with a deadline) and
-retires as each gate re-derives.
+**Round 5 (vocabulary + the readiness seam) — RULED (user, 2026-07-19): RATIFIED as proposed.**
+**Needs** is the fifth Ubiquitous Language term (Worth · Odds · Gates · Closure · Needs); one pure
+needs module; keep_value consumes it first; the readiness leaf folds in LATER and only under its
+267-frame leaf-lab bench; the gate library becomes a derived view (a gate = a slot with a deadline)
+and retires as each gate re-derives. The 0065 glossary carries the ratified row (module pending).
 
 **Round 6 (migration) — SETTLED: the proven seam-D pattern.** v2 emits inside the existing
 `discard_shadow` (per-row `keep_v2` + a v1-vs-v2 agreement bit) and beside the refresh SHED;
@@ -135,6 +147,25 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
 6. **Migration** — shadow-first beside the live equation (emit both, agreement bit — the proven
    seam-D pattern); each retired gate's corpus case is the acceptance test ("the gate library
    dissolves into the needs model"); per-family swap under the corpus + score-diff gates.
+
+## BUILD ORDER (post-grill; shadow-first per the standing ruling — each WP suite-green, staged)
+
+1. **WP-N1 — the needs module** (`common/needs.py`, the fifth glossary seam): pure slot derivation.
+   My-side slots (fund-attack per body = cost − attached; evolve/deploy slots off `deploy_now_ids` +
+   the forward index; attach/supporter quota slots; line completion; draw-engine; discard-fuel) and
+   the RULED opponent-side read (visible zones + turns-to-ready per their in-play body). Slot values
+   in the ONE currency (tier points move to the slots roles fill; oracle-priced values consumed,
+   never re-derived). The coverage lint + dissolution ledger land WITH the module.
+2. **WP-N2 — exact assignment + marginals** (Round 2): lib-free bitmask DP; `keep_v2(X)` =
+   `V(H) − V(H − X)` with re-assignment; SET marginals for multi-pick discards; the Round-1 hedge
+   `max(marginal, intrinsic tier)`; memoized by hand-fingerprint for mid-sim use.
+3. **WP-N3 — shadow columns** (Round 6): `keep_v2` per row + a v1-vs-v2 agreement bit inside the
+   existing `discard_shadow`, plus the refresh-SHED site; sweep the corpus, adjudicate every
+   v1-vs-v2 disagreement (each = a v2 bug or a v1 gate artifact).
+4. **WP-N4 — per-family swaps + gate dissolution**: as v2 clears each family (corpus + agreement),
+   swap the site and retire the gates that family used, per the ledger; the hedge retires with them.
+5. **WP-N5 — the readiness fold** (Round 5's condition): readiness consumes the needs module ONLY
+   under the 267-frame leaf-lab bench (no regression on SOLE-top / distinct-values / Gate 0).
 
 ## Acceptance (pre-committed)
 
