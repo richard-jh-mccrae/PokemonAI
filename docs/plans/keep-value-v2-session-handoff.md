@@ -50,12 +50,17 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
 
 ## Open threads, priority order
 
-1. **The refresh resupply discount** (the measured next piece): the refresh sweep's residual is
-   62/83 frames where v2 OVER-prices the shed (safe direction) because slot `resupply` is 0.0
-   everywhere — the closure's re-access odds never discount an uncovered slot. Build: per-slot
-   resupply from `fetch_closure.reaccess_outs` + `deck_odds` over the refresh draw window, thread
-   through `_resolve_needs` callers. Then re-sweep; if sign-flips ≈ 0 and magnitudes track, the
-   refresh-SHED site becomes a swap candidate (shadow → decider, the seam-D/WP-N4 pattern).
+1. ~~**The refresh resupply discount**~~ **DONE 2026-07-20 (WP-N6)** — `_refresh_slot_resupply`
+   (per-slot closure re-supply over the refresh window, `fetch_closure.class_reaccess_outs`) is
+   LIVE in the refresh shadow. Measured: sign-flips 13→8, mean |v2−v1| 9.7→6.7, bias centered;
+   discard held 12/12. `general` slots keep r=0.0 (their 0.45 W already carries the discount —
+   stacking flipped the sweep unsafe; joint W+r re-measure only). **The swap bar (flips ≈ 0) is
+   NOT met**: the 8 residual flips are v2 SCOPE gaps shared with the discard decider — the flat
+   `answer_doom` TAG-tier slot value (over-prices a worth-0 switch at 20: 83661652-40;
+   under-prices the doomed successor vs v1's full-worth closing spike: 83037962-49) and the
+   saturating engine band vs v1's per-supporter sum (82522698-36). Re-pricing those is the NEW
+   next piece — it feeds the discard bench too, so it needs its own adjudication (the 12/12 must
+   hold through it).
 2. **Opponent DENY slots**: `needs.deny_slot` + `turns_to_ready` exist (WP-N1, tested) but the
    resolver never emits them — needs the visible opponent read (their bodies' energy deficit +
    forward hops) wired into `_resolve_needs`. The Hammer/gust cards currently ride the hedge.

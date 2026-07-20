@@ -284,6 +284,27 @@ comparator) and ADR-0032 (Effect-Clause tier).
   best-behaved shape; `leaf_hand_value` stays armed OFF; the fold re-opens only after those
   blindnesses are read. Suite green (3057).
 
+- **WP-N6 — the refresh slot-RESUPPLY discount (2026-07-20): built + measured; refresh swap still
+  NOT cleared.** The WP-N5 residual (v2 over-pricing the refresh SHED because uncovered/covered
+  slots never saw the closure's re-access odds) fixed at its site: `pilot._refresh_slot_resupply`
+  fills the assignment's resupply vector for the REFRESH window — per slot, P(re-supply within the
+  refresh's own draw window), outs = the slot's supplier classes pointed backwards via the NEW
+  `fetch_closure.class_reaccess_outs` (the SET walk: own copies of every member class + each
+  reaching tutor counted ONCE; `reaccess_outs` now delegates to it), held eligible copies as
+  certain outs over the shuffle-grown pool, prize-split-weighted pre-anchor — v1's `_keep_cost`
+  model per SLOT instead of per copy. Closing-edge kinds (`deploy_now`/`answer_doom`) and
+  pitch-side fuel stay 0.0; `fund_attack` windows widen by the quota deadline (`quota_window`
+  re-derived). **In-build adjudication: `general` slots stay 0.0** — `_GENERAL_WORTH_W` (0.45) was
+  measured at resupply 0.0 and empirically already carries the site's re-access discount; stacking
+  ×(1−r) flipped the sweep unsafe (under-pricing 19→62). **Measured (83 frames): sign-flips 13→8
+  (every large baseline over-pricing flip fixed, worst −46; 3 new tips all |swing_v2| ≤ 2),
+  mean |v2−v1| 9.7→6.7, bias +5.8→−2.2 (centered); discard 12/12 held (that site keeps resupply
+  0.0 — no redraw window).** The swap bar (flips ≈ 0) is NOT met and the residuals are v2 SCOPE
+  gaps shared with the discard decider — the flat `answer_doom` TAG-tier value (over-prices a
+  worth-0 switch at 20, under-prices the doomed successor vs v1's full-worth closing spike) and
+  the saturating engine band vs v1's per-supporter sum — so re-pricing them is its own
+  adjudicated piece. The hedge (v2 floors at v1's post-gate keep) stays.
+
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles

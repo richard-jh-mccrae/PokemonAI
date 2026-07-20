@@ -277,6 +277,29 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    cannot read, so any hand-based tie-split there is noise. `leaf_hand_value` stays armed OFF;
    N5d+ε committed as the best-behaved shape; the fold re-opens only after the who's-Active/tool
    leaf terms land (leaf-native work, outside this spec).
+9. **WP-N6 — the refresh slot-RESUPPLY discount — BUILT + MEASURED 2026-07-20, refresh swap still
+   NOT cleared.** The WP-N5 residual's staged fix: `pilot._refresh_slot_resupply` fills the
+   resupply vector at the REFRESH site — per slot, P(the closure re-supplies it within the
+   refresh's own draw window), from the slot's supplier classes pointed backwards
+   (`fetch_closure.class_reaccess_outs`, the SET walk — each tutor counted once, never the
+   double-count a per-class sum gives) over the shuffle-grown pool, the slot's eligible held
+   copies joining as certain outs, prize-split-weighted pre-anchor (`_prize_split_hit`) — v1's
+   `_keep_cost` model per SLOT instead of per copy. Closing-edge kinds (deploy_now / answer_doom)
+   stay 0.0 (`closing_gate_reaccess` re-derived); only `fund_attack` widens its window by the
+   quota deadline (`quota_window` re-derived). **Adjudicated in-build:** `general` slots ALSO stay
+   0.0 — their `_GENERAL_WORTH_W` (0.45) was measured with resupply at 0.0, so W already carries
+   the site's whole re-access discount; stacking ×(1−r) on top priced a general slot at ~0.45 ×
+   v1's own model and flipped the sweep UNSAFE (under 19→62, flips 13→17). W and r re-open only
+   as a JOINT re-measure. **Measured (83 refresh frames):** sign-flips 13→8 — 8 baseline flips
+   fixed (every large over-pricing flip, worst −46), 3 new near-break-even tips (|swing_v2| ≤ 2);
+   magnitude error mean |v2−v1| 9.7→6.7, median 6.0→3.9, bias centered +5.8→−2.2; discard corpus
+   held 12/12 (resupply stays 0.0 at that site — no redraw window). **The refresh SHED does NOT
+   swap:** the bar is flips ≈ 0, and the 8 residuals are v2 SCOPE gaps, not resupply — the flat
+   `answer_doom` TAG-tier slot value both over-prices (a worth-0 `switch` Item covers it for 20 —
+   83661652-40) and under-prices (the doomed successor's best slot is 20 vs v1's full-worth
+   closing spike 30 — 83037962-49), and the saturating engine band under-prices a two-supporter
+   engine hand v1 sums in full (82522698-36). Those valuations feed the DISCARD decider too, so
+   re-pricing them is its own adjudicated piece, not a resupply patch.
 
 ## Acceptance (pre-committed)
 

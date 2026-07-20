@@ -91,6 +91,31 @@ def test_reaccess_outs_pure_function_matches_the_pilot():
 
 
 @pytest.mark.req("REQ-WORTH-0002")
+def test_class_reaccess_outs_counts_each_tutor_once():
+    """`class_reaccess_outs` (the slot-RESUPPLY leg): a needs slot is filled by a CLASS of cards, so
+    its outs are the own copies of every member class + each deck-search tutor reaching ANY member,
+    counted ONCE. Ultra Ball (1121) reaches both Mega Lucario ex (678) and Riolu (677) — summing
+    per-class `reaccess_outs` would charge it twice (7 + 7); the set walk prices 10. A singleton set
+    IS `reaccess_outs` (the delegation); unknown classes contribute nothing (endorser fail-closed)."""
+    from common import fetch_closure
+    ml = _shipped_pilot("mega_lucario")
+    stat_of, clauses_of = _accessors(ml)
+    counts = {678: 1, 677: 3, 1121: 4, 1145: 2}
+    assert fetch_closure.reaccess_outs(678, counts, stat_of, clauses_of) == 1 + 4 + 2
+    assert fetch_closure.reaccess_outs(677, counts, stat_of, clauses_of) == 3 + 4
+    assert (fetch_closure.class_reaccess_outs({678, 677}, counts, stat_of, clauses_of)
+            == (1 + 3) + 4 + 2)                                   # own copies + Ultra Ball ONCE + Mega Signal
+    assert fetch_closure.class_reaccess_outs({999999}, counts, stat_of, clauses_of) == 0
+    assert (fetch_closure.class_reaccess_outs({999999, 678}, counts, stat_of, clauses_of)
+            == fetch_closure.class_reaccess_outs({678}, counts, stat_of, clauses_of))
+    # singleton parity with `reaccess_outs` over the whole deck (the delegation is load-bearing)
+    for cid in set(ml.deck):
+        c = {cid: 2, 1121: 4, 1145: 2}
+        assert (fetch_closure.class_reaccess_outs({cid}, c, stat_of, clauses_of)
+                == fetch_closure.reaccess_outs(cid, c, stat_of, clauses_of))
+
+
+@pytest.mark.req("REQ-WORTH-0002")
 def test_fetch_reaches_pokemon_pure_function_matches_the_pilot():
     """`fetch_closure.fetch_reaches_pokemon(target, cid, counts, ...)` == the Pilot's
     `_fetch_reaches_pokemon` — Poké Pad's `no_rule_box` never reaches the Rule-Box Mega ex."""

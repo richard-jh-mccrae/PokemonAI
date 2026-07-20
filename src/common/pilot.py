@@ -2508,9 +2508,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
           * FUEL slots ride the pitch side (`needs.pitch_gain` — pitching a matching Energy is
             progress).
         Deferred, documented: opponent DENY slots (await the visible turns-to-ready read wiring),
-        probabilistic slot RESUPPLY over the closure (0.0 here — errs toward keep), non-Active
-        fund bodies, and non-option hand cards as fixed coverage (a real forced discard offers the
-        whole hand)."""
+        probabilistic slot RESUPPLY at THIS site (0.0 here — a forced discard has no redraw
+        window; errs toward keep. The REFRESH site's resupply is LIVE — `_refresh_slot_resupply`
+        over the refresh draw window), non-Active fund bodies, and non-option hand cards as fixed
+        coverage (a real forced discard offers the whole hand)."""
         from common import needs
         slots, elig = self._resolve_needs(obs, board, rows)
         resupply = [0.0] * len(slots)
@@ -2526,7 +2527,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ONE slot derivation behind BOTH the discard decider (`_needs_v2`) and the refresh-SHED
         magnitude shadow (`_refresh_shed_shadow`) — rows need only ``cid``, ``deploy`` (the v1
         gate factor v2 consumes), and ``fuel``. Returns ``(slots, elig)``; the caller owns
-        ``resupply`` (all-0.0 in v0 — errs toward keep). The slot vocabulary, the corpus-adjudicated
+        ``resupply`` — all-0.0 where no draw window backs a discount (the discard decider, the
+        leaf), `_refresh_slot_resupply` at the refresh site. The slot vocabulary, the corpus-adjudicated
         derivations (the succession slot, Pokémon-only lines, the engine band, the fund/doom/fuel
         legs) and the deferred legs are documented on `_needs_v2`.
 
@@ -2750,15 +2752,85 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0                                   # a featurize/resolve slip never crashes ranking
         return min(_HAND_READINESS_CAP, val * _HAND_READINESS_W)
 
+    def _refresh_slot_resupply(self, slots, elig, rows, obs: dict, board: Board,
+                               draws: int) -> list:
+        """The slot-RESUPPLY leg for the REFRESH window (the WP-N5 residual's staged fix): per slot,
+        P(the closure re-supplies it within the refresh's own ``draws``-card window) — the discount
+        `needs.assignment_value` applies to a covered slot's marginal (×(1−r)) and credits an
+        uncovered one (×r). The whole hand shuffles in with the played refresh, so the outs are the
+        slot's supplier CLASSES pointed backwards over the shuffle-grown pool: deck copies + the
+        tutors reaching any class (`fetch_closure.class_reaccess_outs` — each tutor once), with the
+        slot's own eligible HELD copies joining as CERTAIN outs (a shuffled hand card is never
+        prize-assignable) — v1's `_keep_cost` model per slot instead of per copy.
+
+        Fail directions, all toward KEEP (a lower r → a higher shed price — the sweep's measured
+        SAFE side): ``deploy_now`` / ``answer_doom`` slots stay 0.0 (the closing edge,
+        `gate_library.closing_gate_reaccess` — re-access is not bankable against a this-turn
+        deadline); the supplier classes are read off the HELD eligibility only (a deck-only filler
+        class is not counted); the no-deadline (99) slots take the plain window, only
+        ``fund_attack`` widens by its quota deadline (`gate_library.quota_window` re-derived:
+        window = draws + deadline, one natural draw per intervening turn); unresolved deck
+        bookkeeping → all-0.0 (no discount — v2 keeps over-pricing rather than under-pricing).
+        Pre-anchor the outs are prize-split-weighted (`_prize_split_hit`), anchored the plain
+        window draw — exactly the `_refresh_shed_keepcost` bookkeeping. Pitch-side (fuel) slots
+        never enter the keep DP; theirs stay 0.0.
+
+        ``general`` slots ALSO stay 0.0 — measured, not doctrinal (sweep 2026-07-20): their value
+        already carries `_GENERAL_WORTH_W` (0.45), a latent-worth constant MEASURED with resupply
+        at 0.0 (WP-N5: under-pricing 46→19 came from W alone), so W is empirically the site's
+        whole re-access + latency discount. Stacking ×(1−r) on top priced a general slot at
+        ~0.45 × v1's own re-access model and flipped the sweep to the UNSAFE side (under-pricing
+        19→62, sign-flips 13→17). Re-open only as a JOINT re-measure of W and r, never r alone."""
+        from common import fetch_closure
+        from common.deck_odds import draw_hit_probability
+        out = [0.0] * len(slots)
+        me = self._my_player(obs)
+        counts = board.deck_known_counts
+        if counts:
+            deck_count = sum(counts.values())
+            prizes_hidden = 0                                    # anchored: the split is resolved
+        else:
+            from collections import Counter
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(counts.values()) - prizes_hidden
+            if deck_count <= 0 or not counts:
+                return out
+        pool = deck_count + len(rows)                            # the shuffle-grown pool: rows ARE
+        members: list = [[] for _ in slots]                      # the shuffled copies (refresh excluded)
+        for k, js in enumerate(elig):
+            for j in js:
+                members[j].append(k)
+        for j, s in enumerate(slots):
+            if (s.supplied_by_pitch or s.kind in ("deploy_now", "answer_doom", "general")
+                    or not members[j]):
+                continue
+            classes = {rows[k]["cid"] for k in members[j]}
+            u = fetch_closure.class_reaccess_outs(classes, counts, self._closure_stat_of,
+                                                  self._closure_clauses_of)
+            certain = len(members[j])
+            window = draws + (s.deadline if s.kind == "fund_attack" else 0)
+            if prizes_hidden > 0:
+                r = self._prize_split_hit(u, deck_count, prizes_hidden, pool, window,
+                                          certain=certain)
+            else:
+                r = draw_hit_probability(u + certain, pool, window)
+            out[j] = max(0.0, min(1.0, r))
+        return out
+
     def _refresh_shed_shadow(self, obs: dict, select: dict, board: Board, options: list,
                              traces: list, chosen: list):
         """WP-N4b: the refresh-SHED keep-value v2 MAGNITUDE shadow — the refresh analog of the
         discard shadow, deciding NOTHING (the SHED still uses v1's Σ keep_cost). At the refresh PLAY
         option the agent would actually play (top tactical among refreshes), emit v1's shed
         (`_refresh_shed_keepcost`) beside v2's whole-hand assignment marginal (`needs.set_keep_v2`
-        over the held hand) — the site where sets-not-sums bites: v1 SUMS duplicate wincons and
-        OVER-charges the shed (refresh looks too costly), v2 prices the pair as one line + the
-        succession slot. Since the shed is the ONLY term that changes between the two, the refresh
+        over the held hand, slot resupply LIVE over the refresh draw window —
+        `_refresh_slot_resupply`, the WP-N5 residual's fix) — the site where sets-not-sums bites: v1
+        SUMS duplicate wincons and OVER-charges the shed (refresh looks too costly), v2 prices the
+        pair as one line + the succession slot. Since the shed is the ONLY term that changes, the refresh
         swing follows by ``swing_v2 = swing_v1 + (v1_shed − v2_shed)``; the decision-relevant
         agreement is the SIGN bit (would swapping the shed flip play/don't-play?), the magnitude
         analog of the discard's pick agreement. None off a real refresh PLAY option or mid-sim
@@ -2787,7 +2859,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         swing_v1 = self._refresh_swing_tactical(obs, board, ctx)
         rows = self._needs_hand_rows(obs, board, exclude_cid=cid)
         slots, elig = self._resolve_needs(obs, board, rows)
-        resupply = [0.0] * len(slots)
+        branches = refresh_branches(cid, board.my_prizes_remaining, board.opp_prizes_remaining)
+        draws = max((my_draw for my_draw, _opp in branches or ()), default=0)
+        resupply = self._refresh_slot_resupply(slots, elig, rows, obs, board, draws)
         v2_shed = needs.set_keep_v2(slots, elig, resupply, range(len(rows))) if rows else 0.0
         for k, r in enumerate(rows):
             r["keep_v2"] = round(needs.keep_v2(slots, elig, resupply, k), 1)

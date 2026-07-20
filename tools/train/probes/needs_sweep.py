@@ -9,9 +9,10 @@ prints the two v2 shadow reports:
     acceptance was agree_v2 12/12 here (2026-07-20).
   * REFRESH  — per frame where the refresh-SHED magnitude shadow fired: v1's Σ keep_cost vs v2's
     whole-hand assignment marginal, the two swings, the SIGN-agreement bit, and the aggregate
-    under-/over-pricing split. WP-N4b's verdict numbers (18 sign-flips, 46 under-priced) and
-    WP-N5's improvement (13 / 19) came from this report; the residual over-pricing side is the
-    missing resupply discount (the staged next piece).
+    under-/over-pricing split. WP-N4b's verdict numbers (18 sign-flips, 46 under-priced), WP-N5's
+    improvement (13 / 19), and WP-N6's (8 flips, mean |Δ| 9.7→6.7 with the resupply leg live)
+    came from this report; the residual flips are the v2 scope gaps the grill spec's WP-N6 entry
+    names (the answer_doom flat tier, the engine band).
 
     python tools/train/probes/needs_sweep.py            # both reports
     python tools/train/probes/needs_sweep.py --refresh  # refresh only (the slower one)
