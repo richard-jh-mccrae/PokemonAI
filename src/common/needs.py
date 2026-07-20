@@ -156,7 +156,12 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
     """The graded Hammer (the user's 86091435-68 ruling, with TIMING): strip THEIR resource. The
     VALUE comes from the shipped denial oracle (ADR-0062 `_opp_denial_best` — consumed, never
     re-derived) and grades toward full as their body nears ready: at deadline 0 the full oracle
-    value; each turn of slack halves it (a closing edge inverted — urgency, not decay of worth)."""
+    value; each turn of slack halves it (a closing edge inverted — urgency, not decay of worth).
+
+    Resupply ruling (recorded for the closure-discount thread; vacuous while resupply is 0.0):
+    a DEADLINE-0 deny slot must take resupply 0.0 — a deny needed NOW is not re-drawable in time,
+    the same closing edge that makes `deploy_now` un-bankable; slack (deadline ≥ 1) deny slots may
+    take their supplier classes' re-access odds over that window."""
     t = max(0, int(turns_to_ready))
     return Slot("deny", float(oracle_value) / (2 ** t), t, key)
 
@@ -184,6 +189,10 @@ SUPPLIES: dict = {
     # fallback classes
     "typed_basic_energy": ("fund_attack", "fuel"),
     "ace_spec":           ("line", "answer_doom"),
+    # behavioral tags outside TAG_TIER that are worth SOURCES in v2 (the deny leg is their only
+    # pricing — a Crushing/Enhanced Hammer carries no ROLE/TAG tier, so without this route the
+    # resolver would price it 0 and the hedge would carry it forever)
+    "energy_denial":      ("deny",),
 }
 
 # ───────────────────────────────────────── WP-N2: exact assignment + marginals (Round-2 ruling)

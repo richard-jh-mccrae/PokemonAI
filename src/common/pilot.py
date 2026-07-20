@@ -2507,10 +2507,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
           * ANSWER-DOOM under the pressure read (successor / clutch_heal / switch).
           * FUEL slots ride the pitch side (`needs.pitch_gain` — pitching a matching Energy is
             progress).
-        Deferred, documented: opponent DENY slots (await the visible turns-to-ready read wiring),
-        probabilistic slot RESUPPLY over the closure (0.0 here — errs toward keep), non-Active
-        fund bodies, and non-option hand cards as fixed coverage (a real forced discard offers the
-        whole hand)."""
+          * opponent DENY slots (thread 2, the Round-3 ruled read): one per opponent in-play body
+            a strip actually bites, valued by the SHIPPED ADR-0062 denial oracle and graded by the
+            body's visible turns-to-ready (`_opp_turns_to_ready`) — the Hammer/gust classes' first
+            v2 pricing (they still hedge-floor where the graded deny is small; note the oracle is
+            DAMAGE-denominated, so a ready threat prices a deny slot above the worth tiers).
+        Deferred, documented: probabilistic slot RESUPPLY over the closure (0.0 here — errs toward
+        keep), non-Active fund bodies, and non-option hand cards as fixed coverage (a real forced
+        discard offers the whole hand)."""
         from common import needs
         slots, elig = self._resolve_needs(obs, board, rows)
         resupply = [0.0] * len(slots)
@@ -2528,7 +2532,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         gate factor v2 consumes), and ``fuel``. Returns ``(slots, elig)``; the caller owns
         ``resupply`` (all-0.0 in v0 — errs toward keep). The slot vocabulary, the corpus-adjudicated
         derivations (the succession slot, Pokémon-only lines, the engine band, the fund/doom/fuel
-        legs) and the deferred legs are documented on `_needs_v2`.
+        legs, the thread-2 opponent DENY leg) and the deferred legs are documented on `_needs_v2`.
+
+        DENY slots and future per-slot resupply (the thread-1 closure discount, not yet landed
+        here): the CLOSING-EDGE rule SHOULD apply — a deadline-0 deny slot (their body ready NOW)
+        must take resupply 0.0 regardless of how many Hammers the deck could re-draw, because a
+        deny needed THIS turn is not re-drawable in time (the same reasoning that makes the
+        deploy_now spike and the deadline-0 answer_doom slot un-bankable). Deadline ≥ 1 deny slots
+        may take their supplier classes' re-access odds over that window. Vacuous today (resupply
+        is all-0.0), recorded here for the resupply thread.
 
         ``include_general=False`` (WP-N5c, the develop-rung LEAF's term) drops the GENERAL-worth
         slots — a card's latent tier where it fills no SPECIFIC need. Keep-value WANTS them (deciding
@@ -2623,6 +2635,37 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        or (r["cid"] in wincons and getattr(board, "line_preevo_in_play", False))]
             if answers:
                 _emit(needs.answer_doom_slot(value=TAG_TIER["clutch_heal"]), answers)
+        # OPPONENT DENY SLOTS (thread 2; the grill's Round-3 ruling — VISIBLE state + basic
+        # lookahead of their IN-PLAY bodies only): one slot per opponent body a strip actually
+        # bites, VALUED by the shipped ADR-0062 denial oracle (`_denial_at` under the same
+        # Active/Bench tiers as `_opp_denial_best` — CONSUMED, never re-derived: a doomed Active
+        # denies nothing, a benched body must still promote) and GRADED by the body's visible
+        # turns-to-ready (`needs.deny_slot` — a Hammer is worth more the closer their attacker is
+        # to online, the 86091435-68 ruling with timing). Eligibility routes through the SUPPLIES
+        # net: any held row carrying a deny-supplying tag (gust / energy_denial). Fail-closed
+        # everywhere: no deny-capable row, no opponent read, unknown stats
+        # (`_opp_turns_to_ready` → None), or a 0-priced strip → NO slot — those rows keep pricing
+        # at the shipped hedge, the pre-thread-2 behavior.
+        deny_tags = {src for src, kinds in needs.SUPPLIES.items() if "deny" in kinds}
+        deniers = [k for k, r in enumerate(rows) if deny_tags & _tags(r["cid"])]
+        if deniers:
+            state = obs.get("current") or {}
+            players = state.get("players") or []
+            yi = state.get("yourIndex", 0)
+            opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+            tiers = [(_DENIAL_BENCH, "bench", (opp or {}).get("bench") or [])]
+            if not board.active_can_ko:
+                tiers.insert(0, (1.0, "active", (opp or {}).get("active") or []))
+            for weight, area, bodies in tiers:
+                for bi, p in enumerate(bodies):
+                    priced = weight * self._denial_at(p) if p else 0.0
+                    if priced <= 0:
+                        continue
+                    t = self._opp_turns_to_ready(p)
+                    if t is None:
+                        continue               # unknown stats — fail closed, no deny slot
+                    _emit(needs.deny_slot(f"deny:{area}{bi}:{p.get('id')}",
+                                          oracle_value=priced, turns_to_ready=t), deniers)
         fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
         if fuels:
             _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
@@ -3040,6 +3083,44 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 if p:
                     best = max(best, weight * self._denial_at(p))
         return best
+
+    def _opp_turns_to_ready(self, p: dict | None) -> int | None:
+        """The Round-3 ruled basic lookahead of ONE opponent in-play body, from VISIBLE facts only
+        (thread 2, the deny-slot deadline): `needs.turns_to_ready` over
+
+          * the ENERGY DEFICIT — the line's biggest-attack cost (max ``maxDamageCost`` over the
+            body's current + forward forms, "fully energized" measured against the threat it
+            becomes) minus its attached Energy, at the 1-manual-attach/turn quota (rules.md §3).
+            Their card-effect accel is NOT modelled: that can only OVER-state t and UNDER-price
+            the deny slot — the fail-closed direction (the hedge keeps the card at v1's price).
+          * the FORWARD EVOLUTION HOPS still owed — the ``evolvesFrom`` name-chain depth from this
+            body to its line's deepest still-owed form (one evolve per turn, rules.md §4), walked
+            over the forward index (`_forward_card_ids`), depth-guarded. A broken/unknown chain
+            contributes 0 hops (the deficit leg still grades).
+
+        None — the caller emits NO deny slot (fail-closed, erring toward the shipped hedge) —
+        when the body/its stats are unknown or no form's biggest-attack cost is known."""
+        cid = (p or {}).get("id")
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is None:
+            return None
+        fwd = [self.stats.get(f) for f in self._forward_card_ids(cid)]
+        costs = [c for c in (getattr(s, "maxDamageCost", None) for s in (st, *fwd) if s is not None)
+                 if c is not None]
+        if not costs:
+            return None
+        deficit = max(costs) - len((p or {}).get("energies") or [])
+        parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd
+                  if s is not None and s.name}
+        hops = 0
+        for name in parent:
+            d, n = 0, name
+            while n and n != st.name and d <= 3:
+                d, n = d + 1, parent.get(n)
+            if n == st.name:
+                hops = max(hops, d)
+        from common import needs
+        return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops)
 
     def _unfavored(self, board: Board) -> bool:
         """The Read says the straight race loses (Lever A, ADR-0026) — a compiled favorability at or
