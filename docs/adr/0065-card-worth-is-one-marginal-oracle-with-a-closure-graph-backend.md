@@ -207,6 +207,32 @@ comparator) and ADR-0032 (Effect-Clause tier).
   and its telemetry stages the prerequisite: general-worth slot coverage, which is the readiness
   leaf's board-value terms (`board-state-valuation-grill.md`) — i.e. WP-N5's fold, not a bolt-on
   gate. v1 stays the refresh/gamble keep-value spine meanwhile. Suite + corpus green (3055).
+- **WP-N5 — the general-worth slot: the resolver enrichment WP-N4b demanded (2026-07-20).** The
+  refresh sweep proved the v0 resolver blind to a card's LATENT worth (a spare engine/attacker with
+  no open need slot priced ~0). The fix is the readiness leaf's own vocabulary applied to the HAND:
+  a `general` slot kind (`needs.general_worth_slot`) — a held card's role tier × `_GENERAL_WORTH_W`
+  (0.45, the leaf's `_READINESS_BENCH_DISCOUNT`: a hand card is ~one deploy away, like a benched
+  body), emitted ONE per distinct card (so spare COPIES price marginally — sets-not-sums, the
+  assignment de-duplicates) and BELOW every specific need (a need-filler assigns to its need first).
+  PITCH-GATED: a row the pitch term flags dead-weight (spent_burst / fuel / dead_opener / stranded /
+  redundant_tutor / fodder) has no latent worth — context-correct, since refresh rows carry no pitch
+  flag so a SHUFFLED burst keeps its future-attach worth (the gate caught c4f5, where an ungated
+  general slot RESURRECTED the spent Ignition v1 correctly zeroed — the 83454549-36 trap again).
+  **Measured: refresh under-pricing (the UNSAFE direction — shuffling away a kept hand) more than
+  HALVED, 46 → 19 of 83; sign-flips 18 → 13; the residual flipped to over-pricing (35 → 62, the SAFE
+  direction), cleanly isolating the one remaining gap as the missing resupply/re-access discount.**
+  The discard corpus held **12/12** under v2 as the live decider; the **leaf-lab bench is UNCHANGED
+  (39/267 SOLE-top, 71% shared, avg-tie 3.0)** — the enrichment touched only the keep-value resolver,
+  not the leaf, so no accidental coupling (the discipline check, run `tools/train/leaf_lab.py`). Suite
+  green (3057).
+- **WP-N5b — the readiness-leaf fold is BLOCKED on hand-visibility plumbing (2026-07-20).** Round 5's
+  actual "readiness consumes the needs module" fold — the leaf's own deferred v2 "actionable-resource
+  term" (`board-state-valuation-grill.md` §v1→v2: "credit only held cards with a LIVE use") IS the
+  needs assignment — cannot be built yet: the sim end-obs HIDES my hand (`_readiness` reads
+  active/bench only; grill §"What the grade does NOT see"), so the leaf has no hand to value. The
+  fold needs the hand-visibility plumbing FIRST (the grill names it the v2 enabler). Staged; the
+  general-worth slots (WP-N5) already moved the shared vocabulary onto the leaf's terms, so the fold
+  is a wiring + bench-gated swap once the hand is plumbed, not a re-derivation.
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

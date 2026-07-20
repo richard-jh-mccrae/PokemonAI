@@ -76,6 +76,21 @@ def test_fuel_slot_is_supplied_by_pitching():
 
 
 @pytest.mark.req("REQ-NEEDS-0001")
+def test_general_worth_slot_floors_a_spare_role_card():
+    """WP-N5 (the general-worth floor the refresh-SHED sweep proved missing): a held card with role
+    worth but no SPECIFIC need still carries LATENT board value — a discounted general slot that
+    sits BELOW a specific need (a need-filler assigns to its need first) and is de-duplicated (one
+    per distinct card, so spare COPIES price marginally — sets-not-sums)."""
+    line = needs.Slot("line", 30.0, 99, "s")
+    gen = needs.general_worth_slot("general:X", value=6.0)
+    assert gen.kind == "general" and gen.value == 6.0 and "general" in needs.SLOT_KINDS
+    slots, elig, resupply = [line, gen], [{0, 1}, {1}], [0.0, 0.0]   # A: line+general; B: spare
+    assert needs.assignment_value(slots, elig, resupply) == 36.0     # A→line(30), B→general(6)
+    assert needs.keep_v2(slots, elig, resupply, 0) == 30.0           # A's need-fill dominates
+    assert needs.keep_v2(slots, elig, resupply, 1) == 6.0            # the spare's latent general worth
+
+
+@pytest.mark.req("REQ-NEEDS-0001")
 def test_draw_engine_slot_saturates():
     """The engine-supporter premise re-derived: one recurring draw-engine slot; with an engine
     already in play/hand the slot's value drops (saturation — the readiness leaf's term)."""

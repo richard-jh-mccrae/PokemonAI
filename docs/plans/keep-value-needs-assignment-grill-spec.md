@@ -4,10 +4,13 @@
 (three settled by evidence, three ruled by the user — see §Grill run). Per the shadow-equations
 ruling the design is SETTLED → construction proceeds shadow-first; the live v1 equation (9/9 on
 the discard corpus) keeps deciding meanwhile. Build order at the bottom. **WP-N1/N2 BUILT
-2026-07-19; WP-N3 BUILT 2026-07-20; WP-N4 discard swap BUILT 2026-07-20** (see §Build order) — v2
-now DECIDES the forced discard (`Pilot.needs_keep_value`, PROFILE armed ON), corpus-safe (12/12)
-and the duplicate-pair naivety flipped without a new gate. The refresh-SHED shadow (WP-N4b) and the
-gamble/refresh swaps remain staged; the gate stack stays live for those sites + as resolver inputs.
+2026-07-19; WP-N3 BUILT 2026-07-20; WP-N4 discard swap BUILT 2026-07-20; WP-N4b refresh MAGNITUDE
+shadow BUILT 2026-07-20; WP-N5 general-worth slots BUILT 2026-07-20** (see §Build order) — v2 now
+DECIDES the forced discard (`Pilot.needs_keep_value`, PROFILE armed ON), corpus-safe (12/12) and the
+duplicate-pair naivety flipped without a new gate; the refresh shadow proved v2 not-yet-ready there
+and WP-N5's general-worth slot more than halved its unsafe under-pricing (46→19). The readiness-leaf
+fold (WP-N5b) is blocked on hand-visibility plumbing; the gamble/refresh swaps remain staged; the
+gate stack stays live for those sites + as resolver inputs.
 
 **Development window (user, 2026-07-19):** no new Kaggle submission for ~a week; the week's work is
 hashing the keep_value equations out against the existing corrections corpus (the corpus is the
@@ -227,12 +230,25 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    resolver is DISCARD-bench-scoped — it prices a card's line/fund/doom/fuel NEED, not its GENERAL
    worth (a spare engine/attacker/backup with no open slot; an energy on a powered Active). So the
    refresh site does NOT swap; the shadow's telemetry stages the prerequisite below.
-5. **WP-N5 — general-worth slots + the readiness fold** (Round 5's condition; now also the WP-N4b
-   prerequisite): the resolver gains the GENERAL-worth slots the refresh sweep proved missing — a
-   card's board value where it isn't a specific line/fund/doom/fuel need — which are exactly the
-   readiness leaf's board-value terms (`board-state-valuation-grill.md`), so readiness consumes the
-   needs module ONLY under the 267-frame leaf-lab bench (no regression on SOLE-top / distinct-values
-   / Gate 0). The refresh/gamble swaps follow once their shadows clear under the enriched resolver.
+5. **WP-N5 — general-worth slots — BUILT 2026-07-20.** The resolver gained the GENERAL-worth slot
+   the refresh sweep proved missing (`needs.general_worth_slot`, `SLOT_KINDS += "general"`): a held
+   card's latent board value where it fills no specific line/fund/doom/fuel need — its role tier ×
+   `_GENERAL_WORTH_W` (0.45, the leaf's `_READINESS_BENCH_DISCOUNT`), one per distinct card
+   (sets-not-sums), below every specific need, and PITCH-GATED (dead-weight has no latent worth;
+   context-correct since refresh rows carry no pitch flag — a shuffled burst keeps its future-attach
+   worth; caught c4f5). **Measured:** refresh under-pricing (the unsafe direction) more than halved
+   46→19/83, sign-flips 18→13, the residual flipped to the safe over-pricing side (isolating the
+   missing resupply discount); discard corpus held 12/12; the **leaf-lab bench unchanged (39/267
+   SOLE-top)** — the enrichment touched the resolver, not the leaf. This is the shared vocabulary
+   moving onto the leaf's `contribution × saturation` terms.
+6. **WP-N5b — the readiness-leaf fold** (Round 5's fold; BLOCKED on plumbing): readiness consumes
+   the needs module — the leaf's own deferred v2 "actionable-resource term" IS the needs assignment.
+   BLOCKED: the sim end-obs hides my hand (`_readiness` reads active/bench only), so the leaf has no
+   hand to value; the hand-visibility plumbing is the prerequisite (the grill names it the v2
+   enabler). Once plumbed, the fold is a wiring + bench-gated swap (no regression on SOLE-top /
+   distinct-values / Gate 0), not a re-derivation — WP-N5 already put the vocabulary on the leaf's
+   terms. The refresh/gamble keep-value swaps follow once their shadows clear under the enriched
+   resolver (the refresh's residual is now the resupply discount, its own next piece).
 
 ## Acceptance (pre-committed)
 

@@ -40,6 +40,8 @@ SLOT_KINDS = frozenset({
     "fuel",           # discard-source accel fuel — SUPPLIED BY PITCHING (the zone sign)
     "deny",           # strip THEIR resource (value from the ADR-0062 oracle, deadline from their
                       # turns-to-ready — the graded Hammer, 86091435-68)
+    "general",        # a held card's LATENT board worth where it fills no specific need — its role
+                      # tier discounted (the readiness leaf's `contribution` for the HAND; WP-N5)
 })
 
 
@@ -125,6 +127,17 @@ def fuel_slot(key: str, *, value: float) -> Slot:
     PITCHING — the zone sign as structure. A matching Energy assigned here contributes by being
     discarded, so its keep-side marginal is ≤ 0."""
     return Slot("fuel", float(value), 99, key, supplied_by_pitch=True)
+
+
+def general_worth_slot(key: str, *, value: float) -> Slot:
+    """A held card's LATENT board worth where it fills no SPECIFIC need (WP-N5): its role tier,
+    DISCOUNTED (a not-yet-deployed card is worth less than one filling a live need — the readiness
+    leaf's bench position weight, `_READINESS_BENCH_DISCOUNT`). The resolver emits ONE per distinct
+    held card, so spare COPIES price marginally (the assignment de-duplicates — sets-not-sums), and
+    it sits BELOW every specific slot so a need-filler still assigns to its need first. The floor the
+    refresh-SHED sweep proved missing: a hand of playable pieces is no longer shuffle-priced at ~0.
+    No deadline (latent, not this-turn)."""
+    return Slot("general", float(value), 99, key)
 
 
 # ─────────────────────────────────────────────────── opponent-side (Round-3 ruling)

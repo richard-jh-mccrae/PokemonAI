@@ -61,6 +61,12 @@ _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter gra
 # is a draw engine kept over pure filler. Discard-CONTEXT (not general worth), tuned to the −8 band.
 _ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 _ENGINE_SUPPORTER_KEEP = 8.0
+# WP-N5 (keep-value v2): the LATENT-worth discount on a held card that fills no specific need — its
+# role tier is real board value even without an open slot (the readiness leaf's `contribution` for
+# the HAND), but a not-yet-deployed card is worth less than one filling a live need. Sized at the
+# leaf's bench position weight (`_READINESS_BENCH_DISCOUNT` 0.45 — a hand card is ~one deploy away,
+# like a benched body). De-duplicated by the assignment (one slot per distinct card).
+_GENERAL_WORTH_W = 0.45
 _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
                            # of their Pokémon (card text + engine), but a benched body must be PROMOTED
                            # before the denial bites AND they get a turn in between to simply re-attach —
@@ -2590,6 +2596,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
         if fuels:
             _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
+        # GENERAL-WORTH slots (WP-N5): a held card with role worth that fills no SPECIFIC need still
+        # carries LATENT board value — its tier, discounted (`_GENERAL_WORTH_W`, the leaf's bench
+        # position weight) and DE-DUPLICATED (one slot per distinct cid, so spare copies price
+        # marginally). Below every specific slot, so a need-filler assigns to its need first; the
+        # floor the refresh-SHED sweep (WP-N4b) proved missing — a hand of playable pieces is no
+        # longer shuffle-priced at ~0. The readiness leaf's `contribution × saturation` for the HAND.
+        seen_general: set = set()
+        for cid, members in by_cid.items():
+            if cid in seen_general:
+                continue
+            seen_general.add(cid)
+            # A row the PITCH term flags as dead-weight (spent_burst / fuel / dead_opener / stranded
+            # / redundant_tutor / fodder) is fodder NOW — no LATENT worth, no general slot (else the
+            # general worth RESURRECTS a spent burst v1 correctly zeroed — c4f5, the 83454549-36 trap
+            # again). Context-correct: refresh rows carry no pitch flag (a SHUFFLED burst IS a future
+            # attach), so they keep their general worth.
+            live = [m for m in members if rows[m].get("pitch", 0) == 0]
+            if not live:
+                continue
+            worth = self._role_value(cid)
+            deploy = rows[live[0]].get("deploy", 1.0)
+            if worth * deploy > 0:
+                _emit(needs.general_worth_slot(f"general:{cid}",
+                                               value=worth * deploy * _GENERAL_WORTH_W), live)
         return slots, elig
 
     def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
