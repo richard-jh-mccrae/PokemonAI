@@ -302,8 +302,10 @@ pressure, quota), **Closure** ([fetch_closure.py](fetch_closure.py) — WHAT can
 reach what: the tutor/search graph over the card representation, never a text parse), and **Needs**
 ([needs.py](needs.py) — WHAT the position requires: deadline-tagged slots + the exact-assignment
 marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives as "a slot with a
-deadline" and dissolves per the ledger — shadow-only today, `pilot._needs_v2` emits it beside every
-discard pick). Pure modules,
+deadline" and dissolves per the ledger. `pilot._needs_v2` resolves the live board into slots;
+v2 now DECIDES the forced discard (`Pilot.needs_keep_value` armed ON, superseding v1 — the
+duplicate-pair naivety flipped without a new gate), while the gamble/refresh keep-value sites and
+the gate stack stay live pending their own swaps). Pure modules,
 no Pilot imports; the Pilot resolves board facts and delegates (`_role_value` / `_keep_cost` /
 `_deploy_odds` / `_card_reaccess_outs` / `_needs_v2`). `keep_cost = Worth × Gates × (1 − re-access
 Odds over the

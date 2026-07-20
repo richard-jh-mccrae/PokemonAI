@@ -69,6 +69,17 @@ PROFILE = {
                                     # Shadow-validated 11/12 vs the ladder's 9/12 on the corpus (+ the
                                     # user-endorsed 12th). In-place ladder A/B vs the flag-off ladder;
                                     # kill-switch if its ladder value is weak (the develop_rollout precedent).
+                                    # SUPERSEDED as the discard decider by `needs_keep_value` below when
+                                    # that is ON; stays the fallback + the gamble/refresh keep-value spine.
+    "needs_keep_value": True,       # ADR-0065 WP-N4 armed-ON 2026-07-20 (dev-window ruling): the
+                                    # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`) DECIDES the forced
+                                    # discard in place of v1's per-card gate composition — the global
+                                    # exact-assignment marginal (`eq2_pick`), hedged at v1's post-gate
+                                    # keep so it never prices below the shipped decider. The per-family
+                                    # swap for the cleared discard family: agree_v2 12/12 vs v1 on the
+                                    # replayable discard corpus, and the duplicate-pair set case flips
+                                    # WITHOUT a new gate (v1's naivety, structurally gone). Kill-switch
+                                    # (the develop_rollout precedent); OFF falls back to v1.
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): the within-turn
                                     # rollout rung — cost-measured affordable + crash-safe (60 games, 0
                                     # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off

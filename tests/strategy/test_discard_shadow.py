@@ -21,9 +21,10 @@ MEGA, SALVATORE, HILDA, WALLYS, CAPE, WATER = 1031, 1189, 1225, 1229, 1159, 3
 CINDERACE, FILLER, IGNITION, LILLIES, HARLEQUIN = 666, 999, 17, 1227, 1223
 
 
-def _setup(hand_ids, *, minc=2, powered=False):
+def _setup(hand_ids, *, minc=2, powered=False, needs_v2=False):
     """The `test_discard_selection.py` fixture shape: a forced Discard over ``hand_ids``.
-    ``powered`` gives my Active its full attack cost (so ``active_fully_powered``)."""
+    ``powered`` gives my Active its full attack cost (so ``active_fully_powered``); ``needs_v2``
+    arms the WP-N4 kill-switch so the keep-value v2 needs-assignment DECIDES (else shadow-only)."""
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
@@ -43,7 +44,8 @@ def _setup(hand_ids, *, minc=2, powered=False):
                            HARLEQUIN: ["draw", "hand_disruption", "shuffle_hand"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
+    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs,
+                  needs_keep_value=needs_v2)
     hand = [{"id": cid} for cid in hand_ids]
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
     active = [{"id": MEGA, "hp": 330, "energies": [0] * 3}] if powered else [None]
@@ -229,3 +231,16 @@ def test_v2_prices_duplicate_wincons_as_a_set_not_a_sum():
     assert len(megas) == 2 and all(r["keep_v2"] == 15.0 for r in megas)  # the succession marginal
     assert not {0, 1} <= set(s["eq2_pick"])                              # NEVER pitch the pair
     assert set(s["eq2_pick"]) == {3, 4}                                  # the spares go instead
+
+
+@pytest.mark.req("REQ-NEEDS-0006")
+def test_v2_decides_the_discard_under_the_kill_switch():
+    """WP-N4 (the per-family swap): with `needs_keep_value` ON the v2 needs-assignment is the
+    DECIDER, not a shadow — the record flags `decided_v2`, and the duplicate-wincon pair v1 pitched
+    now SURVIVES the decision (the succession slots price each copy's marginal real), the true
+    spares going instead. The naivety v1 could not fix is structurally gone at the decision point."""
+    pilot, obs = _setup([MEGA, MEGA, CAPE, WATER, SALVATORE], needs_v2=True)
+    dec = pilot.explain(obs)
+    assert dec.discard_shadow["decided_v2"] is True
+    assert set(dec.chosen) == set(dec.discard_shadow["eq2_pick"]) == {3, 4}
+    assert not {0, 1} <= set(dec.chosen)                                # both Megas kept

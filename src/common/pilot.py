@@ -974,7 +974,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
-                 develop_rollout=False, discard_keep_value=False):
+                 develop_rollout=False, discard_keep_value=False, needs_keep_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1093,6 +1093,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # card-worth equation DECIDES a forced discard in
                                                         # place of the `_DISCARD` ladder. OFF = the ladder
                                                         # decides and the equation only shadows (telemetry).
+        self.needs_keep_value = needs_keep_value        # ADR-0065 WP-N4 kill-switch (default OFF): the
+                                                        # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`,
+                                                        # `eq2_pick`) decides the forced discard in place of
+                                                        # v1 — the per-family swap for the cleared discard
+                                                        # family (agree_v2 12/12 + the duplicate-pair flip).
+                                                        # Takes precedence over `discard_keep_value`; OFF =
+                                                        # v1 decides (or the ladder) and v2 only shadows.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1193,12 +1200,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
         reordered = order != by_score
         grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
-        # ADR-0065 seam-D SWAP (kill-switch `discard_keep_value`): at a forced discard the card-worth
-        # equation DECIDES — the `picks` cheapest-to-lose cards — replacing the tuned `_DISCARD`
-        # ladder. OFF (default) leaves the ladder deciding and the equation only shadows.
-        eq_discard = (select.get("context") == _DISCARD and max_count > 0
-                      and getattr(self, "discard_keep_value", False)
-                      and self._discard_equation_pick(obs, select, board, options, max_count))
+        # ADR-0065 SWAP: at a forced discard the card-worth equation DECIDES — the `picks`
+        # cheapest-to-lose cards — replacing the tuned `_DISCARD` ladder. Precedence (each a
+        # kill-switch, OFF falls through): WP-N4 `needs_keep_value` (the v2 needs-assignment,
+        # `_needs_v2`/`eq2_pick`) > seam-D `discard_keep_value` (v1, `_discard_equation_pick`) >
+        # the ladder. Both OFF leaves the ladder deciding and both equations only shadow.
+        eq_discard = None
+        if select.get("context") == _DISCARD and max_count > 0:
+            if getattr(self, "needs_keep_value", False):
+                eq_discard = self._discard_needs_pick(obs, select, board, options, max_count)
+            elif getattr(self, "discard_keep_value", False):
+                eq_discard = self._discard_equation_pick(obs, select, board, options, max_count)
         if eq_discard:
             chosen = eq_discard
         elif grabbed:                                   # greedy gap-update + take-fewer
@@ -2281,8 +2293,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         rec = {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
                "agree": set(eq_pick) == set(chosen),
                "eq2_pick": eq2_pick, "agree_v2": set(eq2_pick) == set(chosen)}
-        if getattr(self, "discard_keep_value", False):
-            rec["decided"] = True                        # the equation IS the decider (kill-switch ON)
+        if getattr(self, "needs_keep_value", False):
+            rec["decided_v2"] = True                     # v2 needs-assignment IS the decider (WP-N4)
+        elif getattr(self, "discard_keep_value", False):
+            rec["decided"] = True                        # v1 IS the decider (seam-D kill-switch ON)
         return rec
 
     def _discard_equation_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
@@ -2292,6 +2306,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         the equation can't rank (no priceable rows), so the caller keeps the ladder order."""
         _rows, order = self._discard_equation_rows(obs, select, board, options)
         return order[:picks] if order else None
+
+    def _discard_needs_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
+        """The DECIDER under the `needs_keep_value` kill-switch (ADR-0065 WP-N4, the per-family swap):
+        the forced-discard pick IS the keep-value v2 needs-assignment's cheapest removal (`_needs_v2`
+        → `eq2_pick`, `needs.cheapest_removal` over the resolved slots, hedged at v1's post-gate
+        keep), replacing v1's per-card gate composition with the global assignment. Same rows as
+        v1's ranking (`_discard_equation_rows` — the deploy gates + fuel/burst flags v2 consumes);
+        None when nothing is priceable, so the caller falls through to v1 / the ladder."""
+        rows, _order = self._discard_equation_rows(obs, select, board, options)
+        if not rows:
+            return None
+        _keeps, eq2_pick = self._needs_v2(obs, board, rows, picks)
+        return eq2_pick or None
 
     def _discard_equation_rows(self, obs: dict, select: dict, board: Board, options: list):
         """The card-worth discard equation's per-candidate rows AND the full ranked index order — the

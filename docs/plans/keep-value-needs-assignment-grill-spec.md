@@ -4,8 +4,10 @@
 (three settled by evidence, three ruled by the user — see §Grill run). Per the shadow-equations
 ruling the design is SETTLED → construction proceeds shadow-first; the live v1 equation (9/9 on
 the discard corpus) keeps deciding meanwhile. Build order at the bottom. **WP-N1/N2 BUILT
-2026-07-19; WP-N3 BUILT 2026-07-20** (see §Build order) — the v2 shadow rides every discard
-decision (`keep_v2` / `eq2_pick` / `agree_v2`), 12/12 with the live decider on the discard corpus.
+2026-07-19; WP-N3 BUILT 2026-07-20; WP-N4 discard swap BUILT 2026-07-20** (see §Build order) — v2
+now DECIDES the forced discard (`Pilot.needs_keep_value`, PROFILE armed ON), corpus-safe (12/12)
+and the duplicate-pair naivety flipped without a new gate. The refresh-SHED shadow (WP-N4b) and the
+gamble/refresh swaps remain staged; the gate stack stays live for those sites + as resolver inputs.
 
 **Development window (user, 2026-07-19):** no new Kaggle submission for ~a week; the week's work is
 hashing the keep_value equations out against the existing corrections corpus (the corpus is the
@@ -203,8 +205,22 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    Post-adjudication sweep: **agree_v2 12/12** against the live decider over every replayable
    discard correction — every human `correct` the decider satisfies, v2 satisfies. Suite green
    (3133); needs + shadow suites 27.
-4. **WP-N4 — per-family swaps + gate dissolution**: as v2 clears each family (corpus + agreement),
-   swap the site and retire the gates that family used, per the ledger; the hedge retires with them.
+4. **WP-N4 — per-family swaps + gate dissolution** — **DISCARD SWAP BUILT 2026-07-20.** The discard
+   family cleared (agree_v2 12/12 + the duplicate-pair flip), so its site swapped:
+   `Pilot.needs_keep_value` (PROFILE armed ON, kill-switch) makes `_needs_v2`'s `eq2_pick` the
+   forced-discard DECIDER — precedence `needs_keep_value` > `discard_keep_value` (v1) > the ladder.
+   Corpus-safe by construction; the duplicate-wincon pair v1 pitched now survives the DECISION
+   (`test_v2_decides_the_discard_under_the_kill_switch`). **Gate dissolution, precisely:** the
+   discard DECISION stops running v1's pairwise gate composition and flows through the global
+   assignment; the gate code is NOT deleted — `_deploy_odds` / the fuel·burst flags / the quota
+   window are CONSUMED by the resolver (a dead evolution's line slot valued ×0 — the ledger derived)
+   AND still price the gamble keep-floor + refresh SHED, which have not swapped. **The hedge is
+   RETAINED**, not retired: the resolver is still v0-scope (resupply 0.0; opponent DENY slots
+   deferred), so "v2 never prices below the shipped decider" stays until the resolver completes.
+   **Staged next (WP-N4b):** the refresh-SHED shadow join — a MAGNITUDE shadow (v2 hand-valuation
+   beside `_refresh_shed_keepcost`), distinct from the discard's pick-agreement and needing its own
+   agreement design; the discard corpus is this week's bench per the dev-window ruling, so the
+   refresh families join when their site's shadow clears.
 5. **WP-N5 — the readiness fold** (Round 5's condition): readiness consumes the needs module ONLY
    under the 267-frame leaf-lab bench (no regression on SOLE-top / distinct-values / Gate 0).
 

@@ -156,6 +156,39 @@ comparator) and ADR-0032 (Effect-Clause tier).
   ladder's `_BASE_ROLES` exemptions and REGRESS the covered-Drakloak pin `83686860-18`, so that
   discrimination stays the gated seam-D migration. The gamble keep-floor / refresh SHED re-audit is
   a no-op (no pin moved). Suite + corpus green (3105).
+- **Keep-value v2 (Needs) WP-N1–N3 built (2026-07-19/20; `keep-value-needs-assignment-grill-spec.md`).**
+  The successor to the gate stack the user flagged as brittle ("more and more gates that begin to
+  undermine each other"): needs reified as deadline-tagged SLOTS (`common/needs.py`, the fifth
+  glossary term), a card's keep-value its MARGINAL slot coverage under EXACT bitmask-DP assignment —
+  so multi-copies, energy-attached, doom, quotas, fuel and deploy-now are slot PROPERTIES resolved
+  GLOBALLY in one assignment, not pairwise-composed gates. WP-N1 the module + the two soundness nets
+  (the COVERAGE LINT: every worth source names ≥1 slot; the DISSOLUTION LEDGER: every v1 gate names
+  its re-deriving slot); WP-N2 the assignment engine (`assignment_value` / `keep_v2` / `set_keep_v2`
+  / `cheapest_removal`); WP-N3 the Pilot resolver (`pilot._needs_v2`: the live board → slots /
+  eligibility / resupply) + `keep_v2` / `eq2_pick` / `agree_v2` columns on `discard_shadow`,
+  shadow-only. The sweep's four disagreements each adjudicated to a resolver gap (the half-tier
+  SUCCESSION slot for a wincon line — "copy 2's marginal = its next-best slot"; line slots
+  Pokémon/ACE-SPEC only; the draw-engine band off the eligible suppliers; a residual-worth
+  tiebreak), never the design; post-adjudication **agree_v2 12/12** with the live v1 decider.
+- **WP-N4 — the discard decider swap (2026-07-20, dev-window ruling).** The per-family swap for the
+  cleared discard family: `Pilot.needs_keep_value` (PROFILE armed ON, the `develop_rollout`/seam-D
+  precedent) makes the v2 needs-assignment (`_needs_v2` → `eq2_pick`, `needs.cheapest_removal` over
+  the resolved slots) the forced-discard DECIDER, superseding v1's per-card gate composition;
+  precedence `needs_keep_value` > `discard_keep_value` > the ladder, each a kill-switch, OFF falls
+  through. Corpus-safe BY CONSTRUCTION (agree_v2 12/12 → every human `correct` v1 satisfied, v2
+  satisfies), and the **duplicate-wincon pair flips WITHOUT a new gate** — the naivety v1 could not
+  fix (both copies read keep-0) is structurally gone: each copy's solo marginal is the succession
+  slot, the pair's set marginal is full+half. **Gate dissolution, precisely:** the discard DECISION
+  no longer runs v1's brittle pairwise gate composition — it flows through the global assignment.
+  The gate code is NOT deleted: `_deploy_odds` (evolution + fetcher + need-met), the fuel/burst
+  flags and the quota window are CONSUMED by the resolver (a dead evolution's line slot is valued
+  ×0 — the ledger's "dead evolution = no line slot," derived not asserted) AND still price the
+  gamble keep-floor + refresh SHED, which have not swapped. **The hedge is RETAINED** (v2 never
+  prices below v1's post-gate keep): the resolver is still v0-scope — resupply 0.0 (errs toward
+  keep) and opponent DENY slots deferred — so trusting v2 raw is premature; the hedge retires with
+  the resolver's completion. Staged next (WP-N4b): the refresh-SHED shadow join (a MAGNITUDE shadow,
+  distinct from the discard's pick-agreement — the discard corpus is this week's bench per the
+  user). Suite + corpus green (3055); the corpus discard pins hold under v2 as the live decider.
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
