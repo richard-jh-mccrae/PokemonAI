@@ -133,9 +133,43 @@ _READINESS_BODY_CAP = 120.0   # per-body contribution cap — one fully-loaded a
 _READINESS_FLOOR = 8.0        # a bench exists — a small BINARY safety credit (a KO doesn't lose the game
                               # outright); dwarfed by any real contribution, so it only breaks a
                               # bench-empty vs bench-present tie.
-_READINESS_BENCH_DISCOUNT = 0.45   # v1 FLAT bench position weight for attack readiness (Active = 1.0).
-                              # The mobility lift toward 1.0 (retreat-ease, a switch in hand) is v2 — it
-                              # needs the hand visibility the sim's end-obs doesn't expose cleanly.
+_READINESS_BENCH_DISCOUNT = 0.45   # bench position weight FLOOR for attack readiness (Active = 1.0).
+                              # v2 (the who's-Active term, 2026-07-20): the FLOOR of `_bench_position_w`'s
+                              # PROMOTION-EASE lift toward `_READINESS_PROMO_MAX` — a benched attacker is
+                              # nearer-Active when the Active can vacate freely. Degrades to this flat v1
+                              # weight when the Active can't retreat free and no switch is visible (or
+                              # stats are unknown).
+_READINESS_PROMO_EASE = {0: 1.0}   # promotion ease by the Active's effective retreat cost (printed cost −
+                              # attached retreat-reduction Tools, rules.md §3 "pay the Retreat cost in
+                              # Energy" / Air Balloon "{C}{C} less"): ONLY a FREE retreat (effective 0)
+                              # lifts — paying k>0 DISCARDS k attached Energy (rulebook L142), a real
+                              # anti-tempo cost the first measurement round proved is NOT ease (crediting
+                              # payable-at-a-cost promoted chip-loaded rival benches over the human's
+                              # attacker-in-front boards: ep86091435). Unlisted cost = no lift (flat floor).
+_READINESS_SWITCH_EASE = 0.9  # a switch-effect card (`switch` Function Tag: Switch "Switch your Active
+                              # Pokémon with 1 of your Benched Pokémon") in my VISIBLE hand frees the
+                              # promotion regardless of retreat cost — slightly under free-retreat 1.0
+                              # (playing it spends the card). Read off the sim's INJECTED hand when the
+                              # hand plumbing is armed (`leaf_hand_value`); absent hand = no claim.
+_READINESS_PROMO_MAX = 0.5    # ceiling of the lifted bench weight — promotion is never free (it still
+                              # costs the once-per-turn retreat action + the tempo of the swap), so a
+                              # benched attacker must NEVER read equal to the same attacker Active.
+                              # Measured on the leaf lab (2026-07-20): 1.0 let "hide the loaded attacker
+                              # behind a free-retreat wall" boards overtake the human's attacker-in-front
+                              # boards (39→37 SOLE / 190→184 shared); 0.75/0.6 still lost frames; 0.5 is
+                              # the frontier with ZERO regressed frames (40/190, E 83.8→84.7).
+_READINESS_MOBILITY_W = 2.5   # the who's-Active micro-credit: `_active_quality` × this, once per board
+                              # (a bench must exist — a good Active with nowhere to go is nothing). The
+                              # second who's-Active facet the lift can't reach: a free-retreat body UP
+                              # FRONT (Cinderace r0, Lunatone+Air Balloon) or a building line pre-evo is
+                              # what the human boards consistently keep, and the dissected residual ties
+                              # differ by exactly this when the bench is unloaded. Micro-sized: it splits
+                              # exact-value ties, never outranks a real readiness gap (smallest genuine
+                              # attack contribution ≈ a 30-chip × 0.45 × 0.45 ≈ 6). HAND-ARMED
+                              # (`leaf_hand_value`): measured hand-blind it nets sole +4 but trades a
+                              # shared-top frame whose label pivots on HIDDEN-hand context (the held
+                              # Lunar-Cycle {F} / the Mega-in-hand attach) — with the injected hand the
+                              # context is readable, so the credit rides the hand-visibility arm.
 _READINESS_ATTACK_W = 0.45    # damage → readiness scale (Mega Brave 270 × 0.45 = 121 → body cap 120; a
                               # 70 chip → 31): keeps attack readiness the dominant, legible term.
 _READINESS_EVOLVE_HOP = 0.6   # per-hop discount for an attack reachable only after evolving (v1 coarse: a
@@ -3097,13 +3131,33 @@ class PlannerMixin:
         bench = [p for p in (me.get("bench") or []) if p]
         total = 0.0
         seen_utility: set = set()          # per-board saturation bookkeeping (role-keyed, mutated below)
+        bench_w = self._bench_position_w(me)   # promotion-ease bench weight, ONE per board (it reads
+                                               # only the Active + hand, identical for every benched body)
+        best_lift = 0.0                    # the who's-Active lift lands on ONE benched body only — the
+                                           # rules allow ONE retreat per turn (rules.md §3), so only the
+                                           # single best benched attacker is "nearly Active", never the
+                                           # whole bench (measured: a per-body lift multiplied across a
+                                           # loaded bench and overtook the human's attacker-in-front lines)
         for is_active, body in ([(True, b) for b in active] + [(False, b) for b in bench]):
             attack = self._attack_readiness(body, me, is_active=is_active)
             ability = self._ability_readiness(body, me, is_active=is_active)
-            contribution = max(attack, ability) * self._readiness_saturation(body, seen_utility)
+            sat = self._readiness_saturation(body, seen_utility)
+            contribution = max(attack, ability) * sat
             total += min(_READINESS_BODY_CAP, contribution)
+            if not is_active and attack > 0.0 and bench_w > _READINESS_BENCH_DISCOUNT:
+                lifted = attack * (bench_w / _READINESS_BENCH_DISCOUNT)
+                delta = (min(_READINESS_BODY_CAP, max(lifted, ability) * sat)
+                         - min(_READINESS_BODY_CAP, contribution))
+                best_lift = max(best_lift, delta)
+        total += best_lift
         if bench:
             total += _READINESS_FLOOR      # a bench exists — a KO doesn't lose the game outright
+            if getattr(self, "leaf_hand_value", False):    # HAND-ARMED (see _READINESS_MOBILITY_W): the
+                total += _READINESS_MOBILITY_W * self._active_quality(me)   # who's-Active micro-credit —
+                                           # a GOOD Active up front (a free-retreat wall / Air Balloon
+                                           # holder = kept flexibility, OR an energized line pre-evo
+                                           # with its payoff REACHABLE = the wincon being built in the
+                                           # spot it will fight from); nothing without a bench
         return min(_READINESS_CAP, total)
 
     def _readiness_saturation(self, body: dict, seen_utility: set) -> float:
@@ -3125,7 +3179,9 @@ class PlannerMixin:
         reachable attack scores nothing on this term). ``progress = payable (type-aware) energy / cost``
         ∈ [0,1] — off-type energy earns nothing; ``value`` = the attack's damage; an evolution's attack is
         hop-discounted and gated on the evolution being available (v1 coarse: anywhere in my deck+hand+play).
-        ``position_w`` = 1.0 Active, a flat bench discount otherwise (the v2 mobility lift needs the hand)."""
+        ``position_w`` = 1.0 Active, the flat bench discount otherwise; the v2 who's-Active PROMOTION-EASE
+        lift (`_bench_position_w`) is applied by `_readiness` to the single best benched attacker only
+        (one retreat per turn), never per-body here."""
         cid = body.get("id")
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         if not stat:
@@ -3138,6 +3194,83 @@ class PlannerMixin:
             return 0.0
         pos = 1.0 if is_active else _READINESS_BENCH_DISCOUNT
         return pos * progress * (damage * _READINESS_ATTACK_W) * (_READINESS_EVOLVE_HOP ** hops)
+
+    def _promotion_ease(self, me: dict) -> float:
+        """PROMOTION EASE ∈ [0, 1] — how freely the current Active can vacate the spot (the who's-Active
+        term's shared input: `_bench_position_w`'s lift and the Active-mobility credit both read it).
+
+        Reads PUBLIC end-board facts, all verified at source (rules.md §3, rulebook L142/618: retreat
+        once per turn, DISCARD attached Energy equal to the Retreat Cost, free when 0):
+        - the Active's EFFECTIVE retreat cost = printed `retreatCost` − Σ `retreatReduction` of its
+          attached Tools (Air Balloon "{C}{C} less" → 2, parsed from card text, never recalled) — 0 ⇒
+          free retreat, ease 1.0 (the retreat-tool ROUTING: a retreat Tool on the Active is position);
+        - a `switch`-tagged card (Switch: "Switch your Active Pokémon with 1 of your Benched Pokémon")
+          in my VISIBLE hand ⇒ ease `_READINESS_SWITCH_EASE` — readable only off the sim's injected hand
+          (`leaf_hand_value` plumbing); an absent hand claims nothing (the graceful degrade);
+        - a retreat merely PAYABLE at cost k>0 earns `_READINESS_PROMO_EASE.get(k, 0)` — 0 unless
+          listed (paying DISCARDS the Energy, a real anti-tempo cost, not ease); unpayable ⇒ 0.
+        Unknown stats / no Active ⇒ 0 (no claim)."""
+        active = next((p for p in (me.get("active") or []) if p), None)
+        if active is None or not self.stats:
+            return 0.0
+        stat = self.stats.get(active.get("id"))
+        if stat is None:
+            return 0.0
+        eff = getattr(stat, "retreatCost", 0)
+        for tool in (active.get("tools") or []):           # attached retreat-reduction Tools lower it
+            tid = tool.get("id") if isinstance(tool, dict) else tool
+            tstat = self.stats.get(tid) if tid is not None else None
+            eff -= getattr(tstat, "retreatReduction", 0) if tstat is not None else 0
+        eff = max(0, eff)
+        if eff == 0:
+            ease = 1.0
+        elif len(active.get("energies") or []) >= eff:
+            ease = _READINESS_PROMO_EASE.get(eff, 0.0)
+        else:
+            ease = 0.0
+        if ease < _READINESS_SWITCH_EASE and self.functions:
+            for c in (me.get("hand") or []):               # injected hand only (absent = no claim)
+                hid = (c or {}).get("id")
+                if hid is not None and "switch" in self.functions.tags(hid):
+                    ease = _READINESS_SWITCH_EASE
+                    break
+        return ease
+
+    def _active_quality(self, me: dict) -> float:
+        """The who's-Active micro-credit's input ∈ [0, 1]: is the body UP FRONT a good use of the Active
+        spot? ``max(promotion ease, developing line pre-evo)`` — two goods the summed readiness is
+        otherwise blind to (the grill's who's-Active collision dissection):
+        - a MOBILE Active (`_promotion_ease`: free retreat / Air Balloon / a visible Switch) is kept
+          flexibility — the spot can be handed to whoever needs it next turn;
+        - an ENERGIZED declared-line pre-evolution (`_recognized_line_preevo_set` + ≥1 attached Energy)
+          whose forward evolution is REACHABLE (`_reachable_forward_ids`: in my hand or in play — the
+          SAME deployability gate `_best_reachable_attack` rides) is the win being BUILT in the spot it
+          will fight from — Energy carries through evolution (rules.md §4: evolving keeps attached
+          cards), but the attack-readiness gate discount-benches none of that when the payoff's ATTACK
+          value is what's scored; the human boards keep the energized Staryu/Dreepy front (measured).
+          The reachability gate is scenario-1 doctrine (the grill): an energized pre-evo whose payoff
+          is out of reach earns ~0 — crediting it re-opens the exact over-credit v1 killed (measured:
+          hand-blind it promoted the Riolu attach the human withholds as Lunar-Cycle fuel).
+        A bare (0-Energy) pre-evo earns nothing — parking an empty base up front is not development."""
+        ease = self._promotion_ease(me)
+        if ease >= 1.0:
+            return 1.0
+        active = next((p for p in (me.get("active") or []) if p), None)
+        if (active is not None and (active.get("energies") or ())
+                and active.get("id") in self._recognized_line_preevo_set()
+                and self._reachable_forward_ids(active.get("id"), me)):
+            return 1.0
+        return ease
+
+    def _bench_position_w(self, me: dict) -> float:
+        """The PROMOTION-EASE-lifted bench position weight (the grill's who's-Active term: `position_w`)
+        — `_READINESS_BENCH_DISCOUNT` lifted toward `_READINESS_PROMO_MAX` by `_promotion_ease`.
+        `_readiness` applies it to the single BEST benched attacker only (one retreat per turn).
+        Ease 0 (or unknown stats / no Active) degrades to the flat v1 `_READINESS_BENCH_DISCOUNT`.
+        Ceiling `_READINESS_PROMO_MAX` < 1.0: a benched attacker never reads equal to the same attacker
+        Active, so the magnitude budget (`_READINESS_BODY_CAP` / `_READINESS_CAP`) is untouched."""
+        base = _READINESS_BENCH_DISCOUNT
+        return base + (_READINESS_PROMO_MAX - base) * self._promotion_ease(me)
 
     def _best_reachable_attack(self, body: dict, stat, me: dict):
         """The body's best ``(progress, damage, hops)`` reachable attack — the one maximising
