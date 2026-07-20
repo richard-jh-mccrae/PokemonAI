@@ -164,9 +164,15 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    the RULED opponent-side read (visible zones + turns-to-ready per their in-play body). Slot values
    in the ONE currency (tier points move to the slots roles fill; oracle-priced values consumed,
    never re-derived). The coverage lint + dissolution ledger land WITH the module.
-2. **WP-N2 — exact assignment + marginals** (Round 2): lib-free bitmask DP; `keep_v2(X)` =
-   `V(H) − V(H − X)` with re-assignment; SET marginals for multi-pick discards; the Round-1 hedge
-   `max(marginal, intrinsic tier)`; memoized by hand-fingerprint for mid-sim use.
+2. **WP-N2 — exact assignment + marginals** (Round 2) — **BUILT 2026-07-19.** `needs.assignment_value`
+   (V = Σ uncovered·resupply + exact best coverage of v·(1−resupply), lib-free bitmask DP, ≤16
+   slots), `keep_v2` (counterfactual marginal with re-assignment, hedged at `intrinsic`),
+   `set_keep_v2` (joint multi-pick marginal — the duplicate-wincon naivety structurally impossible),
+   `pitch_gain` (fuel slots ride the pitch side), and `cheapest_removal` (the discard objective:
+   `max(set marginal, max member hedge) − Σ pitch gains`; hedge floors by MAX not SUM, preserving
+   sets-not-sums). The Round-2 counterexample, the resupply-derived re-access discount, and the
+   deploy-now full-loss spike are the pinned proofs (`test_needs.py`). Memoization by
+   hand-fingerprint arrives with the WP-N3 resolver (the stateful side).
 3. **WP-N3 — shadow columns** (Round 6): `keep_v2` per row + a v1-vs-v2 agreement bit inside the
    existing `discard_shadow`, plus the refresh-SHED site; sweep the corpus, adjudicate every
    v1-vs-v2 disagreement (each = a v2 bug or a v1 gate artifact).

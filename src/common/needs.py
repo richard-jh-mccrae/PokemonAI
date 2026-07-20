@@ -155,6 +155,114 @@ SUPPLIES: dict = {
     "ace_spec":           ("line", "answer_doom"),
 }
 
+# ───────────────────────────────────────── WP-N2: exact assignment + marginals (Round-2 ruling)
+_MAX_KEEP_SLOTS = 16    # bitmask-DP bound; beyond it the lowest-weight slots are dropped (an
+                        # under-count of V on BOTH sides of a marginal — never a crash)
+
+
+def _keep_slot_dp(slots, eligibility, resupply, exclude):
+    """The exact-coverage core: over the KEEP slots (``supplied_by_pitch`` excluded), maximise
+    Σ_covered v_j·(1−r_j) by assigning each non-excluded card to ≤1 eligible slot — lib-free
+    bitmask DP over slot subsets (≤ `_MAX_KEEP_SLOTS` × ≤ ~10 cards ⇒ trivial). Returns
+    (base, best): ``base`` = Σ_j v_j·r_j (what the closure re-supplies even with no held card) and
+    ``best`` = the optimal held coverage on top. V = base + best."""
+    keep = [(j, s) for j, s in enumerate(slots) if not s.supplied_by_pitch]
+    weighted = []
+    for j, s in keep:
+        r = min(1.0, max(0.0, float(resupply[j]) if j < len(resupply) else 0.0))
+        weighted.append((j, s.value * (1.0 - r), s.value * r))
+    weighted.sort(key=lambda t: -t[1])
+    weighted = weighted[:_MAX_KEEP_SLOTS]
+    base = sum(b for _j, _w, b in weighted)
+    bit_of = {j: i for i, (j, _w, _b) in enumerate(weighted)}
+    weights = [w for _j, w, _b in weighted]
+    dp = {0: 0.0}
+    for i, elig in enumerate(eligibility):
+        if i in exclude:
+            continue
+        mask_i = 0
+        for j in elig:
+            if j in bit_of:
+                mask_i |= 1 << bit_of[j]
+        if not mask_i:
+            continue
+        ndp = dict(dp)
+        for mask, val in dp.items():
+            free = mask_i & ~mask
+            while free:
+                low = free & -free
+                nm = mask | low
+                v = val + weights[low.bit_length() - 1]
+                if v > ndp.get(nm, -1.0):
+                    ndp[nm] = v
+                free ^= low
+        dp = ndp
+    return base, max(dp.values())
+
+
+def assignment_value(slots, eligibility, resupply, *, exclude=frozenset()) -> float:
+    """V(held \\ exclude) — expected slot coverage: a slot covered by a held card counts full; an
+    uncovered slot counts value × its closure RESUPPLY odds (the re-access discount, derived); fuel
+    slots (``supplied_by_pitch``) never enter the keep side. Exact (no greedy order-dependence —
+    the Round-2 counterexample is the pinned proof)."""
+    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude))
+    return base + best
+
+
+def keep_v2(slots, eligibility, resupply, index: int, *, intrinsic: float = 0.0) -> float:
+    """The v2 keep-cost of held card ``index`` = ``V(all) − V(all − index)`` with re-assignment —
+    the counterfactual marginal, exactly. ``intrinsic`` is the Round-1 transitional hedge: the
+    card's v1 tier as a floor (`max(marginal, intrinsic)`) while the migration runs; a firing floor
+    is missing-slot telemetry. Deadline-0 slots with 0 resupply lose full value (the deploy-now
+    spike, derived); duplicate copies price marginally (the sibling covers — sets-not-sums)."""
+    marginal = (assignment_value(slots, eligibility, resupply)
+                - assignment_value(slots, eligibility, resupply, exclude={index}))
+    return max(marginal, float(intrinsic))
+
+
+def set_keep_v2(slots, eligibility, resupply, indices) -> float:
+    """The SET marginal — ``V(all) − V(all − indices)``: what a multi-pick discard jointly costs.
+    Two duplicate wincons solo-price 0 each (the sibling covers) but the PAIR prices full — the
+    duplicate-wincon naivety is structurally impossible here."""
+    return (assignment_value(slots, eligibility, resupply)
+            - assignment_value(slots, eligibility, resupply, exclude=frozenset(indices)))
+
+
+def pitch_gain(slots, eligibility, index: int) -> float:
+    """The pitch side: the best ``supplied_by_pitch`` (fuel) slot card ``index`` can fill by BEING
+    discarded — pitching it is progress, so it subtracts from its removal cost. One slot per card
+    (v1 — a second matching fuel card re-prices next decision)."""
+    best = 0.0
+    for j in eligibility[index] if index < len(eligibility) else ():
+        if j < len(slots) and slots[j].supplied_by_pitch:
+            best = max(best, slots[j].value)
+    return best
+
+
+def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int) -> list:
+    """The discard decider's objective (WP-N3/N4 consume this): the ``picks``-subset with the
+    lowest removal score, where
+
+        score(P) = max( set_keep_v2(P), max_{i∈P} intrinsic_i ) − Σ_{i∈P} pitch_gain(i)
+
+    — the joint keep loss (exact set marginal), floored by the most-protected member's hedge (a
+    MAX, not a sum: summing intrinsics would re-introduce the double-count sets-not-sums kills),
+    minus what pitching actively gains (fuel). Brute-force over C(n, picks) (n ≤ ~10 ⇒ ≤ ~250
+    subsets — trivial). Ties break toward lower indices; returns a sorted list."""
+    from itertools import combinations
+    n = len(eligibility)
+    k = max(0, min(int(picks), n))
+    best_set, best_score = None, None
+    for combo in combinations(range(n), k):
+        floor = max((float(intrinsics[i]) if i < len(intrinsics) else 0.0 for i in combo),
+                    default=0.0)
+        score = (max(set_keep_v2(slots, eligibility, resupply, combo), floor)
+                 - sum(pitch_gain(slots, eligibility, i) for i in combo))
+        if best_score is None or score < best_score:
+            best_set, best_score = combo, score
+    return sorted(best_set or ())
+
+
 #: The DISSOLUTION LEDGER: every gate/flag of the v1 keep_value equation → the slot kind that
 #: re-derives it. Retiring a gate not listed here (or listed against a kind that doesn't exist) is
 #: a red test — the migration cannot silently drop corpus-anchored knowledge.

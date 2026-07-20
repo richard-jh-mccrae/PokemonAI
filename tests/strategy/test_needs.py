@@ -121,3 +121,74 @@ def test_dissolution_ledger_every_gate_names_its_deriving_slot():
     assert set(needs.DISSOLUTION_LEDGER) == expected_gates
     for gate, kind in needs.DISSOLUTION_LEDGER.items():
         assert kind in needs.SLOT_KINDS, f"gate {gate!r} names unknown slot kind {kind!r}"
+
+
+# ============================================================ WP-N2: exact assignment + marginals
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_marginal_is_counterfactual_with_reassignment():
+    """The Round-2 counterexample that refuted greedy: card A supplies S1(20) and S2(15), card B
+    supplies only S1. Exact assignment covers both (V=35); the marginals re-assign — losing B costs
+    15 (A slides to S1, S2 goes bare), NOT 0."""
+    slots = [needs.Slot("line", 20.0, 99, "s1"), needs.Slot("line", 15.0, 99, "s2")]
+    elig = [{0, 1}, {0}]                                # A: S1+S2; B: S1 only
+    resupply = [0.0, 0.0]
+    assert needs.assignment_value(slots, elig, resupply) == 35.0
+    assert needs.keep_v2(slots, elig, resupply, 1) == 15.0      # B's marginal: re-assignment happens
+    assert needs.keep_v2(slots, elig, resupply, 0) == 15.0      # A's: B covers S1, S2's 15 is lost
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_duplicate_copies_price_marginally_and_as_a_set():
+    """Sets-not-sums, natively: two identical wincons, one line slot (20). Each copy's SOLO marginal
+    is 0 (the sibling covers); the PAIR's set marginal is the full 20 — so a forced discard-2 never
+    reads both as free. The duplicate-wincon naivety dies here."""
+    slots = [needs.Slot("line", 20.0, 99, "s1")]
+    elig = [{0}, {0}, set()]                            # wincon, wincon, dreg
+    resupply = [0.0]
+    assert needs.keep_v2(slots, elig, resupply, 0) == 0.0
+    assert needs.keep_v2(slots, elig, resupply, 1) == 0.0
+    assert needs.set_keep_v2(slots, elig, resupply, {0, 1}) == 20.0
+    assert needs.set_keep_v2(slots, elig, resupply, {0, 2}) == 0.0
+    # the discard decider's objective: the cheapest 2-removal pitches ONE wincon + the dreg
+    picks = needs.cheapest_removal(slots, elig, resupply, [0.0, 0.0, 0.0], 2)
+    assert 2 in picks and len(picks) == 2 and picks != [0, 1]
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_resupply_discounts_the_uncovered_loss():
+    """The Closure re-enters as slot RESUPPLY: a slot the deck can re-fill by its deadline at odds r
+    only loses value ×(1−r) when its held card leaves — the old re-access discount, derived. A
+    deadline-0 slot with no resupply (deploy-now) loses full value — the spike, derived."""
+    slots = [needs.Slot("line", 20.0, 2, "s")]
+    assert needs.keep_v2(slots, [{0}], [0.7], 0) == pytest.approx(20.0 * 0.3)
+    spike = [needs.Slot("deploy_now", 20.0, 0, "d")]
+    assert needs.keep_v2(spike, [{0}], [0.0], 0) == 20.0
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_hedge_floors_the_marginal_at_the_intrinsic_tier():
+    """The Round-1 transitional hedge (discretionary per the dev-window ruling): a card the slot
+    model prices at 0 keeps its intrinsic tier as a floor while migrating; the floor's firing is
+    missing-slot telemetry."""
+    slots = [needs.Slot("line", 20.0, 99, "s")]
+    elig = [{0}, set()]
+    assert needs.keep_v2(slots, elig, [0.0], 1) == 0.0
+    assert needs.keep_v2(slots, elig, [0.0], 1, intrinsic=12.0) == 12.0
+    assert needs.keep_v2(slots, elig, [0.0], 0, intrinsic=5.0) == 20.0   # marginal already higher
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_fuel_slots_ride_the_pitch_side_not_the_keep_side():
+    """A supplied_by_pitch slot never enters keep coverage; it feeds `pitch_gain` (pitching the
+    matching card is progress) and `cheapest_removal` prefers pitching the fuel card among
+    otherwise-equal removals."""
+    fuel = needs.fuel_slot("fuel:F", value=8.0)
+    line = needs.Slot("line", 20.0, 99, "s")
+    slots = [line, fuel]
+    elig = [{0}, {1}, set()]                            # wincon->line, energy->fuel, dreg
+    resupply = [0.0, 0.0]
+    assert needs.assignment_value(slots, elig, resupply) == 20.0         # fuel excluded from keep V
+    assert needs.pitch_gain(slots, elig, 1) == 8.0
+    assert needs.pitch_gain(slots, elig, 0) == 0.0
+    picks = needs.cheapest_removal(slots, elig, resupply, [0.0, 0.0, 0.0], 1)
+    assert picks == [1]                                 # the fuel energy out-pitches even the dreg
