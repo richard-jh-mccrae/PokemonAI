@@ -78,7 +78,47 @@ only; hard rungs own the match); the fail directions.
 corrections train nothing; the handCount-overfit precedent) — ML stays the residue owner. Also
 rejected: "just soften the booleans" (graded gates fix cliffs, not composition — same architecture).
 
-## Open grill questions (the rounds this spec needs)
+## GRILL RUN 2026-07-19 — three rounds settled by evidence, three rulings pending
+
+**Round 1 (slot soundness) — evidence in; RULING PENDING.** The needs vocabulary already exists in
+the codebase IN TRIPLICATE — the gamble's five Outcome Classes (needs-as-GAINS: energy / evolution /
+pump / gust / survival), the gate library + ladder premises (needs-as-KEEPS), and the readiness
+leaf's terms (needs-as-BOARD: cost-progress, ability, saturation, preconditions) — so enumeration is
+unification, not invention. The adversarial finding: a MISSED slot sheds a good card (the wrong fail
+direction — every gate erred toward keep). Pending ruling: coverage lint only, or lint + a
+transitional `keep = max(marginal, intrinsic tier)` hedge retiring per-family. Recommended: lint +
+hedge.
+
+**Round 2 (assignment algorithm) — SETTLED: greedy REFUTED, exact bitmask DP.** Counterexample: A
+supplies S1(20)+S2(15), B supplies S1 only — greedy prices marginal(B)=0, optimal 15 (two hand
+Drakloaks vs {evolve-Active-now, line-2}). Exact assignment is lib-free trivial at this size
+(~12 slots × ≤8 cards ≈ 33k ops/solve; all marginals ≈ 300k ops/decision; memoized by
+hand-fingerprint for the mid-sim SHED). Bonus: a forced discard-2 asks for the PAIR minimizing
+`V(H) − V(H − pair)` — exact SET semantics natively; the duplicate-wincon naivety dies here.
+
+**Round 3 (opponent-facing slots) — evidence in; RULING PENDING.** My-side-only is REFUTED by the
+user's own Hammer ruling (86091435-68: the Hammer's keep-value IS its denial use); full opponent
+modeling is ADR-0064-blocked. Recommended middle: opponent-derived slots exist ONLY where a shipped
+oracle already prices them (denial = ADR-0062 `_opp_denial_best`/`denial_value`; doom-answers = the
+ADR-0064 threat read; gust-reach = `_gust_best_ko_prizes`) — the needs model consumes those values,
+never re-derives them.
+
+**Round 4 (recurring-needs horizon) — SETTLED.** Deadlines, not decay (Round 8 §3 stands). Slots
+materialize only where a signal resolves them: deadline-0 and deadline-1 concretely; quota rank k>2
+keeps the shipped window treatment; Σ slot values capped < KO_SCORE (the readiness invariant — the
+horizon discipline preserved).
+
+**Round 5 (vocabulary + the readiness seam) — RULING PENDING.** Proposed: **Needs** becomes the
+fifth Ubiquitous Language term (Worth · Odds · Gates · Closure · Needs); one pure needs module;
+keep_value consumes it first; the readiness leaf folds in LATER and only under its 267-frame
+leaf-lab bench; the gate library becomes a derived view (a gate = a slot with a deadline) and
+retires as each gate re-derives.
+
+**Round 6 (migration) — SETTLED: the proven seam-D pattern.** v2 emits inside the existing
+`discard_shadow` (per-row `keep_v2` + a v1-vs-v2 agreement bit) and beside the refresh SHED;
+per-family swap under the corpus gates; the acceptance list below is the contract.
+
+## Open grill questions (the original rounds, kept for the record)
 
 1. **Slot enumeration soundness** — what guarantees a need isn't missed (the coverage-lint pattern:
    every ladder rung / retired gate maps to a slot class)? What is the fail direction of an
