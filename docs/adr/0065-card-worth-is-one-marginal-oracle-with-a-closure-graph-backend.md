@@ -243,9 +243,25 @@ comparator) and ADR-0032 (Effect-Clause tier).
   it is intrinsic, not miscalibration. Gate-0 (lucario ctx-0 subset, CAP 2500): SOLE-top flat, 1-ply
   at-top 75%→50%. The grill's "a big new positive term VOIDS every guard" warning, materialized: a
   raw hand-value term rewards HOARDING over deploying — the opposite of the develop rung's job. Kept
-  armed OFF; the plumbing + the bench methodology stay as the enabler. The refined shape (value only
-  the held cards that CAN'T deploy this turn — actionable, not all latent worth) is the next
-  iteration, not this one.
+  armed OFF; the plumbing + the bench methodology stay as the enabler.
+- **WP-N5c — the hand term narrowed to "live use" (specific needs only); STILL armed OFF, ceiling
+  diagnosed (2026-07-20).** Dissecting the 51 regressed frames (`ep83661652`: every option reaches
+  the SAME board 93, so the hand term is the only discriminator, and it hands the lines holding two
+  extra cards 676/677 **+23** vs the correct line that PLAYED them **+2** — pure hoarding, driven by
+  the GENERAL-worth slots). Fix: `_resolve_needs(..., include_general=False)` for the leaf only —
+  keep-value keeps latent worth (deciding what to shed prices a spare), but the leaf's term is the
+  grill's "held cards with a LIVE use" = the SPECIFIC needs, not latent worth. **Measured: recovered
+  ~⅓ of the lost shared-top (leaf-lab 141→153 of 267) while keeping the SOLE-top gain (50→48, still
+  18% vs 15% baseline).** But shared-top stays below baseline (153 vs 190): the specific-need slots
+  THEMSELVES still credit fumbles — a `deploy_now` evolution HELD at end-of-turn is a card I didn't
+  evolve. **The ceiling, now precise:** keep-value credits "held cards with a use," but the LEAF
+  wants the COMPLEMENT — resources I COULDN'T deploy this turn (future value), not ones I chose not
+  to. At a static end-of-turn board those are indistinguishable without a per-card "was this
+  deployable" counterfactual. So the needs valuation (built for keep decisions) does not cleanly map
+  to the leaf's end-of-turn board value; the fold is PARKED armed-OFF pending either that complement
+  term or a pure small tie-breaker (break the 36→5 exact-value ties without overturning real gaps).
+  N5c is committed as the better term (halves the regression, matches the grill's spec); the arming
+  bar (SOLE-top AND shared-top both up, like the v1 leaf) is not met.
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

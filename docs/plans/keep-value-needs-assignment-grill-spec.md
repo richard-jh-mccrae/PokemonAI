@@ -252,8 +252,18 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    "correct at-top" 190→148 (the term breaks ties ~15 for / ~42 against correct — real ranking
    errors, not W-sensitive); Gate-0 subset SOLE flat, 1-ply at-top 75%→50%. The grill's "a big
    positive term voids guards" warning: a raw hand-value term rewards HOARDING over deploying. Kept
-   OFF; the plumbing + methodology stay. Next iteration (WP-N5c, not built): value only the held
-   cards that CAN'T deploy this turn (actionable, not all latent worth). The refresh/gamble keep-value
+   OFF; the plumbing + methodology stay.
+7. **WP-N5c — hand term narrowed to "live use" (specific needs only) — BUILT, STILL armed OFF
+   2026-07-20.** Dissecting the regressed frames showed the hoarding was driven by the GENERAL-worth
+   slots (a line holding 2 spare cards scored +23 vs +2 for the line that played them). Fix:
+   `_resolve_needs(..., include_general=False)` for the LEAF only (keep-value keeps latent worth).
+   Measured: recovered ~⅓ of the lost shared-top (leaf-lab 141→153/267), kept the SOLE-top gain
+   (48/267, 18% vs 15%). But still below baseline shared-top (190) — the specific-need slots credit
+   FUMBLES too (a held deploy-now evolution = a card I didn't evolve). Ceiling, now precise:
+   keep-value credits "held cards with a use", the LEAF wants the COMPLEMENT (resources I COULDN'T
+   deploy), indistinguishable at a static end-board without a per-card counterfactual. PARKED
+   armed-OFF (arming bar = SOLE-top AND shared-top both up, the v1-leaf standard — not met); next
+   shape is the non-deployable complement or a pure small tie-breaker. The refresh/gamble keep-value
    swaps follow once their shadows clear under the enriched resolver (the refresh's residual is now
    the resupply discount, its own next piece).
 

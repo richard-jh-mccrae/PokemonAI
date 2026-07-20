@@ -2514,7 +2514,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
         return keeps, sorted(rows[k]["i"] for k in pick)
 
-    def _resolve_needs(self, obs: dict, board: Board, rows: list):
+    def _resolve_needs(self, obs: dict, board: Board, rows: list, *, include_general: bool = True):
         """The shared keep-value v2 RESOLVER: the live board + the held-card ``rows`` resolved into
         `common.needs` slots and per-row eligibility (which slot indices each row can supply). The
         ONE slot derivation behind BOTH the discard decider (`_needs_v2`) and the refresh-SHED
@@ -2522,7 +2522,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         gate factor v2 consumes), and ``fuel``. Returns ``(slots, elig)``; the caller owns
         ``resupply`` (all-0.0 in v0 — errs toward keep). The slot vocabulary, the corpus-adjudicated
         derivations (the succession slot, Pokémon-only lines, the engine band, the fund/doom/fuel
-        legs) and the deferred legs are documented on `_needs_v2`."""
+        legs) and the deferred legs are documented on `_needs_v2`.
+
+        ``include_general=False`` (WP-N5c, the develop-rung LEAF's term) drops the GENERAL-worth
+        slots — a card's latent tier where it fills no SPECIFIC need. Keep-value WANTS them (deciding
+        what to shed prices a spare by its latent worth), but the LEAF must NOT: at end-of-turn a
+        generically-good card still IN hand is a card I chose not to deploy, so crediting its latent
+        worth rewards HOARDING over deploying (the WP-N5b regression — 676/677 held for +23 beat the
+        line that played them). The grill's own term is "held cards with a LIVE use" = the SPECIFIC
+        needs only (deploy-now / fund / answer-doom / supply-wincon / fuel / line), not latent worth."""
         from common import needs
         from common.card_worth import ROLE_TIER, ACE_SPEC_TIER, ENERGY_TIER, TAG_TIER
         me = self._my_player(obs)
@@ -2618,8 +2626,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # marginally). Below every specific slot, so a need-filler assigns to its need first; the
         # floor the refresh-SHED sweep (WP-N4b) proved missing — a hand of playable pieces is no
         # longer shuffle-priced at ~0. The readiness leaf's `contribution × saturation` for the HAND.
+        # The LEAF opts OUT (`include_general=False`, WP-N5c): at end-of-turn latent worth rewards
+        # HOARDING over deploying (676/677 held for +23 beat the line that played them) — the leaf's
+        # actionable-resource term is "held cards with a LIVE use" (the specific needs above) only.
         seen_general: set = set()
-        for cid, members in by_cid.items():
+        for cid, members in (by_cid.items() if include_general else ()):
             if cid in seen_general:
                 continue
             seen_general.add(cid)
@@ -2688,7 +2699,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rows = self._needs_hand_rows(mobs, board)
             if not rows:
                 return 0.0
-            slots, elig = self._resolve_needs(mobs, board, rows)
+            slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
             resupply = [0.0] * len(slots)
             from common import needs
             val = needs.set_keep_v2(slots, elig, resupply, range(len(rows)))
