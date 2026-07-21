@@ -712,5 +712,10 @@
     "disposition": "refuted",
     "reason": "user re-review 2026-07-19 (seam-D shadow evidence): the recorded correct [Lillie's + Crushing Hammer] mis-specifies the 2nd slot — the Hammer should be KEPT and used on the opponent's Active (Archaludon ex, energy attached), so the keep-value equation's pick (Risky Ruins + a Lillie's; Drakloak AND Hammer kept) is endorsed over the label. The SURVIVING substance — never pitch the sole Drakloak that can evolve the Active this turn (evolve first, use Recon Directive; the Ultra Ball itself may be unnecessary — a whether-to-play question, out of this correction's scope) — is preserved as the relaxed deploy-now target in test_hyperclosure_corpus.py.",
     "round": "2026-07-19"
+  },
+  "83969481-55": {
+    "disposition": "deferred-multi-turn",
+    "reason": "Endgame heal-as-insurance (Healing grill, valuation-systems-coverage). Don't shuffle away the one clutch_heal (Wally's) while behind 5-2 in a 35-card-deck endgame. NOT doomed this turn (my 380 HP > their Nebula 210), so answer_doom correctly does not open; value is multi-turn survival-trajectory x redraw-odds x prize-stakes -> Prize-Race Planner family, same home as b4649. Covered COINCIDENTALLY today (Pilot plays [4] Jetting, Attack dominates; Lillie's [1] -1.6, no held-answer protection) so no live regression. Characterised in docs/todo/deferred-multi-turn-criticals.md (2026-07-21 round). Do NOT add a rung; mine a fresh failing example before building.",
+    "round": "2026-07-21"
   }
 }

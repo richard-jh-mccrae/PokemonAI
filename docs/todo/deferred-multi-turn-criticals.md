@@ -203,3 +203,67 @@ correct closed-form picks; the human's lines span turns / model the opponent's c
 > `planner_83661649_30/107/45.json`; full suite green. Both switches **flipped DEFAULT ON 2026-07-06**
 > (user decision — verification via ladder-match corrections, not an A/B; mega_lucario too weak for the
 > non-mirror leg — see ADR-0044 *Amendment*). Kill-switches retained for a one-line revert.
+
+---
+
+## 2026-07-21 round — endgame heal-as-insurance (`83969481-55`, deferred here)
+
+Surfaced in the valuation-systems **healing grill** (`docs/plans/valuation-systems-coverage-review.md`,
+the Healing row). A NEW shape for this file: not an attack-sequence (`a21472`) or a prize-race attach
+(`b4649`) but a **keep/shed** decision — *don't shuffle away a scarce survival answer while behind*. Like
+`b4649` it is **covered coincidentally today**, so it is a characterised exemplar, not a live gate.
+
+| id | today, on its captured state | what it needs |
+|----|------------------------------|---------------|
+| `83969481-55` | **covered (coincidental)** — Pilot plays `[4]` Jetting == correct, but only because Attack (189.9) dominates; `Lillie's [1]` scores −1.6 with **no rule protecting the held Wally's** | **multi-turn survival-trajectory + redraw-odds + prize-stakes** projection: value holding a scarce `clutch_heal` against a doom that has not arrived yet |
+
+- **Record:** `data/corrections/mega_starmie_20260705_0c72a97/corrections.jsonl` (id `60878afb4945`, episode `83969481`, seat 0). Ledger `reviewed.json`: **`{}` (never processed)**. *(State embedded in the Correction `obs`; no separate fixture minted until the layer is built — same policy as the 2026-07-04 round.)*
+- **Category:** `wasted_resource` (mislabelled — it is a **multi-turn keep-value / insurance** decision). **Today:** `chosen=[4]` == `correct=[4]`, `planned` RACE — **already passes**.
+
+**The decision (endgame, prizes: me 5, opp 2 — I'm behind, deck 35).** My Active is **Mega Starmie ex** (id
+1031, 330 HP + **Hero's Cape** +100 = **380/430**, 2×{W}). Opp Active is a Mega Starmie ex (190/430) with a
+benched Mega Starmie ex (280/330). Hand: Mega Signal, Cinderace, **Lillie's Determination** (id 1227:
+*"Shuffle your hand into your deck, then draw 6"*), **Wally's Compassion** (id 1229, my only `clutch_heal`),
+Salvatore.
+
+- Original blunder chose `[1]` **Lillie's Determination** — which shuffles the Wally's back into a 35-card deck.
+- Human-correct `[4]` **Attack (Jetting Blow)**: *"during the end game … id rather not shuffle back our Wally's
+  Compassion. He can really save us against a Nebula Beam."*
+
+**Why `[4]` is right (the insurance read).** I am **not doomed this turn** — the opponent's max single hit is
+Nebula 210 < my 380 HP — so the concrete `answer_doom` slot correctly does **not** open (`active_doomed=False`).
+But I am **behind on prizes in a thin-deck endgame**: if my Active is chipped into Nebula range over the next
+turn or two, Wally's is my one out, and shuffling it into a 35-card deck makes redrawing it in time unlikely.
+Holding it is *multi-turn insurance*, valued by `turns-until-I'm-in-KO-range × P(redraw an answer) × the
+prize-stakes of losing`.
+
+**Why the closed-form value systems are correctly silent (do NOT bolt a rung).** This is not a Needs miss and
+not a latent-worth miss:
+- Needs is **single-decision / concrete-deadline**; `clutch_heal → answer_doom` only opens on a *this-read*
+  incoming KO (`pilot._resolve_needs`, gated `board.active_doomed`), which is absent here.
+- The **`general` slot** (latent standing worth, `needs.general_worth_slot`, deadline 99) credits Wally's role
+  tier when it fills no specific slot — but that is *standing usefulness now*, not *insurance against a future
+  contingent doom*.
+- A `dont-shuffle-away-the-clutch-answer` hypothesis would be a **gut number** AND would smuggle a multi-turn
+  projection into a single-turn engine — reintroducing exactly the hoarding pathology the leaf's latent-worth
+  refusal guards against (`pilot.py:2549`, the 676/677 `+23`-vs-`+2` regression).
+
+**Capability needed.** The **Prize-Race Planner** family (ADR-0030, same home as `b4649`): a multi-turn
+survival + prize-trajectory model that prices *keeping a scarce answer* against the opponent's projected KO
+clock, discounted by my redraw odds — a *ranking* input to the value model, never a committed lock.
+
+**Status & why it stays here.** The captured blunder **no longer reproduces** (the shipped Pilot already
+plays `[4]`), so there is **no live regression to gate** — it lands right via Attack-dominance, not via any
+insurance reasoning. Kept as the concrete **keep-value insurance** exemplar for the future Prize-Race Planner.
+**Before building anything, mine a FRESH failing example** where the shuffle/refresh actually out-scores
+holding the answer (change the board so Attack is not dominant) — this state is already handled.
+
+**Definition of done.** A real-state regression gate (`decision.chosen == correct`) once the Prize-Race /
+multi-turn survival capability exists — **not** hacked into the closed-form this-turn systems. Housekeeping:
+because it is coincidentally covered, move `83969481-55` to the reviewed ledger (`reviewed.json`,
+disposition `deferred-multi-turn`) so `tune.py` stops resurfacing it as new work.
+
+**Verify at source when picking up:** Mega Starmie ex (1031) HP 330 + Hero's Cape (+100) → 430; Jetting Blow
+120 (+50 bench) / Nebula Beam 210; Wally's Compassion (1229) heal-all-+-bounce; Lillie's Determination (1227)
+shuffle-hand-then-draw-6 — all in `data/EN_Card_Data.csv`; confirm prize counts (me 5 / opp 2) + deck size
+(35) via the Correction `obs`.
