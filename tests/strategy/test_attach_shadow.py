@@ -195,9 +195,12 @@ _CORPUS = {
     ("85046350", 21): ("pick", None),              # Ruling 5: don't power the Dunsparce draw-engine
     ("86089638", 18): ("pick", None),              # Ruling 5 + type-fit: on-type onto the Dreepy line
     ("83037962", 48): ("pick", None),              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
-    ("82749168", 61): ("pick", "Ruling 1 concentrate on the started carrier (not yet built)"),
-    ("82523811", 59): ("pick", "Ruling 1 carrier-survival forward P-term (not yet built)"),
-    ("83664340", 45): ("pick", "Ruling 2a arm-doomed refill-discount (not yet built)"),
+    ("82749168", 61): ("pick", None),              # Ruling 1: concentrate on the started (2-Energy) carrier
+    # Ruling 1: build the survivable 400-HP ACTIVE carrier. NOTE the recorded correct=[6] mis-tags a
+    # redundant bench index (same target as chosen=[2]); the rationale is unambiguous ("add a second
+    # energy to the ACTIVE Mega Starmie ... Nebula Beam in two turns"), so we assert the ACTIVE intent.
+    ("82523811", 59): (("area", ACTIVE), None),
+    ("83664340", 45): ("pick", None),              # Ruling 2a: arm the doomed Active (Jetting this turn)
     ("82750161", 59): ("pick", "Ruling 2b snipe-value / active-already-lethal (not yet built)"),
     ("83037962", 70): ("pick", "Ruling 4 accel-routing marginal (not yet built)"),
     ("84889539", 87): ("pick", "Ruling 6 partner-conditional role (not yet built)"),
@@ -225,5 +228,9 @@ def test_corpus_shadow_agrees_with_correct(ep, fr, request):
     assert s is not None
     if expectation == "abstain":
         assert s["eq_pick"] is None, f"{ep}-{fr}: expected abstain, got eq_pick={s['eq_pick']}"
+    elif isinstance(expectation, tuple) and expectation[0] == "area":
+        opt = rec["obs"]["select"]["option"][s["eq_pick"]]
+        assert opt.get("inPlayArea") == expectation[1], \
+            f"{ep}-{fr}: eq_pick target area {opt.get('inPlayArea')} != {expectation[1]}"
     else:
         assert s["eq_pick"] in correct, f"{ep}-{fr}: eq_pick={s['eq_pick']} not in correct={correct}"

@@ -2972,22 +2972,39 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return float(getattr(st, "minCostDamage", 0) or getattr(st, "maxDamage", 0) or 0)
         return 0.0
 
+    def _attach_progress(self, cid, energy: int) -> float:
+        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward its biggest attack
+        (attach grill Ruling 1). ``(min(e, M) / M)**2 * maxDamage`` — the SQUARE makes the marginal
+        of the k-th Energy INCREASE with k, so completing a started carrier is worth more than
+        starting a fresh body: concentrate on the most-built survivable carrier falls out (82523811-59,
+        82749168-61), while the maxed body's marginal is 0 (over-attach). Falls back to the flat 2-point
+        readiness when the biggest-attack cost is unknown."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        maxc = getattr(st, "maxDamageCost", None) if st is not None else None
+        dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
+        if not maxc or maxc <= 0 or dmax <= 0:
+            return self._attach_readiness(cid, energy)
+        frac = min(energy, maxc) / maxc
+        return frac * frac * dmax
+
     def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
         """Phase-1 shadow of ONE energy-attach option (attach grill ruling, 2026-07-21). DECIDES
         NOTHING. Returns a per-option working row, or None to ABSTAIN — Ruling 3: a Pokémon Tool
         rides `OptionType.ATTACH` but is not Energy, so it is never priced here.
 
         The row's fields ARE the ruled terms (ranked lexicographically in `_attach_shadow`):
-          * `marginal`      — readiness the attach buys (`_attach_readiness` delta), gated to 0 for a
+          * `marginal`      — max(`this_turn`, survival-weighted `build`), gated to 0 for a
                               non-attacking role (Ruling 5b/6-partial) and for a discard-EOT burst that
-                              EVAPORATES on a body that can't attack this turn (the guard).
+                              EVAPORATES on a body that can't attack this turn (the guard). `this_turn`
+                              is the attack the Active unlocks tonight; `build` is the CONVEX forward
+                              progress toward the biggest attack (Ruling 1), zeroed for a doomed carrier.
           * `line_value`    — worth of the line the body advances (`_role_value`, line-aware); the
                               target-choice tie-break (wincon line over filler).
           * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
                               same-marginal tie toward the reusable Basic over the burst.
-        NOTE the multi-turn terms (carrier-survival forward P-term, arm-doomed refill-discount,
-        snipe-value/overkill, accel-routing, partner-conditional role) are LATER increments — the
-        frames that need them are xfail in test_attach_shadow.py."""
+        NOTE the remaining multi-turn terms (snipe-value / overkill cap, accel-routing, partner-
+        conditional role) are LATER increments — the frames that need them are xfail in
+        test_attach_shadow.py."""
         ctx = select.get("context")
         is_attach = option.get("type") == _ATTACH
         is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
@@ -3015,11 +3032,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         line_ids = self._line_preevo_set() | self._wincon_set()
         non_attacking = tcid not in line_ids and (
             self._is_utility_body(tcid) or self._is_draw_engine_body(tcid))
-        delta = self._attach_readiness(tcid, have + 1) - self._attach_readiness(tcid, have)
-        marginal = 0.0 if (non_attacking or evaporates) else max(delta, 0.0)
+        # Ruling 1 (carrier-survival forward P-term) + 2a (arm-the-doomed): the attach's marginal is the
+        # BETTER of two readings — the immediate attack it unlocks THIS turn (only the Active fires this
+        # turn), and the survival-weighted forward BUILD toward the body's biggest attack. A DOOMED
+        # carrier earns no build credit (it won't live to fire the bigger attack — `dont-feed-the-
+        # doomed`), so a doomed Active scores only if this Energy arms an attack tonight (arm-the-doomed);
+        # a survivable carrier banks the build, so the most-built survivable body wins the concentrate.
+        this_turn = (self._attach_readiness(tcid, have + 1)
+                     - self._attach_readiness(tcid, have)) if area == _ACTIVE else 0.0
+        survives = not (area == _ACTIVE and board.active_doomed)      # forward-survival of the carrier
+        build = (self._attach_progress(tcid, have + 1)
+                 - self._attach_progress(tcid, have)) if survives else 0.0
+        marginal = 0.0 if (non_attacking or evaporates) else max(this_turn, build, 0.0)
         type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
         return {"i": None, "target": tcid, "energy": ecid,
-                "marginal": round(marginal, 1),
+                "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),
+                "build": round(build, 1), "doomed": not survives,
                 "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
                 "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
                 "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}
