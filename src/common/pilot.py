@@ -2593,10 +2593,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 # answer-doom slot). Same granularity as the retired answer-doom test.
                 urgent = bool(board.active_doomed and cid in self._wincon_set()
                               and getattr(board, "line_preevo_in_play", False))
+                # READINESS (piece 1): the primary comes online when its base is in play AND already
+                # powered (evolve next turn, attack soon ⇒ deadline 1); a base in play but unpowered,
+                # or not yet benched, is a turn further (2). The backup (succession) is one hop behind
+                # the primary. Consumed ONLY by the refresh-SHED resupply window (`_refresh_slot_
+                # resupply`) — inert for the live discard decider, which reads no deadline. Two live
+                # Staryu that make both Mega Starmie imminent lines can no longer be shed for ~nothing.
+                line_deadline = self._line_readiness_deadline(me, cid)
                 for s in needs.line_slots(f"line:{cid}", value=worth * deploy,
                                           succession=bool(set(roles) & needs.SUCCESSION_ROLES),
                                           primary_met=cid in board.in_play_ids,
-                                          succession_urgent=urgent):
+                                          succession_urgent=urgent,
+                                          deadline=line_deadline,
+                                          succ_deadline=line_deadline + 1):
                     _emit(s, members)
             if cid in getattr(board, "deploy_now_ids", frozenset()):
                 _emit(needs.deploy_now_slot(f"deploy:{cid}", value=self._role_value(cid)), members)
@@ -2885,7 +2894,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             u = fetch_closure.class_reaccess_outs(classes, counts, self._closure_stat_of,
                                                   self._closure_clauses_of)
             certain = len(members[j])
-            window = draws + (s.deadline if s.kind == "fund_attack" else 0)
+            # fund_attack widens by its quota deadline; a LINE slot CLAMPS to its readiness deadline
+            # (piece 1) — a wincon one attach from live gets only its ~1-2-draw re-access window, not
+            # the whole refresh redraw, so its shed cost stays material; other slots take the window.
+            if s.kind == "fund_attack":
+                window = draws + s.deadline
+            elif s.kind == "line":
+                window = min(draws, s.deadline)
+            else:
+                window = draws
             if prizes_hidden > 0:
                 r = self._prize_split_hit(u, deck_count, prizes_hidden, pool, window,
                                           certain=certain)
@@ -4484,6 +4501,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
+
+    def _line_readiness_deadline(self, me: dict, cid) -> int:
+        """READINESS (piece 1): how soon a held wincon ``cid`` comes online, as the re-access deadline
+        the refresh-SHED window clamps to (`_refresh_slot_resupply`). Keyed on the payoff's BASE being
+        in play — the human's own line ("no riolu in play, thus it's worthless at this moment",
+        ml ep83966336 f44):
+
+          * a base in play AND already powered ⇒ **1** (evolve next turn, attack soon — hold it);
+          * a base in play but unpowered ⇒ **2** (a turn further, still an imminent line — hold it);
+          * NO base in play ⇒ **99** (latent — the payoff cannot be assembled soon, it is freely
+            re-fetchable once a base lands, so it stays cheap to shuffle away — restores f44).
+
+        Two live Staryu keep both Mega Starmie expensive to shed (deadline 2, ep82752604 f16); a lone
+        Mega Lucario with no Riolu down stays sheddable (99). Fail-open: unknown forward-line facts ⇒
+        no base found ⇒ 99 (the re-fetchable side, never over-protects)."""
+        if cid is None:
+            return 99
+        board = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
+        bases = [p for p in board if cid in self._forward_card_ids(p.get("id"))]
+        if not bases:
+            return 99
+        return 1 if any(p.get("energies") for p in bases) else 2
 
     def _bench_line_member_needs(self, me: dict) -> bool:
         """True if a BENCHED body on a declared win-condition Line's path (pre-evolution or payoff,
