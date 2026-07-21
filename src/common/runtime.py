@@ -47,6 +47,12 @@ PROFILE = {
     "objectives_phases": True,      # ADR-0040 derived advisory phases
     "gamble_lines": True,           # ADR-0039 Tier-2 Gamble rung
     "snipe_prize_redundant": True,  # ADR-0044 Prize-Redundant Target (user decision 2026-07-06)
+    "snipe_prize_reach": True,      # snipe-targeting grill armed-ON 2026-07-21 (dev-window): a PURE
+                                    # Prize-Path tie-break — among prize-completing subsets tied on
+                                    # turns, the +1 lands on the bench body my repeatable snipe rider
+                                    # finishes soonest (rides free alongside my main KOs), not the
+                                    # mask-order default (83667237-107: Makuhita over Lunatone). Never
+                                    # changes my_path_turns/race_ahead; kill-switch → mask-order default.
     "forced_promotion": True,       # ADR-0044 Forced-Promotion Read
     "match_planner_steer": True,    # ADR-0045 S3 Game Plan directs the Turn Goal
     "forgo_ko": True,               # ADR-0045 S4 forgo a non-winning KO

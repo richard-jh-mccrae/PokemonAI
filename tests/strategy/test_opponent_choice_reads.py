@@ -40,7 +40,9 @@ def test_107_body_identity_keying_plugs_the_duplicate_species_path_leak():
     path) and a benched redundant copy. `path_target_ids` is card-id-keyed, so the on-path credit
     leaks onto the benched copy. Under `snipe_prize_redundant`, `_target_on_path` matches the
     specific BODY identity (`path_target_keys`), so the benched 678 reads OFF-path while a genuinely
-    on-path small (Lunatone, bench 0) reads on-path."""
+    on-path small reads on-path. Since the snipe-targeting grill (2026-07-21, `snipe_prize_reach`)
+    the on-path small is MAKUHITA (bench 3, 80 HP) — the +1 prize my repeatable Jetting Blow rider
+    (⌈80/50⌉=2) finishes alongside my main KOs — NOT Lunatone (110 HP, needs a dedicated gust-up)."""
     fx = _fx("planner_83667237_107.json")
     pilot = _shipped_pilot()
     pilot.snipe_prize_redundant = True
@@ -48,17 +50,20 @@ def test_107_body_identity_keying_plugs_the_duplicate_species_path_leak():
     select = obs["select"]
     board = pilot._board(obs, select)
     bench_mega = select["option"][1]      # opp Mega Lucario ex, bench 1 (the redundant copy)
-    lunatone = select["option"][0]        # opp Lunatone, bench 0 (a genuine on-path small)
+    makuhita = select["option"][3]        # opp Makuhita, bench 3 (the rider-reachable on-path small)
+    lunatone = select["option"][0]        # opp Lunatone, bench 0 (off-path now — rider can't finish it)
     assert pilot._context(obs, select, board, bench_mega).target_on_path is False   # leak plugged
-    assert pilot._context(obs, select, board, lunatone).target_on_path is True
+    assert pilot._context(obs, select, board, makuhita).target_on_path is True
+    assert pilot._context(obs, select, board, lunatone).target_on_path is False     # grill flip
 
 
 @pytest.mark.req("REQ-READ-0001")
 def test_107_off_committed_path_bodies_are_flagged_redundant_when_safe():
     """The prize-trajectory read: I need 4 prizes and have a COMMITTED cheapest path (the active Mega
-    + the on-path small Lunatone). Chip on any body OFF that path doesn't advance it — the second Mega
-    Lucario ex (3 prizes I never need) and the alternative small Makuhita are both flagged
-    `target_prize_redundant`; the on-path Lunatone is not. (My Active is not doomed here, so even the
+    + the on-path small). Chip on any body OFF that path doesn't advance it. Since the snipe grill
+    (`snipe_prize_reach`) the committed small is MAKUHITA — the +1 my rider finishes for free — so
+    Makuhita is NOT redundant while Lunatone (110 HP, off the rider-reachable path) and the second
+    Mega Lucario ex (3 prizes I never need) both are. (My Active is not doomed here, so even the
     low-prize off-path body is deprioritized — under pressure the guard would keep threat-denial.)"""
     fx = _fx("planner_83667237_107.json")
     pilot = _shipped_pilot()
@@ -68,8 +73,8 @@ def test_107_off_committed_path_bodies_are_flagged_redundant_when_safe():
     board = pilot._board(obs, select)
     assert board.my_path_turns is not None and board.active_doomed is False        # safe, committed path
     assert pilot._context(obs, select, board, select["option"][1]).target_prize_redundant is True   # 2nd Mega
-    assert pilot._context(obs, select, board, select["option"][3]).target_prize_redundant is True   # off-path Makuhita
-    assert pilot._context(obs, select, board, select["option"][0]).target_prize_redundant is False  # Lunatone (on-path)
+    assert pilot._context(obs, select, board, select["option"][0]).target_prize_redundant is True   # off-path Lunatone
+    assert pilot._context(obs, select, board, select["option"][3]).target_prize_redundant is False  # Makuhita (on-path)
 
 
 @pytest.mark.req("REQ-READ-0002")
@@ -88,16 +93,32 @@ def test_107_prize_redundant_suppresses_the_threat_snipe_hypotheses():
 
 
 @pytest.mark.req("REQ-READ-0002")
+def test_107_opponent_discard_energy_is_read():
+    """Opponent-discard reading (coverage-review item #2, previously 'not read at all'): the
+    opponent's fully-visible discard on 83667237-107 holds five Basic {F} Energy (EnergyType 6) —
+    now surfaced as `Board.opp_discard_energy`, the raw read behind the discard-fuel gauge (the {F}
+    that keeps the Hariyama Wild Press / Aura-Jab lines live). Pure data; no live decider consumes
+    it yet (the gauge's threat-rank lift awaits a corpus anchor — 107 itself is prize-math)."""
+    fx = _fx("planner_83667237_107.json")
+    pilot = _shipped_pilot()
+    board = pilot._board(fx["obs"], fx["obs"]["select"])
+    assert dict(board.opp_discard_energy) == {6: 5}      # {F} x5 (EnergyType.FIGHTING == 6)
+
+
+@pytest.mark.req("REQ-READ-0002")
 def test_107_snipes_an_on_path_small_not_the_redundant_second_mega():
-    """End-to-end (ADR-0044): on the ACTUAL captured state the shipped Pilot no longer snipes the
-    redundant second Mega Lucario ex — it chips the on-path 1-prize small (Lunatone), advancing my
-    cheapest 4-prize path instead of wasting chip on a body I mean to gust around."""
+    """End-to-end (ADR-0044 + the 2026-07-21 snipe grill): on the ACTUAL captured state the shipped
+    Pilot no longer snipes the redundant second Mega Lucario ex — it chips MAKUHITA (bench 3), the
+    1-prize small my repeatable Jetting Blow rider (⌈80/50⌉=2) finishes alongside my main KOs, taking
+    the 4th prize for free. NOT Lunatone (110 HP, needs a dedicated gust-up): the grill ruled the +1
+    lands on the rider-reachable body, the user's `correct` on this frame (`snipe_prize_reach`)."""
     fx = _fx("planner_83667237_107.json")
     pilot = _shipped_pilot()
     assert pilot.snipe_prize_redundant is True           # DEFAULT ON (2026-07-06)
+    assert pilot.snipe_prize_reach is True               # DEFAULT ON (snipe grill, 2026-07-21)
     d = pilot.explain(fx["obs"])
     assert d.chosen != fx["chosen"]        # not the old blunder [1] (the 2nd Mega Lucario ex)
-    assert d.chosen == [0]                 # Lunatone — the on-path small (snipe-on-the-path)
+    assert d.chosen == [3]                 # Makuhita — the rider-reachable on-path small (the grill fix)
 
 
 @pytest.mark.req("REQ-READ-0003")

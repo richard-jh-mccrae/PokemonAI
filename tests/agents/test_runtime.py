@@ -57,6 +57,7 @@ EXPECTED_SHIPPED = {
     "objectives_phases": True,      # ADR-0040
     "gamble_lines": True,           # ADR-0039
     "snipe_prize_redundant": True,  # ADR-0044 (user decision 2026-07-06)
+    "snipe_prize_reach": True,      # snipe-targeting grill (2026-07-21) — rider-reach Prize-Path tie-break
     "forced_promotion": True,       # ADR-0044
     "match_planner_steer": True,    # ADR-0045 S3
     "forgo_ko": True,               # ADR-0045 S4

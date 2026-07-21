@@ -537,6 +537,14 @@ class Board:
                                           # priority spine: composes Brief + Read-Intel (γ-gated) + the
                                           # general draw-engine card fact. `priority(opp_id)` steers
                                           # snipe/gust. Empty (all-0) default = inert (kill-switch/no Read).
+    opp_discard_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in the
+                                          # OPPONENT's (fully visible) discard — the discard-fuel gauge read
+                                          # (coverage-review item #2: "their discard holds N energy of type
+                                          # T"). A discard-fuelled forward line — Mega Lucario ex Aura Jab
+                                          # re-attaches Basic {F} FROM discard (678), a self-KO'd Wild Press
+                                          # {F}{F}{F} (674) is only re-castable while the {F} is recoverable —
+                                          # is a realer threat when its type sits here. Pure data; consumed
+                                          # by the (armed-off) `snipe_discard_fuel` threat-rank lift.
     my_discard_basic_energy: dict = field(default_factory=dict)  # {EnergyType: count} of Basic Energy in
                                           # MY open discard — the recover-rider fuel (Aura Jab class), and the
                                           # ONE truth for it since ADR-0061 (`_recover_units` reads it here).
@@ -1023,7 +1031,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
                  lethal_veto=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
-                 snipe_prize_redundant=False, forced_promotion=False,
+                 snipe_prize_redundant=False, snipe_prize_reach=False, forced_promotion=False,
                  value_model=None,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
@@ -1085,6 +1093,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # Target snipe suppression (+ body-identity path
                                                         # keying) — don't chip an off-path body I don't
                                                         # need to KO ("deny the second Mega")
+        self.snipe_prize_reach = snipe_prize_reach      # snipe-grill kill-switch: the Prize-Path
+                                                        # rider-reach TIE-BREAK — among prize-completing
+                                                        # subsets tied on turns, put the +1 on the bench
+                                                        # body my repeatable snipe rider finishes soonest
+                                                        # (rides free with my main KOs). Pure tie-break;
+                                                        # never moves my_path_turns. OFF = mask-order
         self.forced_promotion = forced_promotion        # ADR-0044 kill-switch: the Forced-Promotion Read
                                                         # — when their Active is dead, pre-chip the ready
                                                         # wincon they'll promote, not the energized bench-sitter
@@ -4641,6 +4655,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_cannot_punish_wincon=self._opp_cannot_punish_wincon(me, opp),
             basic_energy_in_deck=self._basic_energy_in_deck(deck_empty),
             my_discard_basic_energy=self._discard_energy_counts(me.get("discard") or [])[1],
+            opp_discard_energy=self._discard_energy_counts(opp.get("discard") or [])[1],
             active_best_attack_locked=self._active_best_attack_locked(ma),
             opp_has_stage2=self._board_has_stage2(opp),
             opp_has_colorless_ability=self._board_has_colorless_ability(opp),
