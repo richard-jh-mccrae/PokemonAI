@@ -93,6 +93,19 @@ def test_107_prize_redundant_suppresses_the_threat_snipe_hypotheses():
 
 
 @pytest.mark.req("REQ-READ-0002")
+def test_107_opponent_discard_energy_is_read():
+    """Opponent-discard reading (coverage-review item #2, previously 'not read at all'): the
+    opponent's fully-visible discard on 83667237-107 holds five Basic {F} Energy (EnergyType 6) —
+    now surfaced as `Board.opp_discard_energy`, the raw read behind the discard-fuel gauge (the {F}
+    that keeps the Hariyama Wild Press / Aura-Jab lines live). Pure data; no live decider consumes
+    it yet (the gauge's threat-rank lift awaits a corpus anchor — 107 itself is prize-math)."""
+    fx = _fx("planner_83667237_107.json")
+    pilot = _shipped_pilot()
+    board = pilot._board(fx["obs"], fx["obs"]["select"])
+    assert dict(board.opp_discard_energy) == {6: 5}      # {F} x5 (EnergyType.FIGHTING == 6)
+
+
+@pytest.mark.req("REQ-READ-0002")
 def test_107_snipes_an_on_path_small_not_the_redundant_second_mega():
     """End-to-end (ADR-0044 + the 2026-07-21 snipe grill): on the ACTUAL captured state the shipped
     Pilot no longer snipes the redundant second Mega Lucario ex — it chips MAKUHITA (bench 3), the
