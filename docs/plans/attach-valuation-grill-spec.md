@@ -141,3 +141,60 @@ the output and the AGREEMENT bit vs the rungs' pick). Mid-sim guard; memoise the
 order (failing legs first, agreeing families last); each swap under corpus + score-diff + the
 currency-zone rule (the oracle REPLACES the rungs it shadowed). Deck-rung folds via /deck-align
 (ADR-0034). Earns its own ADR (the fourth shadow's) at the first swap.
+
+## Grill rulings — 2026-07-21 (energy-attach axis)
+
+Walked the full 41-frame `misattachment` corpus (all card facts verified at source, incl. the
+load-bearing **Ignition = `{C}` normally / `{C}{C}{C}` on an Evolution, discards EOT**). ~27 frames
+are genuine energy-attach valuations; the rest are other decisions (retreat/Boss/Judge/fetch/setup)
+or `chosen==correct` pins. The equation stays:
+
+```
+attach_value(E → B) =
+    [ P(B's line lands a valued attack by B's deadline | attach) − P(… | don't) ]   (marginal)
+    × value(the attack B's LINE advances)
+    − resource_cost(E)
+  gate: E ∈ {Basic Energy, Special Energy}; never a Pokémon Tool
+```
+
+Term rulings (each tagged with its anchor frame(s), which become pins/xfail targets):
+
+1. **Carrier-survival forward P-term** — `82523811-59`. The marginal folds
+   `P(carrier alive through the k-turn window)`. NOT a flat "don't start a 2nd attacker" rule — it
+   reverses when the *active* is the fragile body. Same survivability substrate as the doomed-sign
+   pair, pointed forward. → concentrate on the survivable carrier.
+2a. **Now-or-never deadline + refill-discount** — `83664340-45`. Arm any doomed body that can attack
+   this turn when nothing better uses the attach: its last attack has zero refill; the survivor's
+   attach-need is refilled next turn (high odds) → discounted by `(1 − refill_odds)`. Aggression
+   posture confirms we always cash it. `resource_cost` supply-sensitivity is a MINOR secondary term,
+   not the gate.
+2b. **Value credits snipe/prize-advancement, caps overkill** — `83664340-45`. Reward spread/second-
+   prize paths; cap damage at the KO actually achievable (no overkill credit). Jetting Blow's 120+50
+   across two bodies > Nebula's flat 210 into a wall you won't KO.
+3. **Energy-only gate, incl. Special Energy** — `82227388-7` (Hero's Cape), `85709280-55` (Air
+   Balloon). `attach_is_energy` ≙ card type ∈ {Basic Energy, Special Energy}; Pokémon Tool excluded.
+   Ignition (Special) is IN; Tools route to their own valuations (survivability / retreat economics),
+   never priced as energy progress.
+4. **Accel-routing in, prize-math out** — `83037962-70`. Value an attach by the attack it advances
+   INCLUDING accelerator attacks (progress = the energy Turbo Flare / Aura Jab routes, not face
+   damage), onto the survivable carrier (Ruling 1). Prize-math / sacrifice-for-tempo delay is
+   planner-scope, NEVER in the energy oracle.
+5. **Value = line-payoff, role-gated, not raw damage** — `85046350-21`, `86089638-18`. `value` =
+   payoff attack of B's evolution line (lookahead: Dreepy → Dragapult 200), gated to 0 when the
+   line's TERMINAL job is non-attacking (wall / draw-engine), regardless of nominal attack (Meowth
+   Tuck Tail 60, Dudunsparce Land Crush 90). Role gate wins over lookahead; role value from Worth
+   tiers, never the current body's raw `predicted_damage`.
+6. **Partner-conditional role, board-evaluated** — `84889539-87`. A synergy-pair body's value is
+   conditional on its partner on YOUR board (Solrock ≈ 0 without a Lunatone in play — proven clean by
+   both Lunatones being prized). General oracle stays partner-agnostic but evaluates role at the
+   current board; the pairing itself is deck-layer (ADR-0034 rung).
+
+**Guard** — `82750161-59`, `82752045-97`, `83116501-89` (target corrections; the Ignition in their
+labels is incidental). Never route a discard-EOT burst onto a body that can't attack this turn
+(dominated by holding it); concentrate via threshold-marginal; an already-lethal or already-full
+body's further attach is ~0 marginal (over-attach / overkill cap).
+
+**AGREE families → pins:** resource-class (Basic > Ignition, same target), over-attach
+(`maxDamageCost` met → 0), doomed-DON'T-feed (`83037962-48`: 2 energy on a body needing 3 that dies
+= 0), concentrate, don't-fund-non-attacker. **Out of scope:** prize-math (planner); the tangential
+non-attach frames.
