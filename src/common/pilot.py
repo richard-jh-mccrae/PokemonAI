@@ -993,7 +993,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
                  lethal_veto=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
-                 snipe_prize_redundant=False, forced_promotion=False,
+                 snipe_prize_redundant=False, snipe_prize_reach=False, forced_promotion=False,
                  value_model=None,
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
@@ -1055,6 +1055,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # Target snipe suppression (+ body-identity path
                                                         # keying) — don't chip an off-path body I don't
                                                         # need to KO ("deny the second Mega")
+        self.snipe_prize_reach = snipe_prize_reach      # snipe-grill kill-switch: the Prize-Path
+                                                        # rider-reach TIE-BREAK — among prize-completing
+                                                        # subsets tied on turns, put the +1 on the bench
+                                                        # body my repeatable snipe rider finishes soonest
+                                                        # (rides free with my main KOs). Pure tie-break;
+                                                        # never moves my_path_turns. OFF = mask-order
         self.forced_promotion = forced_promotion        # ADR-0044 kill-switch: the Forced-Promotion Read
                                                         # — when their Active is dead, pre-chip the ready
                                                         # wincon they'll promote, not the energized bench-sitter

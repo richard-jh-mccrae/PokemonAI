@@ -148,13 +148,21 @@ _PRED_LEAD = 2.0         # the γ-gated opponent OVERLAY (Tier 4, ADR-0040 §5):
                          # the phase-grilling contract (no confidence cliff)
 
 
-def prize_paths(bodies, prizes_needed: int):
+def prize_paths(bodies, prizes_needed: int, reach=None):
     """The cheapest Prize Path over ``bodies`` (ADR-0040): ``(frozenset(keys), total_turns)``.
 
     ``bodies``: ``((key, prize_value, turns), …)`` — each KO-able body, its prize yield ({1,2,3})
     and the feasibility turns to fell it. The cheapest path = the subset whose prize sum reaches
     ``prizes_needed`` in the fewest total turns (ties → fewer bodies, then bigger prize sum —
     prefer the compact overshoot). ≤6 bodies a side ⇒ ≤64 subsets, trivial by construction.
+
+    ``reach`` (optional, snipe_prize_reach): ``{key: rider-reach-cost}`` — a PURE tie-break sorted
+    AFTER (turns, bodies, prizes), so it can never change the chosen turn count (``my_path_turns``
+    and ``race_ahead`` are untouched). Among prize-completing subsets tied on real turn cost, it
+    prefers the one whose bench member my repeatable snipe rider finishes soonest — the body that
+    rides to a KO alongside my main attacks instead of demanding a dedicated gust-up (83667237-107:
+    Makuhita @ ⌈80/50⌉=2 riders beats Lunatone/Solrock @ ⌈110/50⌉=3, so the +1 prize lands on the
+    rider-finishable body). ``None`` (or a key absent) contributes 0 → behaviour identical to before.
 
     ``prizes_needed <= 0`` → ``(frozenset(), 0.0)`` (already won). No subset reaches the count
     (their visible board is worth fewer prizes than I still need) → ``(frozenset(), None)`` —
@@ -163,21 +171,24 @@ def prize_paths(bodies, prizes_needed: int):
     if prizes_needed <= 0:
         return frozenset(), 0.0
     items = tuple(bodies)
-    best = None                      # (turns, len, -prizes, keys)
+    reach = reach or {}
+    best = None                      # (turns, len, -prizes, reach_sum, keys)
     for mask in range(1 << len(items)):
         prizes = turns = n = 0
+        reach_sum = 0.0
         keys = []
         for i, (key, pv, t) in enumerate(items):
             if mask & (1 << i):
                 prizes, turns, n = prizes + pv, turns + t, n + 1
+                reach_sum += reach.get(key, 0.0)
                 keys.append(key)
         if prizes >= prizes_needed:
-            cand = (turns, n, -prizes, frozenset(keys))
-            if best is None or cand[:3] < best[:3]:
+            cand = (turns, n, -prizes, reach_sum, frozenset(keys))
+            if best is None or cand[:4] < best[:4]:
                 best = cand
     if best is None:
         return frozenset(), None
-    return best[3], float(best[0])
+    return best[4], float(best[0])
 
 
 class ObjectivesMixin:
@@ -222,6 +233,16 @@ class ObjectivesMixin:
         return hp / t_star + own_chip + _RACE_LATER_CHIP * rest
 
     # ------------------------------------------------------ the two-sided Prize Path (Board signals)
+
+    def _my_max_rider(self, ma: dict | None) -> int:
+        """My Active's biggest bench-snipe rider (Jetting Blow 50) — the per-turn damage a snipe
+        lands on a benched body WITHOUT a gust-up. Backs the ``snipe_prize_reach`` Prize-Path
+        tie-break (a body finishable by repeated riders completes a prize alongside my main KOs).
+        0 with no Active / no snipe attack."""
+        stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
+        if not stat:
+            return 0
+        return max((self._rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
 
     def _my_turns_to_ko(self, obs, my_active_id: int | None, energy: int, body: dict) -> float | None:
         """My feasibility turns to fell opponent ``body``: hp over my Active's best affordable
@@ -344,19 +365,26 @@ class ObjectivesMixin:
         Read-predicted attackers behind the γ-continuous lead — the Tier-4 overlay). Re-derived
         every decision — a ranking objective, never a lock. Returns the five Board field values."""
         energy = len((ma or {}).get("energies") or [])
+        rider = self._my_max_rider(ma) if getattr(self, "snipe_prize_reach", False) else 0
         mine = []
+        reach = {}                       # snipe_prize_reach: rider-finish tie-break (bench only)
         for body, extra in ([(oa, 0)] if oa else []) + [(b, _PATH_BENCH_EXTRA)
                                                         for b in (opp.get("bench") or []) if b]:
             t = self._my_turns_to_ko(obs, (ma or {}).get("id"), energy, body)
             if t is not None:
-                mine.append((id(body), self._prize_value(body), t + extra, body.get("id")))
+                key = id(body)
+                mine.append((key, self._prize_value(body), t + extra, body.get("id")))
+                if rider > 0:            # a benched body (extra>0) my rider can finish rides ~free
+                    hp = body.get("hp", 0) or 0   # alongside my main KOs; the Active (extra==0) is
+                    reach[key] = math.ceil(hp / rider) if extra else 0.0   # hit by the main attack
         theirs = []
         for body, extra in ([(ma, 0)] if ma else []) + [(b, _PATH_BENCH_EXTRA)
                                                         for b in (me.get("bench") or []) if b]:
             t = self._their_turns_to_ko(opp, body, read, gamma)
             if t is not None:
                 theirs.append((id(body), self._prize_value(body), t + extra, body.get("id")))
-        my_keys, my_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in mine], my_prizes)
+        my_keys, my_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in mine], my_prizes,
+                                        reach=reach or None)
         my_keys, my_turns = self._sticky_path(mine, my_prizes, my_keys, my_turns)
         their_keys, their_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in theirs], opp_prizes)
         return {
