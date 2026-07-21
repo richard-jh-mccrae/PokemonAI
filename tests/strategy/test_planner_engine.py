@@ -286,3 +286,27 @@ def test_flag_off_never_commits_develop_and_emits_no_candidates():
             obs = battle_select(d.chosen)
     finally:
         battle_finish()
+
+
+@pytest.mark.req("REQ-PLANNER-0036")
+def test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder():
+    """ep82227388 f43 ('play Wally's to fully heal, then Ignition, then Nebula again'): my Mega Starmie
+    (210/330, fully powered) faces the mirror's 280-HP Active. Their Nebula Beam (210) == my HP, so I
+    die next turn; my Nebula (210) does NOT KO their 280, so this is the NO-KO variant of the heal-line
+    — heal to survive + chip, not stabilize-then-KO. The human's whole-turn sequence OPENS with
+    Pokégear 3.0 (dig), then Wally's, then the Ignition re-attach, then Nebula. The old agent instead
+    committed the turn-ending Attack ([12]) and skipped the heal entirely.
+
+    This is a SINGLE-FRAME guard, not a full-turn playout: no committed correction carries
+    ``search_begin_input`` (0/372), so the engine cannot fork this captured mid-turn state and the
+    downstream heal→re-power→attack cannot be simulated here. We assert only what is verifiable — the
+    shipped Pilot opens with the Pokégear dig (step 1 of the human's line) and never regresses to the
+    Attack blunder. The no-KO 'survive-and-chip' planner rung that would PROVE the heal follows does
+    not exist yet (contrast 6858, the KO variant, which ``stabilize_then_ko`` owns)."""
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_82227388_43.json")
+                    .read_text(encoding="utf-8"))
+    pilot = _shipped_pilot()
+    decision = pilot.explain(fx["obs"])
+    chosen = decision.options[decision.chosen[0]]
+    assert getattr(chosen, "card_id", None) == 1122          # opens with Pokégear 3.0 (the human's step 1)
+    assert decision.chosen != fx["chosen"]                   # NOT the old turn-ending Attack blunder ([12])
