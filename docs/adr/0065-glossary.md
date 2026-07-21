@@ -1,9 +1,9 @@
 # Ubiquitous Language — the card-worth oracle (ADR-0065)
 
 Companion vocabulary doc for ADR-0065 (not an ADR itself — same convention as `0050-glossary.md`).
-Five plain words for the oracle's independent features (Needs ratified 2026-07-19, built WP-N1–N3);
-use these in code, tests, commits, and
-grill docs. Agreed with the user 2026-07-19.
+Six plain words: the umbrella quantity (**Value**, ratified 2026-07-20) over five independent
+features (Worth · Odds · Gates · Closure · Needs — Needs ratified 2026-07-19, built WP-N1–N8); use
+these in code, tests, commits, and grill docs. Agreed with the user 2026-07-19/20.
 
 ## The two features (do not conflate)
 
@@ -12,10 +12,29 @@ grill docs. Agreed with the user 2026-07-19.
 | **Worth** | What a card or action is worth to the plan, on THIS board — a valuation of common mechanics (roles, tags, ACE-SPEC, energy) with respect to board state. Has NO opinion about probability. | `common/card_worth.py` | value, score (ambiguous with the Tier-0 tactical score), currency (that's the *property* of worth being one scale, not worth itself) |
 | **Odds** | The chance of having, reaching, rebuilding, or funding something, by a given draw window — pure deck math. Has NO opinion about value. | `common/deck_odds.py` | probability (fine in prose, but "Odds" is the code-facing noun), chance |
 
-Every card/action equation in this codebase is their product:
+## The umbrella term: Value (ratified with the user 2026-07-20)
+
+**Value** = what a card or body means RIGHT NOW — its Worth shaped by the situation (Needs, Odds,
+Gates), asked of a SPECIFIC QUESTION at a specific moment. One quantity, many questions:
+
+| Question | Asks | The site |
+| --- | --- | --- |
+| **keep** Value | what do I lose if this card leaves my hand? | the discard decider, the refresh SHED, the gamble floor |
+| **deny** Value | what do I gain by removing/dragging THEIRS? | the gust target pick, the Hammer, the deny slots |
+| **attach** Value | which body does this Energy advance most? | the attach oracle (seeded, `attach-valuation-grill-spec.md`) |
+| **snipe** Value | which of their bodies does damage deny most? | the snipe target pick |
+
+The word "keep-value" is NOT the umbrella — it is the keep QUESTION's Value and nothing more (the
+2026-07-20 correction: the keep-value-v2 line's name made the one variant sound like the whole).
+Say **Value** for the contextual quantity, **Worth** for the context-free tier underneath it, and
+name the question when it matters ("the Mega's keep Value", "their Staryu's deny Value"). Code
+symbols keep their question-specific names (`keep_v2`, `keep_cost`, the gust tacticals) — they name
+questions correctly; only umbrella USAGE changes.
+
+Every question's equation is the same product:
 
 ```
-value = Worth × Odds
+Value(question, moment) = Worth × Odds × Gates    (Needs supplying WHICH worth is live)
 ```
 
 - **keep_cost** = Worth × (1 − Odds of getting it back) × Gates — Odds pointed BACKWARDS (closure)
@@ -73,10 +92,11 @@ value = Worth × Odds
 
 ## Flagged ambiguities
 
-- **"Value"** in casual conversation can mean Worth, the Worth×Odds product, or the Tier-0
-  tactical score (a different, older currency — KO_SCORE-scaled, not Worth-scaled). Say **Worth**
-  when you mean the card_worth tier, and **tactical score** for the Tier-0 number; "value" alone in
-  code/commits should be avoided once this glossary lands.
+- **"Value"** — RESOLVED 2026-07-20 (see the umbrella section above): Value IS the ratified name
+  for the contextual Worth×Odds×Gates quantity, qualified by its question (keep/deny/attach/snipe).
+  Two residual cautions: say **Worth** when you mean the context-free tier, and **tactical score**
+  for the Tier-0 number (a different, older currency — KO_SCORE-scaled, not Worth-scaled); bare
+  "value" without a question is still ambiguous in code — qualify it.
 - **"Closure" vs "reachability"** — Closure is the noun for the module/graph; "reachable" is the
   adjective for a specific target (`fetch_target_matches` returns whether ONE target is reachable
   from ONE clause). Don't say "the reachability module."
