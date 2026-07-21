@@ -115,6 +115,9 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     refresh_shadow = getattr(decision, "refresh_shadow", None)  # the refresh-SHED v2 MAGNITUDE shadow
     if refresh_shadow:                            # (ADR-0065 WP-N4b): v1 Σ keep_cost vs v2 assignment
         rec["refresh_shadow"] = refresh_shadow    # marginal + the two swings + the sign-agreement bit
+    attach_shadow = getattr(decision, "attach_shadow", None)  # the ENERGY-ATTACH valuation shadow (the
+    if attach_shadow:                             # fourth shadow, attach grill ruling): per-option
+        rec["attach_shadow"] = attach_shadow      # marginal/line_value/resource_cost + pick + agree bit
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
         rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung

@@ -1001,6 +1001,14 @@ class Decision:
                                      # swapping the shed flip play/don't-play?). Deciding NOTHING — the
                                      # sets-not-sums evidence the refresh swap rides. Sparse: None off
                                      # a real refresh PLAY option / mid-sim
+    attach_shadow: dict | None = None   # the ENERGY-ATTACH valuation shadow (attach-valuation-grill-
+                                     # spec.md "Grill rulings — 2026-07-21"; the fourth shadow): every
+                                     # energy-attach option priced in one currency — the marginal
+                                     # readiness the attach buys, the value of the line it advances
+                                     # (role-gated), the burst-waste of a discard-EOT Energy — plus the
+                                     # pick (`eq_pick`) and the agreement bit vs the shipped rungs'
+                                     # `chosen`. A Pokémon Tool ABSTAINS (Ruling 3: not Energy). Deciding
+                                     # NOTHING — sparse: None off a real attach choice / mid-sim
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1244,6 +1252,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
                                              if planned.goal == "develop" else None),  # rung's ranking (sparse)
                             gamble=getattr(self, "_gamble_trace", None),
+                            attach_shadow=self._attach_shadow(obs, select, board, options, traces,
+                                                              planned.next_step),  # attaches often route here
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -1289,6 +1299,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         gamble=getattr(self, "_gamble_trace", None),
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
+                        attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -2989,6 +3000,230 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "cycle_adaptive": round(cycle_adaptive, 1), "swing_v2_cyc": round(swing_v2_cyc, 1),
                 "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
                 "played": i in (chosen or []), "eq": rows}
+
+    def _attach_readiness(self, cid, energy: int) -> float:
+        """Best printed damage the body ``cid`` can afford with ``energy`` Energy — a 2-point
+        threshold model off `CardStat` (cheapest attack / biggest attack). Opponent-independent, so
+        it credits a BENCHED body's progress toward its OWN payoff (Nebula Beam 210 at 3, Jetting
+        Blow 120 at 1) and reads 0 below the cheapest cost. The marginal of an attach is the delta of
+        this across the extra Energy — over-attach on a maxed body is 0, a threshold-crossing attach
+        is a big jump (the concentrate signal falls out)."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is None:
+            return 0.0
+        maxc, minc = getattr(st, "maxDamageCost", None), getattr(st, "minAttackCost", None)
+        if maxc is not None and energy >= maxc:
+            return float(getattr(st, "maxDamage", 0) or 0)
+        if minc is not None and energy >= minc:
+            return float(getattr(st, "minCostDamage", 0) or getattr(st, "maxDamage", 0) or 0)
+        return 0.0
+
+    def _opp_body_hps(self, obs: dict) -> list:
+        """Current HP of every opponent Pokémon in play (Active + Bench) — the overkill-cap read: a
+        bigger attack buys nothing once the current one already covers the biggest body on the board."""
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if len(players) > 1 else None
+        if not opp:
+            return []
+        bodies = list(opp.get("active") or []) + list(opp.get("bench") or [])
+        return [m.get("hp", 0) for m in bodies if m]
+
+    def _attach_progress(self, cid, energy: int) -> float:
+        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward its biggest attack
+        (attach grill Ruling 1). ``(min(e, M) / M)**2 * maxDamage`` — the SQUARE makes the marginal
+        of the k-th Energy INCREASE with k, so completing a started carrier is worth more than
+        starting a fresh body: concentrate on the most-built survivable carrier falls out (82523811-59,
+        82749168-61), while the maxed body's marginal is 0 (over-attach). Falls back to the flat 2-point
+        readiness when the biggest-attack cost is unknown."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        maxc = getattr(st, "maxDamageCost", None) if st is not None else None
+        dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
+        if not maxc or maxc <= 0 or dmax <= 0:
+            return self._attach_readiness(cid, energy)
+        frac = min(energy, maxc) / maxc
+        return frac * frac * dmax
+
+    def _partner_absent(self, cid, obs: dict) -> bool:
+        """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play
+        (Solrock needs a Lunatone, and vice-versa — `strategy.partners`), and NONE of its declared
+        partners is on my board right now → a dead attach target, value it at 0. Partner-AGNOSTIC in
+        the general oracle: the pairing itself is deck-declared data (ADR-0034). False for any body
+        with no declared partner."""
+        partners = getattr(self.strategy, "partners", None) or {}
+        need = partners.get(cid)
+        if not need:
+            return False
+        me = self._my_player(obs)
+        in_play = {m.get("id") for m in ((me.get("active") or []) + (me.get("bench") or [])) if m}
+        return not any(p in in_play for p in need)
+
+    def _accel_attack_id(self, cid):
+        """The body's attack that carries an energy-accel rider (recoverN > 0) — Turbo Flare / Aura
+        Jab. None when the body has no accelerator attack."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        for aid in (getattr(st, "attacks", None) or ()):
+            ast = self._attack_stat(aid)
+            if ast and getattr(ast, "recoverN", 0):
+                return aid
+        return None
+
+    def _accel_routed_value(self, obs: dict, board: Board, routed: int) -> float:
+        """Value of the ``routed`` Energy an accelerator attack (Turbo Flare) attaches to the Bench —
+        Ruling 4: an attach that FIRES an accelerator is worth the forward build the routed Energy
+        buys on the survivable carrier, not the accelerator's own face damage. Concentrated onto the
+        single Bench Line body that gains the most (the accel routes 'in any way you like'), priced in
+        the same convex-build currency (`_attach_progress`)."""
+        if routed <= 0:
+            return 0.0
+        me = self._my_player(obs)
+        line_ids = self._line_preevo_set() | self._wincon_set()
+        best = 0.0
+        for b in (me.get("bench") or []):
+            if not b:
+                continue
+            cid = b.get("id")
+            if cid not in line_ids and self._is_utility_body(cid):
+                continue                                       # don't credit routing onto a utility body
+            have = len(b.get("energies") or [])
+            best = max(best, self._attach_progress(cid, have + routed) - self._attach_progress(cid, have))
+        return best
+
+    def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
+        """Phase-1 shadow of ONE energy-attach option (attach grill ruling, 2026-07-21). DECIDES
+        NOTHING. Returns a per-option working row, or None to ABSTAIN — Ruling 3: a Pokémon Tool
+        rides `OptionType.ATTACH` but is not Energy, so it is never priced here.
+
+        The row's fields ARE the ruled terms (ranked lexicographically in `_attach_shadow`):
+          * `marginal`      — max(`this_turn`, survival-weighted `build`, `accel_value`), gated to 0
+                              for a non-attacking role (Ruling 5b/6-partial) and for a discard-EOT burst
+                              that EVAPORATES on a body that can't attack this turn (the guard).
+                              `this_turn` is the attack the Active unlocks tonight; `build` is the CONVEX
+                              forward progress toward the biggest attack (Ruling 1), zeroed for a doomed
+                              carrier; `accel_value` is the forward build the Energy an ACTIVE
+                              accelerator ROUTES buys on the survivable carrier (Ruling 4).
+          * `line_value`    — worth of the line the body advances (`_role_value`, line-aware); the
+                              target-choice tie-break (wincon line over filler).
+          * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
+                              same-marginal tie toward the reusable Basic over the burst.
+        NOTE the remaining term (partner-conditional role, Ruling 6) is a LATER deck-layer increment —
+        the frame that needs it is xfail in test_attach_shadow.py."""
+        ctx = select.get("context")
+        is_attach = option.get("type") == _ATTACH
+        is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
+        if not (is_attach or is_from):
+            return None
+        ecid = self._option_card_id(obs, select, option)
+        estat = self.stats.get(ecid) if (self.stats and ecid is not None) else None
+        if is_attach and not self._attach_is_energy(estat):
+            return None                                        # Ruling 3: a Tool is not Energy
+        target = self._attach_target(obs, option)
+        if target is None and is_from:
+            target = self._option_pokemon(obs, select, option)
+        if target is None:
+            return None
+        tcid = target.get("id")
+        have = len(target.get("energies") or [])
+        area = option.get("inPlayArea") if is_attach else _BENCH   # accel recipients are benched
+        etags = set(self.functions.tags(ecid)) if (self.functions and ecid is not None) else set()
+        burst = "discard_eot" in etags
+        # a burst that can't be cashed THIS turn evaporates at end of turn — no durable progress
+        can_cash = area == _ACTIVE and board.turn > 1
+        evaporates = burst and not can_cash
+        # Ruling 5b/6-partial: a body whose job is non-attacking (wall / draw-engine, and not a
+        # win-condition Line member) advances no valued attack — its marginal is 0.
+        line_ids = self._line_preevo_set() | self._wincon_set()
+        non_attacking = tcid not in line_ids and (
+            self._is_utility_body(tcid) or self._is_draw_engine_body(tcid)
+            or self._partner_absent(tcid, obs))         # Ruling 6: a partnerless co-dependent engine
+        # Ruling 1 (carrier-survival forward P-term) + 2a (arm-the-doomed): the attach's marginal is the
+        # BETTER of two readings — the immediate attack it unlocks THIS turn (only the Active fires this
+        # turn), and the survival-weighted forward BUILD toward the body's biggest attack. A DOOMED
+        # carrier earns no build credit (it won't live to fire the bigger attack — `dont-feed-the-
+        # doomed`), so a doomed Active scores only if this Energy arms an attack tonight (arm-the-doomed);
+        # a survivable carrier banks the build, so the most-built survivable body wins the concentrate.
+        this_turn = (self._attach_readiness(tcid, have + 1)
+                     - self._attach_readiness(tcid, have)) if area == _ACTIVE else 0.0
+        survives = not (area == _ACTIVE and board.active_doomed)      # forward-survival of the carrier
+        build = (self._attach_progress(tcid, have + 1)
+                 - self._attach_progress(tcid, have)) if survives else 0.0
+        # Ruling 2b (overkill cap): once the ACTIVE already KOs the opponent's Active AND its current
+        # affordable attack already covers the biggest body on their board, a bigger attack buys
+        # nothing more this game-state — stop over-building it and develop a second threat instead
+        # (82750161-59: Jetting KOs the 80-HP Riolu, Nebula 210 overkills a 110-HP board). Opponent-
+        # aware, so it does NOT fire when a bench threat still out-HPs the cheap attack (82523811-59:
+        # Hariyama 150 needs Nebula), where Ruling 1's build stands.
+        overkill = False
+        if area == _ACTIVE and board.active_cheap_attack_kos:
+            opp_hp = self._opp_body_hps(obs)
+            if opp_hp and max(opp_hp) <= self._attach_readiness(tcid, have):
+                overkill = True
+        # Ruling 4 (accel-routing): an attach that lets an ACTIVE accelerator FIRE (Cinderace's Turbo
+        # Flare) is worth the forward build the Energy it ROUTES buys on the survivable carrier, not the
+        # accelerator's own face damage — holds even for a doomed accelerator (it powers the successor
+        # before falling, 83037962-70). Prize-math delay stays OUT (planner-scope).
+        accel_value = 0.0
+        feeds_accel = (area == _ACTIVE and "accel_source" in self._roles_of(tcid)
+                       and self._attach_target_needs(target)
+                       and not board.accel_recipient_missing and not board.bench_wincon_ready)
+        if feeds_accel:
+            aid = self._accel_attack_id(tcid)
+            ast = self._attack_stat(aid) if aid is not None else None
+            if ast is not None:
+                # EXPECTED routing for the value estimate: the printed ceiling capped by what the
+                # recipients can actually use. (The live decider's `_recover_units` also floors this by
+                # the prize-paranoid deck-fuel bound — a grader-safety concern for a COMMITMENT, not for
+                # a shadow value read.)
+                routed = min(getattr(ast, "recoverN", 0), self._recover_recipient_need(ast, board, obs))
+                accel_value = self._accel_routed_value(obs, board, routed)
+        marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, accel_value, 0.0)
+        type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
+        return {"i": None, "target": tcid, "energy": ecid,
+                "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),
+                "build": round(build, 1), "accel_value": round(accel_value, 1), "doomed": not survives,
+                "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
+                "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
+                "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}
+
+    def _attach_shadow(self, obs: dict, select: dict, board: Board, options: list,
+                       traces: list, chosen: list):
+        """The energy-attach valuation shadow (the fourth shadow) — price every energy-attach option
+        in `options` via `_attach_value`, emit the working rows + the top pick + the agreement bit vs
+        the shipped rungs' `chosen`. DECIDES NOTHING. None off a real attach choice (fewer than two
+        priced options) or mid-sim (`self._planning`).
+
+        `eq_pick` ranks rows lexicographically by the ruled priority: (marginal, line_value,
+        −resource_cost) — durable progress first, then the wincon line, then the reusable Energy."""
+        if self._planning:
+            return None
+        ctx = select.get("context")
+        attach_idx = [i for i, o in enumerate(options)
+                      if o.get("type") == _ATTACH or (ctx == _ATTACH_FROM and o.get("type") == _CARD)]
+        if len(attach_idx) < 2:
+            return None
+        rows, abstained = [], 0
+        for i in attach_idx:
+            row = self._attach_value(obs, select, board, options[i])
+            if row is None:                                    # Ruling 3 abstain (Tool) — no row
+                abstained += 1
+                continue
+            row["i"] = i
+            rows.append(row)
+        # Rank only options that buy DURABLE progress; if none does, the oracle attaches NOTHING
+        # (`eq_pick = None`) — an all-Tool menu or a purely-wasteful attach. Priority (the ruled
+        # order): marginal readiness, then the wincon line, then on-type over wasted, then reusable.
+        positive = [r for r in rows if r["marginal"] > 0]
+        if positive:
+            best = max(positive, key=lambda r: (r["marginal"], r["line_value"],
+                                                not r["type_wasted"], -r["resource_cost"]))
+            eq_pick = best["i"]
+            agree = eq_pick in (chosen or [])
+        else:
+            eq_pick = None                                     # attach nothing beats a valueless attach
+            agree = not (set(chosen or []) & set(attach_idx))
+        return {"eq": rows, "eq_pick": eq_pick, "abstained": abstained,
+                "picks": sorted(chosen or []), "agree": agree}
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can
