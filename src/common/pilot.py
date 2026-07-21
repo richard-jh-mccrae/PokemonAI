@@ -51,6 +51,13 @@ _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card oppone
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
 _REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
                            # resources denied, versus cards they have demonstrably been unable to play.
+_REFRESH_BENCH_BODY = 12.0 # piece 2 (SHADOW-reported, decides nothing yet): per missing bench body the
+                           # redraw can supply, the ADAPTIVE draw credit above the flat CYCLE. A thin
+                           # board that the HAND cannot develop (no benchable body held) values the
+                           # redraw by the open deploy need × P(deck supplies a body) — ep83038055 f40,
+                           # "we desperately need a bench". A generic body-deploy tier (engine band);
+                           # magnitude is an OPEN promotion question — measured in the refresh shadow
+                           # before it ever touches the live CYCLE.
 _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter grab: prefer the refresh
                            # with the bigger own-draw ceiling (Lillie's 8 early ≻ Judge 4). Scaled so a
                            # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
@@ -2956,8 +2963,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         for k, r in enumerate(rows):
             r["keep_v2"] = round(needs.keep_v2(slots, elig, resupply, k), 1)
         swing_v2 = swing_v1 + (v1_shed - v2_shed)
+        # PIECE 2 (report-only): the adaptive draw credit beside the flat CYCLE, and the swing that
+        # applies BOTH the graded shed and the adaptive cycle. Decides nothing; measured before promotion.
+        cycle_adaptive = self._refresh_cycle_adaptive(obs, board, cid)
+        swing_v2_cyc = swing_v2 + (cycle_adaptive - _REFRESH_CYCLE)
         return {"i": i, "cid": cid, "v1_shed": round(v1_shed, 1), "v2_shed": round(v2_shed, 1),
                 "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
+                "cycle_adaptive": round(cycle_adaptive, 1), "swing_v2_cyc": round(swing_v2_cyc, 1),
                 "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
                 "played": i in (chosen or []), "eq": rows}
 
@@ -3016,6 +3028,64 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         prizes_hidden = sum(1 for p in (me.get("prize") or [])
                             if not (isinstance(p, dict) and p.get("id") is not None))
         return max(0, unseen - prizes_hidden)
+
+    def _is_benchable_body(self, cid) -> bool:
+        """A benchable body: a Basic Pokémon (`is_pokemon` and no `evolvesFrom` — it grounds out on
+        the field itself, not as an evolution). Staryu/Riolu yes; Cinderace (evolves from Raboot) no."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        return bool(st and getattr(st, "is_pokemon", False) and not getattr(st, "evolvesFrom", None))
+
+    def _hand_has_benchable_body(self, me: dict) -> bool:
+        """True if a benchable Basic Pokémon is already IN HAND — then the bench need is served by
+        DEPLOYING it, not by refreshing, so piece 2's adaptive CYCLE takes no lift (the redraw is not
+        the way to a body). The derived gate that keeps 'bench a body before you shuffle' intact."""
+        return any(self._is_benchable_body(c.get("id")) for c in (me.get("hand") or []) if c)
+
+    def _refresh_cycle_adaptive(self, obs: dict, board: Board, cid) -> float:
+        """PIECE 2 (SHADOW-reported, decides nothing yet — Ruling 3, 'CYCLE should scale to the
+        situation'): the refresh DRAW credit, flat `_REFRESH_CYCLE` PLUS the open bench-deploy need a
+        redraw can fill. A refresh into a starved board (`board.my_bench < _THIN_BENCH`) that the HAND
+        cannot develop itself (`_hand_has_benchable_body` False — else deploy, don't shuffle) is worth
+        more than card flow: the body deficit × the deploy tier × P(the redraw actually supplies a body
+        from the deck over its own draw window).
+
+        The supply probability is a VALUE estimate, not a grader-safety endorsement, so it is the
+        prize-split-weighted expectation (`_prize_split_hit`, un-floored unseen) — the SAME model the
+        shed's re-access uses — NOT the pigeonhole floor `_deck_basic_energy_fuel` needs (which zeroes
+        a 3-of Staryu behind six hidden prizes, ep83038055 f40's exact hole). Bounded (deficit ≤
+        `_THIN_BENCH`, prob ≤ 1). REPLACES nothing live — reported beside the flat CYCLE so the corpus
+        can measure whether the lift fixes f40 without over-firing before it is promoted into
+        `_refresh_swing_tactical`. Flat `_REFRESH_CYCLE` on a developed board or a hand that can bench."""
+        from common.strategy.context import _THIN_BENCH
+        from common.deck_odds import draw_hit_probability
+        from common.strategy.refresh import refresh_branches
+        branches = refresh_branches(cid, board.my_prizes_remaining, board.opp_prizes_remaining)
+        deficit = max(0, _THIN_BENCH - board.my_bench)
+        me = self._my_player(obs)
+        if not branches or deficit <= 0 or self._hand_has_benchable_body(me):
+            return float(_REFRESH_CYCLE)
+        draws = max(my_draw for my_draw, _o in branches)
+        counts = board.deck_known_counts
+        if counts:
+            deck_count = sum(counts.values())
+            prizes_hidden = 0
+            outs = sum(n for c, n in counts.items() if n > 0 and self._is_benchable_body(c))
+        else:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {c: n for c, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(counts.values()) - prizes_hidden
+            outs = sum(n for c, n in counts.items() if self._is_benchable_body(c))
+        pool = deck_count + max(0, board.my_hand_size - 1)   # the shuffled hand joins the draw pool
+        if outs <= 0 or deck_count <= 0 or pool <= 0:
+            return float(_REFRESH_CYCLE)
+        if prizes_hidden > 0:
+            p = self._prize_split_hit(outs, deck_count, prizes_hidden, pool, draws)
+        else:
+            p = draw_hit_probability(outs, pool, draws)
+        return float(_REFRESH_CYCLE) + _REFRESH_BENCH_BODY * deficit * p
 
     def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
         """Total Energy the rider's recipients still LACK to pay an attack — theirs or their forward
