@@ -198,3 +198,26 @@ body's further attach is ~0 marginal (over-attach / overkill cap).
 (`maxDamageCost` met → 0), doomed-DON'T-feed (`83037962-48`: 2 energy on a body needing 3 that dies
 = 0), concentrate, don't-fund-non-attacker. **Out of scope:** prize-math (planner); the tangential
 non-attach frames.
+
+### Build status — Phase 1 shadow oracle (`Pilot._attach_shadow`, 2026-07-21)
+
+Built test-first (`tests/strategy/test_attach_shadow.py`; `discard_shadow`/`refresh_shadow` pattern —
+sparse, mid-sim-guarded, DECIDES NOTHING, on the wire via `telemetry.to_record`). Per-option row =
+`marginal` (max of the this-turn attack unlocked and the survival-weighted convex forward `build`),
+`line_value`, `resource_cost`, `type_wasted`; `eq_pick` ranks `(marginal, line_value, on-type,
+−resource_cost)`.
+
+| Ruling | Status | Mechanism |
+|---|---|---|
+| 3 energy-only gate (incl. Special) | ✅ | a Pokémon Tool abstains (no row) |
+| 5b role-gate + type-fit | ✅ | `_is_utility_body`/`_is_draw_engine_body` → marginal 0; on-type beats `attach_type_wasted` |
+| over-attach / concentrate | ✅ | convex `_attach_progress` `(min(e,M)/M)²·maxDamage` — 0 at max, biggest step at completion |
+| 1 carrier-survival | ✅ | `build` zeroed for a doomed carrier; survivable most-built body wins |
+| 2a arm-the-doomed | ✅ | doomed Active scores only via `this_turn` (arms an attack tonight) |
+| 2b overkill cap | ✅ | Active attach → 0 when it already KOs & `max(opp HP) ≤` current affordable damage (opponent-aware) |
+| 4 accel-routing value | ⚠️ anchor passes, mechanism partial | `83037962-70` lands via the accelerator's own this-turn attack; valuing the *routed* Energy is unbuilt |
+| 6 partner-conditional role | ❌ deferred (deck-layer) | Solrock≈0 without Lunatone in play needs a deck-declared partner map (ADR-0034), not general-oracle card-id logic |
+
+Full suite green (3102 passed) at each increment. Next: the accel-routing marginal (value the Energy
+an attack routes onto the survivable carrier — extend `_recover_units` into the P-term), then the
+Ruling-6 partner map via /deck-align. Phase 2 (staged swaps) unchanged.
