@@ -90,3 +90,8 @@ class Strategy:
     weight_overrides: dict = field(default_factory=dict)  # authored per-deck seed overrides of (typically
                                                         # general) Hypothesis weights by id -- doctrine-driven,
                                                         # sparse, UNDER the learned tuned.json layer (ADR-0035)
+    partners: dict = field(default_factory=dict)       # cardId -> [partner cardIds]: a co-dependent engine
+                                                        # body whose value REQUIRES at least one listed
+                                                        # partner in play (Solrock<->Lunatone). Deck-declared
+                                                        # data (ADR-0034); the general attach oracle reads it
+                                                        # to zero a partnerless engine body (attach Ruling 6)

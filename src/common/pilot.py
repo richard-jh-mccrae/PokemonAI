@@ -2999,6 +2999,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         frac = min(energy, maxc) / maxc
         return frac * frac * dmax
 
+    def _partner_absent(self, cid, obs: dict) -> bool:
+        """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play
+        (Solrock needs a Lunatone, and vice-versa — `strategy.partners`), and NONE of its declared
+        partners is on my board right now → a dead attach target, value it at 0. Partner-AGNOSTIC in
+        the general oracle: the pairing itself is deck-declared data (ADR-0034). False for any body
+        with no declared partner."""
+        partners = getattr(self.strategy, "partners", None) or {}
+        need = partners.get(cid)
+        if not need:
+            return False
+        me = self._my_player(obs)
+        in_play = {m.get("id") for m in ((me.get("active") or []) + (me.get("bench") or [])) if m}
+        return not any(p in in_play for p in need)
+
     def _accel_attack_id(self, cid):
         """The body's attack that carries an energy-accel rider (recoverN > 0) — Turbo Flare / Aura
         Jab. None when the body has no accelerator attack."""
@@ -3075,7 +3089,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # win-condition Line member) advances no valued attack — its marginal is 0.
         line_ids = self._line_preevo_set() | self._wincon_set()
         non_attacking = tcid not in line_ids and (
-            self._is_utility_body(tcid) or self._is_draw_engine_body(tcid))
+            self._is_utility_body(tcid) or self._is_draw_engine_body(tcid)
+            or self._partner_absent(tcid, obs))         # Ruling 6: a partnerless co-dependent engine
         # Ruling 1 (carrier-survival forward P-term) + 2a (arm-the-doomed): the attach's marginal is the
         # BETTER of two readings — the immediate attack it unlocks THIS turn (only the Active fires this
         # turn), and the survival-weighted forward BUILD toward the body's biggest attack. A DOOMED

@@ -216,8 +216,8 @@ sparse, mid-sim-guarded, DECIDES NOTHING, on the wire via `telemetry.to_record`)
 | 2a arm-the-doomed | ✅ | doomed Active scores only via `this_turn` (arms an attack tonight) |
 | 2b overkill cap | ✅ | Active attach → 0 when it already KOs & `max(opp HP) ≤` current affordable damage (opponent-aware) |
 | 4 accel-routing value | ✅ | feeding an ACTIVE `accel_source` is worth the forward build the routed Energy buys on the survivable carrier (`_accel_routed_value`, expected `recoverN` capped by recipient need — not the live decider's prize-paranoid floor); `83037962-70` now drives on the routing (210), not Cinderace's own 50 |
-| 6 partner-conditional role | ❌ deferred (deck-layer) | Solrock≈0 without Lunatone in play needs a deck-declared partner map (ADR-0034), not general-oracle card-id logic |
+| 6 partner-conditional role | ✅ | `Strategy.partners` (deck-declared, mega_lucario `Solrock⇄Lunatone`) read by the general `_partner_absent`; a partnerless engine body → non-attacking (value 0). `84889539-87` routes the `{F}` to the Riolu line, both Lunatone prized |
 
-Full suite green (3103 passed) at each increment. Only Ruling 6 remains — a deck-layer partner map via
-/deck-align (add the Solrock⇄Lunatone pairing so the general value term can zero an engine body whose
-partner is off-board). Phase 2 (staged swaps) unchanged.
+**All eight ruled behaviors are built.** Full suite green (3105 passed) at each increment; the deck-layer
+`partners` field is the value-side complement of mega_lucario's `skip-partnerless-solrock` rung. Phase 2
+(staged swaps — fold the shadow into the live deciders per corpus + score-diff gates) is the next arc.

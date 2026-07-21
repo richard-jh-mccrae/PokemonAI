@@ -31,6 +31,7 @@ ATTACH, HAND, ACTIVE, BENCH, MAIN = 8, 2, 4, 5, 0
 _TOOL, _BASIC_ENERGY, _SPECIAL_ENERGY = 2, 5, 6
 MEGA, STARYU, WATER, IGNITION, CAPE = 1031, 1030, 3, 17, 1100
 LUNATONE = 675        # engine-only body — a non-attacking role
+SOLROCK = 676         # a co-dependent engine body: worthless without a Lunatone in play (Ruling 6)
 
 
 def _attach(hand_idx, area, in_idx):
@@ -45,6 +46,8 @@ def _stats():
                          minAttackCost=1, maxDamageCost=1),
         LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, maxDamage=50, minCostDamage=50,
                            minAttackCost=2, maxDamageCost=2, hasAbility=True),
+        SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, maxDamage=70, minCostDamage=70,
+                          minAttackCost=1, maxDamageCost=1),
         WATER: CardStat(WATER, name="Water", cardType=_BASIC_ENERGY, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition", cardType=_SPECIAL_ENERGY, energyType=0),
         CAPE: CardStat(CAPE, name="Hero's Cape", cardType=_TOOL, aceSpec=True, hpBonus=100),
@@ -54,7 +57,8 @@ def _stats():
 def _pilot():
     funcs = CardFunctions({IGNITION: ["discard_eot"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"],
-                            LUNATONE: ["engine"]})
+                            LUNATONE: ["engine"], SOLROCK: ["secondary_attacker", "engine"]},
+                     partners={SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=funcs)
 
@@ -138,6 +142,30 @@ def test_role_gate_zeros_a_non_attacking_body():
     assert s["eq_pick"] == 1                       # -> the Staryu attacker
 
 
+@pytest.mark.req("REQ-ATTACH-SHADOW-0011")
+def test_partner_conditional_engine_gated_when_partner_absent():
+    # Ruling 6: a Solrock with NO Lunatone in play is a dead attacker -> gated to 0; the Staryu wins.
+    p = _pilot()
+    bench = [{"id": SOLROCK, "energies": [], "hp": 110}, {"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, [{"id": WATER}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])
+    s = p.explain(obs).attach_shadow
+    assert _row_for(s, 0)["marginal"] == 0.0       # partnerless Solrock: gated
+    assert s["eq_pick"] == 1                        # -> the Staryu
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0012")
+def test_partner_conditional_engine_valued_when_partner_present():
+    # With a Lunatone in play the pairing is live -> Solrock (Cosmic Beam 70) out-values the Staryu (20).
+    p = _pilot()
+    bench = [{"id": SOLROCK, "energies": [], "hp": 110}, {"id": STARYU, "energies": [], "hp": 70},
+             {"id": LUNATONE, "energies": [], "hp": 110}]
+    obs = _obs(bench, [{"id": WATER}],
+               [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])   # Solrock, Staryu
+    s = p.explain(obs).attach_shadow
+    assert _row_for(s, 0)["marginal"] > 0.0        # partner present: Solrock is live
+    assert s["eq_pick"] == 0                        # -> the Solrock (70 > 20)
+
+
 @pytest.mark.req("REQ-ATTACH-SHADOW-0006")
 def test_midsim_guard_and_telemetry_wiring():
     p = _pilot()
@@ -207,7 +235,7 @@ _CORPUS = {
     # (target correction), and the oracle picks the durable Basic onto the same bench[0] target.
     ("82750161", 59): (("target", BENCH, 0), None),
     ("83037962", 70): ("pick", None),              # Ruling 4: feed the accelerator (Turbo Flare routes 3)
-    ("84889539", 87): ("pick", "Ruling 6 partner-conditional role (not yet built)"),
+    ("84889539", 87): ("pick", None),              # Ruling 6: route to the Riolu line, not a partnerless Solrock
 }
 
 

@@ -358,6 +358,10 @@ STRATEGY = Strategy(
            # FETCH recognition + `develop-the-cheap-prize-wall-line` read it (kill-switched, default on).
            Line(path=[MAKUHITA, HARIYAMA], payoff=HARIYAMA, role="secondary_attacker")],
     roles=ROLES,
+    # The co-dependent one-of-each engine (STRATEGY.md §0): each half is a dead attach target without
+    # its partner in play. Deck-declared so the GENERAL attach oracle zeroes a partnerless Solrock /
+    # Lunatone (attach Ruling 6) — the value-side complement of the `skip-partnerless-solrock` rung.
+    partners={SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
     params={"setup_energy_target": 2,    # FF — toward the first Mega Brave (build-active-wincon target)
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
                                           # functional consumer). Tier-1 engine sims (planner_engine_rank,
