@@ -2972,6 +2972,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return float(getattr(st, "minCostDamage", 0) or getattr(st, "maxDamage", 0) or 0)
         return 0.0
 
+    def _opp_body_hps(self, obs: dict) -> list:
+        """Current HP of every opponent Pokémon in play (Active + Bench) — the overkill-cap read: a
+        bigger attack buys nothing once the current one already covers the biggest body on the board."""
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if len(players) > 1 else None
+        if not opp:
+            return []
+        bodies = list(opp.get("active") or []) + list(opp.get("bench") or [])
+        return [m.get("hp", 0) for m in bodies if m]
+
     def _attach_progress(self, cid, energy: int) -> float:
         """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward its biggest attack
         (attach grill Ruling 1). ``(min(e, M) / M)**2 * maxDamage`` — the SQUARE makes the marginal
@@ -3043,7 +3055,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         survives = not (area == _ACTIVE and board.active_doomed)      # forward-survival of the carrier
         build = (self._attach_progress(tcid, have + 1)
                  - self._attach_progress(tcid, have)) if survives else 0.0
-        marginal = 0.0 if (non_attacking or evaporates) else max(this_turn, build, 0.0)
+        # Ruling 2b (overkill cap): once the ACTIVE already KOs the opponent's Active AND its current
+        # affordable attack already covers the biggest body on their board, a bigger attack buys
+        # nothing more this game-state — stop over-building it and develop a second threat instead
+        # (82750161-59: Jetting KOs the 80-HP Riolu, Nebula 210 overkills a 110-HP board). Opponent-
+        # aware, so it does NOT fire when a bench threat still out-HPs the cheap attack (82523811-59:
+        # Hariyama 150 needs Nebula), where Ruling 1's build stands.
+        overkill = False
+        if area == _ACTIVE and board.active_cheap_attack_kos:
+            opp_hp = self._opp_body_hps(obs)
+            if opp_hp and max(opp_hp) <= self._attach_readiness(tcid, have):
+                overkill = True
+        marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, 0.0)
         type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
         return {"i": None, "target": tcid, "energy": ecid,
                 "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),

@@ -201,7 +201,10 @@ _CORPUS = {
     # energy to the ACTIVE Mega Starmie ... Nebula Beam in two turns"), so we assert the ACTIVE intent.
     ("82523811", 59): (("area", ACTIVE), None),
     ("83664340", 45): ("pick", None),              # Ruling 2a: arm the doomed Active (Jetting this turn)
-    ("82750161", 59): ("pick", "Ruling 2b snipe-value / active-already-lethal (not yet built)"),
+    # Ruling 2b (overkill cap): active already KOs & nothing on the board needs the bigger attack ->
+    # develop the benched second threat. correct=[1] tags Ignition->bench[0]; the energy is incidental
+    # (target correction), and the oracle picks the durable Basic onto the same bench[0] target.
+    ("82750161", 59): (("target", BENCH, 0), None),
     ("83037962", 70): ("pick", "Ruling 4 accel-routing marginal (not yet built)"),
     ("84889539", 87): ("pick", "Ruling 6 partner-conditional role (not yet built)"),
 }
@@ -232,5 +235,9 @@ def test_corpus_shadow_agrees_with_correct(ep, fr, request):
         opt = rec["obs"]["select"]["option"][s["eq_pick"]]
         assert opt.get("inPlayArea") == expectation[1], \
             f"{ep}-{fr}: eq_pick target area {opt.get('inPlayArea')} != {expectation[1]}"
+    elif isinstance(expectation, tuple) and expectation[0] == "target":
+        opt = rec["obs"]["select"]["option"][s["eq_pick"]]
+        assert (opt.get("inPlayArea"), opt.get("inPlayIndex")) == (expectation[1], expectation[2]), \
+            f"{ep}-{fr}: eq_pick target {(opt.get('inPlayArea'), opt.get('inPlayIndex'))} != {expectation[1:]}"
     else:
         assert s["eq_pick"] in correct, f"{ep}-{fr}: eq_pick={s['eq_pick']} not in correct={correct}"
