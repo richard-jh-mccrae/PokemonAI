@@ -196,9 +196,10 @@ _CORPUS = {
     ("86089638", 18): ("pick", None),              # Ruling 5 + type-fit: on-type onto the Dreepy line
     ("83037962", 48): ("pick", None),              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
     ("82749168", 61): ("pick", None),              # Ruling 1: concentrate on the started (2-Energy) carrier
-    # Ruling 1: build the survivable 400-HP ACTIVE carrier. NOTE the recorded correct=[6] mis-tags a
-    # redundant bench index (same target as chosen=[2]); the rationale is unambiguous ("add a second
-    # energy to the ACTIVE Mega Starmie ... Nebula Beam in two turns"), so we assert the ACTIVE intent.
+    # Ruling 1: build the survivable 400-HP ACTIVE carrier (opp has Hariyama 150 / Riolu 180 that only
+    # Nebula 210 KOs) rather than starting a fresh bench Mega. correct re-tagged [6]->[1] (2026-07-21;
+    # the [6] tag was a redundant bench index identical to chosen). Assert the ACTIVE target — options
+    # 1/3/5 are identical Basic->active copies, so pin the area, not one redundant index.
     ("82523811", 59): (("area", ACTIVE), None),
     ("83664340", 45): ("pick", None),              # Ruling 2a: arm the doomed Active (Jetting this turn)
     # Ruling 2b (overkill cap): active already KOs & nothing on the board needs the bigger attack ->
