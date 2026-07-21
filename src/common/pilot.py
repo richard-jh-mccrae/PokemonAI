@@ -74,6 +74,16 @@ _ENGINE_SUPPORTER_KEEP = 8.0
 # leaf's bench position weight (`_READINESS_BENCH_DISCOUNT` 0.45 — a hand card is ~one deploy away,
 # like a benched body). De-duplicated by the assignment (one slot per distinct card).
 _GENERAL_WORTH_W = 0.45
+_GENERAL_ILLIQUID_FLOOR = 0.15  # piece 2b (the shed's Hole-2 fix): a general-worth card whose value
+                           # needs board state it hasn't got — an Energy with NO body that can receive
+                           # and attack with it (a doomed Active, an empty Bench, no benchable body in
+                           # hand) — prices at this fraction of its latent tier, not the full catalog
+                           # worth. Illiquid held value you cannot spend is not worth clinging to over a
+                           # refresh (ep83038055 f40: Ignition 13.5 + a bare {W} propped the shed above
+                           # the redraw with no attacker in sight). NOT 0 — a residual future worth once
+                           # a body lands keeps it above outright-dead cards in pitch order. Derived from
+                           # the board, never a card list; a live recipient restores full worth (f65: an
+                           # Ignition kept for the BENCHED Mega Starmie stays fully priced).
 # WP-N5b/N5d (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD
 # hand at end-of-turn = the needs-assignment slot coverage (`needs.set_keep_v2`) of the held cards
 # that COULD NOT have been deployed this turn (`_held_undeployable` — the N5d complement: a card I
@@ -2737,8 +2747,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             worth = self._role_value(cid)
             deploy = rows[live[0]].get("deploy", 1.0)
             if worth * deploy > 0:
+                liq = self._general_liquidity(cid, board, me)   # piece 2b: illiquid latent worth discounts
                 _emit(needs.general_worth_slot(f"general:{cid}",
-                                               value=worth * deploy * _GENERAL_WORTH_W), live)
+                                               value=worth * deploy * _GENERAL_WORTH_W * liq), live)
         return slots, elig
 
     def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
@@ -3036,10 +3047,47 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return bool(st and getattr(st, "is_pokemon", False) and not getattr(st, "evolvesFrom", None))
 
     def _hand_has_benchable_body(self, me: dict) -> bool:
-        """True if a benchable Basic Pokémon is already IN HAND — then the bench need is served by
-        DEPLOYING it, not by refreshing, so piece 2's adaptive CYCLE takes no lift (the redraw is not
-        the way to a body). The derived gate that keeps 'bench a body before you shuffle' intact."""
+        """True if a benchable Basic Pokémon is already IN HAND (deploy it directly)."""
         return any(self._is_benchable_body(c.get("id")) for c in (me.get("hand") or []) if c)
+
+    def _hand_can_develop_body(self, me: dict) -> bool:
+        """True if the HAND can put a body on the board this turn — a benchable Basic directly, OR a
+        fetcher that produces one (`bench_fill` Poffin / `tutor_pokemon` Ball can grab a Basic). NOT a
+        `tutor_mega` (Mega Signal fetches the payoff, which still needs its base). The line between a
+        genuinely stranded hand (f40 — no body, no fetcher) and a developable one (ep83667237 f120 —
+        a Poffin and an Ultra Ball on hand, so the Energy has a home coming and is NOT illiquid)."""
+        if self._hand_has_benchable_body(me):
+            return True
+        body_fetch = {"bench_fill", "tutor_pokemon"}
+        for c in (me.get("hand") or []):
+            cid = c.get("id") if c else None
+            if cid is not None and self.functions and (body_fetch & set(self.functions.tags(cid))):
+                return True
+        return False
+
+    def _has_energy_recipient(self, board: Board, me: dict) -> bool:
+        """True if an Energy card has a live home on my board: a benched body (bench bodies are not the
+        doomed Active), a non-doomed Active, or a benchable body in hand to deploy onto. False is the
+        f40 shape — a doomed Active, an empty Bench and no body in hand — where held Energy cannot be
+        attached to anything that will attack, so its latent worth is illiquid."""
+        if board.my_bench > 0:
+            return True
+        if not board.active_doomed and any(me.get("active") or []):
+            return True
+        return self._hand_can_develop_body(me)
+
+    def _general_liquidity(self, cid, board: Board, me: dict) -> float:
+        """PIECE 2b: the LIQUIDITY factor on a general-worth slot ∈ (`_GENERAL_ILLIQUID_FLOOR`, 1] —
+        how realizable a card's LATENT worth is on the current board. An Energy with no recipient
+        (`_has_energy_recipient` False) prices at the floor: catalog worth you cannot spend is not
+        worth holding over a refresh (the shed mirror of piece 1's line-slot readiness — same idea, the
+        keep side). 1.0 (unchanged) for everything with a live use, so only the genuinely stranded card
+        is discounted; never a card list. Extends to other role-blocked worth (an evolver with no base)
+        as the corpus demands — energy is the dominant f40 term and the first cut."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is not None and getattr(st, "is_energy", False) and not self._has_energy_recipient(board, me):
+            return _GENERAL_ILLIQUID_FLOOR
+        return 1.0
 
     def _refresh_cycle_adaptive(self, obs: dict, board: Board, cid) -> float:
         """PIECE 2 (SHADOW-reported, decides nothing yet — Ruling 3, 'CYCLE should scale to the
@@ -3062,7 +3110,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         branches = refresh_branches(cid, board.my_prizes_remaining, board.opp_prizes_remaining)
         deficit = max(0, _THIN_BENCH - board.my_bench)
         me = self._my_player(obs)
-        if not branches or deficit <= 0 or self._hand_has_benchable_body(me):
+        if not branches or deficit <= 0 or self._hand_can_develop_body(me):
             return float(_REFRESH_CYCLE)
         draws = max(my_draw for my_draw, _o in branches)
         counts = board.deck_known_counts
