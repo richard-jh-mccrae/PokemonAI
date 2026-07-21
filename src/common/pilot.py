@@ -64,9 +64,14 @@ _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter gra
                            # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
                            # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
 # The discard equation's engine-supporter keep floor (ADR-0065 seam-D) — mirrors the ladder's
-# `keep-engine-supporter-at-discard` (−8): a draw/search/heal SUPPORTER that is not hand_disruption
+# `keep-engine-supporter-at-discard` (−8): a draw/search/dig SUPPORTER that is not hand_disruption
 # is a draw engine kept over pure filler. Discard-CONTEXT (not general worth), tuned to the −8 band.
-_ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
+# NOTE: `heal`/`clutch_heal` are DELIBERATELY OUT (classification fix, 2026-07-21) — a heal Supporter
+# (Wally's Compassion) is RECOVERY, not card advantage, and does not belong on the draw-engine slot.
+# It was pricing Wally's at a saturated ~2.6 on the shared engine slot AND (as an `engine_cids`
+# member) barring it from its rightful `general` worth (recovery role 20 → ~9). A heal that also
+# genuinely draws still qualifies via its `draw`/`dig` tag; a pure heal now takes general worth.
+_ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig"})
 _ENGINE_SUPPORTER_KEEP = 8.0
 # WP-N5 (keep-value v2): the LATENT-worth discount on a held card that fills no specific need — its
 # role tier is real board value even without an open slot (the readiness leaf's `contribution` for
@@ -2413,8 +2418,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
             worth = self._role_value(cid)
             # The engine-supporter WORTH floor (Finding 2's 5th premise gate, mirrored for the swap):
-            # a draw/search/dig/heal SUPPORTER that is NOT hand_disruption (Lillie's, not Harlequin) is
+            # a draw/search/dig SUPPORTER that is NOT hand_disruption (Lillie's, not Harlequin) is
             # a draw engine worth keeping over pure filler, though it carries no ROLE/TAG worth.
+            # (heal/clutch_heal excluded — a pure-heal Supporter is recovery, not a draw engine.)
             # Discard-CONTEXT (mirrors `keep-engine-supporter-at-discard` −8). A WORTH floor, not a keep
             # floor — it is still discounted by re-access (a duplicate engine supporter is covered) and
             # by the gates (a need-met tutor still zeros), unlike a hard override.
