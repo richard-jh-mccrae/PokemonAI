@@ -81,7 +81,8 @@ SUCCESSION_ROLES = frozenset({"win_condition", "primary_attacker"})
 
 
 def line_slots(key: str, *, value: float, succession: bool = False,
-               primary_met: bool = False, succession_urgent: bool = False) -> list:
+               primary_met: bool = False, succession_urgent: bool = False,
+               deadline: int = 99, succ_deadline: int = 99) -> list:
     """The line slots for ONE card class: the primary assembly slot at the full tier (absent when a
     copy is already IN PLAY — ``primary_met``, the in_play gate re-derived as slot absence), plus —
     for a wincon class (``succession=True``, `SUCCESSION_ROLES`) — a SUCCESSION slot: the plan needs
@@ -99,14 +100,22 @@ def line_slots(key: str, *, value: float, succession: bool = False,
         against a this-turn need). This re-derives the old flat answer-doom successor value
         (`TAG_TIER["clutch_heal"]`) AS the line's own worth: a doomed wincon's successor is not
         shuffle fodder (ep83037962 f49 — don't Harlequin away the second Mega Starmie the turn its
-        Staryu hit the bench)."""
+        Staryu hit the bench).
+
+    READINESS (piece 1, the shuffle-value grill): ``deadline`` / ``succ_deadline`` carry the line's
+    board-derived power-up timing — the primary at the turn the payoff comes online (its base already
+    in play and powered ⇒ ~1), the succession one turn further (the backup). They default to 99
+    (latent) so every non-refresh caller is unchanged; only the refresh-SHED resupply consumes
+    ``deadline`` (`pilot._refresh_slot_resupply` clamps the re-access window to it), so a wincon one
+    attach from live is no longer priced as freely re-fetchable and shed for nearly nothing
+    (ep82752604 f16). The URGENT succession override still wins (deadline 0)."""
     out = []
     if not primary_met:
-        out.append(Slot("line", float(value), 99, key))
+        out.append(Slot("line", float(value), deadline, key))
     if succession:
         succ_val = float(value) if succession_urgent else float(value) / 2.0
-        succ_deadline = 0 if succession_urgent else 99
-        out.append(Slot("line", succ_val, succ_deadline, f"{key}:succ"))
+        sd = 0 if succession_urgent else succ_deadline
+        out.append(Slot("line", succ_val, sd, f"{key}:succ"))
     return out
 
 

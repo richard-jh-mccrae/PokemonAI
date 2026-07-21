@@ -80,9 +80,11 @@ def test_doomed_successor_rides_a_full_tier_this_turn_succession_slot():
 
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_duplicate_supporter_second_copy_is_worth_zero():
-    """ep82522698 f36 (Game C): two Wally's Compassion (a one-per-turn Supporter). One fills the
-    saturating draw-engine need; the SPARE gets NO general slot and prices keep_v2 = 0 — "you lose
-    the second Supporter in a shuffle for free". The whole-hand shed drops accordingly."""
+    """ep82522698 f36 (Game C): two Wally's Compassion (a one-per-turn Supporter). Wally's is a
+    RECOVERY heal, NOT a draw engine (classification fix 2026-07-21 — `heal`/`clutch_heal` out of
+    `_ENGINE_KEEP_TAGS`), so it takes a DE-DUPLICATED general-worth slot (one per class); the SPARE
+    copy covers nothing the first does not and prices keep_v2 = 0 — "you lose the second Supporter in
+    a shuffle for free". The ruling survives the reclassification; the shed drops accordingly."""
     from common import needs
     pilot = _shipped_pilot("mega_starmie")
     obs = _corpus_frame("82522698", 36)["obs"]
@@ -92,8 +94,9 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
     resupply = [0.0] * len(slots)
     keeps = [needs.keep_v2(slots, elig, resupply, k) for k in wally_rows]
     assert min(keeps) == pytest.approx(0.0)                     # the spare copy is worth 0
-    # and no general slot exists for the (saturating-engine) Wally's class
-    assert not [s for s in slots if s.key == "general:1229"]
+    # ONE de-duplicated general slot covers the Wally's class (recovery worth, not a draw engine),
+    # which is WHY the spare prices 0 — the sibling already covers it.
+    assert len([s for s in slots if s.key == "general:1229"]) == 1
 
 
 @pytest.mark.req("REQ-NEEDS-0009")

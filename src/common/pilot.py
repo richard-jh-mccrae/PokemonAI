@@ -51,15 +51,27 @@ _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card oppone
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
 _REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
                            # resources denied, versus cards they have demonstrably been unable to play.
+_REFRESH_BENCH_BODY = 12.0 # piece 2 (SHADOW-reported, decides nothing yet): per missing bench body the
+                           # redraw can supply, the ADAPTIVE draw credit above the flat CYCLE. A thin
+                           # board that the HAND cannot develop (no benchable body held) values the
+                           # redraw by the open deploy need × P(deck supplies a body) — ep83038055 f40,
+                           # "we desperately need a bench". A generic body-deploy tier (engine band);
+                           # magnitude is an OPEN promotion question — measured in the refresh shadow
+                           # before it ever touches the live CYCLE.
 _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter grab: prefer the refresh
                            # with the bigger own-draw ceiling (Lillie's 8 early ≻ Judge 4). Scaled so a
                            # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
                            # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
                            # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
 # The discard equation's engine-supporter keep floor (ADR-0065 seam-D) — mirrors the ladder's
-# `keep-engine-supporter-at-discard` (−8): a draw/search/heal SUPPORTER that is not hand_disruption
+# `keep-engine-supporter-at-discard` (−8): a draw/search/dig SUPPORTER that is not hand_disruption
 # is a draw engine kept over pure filler. Discard-CONTEXT (not general worth), tuned to the −8 band.
-_ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
+# NOTE: `heal`/`clutch_heal` are DELIBERATELY OUT (classification fix, 2026-07-21) — a heal Supporter
+# (Wally's Compassion) is RECOVERY, not card advantage, and does not belong on the draw-engine slot.
+# It was pricing Wally's at a saturated ~2.6 on the shared engine slot AND (as an `engine_cids`
+# member) barring it from its rightful `general` worth (recovery role 20 → ~9). A heal that also
+# genuinely draws still qualifies via its `draw`/`dig` tag; a pure heal now takes general worth.
+_ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig"})
 _ENGINE_SUPPORTER_KEEP = 8.0
 # WP-N5 (keep-value v2): the LATENT-worth discount on a held card that fills no specific need — its
 # role tier is real board value even without an open slot (the readiness leaf's `contribution` for
@@ -67,6 +79,16 @@ _ENGINE_SUPPORTER_KEEP = 8.0
 # leaf's bench position weight (`_READINESS_BENCH_DISCOUNT` 0.45 — a hand card is ~one deploy away,
 # like a benched body). De-duplicated by the assignment (one slot per distinct card).
 _GENERAL_WORTH_W = 0.45
+_GENERAL_ILLIQUID_FLOOR = 0.15  # piece 2b (the shed's Hole-2 fix): a general-worth card whose value
+                           # needs board state it hasn't got — an Energy with NO body that can receive
+                           # and attack with it (a doomed Active, an empty Bench, no benchable body in
+                           # hand) — prices at this fraction of its latent tier, not the full catalog
+                           # worth. Illiquid held value you cannot spend is not worth clinging to over a
+                           # refresh (ep83038055 f40: Ignition 13.5 + a bare {W} propped the shed above
+                           # the redraw with no attacker in sight). NOT 0 — a residual future worth once
+                           # a body lands keeps it above outright-dead cards in pitch order. Derived from
+                           # the board, never a card list; a live recipient restores full worth (f65: an
+                           # Ignition kept for the BENCHED Mega Starmie stays fully priced).
 # WP-N5b/N5d (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD
 # hand at end-of-turn = the needs-assignment slot coverage (`needs.set_keep_v2`) of the held cards
 # that COULD NOT have been deployed this turn (`_held_undeployable` — the N5d complement: a card I
@@ -2396,8 +2418,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
             worth = self._role_value(cid)
             # The engine-supporter WORTH floor (Finding 2's 5th premise gate, mirrored for the swap):
-            # a draw/search/dig/heal SUPPORTER that is NOT hand_disruption (Lillie's, not Harlequin) is
+            # a draw/search/dig SUPPORTER that is NOT hand_disruption (Lillie's, not Harlequin) is
             # a draw engine worth keeping over pure filler, though it carries no ROLE/TAG worth.
+            # (heal/clutch_heal excluded — a pure-heal Supporter is recovery, not a draw engine.)
             # Discard-CONTEXT (mirrors `keep-engine-supporter-at-discard` −8). A WORTH floor, not a keep
             # floor — it is still discounted by re-access (a duplicate engine supporter is covered) and
             # by the gates (a need-met tutor still zeros), unlike a hard override.
@@ -2593,10 +2616,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 # answer-doom slot). Same granularity as the retired answer-doom test.
                 urgent = bool(board.active_doomed and cid in self._wincon_set()
                               and getattr(board, "line_preevo_in_play", False))
+                # READINESS (piece 1): the primary comes online when its base is in play AND already
+                # powered (evolve next turn, attack soon ⇒ deadline 1); a base in play but unpowered,
+                # or not yet benched, is a turn further (2). The backup (succession) is one hop behind
+                # the primary. Consumed ONLY by the refresh-SHED resupply window (`_refresh_slot_
+                # resupply`) — inert for the live discard decider, which reads no deadline. Two live
+                # Staryu that make both Mega Starmie imminent lines can no longer be shed for ~nothing.
+                line_deadline = self._line_readiness_deadline(me, cid)
                 for s in needs.line_slots(f"line:{cid}", value=worth * deploy,
                                           succession=bool(set(roles) & needs.SUCCESSION_ROLES),
                                           primary_met=cid in board.in_play_ids,
-                                          succession_urgent=urgent):
+                                          succession_urgent=urgent,
+                                          deadline=line_deadline,
+                                          succ_deadline=line_deadline + 1):
                     _emit(s, members)
             if cid in getattr(board, "deploy_now_ids", frozenset()):
                 _emit(needs.deploy_now_slot(f"deploy:{cid}", value=self._role_value(cid)), members)
@@ -2721,8 +2753,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             worth = self._role_value(cid)
             deploy = rows[live[0]].get("deploy", 1.0)
             if worth * deploy > 0:
+                liq = self._general_liquidity(cid, board, me)   # piece 2b: illiquid latent worth discounts
                 _emit(needs.general_worth_slot(f"general:{cid}",
-                                               value=worth * deploy * _GENERAL_WORTH_W), live)
+                                               value=worth * deploy * _GENERAL_WORTH_W * liq), live)
         return slots, elig
 
     def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
@@ -2885,7 +2918,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             u = fetch_closure.class_reaccess_outs(classes, counts, self._closure_stat_of,
                                                   self._closure_clauses_of)
             certain = len(members[j])
-            window = draws + (s.deadline if s.kind == "fund_attack" else 0)
+            # fund_attack widens by its quota deadline; a LINE slot CLAMPS to its readiness deadline
+            # (piece 1) — a wincon one attach from live gets only its ~1-2-draw re-access window, not
+            # the whole refresh redraw, so its shed cost stays material; other slots take the window.
+            if s.kind == "fund_attack":
+                window = draws + s.deadline
+            elif s.kind == "line":
+                window = min(draws, s.deadline)
+            else:
+                window = draws
             if prizes_hidden > 0:
                 r = self._prize_split_hit(u, deck_count, prizes_hidden, pool, window,
                                           certain=certain)
@@ -2939,8 +2980,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         for k, r in enumerate(rows):
             r["keep_v2"] = round(needs.keep_v2(slots, elig, resupply, k), 1)
         swing_v2 = swing_v1 + (v1_shed - v2_shed)
+        # PIECE 2 (report-only): the adaptive draw credit beside the flat CYCLE, and the swing that
+        # applies BOTH the graded shed and the adaptive cycle. Decides nothing; measured before promotion.
+        cycle_adaptive = self._refresh_cycle_adaptive(obs, board, cid)
+        swing_v2_cyc = swing_v2 + (cycle_adaptive - _REFRESH_CYCLE)
         return {"i": i, "cid": cid, "v1_shed": round(v1_shed, 1), "v2_shed": round(v2_shed, 1),
                 "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
+                "cycle_adaptive": round(cycle_adaptive, 1), "swing_v2_cyc": round(swing_v2_cyc, 1),
                 "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
                 "played": i in (chosen or []), "eq": rows}
 
@@ -2999,6 +3045,101 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         prizes_hidden = sum(1 for p in (me.get("prize") or [])
                             if not (isinstance(p, dict) and p.get("id") is not None))
         return max(0, unseen - prizes_hidden)
+
+    def _is_benchable_body(self, cid) -> bool:
+        """A benchable body: a Basic Pokémon (`is_pokemon` and no `evolvesFrom` — it grounds out on
+        the field itself, not as an evolution). Staryu/Riolu yes; Cinderace (evolves from Raboot) no."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        return bool(st and getattr(st, "is_pokemon", False) and not getattr(st, "evolvesFrom", None))
+
+    def _hand_has_benchable_body(self, me: dict) -> bool:
+        """True if a benchable Basic Pokémon is already IN HAND (deploy it directly)."""
+        return any(self._is_benchable_body(c.get("id")) for c in (me.get("hand") or []) if c)
+
+    def _hand_can_develop_body(self, me: dict) -> bool:
+        """True if the HAND can put a body on the board this turn — a benchable Basic directly, OR a
+        fetcher that produces one (`bench_fill` Poffin / `tutor_pokemon` Ball can grab a Basic). NOT a
+        `tutor_mega` (Mega Signal fetches the payoff, which still needs its base). The line between a
+        genuinely stranded hand (f40 — no body, no fetcher) and a developable one (ep83667237 f120 —
+        a Poffin and an Ultra Ball on hand, so the Energy has a home coming and is NOT illiquid)."""
+        if self._hand_has_benchable_body(me):
+            return True
+        body_fetch = {"bench_fill", "tutor_pokemon"}
+        for c in (me.get("hand") or []):
+            cid = c.get("id") if c else None
+            if cid is not None and self.functions and (body_fetch & set(self.functions.tags(cid))):
+                return True
+        return False
+
+    def _has_energy_recipient(self, board: Board, me: dict) -> bool:
+        """True if an Energy card has a live home on my board: a benched body (bench bodies are not the
+        doomed Active), a non-doomed Active, or a benchable body in hand to deploy onto. False is the
+        f40 shape — a doomed Active, an empty Bench and no body in hand — where held Energy cannot be
+        attached to anything that will attack, so its latent worth is illiquid."""
+        if board.my_bench > 0:
+            return True
+        if not board.active_doomed and any(me.get("active") or []):
+            return True
+        return self._hand_can_develop_body(me)
+
+    def _general_liquidity(self, cid, board: Board, me: dict) -> float:
+        """PIECE 2b: the LIQUIDITY factor on a general-worth slot ∈ (`_GENERAL_ILLIQUID_FLOOR`, 1] —
+        how realizable a card's LATENT worth is on the current board. An Energy with no recipient
+        (`_has_energy_recipient` False) prices at the floor: catalog worth you cannot spend is not
+        worth holding over a refresh (the shed mirror of piece 1's line-slot readiness — same idea, the
+        keep side). 1.0 (unchanged) for everything with a live use, so only the genuinely stranded card
+        is discounted; never a card list. Extends to other role-blocked worth (an evolver with no base)
+        as the corpus demands — energy is the dominant f40 term and the first cut."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is not None and getattr(st, "is_energy", False) and not self._has_energy_recipient(board, me):
+            return _GENERAL_ILLIQUID_FLOOR
+        return 1.0
+
+    def _refresh_cycle_adaptive(self, obs: dict, board: Board, cid) -> float:
+        """PIECE 2 (SHADOW-reported, decides nothing yet — Ruling 3, 'CYCLE should scale to the
+        situation'): the refresh DRAW credit, flat `_REFRESH_CYCLE` PLUS the open bench-deploy need a
+        redraw can fill. A refresh into a starved board (`board.my_bench < _THIN_BENCH`) that the HAND
+        cannot develop itself (`_hand_has_benchable_body` False — else deploy, don't shuffle) is worth
+        more than card flow: the body deficit × the deploy tier × P(the redraw actually supplies a body
+        from the deck over its own draw window).
+
+        The supply probability is a VALUE estimate, not a grader-safety endorsement, so it is the
+        prize-split-weighted expectation (`_prize_split_hit`, un-floored unseen) — the SAME model the
+        shed's re-access uses — NOT the pigeonhole floor `_deck_basic_energy_fuel` needs (which zeroes
+        a 3-of Staryu behind six hidden prizes, ep83038055 f40's exact hole). Bounded (deficit ≤
+        `_THIN_BENCH`, prob ≤ 1). REPLACES nothing live — reported beside the flat CYCLE so the corpus
+        can measure whether the lift fixes f40 without over-firing before it is promoted into
+        `_refresh_swing_tactical`. Flat `_REFRESH_CYCLE` on a developed board or a hand that can bench."""
+        from common.strategy.context import _THIN_BENCH
+        from common.deck_odds import draw_hit_probability
+        from common.strategy.refresh import refresh_branches
+        branches = refresh_branches(cid, board.my_prizes_remaining, board.opp_prizes_remaining)
+        deficit = max(0, _THIN_BENCH - board.my_bench)
+        me = self._my_player(obs)
+        if not branches or deficit <= 0 or self._hand_can_develop_body(me):
+            return float(_REFRESH_CYCLE)
+        draws = max(my_draw for my_draw, _o in branches)
+        counts = board.deck_known_counts
+        if counts:
+            deck_count = sum(counts.values())
+            prizes_hidden = 0
+            outs = sum(n for c, n in counts.items() if n > 0 and self._is_benchable_body(c))
+        else:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {c: n for c, n in unseen.items() if n > 0}
+            prizes_hidden = sum(1 for p in (me.get("prize") or [])
+                                if not (isinstance(p, dict) and p.get("id") is not None))
+            deck_count = sum(counts.values()) - prizes_hidden
+            outs = sum(n for c, n in counts.items() if self._is_benchable_body(c))
+        pool = deck_count + max(0, board.my_hand_size - 1)   # the shuffled hand joins the draw pool
+        if outs <= 0 or deck_count <= 0 or pool <= 0:
+            return float(_REFRESH_CYCLE)
+        if prizes_hidden > 0:
+            p = self._prize_split_hit(outs, deck_count, prizes_hidden, pool, draws)
+        else:
+            p = draw_hit_probability(outs, pool, draws)
+        return float(_REFRESH_CYCLE) + _REFRESH_BENCH_BODY * deficit * p
 
     def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
         """Total Energy the rider's recipients still LACK to pay an attack — theirs or their forward
@@ -4484,6 +4625,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
+
+    def _line_readiness_deadline(self, me: dict, cid) -> int:
+        """READINESS (piece 1): how soon a held wincon ``cid`` comes online, as the re-access deadline
+        the refresh-SHED window clamps to (`_refresh_slot_resupply`). Keyed on the payoff's BASE being
+        in play — the human's own line ("no riolu in play, thus it's worthless at this moment",
+        ml ep83966336 f44):
+
+          * a base in play AND already powered ⇒ **1** (evolve next turn, attack soon — hold it);
+          * a base in play but unpowered ⇒ **2** (a turn further, still an imminent line — hold it);
+          * NO base in play ⇒ **99** (latent — the payoff cannot be assembled soon, it is freely
+            re-fetchable once a base lands, so it stays cheap to shuffle away — restores f44).
+
+        Two live Staryu keep both Mega Starmie expensive to shed (deadline 2, ep82752604 f16); a lone
+        Mega Lucario with no Riolu down stays sheddable (99). Fail-open: unknown forward-line facts ⇒
+        no base found ⇒ 99 (the re-fetchable side, never over-protects)."""
+        if cid is None:
+            return 99
+        board = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
+        bases = [p for p in board if cid in self._forward_card_ids(p.get("id"))]
+        if not bases:
+            return 99
+        return 1 if any(p.get("energies") for p in bases) else 2
 
     def _bench_line_member_needs(self, me: dict) -> bool:
         """True if a BENCHED body on a declared win-condition Line's path (pre-evolution or payoff,
