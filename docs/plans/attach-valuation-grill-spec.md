@@ -215,9 +215,9 @@ sparse, mid-sim-guarded, DECIDES NOTHING, on the wire via `telemetry.to_record`)
 | 1 carrier-survival | ✅ | `build` zeroed for a doomed carrier; survivable most-built body wins |
 | 2a arm-the-doomed | ✅ | doomed Active scores only via `this_turn` (arms an attack tonight) |
 | 2b overkill cap | ✅ | Active attach → 0 when it already KOs & `max(opp HP) ≤` current affordable damage (opponent-aware) |
-| 4 accel-routing value | ⚠️ anchor passes, mechanism partial | `83037962-70` lands via the accelerator's own this-turn attack; valuing the *routed* Energy is unbuilt |
+| 4 accel-routing value | ✅ | feeding an ACTIVE `accel_source` is worth the forward build the routed Energy buys on the survivable carrier (`_accel_routed_value`, expected `recoverN` capped by recipient need — not the live decider's prize-paranoid floor); `83037962-70` now drives on the routing (210), not Cinderace's own 50 |
 | 6 partner-conditional role | ❌ deferred (deck-layer) | Solrock≈0 without Lunatone in play needs a deck-declared partner map (ADR-0034), not general-oracle card-id logic |
 
-Full suite green (3102 passed) at each increment. Next: the accel-routing marginal (value the Energy
-an attack routes onto the survivable carrier — extend `_recover_units` into the P-term), then the
-Ruling-6 partner map via /deck-align. Phase 2 (staged swaps) unchanged.
+Full suite green (3103 passed) at each increment. Only Ruling 6 remains — a deck-layer partner map via
+/deck-align (add the Solrock⇄Lunatone pairing so the general value term can zero an engine body whose
+partner is off-board). Phase 2 (staged swaps) unchanged.

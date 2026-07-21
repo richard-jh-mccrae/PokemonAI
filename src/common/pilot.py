@@ -2999,24 +2999,56 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         frac = min(energy, maxc) / maxc
         return frac * frac * dmax
 
+    def _accel_attack_id(self, cid):
+        """The body's attack that carries an energy-accel rider (recoverN > 0) — Turbo Flare / Aura
+        Jab. None when the body has no accelerator attack."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        for aid in (getattr(st, "attacks", None) or ()):
+            ast = self._attack_stat(aid)
+            if ast and getattr(ast, "recoverN", 0):
+                return aid
+        return None
+
+    def _accel_routed_value(self, obs: dict, board: Board, routed: int) -> float:
+        """Value of the ``routed`` Energy an accelerator attack (Turbo Flare) attaches to the Bench —
+        Ruling 4: an attach that FIRES an accelerator is worth the forward build the routed Energy
+        buys on the survivable carrier, not the accelerator's own face damage. Concentrated onto the
+        single Bench Line body that gains the most (the accel routes 'in any way you like'), priced in
+        the same convex-build currency (`_attach_progress`)."""
+        if routed <= 0:
+            return 0.0
+        me = self._my_player(obs)
+        line_ids = self._line_preevo_set() | self._wincon_set()
+        best = 0.0
+        for b in (me.get("bench") or []):
+            if not b:
+                continue
+            cid = b.get("id")
+            if cid not in line_ids and self._is_utility_body(cid):
+                continue                                       # don't credit routing onto a utility body
+            have = len(b.get("energies") or [])
+            best = max(best, self._attach_progress(cid, have + routed) - self._attach_progress(cid, have))
+        return best
+
     def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
         """Phase-1 shadow of ONE energy-attach option (attach grill ruling, 2026-07-21). DECIDES
         NOTHING. Returns a per-option working row, or None to ABSTAIN — Ruling 3: a Pokémon Tool
         rides `OptionType.ATTACH` but is not Energy, so it is never priced here.
 
         The row's fields ARE the ruled terms (ranked lexicographically in `_attach_shadow`):
-          * `marginal`      — max(`this_turn`, survival-weighted `build`), gated to 0 for a
-                              non-attacking role (Ruling 5b/6-partial) and for a discard-EOT burst that
-                              EVAPORATES on a body that can't attack this turn (the guard). `this_turn`
-                              is the attack the Active unlocks tonight; `build` is the CONVEX forward
-                              progress toward the biggest attack (Ruling 1), zeroed for a doomed carrier.
+          * `marginal`      — max(`this_turn`, survival-weighted `build`, `accel_value`), gated to 0
+                              for a non-attacking role (Ruling 5b/6-partial) and for a discard-EOT burst
+                              that EVAPORATES on a body that can't attack this turn (the guard).
+                              `this_turn` is the attack the Active unlocks tonight; `build` is the CONVEX
+                              forward progress toward the biggest attack (Ruling 1), zeroed for a doomed
+                              carrier; `accel_value` is the forward build the Energy an ACTIVE
+                              accelerator ROUTES buys on the survivable carrier (Ruling 4).
           * `line_value`    — worth of the line the body advances (`_role_value`, line-aware); the
                               target-choice tie-break (wincon line over filler).
           * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
                               same-marginal tie toward the reusable Basic over the burst.
-        NOTE the remaining multi-turn terms (snipe-value / overkill cap, accel-routing, partner-
-        conditional role) are LATER increments — the frames that need them are xfail in
-        test_attach_shadow.py."""
+        NOTE the remaining term (partner-conditional role, Ruling 6) is a LATER deck-layer increment —
+        the frame that needs it is xfail in test_attach_shadow.py."""
         ctx = select.get("context")
         is_attach = option.get("type") == _ATTACH
         is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
@@ -3066,11 +3098,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_hp = self._opp_body_hps(obs)
             if opp_hp and max(opp_hp) <= self._attach_readiness(tcid, have):
                 overkill = True
-        marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, 0.0)
+        # Ruling 4 (accel-routing): an attach that lets an ACTIVE accelerator FIRE (Cinderace's Turbo
+        # Flare) is worth the forward build the Energy it ROUTES buys on the survivable carrier, not the
+        # accelerator's own face damage — holds even for a doomed accelerator (it powers the successor
+        # before falling, 83037962-70). Prize-math delay stays OUT (planner-scope).
+        accel_value = 0.0
+        feeds_accel = (area == _ACTIVE and "accel_source" in self._roles_of(tcid)
+                       and self._attach_target_needs(target)
+                       and not board.accel_recipient_missing and not board.bench_wincon_ready)
+        if feeds_accel:
+            aid = self._accel_attack_id(tcid)
+            ast = self._attack_stat(aid) if aid is not None else None
+            if ast is not None:
+                # EXPECTED routing for the value estimate: the printed ceiling capped by what the
+                # recipients can actually use. (The live decider's `_recover_units` also floors this by
+                # the prize-paranoid deck-fuel bound — a grader-safety concern for a COMMITMENT, not for
+                # a shadow value read.)
+                routed = min(getattr(ast, "recoverN", 0), self._recover_recipient_need(ast, board, obs))
+                accel_value = self._accel_routed_value(obs, board, routed)
+        marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, accel_value, 0.0)
         type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
         return {"i": None, "target": tcid, "energy": ecid,
                 "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),
-                "build": round(build, 1), "doomed": not survives,
+                "build": round(build, 1), "accel_value": round(accel_value, 1), "doomed": not survives,
                 "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
                 "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
                 "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}

@@ -206,9 +206,20 @@ _CORPUS = {
     # develop the benched second threat. correct=[1] tags Ignition->bench[0]; the energy is incidental
     # (target correction), and the oracle picks the durable Basic onto the same bench[0] target.
     ("82750161", 59): (("target", BENCH, 0), None),
-    ("83037962", 70): ("pick", "Ruling 4 accel-routing marginal (not yet built)"),
+    ("83037962", 70): ("pick", None),              # Ruling 4: feed the accelerator (Turbo Flare routes 3)
     ("84889539", 87): ("pick", "Ruling 6 partner-conditional role (not yet built)"),
 }
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0010")
+def test_accel_routing_drives_the_feed():
+    # Ruling 4: on 83037962-70 feeding the Active Cinderace wins because Turbo Flare ROUTES ~3 Basic
+    # onto the survivable bench carrier (a full Nebula build) — NOT because of Cinderace's own 50 attack.
+    rec = _frame("83037962", 70)
+    s = _tune()._build_pilot(_agent(rec))[0].explain(rec["obs"]).attach_shadow
+    pick = next(r for r in s["eq"] if r["i"] == s["eq_pick"])
+    assert pick["target"] == 666                        # Cinderace, the accelerator
+    assert pick["accel_value"] > pick["this_turn"]      # routing value, not the accelerator's own attack
 
 
 @pytest.mark.req("REQ-ATTACH-SHADOW-0008")
