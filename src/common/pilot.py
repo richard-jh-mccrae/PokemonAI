@@ -979,6 +979,14 @@ class Decision:
                                      # swapping the shed flip play/don't-play?). Deciding NOTHING — the
                                      # sets-not-sums evidence the refresh swap rides. Sparse: None off
                                      # a real refresh PLAY option / mid-sim
+    attach_shadow: dict | None = None   # the ENERGY-ATTACH valuation shadow (attach-valuation-grill-
+                                     # spec.md "Grill rulings — 2026-07-21"; the fourth shadow): every
+                                     # energy-attach option priced in one currency — the marginal
+                                     # readiness the attach buys, the value of the line it advances
+                                     # (role-gated), the burst-waste of a discard-EOT Energy — plus the
+                                     # pick (`eq_pick`) and the agreement bit vs the shipped rungs'
+                                     # `chosen`. A Pokémon Tool ABSTAINS (Ruling 3: not Energy). Deciding
+                                     # NOTHING — sparse: None off a real attach choice / mid-sim
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1222,6 +1230,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
                                              if planned.goal == "develop" else None),  # rung's ranking (sparse)
                             gamble=getattr(self, "_gamble_trace", None),
+                            attach_shadow=self._attach_shadow(obs, select, board, options, traces,
+                                                              planned.next_step),  # attaches often route here
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -1267,6 +1277,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         gamble=getattr(self, "_gamble_trace", None),
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
+                        attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -2943,6 +2954,114 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
                 "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
                 "played": i in (chosen or []), "eq": rows}
+
+    def _attach_readiness(self, cid, energy: int) -> float:
+        """Best printed damage the body ``cid`` can afford with ``energy`` Energy — a 2-point
+        threshold model off `CardStat` (cheapest attack / biggest attack). Opponent-independent, so
+        it credits a BENCHED body's progress toward its OWN payoff (Nebula Beam 210 at 3, Jetting
+        Blow 120 at 1) and reads 0 below the cheapest cost. The marginal of an attach is the delta of
+        this across the extra Energy — over-attach on a maxed body is 0, a threshold-crossing attach
+        is a big jump (the concentrate signal falls out)."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if st is None:
+            return 0.0
+        maxc, minc = getattr(st, "maxDamageCost", None), getattr(st, "minAttackCost", None)
+        if maxc is not None and energy >= maxc:
+            return float(getattr(st, "maxDamage", 0) or 0)
+        if minc is not None and energy >= minc:
+            return float(getattr(st, "minCostDamage", 0) or getattr(st, "maxDamage", 0) or 0)
+        return 0.0
+
+    def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
+        """Phase-1 shadow of ONE energy-attach option (attach grill ruling, 2026-07-21). DECIDES
+        NOTHING. Returns a per-option working row, or None to ABSTAIN — Ruling 3: a Pokémon Tool
+        rides `OptionType.ATTACH` but is not Energy, so it is never priced here.
+
+        The row's fields ARE the ruled terms (ranked lexicographically in `_attach_shadow`):
+          * `marginal`      — readiness the attach buys (`_attach_readiness` delta), gated to 0 for a
+                              non-attacking role (Ruling 5b/6-partial) and for a discard-EOT burst that
+                              EVAPORATES on a body that can't attack this turn (the guard).
+          * `line_value`    — worth of the line the body advances (`_role_value`, line-aware); the
+                              target-choice tie-break (wincon line over filler).
+          * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
+                              same-marginal tie toward the reusable Basic over the burst.
+        NOTE the multi-turn terms (carrier-survival forward P-term, arm-doomed refill-discount,
+        snipe-value/overkill, accel-routing, partner-conditional role) are LATER increments — the
+        frames that need them are xfail in test_attach_shadow.py."""
+        ctx = select.get("context")
+        is_attach = option.get("type") == _ATTACH
+        is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
+        if not (is_attach or is_from):
+            return None
+        ecid = self._option_card_id(obs, select, option)
+        estat = self.stats.get(ecid) if (self.stats and ecid is not None) else None
+        if is_attach and not self._attach_is_energy(estat):
+            return None                                        # Ruling 3: a Tool is not Energy
+        target = self._attach_target(obs, option)
+        if target is None and is_from:
+            target = self._option_pokemon(obs, select, option)
+        if target is None:
+            return None
+        tcid = target.get("id")
+        have = len(target.get("energies") or [])
+        area = option.get("inPlayArea") if is_attach else _BENCH   # accel recipients are benched
+        etags = set(self.functions.tags(ecid)) if (self.functions and ecid is not None) else set()
+        burst = "discard_eot" in etags
+        # a burst that can't be cashed THIS turn evaporates at end of turn — no durable progress
+        can_cash = area == _ACTIVE and board.turn > 1
+        evaporates = burst and not can_cash
+        # Ruling 5b/6-partial: a body whose job is non-attacking (wall / draw-engine, and not a
+        # win-condition Line member) advances no valued attack — its marginal is 0.
+        line_ids = self._line_preevo_set() | self._wincon_set()
+        non_attacking = tcid not in line_ids and (
+            self._is_utility_body(tcid) or self._is_draw_engine_body(tcid))
+        delta = self._attach_readiness(tcid, have + 1) - self._attach_readiness(tcid, have)
+        marginal = 0.0 if (non_attacking or evaporates) else max(delta, 0.0)
+        type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
+        return {"i": None, "target": tcid, "energy": ecid,
+                "marginal": round(marginal, 1),
+                "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
+                "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
+                "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}
+
+    def _attach_shadow(self, obs: dict, select: dict, board: Board, options: list,
+                       traces: list, chosen: list):
+        """The energy-attach valuation shadow (the fourth shadow) — price every energy-attach option
+        in `options` via `_attach_value`, emit the working rows + the top pick + the agreement bit vs
+        the shipped rungs' `chosen`. DECIDES NOTHING. None off a real attach choice (fewer than two
+        priced options) or mid-sim (`self._planning`).
+
+        `eq_pick` ranks rows lexicographically by the ruled priority: (marginal, line_value,
+        −resource_cost) — durable progress first, then the wincon line, then the reusable Energy."""
+        if self._planning:
+            return None
+        ctx = select.get("context")
+        attach_idx = [i for i, o in enumerate(options)
+                      if o.get("type") == _ATTACH or (ctx == _ATTACH_FROM and o.get("type") == _CARD)]
+        if len(attach_idx) < 2:
+            return None
+        rows, abstained = [], 0
+        for i in attach_idx:
+            row = self._attach_value(obs, select, board, options[i])
+            if row is None:                                    # Ruling 3 abstain (Tool) — no row
+                abstained += 1
+                continue
+            row["i"] = i
+            rows.append(row)
+        # Rank only options that buy DURABLE progress; if none does, the oracle attaches NOTHING
+        # (`eq_pick = None`) — an all-Tool menu or a purely-wasteful attach. Priority (the ruled
+        # order): marginal readiness, then the wincon line, then on-type over wasted, then reusable.
+        positive = [r for r in rows if r["marginal"] > 0]
+        if positive:
+            best = max(positive, key=lambda r: (r["marginal"], r["line_value"],
+                                                not r["type_wasted"], -r["resource_cost"]))
+            eq_pick = best["i"]
+            agree = eq_pick in (chosen or [])
+        else:
+            eq_pick = None                                     # attach nothing beats a valueless attach
+            agree = not (set(chosen or []) & set(attach_idx))
+        return {"eq": rows, "eq_pick": eq_pick, "abstained": abstained,
+                "picks": sorted(chosen or []), "agree": agree}
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can
