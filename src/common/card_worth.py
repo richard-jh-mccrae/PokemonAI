@@ -42,7 +42,11 @@ ACE_SPEC_TIER = 25.0              # a one-per-deck, unrecoverable ACE SPEC — h
 TAG_TIER: dict[str, float] = {
     "discard_eot": 30.0,          # a burst Energy (Ignition) — the ladder keep-key band (same −30 as the wincon)
     "clutch_heal": 20.0,          # the emergency heal (Wally's) — answers a specific incoming KO
-    "gust": 10.0,                 # reach (Boss's Orders) — the ladder's −10 keep floor
+    "gust": 10.0,                 # reach (Boss's Orders) — the ladder's −10 keep floor; ALSO the
+                                  # DENY-slot disruption band (the grill currency ruling: a strip is
+                                  # worth this in the ONE currency, NOT the ADR-0062 damage swing —
+                                  # `pilot._resolve_needs`. A role-less Hammer still prices its
+                                  # global worth 0; only its live-strip DENY slot earns the band).
     "recycle": 10.0,              # recovery (Night Stretcher / Super Rod) — same band
 }
 

@@ -277,6 +277,81 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    cannot read, so any hand-based tie-split there is noise. `leaf_hand_value` stays armed OFF;
    N5d+ε committed as the best-behaved shape; the fold re-opens only after the who's-Active/tool
    leaf terms land (leaf-native work, outside this spec).
+9. **WP-N6 — the refresh slot-RESUPPLY discount — BUILT + MEASURED 2026-07-20, refresh swap still
+   NOT cleared.** The WP-N5 residual's staged fix: `pilot._refresh_slot_resupply` fills the
+   resupply vector at the REFRESH site — per slot, P(the closure re-supplies it within the
+   refresh's own draw window), from the slot's supplier classes pointed backwards
+   (`fetch_closure.class_reaccess_outs`, the SET walk — each tutor counted once, never the
+   double-count a per-class sum gives) over the shuffle-grown pool, the slot's eligible held
+   copies joining as certain outs, prize-split-weighted pre-anchor (`_prize_split_hit`) — v1's
+   `_keep_cost` model per SLOT instead of per copy. Closing-edge kinds (deploy_now / answer_doom)
+   stay 0.0 (`closing_gate_reaccess` re-derived); only `fund_attack` widens its window by the
+   quota deadline (`quota_window` re-derived). **Adjudicated in-build:** `general` slots ALSO stay
+   0.0 — their `_GENERAL_WORTH_W` (0.45) was measured with resupply at 0.0, so W already carries
+   the site's whole re-access discount; stacking ×(1−r) on top priced a general slot at ~0.45 ×
+   v1's own model and flipped the sweep UNSAFE (under 19→62, flips 13→17). W and r re-open only
+   as a JOINT re-measure. **Measured (83 refresh frames):** sign-flips 13→8 — 8 baseline flips
+   fixed (every large over-pricing flip, worst −46), 3 new near-break-even tips (|swing_v2| ≤ 2);
+   magnitude error mean |v2−v1| 9.7→6.7, median 6.0→3.9, bias centered +5.8→−2.2; discard corpus
+   held 12/12 (resupply stays 0.0 at that site — no redraw window). **The refresh SHED does NOT
+   swap:** the bar is flips ≈ 0, and the 8 residuals are v2 SCOPE gaps, not resupply — the flat
+   `answer_doom` TAG-tier slot value both over-prices (a worth-0 `switch` Item covers it for 20 —
+   83661652-40) and under-prices (the doomed successor's best slot is 20 vs v1's full-worth
+   closing spike 30 — 83037962-49), and the saturating engine band under-prices a two-supporter
+   engine hand v1 sums in full (82522698-36). Those valuations feed the DISCARD decider too, so
+   re-pricing them is its own adjudicated piece, not a resupply patch.
+10. **WP-N7 — opponent DENY slots — BUILT + MEASURED 2026-07-20 (thread 2).** The Round-3 ruled
+   read wired into `_resolve_needs`: one slot per opponent in-play body a strip actually bites,
+   VALUE = the SHIPPED ADR-0062 denial oracle consumed intact (Active ×1.0 with the
+   `active_can_ko` drop, bench ×0.25 — never re-derived), graded by `needs.deny_slot` over the
+   visible turns-to-ready (`pilot._opp_turns_to_ready`: energy deficit at the 1-attach quota vs
+   forward `evolvesFrom` hops, max of legs; unknown stats → no slot, fail-closed). Eligibility
+   derives from the SUPPLIES net itself (`"gust"` + the NEW `"energy_denial"` entry — Crushing
+   1120 / Enhanced 1081 Hammer); no new flag (the WP-N5 unflagged-enrichment precedent — the
+   hedge floors v2). A deadline-0 deny takes resupply 0.0 at the refresh site (the closing edge —
+   applied to `_refresh_slot_resupply` at integration). **Measured:** discard corpus 12/12 with
+   every `eq2_pick` byte-identical (the live decider unmoved); the Hammer/gust classes get their
+   first v2 pricing (82867148-48's Boss's Orders raw marginal 4.5→8.8, still hedge-floored).
+   **Hedge-floor firings (the thread-5 feed): 13/68 rows before AND after — deny retires ZERO
+   floor firings on this corpus**, so the hedge STAYS. Integrated refresh shadow (with WP-N6):
+   fired=83, flips=13, under=38, over=40 — the deny slots' DAMAGE-denominated oracle values
+   (up to ~140) sit above the worth-tier slots (~8–30) and drive the added flips (safe,
+   over-pricing direction). **The named next adjudicated piece is therefore ONE currency
+   question:** the flat `answer_doom` TAG tier, the saturating engine band, and the
+   damage-denominated deny scale all need a ruled mapping into the slot currency before the
+   refresh swap or hedge retirement can clear.
+11. **WP-N8 — the slot-CURRENCY adjudication — GRILLED + BUILT 2026-07-20.** The user ruled the
+   three currency seams frame-by-frame (grill session on 83661652-40 / 83037962-49 / 82522698-36 /
+   83457493-31). All three land INSIDE the assignment as value DERIVATIONS — no new gates/rungs/
+   flags; one is a deletion. Discard held 12/12 byte-identical through all three; leaf-lab unmoved
+   at 40/190 (the global-`role_value` ripple was caught and scoped out); refresh sign-flips
+   13→11.
+   * **Ruling 1 — answer-doom is a plan, not a flat tier.** The switch/heal answer slot is valued
+     at the DOOMED BODY'S OWN preserved worth (`_role_value(active)` — a worth-0 Switch rescuing a
+     12-point engine Lunatone earns 12; a filler active earns ~0, no slot), NOT the flat
+     `TAG_TIER["clutch_heal"]` 20 nor the swap card's catalog worth. The SUCCESSOR leaves the
+     answer-doom slot and rides an URGENT succession slot (`needs.line_slots` `succession_urgent`):
+     FULL tier at deadline 0 when the Active is doomed and its base is in play — the old full-30
+     spike re-derived as the line's own worth (83037962-49: the second Mega Starmie is not
+     Harlequin fodder the turn its Staryu benched; refresh swing now negative). The urgent
+     succession is a `line` slot at deadline 0, so `_refresh_slot_resupply`'s closing edge
+     generalized to ANY `line`/`deny` slot at deadline ≤ 0.
+   * **Ruling 2 — a duplicate saturating-need Supporter is worth 0** (a DELETION). A cid eligible
+     for the saturating draw-engine need gets NO general-worth slot — one copy fills the
+     one-per-turn need, the SPARE covers nothing and prices keep_v2 0 (the WP-N5 ~9 latent credit
+     for a spare is refuted; "you lose the second Supporter in a shuffle for free" — 82522698-36,
+     two Wally's). The residual-worth tiebreak still ranks the spare above dead cards in pitch
+     order.
+   * **Ruling 3 — the deny slot is card-tier, not the damage swing.** The value drops from the
+     ADR-0062 oracle's ~140 to the disruption band (`TAG_TIER["gust"]` ≈ 10), graded by
+     turns-to-ready; the oracle becomes a GATE only (the strip bites). The damage math stays on
+     the play-side gust rungs (whether to FIRE a gust is a line evaluation, not a keep price —
+     83457493-31: Boss's is a good card, never a whole-hand anchor). Scoped to the deny slot: a
+     role-less Hammer keeps global worth 0, so the leaf and every other worth site are untouched.
+   Two items the grill surfaced as PLANNER-domain (recorded, NOT built — line-evaluation, not
+   pricing): **threshold-race snipe targeting** ("get their Mega under Nebula's 210 before my
+   successor lands"; Riolu-vs-Makuhita off their discard fuel — 83037962-49) and **gust-line
+   tempo evaluation** (KO-behind-the-gust vs what promotes back at full health — 83457493-31).
 
 ## Acceptance (pre-committed)
 

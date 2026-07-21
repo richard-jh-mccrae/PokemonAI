@@ -90,14 +90,31 @@ def reaccess_outs(cid, counts: dict, stat_of, clauses_of) -> int:
     (the `fetch_target_matches` NOTE), tutor play-COSTS are not charged (an Ultra Ball counts even
     when its discard-2 might be unpayable), and Supporter tutors count without the one-per-turn
     slot. Each is per-card small and next-turn-horizon plausible; none is a sound bound."""
-    xst = stat_of(cid) if cid is not None else None
-    if xst is None:
+    return class_reaccess_outs((cid,), counts, stat_of, clauses_of)
+
+
+def class_reaccess_outs(cids, counts: dict, stat_of, clauses_of) -> int:
+    """The copies in the DECK that re-supply ANY of the card classes ``cids`` — the SET
+    generalization of `reaccess_outs` (the keep-value v2 slot-RESUPPLY leg, ADR-0065): a needs SLOT
+    is filled by a class of cards, so its re-supply outs are the own deck copies of every KNOWN
+    class plus every deck-search tutor whose FETCH clause reaches at least one of them, each tutor
+    counted ONCE — summing per-class `reaccess_outs` would double-count an Ultra Ball that reaches
+    two of the slot's Pokémon classes. Unknown classes contribute nothing (the endorser fail
+    direction); a tutor that is itself a member class counts as own copies, never twice. The same
+    accepted over-counting channels as `reaccess_outs`, none a sound bound."""
+    known = {}
+    for cid in cids:
+        st = stat_of(cid) if cid is not None else None
+        if st is not None:
+            known[cid] = st
+    if not known:
         return 0
-    outs = counts.get(cid, 0)
+    outs = sum(counts.get(cid, 0) for cid in known)
     for tid, n in counts.items():
-        if n <= 0 or tid == cid:
+        if n <= 0 or tid in known:
             continue
-        if any(fetch_target_matches(cl, xst) for cl in _deck_fetch_clauses(clauses_of, tid)):
+        clauses = _deck_fetch_clauses(clauses_of, tid)
+        if any(fetch_target_matches(cl, st) for cl in clauses for st in known.values()):
             outs += n
     return outs
 

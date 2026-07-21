@@ -128,8 +128,56 @@ def test_refresh_shed_v2_shadow_rides_the_decision_with_the_swing_identity():
     assert s is not None and isinstance(s["sign_agree"], bool)
     assert s["swing_v2"] == pytest.approx(s["swing_v1"] + s["v1_shed"] - s["v2_shed"], abs=0.05)
     assert s["cid"] == LILLIES and all("keep_v2" in r for r in s["eq"])
-    # The two magnitudes measure different things by v0 scope: v1 discounts each copy by its
-    # re-access odds; v2 (resupply 0.0 — WP-N3 deferred) does not, but prices the hand as an
-    # ASSIGNMENT (sets-not-sums). So a divergence in EITHER direction is real telemetry — v2 < v1 is
-    # over-counted duplicates, v2 > v1 is the missing resupply leg (WP-N5). Both are non-negative.
+    # The two magnitudes measure different things: v1 discounts each copy by its re-access odds;
+    # v2 prices the hand as an ASSIGNMENT (sets-not-sums) with slot resupply live over the refresh
+    # window (`_refresh_slot_resupply`). A divergence in EITHER direction is real telemetry — v2 <
+    # v1 is over-counted duplicates, v2 > v1 is resupply the specific slots can't see. Both are
+    # non-negative (V is monotone in the held set).
     assert s["v1_shed"] >= 0.0 and s["v2_shed"] >= 0.0
+
+
+@pytest.mark.req("REQ-NEEDS-0008")
+def test_refresh_slot_resupply_discounts_by_kind_and_window():
+    """`_refresh_slot_resupply` (the WP-N5 residual's fix): per-slot P(the closure re-supplies it in
+    the refresh draw window). Closing-edge kinds (deploy_now / answer_doom) stay 0.0 — re-access is
+    not bankable against a this-turn deadline (`closing_gate_reaccess` re-derived); pitch-side fuel
+    never enters the keep DP; `general` keeps 0.0 (its 0.45 W already carries the site's re-access
+    discount — measured, see the helper's docstring); an uncovered slot has no supplier classes to
+    point backwards; a live slot lands strictly inside (0, 1]; a `fund_attack` unit's window widens
+    with its quota deadline (`quota_window` re-derived), so a later unit re-supplies no less."""
+    from common import needs
+    fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
+    pilot = _shipped_pilot("mega_starmie")
+    obs = fx["obs"]
+    board = pilot._board_hypothetical(obs)
+    rows = pilot._needs_hand_rows(obs, board)
+    assert rows, "fixture hand resolved to no rows"
+    slots = [needs.deploy_now_slot("deploy:x", value=30.0),
+             needs.answer_doom_slot(value=25.0),
+             needs.fuel_slot("fuel", value=10.0),
+             needs.general_worth_slot("general:x", value=10.0),
+             needs.Slot("line", 30.0, 99, "line:x"),
+             needs.Slot("fund_attack", 10.0, 0, "active:unit0"),
+             needs.Slot("fund_attack", 10.0, 2, "active:unit2"),
+             needs.Slot("line", 30.0, 99, "line:uncovered")]
+    elig = [set(range(7)) if k == 0 else set() for k in range(len(rows))]
+    r = pilot._refresh_slot_resupply(slots, elig, rows, obs, board, draws=6)
+    assert r[0] == r[1] == r[2] == r[3] == 0.0, "closing/pitch/general slots must not discount"
+    assert 0.0 < r[4] <= 1.0, "a live no-deadline slot banks the plain refresh window"
+    assert 0.0 < r[5] <= r[6] <= 1.0, "the quota-widened window re-supplies no less"
+    assert r[7] == 0.0, "no eligible supplier class -> nothing to point backwards"
+
+
+@pytest.mark.req("REQ-NEEDS-0008")
+def test_refresh_shed_v2_is_resupply_discounted():
+    """The shadow's v2 shed with the live resupply leg is no dearer than the same assignment at
+    resupply 0.0 (the retired v0 pricing), while v1's shed — a different jurisdiction — is
+    untouched. Strict inequality on this fixture: its resolver finds a live draw-engine slot."""
+    fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
+    live = _shipped_pilot("mega_starmie").explain(fx["obs"]).refresh_shadow
+    frozen_pilot = _shipped_pilot("mega_starmie")
+    frozen_pilot._refresh_slot_resupply = (
+        lambda slots, elig, rows, obs, board, draws: [0.0] * len(slots))
+    frozen = frozen_pilot.explain(fx["obs"]).refresh_shadow
+    assert live["v1_shed"] == frozen["v1_shed"]
+    assert live["v2_shed"] < frozen["v2_shed"]

@@ -284,6 +284,74 @@ comparator) and ADR-0032 (Effect-Clause tier).
   best-behaved shape; `leaf_hand_value` stays armed OFF; the fold re-opens only after those
   blindnesses are read. Suite green (3057).
 
+- **WP-N6 — the refresh slot-RESUPPLY discount (2026-07-20): built + measured; refresh swap still
+  NOT cleared.** The WP-N5 residual (v2 over-pricing the refresh SHED because uncovered/covered
+  slots never saw the closure's re-access odds) fixed at its site: `pilot._refresh_slot_resupply`
+  fills the assignment's resupply vector for the REFRESH window — per slot, P(re-supply within the
+  refresh's own draw window), outs = the slot's supplier classes pointed backwards via the NEW
+  `fetch_closure.class_reaccess_outs` (the SET walk: own copies of every member class + each
+  reaching tutor counted ONCE; `reaccess_outs` now delegates to it), held eligible copies as
+  certain outs over the shuffle-grown pool, prize-split-weighted pre-anchor — v1's `_keep_cost`
+  model per SLOT instead of per copy. Closing-edge kinds (`deploy_now`/`answer_doom`) and
+  pitch-side fuel stay 0.0; `fund_attack` windows widen by the quota deadline (`quota_window`
+  re-derived). **In-build adjudication: `general` slots stay 0.0** — `_GENERAL_WORTH_W` (0.45) was
+  measured at resupply 0.0 and empirically already carries the site's re-access discount; stacking
+  ×(1−r) flipped the sweep unsafe (under-pricing 19→62). **Measured (83 frames): sign-flips 13→8
+  (every large baseline over-pricing flip fixed, worst −46; 3 new tips all |swing_v2| ≤ 2),
+  mean |v2−v1| 9.7→6.7, bias +5.8→−2.2 (centered); discard 12/12 held (that site keeps resupply
+  0.0 — no redraw window).** The swap bar (flips ≈ 0) is NOT met and the residuals are v2 SCOPE
+  gaps shared with the discard decider — the flat `answer_doom` TAG-tier value (over-prices a
+  worth-0 switch at 20, under-prices the doomed successor vs v1's full-worth closing spike) and
+  the saturating engine band vs v1's per-supporter sum — so re-pricing them is its own
+  adjudicated piece. The hedge (v2 floors at v1's post-gate keep) stays.
+
+- **WP-N7 — opponent DENY slots (2026-07-20, thread 2): built + measured; the hedge stays.** The
+  Round-3 ruled opponent read wired into `_resolve_needs` (unflagged, the WP-N5 enrichment
+  precedent): one deny slot per opponent in-play body a strip bites, valued by the SHIPPED
+  ADR-0062 denial oracle (consumed intact — Active ×1.0 with the `active_can_ko` drop, bench
+  ×0.25) and graded by `needs.deny_slot` over the visible turns-to-ready
+  (`pilot._opp_turns_to_ready` — energy deficit at the 1-attach quota vs forward hops, max of
+  legs, fail-closed on unknowns). `needs.SUPPLIES` gained `"energy_denial"` (the Hammers);
+  eligibility derives from SUPPLIES itself so vocabulary and routing cannot drift. A deadline-0
+  deny takes resupply 0.0 (the closing edge, applied in `_refresh_slot_resupply`). **Measured:
+  discard 12/12 byte-identical (the live decider unmoved); the Hammer/gust classes get their
+  first v2 pricing but the hedge-floor firing count is UNCHANGED (13/68 rows) — deny retires
+  zero firings, so the hedge stays.** With WP-N6 integrated the refresh shadow reads flips=13 /
+  under=38 / over=40: the oracle's DAMAGE-denominated values (~140) sit above the worth tiers
+  (~8–30), which folds the deny scale into the same open CURRENCY adjudication as the flat
+  `answer_doom` tier and the engine band — the named prerequisite for the refresh swap and
+  hedge retirement.
+
+- **Leaf-native who's-Active + tool terms (2026-07-20, thread 3 — the board-state grill's build,
+  logged there in full):** the promotion-ease bench-position lift shipped in the readiness leaf
+  (`planner._bench_position_w` / `_promotion_ease`; retreat-tools route to position, HP-tools
+  already reach survival via engine `hpBonus`), a zero-regression Pareto step — leaf-lab SOLE-top
+  39→40/267, E[correct picks] 83.8→84.7, shared-top flat 190, Gate-0 subset up. The who's-Active
+  mobility micro-credit is HAND-ARMED (rides `leaf_hand_value`, still OFF). **The N5d hand-fold
+  re-measure with the new terms: 52 SOLE / 164 shared — still does NOT clear (shared-top down);
+  the fold stays parked.** The step-1 dissection capped the ceiling: 77/151 residual leaf ties
+  are pure transpositions no board term can split.
+
+- **WP-N8 — the slot-CURRENCY adjudication (2026-07-20): grilled with the user, built, all inside
+  the assignment.** Three seams where a slot value spoke the wrong unit, ruled frame-by-frame and
+  folded into the value derivations (no new gates/rungs/flags; discard held 12/12 byte-identical,
+  leaf-lab unmoved 40/190, refresh sign-flips 13→11):
+  * **Answer-doom is a plan, not a flat tier.** The switch/heal answer slot is valued at the doomed
+    body's OWN preserved worth (`_role_value(active)`), and the successor rides a new URGENT
+    succession slot (`needs.line_slots(succession_urgent=…)` — full tier, deadline 0 when the Active
+    is doomed with its base in play; the old flat-20 successor spike re-derived as the line's own
+    worth). The closing edge in `_refresh_slot_resupply` generalized to any `line`/`deny` slot at
+    deadline ≤ 0.
+  * **A duplicate saturating-need Supporter is worth 0** (a deletion): a cid eligible for the
+    draw-engine need gets no general-worth slot, so the spare copy prices 0 (the WP-N5 ~9 latent
+    credit for a spare, refuted).
+  * **The deny slot is the disruption card-tier** (`TAG_TIER["gust"]` ≈ 10, graded by
+    turns-to-ready), not the ADR-0062 damage swing (~140) — the oracle becomes a GATE only; the
+    damage magnitude stays on the play-side gust rungs. Scoped to the deny slot (a role-less Hammer
+    keeps global worth 0), so the leaf is untouched.
+  Two items the grill surfaced belong to the TURN/MATCH PLANNER, not keep-value, and are recorded
+  unbuilt: threshold-race snipe targeting and gust-line tempo evaluation.
+
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles

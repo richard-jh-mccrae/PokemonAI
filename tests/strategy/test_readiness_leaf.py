@@ -43,18 +43,24 @@ _ATTACKS = {
     6760: AttackStat(6760, damage=70, cost=1, energyTypes=(F,)),      # Solrock Cosmic Beam
     6750: AttackStat(6750, damage=50, cost=2, energyTypes=(F, F)),    # Lunatone Power Gem
 }
+AIR_BALLOON = 1174       # retreat-reduction Tool ("{C}{C} less" -> retreatReduction=2, parsed at source)
+SWITCH = 1123            # Switch Item ("Switch your Active Pokémon with 1 of your Benched Pokémon")
 _STATS = {
+    # retreat costs mirror the REAL cards (EN_Card_Data.csv: Riolu 2, Mega Lucario ex 2, Lunatone 1,
+    # Solrock 1) — the promotion-ease lift reads them, so the fixture must carry them.
     RIOLU: CardStat(RIOLU, name="riolu", hp=70, energyType=F, evolvesFrom=None, attacks=(3330,),
-                    minAttackCost=1, maxDamage=30),
+                    minAttackCost=1, maxDamage=30, retreatCost=2),
     MEGA: CardStat(MEGA, name="mega lucario ex", hp=340, energyType=F, evolvesFrom="riolu",
-                   attacks=(6780, 6781), minAttackCost=1, maxDamage=270, megaEx=True),
+                   attacks=(6780, 6781), minAttackCost=1, maxDamage=270, megaEx=True, retreatCost=2),
     LUNATONE: CardStat(LUNATONE, name="lunatone", hp=110, energyType=F, attacks=(6750,),
-                       minAttackCost=2, maxDamage=50, hasAbility=True),
+                       minAttackCost=2, maxDamage=50, hasAbility=True, retreatCost=1),
     SOLROCK: CardStat(SOLROCK, name="solrock", hp=110, energyType=F, attacks=(6760,),
-                      minAttackCost=1, maxDamage=70),
-    JUNK: CardStat(JUNK, name="junk", hp=60, energyType=F, attacks=()),
+                      minAttackCost=1, maxDamage=70, retreatCost=1),
+    JUNK: CardStat(JUNK, name="junk", hp=60, energyType=F, attacks=(), retreatCost=1),
     ENERGY_F: CardStat(ENERGY_F, name="fighting energy", hp=0, cardType=5, energyType=F),
     ENERGY_P: CardStat(ENERGY_P, name="psychic energy", hp=0, cardType=5, energyType=P),
+    AIR_BALLOON: CardStat(AIR_BALLOON, name="air balloon", hp=0, cardType=2, retreatReduction=2),
+    SWITCH: CardStat(SWITCH, name="switch", hp=0, cardType=1),
 }
 _ROLES = {MEGA: ["win_condition", "primary_attacker"], RIOLU: ["win_condition_base"],
           SOLROCK: ["secondary_attacker", "engine"], LUNATONE: ["engine"]}
@@ -96,12 +102,90 @@ def test_attack_readiness_gate_zero_without_reachable_attack():
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_active_out_readies_the_same_body_benched():
     """position_w: the SAME attacker with the SAME energy reads higher Active than benched (Active 1.0
-    vs the flat bench discount)."""
+    vs the flat bench discount — the promotion-ease lift lives in `_readiness`, never per-body here)."""
     p = _pilot()
     me = {"active": [_body(SOLROCK, [ENERGY_F])], "bench": [_body(SOLROCK, [ENERGY_F])]}
     active = p._attack_readiness(_body(SOLROCK, [ENERGY_F]), me, is_active=True)
     bench = p._attack_readiness(_body(SOLROCK, [ENERGY_F]), me, is_active=False)
     assert active > bench > 0.0
+
+
+# --- promotion-ease position_w (the who's-Active term, v2 2026-07-20) ------------------------------
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_bench_weight_lifts_when_active_retreats_free():
+    """A free-retreat Active (a retreat-reduction Tool covers its whole cost: Air Balloon −2 on a
+    retreat-2 Mega Lucario) lifts the bench weight to the `_READINESS_PROMO_MAX` ceiling — a loaded
+    benched attacker is NEARLY Active when the spot can be vacated for free (the retreat-tool →
+    position routing), but never fully equal (the ceiling stays < 1.0)."""
+    p = _pilot()
+    stuck = {"active": [_body(MEGA)], "bench": [_body(SOLROCK, [ENERGY_F])]}          # retreat 2, E0
+    free = {"active": [_body(MEGA, tools=[{"id": AIR_BALLOON}])],
+            "bench": [_body(SOLROCK, [ENERGY_F])]}                                    # eff retreat 0
+    assert p._bench_position_w(stuck) == pytest.approx(0.45)
+    assert p._bench_position_w(free) == pytest.approx(0.5)    # the measured < 1.0 ceiling
+    assert p._readiness(free) > p._readiness(stuck)       # the lift reaches the board value
+
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_bench_weight_not_lifted_by_a_merely_payable_retreat():
+    """A retreat merely PAYABLE at k>0 is NOT ease — paying DISCARDS the attached Energy (rulebook
+    L142), so the bench weight stays at the flat floor (measured: crediting payable-at-a-cost promoted
+    chip-loaded rival benches over the human's attacker-in-front boards)."""
+    p = _pilot()
+    payable = {"active": [_body(SOLROCK, [ENERGY_F])], "bench": []}                   # retreat 1, E1
+    unpayable = {"active": [_body(RIOLU, [ENERGY_F])], "bench": []}                   # retreat 2, E1
+    assert p._bench_position_w(payable) == pytest.approx(0.45)
+    assert p._bench_position_w(unpayable) == pytest.approx(0.45)
+
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_bench_weight_reads_switch_in_visible_hand_only():
+    """A `switch`-tagged card in my VISIBLE hand lifts a stuck Active's bench weight (promotion via the
+    Item, no retreat needed); an absent hand claims nothing — the graceful degrade to the flat floor."""
+    p = _pilot(functions={SWITCH: ["switch"]})
+    stuck = {"active": [_body(RIOLU)], "bench": [_body(SOLROCK, [ENERGY_F])]}
+    with_switch = {**stuck, "hand": [{"id": SWITCH}]}
+    assert p._bench_position_w(stuck) == pytest.approx(0.45)
+    assert p._bench_position_w(with_switch) == pytest.approx(0.45 + (0.5 - 0.45) * 0.9)
+    assert p._promotion_ease(with_switch) == pytest.approx(0.9)
+
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_active_quality_credit_is_hand_armed_and_scenario1_gated():
+    """The who's-Active micro-credit rides the hand-visibility arm (`leaf_hand_value`) — flag OFF the
+    readiness of a mobile-Active board equals the flat sum (shipped behavior byte-stable); flag ON it
+    earns `_READINESS_MOBILITY_W`. The energized-pre-evo half is SCENARIO-1 gated: it credits ONLY
+    with the forward evolution REACHABLE (in hand/play) — an energized Riolu whose Mega is out of
+    reach earns nothing (the grill's flagship: that attach is ~0, its Energy is Lunar-Cycle fuel)."""
+    p = _pilot()
+    mobile = {"active": [_body(MEGA, tools=[{"id": AIR_BALLOON}])], "bench": [_body(JUNK)]}
+    stuck = {"active": [_body(MEGA)], "bench": [_body(JUNK)]}
+    assert p._readiness(mobile) == p._readiness(stuck)        # flag OFF: no credit (bench unloaded too)
+    p.leaf_hand_value = True
+    assert p._readiness(mobile) - p._readiness(stuck) == pytest.approx(2.5)
+    # scenario-1 gate: energized line pre-evo front credits ONLY with the payoff reachable
+    unreachable = {"active": [_body(RIOLU, [ENERGY_F])], "bench": [_body(JUNK)], "hand": []}
+    reachable = {"active": [_body(RIOLU, [ENERGY_F])], "bench": [_body(JUNK)], "hand": [{"id": MEGA}]}
+    assert p._active_quality(unreachable) == 0.0
+    assert p._active_quality(reachable) == 1.0
+    bare = {"active": [_body(RIOLU)], "bench": [_body(JUNK)], "hand": [{"id": MEGA}]}
+    assert p._active_quality(bare) == 0.0                     # a bare base up front is not development
+
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_lift_lands_on_the_single_best_benched_attacker_only():
+    """One retreat per turn (rules.md §3): the lift raises the board by the single BEST benched
+    attacker's delta, not per-body — two loaded benched attackers gain exactly what one gains."""
+    p = _pilot()
+    free_active = _body(MEGA, tools=[{"id": AIR_BALLOON}])
+    one = {"active": [free_active], "bench": [_body(SOLROCK, [ENERGY_F])]}
+    two = {"active": [free_active], "bench": [_body(SOLROCK, [ENERGY_F]), _body(SOLROCK, [ENERGY_F])]}
+    stuck_one = {"active": [_body(MEGA)], "bench": [_body(SOLROCK, [ENERGY_F])]}
+    stuck_two = {"active": [_body(MEGA)], "bench": [_body(SOLROCK, [ENERGY_F]), _body(SOLROCK, [ENERGY_F])]}
+    lift_one = p._readiness(one) - p._readiness(stuck_one)
+    lift_two = p._readiness(two) - p._readiness(stuck_two)
+    assert lift_one > 0.0
+    assert lift_two == pytest.approx(lift_one)            # the 2nd benched attacker earns NO extra lift
 
 
 @pytest.mark.req("REQ-PLANNER-0011")

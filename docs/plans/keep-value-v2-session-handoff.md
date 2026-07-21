@@ -50,23 +50,56 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
 
 ## Open threads, priority order
 
-1. **The refresh resupply discount** (the measured next piece): the refresh sweep's residual is
-   62/83 frames where v2 OVER-prices the shed (safe direction) because slot `resupply` is 0.0
-   everywhere — the closure's re-access odds never discount an uncovered slot. Build: per-slot
-   resupply from `fetch_closure.reaccess_outs` + `deck_odds` over the refresh draw window, thread
-   through `_resolve_needs` callers. Then re-sweep; if sign-flips ≈ 0 and magnitudes track, the
-   refresh-SHED site becomes a swap candidate (shadow → decider, the seam-D/WP-N4 pattern).
-2. **Opponent DENY slots**: `needs.deny_slot` + `turns_to_ready` exist (WP-N1, tested) but the
-   resolver never emits them — needs the visible opponent read (their bodies' energy deficit +
-   forward hops) wired into `_resolve_needs`. The Hammer/gust cards currently ride the hedge.
-3. **Leaf-native who's-Active + tool terms** (board-state-valuation-grill.md) — the measured
-   prerequisite for ever arming `leaf_hand_value` (§Closed below). This is LEAF work, not needs
-   work; it re-opens the hand fold afterward.
-4. **Fold the shadowed `_DISCARD` rungs** out of `doctrine_fetch` once the in-ladder A/B clears
-   (seam-D follow-up; the rungs are dead code under the swap but still shipped).
-5. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Retire only when
-   resupply (1) and deny (2) land — "v2 never prices below the shipped decider" until the resolver
-   is complete.
+1. ~~**The refresh resupply discount**~~ **DONE 2026-07-20 (WP-N6)** — `_refresh_slot_resupply`
+   (per-slot closure re-supply over the refresh window, `fetch_closure.class_reaccess_outs`) is
+   LIVE in the refresh shadow. Measured: sign-flips 13→8, mean |v2−v1| 9.7→6.7, bias centered;
+   discard held 12/12. `general` slots keep r=0.0 (their 0.45 W already carries the discount —
+   stacking flipped the sweep unsafe; joint W+r re-measure only). **The swap bar (flips ≈ 0) is
+   NOT met**: the 8 residual flips are v2 SCOPE gaps shared with the discard decider — the flat
+   `answer_doom` TAG-tier slot value (over-prices a worth-0 switch at 20: 83661652-40;
+   under-prices the doomed successor vs v1's full-worth closing spike: 83037962-49) and the
+   saturating engine band vs v1's per-supporter sum (82522698-36). Re-pricing those is the NEW
+   next piece — it feeds the discard bench too, so it needs its own adjudication (the 12/12 must
+   hold through it).
+2. ~~**Opponent DENY slots**~~ **DONE 2026-07-20 (WP-N7, grill spec #10)** — wired into
+   `_resolve_needs`, valued by the shipped ADR-0062 oracle, graded by `_opp_turns_to_ready`
+   (visible read, fail-closed). `SUPPLIES` gained `energy_denial` (the Hammers). Discard 12/12
+   byte-identical; deadline-0 deny = resupply 0.0 (closing edge). NOTE the oracle is
+   DAMAGE-denominated (~140 vs the ~8–30 worth tiers) — folded into the currency piece below.
+3. ~~**Leaf-native who's-Active + tool terms**~~ **DONE 2026-07-20 (board-state grill §Build
+   log)** — the promotion-ease lift SHIPPED (leaf-lab 40/190/2.99/84.7, zero regressed frames,
+   Gate-0 up); the mobility micro-credit is HAND-ARMED behind `leaf_hand_value`. The N5d
+   hand-fold re-measure with the new terms: 52/164 — STILL not cleared, stays parked. Hard cap
+   found: 77/151 residual leaf ties are pure transpositions no board term can split.
+4. ~~**THE slot-currency adjudication**~~ **DONE 2026-07-20 (WP-N8, grill spec #11)** — grilled
+   with the user frame-by-frame, all three rulings built inside the assignment (no new
+   gates/rungs/flags; one deletion): (1) answer-doom = the doomed body's preserved worth + the
+   URGENT full-tier deadline-0 succession slot for the successor (not flat 20); (2) a duplicate
+   saturating-need Supporter = 0 (no general slot for an engine-eligible cid); (3) the deny slot =
+   `TAG_TIER["gust"]` disruption band graded by turns-to-ready, NOT the ADR-0062 damage swing
+   (oracle → gate only; scoped so the leaf is untouched). Discard 12/12 byte-identical; leaf-lab
+   40/190 unmoved; refresh flips 13→11. Four frames pinned (`test_needs_currency_rulings.py`).
+   **The refresh-SHED swap and hedge retirement are UNBLOCKED of the currency question** — but
+   still gated on their own benches (the swap bar = refresh flips ≈ 0, currently 11; hedge
+   retirement still needs the sweep to show v2 never prices below the decider without the floor).
+5. **Fold the shadowed `_DISCARD` rungs** out of `doctrine_fetch` once the in-ladder A/B clears
+   (seam-D follow-up). **Assessed 2026-07-20: NOT satisfiable offline** — the A/B is a LIVE
+   Kaggle-ladder measure (the `develop_rollout` precedent), `needs_keep_value` has zero ladder
+   games behind it (armed 2026-07-20, dev window = no submissions ~a week), and folding deletes
+   the kill-switch fallback. Stays gated until ladder evidence accrues post-window.
+6. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Resupply (1)
+   and deny (2) have now LANDED, but the WP-N7 measurement says deny retires ZERO of the 13/68
+   floor firings (the residual firers are engine supporters / burst rows / far-out denies — all
+   legitimate fail-closures), so retirement rides its own sweep — measure whether v2 ever prices
+   below the decider once the floor is removed.
+7. **PLANNER-domain threads (surfaced in the WP-N8 grill, NOT keep-value — line evaluation, not
+   pricing; each needs its own bench + build):**
+   a. **Threshold-race snipe targeting** — pick the snipe that gets an opponent body under my
+      finisher's damage threshold before my successor comes online ("Mega under Nebula's 210 in
+      one more snipe from 230; but from 330 snipe the KO-able Staryu instead" — 83037962-49;
+      Riolu-vs-Makuhita off their discard fuel gauge). All numbers visible.
+   b. **Gust-line tempo evaluation** — a gust+KO on a bare bench body that returns their
+      full-health fueled attacker to the Active is a bad trade (83457493-31: don't Boss here).
 
 ## Closed this session — do not reopen without new evidence
 
@@ -74,7 +107,10 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
   83.5 → 84.5 of 267 — a WASH. Root cause proven: residual ties differ by who's-Active/tools (the
   leaf's other blindnesses); a hand term cannot read positional discriminators, so its tie-splits
   there are noise. The best shape (N5d deployability counterfactual + ε sizing) is committed and
-  parked behind `leaf_hand_value`. Re-measure ONLY after thread 3 lands.
+  parked behind `leaf_hand_value`. **Re-measured 2026-07-20 after thread 3 landed: 52 SOLE / 164
+  shared — shared-top still down, STILL PARKED.** The transposition cap (77/151 ties unsplittable
+  by any board term) bounds what any further leaf/hand term can recover; next evidence would have
+  to come from outside the leaf (search shape, not valuation).
 - **86091435-68** is refuted-as-labeled (user re-review): the Hammer should be KEPT; the surviving
   substance is `test_deploy_now_drakloak_is_not_pitched`.
 
