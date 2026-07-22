@@ -185,6 +185,28 @@ def test_shadow_is_silent_off_an_attach_decision():
     assert p.explain(obs).attach_shadow is None
 
 
+@pytest.mark.req("REQ-ATTACH-SHADOW-0014")
+def test_agree_is_slot_based_not_raw_index():
+    # The agreement bit compares the resolved target SLOT (area, position), not the raw option index.
+    # Two IDENTICAL Water->ACTIVE copies (options 0 and 1) + one Water->BENCH (option 2). The oracle
+    # picks the active (Mega 2->3 crosses to Nebula, beats the bare Staryu build), eq_pick=0. When the
+    # rung's `chosen` is the OTHER active copy (index 1, same slot), that is AGREEMENT — raw-index
+    # would have called it a false disagreement (the 82523811-59 / 82750161-59 hazard).
+    p = _pilot()
+    active = {"id": MEGA, "energies": [WATER, WATER], "hp": 330}
+    obs = _obs([{"id": STARYU, "energies": [], "hp": 70}],
+               [{"id": WATER}, {"id": WATER}, {"id": WATER}],
+               [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0), _attach(2, BENCH, 0)], active=active)
+    sel = obs["select"]
+    board = p._board(obs, sel)
+    options = sel["option"]
+    s_same = p._attach_shadow(obs, sel, board, options, [], chosen=[1])   # duplicate ACTIVE slot
+    assert s_same["eq_pick"] == 0
+    assert s_same["agree"] is True                 # index 1 is the SAME (ACTIVE,0) slot as eq_pick 0
+    s_diff = p._attach_shadow(obs, sel, board, options, [], chosen=[2])   # the BENCH slot
+    assert s_diff["agree"] is False                # a genuine target disagreement
+
+
 # ---------------------------------------------------------------- Style B: corpus replay
 
 def _tune():

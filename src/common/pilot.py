@@ -3540,7 +3540,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 accel_value = self._accel_routed_value(obs, board, routed)
         marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, accel_value, 0.0)
         type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
-        return {"i": None, "target": tcid, "energy": ecid,
+        # The resolved target SLOT (board area, position) — the comparison key for agreement and the
+        # sweep, NOT the raw option index. type-8 ATTACH carries inPlayArea/inPlayIndex; the type-3
+        # ATTACH_FROM recipient carries area/index (accel recipients are benched).
+        slot = [area, option.get("inPlayIndex") if is_attach else option.get("index")]
+        return {"i": None, "target": tcid, "energy": ecid, "slot": slot,
                 "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),
                 "build": round(build, 1), "accel_value": round(accel_value, 1), "doomed": not survives,
                 "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
@@ -3572,6 +3576,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 continue
             row["i"] = i
             rows.append(row)
+        # Agreement is keyed on the resolved target SLOT (area, position), NOT the raw option index:
+        # duplicate energy-source options and identical-effect target copies otherwise read as false
+        # disagreements (82523811-59: three identical Water->active copies; 82750161-59: duplicate
+        # Ignition sources). Keyed off `rows` (energy attaches only), so a chosen Pokémon Tool — which
+        # abstains and has no row — never counts as an energy-attach agreement.
+        slot_by_i = {r["i"]: tuple(r["slot"]) for r in rows}
         # Rank only options that buy DURABLE progress; if none does, the oracle attaches NOTHING
         # (`eq_pick = None`) — an all-Tool menu or a purely-wasteful attach. Priority (the ruled
         # order): marginal readiness, then the wincon line, then on-type over wasted, then reusable.
@@ -3580,10 +3590,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             best = max(positive, key=lambda r: (r["marginal"], r["line_value"],
                                                 not r["type_wasted"], -r["resource_cost"]))
             eq_pick = best["i"]
-            agree = eq_pick in (chosen or [])
+            chosen_slots = {slot_by_i[c] for c in (chosen or []) if c in slot_by_i}
+            agree = slot_by_i.get(eq_pick) in chosen_slots
         else:
             eq_pick = None                                     # attach nothing beats a valueless attach
-            agree = not (set(chosen or []) & set(attach_idx))
+            agree = not (set(chosen or []) & set(slot_by_i))   # agree iff the rung also made no energy attach
         return {"eq": rows, "eq_pick": eq_pick, "abstained": abstained,
                 "picks": sorted(chosen or []), "agree": agree}
 
