@@ -2995,9 +2995,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # applies BOTH the graded shed and the adaptive cycle. Decides nothing; measured before promotion.
         cycle_adaptive = self._refresh_cycle_adaptive(obs, board, cid)
         swing_v2_cyc = swing_v2 + (cycle_adaptive - _REFRESH_CYCLE)
+        # DECISION CONTEXT for the ladder-time promotion analysis: the isolated swing is NOT the
+        # decision — a positive shed swing on a frame the human ruled "don't shuffle" is benign when
+        # another option out-scores the refresh (attach-first / lethal / deferred-fetch carry it). To
+        # judge a v1->v2c promotion from ladder logs we must know whether the shed+cycle DELTA
+        # (swing_v2_cyc − swing_v1) would move the refresh past its best rival:
+        #   promoted_refresh_wins  ==  refresh_score + (swing_v2_cyc − swing_v1) > best_other_score
+        # so emit both the refresh option's own score and the best NON-refresh option's score.
+        refresh_idx = {j for j, _ in refresh_opts}
+        refresh_score = traces[i].score
+        other = [traces[j].score for j in range(len(options)) if j not in refresh_idx]
+        best_other_score = max(other) if other else None
         return {"i": i, "cid": cid, "v1_shed": round(v1_shed, 1), "v2_shed": round(v2_shed, 1),
                 "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
                 "cycle_adaptive": round(cycle_adaptive, 1), "swing_v2_cyc": round(swing_v2_cyc, 1),
+                "refresh_score": round(refresh_score, 1),
+                "best_other_score": round(best_other_score, 1) if best_other_score is not None else None,
                 "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
                 "played": i in (chosen or []), "eq": rows}
 
