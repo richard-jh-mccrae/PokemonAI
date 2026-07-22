@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
-from common.evolve_value import evolve_value
+from common.evolve_value import EvolveInputs, evolve_value
 from common.opponent_model import OpponentModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
@@ -1476,13 +1476,65 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _evolve_shadow(self, obs: dict, ctx, option: dict) -> float:
         """The SHADOW evolve-value oracle's output for an EVOLVE option (common/evolve_value.py) —
-        REPORTING-ONLY, not in `score`. 0.0 off an EVOLVE. Increment 1: the ability-income Δ."""
+        the marginal Δ need-coverage the evolve produces. REPORTING-ONLY, not in `score`; 0.0 off an
+        EVOLVE. Reads the board into `EvolveInputs`, so the equation stays a pure function."""
         if ctx.option_type != _EVOLVE or ctx.card_id is None or self.functions is None:
             return 0.0
         body = self._evolve_body(obs, option)
         body_cid = body.get("id") if body else None
-        return evolve_value(self.functions, result_cid=ctx.card_id,
-                            body_cid=body_cid, engines_online=0).total
+        body_energies = (body.get("energies") or []) if body else []
+        rtags = self.functions.tags(ctx.card_id)
+        btags = self.functions.tags(body_cid) if body_cid is not None else []
+        can_attack = (ctx.card_is_wincon
+                      and self._typed_can_pay(self._valued_attack_types(ctx.card_id), body_energies))
+        inp = EvolveInputs(
+            result_has_draw=("draw" in rtags or "dig" in rtags),
+            body_has_draw=("draw" in btags or "dig" in btags),
+            result_is_wincon=ctx.card_is_wincon,
+            result_is_line_preevo=ctx.card_is_line_preevo,
+            result_can_attack_now=can_attack,
+            body_has_energy=bool(body_energies),
+            body_doomed_affordable=self._body_doomed_affordable(obs, ctx.board))
+        return evolve_value(inp).total
+
+    def _valued_attack_types(self, cid) -> tuple:
+        """The TYPED cost (per-slot EnergyType codes; 0 = colourless) of a card's biggest-damage attack
+        — the payoff attack readiness is measured against. () when unknown."""
+        stat = self.stats.get(cid) if self.stats else None
+        if not stat or not getattr(stat, "attacks", None):
+            return ()
+        cands = [a for a in (self.stats.attack(aid) for aid in stat.attacks) if a is not None]
+        if not cands:
+            return ()
+        pick = max(cands, key=lambda a: (getattr(a, "damage", 0) or 0, getattr(a, "cost", 0) or 0))
+        return tuple(getattr(pick, "energyTypes", ()) or ())
+
+    @staticmethod
+    def _typed_can_pay(cost_types: tuple, have) -> bool:
+        """Greedy typed affordability: a coloured cost slot needs a distinct matching-type Energy, a
+        colourless slot any leftover. False for an unknown/empty cost."""
+        if not cost_types:
+            return False
+        have = list(have)
+        for t in cost_types:
+            if t == 0:
+                continue
+            if t in have:
+                have.remove(t)
+            else:
+                return False
+        return len(have) >= sum(1 for t in cost_types if t == 0)
+
+    def _body_doomed_affordable(self, obs: dict, board) -> bool:
+        """SCOPED doom read (evolve carve-out only): the opponent's Active can ACTUALLY KO next turn —
+        `active_doomed` AND their Active can afford its biggest attack NOW (count check). Deliberately
+        NOT the global affordability-blind doom oracle (docs/todo/incoming-affordability.md)."""
+        if not board.active_doomed:
+            return False
+        oa = self._opp_active(obs)
+        st = self.stats.get(oa.get("id")) if (oa and self.stats) else None
+        cost = getattr(st, "maxDamageCost", None) if st else None
+        return cost is not None and len(oa.get("energies") or []) >= cost
 
     def _weight(self, h) -> float:
         """Effective weight, resolved by id (0 disables): the learned override (tuned.json) over
