@@ -19,6 +19,10 @@ _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks pr
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe/spread rider, capped below —
 _BENCH_SNIPE_CAP = 0.9     # a sub-prize tiebreak: the equal-outcome KO that ALSO snipes wins,
                            # without ever overriding a prize (ADR-0022 #14)
+_RECUR_RELOAD_CAP = 3      # the max Basic Energy a `discard_energy_recur` line reloads from its OWN
+                           # discard in one turn — VERIFIED at source (EN_Card_Data.csv): Mega Lucario
+                           # ex 678 Aura Jab up to 3 Basic {F}; Archaludon ex 190 Assemble Alloy up to
+                           # 2 Basic {M}. Bounds the discard-fuel above the strongest verified reload.
 
 
 class CombatMath:
@@ -526,6 +530,34 @@ class CombatMath:
                 hops = max(hops, d)
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
+
+    def discard_recur_fuel(self, body: dict | None, opp_discard_energy: dict | None, *,
+                           forward_ids=None) -> int:
+        """The extra Basic Energy a `discard_energy_recur` line can reload from the opponent's DISCARD
+        next turn — the Threat Clock's discard-fuel input (S2 of
+        docs/plans/opponent-value-equation-unification.md). A refueler taps its own discard as an
+        extra energy reservoir beyond the 1 manual attach/turn, so its line is faster (lower
+        :meth:`turns_to_afford`) and more dangerous (higher :meth:`incoming`). Verified card facts
+        (EN_Card_Data.csv): Mega Lucario ex 678 Aura Jab attaches up to 3 Basic {F} from its discard
+        to its Bench; Archaludon ex 190 Assemble Alloy up to 2 Basic {M} to its {M} Pokémon.
+
+        Returns ``min(discard count of the line's own type, _RECUR_RELOAD_CAP)`` — the reload TYPE is
+        the recur form's own ``energyType`` (verified {F}/{M}). 0 when no form in the body's line
+        (current + forward) carries the tag, no Basic Energy of the line's type sits in the discard,
+        or functions/stats are blind (fail-open). Pure: a caller models the fuel by augmenting a
+        body's ``energies`` and re-reading the clock — the live reads are unchanged (S2 shadow-only)."""
+        if not (self.functions and self.stats) or not opp_discard_energy:
+            return 0
+        st = self._card_stat((body or {}).get("id"))
+        if st is None:
+            return 0
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        forms = [st, *(self._card_stat(f) for f in (fwd(st.cardId) or ()))]
+        recur = next((s for s in forms if s is not None
+                      and "discard_energy_recur" in self.functions.tags(s.cardId)), None)
+        if recur is None or recur.energyType is None:
+            return 0
+        return min(int(opp_discard_energy.get(recur.energyType, 0)), _RECUR_RELOAD_CAP)
 
     # --- KO valuation (the shared band every hypothetical attacker is priced on) ------------
     def bench_snipe_bonus(self, opp_bench, attack_id) -> float:

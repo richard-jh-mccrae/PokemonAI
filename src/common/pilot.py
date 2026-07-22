@@ -1048,6 +1048,13 @@ class Decision:
                                      # hand_size_attacker forward counter) for the survival-swap
                                      # adjudication. Deciding NOTHING — sparse: None mid-sim / no live
                                      # my-Active vs opp-Active
+    recur_shadow: dict | None = None    # the DISCARD-RECUR fuel SHADOW (Threat-Clock unification S2):
+                                     # per opponent in-play body whose line refuels from its discard
+                                     # (`discard_energy_recur`), the Threat-Clock reads with-vs-without
+                                     # the discard fuel (incoming(t=1) to my Active + turns_to_afford)
+                                     # — how much the discard reservoir accelerates/sharpens the threat.
+                                     # Deciding NOTHING (live reads pass no fuel) — sparse: None mid-sim
+                                     # / no opponent discard fuel
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1347,6 +1354,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
                         promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
                         threat_shadow=self._threat_shadow(obs, board),
+                        recur_shadow=self._recur_shadow(obs, board),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -6076,6 +6084,46 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         new = bool(my_hp and dmg >= my_hp)
         return {"doom_old": old, "doom_curve": new, "doom_incoming": int(dmg),
                 "my_hp": int(my_hp), "agree": old == new}
+
+    def _recur_shadow(self, obs: dict, board) -> dict | None:
+        """S2 discard-recur fuel SHADOW (docs/plans/opponent-value-equation-unification.md): for each
+        opponent in-play body whose line refuels from its own discard (`discard_energy_recur` — Mega
+        Lucario ex 678 reloads {F}, Archaludon ex 190 reloads {M}), emit the Threat-Clock reads
+        WITH-vs-WITHOUT the discard fuel — `incoming(t=1)` to my Active and `turns_to_afford` — so the
+        sweep can see how much the discard reservoir accelerates (lower t) and sharpens (higher
+        incoming) the threat. Deciding NOTHING: the live reads pass no fuel; the shadow models it by
+        augmenting a copy of the body's `energies`. Sparse: None mid-sim (`self._planning`), with no
+        opponent discard Energy, or no live opponent board."""
+        if getattr(self, "_planning", False):
+            return None
+        disc = getattr(board, "opp_discard_energy", None)
+        if not disc:
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        if not opp:
+            return None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        bodies = [p for p in ((opp.get("active") or []) + (opp.get("bench") or [])) if p]
+        rows = []
+        for p in bodies:
+            fuel = self.combat.discard_recur_fuel(p, disc, forward_ids=self._forward_card_ids)
+            if fuel <= 0:
+                continue
+            st = self.stats.get(p.get("id")) if self.stats else None
+            etype = getattr(st, "energyType", None)
+            fueled = dict(p, energies=list(p.get("energies") or []) + [etype] * fuel)
+            row = {"id": p.get("id"), "fuel": fuel,
+                   "ttr_plain": self.combat.turns_to_afford(p, forward_ids=self._forward_card_ids),
+                   "ttr_fuel": self.combat.turns_to_afford(fueled, forward_ids=self._forward_card_ids)}
+            if ma:
+                row["inc_plain"] = self.combat.incoming(ma, [p], 1)
+                row["inc_fuel"] = self.combat.incoming(ma, [fueled], 1)
+            rows.append(row)
+        return {"bodies": rows} if rows else None
 
     def _forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None) -> int:
         """Worst-case incoming if their Active EVOLVES next turn (the Posture forward read;

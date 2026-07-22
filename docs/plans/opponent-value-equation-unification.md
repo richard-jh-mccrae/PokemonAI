@@ -229,9 +229,21 @@ unbisectable — T5/T6 precedent).
     home now.
   - **Memoization** DEFERRED to when a consumer walks multiple t per decision (the t=1 reads stay as cheap
     as before).
-- **S2 — the N-turn + discard-fuel net-new behavior.** Thread `discard_energy_recur` into the accel policy
-  (the first net-new read once the shadow is clean). Fixes deny-vs-recycler and arms the threshold-race
-  input. Still no decider swap — telemetry only.
+- **S2 — the discard-fuel read: BUILT as a shadow (2026-07-22, TDD).** `CombatMath.discard_recur_fuel` —
+  the extra Basic Energy a `discard_energy_recur` line reloads from the opponent's discard next turn
+  (`min(discard count of the line's own type, _RECUR_RELOAD_CAP=3)`; **card facts verified at source** —
+  Mega Lucario ex 678 Aura Jab reloads up to 3 Basic {F} to its Bench, Archaludon ex 190 Assemble Alloy up
+  to 2 Basic {M}). `Pilot._recur_shadow` → `Decision.recur_shadow` → telemetry emits, per opponent refueler
+  body, the Threat-Clock reads WITH-vs-WITHOUT the fuel (`incoming(t=1)` to my Active + `turns_to_afford`),
+  **deciding NOTHING** — the live reads are byte-identical (the shadow models the fuel by augmenting a copy
+  of the body's `energies`; no live primitive touched, so no signature/behaviour change). Tests
+  `tests/strategy/test_discard_recur_fuel.py` (`REQ-RECUR-0001..0004`: the capped line-type fuel, the
+  zero/blind fallbacks, the shadow emit + delta + mid-sim guard). Full core suite green (pending).
+  **Conservatism note (ruling 2):** the fuel raises `incoming` (survival = fail-scared, SAFE to adopt) and
+  lowers `turns_to_afford` (deny = fail-slow; adopting it there over-values a strip — the UNSAFE direction,
+  so the deny swap must stay conservative / Brief-scoped). The sweep of `recur_shadow` (gitignored corpus)
+  measures the magnitude before any adoption. The precise reload TARGETING (Aura Jab feeds the BENCH, not
+  self; Archaludon any {M}) is a swap-time refinement — the shadow augments the recur body directionally.
 - **S3 — the opponent-target slot family, shadow-only (O1 = Option B).** Add the slot family to `needs.py`
   (generalize `deny_slot` to `snipe` / `gust` / `promo_chip` instruments over opponent-target slots, valued
   by the two-term sum with the phase-scaled exchange). Resolve it once per decision, cache it, and emit
@@ -345,7 +357,7 @@ byte-identical). The Threat Clock's two legs (damage curve + affordability clock
 **Next, in order:**
 1. **The S1b corpus sweep** — run the doom `threat_shadow` agree bit over the corrections corpus (needs the
    gitignored `data/meta/`) to quantify the doom divergence; that adjudicates the survival swap (S1's tail).
-2. **S2 — the discard-fuel net-new read** — thread `discard_energy_recur` into `incoming`/`turns_to_afford`'s
-   energy budget (fixes deny-vs-recycler; arms the threshold-race input). The first behavior change; shadow it.
+2. ~~**S2 — the discard-fuel read**~~ **DONE (shadow):** `discard_recur_fuel` + `recur_shadow`. Sweep it
+   (gitignored corpus) to size the fuel's clock effect before any adoption; conservatism note in the S2 bullet.
 3. **S3 — the opponent-target slot family** (`needs.py`): snipe/gust/deny/promo-chip as slots on one
    assignment (O1 = Option B), modeled on the merged gust prize-denominated marginal. Shadow, then S4 swaps.

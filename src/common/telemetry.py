@@ -125,6 +125,9 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     if threat_shadow:                             # unification S1b): incumbent active_doomed vs the
         rec["threat_shadow"] = threat_shadow      # incoming(t=1)-curve re-expression + the agree bit —
                                                   # deciding nothing; disagreement rows drive the swap
+    recur_shadow = getattr(decision, "recur_shadow", None)  # the DISCARD-RECUR fuel SHADOW (S2): per
+    if recur_shadow:                              # opponent refueler body, the Threat-Clock reads with
+        rec["recur_shadow"] = recur_shadow        # vs without the discard fuel — deciding nothing
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
         rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung
