@@ -49,12 +49,13 @@ REPLACES the rungs it shadowed (the currency-zone rule) — never co-exists as a
 
 ### The rung → term fold map (HYPOTHESISED — which rungs each oracle term SHOULD subsume)
 
-⚠️ **This map is a hypothesis, not a measurement.** It was derived by READING the grill spec's
-"hypothesis" section against the shipped `baseline_energy.py` — no frame has yet shown the oracle
-actually reproduces a given rung's pick. The `agree` bit is emitted per option but **no aggregate
-oracle-vs-rung agreement number exists yet**; Round-0 (the `attach_sweep` probe, §below step 1) is
-the measurement that VALIDATES or CORRECTS this table, and it has not been run. Treat every "subsumes"
-cell as a swap *candidate* to confirm against the sweep — never as settled fact — before folding.
+⚠️ **This map was HYPOTHESISED (read off `baseline_energy.py`), then partially MEASURED.** Round-0
+has now run (`tools/train/probes/attach_sweep.py`, results below). It CONFIRMED two families as
+pure-reproduction (`accel-routing`, `doomed-sign`), found `marginal` mixed (real fixes but
+regressions that gate a swap), and left FIVE families (`overkill`, `role-gate`, `type-fit`, the
+burst-veto row, `resource_cost`) **UNMEASURED** — the corpus never exercises them as the dominant
+driver. Treat any UNMEASURED cell as still-hypothesised; the measured status per family is in the
+Round-0 table below.
 
 | Oracle term | Rungs it subsumes | Rungs that SURVIVE (structure, not value) |
 |---|---|---|
@@ -68,18 +69,56 @@ cell as a swap *candidate* to confirm against the sweep — never as settled fac
 | accel-routing (4) | `feed-the-firing-accelerator`, `advance-the-accel-pieces` (attach side) | the PLAY-side `advance-the-accel-pieces` (source selection) |
 | partner-conditional (6) | mega_lucario `aura-jab-skip-partnerless-solrock` (deck rung, ADR-0034 fold) | — |
 
+### Round-0 results — measured 2026-07-22 (`tools/train/probes/attach_sweep.py`)
+
+Full corrections corpus, fresh Pilot per frame, slot-based comparison (Decision 1). The oracle
+FIRED on **122 frames**. The 2×2 is over IN-SCOPE frames only (`correct` IS an attach).
+
+**Scope, quantified:** **50 of 122** fires are OUT-OF-SCOPE — `correct` is a NON-attach play
+(Supporter / retreat / evolve). The oracle prices WHERE energy goes, not WHETHER to attach vs act
+elsewhere (the `_PLAY` layer, the `85786096-70` lesson). On 17 of those 50 the oracle correctly
+declined (`eq_pick=None`). These 50 never enter the fold ranking. The remaining **72 are in-scope.**
+
+| Family | SAFE | REGR | SHARED_GAP | FIX | DIVERGENT | Round-0 verdict |
+|---|---|---|---|---|---|---|
+| `accel-routing` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — oracle reproduces the rung; safe to fold but no behaviour change |
+| `doomed-sign` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — same; swap LAST / never |
+| `marginal` | 21 | **5** | 2 | 3 | 1 | **MEASURED-MIXED** — 3 real FIXes, but **5 REGRESSIONS gate any swap**; triage those first |
+| `overkill`, `role-gate`, `type-fit`, `marginal(burst-veto)`, `resource_cost` | 0 | 0 | 0 | 0 | 0 | **UNMEASURED** — no in-scope frame attributes here; fold stays hypothesised |
+| `(rung-silent)` | 0 | 0 | 6 | 13 | 7 | whether-to-attach signal: oracle catches **13** attaches the rungs MISSED; not a rung-fold |
+| `(unmapped: deck)` | 3 | 0 | 1 | 0 | 0 | ADR-0034 deck folds: `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line` |
+| `structure` (survivors) | 0 | 2 | 0 | 0 | 0 | not fold targets; 2 dragapult regressions (`85786096-24/25`) to eyeball |
+
+**The 5 `marginal` regressions to resolve BEFORE any marginal swap:** `82523811-105`, `82752604-61`,
+`83116081-21`, `85058574-121`, `85059103-84` (each: the rung matches `correct`, the oracle picks a
+different slot — mostly the wrong bench body in a spread/concentrate call).
+
+**Completeness check** flagged 4 fired rungs missing from the map: the 2 deck attach rungs above
+(ADR-0034), and 2 TOOL rungs (`deploy-hp-tool`, `equip-the-retreat-tool-on-the-active`) that ride
+`OptionType.ATTACH` but are out of scope — the oracle abstains on Tools (correct, Ruling 3).
+
+**Bottom line:** the fold map is NOT globally validated. Only `marginal` carries real fold signal,
+and it is gated by 5 regressions. `accel-routing`/`doomed-sign` are safe but pointless to fold (pure
+reproduction). Five families are unmeasured until live telemetry (item 2) or new corrections supply
+frames. The clean-equation goal is intact — the equation already reproduces two families exactly and
+matches `marginal` 21/32 with 3 net fixes — but it is not yet good enough to replace `marginal`
+wholesale, and most families have no evidence at all.
+
 ### How to rank the fold order (do NOT blind-build)
 
-1. **The measurement probe.** Author `tools/train/probes/attach_sweep.py` on the `needs_sweep`
-   pattern (fresh Pilot per frame, the corpus instrument finding): replay every committed attach
-   frame, print `chosen` vs `eq_pick` vs the human `correct`, plus the `agree` bit and the term
-   breakdown. This is the Round-0 measurement the grill spec calls for — it tells you which rung-
-   families the oracle already reproduces (swap last / never) and which it FIXES (swap first).
-2. **On live telemetry**, `attach_shadow` disagreement rows (`agree == False`) become the discovery
-   channel for latent rung bugs the corpus never caught — collect them once the dev window opens.
+1. **The measurement probe — BUILT & RUN.** `tools/train/probes/attach_sweep.py` (the `needs_sweep`
+   pattern: fresh Pilot per frame, slot-based comparison, fires-only primary + a structural audit
+   section, per-family 2×2 via an executable `{rung → family}` fold map). Round-0 results are in the
+   table above. Re-run it after any rung change to refresh the ranking.
+2. **On live telemetry**, `attach_shadow` disagreement rows (`agree == False`, now slot-based) become
+   the discovery channel for latent rung bugs the corpus never caught, AND the source of frames for
+   the five UNMEASURED families — collect them once the dev window opens.
 3. Fold **failing legs first, agreeing families last**; each swap under: discard corpus 12/12 + the
-   full suite + a `score_diff` gate + the currency-zone rule. Deck-rung folds (the mega_lucario
-   attach family) go via `/deck-align` (ADR-0034), score_diff-gated.
+   full suite + a `score_diff` gate + the currency-zone rule. Per Round-0: `accel-routing`/
+   `doomed-sign` fold safely but change nothing; `marginal` needs its 5 regressions resolved first;
+   the five UNMEASURED families cannot be folded until frames exist. Deck-rung folds (the mega_lucario
+   attach family — `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line`) go via
+   `/deck-align` (ADR-0034), score_diff-gated.
 
 ## Standing cautions (paid for — from the coverage review; don't re-buy)
 
