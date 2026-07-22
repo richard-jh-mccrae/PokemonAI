@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 
 from common import deck_odds
 from common.evolve_value import EvolveInputs, evolve_value
+from common.promote_retreat_value import PromoteRetreatInputs, promote_retreat_value
 from common.opponent_model import OpponentModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
@@ -959,6 +960,11 @@ class OptionTrace:
                                  # — the marginal Δ need-coverage the evolve produces. NOT in `score`; the
                                  # baseline_evolution rungs still decide. Swap gated on the corpus family
                                  # (test_evolve_valuation_corpus.py). 0.0 off an EVOLVE option.
+    promote_retreat_shadow: float = 0.0  # REPORTING-ONLY (promote/retreat grill, 2026-07-22): the SHADOW
+                                 # promote/retreat value oracle's output for a TO_ACTIVE/SWITCH option
+                                 # (common/promote_retreat_value.py) — the two-sided window-rollout diff. NOT
+                                 # in `score`; the baseline_promote/baseline_retreat rungs still decide. 0.0
+                                 # off a promote/retreat option.
 
 
 @dataclass
@@ -1519,7 +1525,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                            fired=fired, tactical=tactical,
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
                            hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
-                           evolve_shadow=self._evolve_shadow(obs, ctx, option))  # REPORTING-ONLY (shadow oracle)
+                           evolve_shadow=self._evolve_shadow(obs, ctx, option),  # REPORTING-ONLY (shadow oracle)
+                           promote_retreat_shadow=self._promote_retreat_shadow(ctx))  # REPORTING-ONLY (shadow oracle)
 
     def _evolve_shadow(self, obs: dict, ctx, option: dict) -> float:
         """The SHADOW evolve-value oracle's output for an EVOLVE option (common/evolve_value.py) —
@@ -1543,6 +1550,34 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             body_has_energy=bool(body_energies),
             body_doomed_affordable=self._body_doomed_affordable(obs, ctx.board))
         return evolve_value(inp).total
+
+    def _promote_retreat_shadow(self, ctx) -> float:
+        """The SHADOW promote/retreat value oracle's output for a TO_ACTIVE/SWITCH option
+        (common/promote_retreat_value.py) — the two-sided window-rollout diff (grill 2026-07-22).
+        REPORTING-ONLY, not in `score`; 0.0 off a promote/retreat select. Reads the SAME Context flags
+        the `baseline_promote` ladder consumes into `PromoteRetreatInputs`, so the equation stays a pure
+        function. Phase 1 = the 1-exchange slice: the closure probability (`fetch_enables_p`), the
+        retreat Energy cost and the current Active's forgone attack (`stay_yield`) are wiring hooks left
+        at their conservative defaults until pointed at the gamble/closure and stay-side machinery."""
+        if ctx.select_context not in (_TO_ACTIVE, _SWITCH):
+            return 0.0
+        board = ctx.board
+        tags, roles = (ctx.tags or []), (ctx.roles or [])
+        inp = PromoteRetreatInputs(
+            is_switch=(ctx.select_context == _SWITCH),
+            can_attack_now=ctx.promote_target_can_attack,
+            is_wincon=ctx.card_is_wincon,
+            is_best_target=ctx.is_best_promote_target,
+            is_staller=("opener" in tags or "item_lock" in tags),
+            is_accelerator=("accel_source" in roles),
+            bench_underpowered=(board.bench_wincon_underpowered and board.basic_energy_in_deck),
+            provable_ko=(ctx.promote_target_kos or ctx.is_ko_promote_target),
+            prize_value=ctx.card_prize_value,
+            opp_can_punish=not board.opp_cannot_punish_wincon,
+            opp_prizes_remaining=board.opp_prizes_remaining,
+            on_their_path=ctx.promote_target_on_their_path,
+            is_item_lock=("item_lock" in tags))
+        return promote_retreat_value(inp).total
 
     def _valued_attack_types(self, cid) -> tuple:
         """The TYPED cost (per-slot EnergyType codes; 0 = colourless) of a card's biggest-damage attack
