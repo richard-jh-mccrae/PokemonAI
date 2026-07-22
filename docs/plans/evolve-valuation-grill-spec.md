@@ -151,22 +151,30 @@ reads the board into `EvolveInputs` and emits `OptionTrace.evolve_shadow`. Prove
 evolve corpus cases correctly in shadow (f40 +12, f35 +3 held below Recon, f82 energized 32 > bare 27,
 f29 32 > spread); suite green.
 
-**Phase 2 — the swap: ATTEMPTED, then REVERTED to shadow (2026-07-15) — two calibration gaps found.**
-Wiring `evolve_shadow` into `score` and deleting the rungs flipped f40 to pass (XPASS, as designed) but
-surfaced two regressions the shadow ranking did not — the "seed at old currency, full-family re-audit"
-hazard, made concrete:
-  1. **The exposure term is load-bearing, not optional.** dragapult f32: evolving the threatened Active
-     Dreepy→Drakloak scores 32 (deploy 15 + energized 5 + income 12) and beats the correct
-     `retreat-to-wall-the-line` (30). Without the exposure penalty (evolving a fragile Active under a
-     real threat, wall alternative present) the income term over-values the evolve. Build the exposure
-     term BEFORE the swap.
-  2. **Mega-family deploy under-calibrates vs the old rung STACK.** mega_starmie 82525741-78: an unready
-     Mega Starmie evolve scores 10 (UNREADY tier) but must beat a competing attach (45) / Pokégear (20)
-     the old `evolve-into-wincon +40` stack cleared. The `_DEPLOY_WINCON_*` band needs re-auditing
-     against the full mega/lucario evolve corpus (not just the dragapult targets), with the discriminator
-     staying `income_loss` (megas have none → evolve; dragapult's Recon → hold), NOT the flat tier.
+**Phase 2 — the swap: ATTEMPTED, then REVERTED to shadow (2026-07-15).** Wiring `evolve_shadow` into
+`score` and deleting the rungs flipped f40 to pass (XPASS, as designed) but two suite tests regressed.
+On grill (user, 2026-07-15) they resolved to ONE evolve-value gap + one out-of-scope reclassification:
 
-Next: build the exposure term + re-audit the deploy band against the mega/lucario evolve corpus (extend
-the Round-0 corpus family with those cases), re-prove in shadow, then re-attempt the swap under corpus +
-score-diff + the currency-zone rule. Deck-rung fold (`hold-evolution`) via /deck-align. Earns its ADR at
-the first successful swap.
+  1. **f32 is NOT an evolve gap — it is a TURN-PLANNER maneuver (reclassified, dropped from this grill).**
+     dragapult f32: the evolve scores 32 and beats `retreat-to-wall-the-line` (30). The correct play is a
+     five-step one-turn maneuver (retreat Dreepy→Budew · evolve benched Dreepy→Drakloak · Recon ·
+     reconsider · Itchy-Pollen item-lock), whose value is the END-STATE — structurally outside a
+     single-action equation. `evolve_value`'s 32 for the standalone evolve is CORRECT; the maneuver is
+     simply better and belongs to the Turn Planner. **NO exposure term** (the earlier instinct was wrong
+     twice — evolving here SAVES the body 90>70, so a "threatened-Active penalty" is both incorrect and
+     the wrong layer). Handoff for that grill: `docs/plans/turn-planner-retreat-to-item-lock-wall.md`.
+     CROSS-LAYER REQUIREMENT for the swap: the retreat-to-wall maneuver must remain dominant (planner-
+     committed, or its value planner-scored above any single-action score) so the swap does not regress
+     `test_blunder_20260710_split_fixes` — this is a planner concern, not an `evolve_value` change.
+  2. **Mega-family deploy under-calibrates vs the old rung STACK — the one real evolve-value gap.**
+     mega_starmie 82525741-78: an unready Mega Starmie evolve scores 10 (UNREADY tier) but must beat a
+     competing attach (45) / Pokégear (20) the old `evolve-into-wincon +40` stack cleared. Re-audit the
+     `_DEPLOY_WINCON_*` band against the full mega/lucario evolve corpus (not just the dragapult
+     targets), the discriminator staying `income_loss` (megas have none → evolve; dragapult's Recon →
+     hold), NOT the flat tier.
+
+Next: re-audit the deploy band against the mega/lucario evolve corpus (extend the Round-0 family with
+those cases), re-prove in shadow, then re-attempt the swap under corpus + score-diff + the currency-zone
+rule, holding the retreat-to-wall maneuver dominant. Deck-rung fold (`hold-evolution`) via /deck-align.
+Earns its ADR at the first successful swap. (The `f2` opener is a SEPARATE `_SETUP_ACTIVE` placement-
+value computation, not on the `_EVOLVE` path — its own follow-up, still `xfail`.)
