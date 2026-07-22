@@ -118,6 +118,9 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     attach_shadow = getattr(decision, "attach_shadow", None)  # the ENERGY-ATTACH valuation shadow (the
     if attach_shadow:                             # fourth shadow, attach grill ruling): per-option
         rec["attach_shadow"] = attach_shadow      # marginal/line_value/resource_cost + pick + agree bit
+    promote_retreat_shadow = getattr(decision, "promote_retreat_shadow", None)  # the PROMOTE/RETREAT value
+    if promote_retreat_shadow:                    # shadow (fifth shadow, promote/retreat grill): per-option
+        rec["promote_retreat_shadow"] = promote_retreat_shadow  # window-rollout total + pick + agree bit
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
         rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung

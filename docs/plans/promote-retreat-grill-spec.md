@@ -134,6 +134,28 @@ ranked correctly through the live Pilot). Built incrementally:
 Still deferred (unchanged): the two N-turn curve terms (preservation dividend, tempo-denied) block on the
 unified Threat Clock; the SWAP (retire the rungs) blocks on the shadow-disagreement corpus sweep.
 
+### Sweep #1 — offline disagreement sweep (2026-07-22)
+
+Telemetry wired (`Decision.promote_retreat_shadow`, the FIFTH shadow, emitted in `telemetry.py` beside
+discard/refresh/attach) + the reusable tool `tools/train/promote_retreat_sweep.py`. Replays every
+RECORDED promote/retreat SELECT frame through a fresh Pilot; NO ladder submission. Results:
+
+- **Only 10 promote/retreat SELECT frames in the whole corpus** — and **4 are Boss's-gust-target
+  selects** (opponent bodies on a `_SWITCH`). The sweep **found + fixed a scoping bug**: the shadow was
+  firing on gust selects (pricing the equation over the OPPONENT's body); now guarded by option
+  ownership (`playerIndex == yourIndex`) — gust is the gust-value equation's turf.
+- **On the 6 genuine own-promote/retreat selects: shadow AGREES with the shipped ladder 6/6, ZERO
+  disagreements.** Consistent with Round-0's prediction (this family is the most-hardened; high
+  agreement expected). No swap evidence yet, and no shadow bugs surfaced on these frames.
+- **The load-bearing finding — the emission SITE.** The ~14 `bad_retreat` + the "insanely retreat happy"
+  mass (Group A, ruling 1) are **not** body-PICK selects; they are the **whether-to-retreat** decision at
+  a **MAIN** select (Play Switch / Retreat action vs Attack). The shadow emits only at the body-PICK
+  (TO_ACTIVE/SWITCH), so **Group A is currently invisible to the sweep** — which is exactly why the
+  corpus shows so few select-frames and agreement is trivially high. **Next build to make the sweep bite:
+  a SECOND emission site** — emit `retreat_value` on the retreat ACTION option at MAIN, ranked against
+  the attack sibling (the `stay_yield` subtraction becomes live there). Until then the swap stays
+  un-evidenced, correctly.
+
 ### Hazards (carried from the seed + added this session)
 
 - Adding the positive tempo-denied term "silently voids guards calibrated against the old scale"

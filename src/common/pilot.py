@@ -1029,6 +1029,12 @@ class Decision:
                                      # pick (`eq_pick`) and the agreement bit vs the shipped rungs'
                                      # `chosen`. A Pokémon Tool ABSTAINS (Ruling 3: not Energy). Deciding
                                      # NOTHING — sparse: None off a real attach choice / mid-sim
+    promote_retreat_shadow: dict | None = None  # the PROMOTE/RETREAT value shadow (promote-retreat-grill-
+                                     # spec.md §Settled design; the fifth shadow): every promote/retreat
+                                     # option's two-sided window-rollout total (common/promote_retreat_value.py)
+                                     # + the pick (`eq_pick`) and the agreement bit vs the shipped rungs'
+                                     # `chosen`. DECIDES NOTHING — sparse: None off a TO_ACTIVE/SWITCH select
+                                     # (< 2 options) / mid-sim. The swap-ranking sweep reads its disagreement rows.
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1326,6 +1332,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
+                        promote_retreat_shadow=self._promote_retreat_record(obs, select, options, traces, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -1564,6 +1571,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         hook at its default until that shared machinery is pointed at the promote target."""
         if ctx.select_context not in (_TO_ACTIVE, _SWITCH):
             return 0.0
+        my_index = (obs.get("current") or {}).get("yourIndex", 0)
+        if option.get("playerIndex") not in (None, my_index):
+            return 0.0            # a Boss's-gust target (opponent body) — the gust-value equation's turf
         board = ctx.board
         tags, roles = (ctx.tags or []), (ctx.roles or [])
         is_switch = ctx.select_context == _SWITCH
@@ -1589,6 +1599,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             retreat_energy_worth=retreat_worth,
             stay_yield=stay_yield)
         return promote_retreat_value(inp).total
+
+    def _promote_retreat_record(self, obs: dict, select: dict, options: list, traces: list, chosen: list):
+        """The promote/retreat value shadow (the fifth shadow) — collect every option's two-sided
+        window-rollout total (already computed per-option on `OptionTrace.promote_retreat_shadow`),
+        emit the working rows + the top pick + the agreement bit vs the shipped rungs' `chosen`.
+        DECIDES NOTHING. None off a TO_ACTIVE/SWITCH select (fewer than two options), a Boss's-gust
+        target select (opponent bodies — the gust-value equation's turf), or mid-sim (`self._planning`)
+        — the disagreement rows the swap-ranking sweep reads."""
+        if self._planning or select.get("context") not in (_TO_ACTIVE, _SWITCH) or len(options) < 2:
+            return None
+        my_index = (obs.get("current") or {}).get("yourIndex", 0)
+        if options and options[0].get("playerIndex") not in (None, my_index):
+            return None                                  # a gust-target select, not our own retreat
+        rows = [{"i": i, "v": round(t.promote_retreat_shadow, 2)} for i, t in enumerate(traces)]
+        eq_pick = max(range(len(traces)), key=lambda i: traces[i].promote_retreat_shadow)
+        return {"eq": rows, "eq_pick": eq_pick, "picks": sorted(chosen or []),
+                "agree": eq_pick in (chosen or [])}
 
     def _promote_fetch_p(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """Ruling 3 (EV over closure): P that the closure READIES an unready wincon promote target THIS
