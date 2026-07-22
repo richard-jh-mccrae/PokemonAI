@@ -37,7 +37,8 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
 | **Bench / deploy / fetch** | ✅ covered | Poffin/ball composers, bench baselines, fetch closure | |
 | **Discard-as-resource (MY fuel)** | ✅ covered | fuel slots (pitch side), Aura-Jab class detection | Pitching a matching energy is progress, not loss. |
 | **Opponent read — their board clock** | ✅ covered (new) | WP-N7 deny slots, `_opp_turns_to_ready`, posture Briefs | Assume-the-accel pessimism is doctrine (ADR-0064). |
-| **Opponent read — their DISCARD** | ❌ not read at all | — | Feeds both the snipe fuel-gauge rule and threat reads. |
+| **Opponent read — their DISCARD (damage-scaling)** | ✅ covered | `card_text.parse_attack_scaling` `atk_discard_energy` → `_damage_context(attacker_is_me=False)` → combat KO oracle | A Riptide-class scaler (Kyogre: 20× Basic `{W}` in *their* discard) is priced EXACTLY into `active_doomed`/`incoming_active_damage` — the discard is open info in both directions. Deck-discard scalers (Abomasnow Hammer-lanche) handled via `hiddenPerUnit`. Corrected 2026-07-22 (was mislabelled "not read at all"). |
+| **Opponent read — their DISCARD (as a resource)** | ❌ not read | — | The unread half: discard as a RECOVERY/recursion pool — energy/Pokémon they can re-attach or fetch back (Mega Lucario ex reloads `{F}` from discard; Night Stretcher/Super Rod recursion), and line-liveness (can they re-power/re-evolve a KO'd threat). Feeds threat-persistence + gust/deny valuations. Generalize via a `card_functions` tag for attacks/abilities that use their own discard. |
 | **Attack / lethal / KO race** | ✅ covered (separate arc) | combat/objectives/lethal verification | Out of this review's scope; noted for completeness. |
 
 ## Uncovered-but-buildable, ranked by payoff
@@ -46,8 +47,13 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
    (41 + shares of 111 sequencing / 27 slow-setup), design seeded
    (`attach-valuation-grill-spec.md`), machinery (worth/odds/gates/needs) all built. Run the grill,
    build in shadow, swap per the seam-D pattern.
-2. **Opponent-discard reading** — a small pure signal ("their discard holds N energy of type T /
-   these trainers") consumed by threat ranks and the snipe gauge. Prerequisite for 3.
+2. **Opponent-discard reading (resource half only)** — the damage-scaling half is DONE (Riptide-class,
+   see the coverage table). What remains: read the discard as a RECOVERY pool — an always-on pure signal
+   ("their discard holds N energy of type T / these recoverable Pokémon"), generalized by a `card_functions`
+   tag for attacks/abilities that use their own discard (Mega Lucario ex `{F}` reload, Slowpoke/Night
+   Stretcher recursion), feeding threat-persistence + gust/deny valuations. NOTE the snipe "fuel-gauge"
+   motivation is retired: its one corpus anchor (83667237-107) was ruled 2026-07-22 to be a THRESHOLD-RACE
+   frame, not a discard read (see the snipe/gust scenarios handoff). Read-always per user (free info).
 3. **The snipe-targeting grill** — the 3 corpus failures + the threshold-race rule, ruled
    frame-by-frame, then a `snipe_sweep` bench (23 DAMAGE frames; hold 16, fix the ruled). Do NOT
    blind-build: root causes are in shared threat-rank + prize-guard machinery
