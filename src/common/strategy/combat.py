@@ -486,6 +486,47 @@ class CombatMath:
             return None
         return float(math.ceil(hp / best))
 
+    def turns_to_afford(self, body: dict | None, *, forward_ids=None,
+                        attaches_per_turn: int = 1, max_hops: int = 3) -> int | None:
+        """The earliest future turn ``body``'s LINE is ARMED — its biggest-damage attack's COST is
+        payable (NOT lethality — the armed-threshold blocker) — the Threat Clock's affordability +
+        evolve leg behind the deny-slot deadline (S1c of
+        docs/plans/opponent-value-equation-unification.md). The MAX of two PARALLEL legs (never the
+        sum): the ENERGY deficit (max ``maxDamageCost`` over the body's current + forward forms,
+        minus attached, at ``attaches_per_turn``) and the FORWARD hops (the ``evolvesFrom``
+        name-chain depth to the deepest owed form, one evolve/turn, depth-guarded by ``max_hops``).
+        None when the body/its stats are unknown or no form's biggest-attack cost is known
+        (fail-closed — the caller emits no deny slot).
+
+        Shares the forward index and the energy model with :meth:`incoming` — the Threat Clock's two
+        legs (the damage curve + the affordability clock) in ONE home. ``forward_ids`` overrides the
+        forward callable (the availability gate); ``attaches_per_turn`` is the policy attach rate
+        (1 = the slow deny read, the per-consumer conservatism kept as a parameter). The deny-clock
+        consumer ``pilot._opp_turns_to_ready`` DELEGATES here (byte-identical)."""
+        from common import needs
+        cid = (body or {}).get("id")
+        st = self._card_stat(cid)
+        if st is None:
+            return None
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        fwd_stats = [self._card_stat(f) for f in (fwd(cid) or ())]
+        costs = [c for c in (getattr(s, "maxDamageCost", None)
+                             for s in (st, *fwd_stats) if s is not None) if c is not None]
+        if not costs:
+            return None
+        deficit = max(costs) - len((body or {}).get("energies") or [])
+        parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd_stats
+                  if s is not None and s.name}
+        hops = 0
+        for name in parent:
+            d, n = 0, name
+            while n and n != st.name and d <= max_hops:
+                d, n = d + 1, parent.get(n)
+            if n == st.name:
+                hops = max(hops, d)
+        return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
+                                    attaches_per_turn=attaches_per_turn)
+
     # --- KO valuation (the shared band every hypothetical attacker is priced on) ------------
     def bench_snipe_bonus(self, opp_bench, attack_id) -> float:
         """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes a benched Pokémon is

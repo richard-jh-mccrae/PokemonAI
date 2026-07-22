@@ -214,10 +214,19 @@ unbisectable — T5/T6 precedent).
     afford-agrees case, the unaffordable-current-form divergence, the emit + mid-sim guard). Suite green
     (strategy+blunder 1247; full core pending). **The corpus sweep of this agree bit is the adjudication
     input for the eventual survival swap — run it next (needs the gitignored corrections corpus).**
-  - **S1c — the `_opp_turns_to_ready` curve query: NEXT.** Distinct shape from doom: it is an
-    AFFORDABILITY inversion ("min t the biggest attack is payable"), not a damage-vs-HP read — blocker 3's
-    "armed = cost payable, not lethality". Needs a small `turns_to_afford(body, policy)` primitive off the
-    same energy model, then the same shadow treatment. Deferred so doom's swap isn't blocked on it.
+  - **S1c — the board-clock one-home extraction: BUILT (2026-07-22, TDD).** `CombatMath.turns_to_afford`
+    — the deny-clock's energy/evolve model lifted onto the KO oracle beside `incoming` (the Threat Clock's
+    two legs — the damage curve + the affordability clock — now share ONE home and the one forward index);
+    `pilot._opp_turns_to_ready` DELEGATES to it (byte-identical, the S1a pattern — NOT a shadow, because
+    this read is already an AFFORDABILITY read: "armed = biggest-attack COST payable," blocker 3 already
+    satisfied, so nothing diverges). Policy-parameterizable via `attaches_per_turn` (default 1 = the slow
+    deny read, ruling 2's per-consumer conservatism as a parameter). Tests
+    `tests/strategy/test_turns_to_afford.py` (`REQ-TTR-0001..0004`: the parallel-legs lookahead, fail-closed
+    None, the attach-rate policy param, and the delegate drift-guard); the existing
+    `test_needs_deny_resolver.py::test_opp_turns_to_ready_is_the_visible_parallel_lookahead` pins the
+    byte-identical values. Full core suite green (pending). The full curve-INVERSION
+    (`min{t : incoming(t, slow) ≥ armed}`) is a later refinement; the affordability primitive is the shared
+    home now.
   - **Memoization** DEFERRED to when a consumer walks multiple t per decision (the t=1 reads stay as cheap
     as before).
 - **S2 — the N-turn + discard-fuel net-new behavior.** Thread `discard_energy_recur` into the accel policy
@@ -324,8 +333,19 @@ stays the decider, reads the shared backend") — behavior-preserving, benched o
 - No new magic-number / γ fudge (ADR-0065): every term is a derived tier, a derived odds, or a derived
   phase margin. A graded term REPLACES its guard family and re-audits it — never bolts on beside it.
 
-## Recommended first step
+## Progress & next step
 
-S1: extract `incoming(t, policy)` and re-express `active_doomed` + `_opp_turns_to_ready` as two shadowed
-queries, byte-identical at t=1. It is a real bug-fix (the N-turn read the threshold-race and deny-recycler
-both need) and behavior-neutral to land — the safe wedge into the whole unification.
+**S1 landed (2026-07-22, all behavior-neutral, full core suite green ~2976):** S1a the `incoming(t, policy)`
+curve primitive (`reachable_incoming` delegates, byte-identical); S1b the doom SHADOW
+(`combat.doomed_incoming` + `Decision.threat_shadow`, deciding nothing — its known divergences pinned);
+S1c the board-clock one-home extraction (`combat.turns_to_afford`, `_opp_turns_to_ready` delegates,
+byte-identical). The Threat Clock's two legs (damage curve + affordability clock) now live in one home on
+`CombatMath`, policy-parameterized.
+
+**Next, in order:**
+1. **The S1b corpus sweep** — run the doom `threat_shadow` agree bit over the corrections corpus (needs the
+   gitignored `data/meta/`) to quantify the doom divergence; that adjudicates the survival swap (S1's tail).
+2. **S2 — the discard-fuel net-new read** — thread `discard_energy_recur` into `incoming`/`turns_to_afford`'s
+   energy budget (fixes deny-vs-recycler; arms the threshold-race input). The first behavior change; shadow it.
+3. **S3 — the opponent-target slot family** (`needs.py`): snipe/gust/deny/promo-chip as slots on one
+   assignment (O1 = Option B), modeled on the merged gust prize-denominated marginal. Shadow, then S4 swaps.

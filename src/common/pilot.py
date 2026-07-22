@@ -3923,28 +3923,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             contributes 0 hops (the deficit leg still grades).
 
         None — the caller emits NO deny slot (fail-closed, erring toward the shipped hedge) —
-        when the body/its stats are unknown or no form's biggest-attack cost is known."""
-        cid = (p or {}).get("id")
-        st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if st is None:
-            return None
-        fwd = [self.stats.get(f) for f in self._forward_card_ids(cid)]
-        costs = [c for c in (getattr(s, "maxDamageCost", None) for s in (st, *fwd) if s is not None)
-                 if c is not None]
-        if not costs:
-            return None
-        deficit = max(costs) - len((p or {}).get("energies") or [])
-        parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd
-                  if s is not None and s.name}
-        hops = 0
-        for name in parent:
-            d, n = 0, name
-            while n and n != st.name and d <= 3:
-                d, n = d + 1, parent.get(n)
-            if n == st.name:
-                hops = max(hops, d)
-        from common import needs
-        return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops)
+        when the body/its stats are unknown or no form's biggest-attack cost is known.
+
+        DELEGATES to `combat.turns_to_afford` (Threat-Clock unification S1c,
+        docs/plans/opponent-value-equation-unification.md): the deny-clock's energy/evolve model now
+        lives on the KO oracle beside `incoming` — the Threat Clock's two legs, one home — passing the
+        Pilot's forward index so the read stays byte-identical. The slow deny policy is the default
+        1-attach/turn (their card-effect accel is NOT modelled — the fail-closed direction)."""
+        return self.combat.turns_to_afford(p, forward_ids=self._forward_card_ids)
 
     def _unfavored(self, board: Board) -> bool:
         """The Read says the straight race loses (Lever A, ADR-0026) — a compiled favorability at or
