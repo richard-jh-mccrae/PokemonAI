@@ -164,6 +164,10 @@ _SNIPE_THREAT_PRIZE_FLOOR = 5   # deny an ENERGIZED off-Prize-Path attacker (don
                            # threat will bleed my prizes before I close; below it I race my committed path
                            # (ms f39 snipe @6 vs 83667237-107 stand-down @4, symmetric boards). Calibrated
                            # on 2 corrections — a ladder-tuned floor.
+_ITEM_LOCK_EARLY_TURN = 3  # promote/retreat shadow (Sweep #2 Finding A): an `item_lock` body's disruption
+                           # (Itchy Pollen) is credited only while the opponent still depends on SETUP
+                           # Items — turn <= this. dragapult f20/f13 (turn 2, retreat-into-Budew correct)
+                           # keep it; f30/f35/f96 (turn 4/6/12) lose the flat +27 over-fire.
 _HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evolution line CERTAINLY
                            # reaches a hand-size attacker (Kadabra→Alakazam "Powerful Hand") — latent
                            # win-condition hidden by low printed damage. `hand_size_attacker` Function Tag.
@@ -1581,12 +1585,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         can_attack = self._promote_can_attack(obs, select, option)
         fetch_p = (self._promote_fetch_p(obs, select, board, option)
                    if (ctx.card_is_wincon and not can_attack) else 0.0)
+        item_lock_live = self._item_lock_live(tags, board)   # Sweep #2 Finding A: early-game gate
         inp = PromoteRetreatInputs(
             is_switch=is_switch,
             can_attack_now=can_attack,
             is_wincon=ctx.card_is_wincon,
             is_best_target=ctx.is_best_promote_target,
-            is_staller=("opener" in tags or "item_lock" in tags),
+            is_staller=("opener" in tags or item_lock_live),
             is_accelerator=("accel_source" in roles),
             bench_underpowered=(board.bench_wincon_underpowered and board.basic_energy_in_deck),
             provable_ko=(ctx.promote_target_kos or ctx.is_ko_promote_target),
@@ -1594,7 +1599,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_can_punish=not board.opp_cannot_punish_wincon,
             opp_prizes_remaining=board.opp_prizes_remaining,
             on_their_path=ctx.promote_target_on_their_path,
-            is_item_lock=("item_lock" in tags),
+            is_item_lock=item_lock_live,
             fetch_enables_p=fetch_p,
             retreat_energy_worth=retreat_worth,
             stay_yield=stay_yield)
@@ -1657,12 +1662,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             tags = self.functions.tags(bid) if self.functions else []
             can_attack = bool(stat and stat.minAttackCost is not None
                               and len(b.get("energies") or []) >= stat.minAttackCost)
+            item_lock_live = self._item_lock_live(tags, board)   # Sweep #2 Finding A: early-game gate
             inp = PromoteRetreatInputs(
                 is_switch=True,
                 can_attack_now=can_attack,
                 is_wincon=(bid in wincon),
                 is_best_target=(best_slot == (_BENCH, i)),
-                is_staller=("opener" in tags or "item_lock" in tags),
+                is_staller=("opener" in tags or item_lock_live),
                 is_accelerator=("accel_source" in self._roles_of(bid)),
                 bench_underpowered=(board.bench_wincon_underpowered and board.basic_energy_in_deck),
                 provable_ko=(board.ko_promote_slot == (_BENCH, i)),
@@ -1670,7 +1676,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 opp_can_punish=not board.opp_cannot_punish_wincon,
                 opp_prizes_remaining=board.opp_prizes_remaining,
                 on_their_path=False,
-                is_item_lock=("item_lock" in tags),
+                is_item_lock=item_lock_live,
                 retreat_energy_worth=retreat_worth,
                 stay_yield=stay_yield)
             total = promote_retreat_value(inp).total
@@ -1695,6 +1701,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         payable = self._active_attack_payable_via_accel(
             me, poke, bool(state.get("supporterPlayed")), board.basic_energy_in_deck)
         return 1.0 if payable else 0.0
+
+    def _item_lock_live(self, tags, board: Board) -> bool:
+        """Whether an `item_lock` body's disruption is worth crediting NOW (Sweep #2 Finding A). Itchy
+        Pollen denies the opponent's SETUP Items — valuable while they still depend on them (early game),
+        near-worthless once they're built. Proxied by `board.turn <= _ITEM_LOCK_EARLY_TURN`; a candidate
+        to replace with a real opponent-Item-reliance read. Without this the tempo/staller credit fired
+        UNCONDITIONALLY (a flat +27 retreat-into-Budew on every dragapult frame — ep86091435 f30/35/96)."""
+        return "item_lock" in tags and board.turn <= _ITEM_LOCK_EARLY_TURN
 
     def _promote_can_attack(self, obs: dict, select: dict, option: dict) -> bool:
         """Context-agnostic readiness for the shadow: the option's benched body can use an attack this

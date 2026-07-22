@@ -179,6 +179,25 @@ Sweep now covers **96 whether-frames** (vs 6 pick) — Group A is finally visibl
   decision stack: those belong above the equation, so the shadow "regressing" there is expected, not a bug.
 - **pick-site unchanged: 6/6 agree.** The swap still waits on tightening Finding A, then a re-sweep.
 
+### Sweep #3 — Finding A fixed (2026-07-22)
+
+Gated the `item_lock` credit (both its staller and tempo portions) on `board.turn <= _ITEM_LOCK_EARLY_TURN`
+(=3) via `_item_lock_live`: Itchy Pollen denies the opponent's SETUP Items, valuable early, worthless once
+they're built (the data: correct retreats at turn 2, over-fires at turn 4/6/12; the disruptor signals
+were False on both, so game-phase is the real discriminator — a proxy for a future opp-Item-reliance read).
+
+Re-sweep — the disagreement QUALITY improved (agreement held at 84/96, but the mix flipped the right way):
+- **shadow-fixes-ladder 4 → 7; shadow-regresses 8 → 5.**
+- The false `+27` over-fires (`86091435-30/35/96`, turn 4/6/12) now **agree** (worth_it False).
+- **The headline: the gate surfaced the retreat-happy blunders.** `86090164-67` ("insanely retreat
+  happy" — the complaint that opened this grill) flipped from shadow-WRONG (`+12`, sided with the
+  over-retreating ladder) to **shadow-fixes-ladder** (`−20`, correctly don't-retreat); `86090164-52`
+  ("don't retreat the Active that can KO") likewise. The equation now catches the exact pathology.
+- **Remaining 5 regressions are Finding B** (development/KO forgone: `81905522-47`, `82749168-61`,
+  `82750161-59` — the Active wants an ATTACH or has a planner-tier KO, which `stay_yield` doesn't price)
+  plus two marginal (`value` 3–5). Finding B is the next lever: either a "stay to DEVELOP" term or accept
+  they sit above the equation (the KO ones are planner-tier by ruling 5).
+
 ### Hazards (carried from the seed + added this session)
 
 - Adding the positive tempo-denied term "silently voids guards calibrated against the old scale"
