@@ -131,10 +131,24 @@ value(remove / chip / deny body b) =
 
 **Snipe rider, gust+KO, Hammer strip, forced-promotion pre-chip are the SAME question, different
 instrument** — each plugs its own `Δ` into the two terms. This is ADR-0065's `value = Worth × Odds` shape;
-the `deny_slot` in the Needs assignment is already exactly this, so the concrete realization is: **bring
-the snipe/gust/forced-promo instruments into the same marginal vocabulary the deny-slot already speaks**
-(a Needs-style opponent-target assignment, or a shared `opponent_target_value` primitive the doctrines
-consume — see Open question O1).
+the `deny_slot` in the Needs assignment is already exactly this.
+
+**Realization = the Needs ASSIGNMENT, generalized (O1 resolved: Option B, user, 2026-07-22).** The
+marginal is not a per-doctrine calculator each attack calls independently — it is **one board-wide slot
+assignment**. Every opponent in-play body (+ its forward forms) is an **opponent-target slot** on the same
+ledger the `deny_slot` already lives on; my available removal instruments this turn (snipe rider, gust,
+Hammer, forced-promo chip) are the *cards being assigned to those slots*, and the exact bitmask-DP solver
+(`needs.assignment_value` / `set_keep_v2`) prices the whole turn's removal plan in ONE pass. This is what
+makes the interactions fall out for free — the value is **marginal**, so:
+- I cannot double-spend two instruments on one body and count both (the solver assigns each slot once).
+- KOing body X *reprices* body Y in the same pass (the survival curve shifts; the solver re-optimizes).
+- Sequencing (gust X for the KO ⇒ the Hammer is now better on Y) is the assignment, not hand-coded.
+
+So the concrete build is: **add an opponent-target slot family to `needs.py`** (generalize `deny_slot` to
+`snipe` / `gust` / `promo_chip` instruments over the same slots), and make each doctrine's target pick
+read its instrument's marginal out of the shared assignment — the `deny_slot` → Needs precedent (WP-N7),
+extended. The doctrines stay the DECIDERS (when to snipe vs gust vs Hammer); the assignment is the shared
+value BACKEND they all query.
 
 ## The seams to fold INTO (not around)
 
@@ -180,42 +194,61 @@ unbisectable — T5/T6 precedent).
 - **S2 — the N-turn + discard-fuel net-new behavior.** Thread `discard_energy_recur` into the accel policy
   (the first net-new read once the shadow is clean). Fixes deny-vs-recycler and arms the threshold-race
   input. Still no decider swap — telemetry only.
-- **S3 — the Layer-2 marginal, shadow-only.** Define `opponent_target_value` (the two-term sum with the
-  phase-scaled exchange). Emit it beside every snipe/gust/deny decision as a shadow (the seam-D pattern,
-  ADR-0065). First corpus sweep over the 23 DAMAGE frames (`snipe_sweep`) + the gust frames + the Hammer
-  frames — localize disagreements, adjudicate frame-by-frame with the user (the WP-N8 currency grill).
-  **Acceptance = byte-identical on the 16 passing snipe role reads + fix the ruled threshold-race**
-  (`83667237-107`), hold the deny 5/5 (ADR-0062) and gust frames.
-- **S4 — the decider swaps, per instrument.** Snipe first (its rungs → the marginal; the ADR-0065 snipe
-  fold), then deny (already a slot), then gust (coordinated with the ADR-0066 session). Each a PROFILE
+- **S3 — the opponent-target slot family, shadow-only (O1 = Option B).** Add the slot family to `needs.py`
+  (generalize `deny_slot` to `snipe` / `gust` / `promo_chip` instruments over opponent-target slots, valued
+  by the two-term sum with the phase-scaled exchange). Resolve it once per decision, cache it, and emit
+  **each instrument's marginal slice** beside its real snipe/gust/deny decision as a shadow (the seam-D
+  pattern, ADR-0065; the deny-slot / WP-N7 precedent). First corpus sweep over the 23 DAMAGE frames
+  (`snipe_sweep`) + the gust frames + the Hammer frames — localize disagreements, adjudicate frame-by-frame
+  with the user (the WP-N8 currency grill). **Acceptance = byte-identical on the 16 passing snipe role reads
+  + fix the ruled threshold-race** (`83667237-107`), hold the deny 5/5 (ADR-0062) and the gust frames.
+- **S4 — the decider swaps, per instrument.** Each doctrine's target pick swaps to read its instrument's
+  slice out of the shared assignment: deny first (already a slot — the shortest hop), then snipe (its rungs
+  → the marginal; the ADR-0065 snipe fold), then gust. **Gust is now merged to main** (user, 2026-07-22) —
+  so gust folds INTO the assignment rather than being coordinated across sessions: its
+  `KO_prizes + tempo − return_threat` becomes the gust instrument's marginal in the slot family (verify the
+  merged shape once it lands in this env's remote — see the sync note below). Each swap a PROFILE
   kill-switch, OFF byte-identical (`develop_rollout` / seam-D precedent).
 - **S5 — the decline-a-prize gate (ruling 6).** The riskiest behavior, LAST, behind its own kill-switch
   (ADR-0045 S4's `forgo_ko`, promoted from parked-OFF). The tight four-condition sound gate; any doubt →
   take the prize. Own bench: a captured can-KO-but-bad-trade anchor (Scenario B still lacks one — flag for
   capture) + the forgo-KO corrections.
 
-## Coordination with the in-flight gust session (ruling 3)
+## The merged gust value = the marginal's template (ruling 3; gust merged 2026-07-22)
 
-`valuation-systems-coverage-review.md` (today) records the ADR-0066 unified gust read — `gust value =
-KO_prizes + tempo_denied(role, turns_out_of_position) − return_threat` — as *"being built in a separate
-session; do NOT author it here."* Ruling 3 changes that to **coordinate / absorb**. Concretely:
-- The gust `return_threat` is `incoming(1, ceiling)` — a Layer-1 query. The gust `tempo_denied` is the
-  `survival_shift` term. So the ADR-0066 equation IS the Layer-2 marginal for the gust instrument. Do not
-  build a rival — **make the gust session's `_gust_target_tactical` a consumer of `opponent_target_value`**
-  once S3 lands, or (if it lands first) treat its shape as the marginal's first concrete instance and fold
-  snipe/deny to match it.
-- **Action for the next session:** before touching gust code, check the gust branch/PR state (PR #128
-  merged the gust target/whether cluster; the unified read is elsewhere) and sync with that session so the
-  two do not author two currencies. This is the one hard cross-session dependency.
+The ADR-0066 unified gust read — `gust value = KO_prizes + tempo_denied(role, turns_out_of_position) −
+return_threat` — is now **merged to main** (user). This is not a rival to build around; it is the **first
+concrete instance of the Layer-2 marginal**, so it sets the template the other instruments fold to match:
+- `KO_prizes` = the `prize_advance` term. `tempo_denied` = the `survival_shift` term. `return_threat` =
+  `incoming(1, ceiling)` of what promotes back — a Layer-1 query. So the merged gust equation IS
+  `opponent_target_value` for the gust instrument, already in the two-term shape.
+- **Build consequence:** the gust instrument's marginal in the S3 slot family is the merged expression,
+  lifted from `_gust_target_tactical` into the shared assignment; snipe and deny fold to match its currency,
+  not the reverse. `_gust_target_tactical` then becomes a consumer of its own slice (the ADR-0065 "doctrine
+  stays the decider, reads the shared backend" shape) — a refactor, behavior-preserving, benched on the gust
+  corpus frames.
+- **Sync caveat (verify before building):** as of this writing this environment's git remote (`origin/main`)
+  is still at PR #131 and the merged gust `return_threat`/`tempo` terms are not yet visible here — either the
+  merge has not propagated to this env's remote, or "gust value expression" refers to the ADR-0066 target
+  terms already present in `_gust_target_tactical` (`_gust_energy_denial` / `_gust_target_denial` /
+  `_gust_wincon_denial`) rather than a distinct `return_threat` read. **First action next session: fetch
+  main, read the merged `_gust_target_tactical`, and confirm its actual shape** before lifting it — do not
+  assume the `return_threat` term exists until seen.
 
 ## Open questions / risks
 
-- **O1 — assignment vs primitive.** Is the Layer-2 marginal a **Needs-assignment slot family** (opponent
-  bodies as slots, the deny-slot generalized to snipe/gust — one global assignment prices all removal
-  instruments together) or a **shared `opponent_target_value` primitive** the doctrines call (the ADR-0052
-  KO-oracle shape)? The deny-slot is already in the assignment, which argues for the former; but snipe/gust
-  fire in different SelectContexts (DAMAGE 15 / SWITCH / DISCARD_ENERGY 30) that rarely collide in one
-  select, which argues the primitive is enough. **Decide at S3 against the shadow evidence**, not now.
+- **O1 — assignment vs primitive. RESOLVED: the assignment (Option B; user, 2026-07-22).** The Layer-2
+  marginal is one board-wide Needs slot assignment (opponent bodies as slots, the deny-slot generalized to
+  every removal instrument — snipe / gust / Hammer / promo-chip), so all instruments are priced *together*
+  in one marginal pass. Rationale: the deny-slot is already in the assignment, and the interactions
+  (no-double-spend, KO-reprices-neighbor, sequencing) that a per-doctrine primitive would have to hand-code
+  fall out of the marginal for free. The counter-argument (the instruments fire in different SelectContexts
+  — DAMAGE 15 / SWITCH / DISCARD_ENERGY 30 — so they rarely collide in one *select*) is answered by the
+  assignment being resolved once per DECISION and cached (the `_opp_attack_context` stash precedent): each
+  select then reads its instrument's slice out of the shared plan, so the plan is coherent across the turn
+  even though the engine asks about the instruments separately. **Consequence for the staircase:** S3's
+  shadow emits the assignment's per-instrument marginal (not a standalone value), and S4 swaps each
+  doctrine to read that slice.
 - **R1 — the phase scaler is the +76 risk surface.** Ruling 5 is phase-scaled, and ADR-0065 refused a
   match-importance multiplier for exactly this reason. The guard: the scaler is ADR-0040's *derived* KO-race
   margin (bounded [0, ~1 prize]), consumed intact — never a free γ. Enumerate the computable phase inputs
