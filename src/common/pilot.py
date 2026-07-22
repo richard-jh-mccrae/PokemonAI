@@ -1568,9 +1568,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         tags, roles = (ctx.tags or []), (ctx.roles or [])
         is_switch = ctx.select_context == _SWITCH
         retreat_worth, stay_yield = self._retreat_side(obs) if is_switch else (0.0, 0.0)
+        can_attack = self._promote_can_attack(obs, select, option)
+        fetch_p = (self._promote_fetch_p(obs, select, board, option)
+                   if (ctx.card_is_wincon and not can_attack) else 0.0)
         inp = PromoteRetreatInputs(
             is_switch=is_switch,
-            can_attack_now=self._promote_can_attack(obs, select, option),
+            can_attack_now=can_attack,
             is_wincon=ctx.card_is_wincon,
             is_best_target=ctx.is_best_promote_target,
             is_staller=("opener" in tags or "item_lock" in tags),
@@ -1582,9 +1585,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_prizes_remaining=board.opp_prizes_remaining,
             on_their_path=ctx.promote_target_on_their_path,
             is_item_lock=("item_lock" in tags),
+            fetch_enables_p=fetch_p,
             retreat_energy_worth=retreat_worth,
             stay_yield=stay_yield)
         return promote_retreat_value(inp).total
+
+    def _promote_fetch_p(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """Ruling 3 (EV over closure): P that the closure READIES an unready wincon promote target THIS
+        turn. Interim = the CERTAIN one-attach-short accel case, reusing the body-agnostic
+        `_active_attack_payable_via_accel` (a playable `tutor_energy` in hand + a Basic Energy the deck
+        holds → one accel-attach reaches the cheapest attack) pointed at the promote body — sound and
+        fail-CLOSED (0.0 on unknowns / multi-attach-short). The probabilistic MIDDLE (drawing a
+        not-yet-held enabler over the turn's remaining dig) is deferred to the shared self reachable-attach
+        affordability oracle (the f70 finding in valuation-systems-coverage-review.md, symmetric to
+        ADR-0064 `reachable_incoming`); until it lands this returns 1.0/0.0, never a partial."""
+        poke = self._option_pokemon(obs, select, option)
+        if not poke:
+            return 0.0
+        me = self._my_player(obs)
+        state = obs.get("current") or {}
+        payable = self._active_attack_payable_via_accel(
+            me, poke, bool(state.get("supporterPlayed")), board.basic_energy_in_deck)
+        return 1.0 if payable else 0.0
 
     def _promote_can_attack(self, obs: dict, select: dict, option: dict) -> bool:
         """Context-agnostic readiness for the shadow: the option's benched body can use an attack this

@@ -111,6 +111,29 @@ shadow-disagreement ranking; preserve `disruptor_lock_maneuver`'s kill-switch as
 the `test_blunder_20260710_split_fixes.py` pins. Phase 3 (BLOCKED on the Threat Clock) — extend the
 two curve terms (preservation dividend, tempo-denied) from the 1-exchange slice to the N-turn window.
 
+### Build status — the shadow is BUILT (as of 2026-07-22)
+
+`common/promote_retreat_value.py` (pure equation) + `pilot._promote_retreat_shadow` (wiring, emitted
+REPORTING-ONLY on `OptionTrace.promote_retreat_shadow`). Tests: `tests/strategy/test_promote_retreat_value.py`
+(14 unit, the six rulings) + `tests/strategy/test_promote_retreat_corpus.py` (3 corpus frames — f120/f104/f92
+ranked correctly through the live Pilot). Built incrementally:
+
+- **my_yield / their_yield / tempo-denied / retreat_cost** — wired to the Context flags the ladder reads
+  (1:1). Readiness is sourced off the option body (`_promote_can_attack`), NOT the TO_ACTIVE-scoped
+  `ctx.promote_target_can_attack` — a fix for the readiness leg being dead on SWITCH retreats (found by
+  the f92 corpus test).
+- **stay_yield + retreat cost** — the voluntary-retreat side (`_retreat_side`): the Active's forgone
+  sub-lethal attack priced by the SAME my_yield term (ruling 1), and its retreat Energy via `card_worth`.
+- **fetch_enables_p (ruling 3, EV over closure)** — INTERIM: the CERTAIN one-attach-short accel case only,
+  reusing the body-agnostic `_active_attack_payable_via_accel` (the f70 machinery) pointed at the promote
+  target → 1.0/0.0, fail-closed. The probabilistic MIDDLE (drawing a not-yet-held enabler over the turn's
+  remaining dig) is DEFERRED to the shared **self reachable-attach affordability oracle** (the f70 finding
+  in `valuation-systems-coverage-review.md`, symmetric to ADR-0064 `reachable_incoming`) — a shared build
+  that also serves stall-gust/posture/doom. Point `fetch_enables_p` at it when it lands.
+
+Still deferred (unchanged): the two N-turn curve terms (preservation dividend, tempo-denied) block on the
+unified Threat Clock; the SWAP (retire the rungs) blocks on the shadow-disagreement corpus sweep.
+
 ### Hazards (carried from the seed + added this session)
 
 - Adding the positive tempo-denied term "silently voids guards calibrated against the old scale"
