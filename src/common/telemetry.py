@@ -121,6 +121,10 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     promote_retreat_shadow = getattr(decision, "promote_retreat_shadow", None)  # the PROMOTE/RETREAT value
     if promote_retreat_shadow:                    # shadow (fifth shadow, promote/retreat grill): per-option
         rec["promote_retreat_shadow"] = promote_retreat_shadow  # window-rollout total + pick + agree bit
+    threat_shadow = getattr(decision, "threat_shadow", None)  # the DOOM worst-case SHADOW (Threat-Clock
+    if threat_shadow:                             # unification S1b): incumbent active_doomed vs the
+        rec["threat_shadow"] = threat_shadow      # incoming(t=1)-curve re-expression + the agree bit —
+                                                  # deciding nothing; disagreement rows drive the swap
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
         rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung

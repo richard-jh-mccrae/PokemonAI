@@ -202,11 +202,24 @@ unbisectable — T5/T6 precedent).
     clamp). **Full core suite green (2969 passed / 1 skipped / 3 xfailed)** — the existing
     `test_reachable_incoming.py` (9 pins) unchanged. Memoization DEFERRED to S1b (only a multi-t caller
     pays for the curve; the t=1 read is exactly as cheap as before).
-  - **S1b — re-express `active_doomed` + `_opp_turns_to_ready` as curve queries behind a shadow: NEXT.**
-    The behavior-neutral wiring: emit both old + new beside each decision, assert byte-identical at t=1 on
-    the corpus, then memoize the curve per decision. NOTE `active_doomed` is combat.py machinery on the
-    19-test blast radius (ADR-0064 §2 kept it worst-case as a named follow-up) — shadow-first, its own
-    fixture re-baseline.
+  - **S1b — the doom SHADOW: BUILT (2026-07-22, TDD).** `CombatMath.doomed_incoming` re-expresses the
+    survival doom read as an `incoming(t=1)` curve query (ceiling policy); `Pilot._threat_shadow` emits the
+    incumbent `active_doomed` (the decider, unchanged) beside it + the agreement bit on
+    `Decision.threat_shadow` → `telemetry.to_record`'s `threat_shadow` key, **deciding NOTHING** (the
+    established shadow-equations pattern — `discard`/`refresh`/`attach` precedent; sparse, `_planning`
+    mid-sim guard). **Confirmed NOT byte-identical by design** (the finding that makes it a shadow, not a
+    delegate): `active_doomed` is unconditionally worst-case (ADR-0064 §2) while the curve gates the
+    current form on `can_pay_cheapest` and omits the `hand_size_attacker` forward counter — the two known
+    divergences, pinned in `tests/strategy/test_threat_shadow.py` (`REQ-DOOMSHADOW-0001..0003`: the
+    afford-agrees case, the unaffordable-current-form divergence, the emit + mid-sim guard). Suite green
+    (strategy+blunder 1247; full core pending). **The corpus sweep of this agree bit is the adjudication
+    input for the eventual survival swap — run it next (needs the gitignored corrections corpus).**
+  - **S1c — the `_opp_turns_to_ready` curve query: NEXT.** Distinct shape from doom: it is an
+    AFFORDABILITY inversion ("min t the biggest attack is payable"), not a damage-vs-HP read — blocker 3's
+    "armed = cost payable, not lethality". Needs a small `turns_to_afford(body, policy)` primitive off the
+    same energy model, then the same shadow treatment. Deferred so doom's swap isn't blocked on it.
+  - **Memoization** DEFERRED to when a consumer walks multiple t per decision (the t=1 reads stay as cheap
+    as before).
 - **S2 — the N-turn + discard-fuel net-new behavior.** Thread `discard_energy_recur` into the accel policy
   (the first net-new read once the shadow is clean). Fixes deny-vs-recycler and arms the threshold-race
   input. Still no decider swap — telemetry only.

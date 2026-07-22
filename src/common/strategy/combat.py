@@ -333,6 +333,22 @@ class CombatMath:
                      self.forward_incoming_damage(ma, oa, opp, context=context))
         return threat >= my_hp
 
+    def doomed_incoming(self, ma: dict | None, oa: dict | None, *, charged: dict | None = None,
+                        context: dict | None = None) -> int:
+        """The Threat-Clock CURVE re-expression of the survival doom read (S1b of
+        docs/plans/opponent-value-equation-unification.md): worst incoming to ``ma`` from the
+        opponent's Active ``oa`` via :meth:`incoming` at t=1. Returns the DAMAGE — the caller
+        compares it to my HP (``>= my_hp`` ⇒ doomed).
+
+        NOT byte-identical to :meth:`active_doomed`, by design — ADR-0064 §2 keeps that one
+        unconditionally worst-case. The curve (a) gates the current form on affordability
+        (``can_pay_cheapest`` under one attach) and (b) omits the ``hand_size_attacker`` forward
+        counter. Those two are exactly the divergences the doom SHADOW measures before any survival
+        swap. ``charged`` selects the policy — ``None`` = ceiling, the survival read's worst-case."""
+        if not oa:
+            return 0
+        return int(self.incoming(ma, [oa], 1, charged=charged, context=context))
+
     # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
                            charged: dict | None = None, evo_min_energy: int = 0,

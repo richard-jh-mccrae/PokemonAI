@@ -1039,6 +1039,15 @@ class Decision:
                                      # + the pick (`eq_pick`) and the agreement bit vs the shipped rungs'
                                      # `chosen`. DECIDES NOTHING — sparse: None off a TO_ACTIVE/SWITCH select
                                      # (< 2 options) / mid-sim. The swap-ranking sweep reads its disagreement rows.
+    threat_shadow: dict | None = None   # the DOOM keep-worst-case SHADOW (Threat-Clock unification
+                                     # S1b, docs/plans/opponent-value-equation-unification.md): the
+                                     # incumbent `active_doomed` (worst-case, the decider) beside its
+                                     # `incoming(t=1)`-curve re-expression (`combat.doomed_incoming`,
+                                     # ceiling policy) + the agreement bit. Surfaces the two known
+                                     # divergences (current-form affordability gate; omitted
+                                     # hand_size_attacker forward counter) for the survival-swap
+                                     # adjudication. Deciding NOTHING — sparse: None mid-sim / no live
+                                     # my-Active vs opp-Active
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1337,6 +1346,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
                         promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
+                        threat_shadow=self._threat_shadow(obs, board),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -6052,6 +6062,34 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         complement, never a replacement."""
         return self.combat.active_doomed(
             ma, oa, opp, context=getattr(self, "_opp_attack_context", None))
+
+    def _threat_shadow(self, obs: dict, board) -> dict | None:
+        """S1b threat-clock doom SHADOW (docs/plans/opponent-value-equation-unification.md): emit the
+        incumbent worst-case doom read (`active_doomed`, the decider) beside its `incoming(t=1)`-curve
+        re-expression (`combat.doomed_incoming`, ceiling policy) + the agreement bit — the evidence
+        bridge for routing survival through the ONE Threat-Clock curve. Deciding NOTHING.
+
+        Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) or with no live my-Active
+        vs opp-Active to read. The two divergences the sweep of this bit adjudicates before any swap:
+        the current-form affordability gate (`can_pay_cheapest`) and the omitted `hand_size_attacker`
+        forward counter — ADR-0064 §2 kept `active_doomed` unconditionally worst-case."""
+        if getattr(self, "_planning", False):
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        if not (ma and oa):
+            return None
+        my_hp = ma.get("hp", 0) or 0
+        dmg = self.combat.doomed_incoming(ma, oa, context=getattr(self, "_opp_attack_context", None))
+        old = bool(getattr(board, "active_doomed", False))
+        new = bool(my_hp and dmg >= my_hp)
+        return {"doom_old": old, "doom_curve": new, "doom_incoming": int(dmg),
+                "my_hp": int(my_hp), "agree": old == new}
 
     def _forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None) -> int:
         """Worst-case incoming if their Active EVOLVES next turn (the Posture forward read;
