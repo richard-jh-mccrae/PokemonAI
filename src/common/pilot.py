@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
+from common.evolve_value import evolve_value
 from common.opponent_model import OpponentModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
@@ -923,6 +924,11 @@ class OptionTrace:
                                  # refill that ARMS them). NOT in `score` — inert telemetry that makes the
                                  # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
                                  # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
+    evolve_shadow: float = 0.0   # REPORTING-ONLY (evolve-valuation grill, 2026-07-15): the SHADOW
+                                 # evolve-value oracle's output for an EVOLVE option (common/evolve_value.py)
+                                 # — the marginal Δ need-coverage the evolve produces. NOT in `score`; the
+                                 # baseline_evolution rungs still decide. Swap gated on the corpus family
+                                 # (test_evolve_valuation_corpus.py). 0.0 off an EVOLVE option.
 
 
 @dataclass
@@ -1465,7 +1471,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
                            fired=fired, tactical=tactical,
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
-                           hand_size_relief=self._hand_size_relief(obs, ctx))   # REPORTING-ONLY, not in `score`
+                           hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
+                           evolve_shadow=self._evolve_shadow(obs, ctx, option))  # REPORTING-ONLY (shadow oracle)
+
+    def _evolve_shadow(self, obs: dict, ctx, option: dict) -> float:
+        """The SHADOW evolve-value oracle's output for an EVOLVE option (common/evolve_value.py) —
+        REPORTING-ONLY, not in `score`. 0.0 off an EVOLVE. Increment 1: the ability-income Δ."""
+        if ctx.option_type != _EVOLVE or ctx.card_id is None or self.functions is None:
+            return 0.0
+        body = self._evolve_body(obs, option)
+        body_cid = body.get("id") if body else None
+        return evolve_value(self.functions, result_cid=ctx.card_id,
+                            body_cid=body_cid, engines_online=0).total
 
     def _weight(self, h) -> float:
         """Effective weight, resolved by id (0 disables): the learned override (tuned.json) over
@@ -1640,9 +1657,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return max((int(o.get("number", 0)) for o in (select.get("option") or [])
                     if o.get("type") == _NUMBER), default=0)
 
-    def _evolve_body_energy(self, obs: dict, option: dict) -> int | None:
-        """Energy on the in-play Pokémon an EVOLVE option would evolve (its ``inPlayArea``/``inPlayIndex``
-        body) — so a rule can HOLD a win-condition evolution until the payoff can attack. None off EVOLVE."""
+    def _evolve_body(self, obs: dict, option: dict) -> dict | None:
+        """The in-play Pokémon an EVOLVE option would evolve (its ``inPlayArea``/``inPlayIndex`` body).
+        None off an EVOLVE option or when the slot can't be resolved."""
         if option.get("type") != _EVOLVE:
             return None
         state = obs.get("current") or {}
@@ -1653,7 +1670,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         idx = option.get("inPlayIndex")
         if idx is None or not (0 <= idx < len(bodies)) or not bodies[idx]:
             return None
-        return len(bodies[idx].get("energies") or [])
+        return bodies[idx]
+
+    def _evolve_body_energy(self, obs: dict, option: dict) -> int | None:
+        """Energy COUNT on the body an EVOLVE option would evolve — so a rule can HOLD a win-condition
+        evolution until the payoff can attack. None off EVOLVE."""
+        body = self._evolve_body(obs, option)
+        return None if body is None else len(body.get("energies") or [])
 
     def _is_simultaneous_draw(self, board: Board, attack_id, opp_active_prize: int) -> bool:
         """True iff a game-winning KO with this attack is actually a DRAW (ADR-0022 #2): its UNCONDITIONAL
