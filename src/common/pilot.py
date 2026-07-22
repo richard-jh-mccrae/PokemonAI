@@ -1632,6 +1632,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             retreat_idx = next((i for i, o in enumerate(options) if o.get("type") == _RETREAT), None)
             if retreat_idx is None:
                 return None                              # no retreat action on the menu
+            # Sweep #2 Finding B1: when the Active can KO the opp Active NOW, staying-and-KOing and
+            # retreating-into-a-bigger-KO+snipe are BOTH on the table — a KO-vs-KO comparison the Turn
+            # Planner owns (ruling 5), and the sub-lethal shadow cannot adjudicate (ep82717711-37's
+            # correct retreat-to-finisher scores the SAME +30 as ep82750161-59's wrong pivot). The
+            # shadow RECUSES itself rather than guess.
+            if board.active_can_ko:
+                return None
             value = self._retreat_action_value(obs, board)
             if value is None:
                 return None                              # no benched body to retreat into

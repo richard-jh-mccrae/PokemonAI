@@ -76,3 +76,12 @@ def test_whether_should_retreat_into_the_finisher_f37():
     benched finisher out-earns staying, so retreating is worth it (value > 0)."""
     fx, rec = _whether("mega_starmie", "pr_whether_should_retreat_f37")
     assert rec["worth_it"] is True, rec
+
+
+def test_whether_recuses_when_the_active_can_ko_f59():
+    """82750161-59 (MAIN, Finding B1): the Active can KO the opponent's Active THIS turn, so staying to
+    KO vs retreating into a bigger KO+snipe is a KO-vs-KO comparison the Turn Planner owns (ruling 5).
+    The sub-lethal shadow RECUSES itself — no whether-record — rather than guess."""
+    fx = json.loads((FIXTURES / "pr_whether_active_can_ko_f59.json").read_text(encoding="utf-8"))
+    rec = _pilot("mega_starmie").explain(fx["obs"]).promote_retreat_shadow
+    assert rec is None, rec

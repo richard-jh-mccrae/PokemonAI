@@ -198,6 +198,29 @@ Re-sweep — the disagreement QUALITY improved (agreement held at 84/96, but the
   plus two marginal (`value` 3–5). Finding B is the next lever: either a "stay to DEVELOP" term or accept
   they sit above the equation (the KO ones are planner-tier by ruling 5).
 
+### Sweep #4 — Finding B: recuse on `active_can_ko`, defer the rest (2026-07-22)
+
+Investigating the 5 regressions split them cleanly by `board.active_can_ko`:
+
+- **B1 (`active_can_ko` True) → RECUSAL.** All of `82750161-59`, `85709280-111` (regressions) AND
+  `82717711-37` (a CORRECT retreat-to-finisher) AND `86090164-52/67` are `active_can_ko`. When the
+  Active can KO, staying-and-KOing vs retreating-into-a-bigger-KO+snipe is a **KO-vs-KO comparison the
+  Turn Planner owns** (ruling 5) — and the sub-lethal shadow literally CANNOT tell them apart
+  (`82717711-37`'s correct pivot and `82750161-59`'s wrong pivot both score `+30`). So the whether-site
+  now **recuses** (`active_can_ko` → no record) rather than guess. This removes 24 frames from the
+  sweep (all planner-tier) and both KO-regressions. NB the `86090164-52/67` "retreat happy" catches move
+  to the PLANNER's ledger — "take the available KO instead of retreating" is a planner/tactical bug, not
+  a retreat-valuation one.
+- **B2 (`active_can_ko` False) → DEFERRED to the f70 oracle.** The 3 residual regressions
+  (`81905522-47`, `82749168-61` = the attacker is one attach from ready → staying finishes powering it;
+  `83007714-8` = turn-1 setup noise) all need a "stay-to-DEVELOP" term = the current Active's readiness
+  under this turn's attach budget. That is the SAME shared **self reachable-attach affordability oracle**
+  (the f70 finding) that `fetch_enables_p`'s middle waits on — build once, consume on both the stay and
+  the promote sides. Not blind-built.
+
+Net whether-site: **72 priced, 65/72 agree (90%), 4 shadow-fixes-ladder, 3 shadow-regresses (all
+f70-blocked / setup).** Pick-site unchanged 6/6. The equation now opines only where it can adjudicate.
+
 ### Hazards (carried from the seed + added this session)
 
 - Adding the positive tempo-denied term "silently voids guards calibrated against the old scale"
