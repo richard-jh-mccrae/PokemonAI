@@ -735,5 +735,14 @@
  ],
  "675": [
   "draw"
+ ],
+ "162": [
+  "recycle"
+ ],
+ "190": [
+  "discard_energy_recur"
+ ],
+ "678": [
+  "discard_energy_recur"
  ]
 }

@@ -37,7 +37,8 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
 | **Bench / deploy / fetch** | ✅ covered | Poffin/ball composers, bench baselines, fetch closure | |
 | **Discard-as-resource (MY fuel)** | ✅ covered | fuel slots (pitch side), Aura-Jab class detection | Pitching a matching energy is progress, not loss. |
 | **Opponent read — their board clock** | ✅ covered (new) | WP-N7 deny slots, `_opp_turns_to_ready`, posture Briefs | Assume-the-accel pessimism is doctrine (ADR-0064). |
-| **Opponent read — their DISCARD** | ❌ not read at all | — | Feeds both the snipe fuel-gauge rule and threat reads. |
+| **Opponent read — their DISCARD (damage-scaling)** | ✅ covered | `card_text.parse_attack_scaling` `atk_discard_energy` → `_damage_context(attacker_is_me=False)` → combat KO oracle | A Riptide-class scaler (Kyogre: 20× Basic `{W}` in *their* discard) is priced EXACTLY into `active_doomed`/`incoming_active_damage` — the discard is open info in both directions. Deck-discard scalers (Abomasnow Hammer-lanche) handled via `hiddenPerUnit`. Corrected 2026-07-22 (was mislabelled "not read at all"). |
+| **Opponent read — their DISCARD (as a resource)** | ❌ not read | — | The unread half: discard as a RECOVERY/recursion pool — energy/Pokémon they can re-attach or fetch back (Mega Lucario ex reloads `{F}` from discard; Night Stretcher/Super Rod recursion), and line-liveness (can they re-power/re-evolve a KO'd threat). Feeds threat-persistence + gust/deny valuations. Generalize via a `card_functions` tag for attacks/abilities that use their own discard. |
 | **Attack / lethal / KO race** | ✅ covered (separate arc) | combat/objectives/lethal verification | Out of this review's scope; noted for completeness. |
 
 ## Uncovered-but-buildable, ranked by payoff
@@ -46,8 +47,13 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
    (41 + shares of 111 sequencing / 27 slow-setup), design seeded
    (`attach-valuation-grill-spec.md`), machinery (worth/odds/gates/needs) all built. Run the grill,
    build in shadow, swap per the seam-D pattern.
-2. **Opponent-discard reading** — a small pure signal ("their discard holds N energy of type T /
-   these trainers") consumed by threat ranks and the snipe gauge. Prerequisite for 3.
+2. **Opponent-discard reading (resource half only)** — the damage-scaling half is DONE (Riptide-class,
+   see the coverage table). What remains: read the discard as a RECOVERY pool — an always-on pure signal
+   ("their discard holds N energy of type T / these recoverable Pokémon"), generalized by a `card_functions`
+   tag for attacks/abilities that use their own discard (Mega Lucario ex `{F}` reload, Slowpoke/Night
+   Stretcher recursion), feeding threat-persistence + gust/deny valuations. NOTE the snipe "fuel-gauge"
+   motivation is retired: its one corpus anchor (83667237-107) was ruled 2026-07-22 to be a THRESHOLD-RACE
+   frame, not a discard read (see the snipe/gust scenarios handoff). Read-always per user (free info).
 3. **The snipe-targeting grill** — the 3 corpus failures + the threshold-race rule, ruled
    frame-by-frame, then a `snipe_sweep` bench (23 DAMAGE frames; hold 16, fix the ruled). Do NOT
    blind-build: root causes are in shared threat-rank + prize-guard machinery
@@ -70,3 +76,55 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
 - Adding a big positive term silently voids guards calibrated against the old scale.
 - Blind pokes at shared machinery (threat rank, prize guards) risk the frames that already pass —
   grill first, bench always.
+
+## Opponent-read grill findings (2026-07-22) — logged, not yet built
+
+Session grilling the two opponent-read rows. Rulings + findings, in order surfaced:
+
+- **`82749168-38` refuted (user ruled: pilot right).** The labelled snipe is onto a **benched**
+  Dragapult ex — Tera prevents all attack damage while benched (rulebook App.6), so the 50 rider
+  does 0; `dont-snipe-a-benched-tera` already ranks it below the real Hoothoot snipe. Drop it from
+  the "3 snipe misses" → snipe is **16/18**, two real gaps (discard-fuel *retired* below + the pure
+  Riolu transposition, unfixable).
+- **`83667237-107` is a THRESHOLD-RACE frame, not discard-fuel (user ruled).** Makuhita is the pick
+  because it's the only benched body a 2-turn Jetting Blow snipe (50+50 ≥ 80 HP) can KO before the
+  finisher lands (+ prize-cap avoids the 2nd Mega + the chip banks for a later gust-KO). The
+  discard `{F}` is a **risk** to the plan (they can evolve Makuhita out of range), not the motive.
+  ⇒ the snipe **discard-fuel gauge has no corpus anchor** — retired; threshold-race (#3) is the real
+  driver. Live retest: pilot takes an on-path 110-body (+12), Makuhita scores 0 (`reviewed.json`
+  "fixed" is stale — ADR-0044 only killed the 2nd-Mega pick).
+- **Discard damage-scaling is already read** (Kyogre Riptide class) — coverage row above corrected.
+  Built `discard_energy_recur` tag (Mega Lucario ex 678, Archaludon ex 190; `recycle` reused for
+  Slowpoke 162) as inert vocabulary; the `_opp_turns_to_ready` wiring is the pending #2 proposal.
+- **Kyogre/Mega Abomasnow ex recycling deck — two logged findings:**
+  - **(a) Denial is futile vs a recycler.** Riptide shuffles its scored `{W}` back into the deck and
+    Hammer-lanche re-mills it — the `{W}` pool is renewable, so Crushing-Hammer-class energy denial
+    on them is near-worthless. Doctrine for the `kyogre_mega_abomasnow_ex` Brief; a candidate consumer
+    of the `recycle`/`discard_energy_recur` vocabulary. The live *discard* read is NOT fooled by the
+    recycle — reading the live pile each turn tracks the pulse correctly.
+  - **(b) Opponent Hammer-lanche is under-read.** It is a HIDDEN deck-density scaler (`100×` Basic
+    `{W}` off the top 6 of *their* deck); `_damage_context` estimates deck density only for
+    `attacker_is_me`, so the opponent's ~350-avg nuke prices at its flat base (~0) in the doom oracle.
+    Their density is hidden → only a matchup-Brief prior (`opp_deck_basic_water_density` ≈ 0.58) can
+    price it soundly. Brief-scoped, not a general read.
+- **`dp_stall_gust_false_famine_accel_f70` — the SELF-side of assume-the-accel (user ruled: 100% our
+  choice).** Active Dragapult ex 0e, hand holds Crispin (`tutor_energy`). The equation fires a
+  famine stall-gust (+105) reading "0e → can't attack". FALSE: Crispin attaches one Basic Energy by
+  its effect AND hands a second of a different type, which the unused manual attach then plays —
+  Dragapult ex reaches `{R}{P}` THIS turn = **Phantom Dive 200 + 6 counters** (verified: all three
+  hand cards are Supporters, so Boss's-stall vs Crispin-attack is mutually exclusive — the stall
+  forgoes the 200). Fix at value altitude, NOT a stall-gust gate: a **self reachable-attach
+  affordability oracle** symmetric to ADR-0064 `reachable_incoming` — budget this turn's attaches =
+  `manual_attach (if unused)` + the attach effects of `tutor_energy`/`energy_accel` cards in hand,
+  and model the FULL budget (reaches the 2-cost `{R}{P}`, not just the cheapest `●`). Famine = the
+  cheapest attack unpayable even with that budget. Dissolves the stall-gust premise for every
+  consumer (stall-gust, posture, doom) with no new rung/gate.
+- **Gust-target/whether cluster — RESOLVED by the merged gust-value equation (PR #128, main).**
+  Verified 2026-07-22 after rebasing on main: `retest_one dragapult_ex 86089120-14` → **FIXED=True**,
+  Boss's Orders now scores **0.0** (no rung) and the pilot attaches `{P}` to Dreepy (score 18) — the
+  turn-2 setup gust is priced at 0 exactly as ruled. Gives Scenario B the corpus ground the planner
+  handoff said it lacked
+  (siblings: `85785067-41` gust the support ex to delay; `85163079-30` gust a KO-able wincon;
+  `85164131-22` an answerable body is worth 0 to touch). The unified read — gust value =
+  `KO_prizes + tempo_denied(role, turns_out_of_position) - return_threat` - is being built in a
+  separate session; do NOT author it here. Logged for cross-reference only.
