@@ -83,7 +83,7 @@ declined (`eq_pick=None`). These 50 never enter the fold ranking. The remaining 
 |---|---|---|---|---|---|---|
 | `accel-routing` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — oracle reproduces the rung; safe to fold but no behaviour change |
 | `doomed-sign` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — same; swap LAST / never |
-| `marginal` | 24 | **2** | 2 | 3 | 1 | **MEASURED-MIXED** — was 21/**5**/2/3/1; **evolution-lookahead cleared 3 regressions** (see below). 2 remain, each a SEPARATE root cause |
+| `marginal` | 25 | **1** | 2 | 3 | 1 | **MEASURED-MIXED** — was 21/**5**/2/3/1; evolution-lookahead cleared 3 + Ignition-units cleared 1 (see below). **1 remains** (the convex first-step edge) |
 | `overkill`, `role-gate`, `type-fit`, `marginal(burst-veto)`, `resource_cost` | 0 | 0 | 0 | 0 | 0 | **UNMEASURED** — no in-scope frame attributes here; fold stays hypothesised |
 | `(rung-silent)` | 0 | 0 | 6 | 13 | 7 | whether-to-attach signal: oracle catches **13** attaches the rungs MISSED; not a rung-fold |
 | `(unmapped: deck)` | 3 | 0 | 1 | 0 | 0 | ADR-0034 deck folds: `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line` |
@@ -95,11 +95,12 @@ pre-evolution's attach by its OWN cheap attack (maxed at 1 Energy) instead of th
 **FIXED by evolution-lookahead** (`_line_payoff_stat`, below), which also required a pre-evo build
 discount so the payoff-priced pre-evo doesn't out-credit an evolved body or a this-turn arm of the
 doomed Active (would have regressed `doomed-sign` 4→1 and `83007714-22`; both held after the 0.25
-discount). The **2 that remain** are each a distinct, separate root cause, NOT a spread/concentrate
-bug: `82523811-105` needs the **Ignition burst-units** fix (Ignition on an Evolution = CCC=3, the
-oracle counts +1, so it misses the Nebula lethal); `85058574-121` is the **convex first-step edge**
-(a cheap secondary's completing energy, Solrock 70@1, out-marginals the wincon Mega's first energy,
-67.5, before `line_value` breaks the tie).
+discount). `82523811-105` was then cleared by the **Ignition burst-units** fix (Ignition on an
+Evolution = CCC=3; the +1 model missed the Nebula lethal — now counted as 3 units, but only when they
+UNLOCK a KO the reusable Basic can't reach, so a non-KO burst stays conserved, `83664340-45`). The
+**1 that remains** is the **convex first-step edge** (`85058574-121`: a cheap secondary's completing
+energy, Solrock 70@1, out-marginals the wincon Mega's first energy, 67.5, before `line_value` breaks
+the tie) — a genuine portfolio question, not a missing term.
 
 **Completeness check** flagged 4 fired rungs missing from the map: the 2 deck attach rungs above
 (ADR-0034), and 2 TOOL rungs (`deploy-hp-tool`, `equip-the-retreat-tool-on-the-active`) that ride
@@ -167,9 +168,13 @@ wholesale, and most families have no evidence at all.
   recipient need); the live decider's `_recover_units` floors by the prize-paranoid deck-fuel bound.
   Decide at swap time which currency the LIVE decider uses (likely keep the sound floor for the
   commitment, the expected value only for the shadow's discovery signal).
-- **Ignition burst-units.** `_attach_readiness`/`_attach_progress` add +1 unit per attach; Ignition on
-  an Evolution really adds `{C}{C}{C}`. No current green frame needs it (they prefer the Basic), but a
-  frame where Ignition UNLOCKS a bigger attack this turn would.
+- **Ignition burst-units — IMPLEMENTED (2026-07-22).** `_attach_value` now counts an Ignition
+  (`discard_eot`) onto an Evolution as `{C}{C}{C}`=3 units (card text), but ONLY when they unlock a KO
+  of the opp Active the reusable Basic (+1) can't reach — so a lethal burst is spent (`82523811-105`,
+  Nebula 210 vs 200-HP) while a non-KO burst is conserved (`83664340-45`, Nebula 210 vs 300-HP wall).
+  Cleared the last pre-evo-family `marginal` regression; pinned by
+  `test_ignition_three_units_only_when_it_unlocks_a_ko`. Limitation: a body already carrying an
+  Ignition still counts it as 1 card in `have` (rare; no repro frame).
 - **Evolution-lookahead value — IMPLEMENTED (2026-07-22).** `_attach_progress` now prices a
   win-condition pre-evo's convex build by the LINE PAYOFF's attack (`_line_payoff_stat`: Staryu builds
   toward Mega Starmie's Nebula CCC=210, not Water Gun 20), × a 0.25 pre-evo discount (the body must

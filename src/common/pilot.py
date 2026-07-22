@@ -3515,6 +3515,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         area = option.get("inPlayArea") if is_attach else _BENCH   # accel recipients are benched
         etags = set(self.functions.tags(ecid)) if (self.functions and ecid is not None) else set()
         burst = "discard_eot" in etags
+        # ENERGY UNITS this attach delivers: a Basic/Special provides 1, but Ignition (`discard_eot`)
+        # provides {C}{C}{C}=3 on an EVOLUTION Pokémon (card text; the load-bearing rule). A burst is
+        # one-shot and precious, so its 3 units are credited ONLY when they UNLOCK A KO of the opp
+        # Active that the reusable Basic (+1) can't reach — the lethal the +1 model missed (82523811-105:
+        # 1 W + Ignition = 4 -> Nebula 210 KOs the 200-HP Active). When the bigger attack does NOT KO
+        # (83664340-45: Nebula 210 vs 300-HP Archaludon) the burst buys nothing extra, so it counts as 1
+        # and the reusable Basic wins on resource_cost (conserve-burst-when-no-KO).
+        target_stat = self.stats.get(tcid) if (self.stats and tcid is not None) else None
+        units = 1
+        if burst and bool(getattr(target_stat, "evolvesFrom", None)) and area == _ACTIVE and board.turn > 1:
+            opp_hp = (self._opp_active(obs) or {}).get("hp", 0)
+            if opp_hp and self._attach_readiness(tcid, have + 3) >= opp_hp > self._attach_readiness(tcid, have + 1):
+                units = 3
         # a burst that can't be cashed THIS turn evaporates at end of turn — no durable progress
         can_cash = area == _ACTIVE and board.turn > 1
         evaporates = burst and not can_cash
@@ -3530,10 +3543,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # carrier earns no build credit (it won't live to fire the bigger attack — `dont-feed-the-
         # doomed`), so a doomed Active scores only if this Energy arms an attack tonight (arm-the-doomed);
         # a survivable carrier banks the build, so the most-built survivable body wins the concentrate.
-        this_turn = (self._attach_readiness(tcid, have + 1)
+        this_turn = (self._attach_readiness(tcid, have + units)
                      - self._attach_readiness(tcid, have)) if area == _ACTIVE else 0.0
         survives = not (area == _ACTIVE and board.active_doomed)      # forward-survival of the carrier
-        build = (self._attach_progress(tcid, have + 1)
+        build = (self._attach_progress(tcid, have + units)
                  - self._attach_progress(tcid, have)) if survives else 0.0
         # Ruling 2b (overkill cap): once the ACTIVE already KOs the opponent's Active AND its current
         # affordable attack already covers the biggest body on their board, a bigger attack buys

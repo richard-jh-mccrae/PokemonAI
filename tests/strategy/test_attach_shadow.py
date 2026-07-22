@@ -119,6 +119,26 @@ def test_resource_class_prefers_reusable_basic_over_burst_same_target():
     assert s["eq_pick"] == 1                       # -> attach the reusable Water
 
 
+@pytest.mark.req("REQ-ATTACH-SHADOW-0016")
+def test_ignition_three_units_only_when_it_unlocks_a_ko():
+    # Ignition on an EVOLUTION provides {C}{C}{C}=3 (card text) — but the burst is one-shot, so its
+    # extra units are credited ONLY when they UNLOCK A KO the reusable Basic can't reach. Active Mega
+    # Starmie ex (1 W): Ignition -> 4 Energy -> Nebula 210; a single Water -> 2 -> Jetting 120.
+    p = _pilot()
+
+    def _obs_vs(opp_hp):
+        me = {"active": [{"id": MEGA, "energies": [WATER], "hp": 330}], "bench": [],
+              "hand": [{"id": IGNITION}, {"id": WATER}]}
+        opp = {"active": [{"id": MEGA, "hp": opp_hp}], "bench": []}
+        return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
+                "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                           "option": [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)]}}
+    s_ko = p.explain(_obs_vs(200)).attach_shadow       # Nebula 210 KOs, Jetting 120 doesn't
+    assert s_ko["eq_pick"] == 0                         # -> attach the Ignition (unlocks the lethal, 82523811-105)
+    s_wall = p.explain(_obs_vs(300)).attach_shadow      # neither Nebula nor Jetting KOs the 300-HP wall
+    assert s_wall["eq_pick"] == 1                       # -> keep the burst, attach the Water (83664340-45)
+
+
 @pytest.mark.req("REQ-ATTACH-SHADOW-0004")
 def test_over_attach_marginal_is_zero_on_a_maxed_body():
     # A Mega already at its biggest-attack cost (3) gains nothing; the needy Staryu wins.
