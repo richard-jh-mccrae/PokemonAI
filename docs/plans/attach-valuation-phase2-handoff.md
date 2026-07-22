@@ -74,20 +74,22 @@ Round-0 table below.
 Full corrections corpus, fresh Pilot per frame, slot-based comparison (Decision 1). The oracle
 FIRED on **122 frames**. The 2×2 is over IN-SCOPE frames only (`correct` IS an attach).
 
-**Scope, quantified:** **50 of 122** fires are OUT-OF-SCOPE — `correct` is a NON-attach play
-(Supporter / retreat / evolve). The oracle prices WHERE energy goes, not WHETHER to attach vs act
-elsewhere (the `_PLAY` layer, the `85786096-70` lesson). On 17 of those 50 the oracle correctly
-declined (`eq_pick=None`). These 50 never enter the fold ranking. The remaining **72 are in-scope.**
+**Scope, quantified (2026-07-22, post re-tag):** of 122 fires, **44 are OUT-OF-SCOPE** (`correct` is
+a NON-attach play — the `_PLAY`-layer "whether to attach at all" question, the `85786096-70` lesson;
+oracle correctly declined on 16) and **9 are PLANNER-SCOPE** (`scope: turn`/`match` — multi-turn
+decisions needing threat/deadline reads + odds the single-turn oracle can't do, the `85058574-121`
+lesson, see `turn-planner-energy-routing-and-turns-to-energy-handoff.md`). NEITHER enters the fold
+ranking. The remaining **69 are in-scope.**
 
 | Family | SAFE | REGR | SHARED_GAP | FIX | DIVERGENT | Round-0 verdict |
 |---|---|---|---|---|---|---|
 | `accel-routing` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — oracle reproduces the rung; safe to fold but no behaviour change |
 | `doomed-sign` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — same; swap LAST / never |
-| `marginal` | 25 | **1** | 2 | 3 | 1 | **MEASURED-MIXED** — was 21/**5**/2/3/1; evolution-lookahead cleared 3 + Ignition-units cleared 1 (see below). **1 remains** (the convex first-step edge) |
+| `marginal` | 24 | **0** | 2 | 3 | 1 | **NO REGRESSION** — was 21/**5**/2/3/1; evolution-lookahead cleared 3, Ignition-units cleared 1, the last was a mis-scoped planner frame (`85058574-121`, re-tagged & excluded). 2 SHARED_GAP + 1 DIVERGENT where the oracle is no worse than the rungs |
 | `overkill`, `role-gate`, `type-fit`, `marginal(burst-veto)`, `resource_cost` | 0 | 0 | 0 | 0 | 0 | **UNMEASURED** — no in-scope frame attributes here; fold stays hypothesised |
 | `(rung-silent)` | 0 | 0 | 6 | 13 | 7 | whether-to-attach signal: oracle catches **13** attaches the rungs MISSED; not a rung-fold |
 | `(unmapped: deck)` | 3 | 0 | 1 | 0 | 0 | ADR-0034 deck folds: `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line` |
-| `structure` (survivors) | 0 | 2 | 0 | 0 | 0 | not fold targets; 2 dragapult regressions (`85786096-24/25`) to eyeball |
+| `structure` (survivors) | 0 | 1 | 0 | 0 | 0 | not fold targets; 1 dragapult regression (`85786096-24/25`; the other is planner-scope) to eyeball |
 
 **`marginal` regression triage (2026-07-22).** The original 5 split into ONE shared root cause + two
 singletons: `82752604-61`, `83116081-21`, `85059103-84` all failed because the oracle priced a
@@ -98,20 +100,27 @@ doomed Active (would have regressed `doomed-sign` 4→1 and `83007714-22`; both 
 discount). `82523811-105` was then cleared by the **Ignition burst-units** fix (Ignition on an
 Evolution = CCC=3; the +1 model missed the Nebula lethal — now counted as 3 units, but only when they
 UNLOCK a KO the reusable Basic can't reach, so a non-KO burst stays conserved, `83664340-45`). The
-**1 that remains** is the **convex first-step edge** (`85058574-121`: a cheap secondary's completing
-energy, Solrock 70@1, out-marginals the wincon Mega's first energy, 67.5, before `line_value` breaks
-the tie) — a genuine portfolio question, not a missing term.
+last one, `85058574-121`, first looked like a convex first-step edge (Solrock 70@1 out-marginals the
+wincon Mega's 67.5) — but the walkthrough showed the CORRECT play is neither the oracle's Solrock nor
+the label's Mega Lucario: it is **Hariyama**, reached by multi-turn threat/deadline reads + a
+prize-paranoid backup model + a turns-to-energy odds calc — **turn-planner scope, not the energy
+oracle**. Re-tagged `[2]→[3]` Hariyama, `scope: turn` (user-confirmed), and excluded from the 2×2
+(`turn-planner-energy-routing-and-turns-to-energy-handoff.md`). So `marginal` has **no genuine
+in-scope regression** — the general oracle is not the wrong-answer here, it is the wrong TOOL, by
+design (prize-math is planner scope, Ruling 4).
 
 **Completeness check** flagged 4 fired rungs missing from the map: the 2 deck attach rungs above
 (ADR-0034), and 2 TOOL rungs (`deploy-hp-tool`, `equip-the-retreat-tool-on-the-active`) that ride
 `OptionType.ATTACH` but are out of scope — the oracle abstains on Tools (correct, Ruling 3).
 
-**Bottom line:** the fold map is NOT globally validated. Only `marginal` carries real fold signal,
-and it is gated by 5 regressions. `accel-routing`/`doomed-sign` are safe but pointless to fold (pure
-reproduction). Five families are unmeasured until live telemetry (item 2) or new corrections supply
-frames. The clean-equation goal is intact — the equation already reproduces two families exactly and
-matches `marginal` 21/32 with 3 net fixes — but it is not yet good enough to replace `marginal`
-wholesale, and most families have no evidence at all.
+**Bottom line:** the fold map is NOT globally validated, but the picture is much stronger than
+Round-0. After evolution-lookahead + Ignition-units + the `85058574-121` re-scope, **`marginal` has
+NO in-scope regression** (24 SAFE / 0 REGR / 2 SHARED_GAP / 3 FIX / 1 DIVERGENT — the oracle is no
+worse than the rungs on the remaining 3). `accel-routing`/`doomed-sign` reproduce their rungs exactly
+(safe but pointless to fold). Five families are unmeasured until live telemetry (item 2) or new
+corrections supply frames. The clean-equation goal is on track — the equation reproduces two families
+exactly and now matches or beats the rungs on every in-scope `marginal` frame — the remaining work is
+evidence (unmeasured families) and the planner layer (mis-scoped multi-turn frames), not oracle bugs.
 
 ### How to rank the fold order (do NOT blind-build)
 
@@ -124,8 +133,8 @@ wholesale, and most families have no evidence at all.
    the five UNMEASURED families — collect them once the dev window opens.
 3. Fold **failing legs first, agreeing families last**; each swap under: discard corpus 12/12 + the
    full suite + a `score_diff` gate + the currency-zone rule. Per Round-0: `accel-routing`/
-   `doomed-sign` fold safely but change nothing; `marginal` is down to **2** regressions (evolution-
-   lookahead cleared 3), each a distinct separate cause (Ignition-units; convex first-step edge);
+   `doomed-sign` fold safely but change nothing; `marginal` now has **0 in-scope regressions**
+   (evolution-lookahead + Ignition-units cleared 4; the 5th was mis-scoped planner, re-tagged);
    the five UNMEASURED families cannot be folded until frames exist. Deck-rung folds (the mega_lucario
    attach family — `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line`) go via
    `/deck-align` (ADR-0034), score_diff-gated.

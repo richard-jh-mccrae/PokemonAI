@@ -162,7 +162,7 @@ def sweep_primary(tune, frames, names) -> None:
     # Out-of-scope: the oracle FIRED but `correct` is a NON-attach play (Supporter / retreat / evolve)
     # — the "whether to attach AT ALL" question, which is the _PLAY layer's lane, not the oracle's
     # (the 85786096-70 lesson). Counted separately; NEVER mixed into the fold-ranking 2x2.
-    oos_total = oos_oracle_declined = 0
+    oos_total = oos_oracle_declined = plan_total = 0
     for (ep, fr), rec in frames:
         try:
             dec = tune._build_pilot(_agent(rec))[0].explain(rec["obs"])
@@ -191,6 +191,13 @@ def sweep_primary(tune, frames, names) -> None:
         oracle_cell = _show(eq_slot, eq_energy)
         rung_cell = _show(next(iter(chosen_slots)) if chosen_slots else None)
 
+        if rec.get("scope") in ("turn", "match"):          # multi-turn PLANNER decision — the correct
+            plan_total += 1                                # play needs threat/deadline reads + odds the
+            print(f"{ep + '-' + str(fr):<14} {rec['agent'][:12]:<13} {'PLAN':<4} {oracle_cell:<16} "  # single-turn
+                  f"{rung_cell:<16} {_show(next(iter(correct_slots)) if correct_slots else None):<12} "  # oracle can't do
+                  f"{str(agree):<4} {'—':<11} (turn-planner scope)")
+            continue
+
         if not in_scope:                                   # out of the oracle's lane — count, don't rank
             oos_total += 1
             oos_oracle_declined += (eq is None)
@@ -218,11 +225,12 @@ def sweep_primary(tune, frames, names) -> None:
         print(f"{ep + '-' + str(fr):<14} {rec['agent'][:12]:<13} {'IN':<4} {oracle_cell:<16} {rung_cell:<16} "
               f"{corr_cell:<12} {str(agree):<4} {bucket:<11} {family}")
 
-    print(f"\nfired on {fired} frames  |  IN-SCOPE (correct is an attach): {fired - oos_total}  |  "
+    print(f"\nfired on {fired} frames  |  IN-SCOPE (correct is an attach): {fired - oos_total - plan_total}  |  "
           f"OUT-OF-SCOPE (correct is a non-attach play): {oos_total} "
-          f"(oracle correctly declined on {oos_oracle_declined})")
-    print("  → out-of-scope fires are the _PLAY-layer 'whether to attach at all' question, NOT the "
-          "oracle's lane; they do NOT enter the fold-ranking 2x2.\n")
+          f"(oracle correctly declined on {oos_oracle_declined})  |  PLANNER-SCOPE (scope=turn/match): {plan_total}")
+    print("  → out-of-scope fires are the _PLAY-layer 'whether to attach at all' question; planner-scope "
+          "fires need multi-turn threat/deadline reads + odds the single-turn oracle can't do "
+          "(85058574-121). NEITHER enters the fold-ranking 2x2.\n")
     print("PER-FAMILY 2x2 over IN-SCOPE frames (ranks the fold order):")
     print(f"  {'family':<22} {'SAFE':>5} {'REGRESSION':>11} {'SHARED_GAP':>11} {'FIX':>5} {'DIVERGENT':>10}   reading")
     for fam in sorted(per_family):
