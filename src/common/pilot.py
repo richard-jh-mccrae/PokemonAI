@@ -3389,20 +3389,46 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         bodies = list(opp.get("active") or []) + list(opp.get("bench") or [])
         return [m.get("hp", 0) for m in bodies if m]
 
-    def _attach_progress(self, cid, energy: int) -> float:
-        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward its biggest attack
-        (attach grill Ruling 1). ``(min(e, M) / M)**2 * maxDamage`` — the SQUARE makes the marginal
-        of the k-th Energy INCREASE with k, so completing a started carrier is worth more than
-        starting a fresh body: concentrate on the most-built survivable carrier falls out (82523811-59,
-        82749168-61), while the maxed body's marginal is 0 (over-attach). Falls back to the flat 2-point
-        readiness when the biggest-attack cost is unknown."""
+    def _line_payoff_stat(self, cid):
+        """The CardStat whose attack a body's Energy ultimately FUELS — evolution-lookahead (attach
+        grill Ruling 5a). A win-condition-Line PRE-evolution's Energy carries through evolution and
+        builds toward the LINE's PAYOFF attack (a Staryu's Energy builds toward Mega Starmie's Nebula
+        Beam CCC=210, NOT Staryu's own Water Gun, maxed at 1), so its progress must be priced by the
+        payoff, not the pre-evo's cheap own attack. Returns the payoff's stat for a wincon-Line
+        pre-evolution, else the body's own stat (a terminal/own-attacker body is priced by itself)."""
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if cid is None or not self.stats:
+            return st
+        for line in self._wincon_lines():
+            if cid in (line.path or []) and cid != line.payoff:
+                return self.stats.get(line.payoff) or st
+        return st
+
+    def _attach_progress(self, cid, energy: int) -> float:
+        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward the biggest attack it
+        FUELS (attach grill Ruling 1 + 5a evolution-lookahead). ``(min(e, M) / M)**2 * maxDamage`` — the
+        SQUARE makes the marginal of the k-th Energy INCREASE with k, so completing a started carrier is
+        worth more than starting a fresh body: concentrate on the most-built survivable carrier falls out
+        (82523811-59, 82749168-61), while the maxed body's marginal is 0 (over-attach). `M`/`maxDamage`
+        come from the LINE PAYOFF (`_line_payoff_stat`), so a wincon pre-evo builds toward its evolution's
+        attack, not its own cheap one (82752604-61, 83116081-21, 85059103-84). Falls back to the flat
+        2-point readiness when the biggest-attack cost is unknown."""
+        st = self._line_payoff_stat(cid)
         maxc = getattr(st, "maxDamageCost", None) if st is not None else None
         dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
         if not maxc or maxc <= 0 or dmax <= 0:
             return self._attach_readiness(cid, energy)
         frac = min(energy, maxc) / maxc
-        return frac * frac * dmax
+        value = frac * frac * dmax
+        # A pre-evolution's Energy carries through, but the body must still EVOLVE before the payoff
+        # fires — so its forward build is DISCOUNTED below an already-evolved body's build and below a
+        # this-turn arm of the doomed Active. Without it the payoff-priced pre-evo over-credits and
+        # beats both (83007714-22: evolved > pre-evo; 82522726-7 / 85785606-19/21: arm-the-doomed >
+        # banking on a bench pre-evo). The discount cancels in a pre-evo-vs-pre-evo compare, so
+        # concentrate on the started pre-evo is preserved (83116081-21).
+        if cid in self._line_preevo_set():
+            value *= 0.25
+        return value
 
     def _partner_absent(self, cid, obs: dict) -> bool:
         """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play

@@ -23,6 +23,7 @@ from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.strategy.strategy import Line
 from common.telemetry import to_record
 
 REPO = Path(__file__).resolve().parents[2]
@@ -183,6 +184,24 @@ def test_shadow_is_silent_off_an_attach_decision():
     obs = _obs([{"id": STARYU, "energies": [], "hp": 70}], [{"id": WATER}],
                [{"type": 12}, {"type": 11}])       # Retreat / End — no attach option
     assert p.explain(obs).attach_shadow is None
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0015")
+def test_evolution_lookahead_concentrates_on_the_started_preevo():
+    # Two bench Staryu on the Staryu -> Mega Starmie WIN-CONDITION line: one carries 1 W, one is bare.
+    # Both build toward Nebula Beam (CCC=3, 210) — NOT Staryu's own Water Gun (maxed at 1 W). Evolution-
+    # lookahead (Ruling 5a) prices the pre-evo attach by the LINE PAYOFF, so the convex build
+    # concentrates on the STARTED Staryu. WITHOUT it the 1-W Staryu reads "maxed" (build 0) and the
+    # oracle wrongly spreads to the bare one (the 82752604-61 / 83116081-21 / 85059103-84 regressions).
+    strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]},
+                     lines=[Line(path=[STARYU, MEGA], payoff=MEGA)])
+    p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
+              functions=CardFunctions({}))
+    bench = [{"id": STARYU, "energies": [WATER], "hp": 70}, {"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, [{"id": WATER}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])
+    s = p.explain(obs).attach_shadow
+    assert _row_for(s, 0)["build"] > _row_for(s, 1)["build"]   # started (1->2) convex-beats bare (0->1)
+    assert s["eq_pick"] == 0                                    # concentrate on the STARTED pre-evo
 
 
 @pytest.mark.req("REQ-ATTACH-SHADOW-0014")

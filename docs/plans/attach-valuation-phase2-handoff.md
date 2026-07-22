@@ -83,15 +83,23 @@ declined (`eq_pick=None`). These 50 never enter the fold ranking. The remaining 
 |---|---|---|---|---|---|---|
 | `accel-routing` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — oracle reproduces the rung; safe to fold but no behaviour change |
 | `doomed-sign` | 4 | 0 | 0 | 0 | 0 | **MEASURED-SAFE** — same; swap LAST / never |
-| `marginal` | 21 | **5** | 2 | 3 | 1 | **MEASURED-MIXED** — 3 real FIXes, but **5 REGRESSIONS gate any swap**; triage those first |
+| `marginal` | 24 | **2** | 2 | 3 | 1 | **MEASURED-MIXED** — was 21/**5**/2/3/1; **evolution-lookahead cleared 3 regressions** (see below). 2 remain, each a SEPARATE root cause |
 | `overkill`, `role-gate`, `type-fit`, `marginal(burst-veto)`, `resource_cost` | 0 | 0 | 0 | 0 | 0 | **UNMEASURED** — no in-scope frame attributes here; fold stays hypothesised |
 | `(rung-silent)` | 0 | 0 | 6 | 13 | 7 | whether-to-attach signal: oracle catches **13** attaches the rungs MISSED; not a rung-fold |
 | `(unmapped: deck)` | 3 | 0 | 1 | 0 | 0 | ADR-0034 deck folds: `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line` |
 | `structure` (survivors) | 0 | 2 | 0 | 0 | 0 | not fold targets; 2 dragapult regressions (`85786096-24/25`) to eyeball |
 
-**The 5 `marginal` regressions to resolve BEFORE any marginal swap:** `82523811-105`, `82752604-61`,
-`83116081-21`, `85058574-121`, `85059103-84` (each: the rung matches `correct`, the oracle picks a
-different slot — mostly the wrong bench body in a spread/concentrate call).
+**`marginal` regression triage (2026-07-22).** The original 5 split into ONE shared root cause + two
+singletons: `82752604-61`, `83116081-21`, `85059103-84` all failed because the oracle priced a
+pre-evolution's attach by its OWN cheap attack (maxed at 1 Energy) instead of the LINE's payoff — now
+**FIXED by evolution-lookahead** (`_line_payoff_stat`, below), which also required a pre-evo build
+discount so the payoff-priced pre-evo doesn't out-credit an evolved body or a this-turn arm of the
+doomed Active (would have regressed `doomed-sign` 4→1 and `83007714-22`; both held after the 0.25
+discount). The **2 that remain** are each a distinct, separate root cause, NOT a spread/concentrate
+bug: `82523811-105` needs the **Ignition burst-units** fix (Ignition on an Evolution = CCC=3, the
+oracle counts +1, so it misses the Nebula lethal); `85058574-121` is the **convex first-step edge**
+(a cheap secondary's completing energy, Solrock 70@1, out-marginals the wincon Mega's first energy,
+67.5, before `line_value` breaks the tie).
 
 **Completeness check** flagged 4 fired rungs missing from the map: the 2 deck attach rungs above
 (ADR-0034), and 2 TOOL rungs (`deploy-hp-tool`, `equip-the-retreat-tool-on-the-active`) that ride
@@ -115,7 +123,8 @@ wholesale, and most families have no evidence at all.
    the five UNMEASURED families — collect them once the dev window opens.
 3. Fold **failing legs first, agreeing families last**; each swap under: discard corpus 12/12 + the
    full suite + a `score_diff` gate + the currency-zone rule. Per Round-0: `accel-routing`/
-   `doomed-sign` fold safely but change nothing; `marginal` needs its 5 regressions resolved first;
+   `doomed-sign` fold safely but change nothing; `marginal` is down to **2** regressions (evolution-
+   lookahead cleared 3), each a distinct separate cause (Ignition-units; convex first-step edge);
    the five UNMEASURED families cannot be folded until frames exist. Deck-rung folds (the mega_lucario
    attach family — `attach-solrock-over-line-base`, `aurajab-load-the-wincon-line`) go via
    `/deck-align` (ADR-0034), score_diff-gated.
@@ -161,9 +170,15 @@ wholesale, and most families have no evidence at all.
 - **Ignition burst-units.** `_attach_readiness`/`_attach_progress` add +1 unit per attach; Ignition on
   an Evolution really adds `{C}{C}{C}`. No current green frame needs it (they prefer the Basic), but a
   frame where Ignition UNLOCKS a bigger attack this turn would.
-- **Evolution-lookahead value.** `line_value` uses `_role_value` (line-aware worth); the fuller
-  Ruling 5a — value a pre-evo attach by the LINE's payoff attack damage (Dreepy → Dragapult 200) — is
-  approximated by the role tier, not the payoff attack. Fine for target-choice today.
+- **Evolution-lookahead value — IMPLEMENTED (2026-07-22).** `_attach_progress` now prices a
+  win-condition pre-evo's convex build by the LINE PAYOFF's attack (`_line_payoff_stat`: Staryu builds
+  toward Mega Starmie's Nebula CCC=210, not Water Gun 20), × a 0.25 pre-evo discount (the body must
+  still evolve, so its build sits below an evolved body's and below a this-turn arm). Cleared 3 of the
+  5 `marginal` Round-0 regressions with no net new regression; pinned by
+  `test_evolution_lookahead_concentrates_on_the_started_preevo`. Remaining nuance (future, no repro
+  frame): a PER-HOP discount (a 2-hop Dreepy sits further from Dragapult than a 1-hop Drakloak — flat
+  0.25 today), and extending the payoff pricing to SECONDARY-attacker lines (only win-condition lines
+  today, matching `_line_preevo_set` / ADR-0048).
 - **Generalize `Strategy.partners`.** Only mega_lucario declares a pairing; other decks' engine pairs
   (if any surface) are `/deck-align` candidates.
 
