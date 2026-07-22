@@ -119,3 +119,10 @@ Session grilling the two opponent-read rows. Rulings + findings, in order surfac
   and model the FULL budget (reaches the 2-cost `{R}{P}`, not just the cheapest `●`). Famine = the
   cheapest attack unpayable even with that budget. Dissolves the stall-gust premise for every
   consumer (stall-gust, posture, doom) with no new rung/gate.
+- **Gust-target/whether cluster — OWNED BY ANOTHER SESSION (gust-value equation in progress).**
+  User confirmed the anchor `86089120-14` (turn-2 setup gust worth **0**: no KO, nothing stranded,
+  develop instead) and it gives Scenario B the corpus ground the planner handoff said it lacked
+  (siblings: `85785067-41` gust the support ex to delay; `85163079-30` gust a KO-able wincon;
+  `85164131-22` an answerable body is worth 0 to touch). The unified read — gust value =
+  `KO_prizes + tempo_denied(role, turns_out_of_position) - return_threat` - is being built in a
+  separate session; do NOT author it here. Logged for cross-reference only.
