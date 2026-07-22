@@ -145,9 +145,28 @@ Baseline:
 
 ## Build shape (per the shadow-equations ruling)
 
-**Phase 1 — the shadow oracle** (after the grill settles the design; no swap gate): compute the evolve
-Δ-coverage at the real decision point, emit per-option in the trace (inner terms — income Δ, typed
-readiness, line Δ, exposure — plus the output and the AGREEMENT bit vs the rungs' pick). **Phase 2 —
-staged swaps**: Round-0 corpus family + shadow-telemetry disagreements rank the fold order (failing legs
-first, agreeing anchors last); each swap under corpus + score-diff + the currency-zone rule. Deck-rung
-fold via /deck-align. Earns its ADR at the first swap.
+**Phase 1 — the shadow oracle: DONE (2026-07-15, commit 9d0b958).** `common/evolve_value.py` computes
+the full equation (deploy readiness-conditioned + income_gain − income_loss + scoped-doom); the Pilot
+reads the board into `EvolveInputs` and emits `OptionTrace.evolve_shadow`. Proven to rank all four
+evolve corpus cases correctly in shadow (f40 +12, f35 +3 held below Recon, f82 energized 32 > bare 27,
+f29 32 > spread); suite green.
+
+**Phase 2 — the swap: ATTEMPTED, then REVERTED to shadow (2026-07-15) — two calibration gaps found.**
+Wiring `evolve_shadow` into `score` and deleting the rungs flipped f40 to pass (XPASS, as designed) but
+surfaced two regressions the shadow ranking did not — the "seed at old currency, full-family re-audit"
+hazard, made concrete:
+  1. **The exposure term is load-bearing, not optional.** dragapult f32: evolving the threatened Active
+     Dreepy→Drakloak scores 32 (deploy 15 + energized 5 + income 12) and beats the correct
+     `retreat-to-wall-the-line` (30). Without the exposure penalty (evolving a fragile Active under a
+     real threat, wall alternative present) the income term over-values the evolve. Build the exposure
+     term BEFORE the swap.
+  2. **Mega-family deploy under-calibrates vs the old rung STACK.** mega_starmie 82525741-78: an unready
+     Mega Starmie evolve scores 10 (UNREADY tier) but must beat a competing attach (45) / Pokégear (20)
+     the old `evolve-into-wincon +40` stack cleared. The `_DEPLOY_WINCON_*` band needs re-auditing
+     against the full mega/lucario evolve corpus (not just the dragapult targets), with the discriminator
+     staying `income_loss` (megas have none → evolve; dragapult's Recon → hold), NOT the flat tier.
+
+Next: build the exposure term + re-audit the deploy band against the mega/lucario evolve corpus (extend
+the Round-0 corpus family with those cases), re-prove in shadow, then re-attempt the swap under corpus +
+score-diff + the currency-zone rule. Deck-rung fold (`hold-evolution`) via /deck-align. Earns its ADR at
+the first successful swap.
