@@ -107,3 +107,15 @@ Session grilling the two opponent-read rows. Rulings + findings, in order surfac
     `attacker_is_me`, so the opponent's ~350-avg nuke prices at its flat base (~0) in the doom oracle.
     Their density is hidden → only a matchup-Brief prior (`opp_deck_basic_water_density` ≈ 0.58) can
     price it soundly. Brief-scoped, not a general read.
+- **`dp_stall_gust_false_famine_accel_f70` — the SELF-side of assume-the-accel (user ruled: 100% our
+  choice).** Active Dragapult ex 0e, hand holds Crispin (`tutor_energy`). The equation fires a
+  famine stall-gust (+105) reading "0e → can't attack". FALSE: Crispin attaches one Basic Energy by
+  its effect AND hands a second of a different type, which the unused manual attach then plays —
+  Dragapult ex reaches `{R}{P}` THIS turn = **Phantom Dive 200 + 6 counters** (verified: all three
+  hand cards are Supporters, so Boss's-stall vs Crispin-attack is mutually exclusive — the stall
+  forgoes the 200). Fix at value altitude, NOT a stall-gust gate: a **self reachable-attach
+  affordability oracle** symmetric to ADR-0064 `reachable_incoming` — budget this turn's attaches =
+  `manual_attach (if unused)` + the attach effects of `tutor_energy`/`energy_accel` cards in hand,
+  and model the FULL budget (reaches the 2-cost `{R}{P}`, not just the cheapest `●`). Famine = the
+  cheapest attack unpayable even with that budget. Dissolves the stall-gust premise for every
+  consumer (stall-gust, posture, doom) with no new rung/gate.
