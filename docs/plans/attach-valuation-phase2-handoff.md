@@ -11,12 +11,16 @@ rulings — 2026-07-21" ledger + build-status table are the design of record) an
 **The oracle is a SHADOW — it DECIDES NOTHING.** `Pilot._attach_shadow` is attached to the `Decision`
 and emitted to telemetry (`telemetry.to_record` → `attach_shadow`), but `decide()` / `plan_turn` are
 untouched: the 22 rungs in `src/common/strategy/baseline/baseline_energy.py` still make every live
-attach call. That is why the full suite (3108 passed) held unchanged at every increment.
+attach call. That is why the full suite held unchanged at every Phase-1 increment (a shadow that
+decides nothing changes no live pick). Re-run `python -m pytest tests/ -q` for the current total —
+earlier snapshots (3105 in the grill spec, 3108 here) are stale now that the evolve-valuation arc
+merged; don't cite a fixed number.
 
 - **Entry:** `Pilot._attach_shadow(obs, select, board, options, traces, chosen)` — sparse (None off a
-  real attach choice or mid-sim `self._planning`), wired onto BOTH `Decision` returns (the planned-
-  turn path ~pilot.py:1225 and the fall-through ~pilot.py:1271). Fires when ≥2 options are `_ATTACH`
-  (or `_ATTACH_FROM` `_CARD` recipients).
+  real attach choice or mid-sim `self._planning`), wired onto BOTH `Decision` returns in `explain()`
+  — the planned-turn path and the fall-through (grep `attach_shadow=self._attach_shadow`; line numbers
+  drift with every merge, so search the call, don't trust a number). Fires when ≥2 options are
+  `_ATTACH` (or `_ATTACH_FROM` `_CARD` recipients).
 - **Per-option pricing:** `Pilot._attach_value(...)` → a row, or None to ABSTAIN (a Pokémon Tool —
   Ruling 3). `eq_pick` ranks rows by `(marginal, line_value, not type_wasted, −resource_cost)`;
   `eq_pick = None` when nothing buys durable progress (all-Tool menu / pure waste).
@@ -43,9 +47,14 @@ SHADOWS, replace/re-point the tuned rung magnitudes with the oracle's one-curren
 seam-D migration pattern (the discard convergence) and the shadow-equations ruling. The oracle
 REPLACES the rungs it shadowed (the currency-zone rule) — never co-exists as a second positive term.
 
-### The rung → term fold map (which rungs each oracle term subsumes)
+### The rung → term fold map (HYPOTHESISED — which rungs each oracle term SHOULD subsume)
 
-From the grill spec's "hypothesis" section, verified against the shipped `baseline_energy.py`:
+⚠️ **This map is a hypothesis, not a measurement.** It was derived by READING the grill spec's
+"hypothesis" section against the shipped `baseline_energy.py` — no frame has yet shown the oracle
+actually reproduces a given rung's pick. The `agree` bit is emitted per option but **no aggregate
+oracle-vs-rung agreement number exists yet**; Round-0 (the `attach_sweep` probe, §below step 1) is
+the measurement that VALIDATES or CORRECTS this table, and it has not been run. Treat every "subsumes"
+cell as a swap *candidate* to confirm against the sweep — never as settled fact — before folding.
 
 | Oracle term | Rungs it subsumes | Rungs that SURVIVE (structure, not value) |
 |---|---|---|
@@ -54,7 +63,8 @@ From the grill spec's "hypothesis" section, verified against the shipped `baseli
 | overkill cap (2b) | `conserve-burst-when-no-ko`, `dont-overbuild-*` (payoff side) | — |
 | role gate (5b) | `dont-fund-the-non-attacking-body`, `dont-power-the-draw-engine` | — |
 | type-fit | `dont-waste-off-type-energy` | `fuel-the-dormant-ability` (ability fuel, not attack cost) |
-| resource_cost | `prefer-reusable-over-burst`, `conserve-discard-energy-prefer-basic`, `dont-waste-discard-energy` (partial), the Ignition family | `dont-attach-discard-energy-turn1` (a rules gate — first-turn can't attack) |
+| `marginal` (`evaporates` gate — burst VETOES) | the burst-veto branches of `dont-waste-discard-energy` (benched / turn-1 / already-affords), `dont-attach-discard-energy-turn1` | — |
+| resource_cost (burst TIE-BREAK only) | `prefer-reusable-over-burst`, `conserve-discard-energy-prefer-basic`, and the same-target reusable-vs-burst branch of `dont-waste-discard-energy` | — |
 | accel-routing (4) | `feed-the-firing-accelerator`, `advance-the-accel-pieces` (attach side) | the PLAY-side `advance-the-accel-pieces` (source selection) |
 | partner-conditional (6) | mega_lucario `aura-jab-skip-partnerless-solrock` (deck rung, ADR-0034 fold) | — |
 
@@ -82,7 +92,17 @@ From the grill spec's "hypothesis" section, verified against the shipped `baseli
   `test_attach_target_priority.py`, the six ADR-0060 ordering pins, and now `test_attach_shadow.py`.
 - **Blind pokes at shared machinery risk the frames that already pass.** The oracle's overkill cap
   and accel-routing read opponent HP and accel riders — a swap must hold the 16 currently-correct
-  snipe frames and the discard 12/12.
+  snipe frames and the discard 12/12. Two sharp edges to preserve verbatim: (a) the accel-routing
+  value is gated on board signals the live `feed-the-firing-accelerator` rung does NOT share —
+  `_attach_value`'s `feeds_accel` also requires `not board.accel_recipient_missing and not
+  board.bench_wincon_ready`; a swap that drops them changes when routing is credited. (b) the overkill
+  cap mixes two damage notions — the KO gate is `board.active_cheap_attack_kos` but the coverage test
+  is `_attach_readiness(have)` (current affordable printed damage); they are not the same currency, so
+  don't "simplify" one into the other.
+- **The strong burst VETOES live in `marginal`, not `resource_cost`.** `resource_cost` is only the
+  4th (tie-break) ranking key. The −60/−60/−40 burst penalties are reproduced by the `evaporates` →
+  marginal-0 gate (benched / turn-1 / can't-cash burst). When folding a burst rung, replace it against
+  the `evaporates` gate, not the tie-break term (see the fold map's two burst rows).
 
 ## Open refinements (not blockers — future increments, each its own red→green)
 

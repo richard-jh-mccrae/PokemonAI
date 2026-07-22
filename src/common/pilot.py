@@ -3466,8 +3466,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                               target-choice tie-break (wincon line over filler).
           * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
                               same-marginal tie toward the reusable Basic over the burst.
-        NOTE the remaining term (partner-conditional role, Ruling 6) is a LATER deck-layer increment —
-        the frame that needs it is xfail in test_attach_shadow.py."""
+        The partner-conditional role (Ruling 6) is LIVE via `_partner_absent` (deck-declared
+        `strategy.partners`): a partnerless co-dependent engine body gates to a non-attacking role
+        (marginal 0). Pinned by test_attach_shadow.py (`84889539-87` and the synthetic partner
+        gated/valued pair)."""
         ctx = select.get("context")
         is_attach = option.get("type") == _ATTACH
         is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
@@ -3553,7 +3555,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         priced options) or mid-sim (`self._planning`).
 
         `eq_pick` ranks rows lexicographically by the ruled priority: (marginal, line_value,
-        −resource_cost) — durable progress first, then the wincon line, then the reusable Energy."""
+        ¬type_wasted, −resource_cost) — durable progress first, then the wincon line, then on-type
+        over a wasted attach, then the reusable Energy over the burst."""
         if self._planning:
             return None
         ctx = select.get("context")
