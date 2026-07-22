@@ -1,10 +1,11 @@
 # Evolve valuation — grill-session seed: one equation for the Evolve decision
 
-**Status (2026-07-15).** SEED for a grill session — NOT designed, NOT built. The counterpart to
-`attach-valuation-grill-spec.md`; item #4 of `valuation-systems-coverage-review.md` ("Generalize
-evolution-timing"). The doc names the frame verbatim — the evolve decision is **"Needs-vocabulary
-shaped"** — and the Needs substrate already carries every term (see §"Machinery"). This grill decides
-HOW an evolve's marginal need-coverage combines; the build extends `needs.py`, it does not add rungs.
+**Status (2026-07-15).** DESIGN SETTLED (grill 2026-07-15, §"Settled design" below) — NOT yet built.
+The counterpart to `attach-valuation-grill-spec.md`; item #4 of `valuation-systems-coverage-review.md`
+("Generalize evolution-timing"). The doc names the frame verbatim — the evolve decision is
+**"Needs-vocabulary shaped"** — and the Needs substrate already carries every term (see §"Machinery").
+The grill decided HOW an evolve's marginal need-coverage combines; the build extends `needs.py`, it does
+not add rungs. Next action: Round 0 measurement, then the Phase-1 shadow oracle.
 
 Precipitating correction: a first pass shipped three brittle rungs (`evolve-to-turn-on-the-draw-engine`,
 `dont-open-the-fragile-line-base` gated on `card_id == DREEPY`, `dont-grab-the-unpayable-fetcher`) and
@@ -74,42 +75,41 @@ Drakloak→Dragapult on wrong colours) / exposure-opener (f2, 86091728 f2: open 
 which-body (f82) / refuted (86091728 f12 — first-turn evolve illegal, rules.md L97). Build the corpus
 family (pins + xfail) in the hyperclosure-corpus style. Only the legs the survivors flag get converged.
 
-## The grill agenda
+## Settled design (grill rulings, 2026-07-15)
 
-1. **The income Δ — persistent vs one-shot.** `draw_engine_slot` saturates (marginal engine halves).
-   Drakloak's Recon is a PERSISTENT stream (evolving forfeits EVERY future dig); Dudunsparce's Run Away
-   Draw is a ONE-SHOT that recycles itself. Same slot, different horizon — does the persistent stream
-   price as a sum-over-turns (a large hold pressure) while the burst prices as a single deadline-0
-   deploy? Settle the horizon term.
-2. **The typed-readiness gate.** `fund_attack` coverage from an evolve counts only if R can pay a
-   VALUED attack — via `AttackStat.energyTypes`, not the energy count (f35 anchor). `turns_to_ready`
-   sets the deadline: a body still k typed-Energy short has the readiness slot k turns out, so evolving
-   into it buys no THIS-turn readiness.
-3. **When to evolve = deploy_now vs kept income.** The now-vs-later argmax: `deploy_now_slot`
-   (deadline 0, un-bankable, full marginal) vs the `draw_engine` coverage the evolve destroys. ①'s
-   "delay until strictly necessary" must fall out — evolve fires only when the deploy Δ (readiness/line)
-   exceeds the income stream ended. Grill that the shipped `hold-evolution` fixtures survive the fold.
-4. **The doom carve-out — the affordability question (the ① blocker).** `hold-evolution`'s carve-out
-   "evolve now if `active_doomed`" inherits the DELIBERATELY affordability-blind doom oracle
-   (`docs/todo/incoming-affordability.md`, ADR-0064): at f35 it fires on an Archaludon holding 1 of 3
-   Metal that cannot reach lethal for turns, wrongly securing a body against a non-threat. Does the
-   evolve equation get an affordability-aware `turns_to_ready`-of-THEIR-attack read (the same lookahead
-   already computed for `deny_slot`), scoped to this carve-out — or does it inherit the global punt?
-   This is the gate that kept ① from landing; settle it here.
-5. **Exposure / the opener (f2).** A body's value AS the Active = its Active-slot coverage, NOT its
-   latent bench worth. Dreepy (fragile, 2 hops from any attacker, no ability) covers ≈ 0 as Active — a
-   `general_worth`/line body whose value is future and bench-bound; Munkidori covers more (attacks, has
-   Adrena-Brain). The comparison is exposure × fragility, deck-agnostic. CRITICAL counterexample it must
-   respect: a **1-hop aggressive base that itself attacks SHOULD open** (mega_lucario opens Riolu, ml
-   f1) — so the term is hops-to-payoff × can't-attack-now × slot-threat, never a card-id.
-6. **Which-body (f82).** Two equal evolves, one on an energized body → the fund_attack Δ is larger on
-   the body already carrying Energy (its readiness slot is nearer deadline). The +5 tie-breaks fold into
-   this marginal.
-7. **Fold list.** Which of the 6 baseline rungs + the deck `hold-evolution` fold into the oracle; which
-   SURVIVE as structure (`dont-rush-evolve-without-target` = slot absence; the deploy-now spike is
-   already a slot). The dragapult deck rung folds per ADR-0034 (/deck-align).
-8. **Where it lands.** A signed evolve tactical (the ADR-0062 shape) shadow-emitted first (the
-   shadow-equations ruling — build in shadow, swap staged), calibrated at the old rung currency.
+1. **Income Δ — horizon (RULED).** `Δcover(draw_engine) = cover(R's ability) − cover(B's ability)`; the
+   SIGN gives pull (turn-on) vs hold (turn-off). Magnitude splits on the RECYCLE card-fact:
+   - **ONE-SHOT** (self-shuffle — Run Away Draw "shuffle this Pokémon into your deck") → a single
+     **deadline-0** draw event ≈ `draw_engine_slot` value; a deploy-now burst (pull). ② needs no more.
+   - **PERSISTENT** (body stays — Recon, once/turn) → a **stream** =
+     `draw_engine_value × turns_to_ready(R's payoff attack, TYPED)`. The hold pressure that collapses to
+     0 exactly when the body is typed-ready. ① is DERIVED, and colour-safe (uses the typed deficit).
+2. **Typed readiness (RULED).** `fund_attack` coverage from an evolve counts only via
+   `AttackStat.energyTypes` (colour-aware), never the energy count; deadline = `turns_to_ready(typed_
+   deficit, evolve_hops)`. A body that can't pay the payoff colours buys 0 this-turn readiness (f35's
+   {R}{D} reads 1-short of {R}{P}).
+3. **When to evolve — derived (RULED).** now-vs-later = `deploy_now_slot` (deadline-0, un-bankable) vs
+   the persistent income stream ended. Evolve iff deploy Δ (readiness + line) ≥ the stream.
+   `hold-evolution` is DELETED, not asserted.
+4. **Doom carve-out — scoped affordability (RULED, user 2026-07-15).** The "evolve now if
+   `active_doomed`" carve-out gets a **SCOPED opponent-`turns_to_ready` read** — reusing the `deny_slot`
+   lookahead (their visible Energy deficit + forward hops) — so it fires only when the opponent can
+   ACTUALLY reach the KO. Scoped to THIS carve-out; the global affordability-blind doom oracle
+   (`docs/todo/incoming-affordability.md`, ADR-0064) is UNTOUCHED. This lands ① (f35: Archaludon on 1 of
+   3 Metal ⇒ not doomed-for-evolve ⇒ hold and keep digging Recon).
+5. **Exposure / opener (RULED).** `exposure_cost(R) = R's fragility × threat-in-its-slot`; the opener
+   term derives from LINE-SHAPE — `hops_to_payoff × can't-attack-now × slot-threat` — **never a
+   card-id**. Dreepy (2 hops, no attack) ≈ 0 Active-coverage; **Riolu (1 hop, attacks) still opens**
+   (mega_lucario constraint preserved).
+6. **Which-body (RULED, folded).** The energized body's readiness slot is nearer its deadline ⇒ larger
+   `fund_attack` Δ. The two `+5` tie-breaks disappear into item 2.
+7. **Fold list (RULED).** FOLD into the oracle: `evolve-into-wincon`, `advance-the-evolution-line`, both
+   `energized-body-first`, and the deck `hold-evolution` (via /deck-align, ADR-0034). SURVIVE as
+   structure: `dont-rush-evolve-without-target` (= deploy-now slot ABSENT), `prefer-rush-evolve-tutor`
+   (= a deploy-now ENABLER, a PLAY option type, not an evolve).
+8. **Landing (RULED).** A signed `_evolve_value_tactical` (ADR-0062 shape), **shadow-emitted first**
+   (shadow-equations ruling), calibrated at the old rung currency; staged swaps ranked by the Round-0
+   corpus + shadow disagreements. Earns its ADR at the first swap.
 
 ## Hazards (don't re-buy)
 
