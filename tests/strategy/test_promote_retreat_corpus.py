@@ -52,3 +52,27 @@ def test_shadow_retreats_into_the_ready_wincon_f92():
     constant offset across the destination options, so readiness still decides the pick)."""
     fx, shadow = _shadows("mega_starmie", "pr_retreat_into_ready_wincon_f92")
     assert max(shadow, key=shadow.get) == fx["correct"][0], shadow
+
+
+# ---- the WHETHER-to-retreat site (MAIN selects, ruling 1) ----------------------------------------
+
+def _whether(agent: str, fixture: str):
+    fx = json.loads((FIXTURES / f"{fixture}.json").read_text(encoding="utf-8"))
+    rec = _pilot(agent).explain(fx["obs"]).promote_retreat_shadow
+    assert rec is not None and rec.get("site") == "whether", rec
+    return fx, rec
+
+
+def test_whether_dont_retreat_when_the_active_can_attack_f9():
+    """81906755-9 (MAIN, bad_retreat): 'don't waste energy by needlessly retreating' — the Active has a
+    real attack, so retreating out of it nets NEGATIVE (ruling 1: stay_yield subtraction). The shadow
+    says retreat is not worth it, matching the human's don't-retreat."""
+    fx, rec = _whether("mega_starmie", "pr_whether_dont_retreat_f9")
+    assert rec["worth_it"] is False, rec
+
+
+def test_whether_should_retreat_into_the_finisher_f37():
+    """82756664-37 (MAIN, bad_retreat): 'should retreat to Mega Starmie for the KO and snipe' — the
+    benched finisher out-earns staying, so retreating is worth it (value > 0)."""
+    fx, rec = _whether("mega_starmie", "pr_whether_should_retreat_f37")
+    assert rec["worth_it"] is True, rec

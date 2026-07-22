@@ -1332,7 +1332,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
-                        promote_retreat_shadow=self._promote_retreat_record(obs, select, options, traces, chosen),
+                        promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -1600,22 +1600,83 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             stay_yield=stay_yield)
         return promote_retreat_value(inp).total
 
-    def _promote_retreat_record(self, obs: dict, select: dict, options: list, traces: list, chosen: list):
-        """The promote/retreat value shadow (the fifth shadow) — collect every option's two-sided
-        window-rollout total (already computed per-option on `OptionTrace.promote_retreat_shadow`),
-        emit the working rows + the top pick + the agreement bit vs the shipped rungs' `chosen`.
-        DECIDES NOTHING. None off a TO_ACTIVE/SWITCH select (fewer than two options), a Boss's-gust
-        target select (opponent bodies — the gust-value equation's turf), or mid-sim (`self._planning`)
-        — the disagreement rows the swap-ranking sweep reads."""
-        if self._planning or select.get("context") not in (_TO_ACTIVE, _SWITCH) or len(options) < 2:
+    def _promote_retreat_record(self, obs: dict, select: dict, board: Board, options: list,
+                                traces: list, chosen: list):
+        """The promote/retreat value shadow (the fifth shadow), two emission SITES. DECIDES NOTHING;
+        None mid-sim (`self._planning`) — the disagreement rows the swap-ranking sweep reads.
+
+        - **pick** (TO_ACTIVE/SWITCH own-retreat select): every option's two-sided window-rollout total
+          (per-option on `OptionTrace.promote_retreat_shadow`) + the top pick + the agreement bit vs the
+          shipped rungs' `chosen`. None off a <2-option select or a Boss's-gust target (opponent bodies).
+        - **whether** (MAIN select with a native RETREAT option): the value of retreating the Active into
+          the BEST benched body (`_retreat_action_value`, ruling 1 — `stay_yield` live here) + the
+          SIGN-agreement bit (retreat-worth-it vs did the ladder retreat). This is where the Group-A
+          "whether to retreat" mass lives — invisible to the pick site."""
+        if self._planning:
             return None
+        ctx = select.get("context")
         my_index = (obs.get("current") or {}).get("yourIndex", 0)
-        if options and options[0].get("playerIndex") not in (None, my_index):
-            return None                                  # a gust-target select, not our own retreat
-        rows = [{"i": i, "v": round(t.promote_retreat_shadow, 2)} for i, t in enumerate(traces)]
-        eq_pick = max(range(len(traces)), key=lambda i: traces[i].promote_retreat_shadow)
-        return {"eq": rows, "eq_pick": eq_pick, "picks": sorted(chosen or []),
-                "agree": eq_pick in (chosen or [])}
+        if ctx in (_TO_ACTIVE, _SWITCH):
+            if len(options) < 2 or (options and options[0].get("playerIndex") not in (None, my_index)):
+                return None                              # <2 options, or a gust-target (opponent) select
+            rows = [{"i": i, "v": round(t.promote_retreat_shadow, 2)} for i, t in enumerate(traces)]
+            eq_pick = max(range(len(traces)), key=lambda i: traces[i].promote_retreat_shadow)
+            return {"site": "pick", "eq": rows, "eq_pick": eq_pick, "picks": sorted(chosen or []),
+                    "agree": eq_pick in (chosen or [])}
+        if ctx == _MAIN:
+            retreat_idx = next((i for i, o in enumerate(options) if o.get("type") == _RETREAT), None)
+            if retreat_idx is None:
+                return None                              # no retreat action on the menu
+            value = self._retreat_action_value(obs, board)
+            if value is None:
+                return None                              # no benched body to retreat into
+            worth_it = value > 0.0
+            ladder_retreated = retreat_idx in (chosen or [])
+            return {"site": "whether", "retreat_idx": retreat_idx, "value": round(value, 2),
+                    "worth_it": worth_it, "ladder_retreated": ladder_retreated,
+                    "agree": worth_it == ladder_retreated}
+        return None
+
+    def _retreat_action_value(self, obs: dict, board: Board) -> float | None:
+        """Ruling 1's whether-to-retreat value at a MAIN menu: the BEST two-sided window-rollout total
+        over every benched body the Active could retreat into, MINUS the retreat Energy and the Active's
+        forgone attack (`_retreat_side` — constant across destinations). > 0 ⇒ retreating out-earns
+        staying-and-attacking. None with no benched body. The destination readiness/exposure legs are
+        computed off each body directly (valid without a per-option Context)."""
+        me = self._my_player(obs)
+        bench = (me.get("bench") or []) if me else []
+        wincon = self._wincon_set()
+        best_slot = board.best_promote_slot
+        retreat_worth, stay_yield = self._retreat_side(obs)
+        best = None
+        for i, b in enumerate(bench):
+            bid = b.get("id") if b else None
+            if bid is None:
+                continue
+            stat = self.stats.get(bid) if self.stats else None
+            tags = self.functions.tags(bid) if self.functions else []
+            can_attack = bool(stat and stat.minAttackCost is not None
+                              and len(b.get("energies") or []) >= stat.minAttackCost)
+            inp = PromoteRetreatInputs(
+                is_switch=True,
+                can_attack_now=can_attack,
+                is_wincon=(bid in wincon),
+                is_best_target=(best_slot == (_BENCH, i)),
+                is_staller=("opener" in tags or "item_lock" in tags),
+                is_accelerator=("accel_source" in self._roles_of(bid)),
+                bench_underpowered=(board.bench_wincon_underpowered and board.basic_energy_in_deck),
+                provable_ko=(board.ko_promote_slot == (_BENCH, i)),
+                prize_value=self._prize_value(b),
+                opp_can_punish=not board.opp_cannot_punish_wincon,
+                opp_prizes_remaining=board.opp_prizes_remaining,
+                on_their_path=False,
+                is_item_lock=("item_lock" in tags),
+                retreat_energy_worth=retreat_worth,
+                stay_yield=stay_yield)
+            total = promote_retreat_value(inp).total
+            if best is None or total > best:
+                best = total
+        return best
 
     def _promote_fetch_p(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """Ruling 3 (EV over closure): P that the closure READIES an unready wincon promote target THIS

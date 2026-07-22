@@ -156,6 +156,29 @@ RECORDED promote/retreat SELECT frame through a fresh Pilot; NO ladder submissio
   the attack sibling (the `stay_yield` subtraction becomes live there). Until then the swap stays
   un-evidenced, correctly.
 
+### Sweep #2 — the whether-to-retreat site is live (2026-07-22)
+
+Built the second emission site: `_promote_retreat_record` now dispatches on context — **pick**
+(TO_ACTIVE/SWITCH) and **whether** (MAIN with a native RETREAT option). The whether-site emits
+`_retreat_action_value` = the BEST two-sided total over all benched destinations − retreat cost −
+`stay_yield` (ruling 1 goes live), with a SIGN-agreement bit (retreat-worth-it vs did-the-ladder-retreat).
+Sweep now covers **96 whether-frames** (vs 6 pick) — Group A is finally visible.
+
+- **whether-site: 84/96 agree with the shipped ladder; 12 disagreements** — 4 shadow-fixes-ladder,
+  8 shadow-regresses. Two real findings fall straight out:
+- **Finding A — the tempo-denied term (ruling 6) OVER-FIRES.** 7 of the 12 disagreements are the
+  dragapult `86091435-*` cluster, all at the SAME `value=27` — the item-lock credit fires **whenever a
+  benched Budew exists**, unconditional of whether item-lock is worth anything THIS turn. It correctly
+  catches `86091435-20` ("retreat into Budew, then item lock" — a genuine shadow-fixes-ladder) but then
+  credits the same +27 on frames whose real play is an attach/ability (`-30/-35/-96`). **The tempo fold
+  needs a gate:** credit item-lock only when the opponent actually relies on Items (early game /
+  Item-dependent matchup), mirroring `disruptor_lock_maneuver`'s matchup-dependence. Top swap-staging fix.
+- **Finding B — `stay_yield` under-counts a planner-tier forgone play.** The other regressions
+  (`82749168-61`, `82750161-59`) are frames where the Active's forgone play is a KO / attach-to-KO —
+  which is the PLANNER's tier (ruling 5), not the shadow's sub-lethal `stay_yield`. Consistent with the
+  decision stack: those belong above the equation, so the shadow "regressing" there is expected, not a bug.
+- **pick-site unchanged: 6/6 agree.** The swap still waits on tightening Finding A, then a re-sweep.
+
 ### Hazards (carried from the seed + added this session)
 
 - Adding the positive tempo-denied term "silently voids guards calibrated against the old scale"

@@ -26,7 +26,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "tools"))
 
-_SWITCH, _TO_ACTIVE = 3, 4
+_SWITCH, _TO_ACTIVE, _MAIN, _RETREAT = 3, 4, 0, 12
 
 
 def _build_pilot(agent: str):
@@ -59,7 +59,13 @@ def _gather_frames() -> dict:
             obs = ast.literal_eval(obs) if isinstance(obs, str) else obs
             if not (isinstance(dec, dict) and isinstance(obs, dict)):
                 continue
-            if (obs.get("select") or {}).get("context") not in (_SWITCH, _TO_ACTIVE):
+            sel = obs.get("select") or {}
+            ctx = sel.get("context")
+            if ctx in (_SWITCH, _TO_ACTIVE):
+                pass
+            elif ctx == _MAIN and any(op.get("type") == _RETREAT for op in (sel.get("option") or [])):
+                pass                                       # a MAIN menu carrying a native retreat action
+            else:
                 continue
             key = f"{o.get('episode_id')}-{dec.get('frame')}"
             frames.setdefault(key, {"agent": o.get("agent"), "obs": obs,
@@ -82,7 +88,7 @@ def _tag(r: dict) -> str:
 
 def main() -> None:
     frames = _gather_frames()
-    print(f"promote/retreat SELECT frames in corpus: {len(frames)}")
+    print(f"promote/retreat + MAIN-retreat frames in corpus: {len(frames)}")
     rows, skipped = [], 0
     for key, fr in frames.items():
         try:
@@ -91,26 +97,43 @@ def main() -> None:
             skipped += 1
             continue
         rec = getattr(d, "promote_retreat_shadow", None)
-        if not rec:                                            # <2 opts / gust select / mid-sim
+        if not rec:                                            # <2 opts / gust select / mid-sim / no dest
             skipped += 1
             continue
-        shadow, ladder, correct = rec["eq_pick"], (d.chosen[0] if d.chosen else None), _first(fr["correct"])
-        rows.append({"key": key, "agent": fr["agent"], "cat": fr["cat"], "eq": rec["eq"],
-                     "shadow": shadow, "ladder": ladder, "correct": correct, "agree": rec["agree"],
-                     "shadow_right": (shadow == correct) if correct is not None else None,
-                     "ladder_right": (ladder == correct) if correct is not None else None,
-                     "rat": fr["rat"]})
-    disagree = [r for r in rows if not r["agree"]]
-    print(f"priced (own promote/retreat): {len(rows)}   skipped (gust/unpriced): {skipped}")
-    print(f"\nAGREEMENT vs shipped ladder: {sum(r['agree'] for r in rows)}/{len(rows)} agree, "
-          f"{len(disagree)} disagree\n")
-    order = {"SHADOW-FIXES-LADDER": 0, "both-wrong": 1, "no-label": 2, "both-right": 3, "shadow-regresses": 4}
-    print("DISAGREEMENT ROWS (shadow-fixes-ladder first):")
-    for r in sorted(disagree, key=lambda r: order[_tag(r)]):
-        print(f"  {r['key']:16} {r['agent']:13} {_tag(r):20} shadow={r['shadow']} "
-              f"ladder={r['ladder']} correct={r['correct']} | {r['cat']}")
-        print(f"      eq={r['eq']} | {r['rat']}")
-    print(f"\nsummary: {dict(Counter(_tag(r) for r in disagree))}")
+        correct = _first(fr["correct"])
+        opts = fr["obs"]["select"]["option"]
+        base = {"key": key, "agent": fr["agent"], "cat": fr["cat"], "site": rec["site"],
+                "agree": rec["agree"], "rat": fr["rat"]}
+        if rec["site"] == "pick":
+            shadow, ladder = rec["eq_pick"], (d.chosen[0] if d.chosen else None)
+            base.update(shadow=shadow, ladder=ladder, correct=correct, eq=rec["eq"],
+                        shadow_right=(shadow == correct) if correct is not None else None,
+                        ladder_right=(ladder == correct) if correct is not None else None)
+        else:                                                  # whether-to-retreat (sign agreement)
+            cor_retreat = (opts[correct].get("type") == _RETREAT) if (correct is not None
+                           and correct < len(opts)) else None
+            base.update(value=rec["value"], worth_it=rec["worth_it"],
+                        ladder=rec["ladder_retreated"], correct=cor_retreat,
+                        shadow=rec["worth_it"],
+                        shadow_right=(rec["worth_it"] == cor_retreat) if cor_retreat is not None else None,
+                        ladder_right=(rec["ladder_retreated"] == cor_retreat) if cor_retreat is not None else None)
+        rows.append(base)
+
+    for site in ("pick", "whether"):
+        srows = [r for r in rows if r["site"] == site]
+        disagree = [r for r in srows if not r["agree"]]
+        print(f"\n===== SITE: {site} =====")
+        print(f"  priced: {len(srows)}   agree vs ladder: {sum(r['agree'] for r in srows)}/{len(srows)}"
+              f"   disagree: {len(disagree)}")
+        order = {"SHADOW-FIXES-LADDER": 0, "both-wrong": 1, "no-label": 2, "both-right": 3, "shadow-regresses": 4}
+        for r in sorted(disagree, key=lambda r: order[_tag(r)]):
+            extra = (f"value={r.get('value')} worth_it={r.get('worth_it')}" if site == "whether"
+                     else f"eq={r.get('eq')}")
+            print(f"  {r['key']:15} {r['agent']:13} {_tag(r):20} shadow={r['shadow']} "
+                  f"ladder={r['ladder']} correct={r['correct']} | {r['cat']}")
+            print(f"      {extra} | {r['rat']}")
+        print(f"  disagreement verdicts: {dict(Counter(_tag(r) for r in disagree))}")
+    print(f"\nskipped (gust/unpriced/no-dest): {skipped}")
 
 
 if __name__ == "__main__":
