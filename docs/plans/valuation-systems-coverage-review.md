@@ -76,3 +76,34 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
 - Adding a big positive term silently voids guards calibrated against the old scale.
 - Blind pokes at shared machinery (threat rank, prize guards) risk the frames that already pass —
   grill first, bench always.
+
+## Opponent-read grill findings (2026-07-22) — logged, not yet built
+
+Session grilling the two opponent-read rows. Rulings + findings, in order surfaced:
+
+- **`82749168-38` refuted (user ruled: pilot right).** The labelled snipe is onto a **benched**
+  Dragapult ex — Tera prevents all attack damage while benched (rulebook App.6), so the 50 rider
+  does 0; `dont-snipe-a-benched-tera` already ranks it below the real Hoothoot snipe. Drop it from
+  the "3 snipe misses" → snipe is **16/18**, two real gaps (discard-fuel *retired* below + the pure
+  Riolu transposition, unfixable).
+- **`83667237-107` is a THRESHOLD-RACE frame, not discard-fuel (user ruled).** Makuhita is the pick
+  because it's the only benched body a 2-turn Jetting Blow snipe (50+50 ≥ 80 HP) can KO before the
+  finisher lands (+ prize-cap avoids the 2nd Mega + the chip banks for a later gust-KO). The
+  discard `{F}` is a **risk** to the plan (they can evolve Makuhita out of range), not the motive.
+  ⇒ the snipe **discard-fuel gauge has no corpus anchor** — retired; threshold-race (#3) is the real
+  driver. Live retest: pilot takes an on-path 110-body (+12), Makuhita scores 0 (`reviewed.json`
+  "fixed" is stale — ADR-0044 only killed the 2nd-Mega pick).
+- **Discard damage-scaling is already read** (Kyogre Riptide class) — coverage row above corrected.
+  Built `discard_energy_recur` tag (Mega Lucario ex 678, Archaludon ex 190; `recycle` reused for
+  Slowpoke 162) as inert vocabulary; the `_opp_turns_to_ready` wiring is the pending #2 proposal.
+- **Kyogre/Mega Abomasnow ex recycling deck — two logged findings:**
+  - **(a) Denial is futile vs a recycler.** Riptide shuffles its scored `{W}` back into the deck and
+    Hammer-lanche re-mills it — the `{W}` pool is renewable, so Crushing-Hammer-class energy denial
+    on them is near-worthless. Doctrine for the `kyogre_mega_abomasnow_ex` Brief; a candidate consumer
+    of the `recycle`/`discard_energy_recur` vocabulary. The live *discard* read is NOT fooled by the
+    recycle — reading the live pile each turn tracks the pulse correctly.
+  - **(b) Opponent Hammer-lanche is under-read.** It is a HIDDEN deck-density scaler (`100×` Basic
+    `{W}` off the top 6 of *their* deck); `_damage_context` estimates deck density only for
+    `attacker_is_me`, so the opponent's ~350-avg nuke prices at its flat base (~0) in the doom oracle.
+    Their density is hidden → only a matchup-Brief prior (`opp_deck_basic_water_density` ≈ 0.58) can
+    price it soundly. Brief-scoped, not a general read.
