@@ -1,12 +1,128 @@
-# Promote / retreat — grill-session seed: the prize-trade differential
+# Promote / retreat — the prize-trade differential (design SETTLED 2026-07-22)
 
-**Status.** SEED — NOT designed, NOT built. The shadow ruling
-(`docs/plans/shadow-equations-ruling.md`) applies: once the grill settles the design, the equation
-ships as a SHADOW emitter beside the promote ladder regardless of how many corrections the ladder
-already satisfies; swaps stay corpus + score-diff gated. Supersedes the attach spec's
-"sibling consumer" paragraph, which under-called this family as "a cheap composition of two
-existing oracles" — the user's counterexamples (below) refute that: readiness is hand-AND-closure
-aware, and the value is a TRADE over an exchange window, not a single-body score.
+**Status.** DESIGNED — grill closed 2026-07-22 (six rulings, §Settled design below); NOT yet built.
+The shadow ruling (`docs/plans/shadow-equations-ruling.md`) applies: the equation ships as a SHADOW
+emitter beside the promote ladder regardless of how many corrections the ladder already satisfies;
+swaps stay corpus + score-diff gated. Supersedes the attach spec's "sibling consumer" paragraph,
+which under-called this family as "a cheap composition of two existing oracles" — the user's
+counterexamples (below) refute that: readiness is hand-AND-closure aware, and the value is a TRADE
+over an exchange window, not a single-body score.
+
+The original SEED (musing, hypothesis, inventory, grill agenda) is preserved below §Settled design
+as provenance — read the settled section first; the seed's open questions are now answered there.
+
+---
+
+## Settled design (grill closed 2026-07-22) — scoped to the RETREAT/PROMOTE decision
+
+Walked the retreat/promote correction family (52 flavoured corrections) against the seed equation,
+one disagreeing frame at a time. Six rulings settle the design and, as importantly, settle the
+**scope** — most of the family is owned by tiers ABOVE the value equation.
+
+### The decision stack (what owns retreat/promote, top to bottom)
+
+| Tier | Owner | Fires when | Corpus anchors |
+|---|---|---|---|
+| 0 | **Lethal solver** (turn player) | retreat unlocks a **provable match win** (`deck_definitely_has` + engine-confirmed) — it **takes over** and preempts the equation | `84071010-15` (`retreat_enabler_lethal`) |
+| 1 | **Turn planner** (`ko_for_prizes`) | retreat unlocks a **provable KO / multi-prize** sequence THIS turn | `83053965-32/-48`, `82224509-41`, `82226116-48/100`, `83455356-11`, and the live gaps `82751468-14`, `83007714-92` |
+| 2 | **Retreat value equation** (THIS doc) | everything else — **uncertain / positional** value | Groups A, B, D, E below |
+
+The stack IS the speculation cap: the equation never multiplies "win = game" (or a certain KO) by a
+soft probability, because those branches are handed UP to certainty-gated / engine-verified owners.
+
+### The equation (tier 2), fully specified by the rulings
+
+```
+retreat_value(B) = window-rollout diff  { A active, B benched }  vs  { B active, A benched }   (ruling 2: option b, two-sided)
+                                         take the max; the FORGONE ATTACK of the current Active
+                                         is the A-side of the diff, NOT a separate term (ruling 1)
+
+   my_yield(B)     = EV over closure of SUB-LETHAL outcomes only                                (ruling 3: expected value, NOT fail-closed)
+                     { stall, chip, charge-up DIVIDEND, sub-lethal KO }                          (rulings 4/5: win→solver, provable KO→planner, so
+                     via the gamble Outcome-Class machinery (_gamble_ko_classes /                 they are absent here by construction — no P·win)
+                     _fetch_reaches_slot) pointed at the promote target; P(fetch) from
+                     deck_odds + fetch_closure
+
+ − their_yield(B)   = prize_value(B) × P(they KO B) × prize-map asymmetry                         (threat_turns / prize_paths / opp_prizes_remaining)
+                     + TEMPO-DENIED: Δt(their Threat-Clock curve shifts right) × opp_prize_rate,  (ruling 6: retreat-as-disruption / item-lock
+                       bounded by opp_prizes_remaining                                             folds in as reduced opponent whole-window yield)
+
+ − retreat_cost     = Energy paid to retreat, priced via card_worth
+```
+
+### The six rulings (user, 2026-07-22)
+
+1. **Forgone attack is an opportunity-cost SUBTRACTION inside the differential, not a hard veto.**
+   Collapses Group A ("don't retreat, A can attack") and Group C ("do retreat, the destination
+   out-earns A") into ONE term: retreat wins iff the destination clears `my_yield(A, stay)`. One
+   veto dies, one term is born.
+2. **Retreat MUST consider the opponent's side → option (b): the two-sided window-rollout diff**
+   (not the per-turn shortcut, which double-charges the deferred-not-destroyed attack). Buildable
+   NOW at the 1-exchange window on the merged `objectives.py` arithmetic (`threat_turns`,
+   `prize_paths`, `race_values`; PR #128/#131, main).
+3. **Readiness leg = EXPECTED VALUE over closure**, not the fail-closed floor. Reuses the gamble
+   Outcome-Class machinery but keeps it probabilistic; `P(fetch)` flows in from Odds + Closure.
+4. **The retreat-to-WIN branch is the lethal solver's, which takes over.** The equation never prices
+   it → no `P·win`. The speculation hazard EV opened is capped structurally at the lethal boundary.
+5. **The provable retreat→KO / multi-prize branch is the turn planner's (`ko_for_prizes`),** same
+   shape as ruling 4. Group C re-classifies OUT of the equation as planner-sequencing gaps.
+6. **Retreat-as-disruption (item-lock, free-pivot) and `disruptor_lock_maneuver` fold INTO the
+   equation** as a tempo-denied term in `their_yield` (same currency), NOT a separate axis. The
+   fold replaces `disruptor_lock_maneuver`'s SHIP-AND-REFINE kill-switch with a computed trade:
+   `tempo_denied − prize_value(fragile Budew) × P(they KO it)`.
+
+### Two curve terms declare a Threat-Clock dependency (the single clean deferral)
+
+`my_yield`'s **preservation dividend** (my bench charges faster — Cinderace's 3/turn onto the Mega)
+and `their_yield`'s **tempo-denied** (their curve slips under a lock) are MIRRORS: my curve up vs
+their curve down, both over the N-turn window. Both are buildable only as an **immediate 1-exchange
+slice now**; their full N-turn form BLOCKS on the unified Threat Clock
+(`threat-clock-unification-handoff.md`, `incoming(t,policy)` for t>1). Everything else ships at
+1-exchange.
+
+### Round-0 corpus classification (retreat/promote family)
+
+- **A — forgone-attack ("don't retreat, attack"):** `86090164-52/67`, `81904451-17`, `81905063-16`,
+  `81906755-9`, `82867148-62`, `81785223-12`, `81905522-10` → priced by the window diff's A-side; NO
+  separate veto. (`86090164-67` "insanely retreat happy" is the headline live flag.)
+- **B — readiness (equation `my_yield`):** `82753102-120` ✓ WALKED — Cinderace-over-Staryu holds on
+  band value alone; the speculative "retreat-to-win if I draw Ignition" is NOT banked (ruling 4) and
+  the pick survives without it. `83007714-104` — same-prize (both Mega ex) so `their_yield` equal →
+  pure `my_yield` readiness; should be covered by `promote-the-ready-wincon +40` per-option (RETEST).
+- **C — provable KO seq → PLANNER, not the equation:** several already `covered` via `ko_for_prizes`
+  (`83053965-32/-48` etc.). Live planner-sequencing gaps to hand to the planner session:
+  `82751468-14` (flat 4-way attach tie), `83007714-92` (retreated into the dead Cinderace, not the
+  430/3⚡ Hero's-Cape Mega that KOs).
+- **D — target / prize-map (`their_yield`):** anchored by the `dont-promote-into-their-prize-reach`
+  family (spec's four stand-downs, `bench_wincon_prize_value`) — real, but never the SOLE decider in
+  an anchored 1-exchange frame. `85164131-22` re-classed OUT to the snipe system (a `Damage`-context
+  snipe-target pick, not a retreat).
+- **E — disruption (folded into `their_yield`, ruling 6):** `85046350-20` shipped
+  `disruptor_lock_maneuver` (kill-switched); live gaps `86091435-20` (retreat→Budew→item-lock),
+  `85709280-42/55` (Air Balloon free-pivot). Proposal seed: `capability-gap-retreat-to-item-lock.md`.
+
+### Build shape (supersedes the seed's §Build shape)
+
+Phase 1 — the **1-exchange two-sided shadow**: `my_yield` (EV-over-closure sub-lethal band via the
+gamble Outcome-Class) − `their_yield` (prize-map + immediate tempo-denied slice) − retreat_cost,
+emitted per promote/retreat option beside the ladder, with the agreement bit. Wins/provable-KOs are
+handed up (tiers 0/1) and MUST be absent from the shadow. Phase 2 — staged swaps by Round-0 +
+shadow-disagreement ranking; preserve `disruptor_lock_maneuver`'s kill-switch as a floor and re-audit
+the `test_blunder_20260710_split_fixes.py` pins. Phase 3 (BLOCKED on the Threat Clock) — extend the
+two curve terms (preservation dividend, tempo-denied) from the 1-exchange slice to the N-turn window.
+
+### Hazards (carried from the seed + added this session)
+
+- Adding the positive tempo-denied term "silently voids guards calibrated against the old scale"
+  (standing caution) — seed at the current partial order; keep the kill-switch as a floor.
+- This family is ADR-0031/0044/0064-hardened with additive interactions (+50 stacking with +45) —
+  re-audit surface is the promote/retreat pins across `test_blunder_*` + the ADR-0064 suite.
+- Anti-speculation: high Round-0 pass rate expected; build the shadow anyway (the ruling), swap only
+  measured failures first.
+
+---
+
+## PROVENANCE — the original SEED (superseded by §Settled design above; kept for the reasoning trail)
 
 ## The musing (user, 2026-07-19)
 

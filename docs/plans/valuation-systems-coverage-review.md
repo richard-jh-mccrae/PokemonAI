@@ -128,3 +128,22 @@ Session grilling the two opponent-read rows. Rulings + findings, in order surfac
   `85164131-22` an answerable body is worth 0 to touch). The unified read — gust value =
   `KO_prizes + tempo_denied(role, turns_out_of_position) - return_threat` - is being built in a
   separate session; do NOT author it here. Logged for cross-reference only.
+
+## Promote/retreat grill — design SETTLED (2026-07-22)
+
+The "Retreat / switch / who's Active ✅ covered" row above is the hand-tuned promote/retreat LADDER.
+The **equation** upgrade (the prize-trade differential) was grilled to a settled design this session:
+see `docs/plans/promote-retreat-grill-spec.md` §Settled design (SEED → DESIGNED, six rulings). Key
+outcomes for this map:
+
+- **The equation's scope shrank to a decision-stack tier 2.** Retreat-to-WIN → the lethal solver
+  (preempts); provable retreat→KO → the turn planner (`ko_for_prizes`); only the uncertain/positional
+  band is the value equation's. That structurally caps the EV-over-closure speculation hazard.
+- **`disruptor_lock_maneuver` folds into `their_yield`** as a tempo-denied term (mirror of the gust
+  read's `tempo_denied`) — its kill-switch becomes a computed trade.
+- **One clean deferral:** the two curve terms (preservation dividend ↑ my curve, tempo-denied ↓ their
+  curve) block on the unified Threat Clock for their N-turn form; a 1-exchange shadow ships now on the
+  merged `objectives.py` arithmetic.
+- **Two live PLANNER gaps surfaced** (not valuation gaps): `82751468-14` (flat attach tie),
+  `83007714-92` (retreated into the dead body, not the KO-ready Mega) — hand to the planner session.
+- `85164131-22` re-classed from retreat to the **snipe** system (a `Damage`-context snipe-target).
