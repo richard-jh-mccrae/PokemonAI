@@ -534,9 +534,9 @@
     "round": "2026-07-03"
   },
   "83661652-19": {
-    "disposition": "covered",
-    "reason": "develop-a-basic-in-setup develops Riolu over the poor Boss's Orders stall (retest [4]->[5]); W-route-blind. The poor-stall blunder is gone.",
-    "round": "2026-07-04"
+    "disposition": "refuted",
+    "reason": "wrong-seat / non-doctrine attacker (user ruling 2026-07-22): the correct line 'attach {F} to Lunatone, attack with Power Gem' is not a line this deck plays — Lunatone (675) is the Lunar Cycle ability body (energy mover), never built as an attacker. The equation developing a basic over feeding the (forward-doomed) Lunatone is correct; no real energy-attach anchor here. Supersedes the 2026-07-04 'covered' note (which only cleared the poor-stall gust).",
+    "round": "2026-07-22"
   },
   "83661652-31": {
     "disposition": "covered",
@@ -574,9 +574,9 @@
     "round": "2026-07-04"
   },
   "83667237-107": {
-    "disposition": "fixed",
-    "reason": "FIXED + SHIPPED (ADR-0044 Prize-Redundant Target, snipe_prize_redundant DEFAULT ON 2026-07-06): off-committed-path snipe suppression + body-identity path keying -> snipe lands on the on-path small, not the 2nd Mega. Gated REQ-READ-0001..0003. Kill-switch retained; verify via ladder corrections.",
-    "round": "2026-07-04"
+    "disposition": "deferred",
+    "reason": "discard-fuel snipe residual (grill 2026-07-22): bot snipes Lunatone on-path, human wants Makuhita (pre-evo of a discard-fueled Wild-Press line). snipe-the-evolving-threat stands down via target_forward_form_in_play (Hariyama already in play, ADR-0044) — but under 5 {F} in opp discard + Mega Lucario Aura Jab the 2nd line is live, so the pre-evo is NOT redundant. DoD: build opponent-side discard-fuel read (coverage item #2) then override the stand-down. Handoff: docs/plans/snipe-discard-fuel-grill-handoff.md. Open: strict-vs-broad trigger threshold. To be done in a separate session.",
+    "round": "2026-07-22"
   },
   "83661649-30": {
     "disposition": "fixed",
