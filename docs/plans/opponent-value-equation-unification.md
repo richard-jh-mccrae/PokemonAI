@@ -204,36 +204,60 @@ unbisectable — T5/T6 precedent).
   + fix the ruled threshold-race** (`83667237-107`), hold the deny 5/5 (ADR-0062) and the gust frames.
 - **S4 — the decider swaps, per instrument.** Each doctrine's target pick swaps to read its instrument's
   slice out of the shared assignment: deny first (already a slot — the shortest hop), then snipe (its rungs
-  → the marginal; the ADR-0065 snipe fold), then gust. **Gust is now merged to main** (user, 2026-07-22) —
-  so gust folds INTO the assignment rather than being coordinated across sessions: its
-  `KO_prizes + tempo − return_threat` becomes the gust instrument's marginal in the slot family (verify the
-  merged shape once it lands in this env's remote — see the sync note below). Each swap a PROFILE
-  kill-switch, OFF byte-identical (`develop_rollout` / seam-D precedent).
+  → the marginal; the ADR-0065 snipe fold), then gust. **Gust is merged to main** (user; PR #128/#129) — so
+  gust folds INTO the assignment as a behavior-preserving lift: the merged prize-denominated SUM (see "The
+  merged gust value" — NO `return_threat` term) becomes the gust instrument's marginal, and
+  `_gust_target_tactical` re-reads it. Each swap a PROFILE kill-switch, OFF byte-identical (`develop_rollout`
+  / seam-D precedent). **`return_threat` is NOT here** — it is S5.
 - **S5 — the decline-a-prize gate (ruling 6).** The riskiest behavior, LAST, behind its own kill-switch
   (ADR-0045 S4's `forgo_ko`, promoted from parked-OFF). The tight four-condition sound gate; any doubt →
   take the prize. Own bench: a captured can-KO-but-bad-trade anchor (Scenario B still lacks one — flag for
   capture) + the forgo-KO corrections.
 
-## The merged gust value = the marginal's template (ruling 3; gust merged 2026-07-22)
+## The merged gust value — the actual shape, and what it tells us (ruling 3; gust merged PR #128/#129)
 
-The ADR-0066 unified gust read — `gust value = KO_prizes + tempo_denied(role, turns_out_of_position) −
-return_threat` — is now **merged to main** (user). This is not a rival to build around; it is the **first
-concrete instance of the Layer-2 marginal**, so it sets the template the other instruments fold to match:
-- `KO_prizes` = the `prize_advance` term. `tempo_denied` = the `survival_shift` term. `return_threat` =
-  `incoming(1, ceiling)` of what promotes back — a Layer-1 query. So the merged gust equation IS
-  `opponent_target_value` for the gust instrument, already in the two-term shape.
-- **Build consequence:** the gust instrument's marginal in the S3 slot family is the merged expression,
-  lifted from `_gust_target_tactical` into the shared assignment; snipe and deny fold to match its currency,
-  not the reverse. `_gust_target_tactical` then becomes a consumer of its own slice (the ADR-0065 "doctrine
-  stays the decider, reads the shared backend" shape) — a refactor, behavior-preserving, benched on the gust
-  corpus frames.
-- **Sync caveat (verify before building):** as of this writing this environment's git remote (`origin/main`)
-  is still at PR #131 and the merged gust `return_threat`/`tempo` terms are not yet visible here — either the
-  merge has not propagated to this env's remote, or "gust value expression" refers to the ADR-0066 target
-  terms already present in `_gust_target_tactical` (`_gust_energy_denial` / `_gust_target_denial` /
-  `_gust_wincon_denial`) rather than a distinct `return_threat` read. **First action next session: fetch
-  main, read the merged `_gust_target_tactical`, and confirm its actual shape** before lifting it — do not
-  assume the `return_threat` term exists until seen.
+Read at source on main (`doctrine_gust._gust_target_tactical`, 2026-07-22). The merged gust value is
+**entirely prize-denominated**, and KO-gated:
+
+```
+gust_target_value = KO_SCORE + prize_value(target)
+                  + _gust_target_denial      # a FULL prize for gusting a LIVE threat (energy/imminence read)
+                  + _gust_forward_denial      # 0.5 — line becomes an attacker
+                  + _gust_matchup_priority    # « 1 prize — ADR-0051 MatchupPlan target priority
+                  + _gust_wincon_denial       # ~1.5 prizes — wincon line/pre-evo, γ-scaled
+                  + _gust_energy_denial        # « 1 prize — sunk Energy destroyed (ADR-0062 strip, across the table)
+                  + _gust_snipe_synergy        # +1 prize — gust enables a second snipe-KO
+     (fires only when my Active CAN KO the gusted target — _gust_can_ko gate)
+```
+
+**There is NO `return_threat` subtraction term.** The coverage review's shorthand
+`gust value = KO_prizes + tempo_denied − return_threat` was the *design* description; the built code has the
+`KO_prizes` term (full) and the `tempo_denied` terms (the denial tie-breaks, all in prize-equivalents,
+capped < 1 prize so they never override a real prize gap) but **not** the `return_threat` — that is
+Scenario B (the bad-trade gust where a full-health attacker promotes back), which the coverage review says
+**has no corpus anchor and is unbuilt**. (My earlier "hasn't propagated" caveat was wrong: the code IS
+present on my base; the term simply was never built.)
+
+Two things this settles for the unification:
+
+1. **The currency is ONE prize scale, not two loose terms.** The gust already expresses the tempo/denial
+   half as **prize-equivalents** (sub-prize tie-breaks), not as a separate turns count. So ruling 1's
+   "two-term sum" is, in practice, `prize_advance + survival_shift→prize-equivalents`, and ruling 5's
+   phase-scaler is exactly the converter (`survival_shift × phase_scale` yields prize-equivalents). The
+   merged gust is the codebase VOTING for this denomination — the unified marginal denominates in prizes,
+   and every tempo/denial sub-term is capped < 1 prize unless it is a real prize (KO / wincon-line).
+2. **`return_threat` / decline-a-prize is genuinely NET-NEW — it belongs to S5 (ruling 6), not S3/S4.**
+   The merged gust is a *KO-target ranker* (which KO-able body to drag), not a *whether-to-gust-when-the-
+   trade-is-bad* read. Folding gust into the assignment (S3/S4) is a behavior-preserving lift of the SUM
+   above; the `− return_threat` bad-trade is added later, once, as the shared decline-a-prize gate (S5),
+   for gust AND snipe AND forgo-KO at the same time — which is precisely the unification's payoff (one gate,
+   not a gust-private term).
+
+**Build consequence:** the gust instrument's marginal in the S3 slot family is the merged SUM above, lifted
+from `_gust_target_tactical` into the shared assignment as prize-equivalents; snipe and deny fold to match
+this prize denomination. `_gust_target_tactical` becomes a consumer of its own slice (ADR-0065 "doctrine
+stays the decider, reads the shared backend") — behavior-preserving, benched on the gust corpus frames
+(`86089120-14`, `85163079-30`, `85785067-41`, `85164131-22`).
 
 ## Open questions / risks
 
