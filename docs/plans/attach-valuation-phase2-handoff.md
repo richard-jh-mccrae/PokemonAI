@@ -109,3 +109,33 @@ From the grill spec's "hypothesis" section, verified against the shipped `baseli
 bot's pick, contradicting its own rationale ("add a second energy to the ACTIVE Mega Starmie …
 Nebula Beam in two turns"). Re-tagged `[6]→[1]` (an active index) with a disambiguated label, user-
 confirmed. Watch for similar redundant-index mistags when authoring the `attach_sweep` acceptance set.
+
+## Grilled this session — `85786096-70` (a trap frame: OUT of the attach oracle's scope)
+
+Flagged for grilling; classified and recorded here (NOT added to `test_attach_shadow.py`'s `_CORPUS`
+as a pick/abstain). `dragapult_ex`, category **`slow_setup`** (not `misattachment`): `chosen=[1]`
+**Play Boss's Orders** → `correct=[2]` **Play Crispin**. Every option is `_PLAY` (type 7) in MAIN
+context — there is NO `_ATTACH` option, so the shadow correctly **returns `None`** (verified via
+`_build_pilot('dragapult_ex').explain(obs)`). Card facts at source: Crispin (SCR 133) = *search 2
+Basic Energy of different types, keep 1, **attach the other to 1 of your Pokémon**, shuffle*; Boss's
+Orders (PAL 172) = gust. Three rulings fall out:
+
+- **Not an attach-oracle frame — a "which Supporter" (gust vs energy-accel) decision.** Adding it to
+  `_CORPUS` as a pick/abstain would be a category error; the oracle has nothing to price at this
+  select.
+- **The real defect is gust-vs-setup PRIORITY, not attach valuation.** Crispin (1198) is already
+  correctly tagged `energy_accel`/`accel_source` (dragapult "primary un-gated accel"), so
+  `use-acceleration` (+25) endorses it — yet the gust doctrine still out-scored fixing our own
+  energy. That root cause lives OUTSIDE `baseline_energy.py`; grilling it through the attach lens
+  chases the wrong system.
+- **The oracle's real fire is one step DOWNSTREAM.** Crispin's baked-in "attach the other to 1 of
+  your Pokémon" raises a follow-on target select where the oracle SHOULD price the active Dragapult
+  first (it needs energy to attack), then the {P} onto benched Drakloak for the Phantom Dive line
+  (concentrate/line-build, Rulings 1/5). This frame is a doorway to an attach, not the attach.
+
+**Use it as a SILENCE pin** (a real committed board proving the shadow stays silent on a Supporter
+select) and as the worked example for the `attach_sweep` **eligibility filter** (§"How to rank the
+fold order" step 1): replay only frames where the shadow FIRES — never ingest energy-adjacent
+`_PLAY` frames by category/keyword, or the sweep will report a phantom "disagreement" (the oracle
+can't rank the correct Crispin option) and send someone hunting a non-existent attach bug. Same
+hazard class as the redundant-index mistag above.
