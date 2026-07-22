@@ -106,10 +106,15 @@ cell as a swap *candidate* to confirm against the sweep — never as settled fac
 
 ## Open refinements (not blockers — future increments, each its own red→green)
 
-- **Ruling 2a refill-discount (deeper).** The anchor `83664340-45` passes via `max(this_turn, build)`
-  (the doomed Active's this-turn attack beats the survivor's build). The fuller ruling — discount the
-  SURVIVOR's attach-need by `(1 − refill_odds)` — isn't separately modeled; a frame where the
-  survivor's this-turn value is comparable would need it.
+- **Ruling 2a refill-discount — a KNOWN CORRECTNESS GAP, not a refinement (no repro frame yet).**
+  The `(1 − refill_odds)` discount on the SURVIVOR's attach-need is entirely UNIMPLEMENTED — the
+  oracle has no refill-odds term at all. Every corpus frame that touches Ruling 2a is nonetheless
+  decided correctly by the simpler `max(this_turn, build)` (on the anchor `83664340-45` the doomed
+  60-HP Active's this-turn attack (~120) dominates the fresh bench Mega's small convex build (~23),
+  so the tie never reaches the refill logic). It becomes wrong only on a frame where the survivor
+  ALSO has a comparable this-turn attack — and we have NO such frame, so it CANNOT become an xfail
+  target today. File it as an xfail the moment live telemetry (the item-2 disagreement channel)
+  surfaces a board that turns on it; until then it stays prose.
 - **Accel-routing: expected vs floor.** The shadow uses expected routing (`recoverN` capped by
   recipient need); the live decider's `_recover_units` floors by the prize-paranoid deck-fuel bound.
   Decide at swap time which currency the LIVE decider uses (likely keep the sound floor for the

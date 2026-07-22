@@ -281,3 +281,15 @@ def test_corpus_shadow_agrees_with_correct(ep, fr, request):
             f"{ep}-{fr}: eq_pick target {(opt.get('inPlayArea'), opt.get('inPlayIndex'))} != {expectation[1:]}"
     else:
         assert s["eq_pick"] in correct, f"{ep}-{fr}: eq_pick={s['eq_pick']} not in correct={correct}"
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0013")
+def test_corpus_shadow_silent_on_a_supporter_selection_frame():
+    # 85786096-70 (dragapult_ex, slow_setup): the correct play is "Play Crispin" over "Play Boss's
+    # Orders" — a WHICH-SUPPORTER decision. Every option is _PLAY (type 7); there is NO _ATTACH
+    # option, so the energy-attach oracle prices nothing and must stay SILENT. A committed-board
+    # guard that the fires-only eligibility filter (the attach_sweep probe) correctly EXCLUDES an
+    # energy-adjacent _PLAY frame — kept out of _CORPUS, which asserts the shadow FIRES.
+    rec = _frame("85786096", 70)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec["obs"])
+    assert dec.attach_shadow is None
