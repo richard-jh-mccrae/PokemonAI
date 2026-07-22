@@ -337,35 +337,57 @@ class CombatMath:
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
                            charged: dict | None = None, evo_min_energy: int = 0,
                            context: dict | None = None) -> int:
-        """Worst Weakness/Resistance-adjusted damage the opponent's affordable attackers among
-        ``opp_bodies`` could deal to ``my_body`` NEXT TURN — the **Incoming that counts one
-        development step** (ADR-0064): each body contributes its CURRENT form AND one reachable
-        EVOLUTION hop (promote → evolve → attach → attack, legal in one turn per rules.md §4). The
-        generalisation of ``_incoming_worst`` that the leaf's survival term and the promote
-        stand-down share. 0 when unknown.
+        """The **Incoming that counts ONE development step** (ADR-0064): worst W/R-adjusted damage
+        the opponent's affordable attackers among ``opp_bodies`` could deal ``my_body`` NEXT TURN —
+        each body's CURRENT form plus its reachable EVOLUTION forms (promote → evolve → attach →
+        attack, legal in one turn per rules.md §4), under one attach's Energy. The leaf survival term
+        and the promote stand-down share it.
 
-        ``forward_ids``: callable ``cardId -> iterable`` of the one-hop forward card ids to
-        consider — the AVAILABILITY gate (ADR-0064 Decision 4: pool-forward existence for the
-        threat read, matched-Read rep list for the safety read). None → ``forward_card_ids`` (the
-        pool-level index).
+        This is ``incoming(t=1)`` and DELEGATES to :meth:`incoming` — the one implementation, so the
+        one-step read stays byte-identical with the N-turn Threat-Clock curve by construction
+        (Threat-Clock unification S1; docs/plans/opponent-value-equation-unification.md). All
+        arguments (``forward_ids`` availability gate, ``charged`` energy policy, ``evo_min_energy``
+        bare-pre-evo guard, transient locks) are documented on :meth:`incoming`."""
+        return self.incoming(my_body, opp_bodies, 1, forward_ids=forward_ids, charged=charged,
+                             evo_min_energy=evo_min_energy, context=context)
 
-        ``charged``: the ENERGY policy (ADR-0064 Decision 1).
-        - ``None`` → **ceiling** (worst-case, the hidden-burst-safe survival read): a form
-          contributes its biggest attack once it can pay its CHEAPEST under attached + one attach;
-          the bigger attack's affordability is NOT charged. Mirrors the historical ``_incoming_worst``.
+    def incoming(self, my_body: dict | None, opp_bodies, t: int = 1, *, forward_ids=None,
+                 charged: dict | None = None, evo_min_energy: int = 0,
+                 context: dict | None = None) -> int:
+        """Worst W/R-adjusted damage the opponent's affordable attackers among ``opp_bodies`` could
+        deal ``my_body`` at future turn ``t`` — the **Threat-Clock curve**, the N-turn generalisation
+        of ``reachable_incoming`` (ADR-0064 was ``t=1``; S1 of
+        docs/plans/opponent-value-equation-unification.md). 0 when unknown.
+
+        Over ``t`` turns the opponent has had ``t`` attach-turns, so ``t`` moves ONLY the ENERGY
+        budget — the evolution reach is already MAXIMAL at ``t=1`` (``forward_card_ids`` is
+        all-descendants, existence-gated: every forward form is considered under the current energy
+        budget, per ADR-0064's availability gate). Card-effect acceleration and discard-recur fuel
+        are NOT modelled here (S2 layers them onto the budget); this is the visible-clock read.
+        ``t`` is clamped to ``>= 1``; ``t=1`` reproduces ``reachable_incoming`` exactly.
+
+        ``forward_ids``: callable ``cardId -> iterable`` of the forward card ids to consider — the
+        AVAILABILITY gate (ADR-0064 Decision 4: pool-forward existence for the threat read,
+        matched-Read rep list for the safety read). None → ``forward_card_ids`` (the pool-level index).
+
+        ``charged``: the ENERGY policy (ADR-0064 Decision 1) — the per-consumer conservatism the
+        unification keeps as a PARAMETER (survival passes the ceiling, deny/board-clock the slow read).
+        - ``None`` → **ceiling** (worst-case, the hidden-burst-safe survival read): a form contributes
+          its biggest attack once it can pay its CHEAPEST under ``attached + t`` attaches; the bigger
+          attack's affordability is NOT charged. Mirrors the historical ``_incoming_worst`` at ``t=1``.
         - ``{"base_attach": int, "burst_on_evo": int}`` → **charged**: per-attack typed-cost
-          affordability under attached + ``base_attach`` manual attaches (each wild — pays any one
+          affordability under ``attached + t*base_attach`` manual attaches (each wild — pays any one
           typed slot) + ``burst_on_evo`` colourless-only units available ONLY when the attacking form
           is an Evolution (a matched-Read burst-Energy allowance: Ignition provides {C} on a Basic but
           {C}{C}{C} on an Evolution, so the +2 lands only on an evolved form; it pays colourless slots
-          only, never a typed {F}{F}). The Read-budgeted read.
+          only, never a typed {F}{F}). The burst is a single-card allowance — flat in ``t``, not scaled.
 
         ``evo_min_energy``: the minimum Energy an opponent body must ALREADY carry for its forward
-        evolution hop to count (default 0 — credit every pre-evolution). A catastrophe-grade consumer
+        evolution forms to count (default 0 — credit every pre-evolution). A catastrophe-grade consumer
         (the ``-KO_SCORE`` loss rung) passes 1: a bare 0-Energy pre-evolution is not a credible
-        next-turn game-ender (it needs the evolution IN HAND plus a from-scratch attach), and crediting
-        it manufactures phantom doom on turn 2 (the bounded-pessimism guard, ADR-0064). The current
-        form is always counted regardless.
+        game-ender (it needs the evolution IN HAND plus a from-scratch attach), and crediting it
+        manufactures phantom doom (the bounded-pessimism guard, ADR-0064). The current form is always
+        counted regardless.
 
         Transient locks (ADR-0033) are honoured on a body's CURRENT form only — a self-lock skips it
         entirely, a same-attack lock excludes that attack, a self-bonus raises the hit; a forward
@@ -374,6 +396,7 @@ class CombatMath:
         my_hp = (my_body or {}).get("hp", 0)
         if not (self.stats and my_hp):
             return 0
+        turns = max(1, int(t))
         fwd = forward_ids if forward_ids is not None else self.forward_card_ids
         worst = 0
         for body in opp_bodies:
@@ -385,39 +408,43 @@ class CombatMath:
             attached = len(body.get("energies") or [])
             worst = max(worst, self._reach_form_damage(
                 my_body, body.get("id"), body, attached, charged, context,
-                exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0)))
+                exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0), attaches=turns))
             if attached < evo_min_energy:
                 continue                              # bare pre-evo — not a credible evolving threat here
-            for fid in (fwd(body.get("id")) or ()):   # one evolution hop — carries the attached Energy
+            for fid in (fwd(body.get("id")) or ()):   # forward forms — carry the attached Energy
                 evo = {"id": fid, "energies": body.get("energies") or []}
                 worst = max(worst, self._reach_form_damage(
-                    my_body, fid, evo, attached, charged, context, exclude=None, bonus=0))
+                    my_body, fid, evo, attached, charged, context, exclude=None, bonus=0,
+                    attaches=turns))
         return worst
 
     def _reach_form_damage(self, my_body, form_id, form_body, attached, charged, context, *,
-                           exclude, bonus) -> int:
-        """The worst damage ONE attacker form (current or evolved) deals ``my_body`` next turn under
-        the ``charged`` energy policy (see :meth:`reachable_incoming`). 0 when the form resolves no
-        stat, cannot afford to attack, or deals nothing."""
+                           exclude, bonus, attaches: int = 1) -> int:
+        """The worst damage ONE attacker form (current or evolved) deals ``my_body`` under the
+        ``charged`` energy policy (see :meth:`incoming`), given ``attaches`` manual attach-turns of
+        Energy available (1 = the ADR-0064 one-step read; the Threat-Clock curve passes ``t``). 0
+        when the form resolves no stat, cannot afford to attack, or deals nothing."""
         stat = self._card_stat(form_id)
         if not stat:
             return 0
         if charged is None:                           # ceiling: pay cheapest, credit biggest
-            if not stat.can_pay_cheapest(attached + 1):
+            if not stat.can_pay_cheapest(attached + attaches):
                 return 0
             dmg = self.predicted_max_damage(stat, my_body, exclude_attack=exclude, context=context)
             return int(dmg) + bonus if dmg else 0
         base = charged.get("base_attach", 1)
         # Ignition-class colourless burst lands its full {C}{C}{C} only on an Evolution (rules.md /
-        # card text) — a Basic form gets the plain single attach, no burst.
+        # card text) — a Basic form gets the plain single attach, no burst. A single-card allowance,
+        # so it is flat in the turn count, never scaled by ``attaches``.
         burst = charged.get("burst_on_evo", 0) if getattr(stat, "evolvesFrom", None) else 0
+        wild = attaches * base
         best = 0
         for aid in (stat.attacks or ()):
             if aid == exclude:
                 continue
-            if self.attack_cost(aid) > attached + base + burst:
+            if self.attack_cost(aid) > attached + wild + burst:
                 continue                              # count-unaffordable even with the burst allowance
-            if not self.attack_type_payable(aid, form_body, wild_units=base):
+            if not self.attack_type_payable(aid, form_body, wild_units=wild):
                 continue                              # a typed slot can't be paid (burst is colourless-only)
             best = max(best, int(self.predicted_damage(form_id, aid, my_body,
                                                        bound="max", context=context)))

@@ -191,6 +191,22 @@ unbisectable — T5/T6 precedent).
   param, memoized). Re-express `active_doomed` and `_opp_turns_to_ready` as queries behind a shadow (emit
   old + new, assert **byte-identical on the corpus at t=1**). Compute-only; zero decisions change. Bench:
   the 18 doom call sites + the discard corpus 12/12 + full suite; fresh Pilot per replay.
+  - **S1a — the pure `incoming(t, policy)` primitive: BUILT (2026-07-22, TDD).** `CombatMath.incoming`
+    (`src/common/strategy/combat.py`) — the N-turn curve; `reachable_incoming` now DELEGATES to
+    `incoming(t=1)` (one implementation, so t=1 is byte-identical **by construction**). Key finding that
+    shaped it: `forward_card_ids` is already **all-descendants** (existence-gated), so the evolution reach
+    is maximal at t=1 and **t moves ONLY the energy budget** (`attached + t` ceiling / `attached +
+    t·base_attach + burst` charged) — a minimal generalization, not a multi-hop rewrite. `_reach_form_damage`
+    gained an `attaches` param (default 1). Tests `tests/strategy/test_incoming_curve.py`
+    (`REQ-CURVE-0001..0005`: t=1 parity, monotonic-in-t, the current-form + evolved-nuke energy clocks, t
+    clamp). **Full core suite green (2969 passed / 1 skipped / 3 xfailed)** — the existing
+    `test_reachable_incoming.py` (9 pins) unchanged. Memoization DEFERRED to S1b (only a multi-t caller
+    pays for the curve; the t=1 read is exactly as cheap as before).
+  - **S1b — re-express `active_doomed` + `_opp_turns_to_ready` as curve queries behind a shadow: NEXT.**
+    The behavior-neutral wiring: emit both old + new beside each decision, assert byte-identical at t=1 on
+    the corpus, then memoize the curve per decision. NOTE `active_doomed` is combat.py machinery on the
+    19-test blast radius (ADR-0064 §2 kept it worst-case as a named follow-up) — shadow-first, its own
+    fixture re-baseline.
 - **S2 — the N-turn + discard-fuel net-new behavior.** Thread `discard_energy_recur` into the accel policy
   (the first net-new read once the shadow is clean). Fixes deny-vs-recycler and arms the threshold-race
   input. Still no decider swap — telemetry only.
