@@ -1,0 +1,328 @@
+{
+ "obs": {
+  "current": {
+   "energyAttached": true,
+   "firstPlayer": 0,
+   "looking": null,
+   "players": [
+    {
+     "active": [
+      {
+       "appearThisTurn": false,
+       "energies": [
+        7,
+        2
+       ],
+       "energyCards": [
+        {
+         "id": 7,
+         "playerIndex": 0,
+         "serial": 61
+        },
+        {
+         "id": 2,
+         "playerIndex": 0,
+         "serial": 60
+        }
+       ],
+       "hp": 30,
+       "id": 235,
+       "maxHp": 30,
+       "playerIndex": 0,
+       "preEvolution": [],
+       "serial": 15,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 120,
+       "id": 791,
+       "maxHp": 120,
+       "playerIndex": 0,
+       "preEvolution": [],
+       "serial": 25,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 43,
+     "discard": [
+      {
+       "id": 1097,
+       "playerIndex": 0,
+       "serial": 50
+      },
+      {
+       "id": 1198,
+       "playerIndex": 0,
+       "serial": 33
+      }
+     ],
+     "hand": null,
+     "handCount": 4,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    {
+     "active": [
+      {
+       "appearThisTurn": true,
+       "energies": [
+        5,
+        2
+       ],
+       "energyCards": [
+        {
+         "id": 5,
+         "playerIndex": 1,
+         "serial": 66
+        },
+        {
+         "id": 2,
+         "playerIndex": 1,
+         "serial": 65
+        }
+       ],
+       "hp": 90,
+       "id": 120,
+       "maxHp": 90,
+       "playerIndex": 1,
+       "preEvolution": [
+        {
+         "id": 119,
+         "playerIndex": 1,
+         "serial": 74
+        }
+       ],
+       "serial": 81,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 119,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 77,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 60,
+       "id": 119,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 75,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 30,
+       "id": 235,
+       "maxHp": 30,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 86,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 305,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 87,
+       "tools": []
+      },
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 119,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 76,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 32,
+     "discard": [
+      {
+       "id": 1086,
+       "playerIndex": 1,
+       "serial": 93
+      },
+      {
+       "id": 1086,
+       "playerIndex": 1,
+       "serial": 90
+      },
+      {
+       "id": 1227,
+       "playerIndex": 1,
+       "serial": 119
+      },
+      {
+       "id": 1152,
+       "playerIndex": 1,
+       "serial": 105
+      },
+      {
+       "id": 1198,
+       "playerIndex": 1,
+       "serial": 113
+      },
+      {
+       "id": 2,
+       "playerIndex": 1,
+       "serial": 64
+      }
+     ],
+     "hand": [
+      {
+       "id": 1227,
+       "playerIndex": 1,
+       "serial": 118
+      },
+      {
+       "id": 66,
+       "playerIndex": 1,
+       "serial": 71
+      },
+      {
+       "id": 1198,
+       "playerIndex": 1,
+       "serial": 112
+      },
+      {
+       "id": 1182,
+       "playerIndex": 1,
+       "serial": 109
+      },
+      {
+       "id": 1227,
+       "playerIndex": 1,
+       "serial": 117
+      },
+      {
+       "id": 5,
+       "playerIndex": 1,
+       "serial": 67
+      },
+      {
+       "id": 5,
+       "playerIndex": 1,
+       "serial": 68
+      }
+     ],
+     "handCount": 7,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    }
+   ],
+   "result": -1,
+   "retreated": true,
+   "stadium": [
+    {
+     "id": 1250,
+     "playerIndex": 0,
+     "serial": 52
+    }
+   ],
+   "stadiumPlayed": false,
+   "supporterPlayed": true,
+   "turn": 4,
+   "turnActionCount": 12,
+   "yourIndex": 1
+  },
+  "logs": [
+   {
+    "cardIdActive": 119,
+    "cardIdBench": 120,
+    "playerIndex": 1,
+    "serialActive": 75,
+    "serialBench": 81,
+    "type": 8
+   }
+  ],
+  "remainingOverageTime": 596.8929809999997,
+  "select": {
+   "context": 0,
+   "contextCard": null,
+   "deck": null,
+   "effect": null,
+   "maxCount": 1,
+   "minCount": 1,
+   "option": [
+    {
+     "area": 2,
+     "inPlayArea": 5,
+     "inPlayIndex": 3,
+     "index": 1,
+     "type": 9
+    },
+    {
+     "attackId": 152,
+     "type": 13
+    },
+    {
+     "type": 14
+    }
+   ],
+   "remainDamageCounter": 0,
+   "remainEnergyCost": 0,
+   "type": 0
+  }
+ },
+ "chosen": [
+  1
+ ],
+ "correct": [
+  0
+ ],
+ "chosen_label": "Attack with Dragon Headbutt",
+ "correct_label": "Evolve Dudunsparce → Dunsparce (bench 4 · 70/70)",
+ "note": "86090164 f40: evolve Dunsparce->Dudunsparce (Run Away Draw, one-shot income-ON) before a non-lethal KO of a 30-HP Budew. Equation income-on term. correct=[0]."
+}

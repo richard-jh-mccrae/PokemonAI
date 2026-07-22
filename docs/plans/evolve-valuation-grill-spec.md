@@ -66,14 +66,25 @@ enabler; `hold-evolution` = the income-vs-deploy temporal comparison; `dont-rush
 - **`card_worth`** (ROLE/TAG tiers) for the ability's worth and the result's worth.
 - **`_resolve_needs`** (pilot) — the assignment engine the evolve delta plugs into.
 
-## Round 0 — the measurement pass (DO THIS FIRST)
+## Round 0 — the measurement pass (DONE 2026-07-15)
 
-Replay the evolving cohort through the real `explain()` (FRESH pilot per replay), join `reviewed.json`.
-Classify each: already-passing (the covered anchors — f82, f31, f29 — are regression pins) /
-income-on (②, 86090164 f40: Dunsparce→Dudunsparce) / income-off-hold (①, 86091435 f35:
-Drakloak→Dragapult on wrong colours) / exposure-opener (f2, 86091728 f2: open Munkidori over Dreepy) /
-which-body (f82) / refuted (86091728 f12 — first-turn evolve illegal, rules.md L97). Build the corpus
-family (pins + xfail) in the hyperclosure-corpus style. Only the legs the survivors flag get converged.
+Measured through the real `explain()` (FRESH pilot per replay); corpus family committed at
+`tests/strategy/test_evolve_valuation_corpus.py` (pins + `xfail(strict)` targets, hyperclosure style).
+Baseline:
+
+| correction | leg | result |
+|---|---|---|
+| f82 85785609-82 | which-body | **PIN** (pass) |
+| f31 85046350-31 | promote-preserve-the-line | **PIN** (pass) |
+| 83686860-29 | line-progress (advance over spread) | **PIN** (pass) |
+| f85 | concentrate on the started line | **PIN** (pass) |
+| 86090164-40 | income-ON (one-shot burst) | **TARGET** (xfail) |
+| 86091435-35 | income-OFF hold + typed + scoped doom | **TARGET** (xfail) |
+| 86091728-2 | exposure / opener (line-shape) | **TARGET** (xfail) |
+| 86091728-12 | first-turn evolve illegal (rules.md L97) | refuted (excluded) |
+
+4 pins, 3 targets — the equation's job is the 3 targets without regressing the 4 pins. Each target's
+`xfail(strict)` flips to a hard failure (XPASS) the moment the equation lands, forcing the mark's removal.
 
 ## Settled design (grill rulings, 2026-07-15)
 
