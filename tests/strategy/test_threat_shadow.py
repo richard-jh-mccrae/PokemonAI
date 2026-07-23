@@ -68,8 +68,14 @@ def test_threat_shadow_emits_the_agreement_bit_and_respects_the_midsim_guard():
     board = types.SimpleNamespace(active_doomed=True)
     sh = p._threat_shadow(obs, board)
     assert sh is not None
-    assert set(sh) >= {"doom_old", "doom_curve", "doom_incoming", "my_hp", "agree"}
-    assert sh["doom_old"] is True
+    assert set(sh) >= {"doom_old", "doom_curve", "doom_incoming", "my_hp", "agree",
+                       "doom_charged", "matched", "decided", "doom_final"}
+    # doom_old is the worst-case oracle COMPUTED FRESH (post-swap the Board bit is the DECIDED
+    # value, exposed separately as doom_final — which mirrors what was fed in here).
+    ma = obs["current"]["players"][0]["active"][0]
+    opp = obs["current"]["players"][1]
+    assert sh["doom_old"] == p.combat.active_doomed(ma, opp["active"][0], opp)
+    assert sh["doom_final"] is True
     assert sh["agree"] == (sh["doom_old"] == sh["doom_curve"])
     # mid-sim → sparse (no shadow work during rollouts)
     p._planning = True

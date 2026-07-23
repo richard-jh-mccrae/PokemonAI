@@ -104,3 +104,91 @@ minutes). `Pilot._threat_shadow` emits `{doom_old, doom_curve, doom_incoming, my
 - Shadow-first, fresh Pilot per replay, hold the suite + the discard corpus 12/12 (the standing bars).
 - The swap is S1's tail only; the deny/snipe/gust legs of the Opponent Value Equation (S3b, Option B) are
   a separate line and do not block on this.
+
+---
+
+# RULED (2026-07-23) — the grill's verdict, frame-by-frame, and the shipped swap
+
+Sweep regenerated first (`--doom`): same 259/274, same 15, all incumbent-doomed / curve-safe,
+`incoming = 0`. Every card fact below was verified at source (`data/EN_Card_Data.csv`,
+`docs/rules.md`, `src/common/card_functions.json`, the frames' own `obs`) — several of the
+handoff table's starting guesses did not survive contact.
+
+## What the source-verification changed
+
+1. **The pool has GENERIC supporter accel.** Crispin (1198) and Waitress (1235) are
+   `energy_accel`-tagged Supporters ANY deck can run: each beats the curve's `attached + 1`
+   affordability gate by exactly one (rules.md §3: 1 manual attach + 1 Supporter per turn).
+   The 85058574 (Munkidori) opponent had a **Crispin visibly in its discard** — not hypothetical.
+2. **Weakness ×2 is live in one frame.** Riolu (677) is {P}-weak; Munkidori's Mind Bend
+   ({P}●, 60) doubles to **120 ≥ 70** once affordable. The "safe" curve read there was wrong.
+3. **Ignition's burst is Evolution-gated and colourless-only** ({C} on a Basic, {C}{C}{C} on an
+   Evolution) — already modelled by `incoming(charged=...)`'s `burst_on_evo`. Neo Upper Energy
+   (typed 2-unit on a Stage 2) and Team Rocket's Energy (2-unit on TR bodies) are the other
+   multi-unit specials; neither touches these 15.
+4. **Damage-boost surface is bounded**: vs a non-ex Active only Kieran (+30, a Supporter — it
+   COMPETES with Crispin for the one-Supporter slot); Maximum Belt (+50) / Brave Bangle (+30)
+   only vs an ex.
+5. **Hand size caps the burst.** The Terapagos frames' opponent held 2 cards: Area Zero + bench-out
+   + Crispin needs more cards than the hand had; visible bench (3) caps Unified Beatdown at 90.
+6. **The handoff's "Archaludon at 1e genuinely can't reach" claim was WRONG** — manual + Crispin
+   = 3 {M} reaches Metal Defender 220. Only the 0-Energy frames are genuinely out of reach.
+
+## Per-frame rulings
+
+| frame | opp Active | can it reach my Active next turn? (worst case, at source) | ruling |
+|---|---|---|---|
+| 81904451-17 | Ho-Oh 0e | No: Flap ({R}●, 50) affordable via Crispin but 50 < 60; Shining Blaze needs 3; no R-accel body on their junk bench; no generic non-ex damage tool | **B** |
+| 82749168-21 | Terapagos ex 0e | No: ●● affordable via Crispin, but 30× visible bench (3) = 90 < 160; hand=2 caps Area-Zero/bench-out; Crown Opal needs 3 typed | **B** |
+| 82749168-29 | Terapagos ex 0e | No: same, hand=2, bench 3 → 90 < 160 | **B** |
+| 81904064-44 | M-Abomasnow ex 0e | YES: manual W + Crispin W → Hammer-lanche ({W}{W}, 100× top-6 W density, discard already 3W, ceiling 600 ≥ 330); Maximum Belt +50 vs my ex | **C** |
+| 85163634-17 | Latias ex 0e | No: Eon Blade needs 3, max 2 attaches; hand=1, no energy in discard, no P-accel body benched — and the correction is fetch-timing anyway | **A** |
+| 85058574-69 | Munkidori 0e | YES: manual + Crispin (their deck PROVABLY runs it) → Mind Bend 60 ×2 weakness = 120 ≥ 70 | **A/C** (correction incidental; relax would be WRONG) |
+| 85058574-71 | Munkidori 0e | YES: same | **A/C** |
+| 86091435-13 | Duraludon 0e | Borderline: Confront 50 < 70, but the forward non-ex Archaludon's Iron Blaster ({M}{M}●, 160) is charged-affordable via burst; correction's `correct` is Retreat — doom SUPPORTS it | **A** (keep doom) |
+| 86091435-20 | Duraludon 0e | Same; human wants retreat-into-Budew — doom pressure aligns | **A/B** (keep doom) |
+| 86091435-30 | Archaludon ex 0e | No: Metal Defender needs 3 typed {M}, max manual+Crispin=2, burst is colourless-only, opp discard EMPTY (Assemble Alloy dry) | **B** |
+| 86091435-35 | Archaludon ex 1e | YES: 1 + manual + Crispin = 3 → Metal Defender 220 | **C** (handoff's arithmetic was wrong) |
+| 86091435-60/62/68/69 | Archaludon ex 1e | YES: same (+ Relicanth's Memory Dive adds Duralubeam 130); unmatched Read at these turns anyway | **A** (incidental; stays worst-case) |
+
+## The swap decision: (b) matched-Read-gated — with two grill-found corrections to the plan
+
+**Shipped as `Pilot.doom_matched_relax` (PROFILE ON, kill-switched), RELAX-ONLY:**
+`active_doomed = worst_case AND (matched ∧ no-recur-fuel → charged ≥ my_hp)`.
+
+1. **The doom consumer's charged budget is `_DOOM_CHARGED = {base_attach: 2, burst_on_evo: 2}` —
+   NOT `_incoming_budget`'s `base_attach: 1`.** The sweep proved base_attach=1 relaxes ALL matched
+   frames including Abomasnow (600) and the ×2-weak Munkidori (120): the generic-supporter attach
+   (finding 1) must be budgeted for a catastrophe-grade boolean. Under base_attach=2 the corpus
+   splits exactly on the rulings: relax {82749168-21, -29, 86091435-30}, keep-doom every C.
+2. **Relax-only conjunction (found by the suite, not the grill).** The charged read's wilds+burst
+   credit forward forms the incumbent's `attached+1` forward gate does not (1-Energy Makuhita →
+   Wild Press 210 ≥ 70) — swapping outright MANUFACTURED doom and regressed the 82525101-14
+   Ultra-Ball-discard pin (pitched Ignition to hoard rescue cards: the ADR-0064 §3 play-scared
+   phantom). The charged curve may only CLEAR a worst-case cry, never add one.
+3. **Recur-fuel guard.** A `discard_energy_recur` line (Assemble Alloy) with Basic Energy visibly
+   in their discard refuels outside the attach budget → the relax stands down (synthetic pin).
+
+**Live corpus delta (fresh Pilot per replay): exactly 5 doom flips, 0 regressions.** The three
+ruled-B frames relax; two bonus frames (85045840-8/-10, turn-2 0-Energy Kyogre behind the matched
+kyogre_mega_abomasnow Brief — the Brief itself says "dead early") relax, and **-10's decision now
+matches the human's correction** (attach to Dreepy instead of wasting Boss's Orders). Unmatched
+frames (Ho-Oh, Latias, the turn-10 Archaludon run) are byte-identical worst-case.
+
+**Holds:** full suite 3256 passed; discard corpus **12/12**; pins in
+`tests/strategy/test_doom_matched_relax.py` (3 relax + 3 keep-doom + unmatched byte-identical +
+kill-switch-off byte-identical + recur-guard stand-down), fixtures under
+`tests/fixtures/corrections/*doom*`.
+
+## Standing residuals (flagged, not built)
+
+- **Bench-scaling burst under a big hand**: the charged read prices Unified Beatdown off the
+  VISIBLE bench; a Terapagos holding Area Zero + a wide hand could exceed it (the omitted
+  hand-size-class term). No matched Brief covers a Terapagos-led list today, and the S1b shadow
+  keeps reporting — a future Terapagos Brief should carry the caution.
+- **On-board accel abilities** (Emboar / Iono's Bellibolt / Metang class) are not in the charged
+  budget; none appear in the briefed archetypes' lists. A Brief-derived budget scan (the ADR-0064
+  "derived by scan" line) is the proper home if one arrives.
+- **`_incoming_budget` (`base_attach: 1`) itself** now looks optimistic-by-one for its OWN
+  consumers (the ±50 survival nudge, the promote stand-down) given finding 1 — those are
+  sub-catastrophe and fail-closed-gated, so left as-is here; worth its own sweep.

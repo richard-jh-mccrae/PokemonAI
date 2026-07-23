@@ -1,5 +1,14 @@
 # TODO — make the Incoming / `active_doomed` estimate Energy-affordability-aware
 
+> ✅ **The `active_doomed` follow-up landed 2026-07-23** (the doom-shadow grill —
+> [`doom-shadow-grill-handoff.md`](../plans/doom-shadow-grill-handoff.md) RULED appendix): a
+> **RELAX-ONLY matched-Read gate** (`Pilot.doom_matched_relax`, PROFILE ON, kill-switched). The
+> boolean STAYS worst-case by default; behind a γ-matched Brief with no discard-recur fuel the
+> charged curve (`Pilot._DOOM_CHARGED`, `base_attach: 2` — the +1 budgets the pool-generic
+> Crispin/Waitress supporter attach) may CLEAR a worst-case cry, never add one. planner_6858 stays
+> honored twice over: unmatched → worst-case, and Nebula Beam's ●●● stays charged-reachable via the
+> Ignition burst. Pinned by `tests/strategy/test_doom_matched_relax.py`.
+
 > 🔁 **AMENDED by [ADR-0064](../adr/0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)
 > (2026-07-16).** The survival read behind `_incoming_worst`/`_survives_after_ko` becomes
 > **charged-with-archetype-budget** (per-attack, typed-cost-shape affordability; energy budget =

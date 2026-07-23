@@ -6,6 +6,9 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
   * DOOM     (S1b, `threat_shadow`) — incumbent `active_doomed` vs the `incoming(t=1)`-curve
     re-expression + the agree bit. Disagreements are the adjudication input for the survival swap;
     the split names WHICH direction (curve less/more pessimistic than the worst-case incumbent).
+    Post-swap (`doom_matched_relax`, 2026-07-23) the report adds the CHARGED read (`chg`), whether
+    the matched relax was consulted (`dec`), and the LIVE decided bit (`final`) — rows print on an
+    old-vs-curve disagreement OR a final-vs-worst-case flip (the relax-only behavior changes).
   * RECUR    (S2, `recur_shadow`) — per opponent refueler body, how much the discard fuel moves the
     clock (turns_to_afford) and the incoming to my Active.
   * TARGET   (S3a, `opp_target_shadow`) — the two-term removal value per opponent body (prize +
@@ -55,8 +58,9 @@ def _decide(tune, rec):
 
 
 def sweep_doom(tune, frames) -> None:
-    print(f"{'id':<16} {'agent':<14} {'old':<6} {'curve':<6} {'inc':>5} {'hp':>5} agree")
-    total = agree = old_only = new_only = 0
+    print(f"{'id':<16} {'agent':<14} {'old':<6} {'curve':<6} {'inc':>5} {'hp':>5} "
+          f"{'chg':>5} {'dec':<5} {'final':<6} agree")
+    total = agree = old_only = new_only = decided = flipped = 0
     for (ep, fr), rec in frames:
         d = _decide(tune, rec)
         s = getattr(d, "threat_shadow", None) if not isinstance(d, Exception) else None
@@ -66,12 +70,20 @@ def sweep_doom(tune, frames) -> None:
         agree += s["agree"]
         old_only += s["doom_old"] and not s["doom_curve"]
         new_only += s["doom_curve"] and not s["doom_old"]
-        if not s["agree"]:
+        decided += bool(s.get("decided"))
+        flip = s.get("doom_final", s["doom_old"]) != s["doom_old"]
+        flipped += flip
+        if not s["agree"] or flip:
+            chg = s.get("doom_charged")
             print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} {str(s['doom_old']):<6} "
-                  f"{str(s['doom_curve']):<6} {s['doom_incoming']:>5} {s['my_hp']:>5} DISAGREE")
+                  f"{str(s['doom_curve']):<6} {s['doom_incoming']:>5} {s['my_hp']:>5} "
+                  f"{'-' if chg is None else chg:>5} {str(bool(s.get('decided'))):<5} "
+                  f"{str(s.get('doom_final', s['doom_old'])):<6} "
+                  f"{'AGREE' if s['agree'] else 'DISAGREE'}{' FLIP' if flip else ''}")
     print(f"\nDOOM: agree {agree}/{total}  |  disagree {total - agree} "
           f"(incumbent-doomed-only={old_only} [curve LESS pessimistic — affordability/hand-size gate], "
-          f"curve-doomed-only={new_only})\n")
+          f"curve-doomed-only={new_only})  |  matched-relax decided on {decided}, "
+          f"final flipped vs worst-case on {flipped}\n")
 
 
 def sweep_recur(tune, frames) -> None:

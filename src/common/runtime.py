@@ -111,6 +111,16 @@ PROFILE = {
                                     # double-count, whether-to-attach protection kept). Shadows only until
                                     # flipped; the flip is gated on a score_diff / win-rate bench that tunes
                                     # the scale (attach-valuation-phase2-handoff.md).
+    "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: behind a γ-matched Brief
+                                    # (and no discard-recur fuel) a worst-case `active_doomed` cry
+                                    # stands only if the CHARGED Threat-Clock curve confirms it
+                                    # (`_DOOM_CHARGED`: manual + one generic supporter-accel attach,
+                                    # Ignition burst on Evolutions). RELAX-ONLY — clears phantom doom,
+                                    # never adds one. Relaxes exactly the ruled-B disagreement frames
+                                    # (bare Terapagos / 0e Archaludon); every ruled-C frame
+                                    # (Hammer-lanche density, ×2-weak Mind Bend, 1e Metal Defender)
+                                    # stays doomed. Unmatched → byte-identical worst-case (ADR-0064
+                                    # §4: never relax on a guess)
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
