@@ -356,6 +356,26 @@ stays the decider, reads the shared backend") — behavior-preserving, benched o
 - No new magic-number / γ fudge (ADR-0065): every term is a derived tier, a derived odds, or a derived
   phase margin. A graded term REPLACES its guard family and re-audits it — never bolts on beside it.
 
+## Sweep results (2026-07-22, `tools/train/probes/threat_sweep.py` over `data/corrections`)
+
+All three S1b/S2/S3a shadows swept the real corrections corpus (274 replayable frames), deciding
+nothing — the adjudication evidence:
+
+- **DOOM (S1b `threat_shadow`): agree 259/274 (94.5%); 15 disagreements, ALL one direction** —
+  incumbent-doomed-only, the curve LESS pessimistic, every one with `incoming=0`. These are exactly the
+  two documented divergences (the current-form affordability gate + the omitted `hand_size_attacker`
+  forward counter): the curve refuses to cry doom when the opponent's Active provably can't afford an
+  attack next turn. **This 15-frame set is the survival-swap adjudication list** — each needs a
+  frame-by-frame ruling: is the curve right to relax (affordability), or must the worst-case incumbent
+  stay scared (hidden burst Energy — the ADR-0064/planner_6858 lesson)? Do NOT swap before that grill.
+- **RECUR (S2 `recur_shadow`): 43 refueler frames; the fuel moves the clock in 41 body-reads.**
+  Standout `86091435-119`: Archaludon ex (190) reads `incoming 0 → 220` and `turns_to_afford 2 → 1` once
+  the {M} discard fuel is counted — a body the plain curve calls harmless is a 220 threat with its
+  discard read. The threat-persistence / deny-vs-recycler signal, quantified.
+- **TARGET (S3a `opp_target_shadow`): the two-term marginal ranks sensibly** — a 3-prize Mega ex tops at
+  `3.0`, a 2-prize ex at `2.0`, and a 1-prize body whose removal buys 6–8 survival turns rises to `1.9`
+  (survival sub-prize-capped, never overriding a real prize gap; phase 0.3 neutral, 0.15–0.45 by race).
+
 ## Progress & next step
 
 **S1 landed (2026-07-22, all behavior-neutral, full core suite green ~2976):** S1a the `incoming(t, policy)`
@@ -366,8 +386,8 @@ byte-identical). The Threat Clock's two legs (damage curve + affordability clock
 `CombatMath`, policy-parameterized.
 
 **Next, in order:**
-1. **The S1b corpus sweep** — run the doom `threat_shadow` agree bit over the corrections corpus (needs the
-   gitignored `data/meta/`) to quantify the doom divergence; that adjudicates the survival swap (S1's tail).
+1. ~~**The S1b corpus sweep**~~ **DONE** (`threat_sweep.py`, above): DOOM 259/274, the 15-frame one-directional
+   disagreement set is the survival-swap adjudication list — grill it frame-by-frame BEFORE any swap.
 2. ~~**S2 — the discard-fuel read**~~ **DONE (shadow):** `discard_recur_fuel` + `recur_shadow`. Sweep it
    (gitignored corpus) to size the fuel's clock effect before any adoption; conservatism note in the S2 bullet.
 3. **S3 — the opponent-target slot family** (`needs.py`): snipe/gust/deny/promo-chip as slots on one
