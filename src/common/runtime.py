@@ -103,6 +103,14 @@ PROFILE = {
                                     # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off
                                     # submission. Kill-switch if its ladder value is weak. Needs the live
                                     # search token, so it no-ops (defers) on offline correction retests
+    "attach_value": False,          # attach marginal-fold armed-OFF 2026-07-22: the energy-attach oracle's
+                                    # `marginal` (`_attach_value`) scores each attach in place of the 8
+                                    # positive-endorsement rungs it shadows (`_ATTACH_VALUE_FOLDED`, all
+                                    # Round-0 measured-safe), calibrated by `_ATTACH_VALUE_SCALE`. Negative
+                                    # guards + tiebreak rungs stay (marginal is 0 where they fire → no
+                                    # double-count, whether-to-attach protection kept). Shadows only until
+                                    # flipped; the flip is gated on a score_diff / win-rate bench that tunes
+                                    # the scale (attach-valuation-phase2-handoff.md).
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
