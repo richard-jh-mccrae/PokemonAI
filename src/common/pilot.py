@@ -937,6 +937,24 @@ class Context:
                                    # PROBABLY misses every needed card (post-anchor hypergeometric over the
                                    # shuffle-grown pool, ADR-0024 amendment). Drives `dont-refresh-into-a-probable-miss`.
 
+# The ATTACH marginal-fold set (kill-switch `attach_value`): the POSITIVE-endorsement `baseline_energy`
+# rungs whose job the energy oracle's `marginal` term reproduces (concentrate/build/power-up/spread +
+# accel-routing + arm-the-doomed). All MEASURED-SAFE at Round-0 (marginal 24/0, doomed-sign 4/4,
+# accel-routing 4/4; attach-valuation-phase2-handoff.md). When the switch is ON these are suppressed on
+# ATTACH options and replaced by `_attach_value_tactical`. The NEGATIVE guards and tiebreak rungs are
+# deliberately NOT folded — marginal is 0 where they fire, so keeping them adds no double-count and
+# preserves the whether-to-attach protection the oracle does not provide.
+_ATTACH_VALUE_FOLDED = frozenset({
+    "concentrate-energy-on-wincon", "build-active-wincon", "power-up-attacker",
+    "spread-attach-to-the-needy", "concentrate-accel-on-one-line-body",
+    "feed-the-firing-accelerator", "arm-the-doomed-active", "advance-the-accel-pieces",
+})
+# Damage->weight calibration seed (ADR-0060 calibration-anchor): the oracle's `marginal` is in damage
+# units (~0-210); the folded rungs span ~+15..+35 single / ~+60 co-fired. 0.3 seeds a completing
+# attach (~70) at the concentrate band (~21) and a full payoff (~210) at the co-fire max (~63).
+# BENCH-TUNABLE — the flip to ON is gated on a score_diff / win-rate bench that fits this scale.
+_ATTACH_VALUE_SCALE = 0.3
+
 
 @dataclass
 class OptionTrace:
@@ -1084,7 +1102,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False):
+                 leaf_hand_value=False, attach_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1223,6 +1241,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
+        self.attach_value = attach_value                # ATTACH marginal-fold kill-switch (default OFF): the
+                                                        # energy-attach oracle's `marginal` (`_attach_value`)
+                                                        # scores each attach option in place of the POSITIVE-
+                                                        # endorsement rungs it shadows (`_ATTACH_VALUE_FOLDED`),
+                                                        # calibrated into the rung band by `_ATTACH_VALUE_SCALE`.
+                                                        # The NEGATIVE guards (doomed / overkill / role-gate /
+                                                        # burst-veto) and the tiebreak rungs (type-fit /
+                                                        # resource_cost) STAY — marginal is 0 exactly where they
+                                                        # fire, so no double-count and no whether-to-attach
+                                                        # regression. OFF = the rungs decide and the oracle only
+                                                        # shadows. Flip is gated on a score_diff / win-rate bench.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1553,10 +1582,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._grab_lethal_tactical(obs, select, board, option)
                     + self._grab_enabler_lethal_tactical(obs, select, board, option)
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
-                    + self._attach_retreat_tool_lethal_tactical(obs, select, board, option))
+                    + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
+                    + self._attach_value_tactical(obs, select, board, option))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
-        score = sum(w for _, w in fired) + tactical
+        # ATTACH marginal fold (kill-switch): on an energy-attach option, suppress the positive-
+        # endorsement rungs `_attach_value_tactical` replaces (`_ATTACH_VALUE_FOLDED`) so they don't
+        # double-count. Per-option, so `advance-the-accel-pieces` keeps its PLAY-side (source-selection)
+        # role. OFF (default) leaves `fired` untouched. Suppressed rungs stay in the trace `fired` list
+        # for legibility; only their weight is dropped from `score`.
+        _fold = (getattr(self, "attach_value", False)
+                 and (option.get("type") == _ATTACH
+                      or (select.get("context") == _ATTACH_FROM and option.get("type") == _CARD)))
+        score = sum(w for h, w in fired if not (_fold and h.id in _ATTACH_VALUE_FOLDED)) + tactical
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
                            fired=fired, tactical=tactical,
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
@@ -3389,20 +3427,46 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         bodies = list(opp.get("active") or []) + list(opp.get("bench") or [])
         return [m.get("hp", 0) for m in bodies if m]
 
-    def _attach_progress(self, cid, energy: int) -> float:
-        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward its biggest attack
-        (attach grill Ruling 1). ``(min(e, M) / M)**2 * maxDamage`` — the SQUARE makes the marginal
-        of the k-th Energy INCREASE with k, so completing a started carrier is worth more than
-        starting a fresh body: concentrate on the most-built survivable carrier falls out (82523811-59,
-        82749168-61), while the maxed body's marginal is 0 (over-attach). Falls back to the flat 2-point
-        readiness when the biggest-attack cost is unknown."""
+    def _line_payoff_stat(self, cid):
+        """The CardStat whose attack a body's Energy ultimately FUELS — evolution-lookahead (attach
+        grill Ruling 5a). A win-condition-Line PRE-evolution's Energy carries through evolution and
+        builds toward the LINE's PAYOFF attack (a Staryu's Energy builds toward Mega Starmie's Nebula
+        Beam CCC=210, NOT Staryu's own Water Gun, maxed at 1), so its progress must be priced by the
+        payoff, not the pre-evo's cheap own attack. Returns the payoff's stat for a wincon-Line
+        pre-evolution, else the body's own stat (a terminal/own-attacker body is priced by itself)."""
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if cid is None or not self.stats:
+            return st
+        for line in self._wincon_lines():
+            if cid in (line.path or []) and cid != line.payoff:
+                return self.stats.get(line.payoff) or st
+        return st
+
+    def _attach_progress(self, cid, energy: int) -> float:
+        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward the biggest attack it
+        FUELS (attach grill Ruling 1 + 5a evolution-lookahead). ``(min(e, M) / M)**2 * maxDamage`` — the
+        SQUARE makes the marginal of the k-th Energy INCREASE with k, so completing a started carrier is
+        worth more than starting a fresh body: concentrate on the most-built survivable carrier falls out
+        (82523811-59, 82749168-61), while the maxed body's marginal is 0 (over-attach). `M`/`maxDamage`
+        come from the LINE PAYOFF (`_line_payoff_stat`), so a wincon pre-evo builds toward its evolution's
+        attack, not its own cheap one (82752604-61, 83116081-21, 85059103-84). Falls back to the flat
+        2-point readiness when the biggest-attack cost is unknown."""
+        st = self._line_payoff_stat(cid)
         maxc = getattr(st, "maxDamageCost", None) if st is not None else None
         dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
         if not maxc or maxc <= 0 or dmax <= 0:
             return self._attach_readiness(cid, energy)
         frac = min(energy, maxc) / maxc
-        return frac * frac * dmax
+        value = frac * frac * dmax
+        # A pre-evolution's Energy carries through, but the body must still EVOLVE before the payoff
+        # fires — so its forward build is DISCOUNTED below an already-evolved body's build and below a
+        # this-turn arm of the doomed Active. Without it the payoff-priced pre-evo over-credits and
+        # beats both (83007714-22: evolved > pre-evo; 82522726-7 / 85785606-19/21: arm-the-doomed >
+        # banking on a bench pre-evo). The discount cancels in a pre-evo-vs-pre-evo compare, so
+        # concentrate on the started pre-evo is preserved (83116081-21).
+        if cid in self._line_preevo_set():
+            value *= 0.25
+        return value
 
     def _partner_absent(self, cid, obs: dict) -> bool:
         """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play
@@ -3466,8 +3530,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                               target-choice tie-break (wincon line over filler).
           * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
                               same-marginal tie toward the reusable Basic over the burst.
-        NOTE the remaining term (partner-conditional role, Ruling 6) is a LATER deck-layer increment —
-        the frame that needs it is xfail in test_attach_shadow.py."""
+        The partner-conditional role (Ruling 6) is LIVE via `_partner_absent` (deck-declared
+        `strategy.partners`): a partnerless co-dependent engine body gates to a non-attacking role
+        (marginal 0). Pinned by test_attach_shadow.py (`84889539-87` and the synthetic partner
+        gated/valued pair)."""
         ctx = select.get("context")
         is_attach = option.get("type") == _ATTACH
         is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
@@ -3487,6 +3553,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         area = option.get("inPlayArea") if is_attach else _BENCH   # accel recipients are benched
         etags = set(self.functions.tags(ecid)) if (self.functions and ecid is not None) else set()
         burst = "discard_eot" in etags
+        # ENERGY UNITS this attach delivers: a Basic/Special provides 1, but Ignition (`discard_eot`)
+        # provides {C}{C}{C}=3 on an EVOLUTION Pokémon (card text; the load-bearing rule). A burst is
+        # one-shot and precious, so its 3 units are credited ONLY when they UNLOCK A KO of the opp
+        # Active that the reusable Basic (+1) can't reach — the lethal the +1 model missed (82523811-105:
+        # 1 W + Ignition = 4 -> Nebula 210 KOs the 200-HP Active). When the bigger attack does NOT KO
+        # (83664340-45: Nebula 210 vs 300-HP Archaludon) the burst buys nothing extra, so it counts as 1
+        # and the reusable Basic wins on resource_cost (conserve-burst-when-no-KO).
+        target_stat = self.stats.get(tcid) if (self.stats and tcid is not None) else None
+        units = 1
+        if burst and bool(getattr(target_stat, "evolvesFrom", None)) and area == _ACTIVE and board.turn > 1:
+            opp_hp = (self._opp_active(obs) or {}).get("hp", 0)
+            if opp_hp and self._attach_readiness(tcid, have + 3) >= opp_hp > self._attach_readiness(tcid, have + 1):
+                units = 3
         # a burst that can't be cashed THIS turn evaporates at end of turn — no durable progress
         can_cash = area == _ACTIVE and board.turn > 1
         evaporates = burst and not can_cash
@@ -3502,10 +3581,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # carrier earns no build credit (it won't live to fire the bigger attack — `dont-feed-the-
         # doomed`), so a doomed Active scores only if this Energy arms an attack tonight (arm-the-doomed);
         # a survivable carrier banks the build, so the most-built survivable body wins the concentrate.
-        this_turn = (self._attach_readiness(tcid, have + 1)
+        this_turn = (self._attach_readiness(tcid, have + units)
                      - self._attach_readiness(tcid, have)) if area == _ACTIVE else 0.0
         survives = not (area == _ACTIVE and board.active_doomed)      # forward-survival of the carrier
-        build = (self._attach_progress(tcid, have + 1)
+        build = (self._attach_progress(tcid, have + units)
                  - self._attach_progress(tcid, have)) if survives else 0.0
         # Ruling 2b (overkill cap): once the ACTIVE already KOs the opponent's Active AND its current
         # affordable attack already covers the biggest body on their board, a bigger attack buys
@@ -3538,12 +3617,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 accel_value = self._accel_routed_value(obs, board, routed)
         marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, accel_value, 0.0)
         type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
-        return {"i": None, "target": tcid, "energy": ecid,
+        # The resolved target SLOT (board area, position) — the comparison key for agreement and the
+        # sweep, NOT the raw option index. type-8 ATTACH carries inPlayArea/inPlayIndex; the type-3
+        # ATTACH_FROM recipient carries area/index (accel recipients are benched).
+        slot = [area, option.get("inPlayIndex") if is_attach else option.get("index")]
+        return {"i": None, "target": tcid, "energy": ecid, "slot": slot,
                 "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),
                 "build": round(build, 1), "accel_value": round(accel_value, 1), "doomed": not survives,
                 "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
                 "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
                 "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}
+
+    def _attach_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """The ATTACH marginal fold (kill-switch `attach_value`, default OFF). Scores an energy-attach
+        option by the shadow oracle's `marginal` (`_attach_value`) scaled into the rung band
+        (`_ATTACH_VALUE_SCALE`), REPLACING the positive-endorsement rungs suppressed in `_option_trace`
+        (`_ATTACH_VALUE_FOLDED`). 0 when the switch is OFF, off an energy-attach option, or on a Tool
+        (`_attach_value` abstains). Prize-math stays out (Ruling 4). Signed like the ADR-0062 tacticals,
+        but never negative — the surviving guard rungs carry the penalties."""
+        if not getattr(self, "attach_value", False):
+            return 0.0
+        row = self._attach_value(obs, select, board, option)
+        if row is None:
+            return 0.0
+        return row["marginal"] * _ATTACH_VALUE_SCALE
 
     def _attach_shadow(self, obs: dict, select: dict, board: Board, options: list,
                        traces: list, chosen: list):
@@ -3553,7 +3650,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         priced options) or mid-sim (`self._planning`).
 
         `eq_pick` ranks rows lexicographically by the ruled priority: (marginal, line_value,
-        −resource_cost) — durable progress first, then the wincon line, then the reusable Energy."""
+        ¬type_wasted, −resource_cost) — durable progress first, then the wincon line, then on-type
+        over a wasted attach, then the reusable Energy over the burst."""
         if self._planning:
             return None
         ctx = select.get("context")
@@ -3569,6 +3667,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 continue
             row["i"] = i
             rows.append(row)
+        # Agreement is keyed on the resolved target SLOT (area, position), NOT the raw option index:
+        # duplicate energy-source options and identical-effect target copies otherwise read as false
+        # disagreements (82523811-59: three identical Water->active copies; 82750161-59: duplicate
+        # Ignition sources). Keyed off `rows` (energy attaches only), so a chosen Pokémon Tool — which
+        # abstains and has no row — never counts as an energy-attach agreement.
+        slot_by_i = {r["i"]: tuple(r["slot"]) for r in rows}
         # Rank only options that buy DURABLE progress; if none does, the oracle attaches NOTHING
         # (`eq_pick = None`) — an all-Tool menu or a purely-wasteful attach. Priority (the ruled
         # order): marginal readiness, then the wincon line, then on-type over wasted, then reusable.
@@ -3577,10 +3681,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             best = max(positive, key=lambda r: (r["marginal"], r["line_value"],
                                                 not r["type_wasted"], -r["resource_cost"]))
             eq_pick = best["i"]
-            agree = eq_pick in (chosen or [])
+            chosen_slots = {slot_by_i[c] for c in (chosen or []) if c in slot_by_i}
+            agree = slot_by_i.get(eq_pick) in chosen_slots
         else:
             eq_pick = None                                     # attach nothing beats a valueless attach
-            agree = not (set(chosen or []) & set(attach_idx))
+            agree = not (set(chosen or []) & set(slot_by_i))   # agree iff the rung also made no energy attach
         return {"eq": rows, "eq_pick": eq_pick, "abstained": abstained,
                 "picks": sorted(chosen or []), "agree": agree}
 

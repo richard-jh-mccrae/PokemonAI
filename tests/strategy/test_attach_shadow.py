@@ -19,10 +19,11 @@ from pathlib import Path
 import pytest
 
 from common.cards import CardFunctions
-from common.pilot import Pilot
+from common.pilot import Pilot, _ATTACH_VALUE_FOLDED, _ATTACH_VALUE_SCALE
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.strategy.strategy import Line
 from common.telemetry import to_record
 
 REPO = Path(__file__).resolve().parents[2]
@@ -118,6 +119,26 @@ def test_resource_class_prefers_reusable_basic_over_burst_same_target():
     assert s["eq_pick"] == 1                       # -> attach the reusable Water
 
 
+@pytest.mark.req("REQ-ATTACH-SHADOW-0016")
+def test_ignition_three_units_only_when_it_unlocks_a_ko():
+    # Ignition on an EVOLUTION provides {C}{C}{C}=3 (card text) — but the burst is one-shot, so its
+    # extra units are credited ONLY when they UNLOCK A KO the reusable Basic can't reach. Active Mega
+    # Starmie ex (1 W): Ignition -> 4 Energy -> Nebula 210; a single Water -> 2 -> Jetting 120.
+    p = _pilot()
+
+    def _obs_vs(opp_hp):
+        me = {"active": [{"id": MEGA, "energies": [WATER], "hp": 330}], "bench": [],
+              "hand": [{"id": IGNITION}, {"id": WATER}]}
+        opp = {"active": [{"id": MEGA, "hp": opp_hp}], "bench": []}
+        return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
+                "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                           "option": [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)]}}
+    s_ko = p.explain(_obs_vs(200)).attach_shadow       # Nebula 210 KOs, Jetting 120 doesn't
+    assert s_ko["eq_pick"] == 0                         # -> attach the Ignition (unlocks the lethal, 82523811-105)
+    s_wall = p.explain(_obs_vs(300)).attach_shadow      # neither Nebula nor Jetting KOs the 300-HP wall
+    assert s_wall["eq_pick"] == 1                       # -> keep the burst, attach the Water (83664340-45)
+
+
 @pytest.mark.req("REQ-ATTACH-SHADOW-0004")
 def test_over_attach_marginal_is_zero_on_a_maxed_body():
     # A Mega already at its biggest-attack cost (3) gains nothing; the needy Staryu wins.
@@ -183,6 +204,73 @@ def test_shadow_is_silent_off_an_attach_decision():
     obs = _obs([{"id": STARYU, "energies": [], "hp": 70}], [{"id": WATER}],
                [{"type": 12}, {"type": 11}])       # Retreat / End — no attach option
     assert p.explain(obs).attach_shadow is None
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0015")
+def test_evolution_lookahead_concentrates_on_the_started_preevo():
+    # Two bench Staryu on the Staryu -> Mega Starmie WIN-CONDITION line: one carries 1 W, one is bare.
+    # Both build toward Nebula Beam (CCC=3, 210) — NOT Staryu's own Water Gun (maxed at 1 W). Evolution-
+    # lookahead (Ruling 5a) prices the pre-evo attach by the LINE PAYOFF, so the convex build
+    # concentrates on the STARTED Staryu. WITHOUT it the 1-W Staryu reads "maxed" (build 0) and the
+    # oracle wrongly spreads to the bare one (the 82752604-61 / 83116081-21 / 85059103-84 regressions).
+    strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]},
+                     lines=[Line(path=[STARYU, MEGA], payoff=MEGA)])
+    p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
+              functions=CardFunctions({}))
+    bench = [{"id": STARYU, "energies": [WATER], "hp": 70}, {"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, [{"id": WATER}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])
+    s = p.explain(obs).attach_shadow
+    assert _row_for(s, 0)["build"] > _row_for(s, 1)["build"]   # started (1->2) convex-beats bare (0->1)
+    assert s["eq_pick"] == 0                                    # concentrate on the STARTED pre-evo
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0014")
+def test_agree_is_slot_based_not_raw_index():
+    # The agreement bit compares the resolved target SLOT (area, position), not the raw option index.
+    # Two IDENTICAL Water->ACTIVE copies (options 0 and 1) + one Water->BENCH (option 2). The oracle
+    # picks the active (Mega 2->3 crosses to Nebula, beats the bare Staryu build), eq_pick=0. When the
+    # rung's `chosen` is the OTHER active copy (index 1, same slot), that is AGREEMENT — raw-index
+    # would have called it a false disagreement (the 82523811-59 / 82750161-59 hazard).
+    p = _pilot()
+    active = {"id": MEGA, "energies": [WATER, WATER], "hp": 330}
+    obs = _obs([{"id": STARYU, "energies": [], "hp": 70}],
+               [{"id": WATER}, {"id": WATER}, {"id": WATER}],
+               [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0), _attach(2, BENCH, 0)], active=active)
+    sel = obs["select"]
+    board = p._board(obs, sel)
+    options = sel["option"]
+    s_same = p._attach_shadow(obs, sel, board, options, [], chosen=[1])   # duplicate ACTIVE slot
+    assert s_same["eq_pick"] == 0
+    assert s_same["agree"] is True                 # index 1 is the SAME (ACTIVE,0) slot as eq_pick 0
+    s_diff = p._attach_shadow(obs, sel, board, options, [], chosen=[2])   # the BENCH slot
+    assert s_diff["agree"] is False                # a genuine target disagreement
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0017")
+def test_marginal_fold_killswitch_off_is_inert_on_injects_the_oracle():
+    # Kill-switch `attach_value` (default OFF): OFF the positive-endorsement rungs decide and the
+    # oracle only shadows; ON, on an ATTACH option, those rungs are suppressed and
+    # `_attach_value_tactical` injects the oracle's marginal (scaled). Default OFF must be inert.
+    def _build(flag):
+        strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
+        return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
+                     functions=CardFunctions({}), attach_value=flag)
+    active = {"id": MEGA, "energies": [WATER, WATER], "hp": 330}          # 2 W -> build toward Nebula
+    obs = _obs([{"id": STARYU, "energies": [], "hp": 70}], [{"id": WATER}],
+               [_attach(0, ACTIVE, 0), _attach(0, BENCH, 0)], active=active)
+    dec_off = _build(False).explain(obs)
+    dec_on = _build(True).explain(obs)
+    off, on = dec_off.options[0], dec_on.options[0]    # attach W -> active wincon
+    folded_w = sum(w for h, w in off.fired if h.id in _ATTACH_VALUE_FOLDED)
+    assert folded_w > 0                                # OFF: positive-endorsement rungs DID score the attach
+    # ON: the oracle's marginal enters via the tactical (the only differing scorer between the two
+    # pilots), and equals the shadow row's marginal * scale.
+    row = _row_for(dec_on.attach_shadow, 0)
+    assert on.tactical - off.tactical == pytest.approx(row["marginal"] * _ATTACH_VALUE_SCALE)
+    assert on.tactical > off.tactical                  # positive attach -> positive injection
+    # the folded rungs stay in `fired` for legibility but their weight is dropped from `score`
+    assert any(h.id in _ATTACH_VALUE_FOLDED for h, _ in on.fired)
+    assert on.score == pytest.approx(off.score - folded_w + (on.tactical - off.tactical))
 
 
 # ---------------------------------------------------------------- Style B: corpus replay
@@ -281,3 +369,15 @@ def test_corpus_shadow_agrees_with_correct(ep, fr, request):
             f"{ep}-{fr}: eq_pick target {(opt.get('inPlayArea'), opt.get('inPlayIndex'))} != {expectation[1:]}"
     else:
         assert s["eq_pick"] in correct, f"{ep}-{fr}: eq_pick={s['eq_pick']} not in correct={correct}"
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0013")
+def test_corpus_shadow_silent_on_a_supporter_selection_frame():
+    # 85786096-70 (dragapult_ex, slow_setup): the correct play is "Play Crispin" over "Play Boss's
+    # Orders" — a WHICH-SUPPORTER decision. Every option is _PLAY (type 7); there is NO _ATTACH
+    # option, so the energy-attach oracle prices nothing and must stay SILENT. A committed-board
+    # guard that the fires-only eligibility filter (the attach_sweep probe) correctly EXCLUDES an
+    # energy-adjacent _PLAY frame — kept out of _CORPUS, which asserts the shadow FIRES.
+    rec = _frame("85786096", 70)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec["obs"])
+    assert dec.attach_shadow is None
