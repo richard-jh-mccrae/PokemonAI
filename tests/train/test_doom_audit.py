@@ -191,6 +191,23 @@ def test_sparse_shadow_frames_are_skipped_not_crashed():
     assert rows == []
 
 
+@pytest.mark.req("REQ-DOOMAUDIT-0005")
+def test_mid_turn_relax_marks_the_row_relax_touched():
+    """The relax's live value is largely MID-turn (freeing attach/retreat decisions), so a turn
+    whose LAST read re-doomed still carries `relax_touched=True` when any earlier read on the same
+    body cleared a worst-case cry — the under-count the turn-end cohort alone would hide."""
+    replay = _three_turn_film(opp_start_serial=5, later_discard=(5,))
+    rows = audit_replay(replay, seat=0, explain=_explain_with(
+        [_shadow(old=True, final=False, decided=True),      # mid-turn: relax fired
+         _shadow(old=True, final=True, decided=True)]))     # last read: doom stood
+    assert [r["cohort"] for r in rows] == ["DOOM_HIT"]
+    assert rows[0]["relax_touched"] is True
+    # and a turn never touched by a relax stays untouched
+    rows = audit_replay(replay, seat=0, explain=_explain_with(
+        [_shadow(old=True, final=True), _shadow(old=True, final=True)]))
+    assert rows[0]["relax_touched"] is False
+
+
 @pytest.mark.req("REQ-DOOMAUDIT-0004")
 def test_tally_aggregates_cohorts_and_surfaces_false_relaxes():
     rows = [{"cohort": "FALSE_RELAX", "episode": 1, "turn": 3},

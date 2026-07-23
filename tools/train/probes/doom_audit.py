@@ -96,8 +96,7 @@ def audit_replay(replay: dict, *, seat: int, explain) -> list[dict]:
     film's ground truth. Returns one row dict per audited turn."""
     film = _film(replay)
     episode = (replay.get("info") or {}).get("EpisodeId")
-    last_shadow: dict[int, dict] = {}                      # my turn -> (shadow, serial at that frame)
-    last_serial: dict[int, object] = {}
+    turn_shadows: dict[int, list] = {}                     # my turn -> [(serial at frame, shadow)]
     for frame in film:
         cur = _cur(frame)
         if cur.get("yourIndex") != seat:
@@ -111,22 +110,22 @@ def audit_replay(replay: dict, *, seat: int, explain) -> list[dict]:
         if turn is None or turn_player(turn, first_player=fp) != seat:
             continue                                        # a mid-opponent-turn prompt — not my turn
         if shadow:
-            last_shadow[turn] = shadow
-            last_serial[turn] = _active_serial(cur, seat)
+            turn_shadows.setdefault(turn, []).append((_active_serial(cur, seat), shadow))
     rows: list[dict] = []
-    for turn, shadow in sorted(last_shadow.items()):
-        serial = last_serial.get(turn)
+    for turn, reads in sorted(turn_shadows.items()):
+        serial, shadow = reads[-1]                          # the LAST read — closest to facing them
         if serial is None:
             continue
+        # a relax ANYWHERE in the turn on the body that faced them (the relax's live value is
+        # largely mid-turn — attach/retreat decisions — even when the last read re-doomed)
+        touched = any(s == serial and sh.get("doom_old") and not sh.get("doom_final")
+                      and sh.get("decided") for s, sh in reads)
         faced, died = _turn_outcome(film, seat=seat, my_turn=turn, serial=serial)
         if faced is None:
             continue                                        # their turn never observed (film ends)
-        if faced != serial:
-            rows.append({"episode": episode, "seat": seat, "turn": turn, "serial": serial,
-                         "cohort": "DODGED", "shadow": shadow})
-            continue
+        cohort = "DODGED" if faced != serial else classify(shadow, died=died)
         rows.append({"episode": episode, "seat": seat, "turn": turn, "serial": serial,
-                     "cohort": classify(shadow, died=died), "shadow": shadow})
+                     "cohort": cohort, "relax_touched": touched, "died": died, "shadow": shadow})
     return rows
 
 
@@ -225,10 +224,16 @@ def main(argv=None) -> int:
         print(f"  doom phantom rate: {t['DOOM_PHANTOM']}/{doom_n} = {t['DOOM_PHANTOM']/doom_n:.3f}")
     if safe_n:
         print(f"  worst-case safe-miss rate: {t['SAFE_MISS']}/{safe_n} = {t['SAFE_MISS']/safe_n:.3f}")
+    touched = [r for r in rows if r.get("relax_touched") and r["cohort"] != "DODGED"]
+    touched_died = [r for r in touched if r.get("died")]
+    print(f"  relax-touched turns (a relax fired on the facing body at ANY read of the turn): "
+          f"{len(touched)}, of which died: {len(touched_died)}")
     for r in rows:
-        if r["cohort"] in ("FALSE_RELAX", "SAFE_MISS"):
+        flag = ("TOUCHED+DIED" if r.get("relax_touched") and r.get("died")
+                and r["cohort"] not in ("FALSE_RELAX", "DODGED") else None)
+        if r["cohort"] in ("FALSE_RELAX", "SAFE_MISS") or flag:
             s = r["shadow"]
-            print(f"  {r['cohort']}: ep {r['episode']} seat {r['seat']} turn {r['turn']} "
+            print(f"  {flag or r['cohort']}: ep {r['episode']} seat {r['seat']} turn {r['turn']} "
                   f"serial {r['serial']} (old={s.get('doom_old')} charged={s.get('doom_charged')} "
                   f"hp={s.get('my_hp')} matched={s.get('matched')})")
     return 0
