@@ -29,6 +29,11 @@ CATEGORIES: tuple[str, ...] = (
     # catch-all
     "sequencing_error",      # right actions, wrong order (locked out a better line)
     "other",                 # escape hatch; forces a good rationale, flags a vocab gap
+    # machine-only (ADR-0053 WP3 / design s3a §D4): the value labeler's engine-measured
+    # disagreement kind — a decision whose value-net P(win) fell ≥ θ below the expert's best
+    # option. NEVER authored by a human (they pick a strategic category above); keeping it
+    # separate keeps machine records filterable in every report and off the `other` vocab-gap signal.
+    "value_delta",
 )
 
 

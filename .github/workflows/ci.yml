@@ -93,7 +93,7 @@ jobs:
             if [ "$F_arena"    = "true" ]; then add tests/arena; fi
             if [ "$F_sim"      = "true" ]; then add tests/sim tests/arena; fi
             if [ "$F_submit"   = "true" ]; then add tests/submit tests/sim tests/arena; fi
-            if [ "$F_train"    = "true" ]; then add tests/train tests/tuner tests/blunder tests/value tests/sim; fi
+            if [ "$F_train"    = "true" ]; then add tests/train tests/tuner tests/blunder tests/value tests/sim tests/label; fi
             if [ "$F_meta"     = "true" ]; then add tests/meta_tracker tests/cards tests/arena tests/sim tests/submit tests/train tests/tuner tests/blunder; fi
             if [ "$F_scouting" = "true" ]; then add tests/scouting; fi
             if [ "$F_strategy" = "true" ]; then add tests/strategy; fi

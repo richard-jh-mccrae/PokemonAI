@@ -44,6 +44,9 @@ htmlcov/
 /data/decks/
 /data/meta/
 /data/replays/
+# machine (auto-labeled) corrections — regenerable from the corpus by tools/train/label (WP3,
+# design s3a §D4). The committed human correction tree stays gold; a fresh clone / CI sees none.
+/data/corrections/machine/
 # score_diff captures are build-specific local artifacts (tools/sim/score_diff.py)
 /data/score_diff/
 # fetched card scans (tools/arena/images.py) — per-host, never committed
