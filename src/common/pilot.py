@@ -1039,6 +1039,28 @@ class Decision:
                                      # + the pick (`eq_pick`) and the agreement bit vs the shipped rungs'
                                      # `chosen`. DECIDES NOTHING — sparse: None off a TO_ACTIVE/SWITCH select
                                      # (< 2 options) / mid-sim. The swap-ranking sweep reads its disagreement rows.
+    threat_shadow: dict | None = None   # the DOOM keep-worst-case SHADOW (Threat-Clock unification
+                                     # S1b, docs/plans/opponent-value-equation-unification.md): the
+                                     # incumbent `active_doomed` (worst-case, the decider) beside its
+                                     # `incoming(t=1)`-curve re-expression (`combat.doomed_incoming`,
+                                     # ceiling policy) + the agreement bit. Surfaces the two known
+                                     # divergences (current-form affordability gate; omitted
+                                     # hand_size_attacker forward counter) for the survival-swap
+                                     # adjudication. Deciding NOTHING — sparse: None mid-sim / no live
+                                     # my-Active vs opp-Active
+    recur_shadow: dict | None = None    # the DISCARD-RECUR fuel SHADOW (Threat-Clock unification S2):
+                                     # per opponent in-play body whose line refuels from its discard
+                                     # (`discard_energy_recur`), the Threat-Clock reads with-vs-without
+                                     # the discard fuel (incoming(t=1) to my Active + turns_to_afford)
+                                     # — how much the discard reservoir accelerates/sharpens the threat.
+                                     # Deciding NOTHING (live reads pass no fuel) — sparse: None mid-sim
+                                     # / no opponent discard fuel
+    opp_target_shadow: dict | None = None  # the OPPONENT-TARGET value SHADOW (Opponent Value Equation
+                                     # S3, O1 = Option B): per opponent in-play body the two-term removal
+                                     # value in the one currency — prize_advance + phase × survival_shift
+                                     # (needs.opponent_target_value; survival via the S1 turns_to_ko_me
+                                     # curve). Deciding NOTHING — the evidence for the snipe/gust/deny
+                                     # slot-assignment fold. Sparse: None mid-sim / no opp bodies
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1337,6 +1359,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
                         promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
+                        threat_shadow=self._threat_shadow(obs, board),
+                        recur_shadow=self._recur_shadow(obs, board),
+                        opp_target_shadow=self._opponent_target_shadow(obs, board),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -3913,28 +3938,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             contributes 0 hops (the deficit leg still grades).
 
         None — the caller emits NO deny slot (fail-closed, erring toward the shipped hedge) —
-        when the body/its stats are unknown or no form's biggest-attack cost is known."""
-        cid = (p or {}).get("id")
-        st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if st is None:
-            return None
-        fwd = [self.stats.get(f) for f in self._forward_card_ids(cid)]
-        costs = [c for c in (getattr(s, "maxDamageCost", None) for s in (st, *fwd) if s is not None)
-                 if c is not None]
-        if not costs:
-            return None
-        deficit = max(costs) - len((p or {}).get("energies") or [])
-        parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd
-                  if s is not None and s.name}
-        hops = 0
-        for name in parent:
-            d, n = 0, name
-            while n and n != st.name and d <= 3:
-                d, n = d + 1, parent.get(n)
-            if n == st.name:
-                hops = max(hops, d)
-        from common import needs
-        return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops)
+        when the body/its stats are unknown or no form's biggest-attack cost is known.
+
+        DELEGATES to `combat.turns_to_afford` (Threat-Clock unification S1c,
+        docs/plans/opponent-value-equation-unification.md): the deny-clock's energy/evolve model now
+        lives on the KO oracle beside `incoming` — the Threat Clock's two legs, one home — passing the
+        Pilot's forward index so the read stays byte-identical. The slow deny policy is the default
+        1-attach/turn (their card-effect accel is NOT modelled — the fail-closed direction)."""
+        return self.combat.turns_to_afford(p, forward_ids=self._forward_card_ids)
 
     def _unfavored(self, board: Board) -> bool:
         """The Read says the straight race loses (Lever A, ADR-0026) — a compiled favorability at or
@@ -6052,6 +6063,108 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         complement, never a replacement."""
         return self.combat.active_doomed(
             ma, oa, opp, context=getattr(self, "_opp_attack_context", None))
+
+    def _threat_shadow(self, obs: dict, board) -> dict | None:
+        """S1b threat-clock doom SHADOW (docs/plans/opponent-value-equation-unification.md): emit the
+        incumbent worst-case doom read (`active_doomed`, the decider) beside its `incoming(t=1)`-curve
+        re-expression (`combat.doomed_incoming`, ceiling policy) + the agreement bit — the evidence
+        bridge for routing survival through the ONE Threat-Clock curve. Deciding NOTHING.
+
+        Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) or with no live my-Active
+        vs opp-Active to read. The two divergences the sweep of this bit adjudicates before any swap:
+        the current-form affordability gate (`can_pay_cheapest`) and the omitted `hand_size_attacker`
+        forward counter — ADR-0064 §2 kept `active_doomed` unconditionally worst-case."""
+        if getattr(self, "_planning", False):
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        if not (ma and oa):
+            return None
+        my_hp = ma.get("hp", 0) or 0
+        dmg = self.combat.doomed_incoming(ma, oa, context=getattr(self, "_opp_attack_context", None))
+        old = bool(getattr(board, "active_doomed", False))
+        new = bool(my_hp and dmg >= my_hp)
+        return {"doom_old": old, "doom_curve": new, "doom_incoming": int(dmg),
+                "my_hp": int(my_hp), "agree": old == new}
+
+    def _recur_shadow(self, obs: dict, board) -> dict | None:
+        """S2 discard-recur fuel SHADOW (docs/plans/opponent-value-equation-unification.md): for each
+        opponent in-play body whose line refuels from its own discard (`discard_energy_recur` — Mega
+        Lucario ex 678 reloads {F}, Archaludon ex 190 reloads {M}), emit the Threat-Clock reads
+        WITH-vs-WITHOUT the discard fuel — `incoming(t=1)` to my Active and `turns_to_afford` — so the
+        sweep can see how much the discard reservoir accelerates (lower t) and sharpens (higher
+        incoming) the threat. Deciding NOTHING: the live reads pass no fuel; the shadow models it by
+        augmenting a copy of the body's `energies`. Sparse: None mid-sim (`self._planning`), with no
+        opponent discard Energy, or no live opponent board."""
+        if getattr(self, "_planning", False):
+            return None
+        disc = getattr(board, "opp_discard_energy", None)
+        if not disc:
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        if not opp:
+            return None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        bodies = [p for p in ((opp.get("active") or []) + (opp.get("bench") or [])) if p]
+        rows = []
+        for p in bodies:
+            fuel = self.combat.discard_recur_fuel(p, disc, forward_ids=self._forward_card_ids)
+            if fuel <= 0:
+                continue
+            st = self.stats.get(p.get("id")) if self.stats else None
+            etype = getattr(st, "energyType", None)
+            fueled = dict(p, energies=list(p.get("energies") or []) + [etype] * fuel)
+            row = {"id": p.get("id"), "fuel": fuel,
+                   "ttr_plain": self.combat.turns_to_afford(p, forward_ids=self._forward_card_ids),
+                   "ttr_fuel": self.combat.turns_to_afford(fueled, forward_ids=self._forward_card_ids)}
+            if ma:
+                row["inc_plain"] = self.combat.incoming(ma, [p], 1)
+                row["inc_fuel"] = self.combat.incoming(ma, [fueled], 1)
+            rows.append(row)
+        return {"bodies": rows} if rows else None
+
+    def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
+        """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
+        Option B): per opponent in-play body, the two-term REMOVAL value in the ONE currency —
+        `prize_advance + phase × survival_shift` (`needs.opponent_target_value`). `survival_shift` is
+        the turns of survival bought by removing the body (Δ `combat.turns_to_ko_me` via the S1 curve);
+        `prize_advance` is its prize value (the if-KO'd term); `phase` is the KO-race scale
+        (`needs.phase_scale`). The sweep compares this per-body ranking to the shipped snipe / gust /
+        deny picks — the evidence for the Option-B assignment. Deciding NOTHING. Sparse: None mid-sim
+        (`self._planning`), no live my Active, or no opponent in-play bodies. Redundancy (the ADR-0044
+        guards) and instrument-specifics (chip vs KO, reachability) are swap-time, not priced here."""
+        if getattr(self, "_planning", False):
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        bodies = [p for p in (((opp or {}).get("active") or []) + ((opp or {}).get("bench") or [])) if p]
+        if not (ma and bodies):
+            return None
+        from common import needs
+        phase = needs.phase_scale(race_ahead=getattr(board, "race_ahead", None),
+                                  opp_prizes_remaining=getattr(board, "opp_prizes_remaining", 0))
+        base_t = self.combat.turns_to_ko_me(ma, bodies)
+        rows = []
+        for i, b in enumerate(bodies):
+            shift = self.combat.turns_to_ko_me(ma, bodies[:i] + bodies[i + 1:]) - base_t
+            prize = self.combat.prize_value(b)
+            val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
+            rows.append({"id": b.get("id"), "prize": prize, "survival_shift": shift,
+                         "value": round(val, 3)})
+        return {"phase": round(phase, 3), "bodies": rows}
 
     def _forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None) -> int:
         """Worst-case incoming if their Active EVOLVES next turn (the Posture forward read;

@@ -121,6 +121,16 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     promote_retreat_shadow = getattr(decision, "promote_retreat_shadow", None)  # the PROMOTE/RETREAT value
     if promote_retreat_shadow:                    # shadow (fifth shadow, promote/retreat grill): per-option
         rec["promote_retreat_shadow"] = promote_retreat_shadow  # window-rollout total + pick + agree bit
+    threat_shadow = getattr(decision, "threat_shadow", None)  # the DOOM worst-case SHADOW (Threat-Clock
+    if threat_shadow:                             # unification S1b): incumbent active_doomed vs the
+        rec["threat_shadow"] = threat_shadow      # incoming(t=1)-curve re-expression + the agree bit —
+                                                  # deciding nothing; disagreement rows drive the swap
+    recur_shadow = getattr(decision, "recur_shadow", None)  # the DISCARD-RECUR fuel SHADOW (S2): per
+    if recur_shadow:                              # opponent refueler body, the Threat-Clock reads with
+        rec["recur_shadow"] = recur_shadow        # vs without the discard fuel — deciding nothing
+    opp_target_shadow = getattr(decision, "opp_target_shadow", None)  # the OPPONENT-TARGET value SHADOW
+    if opp_target_shadow:                         # (S3, Option B): per opponent body the two-term removal
+        rec["opp_target_shadow"] = opp_target_shadow  # value (prize + phase×survival) — deciding nothing
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
         rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung

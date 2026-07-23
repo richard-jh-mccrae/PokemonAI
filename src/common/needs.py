@@ -193,6 +193,51 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
     return Slot("deny", float(oracle_value) / (2 ** t), t, key)
 
 
+# ─────────────────────────── the two-term opponent-target marginal (Opponent Value Equation, S3)
+_PRIZES_START = 6           # the Prize-count both players race down from
+_PHASE_BASE = 0.3           # neutral phase weight (no race read)
+_PHASE_RACE_W = 0.15        # per turn-of-race-margin: being BEHIND (race_ahead < 0) sharpens every
+                            # survival turn toward a full prize; being ahead flattens it. Seed —
+                            # ladder-/grill-matured, same discipline as `objectives.plan_confidence`.
+_PHASE_PRIZE_W = 0.5        # prize-proximity weight: as the opponent nears their last Prize, one
+                            # survival turn is worth more. Seed.
+_SURVIVAL_PER_TURN = 0.5    # prize-equivalents per turn-of-survival bought, before the phase scale —
+                            # a SUB-prize seed (the gust-marginal band), matured by the corpus grill.
+_SURVIVAL_CAP = 0.9         # the survival term stays < 1 Prize: it breaks ties among prize outcomes,
+                            # never overrides a real prize difference (the sub-prize-tie-break rule).
+
+
+def phase_scale(*, race_ahead: float | None, opp_prizes_remaining: int) -> float:
+    """The KO-race-margin PHASE SCALER (ruling 5, docs/plans/opponent-value-equation-unification.md):
+    converts a *turn of survival bought* into prize-equivalents ∈ [0, 1]. A survival turn is worth ≈0
+    when I am stable and ahead, and ≈1 Prize when I am about to be KO'd with the race on the line —
+    "how close either player is to their last Prize."
+
+    Grounded in the same VISIBLE primitives as `objectives.plan_confidence` (ADR-0045): the two-sided
+    race margin (`race_ahead` = their path turns − mine; behind = negative) and the opponent's Prize
+    proximity (fewer of their Prizes left = higher stakes). **Bounded [0, 1] — the deliberate guard
+    against the ADR-0065 +76 runaway (R1): NOT a free match-importance multiplier, a DERIVED, capped
+    race scalar.** Seeds; ladder-matured."""
+    s = _PHASE_BASE
+    if race_ahead is not None:
+        s -= _PHASE_RACE_W * float(race_ahead)              # behind (negative) raises the scale
+    opp_close = max(0, min(_PRIZES_START, _PRIZES_START - int(opp_prizes_remaining))) / _PRIZES_START
+    s += _PHASE_PRIZE_W * opp_close
+    return max(0.0, min(1.0, s))
+
+
+def opponent_target_value(*, prize_advance: float, survival_shift: int, phase: float) -> float:
+    """The two-term OPPONENT-TARGET marginal (ruling 1): what removing/damaging an opponent body is
+    worth to MY match = ``prize_advance`` (prize-race progress) + the ``survival_shift`` (turns of
+    survival bought — Δ `turns_to_ko_me` from removing the body) converted to prize-equivalents by the
+    ``phase`` scale (ruling 5). The survival term is SUB-prize (``_SURVIVAL_CAP`` < 1), so it breaks
+    ties among prize outcomes but never overrides a real prize difference — the gust-marginal
+    discipline. Redundancy (the ADR-0044 guards) is applied by the caller/gate, not priced here. The
+    ONE currency snipe / gust / deny / promo-chip all read (Option B); seeds, grill-matured."""
+    survival = min(_SURVIVAL_CAP, max(0.0, float(survival_shift)) * float(phase) * _SURVIVAL_PER_TURN)
+    return float(prize_advance) + survival
+
+
 # ─────────────────────────────────────────────────────────── the soundness nets
 #: Card→slot SUPPLIES: which slot kinds each worth source (ROLE_TIER role / TAG_TIER tag / the
 #: fallback classes) can fill. The COVERAGE LINT asserts every worth source appears here with ≥1
