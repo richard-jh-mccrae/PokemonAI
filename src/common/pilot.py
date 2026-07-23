@@ -1055,6 +1055,12 @@ class Decision:
                                      # — how much the discard reservoir accelerates/sharpens the threat.
                                      # Deciding NOTHING (live reads pass no fuel) — sparse: None mid-sim
                                      # / no opponent discard fuel
+    opp_target_shadow: dict | None = None  # the OPPONENT-TARGET value SHADOW (Opponent Value Equation
+                                     # S3, O1 = Option B): per opponent in-play body the two-term removal
+                                     # value in the one currency — prize_advance + phase × survival_shift
+                                     # (needs.opponent_target_value; survival via the S1 turns_to_ko_me
+                                     # curve). Deciding NOTHING — the evidence for the snipe/gust/deny
+                                     # slot-assignment fold. Sparse: None mid-sim / no opp bodies
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -1355,6 +1361,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
                         threat_shadow=self._threat_shadow(obs, board),
                         recur_shadow=self._recur_shadow(obs, board),
+                        opp_target_shadow=self._opponent_target_shadow(obs, board),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -6124,6 +6131,40 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 row["inc_fuel"] = self.combat.incoming(ma, [fueled], 1)
             rows.append(row)
         return {"bodies": rows} if rows else None
+
+    def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
+        """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
+        Option B): per opponent in-play body, the two-term REMOVAL value in the ONE currency —
+        `prize_advance + phase × survival_shift` (`needs.opponent_target_value`). `survival_shift` is
+        the turns of survival bought by removing the body (Δ `combat.turns_to_ko_me` via the S1 curve);
+        `prize_advance` is its prize value (the if-KO'd term); `phase` is the KO-race scale
+        (`needs.phase_scale`). The sweep compares this per-body ranking to the shipped snipe / gust /
+        deny picks — the evidence for the Option-B assignment. Deciding NOTHING. Sparse: None mid-sim
+        (`self._planning`), no live my Active, or no opponent in-play bodies. Redundancy (the ADR-0044
+        guards) and instrument-specifics (chip vs KO, reachability) are swap-time, not priced here."""
+        if getattr(self, "_planning", False):
+            return None
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        bodies = [p for p in (((opp or {}).get("active") or []) + ((opp or {}).get("bench") or [])) if p]
+        if not (ma and bodies):
+            return None
+        from common import needs
+        phase = needs.phase_scale(race_ahead=getattr(board, "race_ahead", None),
+                                  opp_prizes_remaining=getattr(board, "opp_prizes_remaining", 0))
+        base_t = self.combat.turns_to_ko_me(ma, bodies)
+        rows = []
+        for i, b in enumerate(bodies):
+            shift = self.combat.turns_to_ko_me(ma, bodies[:i] + bodies[i + 1:]) - base_t
+            prize = self.combat.prize_value(b)
+            val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
+            rows.append({"id": b.get("id"), "prize": prize, "survival_shift": shift,
+                         "value": round(val, 3)})
+        return {"phase": round(phase, 3), "bodies": rows}
 
     def _forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None) -> int:
         """Worst-case incoming if their Active EVOLVES next turn (the Posture forward read;

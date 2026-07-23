@@ -531,6 +531,22 @@ class CombatMath:
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
 
+    def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
+                       max_t: int = 8, context: dict | None = None) -> int:
+        """The earliest future turn the opponent's board can KO ``my_body`` — the survival-window
+        inversion of the Threat-Clock curve (S3 of docs/plans/opponent-value-equation-unification.md):
+        ``min{ t ∈ 1..max_t : incoming(t, policy) >= my_body HP }``, or ``max_t + 1`` when it survives
+        the horizon. Removing an opponent body can only RAISE this (less incoming), so the Δ across a
+        removal is the *turns of survival bought* — the Layer-2 marginal's survival term. ``max_t + 1``
+        for an unknown/HP-less body (nothing threatens it in-horizon)."""
+        hp = (my_body or {}).get("hp", 0)
+        if not hp:
+            return max_t + 1
+        for t in range(1, max(1, int(max_t)) + 1):
+            if self.incoming(my_body, opp_bodies, t, charged=charged, context=context) >= hp:
+                return t
+        return max_t + 1
+
     def discard_recur_fuel(self, body: dict | None, opp_discard_energy: dict | None, *,
                            forward_ids=None) -> int:
         """The extra Basic Energy a `discard_energy_recur` line can reload from the opponent's DISCARD

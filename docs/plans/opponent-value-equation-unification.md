@@ -244,7 +244,18 @@ unbisectable — T5/T6 precedent).
   so the deny swap must stay conservative / Brief-scoped). The sweep of `recur_shadow` (gitignored corpus)
   measures the magnitude before any adoption. The precise reload TARGETING (Aura Jab feeds the BENCH, not
   self; Archaludon any {M}) is a swap-time refinement — the shadow augments the recur body directionally.
-- **S3 — the opponent-target slot family, shadow-only (O1 = Option B).** Add the slot family to `needs.py`
+- **S3a — the two-term marginal + shadow: BUILT (2026-07-22, TDD).** `needs.phase_scale` (ruling 5 — the
+  KO-race phase scaler ∈ [0,1], grounded in `race_ahead` + opp Prize proximity like
+  `objectives.plan_confidence`; **bounded, the R1 +76 guard**) and `needs.opponent_target_value` (ruling 1
+  — `prize_advance + phase × survival_shift`, survival sub-prize-capped). The survival term is grounded in
+  the S1 curve: `CombatMath.turns_to_ko_me` (the survival-window inversion — `min t : incoming(t) ≥ my_hp`),
+  so `survival_shift` = the turns bought by removing a body. `Pilot._opponent_target_shadow` →
+  `Decision.opp_target_shadow` → telemetry emits the per-opponent-body removal value, **deciding NOTHING**.
+  Tests `tests/strategy/test_opponent_target_value.py` (phase bounds+monotonic, the two-term composition,
+  `turns_to_ko_me` + survival_shift, the shadow emit). Full core suite green (pending). Seeds are
+  grill-/ladder-matured; redundancy (ADR-0044) + instrument specifics (chip vs KO, reachability) are
+  swap-time. **The `opp_target_shadow` sweep (gitignored corpus) is the adjudication input for S3b.**
+- **S3b — the opponent-target SLOT in `needs.py` + the assignment fold (NEXT).** Add the slot family to `needs.py`
   (generalize `deny_slot` to `snipe` / `gust` / `promo_chip` instruments over opponent-target slots, valued
   by the two-term sum with the phase-scaled exchange). Resolve it once per decision, cache it, and emit
   **each instrument's marginal slice** beside its real snipe/gust/deny decision as a shadow (the seam-D
