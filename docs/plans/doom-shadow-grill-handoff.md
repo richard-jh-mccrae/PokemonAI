@@ -192,3 +192,27 @@ kill-switch-off byte-identical + recur-guard stand-down), fixtures under
 - **`_incoming_budget` (`base_attach: 1`) itself** now looks optimistic-by-one for its OWN
   consumers (the ±50 survival nudge, the promote stand-down) given finding 1 — those are
   sub-catastrophe and fail-closed-gated, so left as-is here; worth its own sweep.
+
+## Local gauntlet A/B (2026-07-23, post-ship) — KEEP ON
+
+Cross-deck paired-delta A/B (`tools/sim/gauntlet_ab.py`, the T5 instrument), 3 agents × 6 directed
+matchups × 400 games/battle/side = 4,800 games, jobs=4. Overlay side forced
+`doom_matched_relax: false`; baseline = shipped PROFILE (ON) — so delta reads **OFF − ON** (the
+tool's hardcoded "FLIP value_model" line does not apply, sign inverted vs its assumption).
+
+| matchup (D vs O) | flag OFF | flag ON | ON advantage |
+|---|---|---|---|
+| mega_starmie vs mega_lucario | .672 | .667 | −0.5 pt |
+| mega_starmie vs dragapult_ex | .895 | .885 | −1.0 pt |
+| mega_lucario vs mega_starmie | .323 | .325 | +0.3 pt |
+| mega_lucario vs dragapult_ex | .665 | .688 | +2.2 pt |
+| dragapult_ex vs mega_starmie | .065 | .102 | +3.7 pt |
+| dragapult_ex vs mega_lucario | .287 | .307 | +2.0 pt |
+
+Aggregate OFF−ON = **−1.12 pt** (95% CI [−3.5, +1.2], **0 crashes**) → turning the flag OFF costs
+~1 point on average; no matchup shows a significant OFF advantage. Verdict per the armed-ON
+convention: **stays ON** (crash-clean, no regression, point estimate favors ON). The gain
+concentrates in dragapult_ex — the agent whose Dreepy/Drakloak Actives were chronically
+worst-case-doomed against briefed opponents — consistent with the grill's corpus reading. At
+n=400 the CI (±2.4 pt) resolves gross regressions only; the ±1% precision tier is the in-place
+Kaggle ladder A/B vs the prior flag-off submission once merged.
