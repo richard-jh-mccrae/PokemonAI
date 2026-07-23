@@ -75,6 +75,9 @@ EXPECTED_SHIPPED = {
     "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
                                     # term (readiness consumes needs), gated on the leaf-lab bench before arming
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
+    "attach_value": False,          # attach marginal-fold armed-OFF 2026-07-22: the energy-attach oracle's
+                                    # `marginal` scores each attach in place of the positive-endorsement rungs;
+                                    # ships OFF (shadows only) until the flip is gated on a score_diff bench
 }
 
 
