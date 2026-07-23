@@ -118,7 +118,9 @@ Session grilling the two opponent-read rows. Rulings + findings, in order surfac
   `manual_attach (if unused)` + the attach effects of `tutor_energy`/`energy_accel` cards in hand,
   and model the FULL budget (reaches the 2-cost `{R}{P}`, not just the cheapest `●`). Famine = the
   cheapest attack unpayable even with that budget. Dissolves the stall-gust premise for every
-  consumer (stall-gust, posture, doom) with no new rung/gate.
+  consumer (stall-gust, posture, doom) with no new rung/gate. **Build handoff written:
+  `self-reachable-attach-oracle-handoff.md`** — the oracle + all four consumers (stall-gust, posture/doom,
+  and the two promote/retreat shadow terms `fetch_enables_p` + Finding-B2 stay-to-develop it unblocks).
 - **Gust-target/whether cluster — RESOLVED by the merged gust-value equation (PR #128, main).**
   Verified 2026-07-22 after rebasing on main: `retest_one dragapult_ex 86089120-14` → **FIXED=True**,
   Boss's Orders now scores **0.0** (no rung) and the pilot attaches `{P}` to Dreepy (score 18) — the
