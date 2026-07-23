@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from common.cards import CardFunctions
-from common.pilot import Pilot
+from common.pilot import Pilot, _ATTACH_VALUE_FOLDED, _ATTACH_VALUE_SCALE
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
@@ -244,6 +244,33 @@ def test_agree_is_slot_based_not_raw_index():
     assert s_same["agree"] is True                 # index 1 is the SAME (ACTIVE,0) slot as eq_pick 0
     s_diff = p._attach_shadow(obs, sel, board, options, [], chosen=[2])   # the BENCH slot
     assert s_diff["agree"] is False                # a genuine target disagreement
+
+
+@pytest.mark.req("REQ-ATTACH-SHADOW-0017")
+def test_marginal_fold_killswitch_off_is_inert_on_injects_the_oracle():
+    # Kill-switch `attach_value` (default OFF): OFF the positive-endorsement rungs decide and the
+    # oracle only shadows; ON, on an ATTACH option, those rungs are suppressed and
+    # `_attach_value_tactical` injects the oracle's marginal (scaled). Default OFF must be inert.
+    def _build(flag):
+        strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
+        return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
+                     functions=CardFunctions({}), attach_value=flag)
+    active = {"id": MEGA, "energies": [WATER, WATER], "hp": 330}          # 2 W -> build toward Nebula
+    obs = _obs([{"id": STARYU, "energies": [], "hp": 70}], [{"id": WATER}],
+               [_attach(0, ACTIVE, 0), _attach(0, BENCH, 0)], active=active)
+    dec_off = _build(False).explain(obs)
+    dec_on = _build(True).explain(obs)
+    off, on = dec_off.options[0], dec_on.options[0]    # attach W -> active wincon
+    folded_w = sum(w for h, w in off.fired if h.id in _ATTACH_VALUE_FOLDED)
+    assert folded_w > 0                                # OFF: positive-endorsement rungs DID score the attach
+    # ON: the oracle's marginal enters via the tactical (the only differing scorer between the two
+    # pilots), and equals the shadow row's marginal * scale.
+    row = _row_for(dec_on.attach_shadow, 0)
+    assert on.tactical - off.tactical == pytest.approx(row["marginal"] * _ATTACH_VALUE_SCALE)
+    assert on.tactical > off.tactical                  # positive attach -> positive injection
+    # the folded rungs stay in `fired` for legibility but their weight is dropped from `score`
+    assert any(h.id in _ATTACH_VALUE_FOLDED for h, _ in on.fired)
+    assert on.score == pytest.approx(off.score - folded_w + (on.tactical - off.tactical))
 
 
 # ---------------------------------------------------------------- Style B: corpus replay

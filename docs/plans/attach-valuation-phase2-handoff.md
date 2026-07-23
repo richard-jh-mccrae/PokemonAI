@@ -122,6 +122,31 @@ corrections supply frames. The clean-equation goal is on track — the equation 
 exactly and now matches or beats the rungs on every in-scope `marginal` frame — the remaining work is
 evidence (unmeasured families) and the planner layer (mis-scoped multi-turn frames), not oracle bugs.
 
+### The marginal fold — BUILT behind a kill-switch (default OFF, 2026-07-22)
+
+The first fold is wired, following the `needs_keep_value` precedent (a default-OFF kill-switch, so the
+shipped agent is byte-identical — CI stays green and the equation still only shadows until flipped).
+
+- **Flag:** `Pilot(attach_value=False)`. ON → the oracle decides the endorsement band; OFF → the rungs.
+- **Injection:** `_attach_value_tactical` scores each energy-attach option by the oracle's `marginal`
+  × `_ATTACH_VALUE_SCALE` (0.3 seed — damage→weight, ADR-0060 calibration-anchor; BENCH-TUNABLE), added
+  to the tactical sum in `_option_trace`.
+- **Scope — the POSITIVE-endorsement band only** (`_ATTACH_VALUE_FOLDED`, 8 rungs, ALL measured-safe):
+  `concentrate-energy-on-wincon`, `build-active-wincon`, `power-up-attacker`, `spread-attach-to-the-needy`,
+  `concentrate-accel-on-one-line-body`, `feed-the-firing-accelerator`, `arm-the-doomed-active`,
+  `advance-the-accel-pieces` (ATTACH side only — suppressed per-option, so its PLAY source-selection role
+  survives). Suppressed only on ATTACH options when ON; kept in the trace `fired` list for legibility.
+- **Deliberately NOT folded:** every NEGATIVE guard (`dont-feed-the-doomed`, `dont-overbuild-*`,
+  `conserve-burst-when-no-ko`, `dont-fund-the-non-attacking-body`, `dont-power-the-draw-engine`, the
+  burst-veto) and the tiebreak rungs (`dont-waste-off-type-energy`, `prefer-reusable-over-burst`,
+  `conserve-discard-energy-prefer-basic`). `marginal` is 0 exactly where these fire, so keeping them
+  adds no double-count AND preserves the whether-to-attach protection the prize-blind oracle does not
+  give. Folding the guards is a LATER, separate step (needs the whether-to-attach layer first).
+- **Pinned:** `test_marginal_fold_killswitch_off_is_inert_on_injects_the_oracle` (OFF byte-identical to
+  a no-flag pilot; ON injects `marginal×scale` and drops the folded weight, score identity checked).
+- **The flip to ON is gated** on a `score_diff` / win-rate bench (does the agent PLAY at least as well?)
+  — NOT just CI pins. Tune `_ATTACH_VALUE_SCALE` there. This environment can't run that bench.
+
 ### How to rank the fold order (do NOT blind-build)
 
 1. **The measurement probe — BUILT & RUN.** `tools/train/probes/attach_sweep.py` (the `needs_sweep`

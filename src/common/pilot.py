@@ -937,6 +937,24 @@ class Context:
                                    # PROBABLY misses every needed card (post-anchor hypergeometric over the
                                    # shuffle-grown pool, ADR-0024 amendment). Drives `dont-refresh-into-a-probable-miss`.
 
+# The ATTACH marginal-fold set (kill-switch `attach_value`): the POSITIVE-endorsement `baseline_energy`
+# rungs whose job the energy oracle's `marginal` term reproduces (concentrate/build/power-up/spread +
+# accel-routing + arm-the-doomed). All MEASURED-SAFE at Round-0 (marginal 24/0, doomed-sign 4/4,
+# accel-routing 4/4; attach-valuation-phase2-handoff.md). When the switch is ON these are suppressed on
+# ATTACH options and replaced by `_attach_value_tactical`. The NEGATIVE guards and tiebreak rungs are
+# deliberately NOT folded — marginal is 0 where they fire, so keeping them adds no double-count and
+# preserves the whether-to-attach protection the oracle does not provide.
+_ATTACH_VALUE_FOLDED = frozenset({
+    "concentrate-energy-on-wincon", "build-active-wincon", "power-up-attacker",
+    "spread-attach-to-the-needy", "concentrate-accel-on-one-line-body",
+    "feed-the-firing-accelerator", "arm-the-doomed-active", "advance-the-accel-pieces",
+})
+# Damage->weight calibration seed (ADR-0060 calibration-anchor): the oracle's `marginal` is in damage
+# units (~0-210); the folded rungs span ~+15..+35 single / ~+60 co-fired. 0.3 seeds a completing
+# attach (~70) at the concentrate band (~21) and a full payoff (~210) at the co-fire max (~63).
+# BENCH-TUNABLE — the flip to ON is gated on a score_diff / win-rate bench that fits this scale.
+_ATTACH_VALUE_SCALE = 0.3
+
 
 @dataclass
 class OptionTrace:
@@ -1084,7 +1102,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False):
+                 leaf_hand_value=False, attach_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1223,6 +1241,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
+        self.attach_value = attach_value                # ATTACH marginal-fold kill-switch (default OFF): the
+                                                        # energy-attach oracle's `marginal` (`_attach_value`)
+                                                        # scores each attach option in place of the POSITIVE-
+                                                        # endorsement rungs it shadows (`_ATTACH_VALUE_FOLDED`),
+                                                        # calibrated into the rung band by `_ATTACH_VALUE_SCALE`.
+                                                        # The NEGATIVE guards (doomed / overkill / role-gate /
+                                                        # burst-veto) and the tiebreak rungs (type-fit /
+                                                        # resource_cost) STAY — marginal is 0 exactly where they
+                                                        # fire, so no double-count and no whether-to-attach
+                                                        # regression. OFF = the rungs decide and the oracle only
+                                                        # shadows. Flip is gated on a score_diff / win-rate bench.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1553,10 +1582,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._grab_lethal_tactical(obs, select, board, option)
                     + self._grab_enabler_lethal_tactical(obs, select, board, option)
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
-                    + self._attach_retreat_tool_lethal_tactical(obs, select, board, option))
+                    + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
+                    + self._attach_value_tactical(obs, select, board, option))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
-        score = sum(w for _, w in fired) + tactical
+        # ATTACH marginal fold (kill-switch): on an energy-attach option, suppress the positive-
+        # endorsement rungs `_attach_value_tactical` replaces (`_ATTACH_VALUE_FOLDED`) so they don't
+        # double-count. Per-option, so `advance-the-accel-pieces` keeps its PLAY-side (source-selection)
+        # role. OFF (default) leaves `fired` untouched. Suppressed rungs stay in the trace `fired` list
+        # for legibility; only their weight is dropped from `score`.
+        _fold = (getattr(self, "attach_value", False)
+                 and (option.get("type") == _ATTACH
+                      or (select.get("context") == _ATTACH_FROM and option.get("type") == _CARD)))
+        score = sum(w for h, w in fired if not (_fold and h.id in _ATTACH_VALUE_FOLDED)) + tactical
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
                            fired=fired, tactical=tactical,
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
@@ -3589,6 +3627,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
                 "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
                 "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}
+
+    def _attach_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """The ATTACH marginal fold (kill-switch `attach_value`, default OFF). Scores an energy-attach
+        option by the shadow oracle's `marginal` (`_attach_value`) scaled into the rung band
+        (`_ATTACH_VALUE_SCALE`), REPLACING the positive-endorsement rungs suppressed in `_option_trace`
+        (`_ATTACH_VALUE_FOLDED`). 0 when the switch is OFF, off an energy-attach option, or on a Tool
+        (`_attach_value` abstains). Prize-math stays out (Ruling 4). Signed like the ADR-0062 tacticals,
+        but never negative — the surviving guard rungs carry the penalties."""
+        if not getattr(self, "attach_value", False):
+            return 0.0
+        row = self._attach_value(obs, select, board, option)
+        if row is None:
+            return 0.0
+        return row["marginal"] * _ATTACH_VALUE_SCALE
 
     def _attach_shadow(self, obs: dict, select: dict, board: Board, options: list,
                        traces: list, chosen: list):
