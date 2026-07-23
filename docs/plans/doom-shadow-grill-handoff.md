@@ -216,3 +216,33 @@ concentrates in dragapult_ex — the agent whose Dreepy/Drakloak Actives were ch
 worst-case-doomed against briefed opponents — consistent with the grill's corpus reading. At
 n=400 the CI (±2.4 pt) resolves gross regressions only; the ±1% precision tier is the in-place
 Kaggle ladder A/B vs the prior flag-off submission once merged.
+
+## Empirical follow-ups (2026-07-23, post-ship) — the audit and the budget sweep
+
+**1. Ground-truth replay audit (`tools/train/probes/doom_audit.py`, TDD).** 60 fresh gauntlet
+films (6 pairings incl. mirrors, seat-balanced, crash-clean), every game-seat replayed through a
+stateful shipped Pilot (one per game — live-faithful); each turn's last `threat_shadow` classified
+against what the film shows happened to that Active on the opponent's next turn (KO = serial
+reaches owner's discard; terminal frame covers game-ending KOs). 647 audited turns:
+
+| cohort | n | reading |
+|---|---|---|
+| FALSE_RELAX | **0** | the relax never cleared a doom that then killed the body |
+| RELAX_OK / relax-touched | 2 / 2 (0 died) | the relax fires RARELY live — its A/B gain is a few high-leverage freed decisions, not a broad behavior shift |
+| DOOM_HIT / DOOM_PHANTOM | 124 / 104 (45.6% phantom) | the remaining conservatism, quantified ("can KO" ≠ "will KO") |
+| SAFE_MISS / SAFE_OK | 23 / 354 (**6.1% miss**) | the WORST-CASE oracle's own blind spot — bodies it called safe that died anyway |
+| DODGED | 40 | switched before facing; counterfactual unobservable |
+
+The headline is twofold: the shipped relax shows **zero empirical errors**, and the incumbent
+worst-case read itself misses ~6% — many at charged 50–70 vs hp 60–160, consistent with
+bench-promoted attackers (outside `active_doomed`'s Active-only contract), Kieran-class +30, and
+checkup damage. Those 23 frames (episode/seat/turn/serial in the audit log) are the evidence base
+for a promote-threat doom leg — a NEW line, not a doom-swap regression.
+
+**2. `_incoming_budget` base_attach sweep (`tools/train/probes/budget_sweep.py`, TDD).**
+The Crispin +1 applied to the `reachable_incoming` seam (the ±50 survival nudge, the loss rung,
+the promote stand-down — never the doom path) across all 332 corpus frames: **zero decision flips**
+(331 SAME, 1 SKIP). Ruling: the sub-catastrophe consumers are insensitive to the generic-supporter
+attach on this corpus — `_incoming_budget` KEEPS `base_attach: 1`; the stricter `_DOOM_CHARGED`
+stays a doom-consumer-only budget. The residual flagged in the RULED appendix is closed with
+evidence, not changed code.
