@@ -223,7 +223,17 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
 ## Deferred
 
 - **`active_doomed` unification** onto the budget model — behind its own fixture re-baseline
-  (Decision 2).
+  (Decision 2). **DONE 2026-07-23** (the doom-shadow grill,
+  [`doom-shadow-grill-handoff.md`](../plans/doom-shadow-grill-handoff.md) RULED appendix): a
+  RELAX-ONLY matched-Read gate (`Pilot.doom_matched_relax`, PROFILE ON) — behind a γ-matched Brief
+  with no discard-recur fuel, a worst-case doom cry stands only if the charged curve confirms it
+  under `Pilot._DOOM_CHARGED` (`base_attach: 2` — the doom consumer budgets the manual attach PLUS
+  one generic supporter-accel, Crispin/Waitress being pool-generic; the grill found
+  `_incoming_budget`'s `base_attach: 1` would have relaxed genuinely-doomed frames — a ×2-weak
+  Riolu vs a Munkidori whose discard visibly held a Crispin). The conjunction direction matters:
+  the charged read's own extra reach can credit forward forms the worst-case forward gate does not
+  (a 1-Energy Makuhita → Wild Press 210), so it may only CLEAR doom, never add it (the 82525101-14
+  Ultra-Ball-discard pin). Pinned by `tests/strategy/test_doom_matched_relax.py`.
 - **Escalation code removal** — behind the corpus re-check (Decision 6).
 - **Hypergeometric draw-odds** for the availability gate — its own note
   ([hypergeometric-fetch-closure.md](../plans/hypergeometric-fetch-closure.md)).

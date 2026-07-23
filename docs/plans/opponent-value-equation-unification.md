@@ -214,6 +214,12 @@ unbisectable — T5/T6 precedent).
     afford-agrees case, the unaffordable-current-form divergence, the emit + mid-sim guard). Suite green
     (strategy+blunder 1247; full core pending). **The corpus sweep of this agree bit is the adjudication
     input for the eventual survival swap — run it next (needs the gitignored corrections corpus).**
+    **→ SWAPPED (2026-07-23): the 15 disagreements were grilled frame-by-frame and the survival swap
+    shipped as a RELAX-ONLY matched-Read gate** (`Pilot.doom_matched_relax`, `_DOOM_CHARGED`
+    `{base_attach: 2, burst_on_evo: 2}`, recur-fuel guard) — rulings, the two grill-found corrections
+    (the generic-supporter +1; the relax-only conjunction after the 82525101-14 phantom-doom
+    regression), pins and holds in
+    [`doom-shadow-grill-handoff.md`](doom-shadow-grill-handoff.md) (RULED appendix).
   - **S1c — the board-clock one-home extraction: BUILT (2026-07-22, TDD).** `CombatMath.turns_to_afford`
     — the deny-clock's energy/evolve model lifted onto the KO oracle beside `incoming` (the Threat Clock's
     two legs — the damage curve + the affordability clock — now share ONE home and the one forward index);

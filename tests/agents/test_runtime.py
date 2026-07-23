@@ -78,6 +78,9 @@ EXPECTED_SHIPPED = {
     "attach_value": False,          # attach marginal-fold armed-OFF 2026-07-22: the energy-attach oracle's
                                     # `marginal` scores each attach in place of the positive-endorsement rungs;
                                     # ships OFF (shadows only) until the flip is gated on a score_diff bench
+    "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: matched-Read charged doom
+                                    # (`_DOOM_CHARGED`) confirms-or-clears a worst-case `active_doomed`
+                                    # cry (relax-only); unmatched = worst-case
 }
 
 

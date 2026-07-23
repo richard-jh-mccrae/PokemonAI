@@ -1102,7 +1102,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False, attach_value=False):
+                 leaf_hand_value=False, attach_value=False, doom_matched_relax=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1257,6 +1257,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # (plan_turn else None) where greedy is weak/indifferent,
                                                         # sim each candidate first action to end-of-turn and
                                                         # commit the best leaf. OFF = byte-identical
+        self.doom_matched_relax = doom_matched_relax    # doom-shadow grill kill-switch (2026-07-23): behind a
+                                                        # γ-matched Brief (`_incoming_budget` set) AND no
+                                                        # discard-recur fuel, a worst-case `active_doomed` cry
+                                                        # stands only if the CHARGED Threat-Clock curve confirms
+                                                        # it under `_DOOM_CHARGED` (base_attach=2: manual + one
+                                                        # generic supporter-accel — Crispin/Waitress;
+                                                        # burst_on_evo=2: Ignition on an Evolution). RELAX-ONLY:
+                                                        # it clears phantom doom, never adds one. Unmatched/
+                                                        # fueled/OFF = byte-identical worst-case (ADR-0064 §2)
         self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
                                                         # the ONE stateful bit of the phase label
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
@@ -6161,13 +6170,57 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return self.combat.incoming_active_damage(
             ma, oa, context=getattr(self, "_opp_attack_context", None))
 
+    # The DOOM consumer's charged energy policy (doom-shadow grill, 2026-07-23) — STRICTER than
+    # `_incoming_budget`'s `base_attach: 1` because the survival boolean is catastrophe-grade:
+    # `base_attach: 2` budgets the manual attach PLUS one generic supporter-accel (Crispin/Waitress
+    # are pool-generic `energy_accel` supporters any deck can hold — the 85058574 Munkidori opponent
+    # had a Crispin visibly in its discard while the 1-budget read called its {P}● / ×2-weakness
+    # Mind Bend unaffordable). `burst_on_evo: 2` is the Ignition {C}{C}{C}-on-an-Evolution allowance
+    # (ADR-0064; colourless-only, so it never funds a typed {W}{W}).
+    _DOOM_CHARGED = {"base_attach": 2, "burst_on_evo": 2}
+
+    def _doom_recur_fueled(self, oa: dict | None, opp: dict | None) -> bool:
+        """The opponent's Active LINE (current + forward forms) refuels from their discard
+        (`discard_energy_recur` — Assemble Alloy re-attaches Basic {M} on evolving) AND that discard
+        visibly holds Basic Energy — fuel the charged attach budget cannot see, so the matched relax
+        must stand down to worst-case (the S2 recur read models the fuel; the doom swap only refuses
+        to relax across it). False when tags/discard are unknown (no extra pessimism on no evidence)."""
+        if not (oa and opp and self.functions):
+            return False
+        ids = {oa.get("id")} | set(self.combat.forward_card_ids(oa.get("id")))
+        if not any("discard_energy_recur" in self.functions.tags(i) for i in ids if i is not None):
+            return False
+        return bool(self._discard_energy_counts(opp.get("discard") or [])[1])
+
     def _active_doomed(self, ma: dict | None, oa: dict | None, opp: dict | None = None) -> bool:
-        """The opponent can KO my Active next turn (current OR forward-evolved attack) — the KO
-        oracle's WORST-CASE read; see its docstring for the deliberate no-affordability stance
-        (docs/todo/incoming-affordability.md). The Threat Clock (ADR-0045) is the multi-turn
-        complement, never a replacement."""
-        return self.combat.active_doomed(
-            ma, oa, opp, context=getattr(self, "_opp_attack_context", None))
+        """The opponent can KO my Active next turn (current OR forward-evolved attack).
+
+        Two policies, γ-gated (the doom-shadow grill ruling, 2026-07-23 — the ADR-0064 §4 asymmetry,
+        mirroring `_incoming_budget`):
+
+        - **Matched Read** (`doom_matched_relax` ON + `_incoming_budget` populated + no discard-recur
+          fuel): RELAX-ONLY conjunction — a doom the worst-case oracle cries stands only if the
+          CHARGED Threat-Clock curve confirms it (`doomed_incoming` under `_DOOM_CHARGED`: per-attack
+          typed affordability at manual + one supporter-accel attach, Ignition burst on Evolutions).
+          The charged read can CLEAR a worst-case doom, never manufacture one — its own extra
+          reach (the +1 supporter wild can credit a forward form the incumbent's `attached + 1`
+          forward gate does not, e.g. a 1-Energy Makuhita → Wild Press 210) must not re-open the
+          phantom play-scared class (ADR-0064 §3; the 82525101-14 Ultra-Ball-discard pin). On the
+          15-frame disagreement corpus this relaxes exactly the ruled-B frames (bare Terapagos ex /
+          0-Energy Archaludon ex) while every ruled-C frame stays doomed (Hammer-lanche density 600,
+          weakness-doubled Mind Bend 120, 1-Energy Metal Defender 220).
+        - **Unmatched / fueled / switch OFF**: the WORST-CASE oracle, byte-identical (`combat.
+          active_doomed` — no affordability charge, the hidden-Ignition planner_6858 lesson;
+          docs/todo/incoming-affordability.md). Never relax on a guess."""
+        ctx = getattr(self, "_opp_attack_context", None)
+        worst = self.combat.active_doomed(ma, oa, opp, context=ctx)
+        if (worst and self.doom_matched_relax
+                and getattr(self, "_incoming_budget", None) is not None
+                and not self._doom_recur_fueled(oa, opp)):
+            my_hp = (ma or {}).get("hp", 0) or 0
+            return bool(my_hp) and self.combat.doomed_incoming(
+                ma, oa, charged=self._DOOM_CHARGED, context=ctx) >= my_hp
+        return worst
 
     def _threat_shadow(self, obs: dict, board) -> dict | None:
         """S1b threat-clock doom SHADOW (docs/plans/opponent-value-equation-unification.md): emit the
@@ -6178,7 +6231,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) or with no live my-Active
         vs opp-Active to read. The two divergences the sweep of this bit adjudicates before any swap:
         the current-form affordability gate (`can_pay_cheapest`) and the omitted `hand_size_attacker`
-        forward counter — ADR-0064 §2 kept `active_doomed` unconditionally worst-case."""
+        forward counter — ADR-0064 §2 kept `active_doomed` unconditionally worst-case.
+
+        Post-swap fields (the doom-shadow grill, 2026-07-23 — `doom_matched_relax`): `doom_old` is
+        the worst-case oracle COMPUTED FRESH (the Board bit is now the decided value, not the
+        incumbent), `doom_charged` the `_DOOM_CHARGED` curve damage where a Read matched (None
+        unmatched), `matched`/`decided` whether the γ-gate held / the charged curve decided this
+        frame, and `doom_final` the live `Board.active_doomed` that consumers saw."""
         if getattr(self, "_planning", False):
             return None
         state = obs.get("current") or {}
@@ -6190,12 +6249,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
         if not (ma and oa):
             return None
+        ctx = getattr(self, "_opp_attack_context", None)
         my_hp = ma.get("hp", 0) or 0
-        dmg = self.combat.doomed_incoming(ma, oa, context=getattr(self, "_opp_attack_context", None))
-        old = bool(getattr(board, "active_doomed", False))
+        dmg = self.combat.doomed_incoming(ma, oa, context=ctx)
+        old = bool(self.combat.active_doomed(ma, oa, opp, context=ctx))
         new = bool(my_hp and dmg >= my_hp)
+        matched = getattr(self, "_incoming_budget", None) is not None
+        decided = bool(old and self.doom_matched_relax and matched
+                       and not self._doom_recur_fueled(oa, opp))   # relax-only: consulted iff worst cries
+        charged = (int(self.combat.doomed_incoming(ma, oa, charged=self._DOOM_CHARGED, context=ctx))
+                   if matched else None)
         return {"doom_old": old, "doom_curve": new, "doom_incoming": int(dmg),
-                "my_hp": int(my_hp), "agree": old == new}
+                "my_hp": int(my_hp), "agree": old == new, "doom_charged": charged,
+                "matched": matched, "decided": decided,
+                "doom_final": bool(getattr(board, "active_doomed", False))}
 
     def _recur_shadow(self, obs: dict, board) -> dict | None:
         """S2 discard-recur fuel SHADOW (docs/plans/opponent-value-equation-unification.md): for each
