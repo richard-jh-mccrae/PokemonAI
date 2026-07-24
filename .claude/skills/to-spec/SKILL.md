@@ -16,7 +16,7 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
+3. Write the spec using the template below, then publish it onto the **originating issue** — the one you were grilling — rather than opening a second issue: post the spec as a comment (or fold it into the issue body). The originating issue is the single unit of progress-tracking for this repo (see `docs/agents/issue-tracker.md`). Then advance its status chip from `status:2-spec` to `status:3-build` — no other triage. If there is no originating issue, create one for the spec and label it `status:3-build`.
 
 <spec-template>
 

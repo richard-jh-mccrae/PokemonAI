@@ -54,7 +54,9 @@ to lock decisions → `/to-spec` to synthesise the spec → `/implement` to buil
 ### Issue tracker
 
 GitHub issues on `richard-jh-mccrae/PokemonAI`, driven via the GitHub **MCP tools**
-(`mcp__github__*`) — no `gh` CLI in web/mobile sessions. See `docs/agents/issue-tracker.md`.
+(`mcp__github__*`) — no `gh` CLI in web/mobile sessions. One `status:*` chip per issue tracks the
+`grill → spec → build` pipeline (`status:1-grilling` → `2-spec` → `3-build` → `4-done`); `/to-spec`
+and `/implement` advance it automatically. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 

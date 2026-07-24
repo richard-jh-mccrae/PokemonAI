@@ -31,9 +31,32 @@ with `pull_request_read` only when explicitly asked.
 Note: GitHub shares one number space across issues and PRs, so a bare `#42` may be either — try
 `issue_read` first and fall back to `pull_request_read`.
 
+## Progress-tracking status ladder
+
+One **status chip** per issue tells you where it is in the `grill → spec → build` pipeline at a
+glance — the point is to resume on/off work without re-reading. An issue carries exactly **one**
+`status:*` label at a time; each stage moves it to the next (remove the old one, add the new one —
+`issue_write` `labels` replaces the set, so include only the new status plus any non-status labels).
+
+| Chip | Meaning | Advanced by |
+|------|---------|-------------|
+| `status:1-grilling` | Filed; decisions not locked yet. Run `/grill-with-docs`. | You, when filing the issue |
+| `status:2-spec` | **Grilling complete** — decisions locked. Next: `/to-spec`. | You, when the grill ends |
+| `status:3-build` | **Spec complete** — ready for `/implement`. | `/to-spec` (automatic) |
+| `status:4-done` | **Build + tests complete — finished.** | `/implement` (automatic), then close the issue |
+
+Only the `1→2` hop is manual (no skill writes issues during a grill); `/to-spec` sets `3-build` and
+`/implement` sets `4-done` + closes. A **closed** issue is also "finished" — the chip just lets a
+finished issue stay visible on an open board.
+
+**One issue per feature.** The originating issue is the unit of tracking — `/to-spec` posts the spec
+as a **comment on that same issue** and advances its chip, rather than spawning a second issue. Keep
+the spec, the discussion, and the status all on one issue.
+
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue with `issue_write` (`method: "create"`).
+Post onto the **originating issue** (comment or body) and advance its status chip. Only create a new
+issue with `issue_write` (`method: "create"`) when there is no originating issue to attach to.
 
 ## When a skill says "fetch the relevant ticket"
 
@@ -63,7 +86,22 @@ Used by `/wayfinder`. The **map** is a single issue; its **tickets** are child (
   `state: "closed"`, `state_reason: "completed"`) → append a one-line context pointer (gist + link)
   to the map's Decisions-so-far via another `issue_write` update of the map body.
 
-**One-time label setup.** The `wayfinder:*` labels (`wayfinder:map`, `wayfinder:research`,
-`wayfinder:prototype`, `wayfinder:grilling`, `wayfinder:task`) and `ready-for-agent` must exist in
-the repo before they can be applied. Check with `get_label`; create any missing ones through the
-GitHub UI (or `gh label create` locally) the first time you run `/wayfinder` or `/to-spec`.
+**One-time label setup.** Labels must exist in the repo before they can be applied (the GitHub API
+rejects an unknown label, and this environment's MCP server is read-only for labels — `get_label`
+only, no create). Create them once via the GitHub UI (repo → Issues → Labels → New label) or with
+`gh` on a machine that has it:
+
+```sh
+# Progress-tracking status ladder
+gh label create "status:1-grilling" -c "#ededed" -d "Decisions not locked yet — run /grill-with-docs"
+gh label create "status:2-spec"     -c "#fbca04" -d "Grilling complete — next: /to-spec"
+gh label create "status:3-build"    -c "#1d76db" -d "Spec complete — ready for /implement"
+gh label create "status:4-done"     -c "#0e8a16" -d "Build + tests complete — finished"
+
+# Only if you use /wayfinder for big/foggy work
+gh label create "wayfinder:map"       -c "#5319e7" -d "Wayfinder map issue"
+gh label create "wayfinder:research"  -c "#c5def5" -d "Wayfinder research ticket"
+gh label create "wayfinder:prototype" -c "#c5def5" -d "Wayfinder prototype ticket"
+gh label create "wayfinder:grilling"  -c "#c5def5" -d "Wayfinder grilling ticket"
+gh label create "wayfinder:task"      -c "#c5def5" -d "Wayfinder task ticket"
+```
