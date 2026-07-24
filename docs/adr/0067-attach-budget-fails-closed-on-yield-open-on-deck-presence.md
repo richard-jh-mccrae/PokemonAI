@@ -39,7 +39,12 @@ The epistemic is split by **what** is uncertain, not applied uniformly:
    a discard-sourced yield is capped at the supply really sitting there and the whole turn's
    discard-drawing effects are capped JOINTLY (two Wondrous Patches over one {P} is one attach;
    Rosa's "up to 2" over a lone Basic Energy is one) — a type palette alone would silently
-   over-count. The hidden deck is ruled the opposite way:
+   over-count. That cap is carried as a **capacity group** into the affordability matcher rather
+   than trimmed off the unit list beforehand, because the constraint is per-COLOUR, not merely a
+   count: two units off a `{R:1, P:1}` pile genuinely reach `{R}{P}` but must not reach `{P}{P}`,
+   and a count-only cap calls the second payable. Colourless slots are charged against the same
+   capacity — an Energy spent paying a colourless slot still leaves the pile. The hidden deck is
+   ruled the opposite way:
 2. **Deck presence fails OPEN (not-provably-empty), typed.** A typed deck-fetch counts unless
    the deck is PROVABLY empty of that Energy type (`basic_energy_types_in_deck()`, the typed
    per-id extension of the sound emptiness oracle) — the same epistemic the live

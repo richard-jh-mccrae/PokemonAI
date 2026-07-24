@@ -28,9 +28,15 @@ KNOWN_UNMODELLED = {
          "attack-based-accel exclusion). Permanently zero, not a gap.",
 }
 
-# Clause shapes the Attach Budget can actually read (CombatMath._accel_units / _hand_yield_units).
+# The vocabulary CombatMath's clause interpreter actually models. Anything outside these sets is
+# silently zeroed at runtime (_accel_target_ok / _AttachCtx.source_types / condition_met all fail
+# CLOSED), so a clause using an unmodelled word must NOT count as coverage — otherwise the gate
+# waves through exactly the silent zero it exists to catch.
 _ATTACHES = ("accel",)
 _HAND_YIELD_TARGETS = ("basic_energy", "energy")
+_TARGETS = (None, "any_pokemon", "stage2", "benched")
+_SOURCES = ("deck", "discard")
+_CONDITIONS = (None, "more_prizes_remaining_than_opp")
 
 
 def _tags() -> dict:
@@ -50,10 +56,20 @@ def _deck_ids(deck_csv: Path) -> set:
     return ids
 
 
+def _accel_readable(cl) -> bool:
+    """An `accel` clause the interpreter can actually turn into units — a quantity AND every gate
+    word in the modelled vocabulary."""
+    return (cl.get("kind") in _ATTACHES
+            and bool(cl.get("amount") or cl.get("to_hand"))
+            and cl.get("target") in _TARGETS
+            and cl.get("source") in _SOURCES
+            and cl.get("condition") in _CONDITIONS)
+
+
 def _budget_readable(clauses) -> bool:
     """Does any clause give the Budget a unit — an attach, or an Energy put into hand?"""
     return any(
-        (cl.get("kind") in _ATTACHES and (cl.get("amount") or cl.get("to_hand")))
+        _accel_readable(cl)
         or (cl.get("kind") == "fetch" and cl.get("zone") == "deck"
             and cl.get("target") in _HAND_YIELD_TARGETS)
         for cl in clauses)
@@ -99,3 +115,16 @@ def test_the_f70_enabler_carries_its_full_two_unit_yield():
     assert accel[0].get("amount") == 1, "the ATTACH half"
     assert accel[0].get("to_hand") == 1, "the put-1-into-your-hand half — the f70 fix"
     assert accel[0].get("distinct_types") is True, "'of different types' — the same-colour guard"
+
+
+def test_the_gate_rejects_a_clause_written_in_unmodelled_vocabulary():
+    """A row can carry a quantity and still be worth zero at runtime, because every gate word the
+    interpreter doesn't know fails CLOSED. The audit must not accept such a row as coverage —
+    otherwise it certifies the silent zero it exists to surface."""
+    assert _budget_readable([{"kind": "accel", "amount": 1, "source": "deck",
+                              "target": "any_pokemon"}])
+    for unmodelled in ({"target": "in_play_ex"},          # target class the interpreter refuses
+                       {"source": "hand"},                # zone it cannot read
+                       {"condition": "opponent_has_stadium"}):   # condition it cannot evaluate
+        row = {"kind": "accel", "amount": 1, "source": "deck", "target": "any_pokemon", **unmodelled}
+        assert not _budget_readable([row]), f"gate accepted an unreadable clause: {row}"

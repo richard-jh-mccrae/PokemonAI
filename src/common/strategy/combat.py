@@ -30,6 +30,9 @@ _RECUR_RELOAD_CAP = 3      # the max Basic Energy a `discard_energy_recur` line 
                            # 2 Basic {M}. Bounds the discard-fuel above the strongest verified reload.
 
 
+DISCARD_SUPPLY = "discard"     # the shared capacity group every discard-drawing effect competes in
+
+
 @dataclass(frozen=True)
 class AttachUnit:
     """ONE Energy unit that could sit on a body — the atom of the **Attach Budget**.
@@ -38,32 +41,45 @@ class AttachUnit:
     doesn't resolve — fail-open, matching :meth:`CombatMath.attack_type_payable`'s ``wild_units``).
     A colourless/special unit carries ``{0}`` and so pays only colourless slots.
 
-    ``group``: units sharing a group id >= 0 must take **distinct** types — Crispin's "up to 2 Basic
-    Energy cards of DIFFERENT types" is one group, so it can never pay a same-colour 2-slot cost.
-
-    ``from_discard``: metadata only (never read by the matcher) — marks a unit drawn from the
-    VISIBLE discard, so the Budget can cap those units at the supply actually sitting there.
+    ``groups``: capacity groups this unit draws from, each policed by the Budget's ``caps``. Two
+    kinds compose: a per-CARD group whose cap is one-per-colour realises "up to 2 Basic Energy of
+    DIFFERENT types" (Crispin), and ``DISCARD_SUPPLY``, whose cap is the visible pile, stops the
+    turn's discard-drawing effects from collectively claiming Energy the pile does not hold.
     """
     types: frozenset = field(default_factory=frozenset)
-    group: int = -1
-    from_discard: bool = False
+    groups: tuple = ()
 
 
 @dataclass(frozen=True)
 class Budget:
     """The **Attach Budget** — this turn's full attach capacity toward ONE body (ADR-0067).
 
-    Held as ``options``: MUTUALLY-EXCLUSIVE unit sets, one per legal play-set (the Items always
-    play; each Supporter is an alternative to every other; the single manual attach picks one
-    Energy source). Affordability asks whether ANY option pays, so a Supporter choice that is
-    smaller but better-TYPED is never lost to a bigger one — exact, not a best-by-count guess.
+    ``options`` are the legal play-sets (the Items always play; each Supporter is an alternative to
+    every other; the single manual attach picks one Energy source). Affordability asks whether ANY
+    option pays, so a Supporter choice that is smaller but better-TYPED is never lost to a bigger
+    one — exact, not a best-by-count guess. Options are not disjoint: the no-Supporter and
+    no-manual-attach sets are emitted alongside their supersets, which is harmless because
+    payability is monotone in units, so a subset never wins where its superset loses.
+
+    ``caps`` bound how many units of each type a group may realise at once, so a set of units can
+    be individually legal yet jointly infeasible — which is exactly the truth about one discard
+    pile shared by two accelerators.
     """
     options: tuple = ((),)
+    caps: dict = field(default_factory=dict)
 
     @property
     def size(self) -> int:
-        """Units in the largest option — the Budget's headline magnitude (telemetry / tests)."""
-        return max((len(o) for o in self.options), default=0)
+        """Units the best option can SIMULTANEOUSLY realise under ``caps`` — the Budget's headline
+        magnitude. Counting raw units would over-report: two Wondrous Patches over a single {P} in
+        the discard are two units but one attach."""
+        return max((self._realisable(option) for option in self.options), default=0)
+
+    def _realisable(self, units) -> int:
+        n = len(units)
+        while n > 0 and not _can_pay((0,) * n, units, self.caps):
+            n -= 1
+        return n
 
 
 @dataclass(frozen=True)
@@ -72,7 +88,7 @@ class _AttachCtx:
 
     The two Energy zones are read at DIFFERENT precisions on purpose (ADR-0067): the deck is
     hidden, so it is a *not-provably-empty* type SET; the discard is public, so it is an exact
-    per-type COUNT and a discard-sourced yield can be capped at the supply really sitting there."""
+    per-type COUNT that caps what the turn's discard-drawing effects can jointly take."""
     deck: frozenset = field(default_factory=frozenset)
     discard: dict = field(default_factory=dict)
     benched: bool = False
@@ -92,66 +108,58 @@ class _AttachCtx:
         return {"more_prizes_remaining_than_opp": self.more_prizes}.get(condition, False)
 
 
-def _within_discard_supply(units, discard: dict) -> tuple:
-    """Drop discard-sourced units the VISIBLE discard cannot actually supply.
-
-    Every discard-drawing effect in a turn competes for ONE public pile, so their yields must be
-    capped jointly, not per card: two Wondrous Patches over a single {P} in the discard is one
-    attach, and Rosa's "up to 2" over a lone Basic Energy is one. Most-constrained-first: a
-    type-LOCKED unit is settled before a free-choice one, since it can only consume its own colour.
-    That greedy can in principle keep one unit fewer than a perfect assignment would — the
-    fail-CLOSED direction, which is the one ADR-0067 requires this leg to err in.
-
-    Deck-sourced units pass through untouched: the deck is hidden, and ADR-0067 rules that leg
-    *not-provably-empty* rather than counted."""
-    remaining, kept = dict(discard), []
-    for unit in sorted(units, key=lambda u: (not u.from_discard, len(u.types))):
-        if not unit.from_discard:
-            kept.append(unit)
-            continue
-        payable = [t for t in unit.types if remaining.get(t, 0) > 0]
-        if not payable:
-            continue                           # the pile is spent — this attach never happens
-        remaining[min(payable, key=lambda t: remaining[t])] -= 1
-        kept.append(AttachUnit(frozenset(payable), unit.group, True))
-    return tuple(kept)
-
-
 @dataclass(frozen=True)
 class _Contribution:
     """What one playable hand card offers: units it attaches BY ITS EFFECT (independent of the
-    turn's manual attach) and units it merely puts in HAND (which the manual attach must play)."""
+    turn's manual attach), units it merely puts in HAND (which the manual attach must play), and
+    the per-card capacity ``cap`` its own group is policed by ({} when it needs no group)."""
     is_supporter: bool
     effect_units: tuple
     hand_yields: tuple
+    group: object = None
+    cap: dict = field(default_factory=dict)
 
 
-def _can_pay(slots, units) -> bool:
+def _can_pay(slots, units, caps=None) -> bool:
     """Can ``units`` cover an attack's per-slot cost ``slots`` (EnergyType codes; 0 = colourless)?
 
-    Exact: every SPECIFIC-type slot is matched to a distinct unit able to take that type (honouring
-    distinct-type groups), and the leftover units cover the colourless slots by count. Bounded and
-    tiny — costs run to 4 slots, budgets to a handful of units."""
+    Exact. Every slot — colourless ones too — is matched to a DISTINCT unit that takes one concrete
+    type from its pool, and each choice is charged against every capacity group the unit belongs to
+    (``caps``: group -> {EnergyType: max units}). Charging colourless slots matters: an Energy spent
+    paying a colourless slot still leaves the discard pile, so skipping it would let one card in the
+    pile fund two slots. A unit inside a group with no pool to name a type from cannot be charged,
+    so it is refused — fail-CLOSED, per ADR-0067.
+
+    Bounded and tiny: costs run to 4 slots, budgets to a handful of units, pools to a few colours.
+    Typed slots are ordered first so an impossible colour prunes before any colourless branching."""
+    caps = caps or {}
     if len(units) < len(slots):
         return False
-    typed = [s for s in slots if s not in (0, None)]
-    if not typed:
-        return True
+    ordered = sorted(slots, key=lambda s: s in (0, None))
 
-    def assign(i, used, taken):
-        if i == len(typed):
+    def assign(index, used, spent):
+        if index == len(ordered):
             return True
-        want = typed[i]
-        for j, u in enumerate(units):
-            bit = 1 << j
-            if used & bit or (u.types and want not in u.types):
+        want = ordered[index]
+        for j, unit in enumerate(units):
+            if used & (1 << j):
                 continue
-            if u.group >= 0 and want in taken.get(u.group, frozenset()):
-                continue                       # this group already spent that type (distinct-types)
-            nxt = taken if u.group < 0 else {**taken,
-                                             u.group: taken.get(u.group, frozenset()) | {want}}
-            if assign(i + 1, used | bit, nxt):
-                return True
+            if want not in (0, None):
+                if unit.types and want not in unit.types:
+                    continue
+                choices = (want,)
+            else:
+                choices = tuple(sorted(unit.types)) or (None,)
+            for chosen in choices:
+                charged, blocked = spent, False
+                for group in unit.groups:
+                    key = (group, chosen)
+                    if charged.get(key, 0) >= caps.get(group, {}).get(chosen, 0):
+                        blocked = True
+                        break
+                    charged = {**charged, key: charged.get(key, 0) + 1}
+                if not blocked and assign(index + 1, used | (1 << j), charged):
+                    return True
         return False
 
     return assign(0, 0, {})
@@ -539,16 +547,17 @@ class CombatMath:
                 (supporters if contrib.is_supporter else items).append(contrib)
         playsets = [items] + ([] if supporter_played else [items + [s] for s in supporters])
 
+        caps = {DISCARD_SUPPLY: dict(ctx.discard)}
+        caps.update({c.group: c.cap for c in items + supporters if c.group is not None})
+
         options = set()
         for playset in playsets:
             sources = [AttachUnit(frozenset(hand_energy_types))] if hand_energy_types else []
             sources += [u for c in playset for u in c.hand_yields]
             manual = [()] if energy_attached else [()] + [(s,) for s in sources]
-            # The whole play-set draws on ONE discard pile, so cap effect + manual TOGETHER.
-            options.update(_within_discard_supply(
-                tuple(u for c in playset for u in c.effect_units) + m, ctx.discard)
-                for m in manual)
-        return Budget(options=tuple(sorted(options, key=lambda o: (-len(o), str(o)))))
+            effect = tuple(u for c in playset for u in c.effect_units)
+            options.update(effect + m for m in manual)
+        return Budget(options=tuple(sorted(options, key=lambda o: (-len(o), str(o)))), caps=caps)
 
     def _attach_contribution(self, card_id, group: int, target_stat, ctx: _AttachCtx):
         """What one hand card offers the Budget, or None if it offers nothing (fail-CLOSED)."""
@@ -557,19 +566,24 @@ class CombatMath:
         if not (tags & _ACCEL_TAGS) or stat is None or not (stat.is_item or stat.is_supporter):
             return None                        # untagged, unknown, or a Pokémon (attack-based accel)
         clauses = self.effects.clauses(card_id) if self.effects else ()
-        distinct = any(cl.get("distinct_types") for cl in clauses)
-        gid = group if distinct else -1
+        # "of DIFFERENT types" is a per-CARD capacity of one unit per colour — no trimming needed:
+        # the units are all emitted and the cap decides how many can be realised together.
+        gid = group if any(cl.get("distinct_types") for cl in clauses) else None
         effect = [u for cl in clauses for u in self._accel_units(cl, target_stat, ctx, gid)]
         yields = [u for cl in clauses for u in self._hand_yield_units(cl, target_stat, ctx, gid)]
-        if distinct:                           # "of DIFFERENT types": never more units than colours
-            palette = set().union(*(u.types for u in effect + yields)) if (effect or yields) else set()
-            while len(effect) + len(yields) > len(palette):
-                (yields if yields else effect).pop()
         if not (effect or yields):
             return None
-        return _Contribution(stat.is_supporter, tuple(effect), tuple(yields))
+        cap = {t: 1 for u in effect + yields for t in u.types} if gid is not None else {}
+        return _Contribution(stat.is_supporter, tuple(effect), tuple(yields), gid, cap)
 
-    def _accel_units(self, clause: dict, target_stat, ctx: _AttachCtx, group: int) -> tuple:
+    @staticmethod
+    def _unit_groups(source, group) -> tuple:
+        """The capacity groups a unit answers to: its card's distinct-types group (when it has one)
+        and, for anything drawn from the public discard, the shared pile."""
+        return tuple(g for g in (group, DISCARD_SUPPLY if source == "discard" else None)
+                     if g is not None)
+
+    def _accel_units(self, clause: dict, target_stat, ctx: _AttachCtx, group) -> tuple:
         """Units an ``accel`` clause attaches BY ITS EFFECT — independent of the manual attach."""
         if clause.get("kind") != "accel" or not self._accel_target_ok(clause, target_stat, ctx):
             return ()
@@ -578,11 +592,9 @@ class CombatMath:
             return ()
         source = clause.get("source")
         pool = self._clause_pool(ctx.source_types(source), clause.get("energy_type"))
-        amount = int(clause.get("amount") or 0)
-        if group >= 0:
-            amount = min(amount, len(pool))    # distinct types can't outrun the available colours
-        return tuple(AttachUnit(pool, group, source == "discard")
-                     for _ in range(amount)) if pool else ()
+        groups = self._unit_groups(source, group)
+        return tuple(AttachUnit(pool, groups)
+                     for _ in range(int(clause.get("amount") or 0))) if pool else ()
 
     def _hand_yield_units(self, clause: dict, target_stat, ctx: _AttachCtx, group: int) -> tuple:
         """Units a clause puts in HAND rather than attaching — playable only via the turn's ONE
@@ -611,9 +623,7 @@ class CombatMath:
             amount = 1
         else:
             return ()
-        if group >= 0:
-            amount = min(amount, len(pool))     # distinct types can't outrun the available colours
-        return tuple(AttachUnit(pool, group, source == "discard")
+        return tuple(AttachUnit(pool, self._unit_groups(source, group))
                      for _ in range(amount)) if pool else ()
 
     @staticmethod
@@ -681,7 +691,7 @@ class CombatMath:
             return False
         attack_ids = (attack_id,) if attack_id is not None else tuple(stat.attacks or ())
         attached = self._attached_units(my_body)
-        return any(_can_pay(slots, attached + tuple(option))
+        return any(_can_pay(slots, attached + tuple(option), budget.caps)
                    for aid in attack_ids if aid != grant.get("same_lock")
                    for slots in (self._attack_slots(aid),) if slots
                    for option in budget.options)

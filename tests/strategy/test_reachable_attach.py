@@ -18,7 +18,7 @@ Card facts VERIFIED at source (`data/EN_Card_Data.csv`, `src/common/card_functio
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
-from common.strategy.combat import CombatMath
+from common.strategy.combat import DISCARD_SUPPLY, CombatMath
 
 # EnergyType codes (cg.api.EnergyType)
 COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
@@ -169,12 +169,19 @@ def test_a_supporter_tutor_and_the_manual_attach_co_occur():
 
 
 def test_two_supporters_never_co_occur():
-    """Crispin AND Rosa's Encouragement in hand is still ONE Supporter this turn."""
+    """Crispin AND Rosa's Encouragement in hand is still ONE Supporter this turn: each yields 2
+    units alone, so the giveaway of a double-play would be a 4-unit option. Asserted on the option
+    CONTENTS, not just the headline size — two 2-unit alternatives and one 2-unit sum look
+    identical from `size` alone."""
     c = _combat()
     b = c.attach_budget(_pult(), [CRISPIN, ROSA], deck_energy_types=DRAGAPULT_DECK_TYPES,
                         discard_energy_counts={FIRE: 1, PSYCHIC: 1}, more_prizes_than_opp=True)
-    # Rosa alone = 2 discard attaches; Crispin alone = 1 effect + 1 manual. Never 4.
     assert b.size == 2
+    assert max(len(option) for option in b.options) == 2
+    # Every option is drawn from ONE Supporter: Rosa's units are discard-sourced, Crispin's are not.
+    for option in b.options:
+        sources = {DISCARD_SUPPLY in unit.groups for unit in option}
+        assert len(sources) <= 1, f"an option mixes both Supporters' units: {option}"
 
 
 def test_the_supporter_quota_being_spent_zeroes_a_supporter_tutor():
@@ -288,6 +295,26 @@ def test_rosa_is_capped_by_what_the_discard_actually_holds():
     two = c.attach_budget(_pult(), [ROSA], energy_attached=True, more_prizes_than_opp=True,
                           discard_energy_counts={FIRE: 1, PSYCHIC: 1}, deck_energy_types=())
     assert two.size == 2
+
+
+def test_the_discard_cap_binds_by_COLOUR_not_merely_by_count():
+    """Two units off a {R:1, P:1} pile reach {R}{P} but NOT {P}{P} — the pile holds one {P}. A cap
+    that counted units without tracking which colour each consumed would call {P}{P} payable: two
+    legal units, jointly impossible. That is the catastrophic direction (ADR-0067)."""
+    c = _combat()
+    b = c.attach_budget(_pult(), [ROSA], energy_attached=True, more_prizes_than_opp=True,
+                        discard_energy_counts={FIRE: 1, PSYCHIC: 1}, deck_energy_types=())
+    assert c.reachable_attach(_pult(), PHANTOM_DIVE, budget=b) is True         # {R}{P}: one each
+    same_colour = {**_STATS, DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320,
+                                                 minAttackCost=2, attacks=(9998,), cardType=0)}
+    c2 = CombatMath(DictCardStatProvider(same_colour,
+                                         attacks={9998: AttackStat(9998, damage=10, cost=2,
+                                                                   energyTypes=(PSYCHIC, PSYCHIC))}),
+                    functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
+    assert c2.reachable_attach(_pult(), 9998, budget=b) is False               # {P}{P}: only one {P}
+    richer = c.attach_budget(_pult(), [ROSA], energy_attached=True, more_prizes_than_opp=True,
+                             discard_energy_counts={PSYCHIC: 2}, deck_energy_types=())
+    assert c2.reachable_attach(_pult(), 9998, budget=richer) is True           # two {P} in the pile
 
 
 def test_two_discard_accelerators_share_one_pile():
@@ -462,8 +489,8 @@ def test_typed_deck_fuel_is_empty_without_stats():
 # ---- the payment matcher, cross-checked against brute force ------------------------------------
 
 def test_the_typed_matcher_agrees_with_an_exhaustive_reference():
-    """`_can_pay` is a pruned search; this pins it against an exhaustive permutation oracle over
-    random slot/unit shapes. A silent over-count here is the catastrophic direction (ADR-0067):
+    """`_can_pay` is a pruned search; this pins it against an exhaustive reference over random
+    slot/unit/capacity shapes. A silent over-count here is the catastrophic direction (ADR-0067):
     it would hand a consumer a false 'can attack'."""
     import itertools
     import random
@@ -471,31 +498,35 @@ def test_the_typed_matcher_agrees_with_an_exhaustive_reference():
     from common.strategy.combat import AttachUnit as _U
     from common.strategy.combat import _can_pay
 
-    def brute(slots, units):
+    def brute(slots, units, caps):
+        """Try every injective slot->unit assignment and every concrete type per used unit."""
         if len(units) < len(slots):
             return False
         for perm in itertools.permutations(range(len(units)), len(slots)):
-            groups, ok = {}, True
+            pools = []
             for slot, j in zip(slots, perm):
-                if slot in (0, None):
-                    continue                       # a colourless slot takes any unit
                 u = units[j]
-                if (u.types and slot not in u.types) or slot in groups.get(u.group, set()):
-                    ok = False
-                    break
-                if u.group >= 0:
-                    groups.setdefault(u.group, set()).add(slot)
-            if ok:
-                return True
+                if slot not in (0, None):
+                    pools.append([slot] if (not u.types or slot in u.types) else [])
+                else:
+                    pools.append(sorted(u.types) or [None])
+            for picks in itertools.product(*pools) if all(pools) else ():
+                spent = {}
+                for (slot, j), chosen in zip(zip(slots, perm), picks):
+                    for g in units[j].groups:
+                        spent[(g, chosen)] = spent.get((g, chosen), 0) + 1
+                if all(n <= caps.get(g, {}).get(t, 0) for (g, t), n in spent.items()):
+                    return True
         return False
 
     rng = random.Random(137)
     types = [FIRE, PSYCHIC, FIGHTING, DARKNESS]
-    for _ in range(4000):
-        slots = tuple(rng.choice([COLORLESS] + types) for _ in range(rng.randint(1, 4)))
+    for _ in range(3000):
+        slots = tuple(rng.choice([COLORLESS] + types) for _ in range(rng.randint(1, 3)))
+        caps = {g: {t: rng.randint(0, 2) for t in types} for g in ("A", "B")}
         units = tuple(
             _U(rng.choice([frozenset(), frozenset({rng.choice(types)}),
                            frozenset(rng.sample(types, rng.randint(2, 3)))]),
-               rng.choice([-1, -1, 0, 0, 1]))
-            for _ in range(rng.randint(0, 5)))
-        assert _can_pay(slots, units) is brute(slots, units), (slots, units)
+               rng.choice([(), (), ("A",), ("B",), ("A", "B")]))
+            for _ in range(rng.randint(0, 4)))
+        assert _can_pay(slots, units, caps) is brute(slots, units, caps), (slots, units, caps)
