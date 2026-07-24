@@ -255,7 +255,9 @@
 "amount": 1,
 "source": "deck",
 "target": "any_pokemon",
-"energy": "basic"
+"energy": "basic",
+"to_hand": 1,
+"distinct_types": true
 }
 ],
 "1199": [
@@ -404,6 +406,17 @@
 "kind": "heal",
 "amount": 10,
 "condition": "played_supporter_this_turn"
+}
+],
+"1146": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "discard",
+"target": "benched",
+"target_type": 5,
+"energy": "basic",
+"energy_type": 5
 }
 ]
 }

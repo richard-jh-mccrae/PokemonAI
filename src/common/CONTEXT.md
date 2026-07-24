@@ -542,9 +542,11 @@ The turn's FULL self-side Energy-attach capacity toward one of my bodies: the ma
 still unspent) plus the attach effect of every PLAYABLE accel/tutor card in my hand at its full
 Effect-Clause-quantified yield — quota-aware (one Supporter per turn; hand-yield cards compete for
 the single manual attach, effect-attaches are independent of it). Typed where the card asserts a
-type, wild where it can't; a typed deck-fetch counts unless the deck is provably empty of that
-type; an unmodelled effect contributes ZERO (fail-closed — under-count, never over). The self-side
-mirror of **Incoming**'s one-development-step energy budget (ADR-0064).
+type, wild where it can't. The two Energy zones are read at different precisions: a typed *deck*
+fetch counts unless the deck is provably empty of that type (hidden zone), while a *discard*-sourced
+attach is capped at the supply visibly sitting there, jointly across the turn's discard-drawing
+effects (public zone). An unmodelled effect contributes ZERO (fail-closed — under-count, never
+over). The self-side mirror of **Incoming**'s one-development-step energy budget (ADR-0064).
 _Avoid_: "+1 accel" (the retired one-unit approximation — the Budget is the full modelled yield),
 attach (the single manual action; the Budget is the whole turn's capacity), energy budget
 (unqualified — say whose side)

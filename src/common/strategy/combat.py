@@ -9,7 +9,9 @@ needed (the doctrines' future explicit dependency).
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass, field
 
+from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
 from common.strategy.damage import compute_active_damage, wr_adjust
 
@@ -19,10 +21,140 @@ _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks pr
 _BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe/spread rider, capped below —
 _BENCH_SNIPE_CAP = 0.9     # a sub-prize tiebreak: the equal-outcome KO that ALSO snipes wins,
                            # without ever overriding a prize (ADR-0022 #14)
+_ACCEL_TAGS = frozenset({"tutor_energy", "energy_accel"})   # the Function-Tag ROUTING gate of the
+                           # Attach Budget: a tag says a card MIGHT supply Energy, an Effect Clause
+                           # says how much (ADR-0067) — an untagged card is never even inspected
 _RECUR_RELOAD_CAP = 3      # the max Basic Energy a `discard_energy_recur` line reloads from its OWN
                            # discard in one turn — VERIFIED at source (EN_Card_Data.csv): Mega Lucario
                            # ex 678 Aura Jab up to 3 Basic {F}; Archaludon ex 190 Assemble Alloy up to
                            # 2 Basic {M}. Bounds the discard-fuel above the strongest verified reload.
+
+
+@dataclass(frozen=True)
+class AttachUnit:
+    """ONE Energy unit that could sit on a body — the atom of the **Attach Budget**.
+
+    ``types``: the EnergyTypes this unit may take. Empty = ANY type (an attached Energy whose card
+    doesn't resolve — fail-open, matching :meth:`CombatMath.attack_type_payable`'s ``wild_units``).
+    A colourless/special unit carries ``{0}`` and so pays only colourless slots.
+
+    ``group``: units sharing a group id >= 0 must take **distinct** types — Crispin's "up to 2 Basic
+    Energy cards of DIFFERENT types" is one group, so it can never pay a same-colour 2-slot cost.
+
+    ``from_discard``: metadata only (never read by the matcher) — marks a unit drawn from the
+    VISIBLE discard, so the Budget can cap those units at the supply actually sitting there.
+    """
+    types: frozenset = field(default_factory=frozenset)
+    group: int = -1
+    from_discard: bool = False
+
+
+@dataclass(frozen=True)
+class Budget:
+    """The **Attach Budget** — this turn's full attach capacity toward ONE body (ADR-0067).
+
+    Held as ``options``: MUTUALLY-EXCLUSIVE unit sets, one per legal play-set (the Items always
+    play; each Supporter is an alternative to every other; the single manual attach picks one
+    Energy source). Affordability asks whether ANY option pays, so a Supporter choice that is
+    smaller but better-TYPED is never lost to a bigger one — exact, not a best-by-count guess.
+    """
+    options: tuple = ((),)
+
+    @property
+    def size(self) -> int:
+        """Units in the largest option — the Budget's headline magnitude (telemetry / tests)."""
+        return max((len(o) for o in self.options), default=0)
+
+
+@dataclass(frozen=True)
+class _AttachCtx:
+    """Per-decision zone facts the clause interpreter reads (never board objects).
+
+    The two Energy zones are read at DIFFERENT precisions on purpose (ADR-0067): the deck is
+    hidden, so it is a *not-provably-empty* type SET; the discard is public, so it is an exact
+    per-type COUNT and a discard-sourced yield can be capped at the supply really sitting there."""
+    deck: frozenset = field(default_factory=frozenset)
+    discard: dict = field(default_factory=dict)
+    benched: bool = False
+    more_prizes: bool = False
+
+    def source_types(self, source) -> frozenset:
+        """The Energy types a clause's SOURCE zone can still supply; empty for an unmodelled zone
+        (fail-CLOSED — an unreadable source yields nothing)."""
+        if source == "deck":
+            return self.deck
+        if source == "discard":
+            return frozenset(t for t, n in self.discard.items() if n > 0)
+        return frozenset()
+
+    def condition_met(self, condition) -> bool:
+        """A clause's play CONDITION; False for an unmodelled one (fail-CLOSED)."""
+        return {"more_prizes_remaining_than_opp": self.more_prizes}.get(condition, False)
+
+
+def _within_discard_supply(units, discard: dict) -> tuple:
+    """Drop discard-sourced units the VISIBLE discard cannot actually supply.
+
+    Every discard-drawing effect in a turn competes for ONE public pile, so their yields must be
+    capped jointly, not per card: two Wondrous Patches over a single {P} in the discard is one
+    attach, and Rosa's "up to 2" over a lone Basic Energy is one. Most-constrained-first: a
+    type-LOCKED unit is settled before a free-choice one, since it can only consume its own colour.
+    That greedy can in principle keep one unit fewer than a perfect assignment would — the
+    fail-CLOSED direction, which is the one ADR-0067 requires this leg to err in.
+
+    Deck-sourced units pass through untouched: the deck is hidden, and ADR-0067 rules that leg
+    *not-provably-empty* rather than counted."""
+    remaining, kept = dict(discard), []
+    for unit in sorted(units, key=lambda u: (not u.from_discard, len(u.types))):
+        if not unit.from_discard:
+            kept.append(unit)
+            continue
+        payable = [t for t in unit.types if remaining.get(t, 0) > 0]
+        if not payable:
+            continue                           # the pile is spent — this attach never happens
+        remaining[min(payable, key=lambda t: remaining[t])] -= 1
+        kept.append(AttachUnit(frozenset(payable), unit.group, True))
+    return tuple(kept)
+
+
+@dataclass(frozen=True)
+class _Contribution:
+    """What one playable hand card offers: units it attaches BY ITS EFFECT (independent of the
+    turn's manual attach) and units it merely puts in HAND (which the manual attach must play)."""
+    is_supporter: bool
+    effect_units: tuple
+    hand_yields: tuple
+
+
+def _can_pay(slots, units) -> bool:
+    """Can ``units`` cover an attack's per-slot cost ``slots`` (EnergyType codes; 0 = colourless)?
+
+    Exact: every SPECIFIC-type slot is matched to a distinct unit able to take that type (honouring
+    distinct-type groups), and the leftover units cover the colourless slots by count. Bounded and
+    tiny — costs run to 4 slots, budgets to a handful of units."""
+    if len(units) < len(slots):
+        return False
+    typed = [s for s in slots if s not in (0, None)]
+    if not typed:
+        return True
+
+    def assign(i, used, taken):
+        if i == len(typed):
+            return True
+        want = typed[i]
+        for j, u in enumerate(units):
+            bit = 1 << j
+            if used & bit or (u.types and want not in u.types):
+                continue
+            if u.group >= 0 and want in taken.get(u.group, frozenset()):
+                continue                       # this group already spent that type (distinct-types)
+            nxt = taken if u.group < 0 else {**taken,
+                                             u.group: taken.get(u.group, frozenset()) | {want}}
+            if assign(i + 1, used | bit, nxt):
+                return True
+        return False
+
+    return assign(0, 0, {})
 
 
 class CombatMath:
@@ -34,12 +166,15 @@ class CombatMath:
         functions: ``CardFunctions`` (defender-side prevention tags), or None.
         transients: the match-scoped ``TransientTracker`` (live next-turn grants keyed by body
             serial, ADR-0033), or None — no live shields/locks are then modeled.
+        effects: ``CardEffects`` (ADR-0032 Effect Clauses), or None — the Attach Budget then reads
+            no yields at all and is empty (fail-CLOSED, ADR-0067).
     """
 
-    def __init__(self, stats, functions, transients=None):
+    def __init__(self, stats, functions, transients=None, effects=None):
         self.stats = stats
         self.functions = functions
         self._transients = transients
+        self.effects = effects
 
     # --- record access (the Stat Provider seam, ADR-0056) ------------------------------
     def attack_stat(self, attack_id):
@@ -352,6 +487,223 @@ class CombatMath:
         if not oa:
             return 0
         return int(self.incoming(ma, [oa], 1, charged=charged, context=context))
+
+    # --- reachable Attach: MY next DEVELOPMENT step (issue #137 / ADR-0067) -----------------
+    def attach_budget(self, target: dict | None, hand_ids, *, energy_attached: bool = False,
+                      supporter_played: bool = False, deck_energy_types=(),
+                      hand_energy_types=(), discard_energy_counts=None,
+                      target_benched: bool = False, more_prizes_than_opp: bool = False) -> Budget:
+        """This turn's FULL Energy-attach capacity toward ``target`` — the **Attach Budget**.
+
+        Enumerates the manual attach (iff ``energy_attached`` is False) plus the attach EFFECT of
+        every PLAYABLE accel/tutor card in ``hand_ids``, each at its **Effect-Clause-quantified**
+        yield — never a flat ``+1`` (that under-read IS the f70 bug: Crispin attaches one Basic by
+        its effect AND hands a second of a different type the manual attach then plays, reaching a
+        2-cost typed attack from zero).
+
+        Two epistemics, split by what is uncertain (ADR-0067):
+        - **Yield fails CLOSED.** Function Tags only ROUTE (``_ACCEL_TAGS``); the amounts, source
+          zone, target restriction and play conditions come from Effect Clauses. An unmodelled
+          clause kind, target class, source zone or condition contributes **zero** — the oracle
+          never guesses a yield, so a PROVABLE famine still fires its stall.
+        - **Deck presence fails OPEN.** ``deck_energy_types`` is the *not-provably-empty* typed
+          set (the sound emptiness oracle, per type), not a provably-present one: with a thin
+          3-copy Energy suite nothing is provable before a search anchors the prizes, and a strict
+          gate would re-fire the very famine this exists to kill. The honest hypergeometric lives
+          in :meth:`readiness_p` alone.
+
+        Quotas are structural, never a branch thicket: Items all play; each Supporter is a separate
+        alternative play-set (one Supporter per turn — a tutor Supporter and the manual attach CAN
+        co-occur, two Supporters cannot); and the single manual attach plays exactly ONE Energy
+        source (an Energy already in hand, or one a played card fetched there).
+
+        A Pokémon-borne accel is deliberately never counted: its acceleration is an ATTACK
+        (Cinderace's Turbo Flare), and attacking ends the turn, so it can never fund another
+        attack this turn — the self-side mirror of ADR-0064's attack-based-accel exclusion.
+
+        Zone facts arrive as ARGUMENTS (no Board, no Pilot). ``deck_energy_types`` /
+        ``hand_energy_types`` are EnergyType codes; ``discard_energy_counts`` is a
+        ``{EnergyType: count}`` map — the discard is PUBLIC, so its yields are capped at the
+        supply really sitting there (two Wondrous Patches over one {P} is one attach), while the
+        hidden deck stays a type set. ``target_benched`` places the body for a bench-restricted
+        clause, and ``more_prizes_than_opp`` answers Rosa's Encouragement's prize gate.
+        """
+        ctx = _AttachCtx(deck=frozenset(deck_energy_types or ()),
+                         discard=dict(discard_energy_counts or {}),
+                         benched=bool(target_benched), more_prizes=bool(more_prizes_than_opp))
+        target_stat = self._card_stat((target or {}).get("id"))
+        items, supporters = [], []
+        for group, cid in enumerate(hand_ids or ()):
+            contrib = self._attach_contribution(cid, group, target_stat, ctx)
+            if contrib is not None:
+                (supporters if contrib.is_supporter else items).append(contrib)
+        playsets = [items] + ([] if supporter_played else [items + [s] for s in supporters])
+
+        options = set()
+        for playset in playsets:
+            sources = [AttachUnit(frozenset(hand_energy_types))] if hand_energy_types else []
+            sources += [u for c in playset for u in c.hand_yields]
+            manual = [()] if energy_attached else [()] + [(s,) for s in sources]
+            # The whole play-set draws on ONE discard pile, so cap effect + manual TOGETHER.
+            options.update(_within_discard_supply(
+                tuple(u for c in playset for u in c.effect_units) + m, ctx.discard)
+                for m in manual)
+        return Budget(options=tuple(sorted(options, key=lambda o: (-len(o), str(o)))))
+
+    def _attach_contribution(self, card_id, group: int, target_stat, ctx: _AttachCtx):
+        """What one hand card offers the Budget, or None if it offers nothing (fail-CLOSED)."""
+        tags = frozenset(self.functions.tags(card_id)) if self.functions else frozenset()
+        stat = self._card_stat(card_id)
+        if not (tags & _ACCEL_TAGS) or stat is None or not (stat.is_item or stat.is_supporter):
+            return None                        # untagged, unknown, or a Pokémon (attack-based accel)
+        clauses = self.effects.clauses(card_id) if self.effects else ()
+        distinct = any(cl.get("distinct_types") for cl in clauses)
+        gid = group if distinct else -1
+        effect = [u for cl in clauses for u in self._accel_units(cl, target_stat, ctx, gid)]
+        yields = [u for cl in clauses for u in self._hand_yield_units(cl, target_stat, ctx, gid)]
+        if distinct:                           # "of DIFFERENT types": never more units than colours
+            palette = set().union(*(u.types for u in effect + yields)) if (effect or yields) else set()
+            while len(effect) + len(yields) > len(palette):
+                (yields if yields else effect).pop()
+        if not (effect or yields):
+            return None
+        return _Contribution(stat.is_supporter, tuple(effect), tuple(yields))
+
+    def _accel_units(self, clause: dict, target_stat, ctx: _AttachCtx, group: int) -> tuple:
+        """Units an ``accel`` clause attaches BY ITS EFFECT — independent of the manual attach."""
+        if clause.get("kind") != "accel" or not self._accel_target_ok(clause, target_stat, ctx):
+            return ()
+        condition = clause.get("condition")
+        if condition is not None and not ctx.condition_met(condition):
+            return ()
+        source = clause.get("source")
+        pool = self._clause_pool(ctx.source_types(source), clause.get("energy_type"))
+        amount = int(clause.get("amount") or 0)
+        if group >= 0:
+            amount = min(amount, len(pool))    # distinct types can't outrun the available colours
+        return tuple(AttachUnit(pool, group, source == "discard")
+                     for _ in range(amount)) if pool else ()
+
+    def _hand_yield_units(self, clause: dict, target_stat, ctx: _AttachCtx, group: int) -> tuple:
+        """Units a clause puts in HAND rather than attaching — playable only via the turn's ONE
+        manual attach, so they compete for it instead of summing.
+
+        Two shapes: an ``accel`` clause's ``to_hand`` rider (Crispin's "put 1 of them into your
+        hand" half — carried HERE and not as a ``fetch`` clause, because a ``fetch`` row would
+        re-arm the gamble energy-closure that `effect_overrides.json` deliberately excludes it
+        from), and a plain deck ``fetch`` of an Energy (Fighting Gong's {F}-locked search, Hilda).
+        A ``to_hand`` rider rides its clause's own target/condition gates: an accel the body can't
+        legally receive is not played for its hand half either."""
+        kind = clause.get("kind")
+        source = clause.get("source")
+        if kind == "accel":
+            if not self._accel_target_ok(clause, target_stat, ctx):
+                return ()
+            condition = clause.get("condition")
+            if condition is not None and not ctx.condition_met(condition):
+                return ()
+            pool = self._clause_pool(ctx.source_types(source), clause.get("energy_type"))
+            amount = int(clause.get("to_hand") or 0)
+        elif kind == "fetch" and clause.get("zone") == "deck":
+            if clause.get("target") not in ("basic_energy", "energy"):
+                return ()                      # a Pokémon/Trainer fetch is no Energy at all
+            pool, source = self._clause_pool(ctx.deck, clause.get("energy_type")), "deck"
+            amount = 1
+        else:
+            return ()
+        if group >= 0:
+            amount = min(amount, len(pool))     # distinct types can't outrun the available colours
+        return tuple(AttachUnit(pool, group, source == "discard")
+                     for _ in range(amount)) if pool else ()
+
+    @staticmethod
+    def _clause_pool(available: frozenset, energy_type) -> frozenset:
+        """The colours a clause can actually deliver: its source zone's, narrowed by a type lock."""
+        return available if energy_type is None else available & {energy_type}
+
+    @staticmethod
+    def _accel_target_ok(clause: dict, target_stat, ctx: _AttachCtx) -> bool:
+        """May this ``accel`` clause legally attach to the body being budgeted? Fail-CLOSED on an
+        unknown body or an unmodelled target class — a restricted accel never funds a body it
+        cannot reach (Wondrous Patch is BENCHED-{P}-only; Rosa's Encouragement is Stage-2-only)."""
+        if target_stat is None:
+            return False
+        target_type = clause.get("target_type")
+        if target_type is not None and getattr(target_stat, "energyType", None) != target_type:
+            return False
+        target = clause.get("target")
+        if target in (None, "any_pokemon"):
+            return True
+        if target == "stage2":
+            return bool(getattr(target_stat, "stage2", False))
+        if target == "benched":
+            return ctx.benched
+        return False
+
+    def _attached_units(self, body: dict | None) -> tuple:
+        """The Energy already ON the body, as Budget units — a typed Basic keeps its colour, a
+        colourless/special one pays colourless slots only, an unresolvable card is wild (fail-open,
+        exactly as :meth:`attack_type_payable` treats it)."""
+        units = []
+        for eid in ((body or {}).get("energies") or ()):
+            etype = getattr(self._card_stat(eid), "energyType", None)
+            units.append(AttachUnit(frozenset() if etype is None else frozenset({etype})))
+        return tuple(units)
+
+    def _attack_slots(self, attack_id) -> tuple:
+        """An attack's per-slot cost as EnergyType codes; () when no record resolves OR the cost is
+        0 (the pinned unknown/0-cost quirk) — the caller then makes no claim."""
+        ast = self.attack_stat(attack_id)
+        if ast is None:
+            return ()
+        return tuple(ast.energyTypes) or (0,) * int(ast.cost or 0)
+
+    def reachable_attach(self, my_body: dict | None, attack_id=None, *, budget: Budget) -> bool:
+        """Can ``my_body`` PAY (and legally use) an attack THIS turn under ``budget``? — the
+        self-side mirror of :meth:`reachable_incoming` (ADR-0064), the **Reachable Attach** oracle.
+
+        ``attack_id`` None asks the FAMINE question: is ANY attack reachable? (Scanning all attacks
+        rather than the cheapest-by-count is what makes the boolean sound once types matter — a
+        cheap ``{F}{F}`` can be unpayable while a dearer ``●●●`` is not.) So a famine — the premise
+        the stall-gust family had wrong at f70 — is ``not reachable_attach(active, None)``, never
+        "0 Energy attached".
+
+        Affordability is per-slot TYPED against attached Energy plus the Budget, and any single
+        Budget option may pay. Transient attack locks are honoured (ADR-0033): a blanket
+        ``self_lock`` body reaches nothing and a ``same_lock`` attack is skipped, so "payable" can
+        never mean an attack the engine will not offer. Fail-CLOSED throughout: an unknown body,
+        an unresolvable attack record or a 0-cost quirk makes NO claim."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return False
+        grant = self._grant(my_body) or {}
+        if grant.get("self_lock"):
+            return False
+        attack_ids = (attack_id,) if attack_id is not None else tuple(stat.attacks or ())
+        attached = self._attached_units(my_body)
+        return any(_can_pay(slots, attached + tuple(option))
+                   for aid in attack_ids if aid != grant.get("same_lock")
+                   for slots in (self._attack_slots(aid),) if slots
+                   for option in budget.options)
+
+    def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
+                    enabler_budget: Budget | None = None,
+                    copies: int = 0, pool: int = 0, draws: int = 0) -> float:
+        """P(``my_body`` is READY to use the attack this turn) — the EV variant of
+        :meth:`reachable_attach`, and the probabilistic MIDDLE the interim promote/retreat
+        ``fetch_enables_p`` never had (it shipped a bare 1.0/0.0).
+
+        1.0 when ``budget`` — what I hold NOW — already reaches. Otherwise, if drawing a still-in-
+        deck enabler WOULD reach (``enabler_budget``, the same Budget computed as though that card
+        were in hand), the exact hypergeometric that the turn's remaining dig finds one:
+        ``draw_hit_probability(copies, pool, draws)``. Fail-CLOSED at 0.0 — no enabler modelled, or
+        an enabler that still would not pay, is worth nothing, never its bare draw odds."""
+        if self.reachable_attach(my_body, attack_id, budget=budget):
+            return 1.0
+        if enabler_budget is None or not self.reachable_attach(my_body, attack_id,
+                                                               budget=enabler_budget):
+            return 0.0
+        return draw_hit_probability(copies, pool, draws)
 
     # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,

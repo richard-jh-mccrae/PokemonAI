@@ -35,6 +35,11 @@ The epistemic is split by **what** is uncertain, not applied uniformly:
    manual attach), Crispin's two units require two distinct Basic-Energy types, and a
    coverage-gate test makes the zero *audited* — every `tutor_energy`/`energy_accel`-tagged card
    in any agent's deck must carry a clause row or sit on an explicit known-unmodelled list.
+   The two Energy zones are therefore read at different precisions: the **discard is public**, so
+   a discard-sourced yield is capped at the supply really sitting there and the whole turn's
+   discard-drawing effects are capped JOINTLY (two Wondrous Patches over one {P} is one attach;
+   Rosa's "up to 2" over a lone Basic Energy is one) — a type palette alone would silently
+   over-count. The hidden deck is ruled the opposite way:
 2. **Deck presence fails OPEN (not-provably-empty), typed.** A typed deck-fetch counts unless
    the deck is PROVABLY empty of that Energy type (`basic_energy_types_in_deck()`, the typed
    per-id extension of the sound emptiness oracle) — the same epistemic the live
@@ -58,3 +63,11 @@ It buys soundness against a ~0.1% prized-copy corner at the cost of reinstating 
   reuse the boolean — it needs the anchored/pigeonhole tier explicitly.
 - The clause interpreter is the extension point: new accel cards are new DATA rows
   (clauses/conditions), never new branches in the budget code.
+- **Crispin's hand half rides its ACCEL clause (`to_hand: 1`), not a new `fetch` clause** — found
+  at build time. A `fetch` row would have been read by the live gamble energy-closure
+  (`planner._fetch_reaches_slot`), which `effect_overrides.json` deliberately excludes Crispin
+  from ("a Supporter is slot-dead after a Supporter refresh"), so the obvious encoding would have
+  silently changed a shipped consumer in a phase whose contract is *no consumer behavior change*.
+  The rider keeps the Budget's view complete while every existing clause consumer sees exactly
+  what it saw before. New vocabulary this adds to the compendium: `to_hand`, `distinct_types`,
+  `target_type` (a recipient's required EnergyType), and `energy_type` on an accel clause.
