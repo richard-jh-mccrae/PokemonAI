@@ -41,3 +41,24 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
 ## Secrets
 
 `kaggle_api_token/` holds a real Kaggle API token (`instructions.txt`). **Never commit it or paste the token into code, configs, or chat.** A root `.gitignore` already excludes `kaggle_api_token/`, `data/meta/`, and `reports/`; the Kaggle CLI reads the token from `KAGGLE_API_TOKEN` or `%USERPROFILE%\.kaggle\access_token` (preferred for the scheduled task).
+
+## Agent skills
+
+External engineering skills from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT)
+are vendored under `.claude/skills/` (`teach`, `wayfinder`, `to-spec`, `to-tickets`, `implement`,
+`tdd`, `code-review`, `research`, `prototype`, `domain-modeling`, `grilling`,
+`setup-matt-pocock-skills`). Intended flow for a GitHub issue: `/grill-with-docs` (or `/grilling`)
+to lock decisions → `/to-spec` to synthesise the spec → `/implement` to build it hands-off;
+`/to-tickets` chunks a large spec, `/wayfinder` handles work too big/foggy for one session.
+
+### Issue tracker
+
+GitHub issues on `richard-jh-mccrae/PokemonAI`, driven via the GitHub **MCP tools**
+(`mcp__github__*`) — no `gh` CLI in web/mobile sessions. One `status:*` chip per issue tracks the
+`grill → spec → build` pipeline (`status:1-grilling` → `2-spec` → `3-build` → `4-done`); `/to-spec`
+and `/implement` advance it automatically. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Multi-context: `CONTEXT-MAP.md` indexes per-context `CONTEXT.md` files; all ADRs live in one
+system-wide `docs/adr/` series. See `docs/agents/domain.md`.
