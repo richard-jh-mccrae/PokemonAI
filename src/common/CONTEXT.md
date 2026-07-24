@@ -740,6 +740,21 @@ _Avoid_: cache (a cache is a recomputable memo — Carried State is genuinely un
 current obs), belief (#149's `known_top` is one MEMBER of this channel, not the channel), turn state
 (engine per-turn flags like `supporterPlayed` are obs facts, not Carried State)
 
+**Count Triple**:
+The three-legged shape of a hidden-zone count field (first instance: `deck_energy_counts`, per-type
+Basic Energy still in MY deck): **floor** (provably at least — pigeonhole over hidden prizes; sound,
+safe for `>=` checks), **expected** (the hypergeometric prize-split average — EV math only, a fraction
+of a card, never comparable to a cost), and **ceiling** (provably at most; the fail-open "could it be
+there" leg — 0a's sound type-set gate is exactly `ceiling > 0`). Two regimes, one interface: PRE-ANCHOR
+(before the first deck-revealing search) the legs honestly diverge; ANCHORED (`deck_known_counts`
+resolved, `obs['own_prizes']` exact) all three collapse to the same integer — so consumers never branch
+on "are we anchored?", and a consumer must NAME the epistemic it reads (`.floor`/`.expected`/`.ceiling`),
+making the estimate-smuggled-into-sound-math mistake (ADR-0067's contamination) ungrammatical rather
+than merely discouraged. The pre-anchor window is short (turns 1–2) but is exactly where the famine
+misreads live (f70; ADR-0067's pre-anchor ruling).
+_Avoid_: expected count alone (that's ONE leg — a bare expectation invites `1.6 >= 1` on a deck that
+holds zero), deck tracker (the SOUND per-card ledger the triple's anchored regime reads from)
+
 **Leaf Profile**:
 The measured subset of **StateModel** fields a planner-leaf evaluation actually touches, plus its
 measured cost — the budget #145's `state_value` and #150's K-sample search size against. **CI-pinned as
