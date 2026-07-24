@@ -152,6 +152,29 @@ table ruled at that grill. No generic event-subscription framework (zero v1 user
 - **Profiling is reported per side** (my Needs/budget cluster vs their clock/read cluster) —
   the split that keeps the side-sharing rationale falsifiable — with the leaf path measured
   separately from the per-decision build (#145/#150 size against these numbers).
+
+  **Measured 2026-07-24, Linux, dragapult_ex over 40 real correction frames:**
+
+  | quantity | cost |
+  |---|---|
+  | `StateModel.build` alone (computes nothing) | **0.0045 ms** |
+  | whole per-decision `Board` build, for scale | 0.954 ms |
+  | model's share of that build (12 fields read) | ~0.02 ms (≈2%) |
+  | THEIR clock cluster (`incoming` + `turns_to_ko_me` + `turns_to_afford`) | **0.113 ms** |
+  | MY affordability cluster (per-body Budgets + famine) | **0.156 ms** |
+  | MY deck counts (`unseen_counts` + Count Triples) | 0.042 ms |
+  | one planner leaf, end to end | 12.7 ms (engine sim dominates) |
+  | model's share of a leaf | ~0.08 ms (**under 1%**) |
+
+  Two findings worth carrying forward. First, the **structural claim holds**: the two expensive
+  clusters really do sit on opposite sides (theirs 0.113 ms vs mine 0.198 ms), so side-level
+  sharing pays in both directions and eager evaluation of the full picture would cost ~0.31 ms
+  per decision against the ~0.02 ms the current profile actually reads — laziness saves ~93% at
+  today's field set. Second, and **not anticipated in the grill**: a leaf's model cost is *not*
+  one build. `_simulate_line` re-runs my policy to end-of-turn, so a leaf pays one per-decision
+  build per decision the simulated line makes (**N = 4** measured on a real turn-1 drive). That
+  is the number #145 and #150 must size against, and it is pinned by a test rather than left in
+  a doc.
 - **The fingerprint cache's honest hit profile:** it misses on every play that touches their
   side (gust, Judge, damage transfer, denial) and hits on the majority that don't (attach,
   evolve, bench, search, draw, retreat). Correctness never depends on the hit rate.

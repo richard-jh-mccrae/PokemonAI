@@ -350,11 +350,21 @@ class MySide(_SideBase):
                      if c and c.get("id") is not None)
 
     @lazy
+    def hand_energy_counts(self) -> dict:
+        """``{EnergyType: count}`` of Basic Energy in my hand — the manual attach's immediately
+        playable supply, as a COUNT because "one {R} left" and "three" are different decisions
+        (the last-attachable-Energy read)."""
+        counts: Counter = Counter()
+        for cid in self.hand_ids:
+            stat = self._combat._card_stat(cid)
+            if stat is not None and stat.is_typed_basic_energy:
+                counts[stat.energyType] += 1
+        return dict(counts)
+
+    @lazy
     def hand_energy_types(self) -> frozenset:
-        """Basic-Energy types sitting in my hand — the manual attach's immediately-playable supply."""
-        return frozenset(stat.energyType for cid in self.hand_ids
-                         if (stat := self._combat._card_stat(cid)) is not None
-                         and stat.is_typed_basic_energy)
+        """The TYPES of that supply — what the Attach Budget's manual-attach leg takes."""
+        return frozenset(self.hand_energy_counts)
 
     @lazy
     def needs(self):
@@ -565,11 +575,13 @@ class TheirSide(_SideBase):
         stays identical to the curve by construction."""
         return self.incoming(my_body, 1, evo_min_energy=evo_min_energy, context=context)
 
-    def turns_to_afford(self, body: BodyView) -> int:
-        """Turns until ``body`` can pay an attack — their side of the energy clock."""
-        return self._memoized(("turns_to_afford", id(body.body)),
+    def turns_to_afford(self, body: BodyView, *, attaches_per_turn: int = 1) -> int | None:
+        """The earliest future turn ``body``'s line is ARMED — its biggest attack's cost payable.
+        None when unknown (fail-closed: the caller emits no deny slot)."""
+        return self._memoized(("turns_to_afford", id(body.body), attaches_per_turn),
                               lambda: self._combat.turns_to_afford(
-                                  body.body, forward_ids=self._forward_ids, charged=self._charged))
+                                  body.body, forward_ids=self._forward_ids,
+                                  attaches_per_turn=attaches_per_turn))
 
     def turns_to_ko_me(self, my_body: dict | None) -> int:
         return self._memoized(("turns_to_ko_me", id(my_body) if my_body is not None else None),
@@ -581,7 +593,8 @@ class TheirSide(_SideBase):
         half of the discard read, which makes a KO'd threat's line persistent."""
         return self._memoized(("discard_recur_fuel", id(body.body)),
                               lambda: self._combat.discard_recur_fuel(
-                                  body.body, self.discard_energy_counts))
+                                  body.body, self.discard_energy_counts,
+                                  forward_ids=self._forward_ids))
 
 
 # ── the model ─────────────────────────────────────────────────────────────────────────────────

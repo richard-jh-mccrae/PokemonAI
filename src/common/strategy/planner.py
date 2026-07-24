@@ -3046,17 +3046,14 @@ class PlannerMixin:
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
-        only, WITHOUT letting it pollute the live turn-scoped memory — ``_board`` mutates the phase
-        hysteresis (``_phase_prev``) and the path stickiness (``_my_path_prev``) as a side effect of
-        the in-order decision sequence, which a ranked/escalated future must not perturb. Snapshot +
-        restore both around the build (ADR-0042/0043)."""
-        saved_phase = getattr(self, "_phase_prev", None)
-        saved_path = getattr(self, "_my_path_prev", None)
-        try:
-            return self._board(obs, (obs or {}).get("select"))
-        finally:
-            self._phase_prev = saved_phase
-            self._my_path_prev = saved_path
+        only, without letting it pollute the live turn-scoped memory.
+
+        Passing the **Carried State** snapshot is what guarantees that (ADR-0068 decision 2): the
+        phase hysteresis and path stickiness are read from the snapshot and their new values
+        discarded, so the build cannot write them at all. This replaced a hand-written
+        snapshot-and-restore around the call — a guard every future hypothetical-build site would
+        otherwise have had to remember, and the third copy of which this phase declined to write."""
+        return self._board(obs, (obs or {}).get("select"), carried=self.carried())
 
     def _value_term(self, end_obs) -> float:
         """The Automatic Value Model's contribution to a simmed leaf (ADR-0042): P(win) on the end-of-turn
@@ -3470,14 +3467,12 @@ class PlannerMixin:
         self._planning = True                          # never nest a search inside the reply policy
         line_val = 0.0
         try:
-            saved_phase = getattr(self, "_phase_prev", None)   # the root re-score mutates phase/path
-            saved_path = getattr(self, "_my_path_prev", None)  # hysteresis (`_board`) — snapshot + restore
-            try:                                               # so the live turn state is untouched
-                root = self._evaluate(obs)              # line account of the taken FIRST action (its
-                line_val += self._line_account(root.options, list(first_step))   # ability-fire / spend rules)
-            finally:
-                self._phase_prev = saved_phase
-                self._my_path_prev = saved_path
+            root = self._evaluate(obs, carried=self.carried())   # the root re-score reads the phase/
+            line_val += self._line_account(root.options,         # path memories from the Carried
+                                           list(first_step))     # State snapshot and writes neither,
+                                                                 # so the live turn is untouched by
+                                                                 # construction (ADR-0068) — this was
+                                                                 # a hand-written save/restore pair
             ob = cgapi.to_observation_class(obs)
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=False)
             st = cgapi.search_step(st.searchId, list(first_step))

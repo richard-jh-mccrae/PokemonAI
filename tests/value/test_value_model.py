@@ -118,9 +118,14 @@ def test_favorability_sanity_gate_detects_a_live_matchup_weight():
 @pytest.mark.req("REQ-VALUE-0005")
 def test_hypothetical_board_build_does_not_pollute_live_memory():
     """`_board_hypothetical` (used by the value leaf on SIMMED boards) must not perturb the live
-    turn-scoped memory — `_board` mutates the phase hysteresis and path stickiness as a side effect
-    of the in-order decision sequence, so a ranked/escalated FUTURE board must snapshot+restore
-    them (else a hypothetical future rewrites the live hysteresis)."""
+    turn-scoped memory: a hypothetical future must never rewrite the live phase hysteresis or sticky
+    path.
+
+    The ASSERTION is unchanged by #138 — the guarantee is the same one — but the MECHANISM under it
+    is now structural rather than defensive (ADR-0068 decision 2): the build is handed the **Carried
+    State** snapshot, reads both memories from it, and writes neither, instead of writing them and
+    restoring afterwards. Same observable behavior, minus the per-site guard that every future
+    hypothetical-build caller would have had to remember."""
     from common.strategy.strategy import Plan
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
@@ -132,6 +137,13 @@ def test_hypothetical_board_build_does_not_pollute_live_memory():
                                     "bench": [], "hand": [], "prize": [None] * 6},
                                    {"active": [{"id": 678, "hp": 440, "energies": []}],
                                     "bench": [], "prize": [None] * 6, "hand": []}]}}
+    before = pilot.carried()                                # the declared channel's snapshot
     pilot._board_hypothetical(obs)                          # build a FUTURE board for features
     assert pilot._phase_prev is Plan.STABILIZE              # live memory untouched …
-    assert pilot._my_path_prev == frozenset({678})         # … both fields restored
+    assert pilot._my_path_prev == frozenset({678})         # … both members
+    assert pilot.carried() == before                        # … and the channel as a whole
+
+    # The same guarantee now extends to a full option re-score inside a simulated line (the second
+    # site that used to carry its own hand-written save/restore pair).
+    pilot._evaluate(dict(obs, select={"option": []}), carried=pilot.carried())
+    assert pilot.carried() == before
