@@ -537,6 +537,30 @@ body, Incoming counts only true bench-snipe (the body is assumed to stay benched
 _Avoid_: Threat (the objective attacker description from the Read; Incoming is the math *against my
 specific body*), active_doomed (a boolean derived from Incoming, not the magnitude)
 
+**Attach Budget**:
+The turn's FULL self-side Energy-attach capacity toward one of my bodies: the manual attach (iff
+still unspent) plus the attach effect of every PLAYABLE accel/tutor card in my hand at its full
+Effect-Clause-quantified yield — quota-aware (one Supporter per turn; hand-yield cards compete for
+the single manual attach, effect-attaches are independent of it). Typed where the card asserts a
+type, wild where it can't; a typed deck-fetch counts unless the deck is provably empty of that
+type; an unmodelled effect contributes ZERO (fail-closed — under-count, never over). The self-side
+mirror of **Incoming**'s one-development-step energy budget (ADR-0064).
+_Avoid_: "+1 accel" (the retired one-unit approximation — the Budget is the full modelled yield),
+attach (the single manual action; the Budget is the whole turn's capacity), energy budget
+(unqualified — say whose side)
+
+**Reachable Attach**:
+The self-side affordability oracle: whether MY body can pay a given attack (or its cheapest) THIS
+turn — the attack's TYPED per-slot cost tested against attached Energy plus the **Attach Budget**
+(greedy typed match). **Famine** = the cheapest attack unreachable even under the full Budget —
+never "0 Energy attached". Boolean and sound-or-silent; its EV variant **readiness_p** prices a
+still-uncertain enabler by the hypergeometric draw instead of 1.0/0.0. The mirror of
+`reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table,
+opposite fail direction (under-count my budget; over-count their threat).
+_Avoid_: active_attack_payable (the attached-now truth — no budget), active_attack_payable_via_accel
+(the retired +1/cheapest-only/untyped approximation), payable (unqualified — attached-now or
+budget-aware?)
+
 **Survival Window**:
 How many turns one of my bodies withstands the predicted **Incoming** before it is Knocked Out. The
 lever a defensive +HP Tool pays for: the Tool earns its slot when its boost widens this window by a
