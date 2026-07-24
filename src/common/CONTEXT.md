@@ -724,6 +724,22 @@ and #150's K sampled worlds reuse MY SideState unmodified. Reuse is **guarded** 
 _Avoid_: player (the engine obs dict for one seat), Opponent Model (the KNOWLEDGE facade, ADR-0047 —
 their SideState *composes* it rather than being it)
 
+**Carried State**:
+The narrow, explicitly-declared channel of facts that persist ACROSS decision points, as opposed to
+the **StateModel**'s per-obs derivations. Members: the phase hysteresis (`_phase_prev` — STABILIZE's
+Schmitt trigger, `objectives._derive_phase`), the Prize-Path stickiness (`_my_path_prev`,
+`objectives._sticky_path`), and later #149's `known_top` (we know our deck's top card because we placed
+it; the obs never shows it). Each is READ IN as an argument and HANDED BACK as a return value — the
+caller decides whether to store it — so no derivation mutates Pilot state as a side effect of being
+computed. This is what keeps the StateModel **pure**, which in turn is what makes SideState sharing and
+the **Leaf Profile** pin sound: a model that rewrote itself on read could be neither shared nor pinned.
+Before this channel existed the two hysteresis memories were mutated by `_board` and defended by
+hand-written snapshot/restore at two separate call sites (`planner.py:3050`, `planner.py:3473`) — a
+planner fork's *hypothetical* phase could otherwise leak into the real game's memory.
+_Avoid_: cache (a cache is a recomputable memo — Carried State is genuinely unrecoverable from the
+current obs), belief (#149's `known_top` is one MEMBER of this channel, not the channel), turn state
+(engine per-turn flags like `supporterPlayed` are obs facts, not Carried State)
+
 **Leaf Profile**:
 The measured subset of **StateModel** fields a planner-leaf evaluation actually touches, plus its
 measured cost — the budget #145's `state_value` and #150's K-sample search size against. **CI-pinned as
