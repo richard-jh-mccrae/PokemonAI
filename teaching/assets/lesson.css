@@ -1,0 +1,129 @@
+/* ============================================================================
+   PokemonAI teaching — shared lesson stylesheet.
+   The FIRST reusable component of the workspace: every lesson links this so the
+   whole course reads as one document. Palette + typography deliberately match
+   teaching/reference/formula-cheatsheet.html and the Typst textbook.
+   Callout colours mirror the book: green = Pokémon example, amber = road-not-
+   taken, purple = toolbox / transfer.
+   ============================================================================ */
+
+:root{
+  --accent:#1f4e79;      /* headings, rules            */
+  --poke:#0a7d5a;        /* green  — Pokémon example    */
+  --amber:#9a5b00;       /* amber  — road not taken     */
+  --tool:#5a3a91;        /* purple — toolbox / transfer */
+  --ink:#222; --paper:#fbfbf9; --rule:#d9d9d0; --mut:#555;
+  --ok:#0a7d5a; --no:#a01e1e;
+  /* energy-token colours (visual only; verify real costs at source) */
+  --e-R:#c0392b; --e-P:#8e44ad; --e-C:#8a8a80;
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  line-height:1.5;
+}
+.wrap{max-width:760px;margin:0 auto;padding:34px 26px 90px}
+
+/* ---- masthead ---- */
+header.lesson{border-bottom:3px solid var(--accent);padding-bottom:12px;margin-bottom:26px}
+.eyebrow{font-family:"Helvetica Neue",Arial,sans-serif;font-size:.68rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--mut)}
+h1{font-family:"Helvetica Neue",Arial,sans-serif;color:var(--accent);font-size:1.7rem;
+  line-height:1.15;margin:.15em 0 .1em}
+header.lesson .sub{color:var(--mut);font-style:italic;margin-top:6px}
+.win{margin-top:14px;background:#eef3f8;border:1px solid #c9d8e8;border-radius:7px;
+  padding:9px 13px;font-size:.95rem}
+.win b{color:var(--accent);font-family:"Helvetica Neue",Arial,sans-serif;
+  font-size:.66rem;letter-spacing:.09em;text-transform:uppercase;display:block;margin-bottom:2px}
+
+/* ---- structure ---- */
+h2{font-family:"Helvetica Neue",Arial,sans-serif;color:var(--accent);font-size:1.16rem;
+  margin:32px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--rule)}
+h2 .n{color:#9bb0c4;font-weight:700;margin-right:.5em}
+h3{font-family:"Helvetica Neue",Arial,sans-serif;font-size:.95rem;color:var(--ink);margin:20px 0 6px}
+p{margin:.55em 0}
+a{color:var(--accent)}
+strong{color:#111}
+.lede{font-size:1.06rem}
+
+/* ---- callouts ---- */
+.call{border-left:4px solid var(--rule);border-radius:0 6px 6px 0;background:#fff;
+  padding:11px 15px;margin:16px 0;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.call .lab{font-family:"Helvetica Neue",Arial,sans-serif;font-size:.62rem;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;display:block;margin-bottom:4px}
+.call p:first-of-type{margin-top:0}.call p:last-child{margin-bottom:0}
+.poke{border-left-color:var(--poke);background:#f2faf6}
+.poke .lab{color:var(--poke)}
+.amber{border-left-color:var(--amber);background:#fbf6ec}
+.amber .lab{color:var(--amber)}
+.tool{border-left-color:var(--tool);background:#f6f2fb}
+.tool .lab{color:var(--tool)}
+
+/* inline tag chips (match cheat-sheet) */
+.tag{display:inline-block;font-family:"Helvetica Neue",Arial,sans-serif;font-size:.58rem;
+  font-weight:700;letter-spacing:.05em;padding:1px 5px;border-radius:3px;vertical-align:middle;
+  color:#fff;margin-left:4px}
+.t-poke{background:var(--poke)}.t-amber{background:var(--amber)}.t-tool{background:var(--tool)}
+
+/* ---- code / mono / formulas ---- */
+code,.mono{font-family:"SF Mono",Consolas,"Liberation Mono",monospace;font-size:.86em;
+  background:#f1f1ec;border-radius:3px;padding:.5px 4px}
+.f{font-family:"Cambria Math","Latin Modern Math",Georgia,serif;font-size:1.05rem;margin:6px 0}
+pre.work{font-family:"SF Mono",Consolas,"Liberation Mono",monospace;font-size:.82rem;line-height:1.55;
+  background:#20242b;color:#e7e7df;border-radius:7px;padding:13px 15px;overflow-x:auto;margin:12px 0}
+pre.work .c{color:#8fbf9f}   /* comment / good */
+pre.work .k{color:#e6b565}   /* key term      */
+pre.work .x{color:#e07a6b}   /* wrong / bug   */
+
+/* ---- energy tokens (visual; real costs verified at source) ---- */
+.e{display:inline-block;min-width:1.35em;height:1.35em;line-height:1.35em;text-align:center;
+  border-radius:50%;font-family:"Helvetica Neue",Arial,sans-serif;font-size:.72rem;font-weight:700;
+  color:#fff;vertical-align:middle;margin:0 1px}
+.e-R{background:var(--e-R)}.e-P{background:var(--e-P)}.e-C{background:var(--e-C);color:#fff}
+
+/* ---- tables ---- */
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.9rem}
+th,td{border:1px solid var(--rule);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#eef1f4;font-family:"Helvetica Neue",Arial,sans-serif;font-size:.74rem;
+  letter-spacing:.03em;text-transform:uppercase;color:var(--accent)}
+td.down{color:var(--no);font-weight:600}td.up{color:var(--accent);font-weight:600}
+
+/* ---- quiz (styled by assets/quiz.js) ---- */
+.quiz{margin:14px 0}
+.q{background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px 16px;margin:14px 0}
+.q .stem{font-weight:600;margin-bottom:10px}
+.q .opts{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.q .opts li{margin:0}
+.q button.opt{font:inherit;text-align:left;width:100%;cursor:pointer;background:#fbfbf9;
+  border:1px solid var(--rule);border-radius:6px;padding:8px 11px;transition:background .12s}
+.q button.opt:hover{background:#f0f4f8}
+.q button.opt.pick-ok{border-color:var(--ok);background:#eaf7f0}
+.q button.opt.pick-no{border-color:var(--no);background:#fbeded}
+.q button.opt.reveal-ok{border-color:var(--ok)}
+.q button.opt[disabled]{cursor:default}
+.q .fb{margin-top:10px;font-size:.9rem;display:none}
+.q .fb.show{display:block}
+.q .fb.ok{color:var(--ok)}.q .fb.no{color:var(--no)}
+.reveal{margin:12px 0}
+.reveal button.rv{font:inherit;font-family:"Helvetica Neue",Arial,sans-serif;font-size:.82rem;
+  cursor:pointer;background:#eef3f8;border:1px solid #c9d8e8;border-radius:6px;padding:6px 12px;color:var(--accent)}
+.reveal .ans{display:none;margin-top:9px;background:#f6f2fb;border-left:4px solid var(--tool);
+  border-radius:0 6px 6px 0;padding:10px 13px}
+.reveal .ans.show{display:block}
+.score{font-family:"Helvetica Neue",Arial,sans-serif;font-size:.86rem;color:var(--mut);margin-top:8px}
+
+/* ---- footer ---- */
+footer.lesson{margin-top:40px;border-top:1px solid var(--rule);padding-top:16px;font-size:.9rem;color:var(--mut)}
+footer.lesson a{color:var(--accent)}
+.src{background:#fff;border:1px solid var(--rule);border-radius:7px;padding:11px 14px;margin:14px 0}
+.src .lab{font-family:"Helvetica Neue",Arial,sans-serif;font-size:.62rem;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:3px}
+.ask{font-style:italic}
+
+@media print{
+  body{background:#fff}.wrap{max-width:none;padding:0}
+  .q button.opt{background:#fff}pre.work{background:#fff;color:#000;border:1px solid #ccc}
+  pre.work .c,pre.work .k,pre.work .x{color:#000}
+}

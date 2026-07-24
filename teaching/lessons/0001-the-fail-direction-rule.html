@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 1 — The Fail-Direction Rule</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="eyebrow">PokemonAI · Lesson 01 · grounded in issue #137</div>
+  <h1>The Fail-Direction Rule</h1>
+  <div class="sub">Which way to round a value feature when you are not sure — and why the answer is
+    <em>opposite</em> for “my capability” and “their threat”.</div>
+  <div class="win">
+    <b>Your one win today</b>
+    Look at any uncertain number that feeds a decision and decide, from first principles, whether to
+    round it <strong>up</strong> or <strong>down</strong> — by naming which mistake is catastrophic.
+    This is the whole design spine of the oracle in <span class="mono">#137</span>.
+  </div>
+</header>
+
+<!-- ============================================================= -->
+<h2><span class="n">1</span>The blunder that named the rule</h2>
+
+<div class="call poke">
+  <span class="lab">Pokémon example — the f70 false famine</span>
+  <p>Our Active <strong>Dragapult ex</strong> has <strong>0 Energy attached</strong>. Our hand holds
+  <strong>Crispin</strong>. The agent’s stall equation read the board as <em>“0 Energy → can’t
+  attack”</em> and chose a defensive stall worth about <strong>+105</strong>.</p>
+  <p>It was <strong>wrong</strong>. Crispin (verified at source, SCR&nbsp;133) <em>“Search your deck
+  for up to 2 Basic Energy cards of different types … put 1 into your hand. <strong>Attach the
+  other</strong> to 1 of your Pokémon.”</em> So Crispin attaches one Energy itself
+  <em>and</em> hands us a second of a different type — which our still-unused manual attach then
+  plays. Dragapult ex reaches <span class="e e-R">R</span><span class="e e-P">P</span> <em>this
+  turn</em> → <strong>Phantom Dive 200</strong> + 6 counters. The agent threw away a winning turn.</p>
+</div>
+
+<p class="lede">The AI was not missing the cards — they were sitting in its hand. It was missing a
+<strong>number</strong>: how much Energy it could still attach this turn. And that number was being
+<em>rounded the wrong way</em>. Issue #137 exists to compute that number correctly. Today’s lesson is
+the principle it is built on.</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">2</span>The idea: uncertainty forces a rounding choice</h2>
+
+<p>A <strong>value feature</strong> is a number the agent computes about a position to help it
+choose (you met these as <span class="mono">φ</span>, the features, in the textbook). Most features
+are <em>estimates</em> — we do not model the whole world. <span class="mono">reachable_attack</span>
+asks <em>“can my body pay for an attack this turn, counting everything I could attach?”</em> We
+cannot always be certain (a card effect we haven’t modelled, an Energy that might still be buried in
+the deck). <strong>Whenever an estimate is uncertain, you must pick a direction to round it.</strong></p>
+
+<p>The rule for picking the direction is not “round down” and not “round to the nearest truth”. It is:</p>
+
+<div class="call" style="border-left-color:var(--accent);background:#eef3f8">
+  <span class="lab" style="color:var(--accent)">The fail-direction rule</span>
+  <p><strong>Round toward the mistake you can afford. Away from the one that is catastrophic.</strong>
+  Name the two possible errors — a false “yes” and a false “no” — decide which one loses you a game,
+  and make the estimate structurally unable to commit <em>that</em> one.</p>
+</div>
+
+<p>Two names for the two directions:</p>
+<ul>
+  <li><strong>Fail-closed</strong> — when unsure, answer the <em>safe, conservative</em> way; refuse
+  to claim more than you can prove. <span class="mono">reachable_attack</span> is fail-closed: an
+  Energy source we can’t verify contributes <strong>zero</strong> to the budget.</li>
+  <li><strong>Fail-open</strong> — when unsure, answer the <em>alarming</em> way; assume the worst is
+  real. Its twin oracle <span class="mono">reachable_incoming</span> (how hard the opponent can hit
+  us next turn) is fail-open: an unproven threat is <strong>credited</strong>.</li>
+</ul>
+
+<div class="call tool">
+  <span class="lab">Toolbox — you already ship this <span class="tag t-tool">embedded</span></span>
+  <p>This is <em>fail-safe design</em>, your home turf. A watchdog timer that isn’t sure the CPU is
+  alive <strong>resets</strong> — it doesn’t assume “probably fine”. A brake controller that can’t
+  trust a wheel sensor commands the <strong>safe</strong> state. You never round a safety-critical
+  reading toward convenience. A value feature is the same discipline: round toward the error you
+  survive.</p>
+</div>
+
+<!-- ============================================================= -->
+<h2><span class="n">3</span>Why the direction flips: same principle, opposite rounding</h2>
+
+<p>Here is the part that trips people up. The two oracles round in <em>opposite</em> numeric
+directions — one under-counts, one over-counts — yet they obey the <strong>same</strong> principle.
+The principle is <em>“always be pessimistic about your own safety.”</em> Which number that makes you
+round down vs up depends only on <strong>whose capability the number measures</strong>.</p>
+
+<table>
+  <thead>
+    <tr><th>Oracle</th><th>Measures</th><th>Catastrophic false</th><th>So round…</th><th>Fail-</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="mono">reachable_attack</span><br>(issue #137)</td>
+      <td>what <strong>my</strong> body can pay for this turn</td>
+      <td>false <strong>“I can attack”</strong> → silences a stall, mis-prices doom, walks into a loss</td>
+      <td class="down">DOWN<br>under-count my budget</td>
+      <td>closed</td>
+    </tr>
+    <tr>
+      <td><span class="mono">reachable_incoming</span><br>(ADR-0064)</td>
+      <td>what the <strong>opponent</strong> can hit me for next turn</td>
+      <td>false <strong>“I’m safe”</strong> → skips a defence, exposes a 3-prize win-condition</td>
+      <td class="up">UP<br>over-count their threat</td>
+      <td>open</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Read the two “catastrophic false” cells together: both are a false sense of <em>safety</em>. To
+kill a false sense of safety you shrink your own reach <strong>and</strong> inflate theirs. Opposite
+arithmetic, one goal. The #137 handoff says it in one line: <em>“the OPPOSITE fail direction — here
+under-count the budget, there over-count the threat.”</em></p>
+
+<div class="call amber">
+  <span class="lab">The road not taken — why not just fix the stall?</span>
+  <p>The tempting patch: add a special case to the stall equation — “don’t stall if Crispin is in
+  hand.” That is a gate at the <em>wrong altitude</em>. The same missing number mis-prices promote,
+  retreat, and doom too. The ruling was to fix it once, at <strong>value altitude</strong>: build the
+  honest budget primitive and let every decider read it. One correct number beats five special
+  cases — the same instinct as replacing scattered magic constants with one calibrated table.</p>
+</div>
+
+<!-- ============================================================= -->
+<h2><span class="n">4</span>Worked problem — compute the budget by hand</h2>
+
+<p>Let’s run <span class="mono">reachable_attack</span> on the f70 board the way the code will. Costs
+verified at source (<span class="mono">EN_Card_Data.csv</span>): Jet Headbutt =
+<span class="e e-C">C</span> (one colourless, pays with any Energy), Phantom Dive =
+<span class="e e-R">R</span><span class="e e-P">P</span> (one Fire <em>and</em> one Psychic — typed
+slots, only that type pays).</p>
+
+<pre class="work"><span class="c"># State: Active Dragapult ex, attached = {}  (0 Energy)</span>
+<span class="c"># Flags: energy_attached = False   supporter_played = False</span>
+<span class="c"># Hand:  Crispin (Supporter, tutor_energy), + non-Energy cards</span>
+
+attach_budget(me, flags, hand):
+    budget = []
+    <span class="k">manual attach</span>  (energy_attached is False)  -> +1 <span class="c"># one WILD (any type)</span>
+    <span class="k">Crispin</span> playable? supporter_played is False -> YES
+        Crispin FULL modelled yield:
+            +1 typed straight onto a Pokémon         <span class="c"># choose {R}</span>
+            +1 typed of a DIFFERENT type into hand    <span class="c"># {P}, played by the manual attach</span>
+    => budget = { <span class="k">R</span> (Crispin direct), <span class="k">P</span> (into hand -> manual attach) }
+
+reachable_attack(Dragapult, "Phantom Dive" = {R}{P}, budget):
+    attached {} + budget {R,P}   greedy typed match:
+        slot R  <- R  ✓
+        slot P  <- P  ✓
+    <span class="c">=> PAYABLE = True   (Phantom Dive 200 is ON the table this turn)</span>
+
+reachable_attack(Dragapult, "cheapest" = Jet Headbutt {C}, budget):
+    colourless slot {C} takes ANY energy -> R pays it
+    <span class="c">=> PAYABLE = True   ==>  famine = NOT payable = False   (NO stall)</span></pre>
+
+<p>Now the same board through the <em>old</em> approximation that shipped the bug —
+<span class="mono">_active_attack_payable_via_accel</span>:</p>
+
+<pre class="work"><span class="x"># The bug: one accel card, +1 attach, cheapest cost only, UNTYPED</span>
+payable_via_accel = ( len(attached) + <span class="x">1</span> ) &gt;= minAttackCost
+                  = (     0        + <span class="x">1</span> ) &gt;= 1            = True  <span class="c"># cheapest only</span>
+<span class="x"># It can prove the 1-cost slot, but it is blind to the 2-cost {R}{P} reach,</span>
+<span class="x"># and the stall gate keyed off a *different* premise ("0 attached") -> false famine -> +105 stall.</span></pre>
+
+<p>The fix is not a smarter <code>+1</code>. It is the <strong>full budget</strong> (both attaches),
+<strong>typed</strong> (R pays R, not “any 2 energy pay {R}{P}”), and <strong>fail-closed</strong>
+(a card whose effect we can’t read contributes 0). Those three properties <em>are</em> the lesson.</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">5</span>Check yourself <span class="tag t-poke">recall</span></h2>
+<p>Answer from memory — first pick locks. Effortful retrieval is what makes this stick.</p>
+
+<div class="quiz">
+
+  <div class="q" data-answer="a">
+    <p class="stem">1. A feature estimates what <strong>my own</strong> body can do this turn, and the
+      estimate is uncertain. Round it…</p>
+    <ul class="opts">
+      <li><button class="opt" data-k="c">Toward whichever number sits nearest the truth</button></li>
+      <li><button class="opt" data-k="a">Down, under-counting my body’s own attack capability</button></li>
+      <li><button class="opt" data-k="d">Randomly, so the estimate errors cancel out</button></li>
+      <li><button class="opt" data-k="b">Up, over-counting my body’s own attack capability</button></li>
+    </ul>
+    <p class="fb ok" data-for="ok">Right — fail-closed. A false “I can attack” is the catastrophic error, so shrink your own claim.</p>
+    <p class="fb no" data-for="no">The catastrophic error is a false “I <em>can</em> attack”. Round down so you can never commit it.</p>
+  </div>
+
+  <div class="q" data-answer="a">
+    <p class="stem">2. A feature estimates what the <strong>opponent</strong> can hit me for next
+      turn, and it is uncertain. Round it…</p>
+    <ul class="opts">
+      <li><button class="opt" data-k="b">Down, under-counting the damage the opponent could reach</button></li>
+      <li><button class="opt" data-k="c">Toward whichever number sits nearest the actual value</button></li>
+      <li><button class="opt" data-k="a">Up, over-counting the damage the opponent could reach</button></li>
+      <li><button class="opt" data-k="d">Randomly, so the estimate errors cancel across turns</button></li>
+    </ul>
+    <p class="fb ok" data-for="ok">Right — fail-open. A false “I’m safe” loses the game, so inflate their reach.</p>
+    <p class="fb no" data-for="no">Here the catastrophic error is a false “I’m safe”. Round <em>up</em> to stay pessimistic about your survival.</p>
+  </div>
+
+  <div class="q" data-answer="a">
+    <p class="stem">3. Both oracles round in opposite numeric directions. What single principle sets
+      both?</p>
+    <ul class="opts">
+      <li><button class="opt" data-k="a">Always be pessimistic about my own safety</button></li>
+      <li><button class="opt" data-k="b">Always be optimistic about my own chances</button></li>
+      <li><button class="opt" data-k="c">Always minimise the total size of errors</button></li>
+      <li><button class="opt" data-k="d">Always round every estimate the same way</button></li>
+    </ul>
+    <p class="fb ok" data-for="ok">Exactly. Pessimism about your safety = shrink your reach AND inflate theirs.</p>
+    <p class="fb no" data-for="no">It’s pessimism about your own safety — which means under-count your reach and over-count theirs.</p>
+  </div>
+
+  <div class="q" data-answer="a">
+    <p class="stem">4. For “can my body attack this turn?”, the <strong>catastrophic</strong> error is
+      a false…</p>
+    <ul class="opts">
+      <li><button class="opt" data-k="b">…no: it silences a stall or mis-prices doom</button></li>
+      <li><button class="opt" data-k="c">…yes: it wastes a small positional nudge only</button></li>
+      <li><button class="opt" data-k="d">…no: it wastes a small positional nudge only</button></li>
+      <li><button class="opt" data-k="a">…yes: it silences a stall or mis-prices doom</button></li>
+    </ul>
+    <p class="fb ok" data-for="ok">Yes. A false “can attack” switches off live safety deciders — that’s the game-loser.</p>
+    <p class="fb no" data-for="no">A false “no” is merely a missed opportunity here; a false “yes” switches off a stall — that’s catastrophic.</p>
+  </div>
+
+  <p class="score"></p>
+</div>
+
+<!-- ============================================================= -->
+<h2><span class="n">6</span>Spaced callback — from boolean to probability</h2>
+
+<p>Issue #137 also asks for <span class="mono">readiness_p</span>: instead of a yes/no, a
+<strong>probability</strong> that the budget lands. When the enabling Energy is certain (in hand, or
+guaranteed in the deck) it is 1.0. But when the enabler is <em>still buried in the deck</em>, we need
+the chance of drawing/fetching it — a distribution you already met in the textbook.</p>
+
+<div class="reveal">
+  <button class="rv">Show answer</button>
+  <div class="ans">
+    The <strong>hypergeometric distribution</strong> — sampling <em>without</em> replacement from the
+    deck (<span class="mono">deck_odds.draw_hit_probability</span>, textbook Ch&nbsp;6). Fail-closed
+    still rules the boolean version: if you can’t bound the odds, credit 0. Notice the transfer —
+    <span class="mono">readiness_p</span> is where today’s hard rounding rule <em>softens</em> into
+    an expected value, which is exactly the bridge from Ch&nbsp;6 (probability) to the value model.
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<h2><span class="n">7</span>Where this transfers <span class="tag t-tool">toolbox</span></h2>
+<ul>
+  <li><strong>Admissible heuristics (A* search, textbook Ch on search).</strong> A* stays optimal
+  only if its cost-to-go estimate <em>never over-estimates</em> — a one-directional rounding rule
+  chosen so the algorithm can’t make its fatal mistake. Same shape as fail-closed, different fatal
+  error.</li>
+  <li><strong>Sound vs complete static analysis</strong> (your world). A <em>sound</em> analyser
+  rounds toward reporting bugs — it may cry wolf, but it never misses a real defect. Which false you
+  tolerate <em>defines</em> the tool.</li>
+  <li><strong>Type&nbsp;I vs Type&nbsp;II error / precision–recall.</strong> The same asymmetry in
+  statistics: you pick a decision threshold by the <em>relative cost</em> of a false positive vs a
+  false negative — never by “nearest the truth”.</li>
+</ul>
+
+<!-- ============================================================= -->
+<footer class="lesson">
+  <div class="src">
+    <span class="lab">Read next — primary source</span>
+    <p><strong>Russell &amp; Norvig, <em>AI: A Modern Approach</em>, Ch&nbsp;3</strong> (admissible
+    heuristics) for the canonical, field-standard statement of one-directional rounding for
+    correctness. In-repo, the concrete source is
+    <span class="mono">docs/plans/self-reachable-attach-oracle-handoff.md</span> and ADR-0064
+    Decision&nbsp;4 (“asymmetric by direction because the failure costs are asymmetric”).</p>
+  </div>
+
+  <p class="ask"><strong>I’m your teacher — ask me anything.</strong> Fuzzy on why a false “safe” is
+  worse than a false “doomed”? Want to trace <span class="mono">_typed_can_pay</span> in real code, or
+  see a second worked board? Just ask, and we’ll go deeper.</p>
+
+  <p>Companion pages:
+    <a href="../book/PokemonAI-ML-Textbook.pdf">the textbook</a> ·
+    <a href="../reference/fail-direction-rule.html">Fail-Direction reference card</a> ·
+    <a href="../reference/formula-cheatsheet.html">formula cheat-sheet</a>.
+    <br>Next likely lesson: <em>typed greedy matching</em> — how <span class="mono">_typed_can_pay</span>
+    proves <span class="e e-R">R</span><span class="e e-P">P</span> is coverable, and why greedy is
+    provably enough here.</p>
+</footer>
+
+</div>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — The Fail-Direction Rule</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>
+  .wrap{max-width:720px}
+  .proc{counter-reset:step;list-style:none;padding:0;margin:10px 0}
+  .proc li{counter-increment:step;position:relative;padding:6px 0 6px 34px;border-bottom:1px solid var(--rule)}
+  .proc li:last-child{border-bottom:none}
+  .proc li::before{content:counter(step);position:absolute;left:0;top:6px;width:22px;height:22px;
+    line-height:22px;text-align:center;border-radius:50%;background:var(--accent);color:#fff;
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:.72rem;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="eyebrow">PokemonAI · reference card · companion to Lesson 01</div>
+  <h1>The Fail-Direction Rule</h1>
+  <div class="sub">Which way to round an uncertain value feature — the one-page version.</div>
+</header>
+
+<div class="call" style="border-left-color:var(--accent);background:#eef3f8">
+  <span class="lab" style="color:var(--accent)">The rule</span>
+  <p><strong>Round an uncertain estimate toward the mistake you can afford; away from the one that
+  loses a game.</strong> Both self- and opponent-side features share one goal —
+  <em>be pessimistic about your own safety</em> — which forces <em>opposite</em> arithmetic.</p>
+</div>
+
+<h2>The decision procedure</h2>
+<ol class="proc">
+  <li>Name the two possible errors: a false <strong>“yes”</strong> and a false <strong>“no”.</strong></li>
+  <li>Ask which one, if committed, <strong>loses a game</strong> (not just a nudge). That is the catastrophic error.</li>
+  <li>Make the estimate <strong>structurally unable</strong> to commit the catastrophic one — round the other way.</li>
+  <li>When you cannot bound the uncertainty at all, credit the <strong>safe extreme</strong> (0 reach for me / full reach for them).</li>
+</ol>
+
+<h2>The matched pair</h2>
+<table>
+  <thead><tr><th>&nbsp;</th><th>reachable_attack (self, #137)</th><th>reachable_incoming (opp, ADR-0064)</th></tr></thead>
+  <tbody>
+    <tr><th>Measures</th><td>what MY body can pay this turn</td><td>what THEY hit me for next turn</td></tr>
+    <tr><th>Catastrophic false</th><td>“I can attack” (silences a stall / mis-prices doom)</td><td>“I’m safe” (skips defence / exposes wincon)</td></tr>
+    <tr><th>Round</th><td class="down">DOWN — under-count</td><td class="up">UP — over-count</td></tr>
+    <tr><th>Name</th><td>fail-<strong>closed</strong></td><td>fail-<strong>open</strong></td></tr>
+    <tr><th>Unproven input →</th><td>contributes 0 to the budget</td><td>credited as a live threat</td></tr>
+  </tbody>
+</table>
+
+<h2>Glossary of the rule</h2>
+<p><strong>Value feature</strong> — a number computed about a position that feeds the decision
+(a <span class="mono">φ</span>).<br>
+<strong>Fail-closed</strong> — when unsure, refuse to claim more than you can prove (self-capability).<br>
+<strong>Fail-open</strong> — when unsure, assume the alarming reading is real (opponent threat).<br>
+<strong>Fail direction</strong> — which way a feature rounds under uncertainty; set by the asymmetric cost of its two errors, not by nearness to the truth.<br>
+<strong>readiness_p</strong> — the EV softening of a fail-closed boolean: P(the enabler lands), 1.0 if certain, else hypergeometric; still credits 0 when unbounded.</p>
+
+<h2>Transfers to</h2>
+<p>Admissible A* heuristics (never over-estimate cost-to-go) · sound static analysis (never miss a
+real bug) · Type&nbsp;I/II error &amp; precision–recall thresholds · fail-safe embedded defaults
+(watchdog reset, brake-on-fault).</p>
+
+<p class="score" style="margin-top:22px">Source of truth:
+<span class="mono">docs/plans/self-reachable-attach-oracle-handoff.md</span> ·
+ADR-0064 Decision 4. Card facts verified in <span class="mono">data/EN_Card_Data.csv</span>.
+Full teaching: <a href="../lessons/0001-the-fail-direction-rule.html">Lesson 01</a>.</p>
+
+</div>
+</body>
+</html>
