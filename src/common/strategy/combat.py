@@ -63,7 +63,8 @@ class Budget:
 
     ``caps`` bound how many units of each type a group may realise at once, so a set of units can
     be individually legal yet jointly infeasible — which is exactly the truth about one discard
-    pile shared by two accelerators.
+    pile shared by two accelerators. An option therefore carries units it may not be able to use
+    together: read it through :attr:`size` or :func:`_can_pay`, never as a raw ``len``.
     """
     options: tuple = ((),)
     caps: dict = field(default_factory=dict)
@@ -566,15 +567,31 @@ class CombatMath:
         if not (tags & _ACCEL_TAGS) or stat is None or not (stat.is_item or stat.is_supporter):
             return None                        # untagged, unknown, or a Pokémon (attack-based accel)
         clauses = self.effects.clauses(card_id) if self.effects else ()
-        # "of DIFFERENT types" is a per-CARD capacity of one unit per colour — no trimming needed:
-        # the units are all emitted and the cap decides how many can be realised together.
         gid = group if any(cl.get("distinct_types") for cl in clauses) else None
         effect = [u for cl in clauses for u in self._accel_units(cl, target_stat, ctx, gid)]
         yields = [u for cl in clauses for u in self._hand_yield_units(cl, target_stat, ctx, gid)]
+        # "of DIFFERENT types" bounds the card two ways. Its per-COLOUR half is the group cap below
+        # (two units can never share a colour). Its COUNT half must be settled here, because when a
+        # card yields fewer units than it prints, the card text does not say WHICH half is lost.
+        #
+        # Crispin over a deck down to one not-provably-empty colour finds ONE Energy — and "put 1 of
+        # them into your hand. Attach the other" leaves it open whether that lone card is the
+        # put-in-hand half or the attach half. Ruled FAIL-CLOSED (ADR-0067, grilled 2026-07-24): the
+        # HAND half survives, so the unit needs the turn's manual attach and is worth nothing once
+        # that is spent. The braver reading would have the card attach by itself with the attach
+        # already gone — a claim no source settles, in the direction ADR-0067 forbids guessing in.
+        while (gid is not None and effect
+               and len(effect) + len(yields) > len(self._palette(effect + yields))):
+            effect.pop()
         if not (effect or yields):
             return None
-        cap = {t: 1 for u in effect + yields for t in u.types} if gid is not None else {}
+        cap = {t: 1 for t in self._palette(effect + yields)} if gid is not None else {}
         return _Contribution(stat.is_supporter, tuple(effect), tuple(yields), gid, cap)
+
+    @staticmethod
+    def _palette(units) -> frozenset:
+        """Every colour the card's units could take — the width of its distinct-types capacity."""
+        return frozenset(t for u in units for t in u.types)
 
     @staticmethod
     def _unit_groups(source, group) -> tuple:

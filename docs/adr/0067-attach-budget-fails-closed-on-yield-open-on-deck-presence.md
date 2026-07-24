@@ -35,6 +35,15 @@ The epistemic is split by **what** is uncertain, not applied uniformly:
    manual attach), Crispin's two units require two distinct Basic-Energy types, and a
    coverage-gate test makes the zero *audited* — every `tutor_energy`/`energy_accel`-tagged card
    in any agent's deck must carry a clause row or sit on an explicit known-unmodelled list.
+
+   Where a card's own text leaves a yield genuinely ambiguous, the ambiguity is resolved the same
+   way. Crispin over a deck down to ONE not-provably-empty colour finds a single Energy, and "put
+   1 of them into your hand. Attach the other" does not say which half that lone card is. **Ruled:
+   it is the HAND half** — so it still needs the turn's manual attach and is worth nothing once
+   that is spent. The braver reading (the card attaches itself with the manual attach already
+   gone) would be a claim no source settles, made in the direction this ADR forbids guessing in.
+   The engine could be probed to settle it; until then the code states the assumption rather than
+   implying the model has no choice to make.
    The two Energy zones are therefore read at different precisions: the **discard is public**, so
    a discard-sourced yield is capped at the supply really sitting there and the whole turn's
    discard-drawing effects are capped JOINTLY (two Wondrous Patches over one {P} is one attach;

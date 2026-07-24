@@ -152,6 +152,27 @@ def test_a_typed_fetch_needs_that_type_still_in_the_deck():
     assert c.reachable_attach(_pult(), JET_HEADBUTT, budget=b) is True
 
 
+def test_crispin_over_a_one_colour_deck_takes_the_fail_closed_reading():
+    """"Up to 2 Basic Energy of DIFFERENT types … put 1 into your hand. Attach the other" finds only
+    ONE card when a single colour is left not-provably-empty — and no source settles whether that
+    lone card is the put-in-hand half or the attach half. Ruled fail-closed (ADR-0067): it is the
+    HAND half, so it needs the turn's manual attach and is worth nothing once that is spent. The
+    braver reading would let Crispin attach with the manual attach already gone."""
+    c = _combat()
+    one_colour = frozenset({DARKNESS})
+    with_attach = c.attach_budget(_pult(), [CRISPIN], deck_energy_types=one_colour)
+    assert with_attach.size == 1                     # one card, played by the manual attach
+    assert c.reachable_attach(_pult(), JET_HEADBUTT, budget=with_attach) is True
+    spent = c.attach_budget(_pult(), [CRISPIN], energy_attached=True, deck_energy_types=one_colour)
+    assert spent.size == 0                           # the hand half has nothing to play it
+    assert c.reachable_attach(_pult(), None, budget=spent) is False
+    # Two colours left: the attach half is real again and survives a spent manual attach.
+    two = c.attach_budget(_pult(), [CRISPIN], energy_attached=True,
+                          deck_energy_types=frozenset({FIRE, PSYCHIC}))
+    assert two.size == 1
+    assert c.reachable_attach(_pult(), JET_HEADBUTT, budget=two) is True
+
+
 def test_a_deck_with_no_basic_energy_yields_no_deck_fetch_budget():
     c = _combat()
     b = c.attach_budget(_pult(), [CRISPIN], deck_energy_types=frozenset())
