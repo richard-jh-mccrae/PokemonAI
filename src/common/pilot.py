@@ -1290,7 +1290,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._incoming_budget = None                    # ADR-0064: reachable-Incoming energy policy,
                                                         # set per decision in _board (None = worst-case ceiling)
         from common.strategy.combat import CombatMath
-        self.combat = CombatMath(stats, functions, transients=self._transients)   # the KO oracle
+        self.combat = CombatMath(stats, functions, transients=self._transients,
+                                 effects=self.effects)                            # the KO oracle
                                                         # (ADR-0052): the one closed-form combat home;
                                                         # the Pilot's damage/KO methods delegate to it
         self._turn_boosts = TurnBoostTracker(            # this-turn flat damage-boost plays (Power Pro
@@ -5773,6 +5774,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if stat and stat.is_basic_energy and cid not in empty:
                 return True
         return False
+
+    def _basic_energy_types_in_deck(self, deck_empty) -> frozenset:
+        """The Basic-Energy TYPES my deck can still yield — the typed extension of
+        ``_basic_energy_in_deck`` the Attach Budget's deck-fetch leg needs (issue #137).
+
+        Same epistemic as its untyped sibling, per type: a type counts unless EVERY Basic Energy
+        card id of that type is known-exhausted by the sound emptiness oracle (``deck_empty``) —
+        *not-provably-empty*, never provably-present. ADR-0067 rules that split deliberately: with
+        a thin 3-copy Energy suite nothing is provable before a search anchors the prizes, so a
+        strict gate would zero every deck-fetch pre-anchor and re-fire the f70 false famine. The
+        honest probability for a still-uncertain fetch lives in ``CombatMath.readiness_p``.
+        Empty with no stats (fail-CLOSED — a stat-blind Pilot claims no fuel)."""
+        if not self.stats:
+            return frozenset()
+        empty = deck_empty or frozenset()
+        return frozenset(
+            stat.energyType for cid in set(self.deck or ())
+            if cid not in empty and (stat := self.stats.get(cid)) is not None
+            and stat.is_typed_basic_energy)
 
     def _opp_has_played_gust(self, opp: dict) -> bool:
         """True if the opponent has played a gust (a Boss's Orders-style forced-switch) this game — a

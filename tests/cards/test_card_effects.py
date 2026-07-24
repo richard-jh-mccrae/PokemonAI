@@ -147,10 +147,16 @@ def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
     # Trainer / Supporter accel: Rosa's discard→Stage-2 (prize-behind gate); Crispin's deck→attach.
     assert eff.clauses(1240)[0] == {"kind": "accel", "amount": 2, "source": "discard", "target": "stage2",
                                     "energy": "basic", "condition": "more_prizes_remaining_than_opp"}
+    # Crispin's FULL yield (issue #137 / ADR-0067): "up to 2 Basic Energy cards of different types …
+    # put 1 of them into your hand. Attach the other." — `amount` is the ATTACH half, `to_hand` the
+    # hand half the turn's one manual attach then plays, `distinct_types` the "different types" guard.
+    # The Attach Budget needs both halves to see the 2-cost typed reach that dp f70 turned on.
     assert eff.clauses(1198)[0] == {"kind": "accel", "amount": 1, "source": "deck",
-                                    "target": "any_pokemon", "energy": "basic"}
-    # Crispin carries NO fetch clause — a Supporter is slot-dead after a Supporter refresh, so the gamble
-    # energy-closure (which counts any `basic_energy` fetch clause) must not treat it as an out.
+                                    "target": "any_pokemon", "energy": "basic",
+                                    "to_hand": 1, "distinct_types": True}
+    # The hand half rides the ACCEL clause and is still NOT a fetch clause — a Supporter is slot-dead
+    # after a Supporter refresh, so the gamble energy-closure (which counts any `basic_energy` fetch
+    # clause) must not treat it as an out.
     assert all(c["kind"] != "fetch" for c in eff.clauses(1198))
 
 
