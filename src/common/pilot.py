@@ -1123,7 +1123,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False, attach_value=True, evolve_value=False,
+                 leaf_hand_value=False, attach_value=True, evolve_value=True,
                  doom_matched_relax=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
@@ -1263,11 +1263,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
-        self.evolve_value = evolve_value                # the EVOLVE DECIDER's kill-switch (ADR-0070).
-                                                        # ARMED OFF: the swap protocol (ADR-0069 §8) keeps
-                                                        # both deciders alive until the corpus flips are
-                                                        # user-ruled, so the `baseline_evolution` rungs
-                                                        # still decide while this is OFF.
+        self.evolve_value = evolve_value                # the EVOLVE DECIDER's emergency lever (ADR-0070,
+                                                        # shipped ON): the body-substituted deploy delta
+                                                        # + odds-priced income. OFF is DEGRADED MODE, not
+                                                        # a rollback — the four rungs it replaced are
+                                                        # deleted, so OFF silences evolve endorsements
+                                                        # and only the _PLAY-side Gate speaks.
         self.attach_value = attach_value                # the ATTACH DECIDER's emergency lever (ADR-0069 §9,
                                                         # shipped ON): the axes-sum marginal (`_attach_value`)
                                                         # IS the energy-attach decision, scaled into the rung

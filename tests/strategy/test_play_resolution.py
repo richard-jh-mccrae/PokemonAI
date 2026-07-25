@@ -1,11 +1,14 @@
 """Play-from-hand option resolution (the bug that disabled every roles/tags Hypothesis on plays) +
-the win-condition development rules it unblocked (`evolve-into-wincon`, `prefer-rush-evolve-tutor`)."""
+the win-condition development rule it unblocked (`prefer-rush-evolve-tutor`).
+
+`evolve-into-wincon` was the module's other subject and is DELETED with the evolve-decider swap
+(#140, ADR-0070 §10) — its referent is the decider's deploy term, pinned at
+`test_evolve_decider.py` (the algebra) and `test_evolve_value.py` (real frames)."""
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, Context, Pilot
 from common.strategy import Plan, Strategy
 
 _PLAY, _ATTACH, _EVOLVE = 7, 8, 9
-_evolve = next(h for h in GENERAL_STRATEGY.hypotheses if h.id == "evolve-into-wincon")
 _rush = next(h for h in GENERAL_STRATEGY.hypotheses if h.id == "prefer-rush-evolve-tutor")
 
 
@@ -25,13 +28,6 @@ def _ctx(**kw):
                 tags=[], roles=[], board=Board())
     base.update(kw)
     return Context(**base)
-
-
-def test_evolve_into_wincon_fires_only_on_an_evolve_into_the_wincon():
-    assert bool(_evolve.when(_ctx(option_type=_EVOLVE, roles=["win_condition"])))
-    assert not _evolve.when(_ctx(option_type=_EVOLVE, roles=["starter"]))     # evolve into non-wincon
-    assert not _evolve.when(_ctx(option_type=_PLAY, roles=["win_condition"]))  # a play, not evolve
-
 
 def test_prefer_rush_evolve_tutor_fires_on_a_setup_rush_evolve_play():
     have_preevo = Board(line_preevo_in_play=True)                       # a pre-evolution to evolve
