@@ -362,9 +362,15 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
     """The follow-up to promote-the-staller: once you draw the evolution, evolve the benched pre-evo
     THEN retreat the staller into the now-ready win-condition — emergent across one turn's two
     decisions (evolve-into-wincon + attack-last, then the SETUP->RACE flip + retreat-to-ready-attacker)."""
+    # The payoff needs a REAL attack record: the evolve decider prices a body by the damage its line
+    # payoff reaches, so a stat-blind Mega has `payoff_damage` 0 and the evolve earns nothing on any
+    # term (fail-closed, ADR-0067). Without this the pin asserts the absence of a signal rather than
+    # the behaviour — the same synthetic gap #139 fixed on two of its own pins.
     stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=120), STARYU: CardStat(STARYU, hp=70),
-                                  MEGA: CardStat(MEGA, megaEx=True, hp=330)},
-                                 attacks={11: AttackStat(11, damage=30)})
+                                  MEGA: CardStat(MEGA, megaEx=True, hp=330, maxDamage=210,
+                                                 maxDamageCost=1, minAttackCost=1, attacks=(99,))},
+                                 attacks={11: AttackStat(11, damage=30),
+                                          99: AttackStat(99, damage=210, cost=1)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
     funcs = CardFunctions({CINDERACE: ["opener"]})

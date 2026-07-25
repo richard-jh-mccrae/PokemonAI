@@ -63,7 +63,6 @@ PINS = {
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
     "83967841-17": "hold: hold the Ultra Ball, end the turn",
     "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
-    "82525741-78": "hold: evolve Mega Starmie ex instead of a Poffin with the line set",
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
     "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
                    "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
@@ -90,6 +89,13 @@ PINS = {
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
 }
 TARGETS = {
+    # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
+    # evolve, but the blunder is the DEAD Buddy-Buddy Poffin: it fetches Basics of 70 HP or less,
+    # Staryu is the only such card in the deck, and all 3 copies were on the board. Evolving either
+    # Staryu is merely FINE — the evolve decider scores both exactly 0.0, i.e. correctly indifferent —
+    # so no evolve valuation can rank the human pick top here. The fix belongs to the fetch family's
+    # exhausted-target gate (#164), which is the convergence this target now awaits.
+    "82525741-78": "poffin: don't play a fetch whose target class is exhausted (awaits #164)",
     # discard-pair valuation
     # `86091435-68` (don't pitch the Drakloak that can EVOLVE the active Dreepy) was the last strict
     # target here — REFUTED-AS-LABELED 2026-07-19 (reviewed.json: the recorded 2nd slot was wrong,
