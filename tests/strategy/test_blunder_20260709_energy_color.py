@@ -53,13 +53,19 @@ def test_f18_fetch_an_on_attack_color_energy_not_the_off_color_utility():
 
 @pytest.mark.req("REQ-GEN-0074")
 def test_f21_dont_sink_energy_into_the_draw_engine():
-    """f21 (CRITICAL): the only Energy is {D}; Dunsparce's Colorless attack made {D} 'payable', so
-    `power-up-attacker` sank it into the Dunsparce -> Dudunsparce DRAW ENGINE. `dont-power-the-draw-engine`
-    penalises that attach so the {D} goes to the on-Line Dreepy instead."""
+    """f21 (CRITICAL): the only Energy is {D}; Dunsparce's Colorless attack made {D} 'payable', so the
+    deleted flat `power-up-attacker` sank it into the Dunsparce -> Dudunsparce DRAW ENGINE. The attach
+    decider forecloses that structurally rather than penalising it (#139, ADR-0069): the
+    board-evaluated role gate zeroes the engine's ATTACK AXIS, so a Colorless attack can no longer make
+    an off-colour Energy read as attack progress. The on-Line Dreepy the human tagged is a
+    target-choice divergence ruled in docs/plans/attach-decider-swap-review.md (a {D} fills neither
+    slot of Phantom Dive's {R}{P}, so every bench option prices near zero)."""
     fx = _fixture("dragapult_dont_feed_draw_engine_f21")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                         # [2] on-Line Dreepy, not [4] Dunsparce
-    assert "dont-power-the-draw-engine" in _fired_ids(dec.options[4])   # penalised on the Dunsparce attach
+    engine = next(r for r in dec.attach_working["eq"] if r["target"] == 305)
+    assert engine["role_gated"] is True
+    assert engine["attack_axis"] == 0.0 and engine["build"] > 0   # gated, not merely unbuildable
+    assert dec.chosen[0] != engine["i"]
 
 
 @pytest.mark.req("REQ-GEN-0074")

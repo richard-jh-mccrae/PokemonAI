@@ -89,9 +89,22 @@ def test_dont_wake_the_giant_takes_the_lock_free_attack(lucario, name):
 
 # ── general-hypothesis ──────────────────────────────────────────────────────────────────────────
 def test_dont_fund_the_non_attacking_body_at_attach_from_f121(lucario):
-    """ml f121 (CRITICAL): Aura Jab's bench-load must not go to Lunatone."""
+    """ml f121 (CRITICAL): Aura Jab's bench-load must not go to Lunatone.
+
+    The correction's content is the ENGINE exclusion, and the attach decider satisfies it structurally:
+    the board-evaluated role gate zeroes the engine-only Lunatone's attack axis while real attackers
+    sit beside it, so it cannot win on an option-index coincidence the way it did at +15-across-the-board.
+    Which live ATTACKER takes the load — the human tagged the second Mega Lucario ex, the decider ranks
+    the Solrock whose Cosmic Beam one {F} completes outright — is a target-choice DIVERGENCE, ruled in
+    docs/plans/attach-decider-swap-review.md (the decider prices one routed unit at a time and so cannot
+    see that the Mega absorbs three; multi-unit routing is out of Phase 1a)."""
     fx = _fixture("ml_aurajab_dont_load_the_engine_f121")
-    assert _decide(lucario, fx)[0] == fx["correct"]
+    chosen, d = _decide(lucario, fx)
+    rows = {r["i"]: r for r in d.attach_working["eq"]}
+    lunatone = next(r for r in rows.values() if r["target"] == 675)
+    assert lunatone["role_gated"] is True and lunatone["attack_axis"] == 0.0
+    assert chosen[0] != lunatone["i"], "the Aura Jab load went to the engine again"
+    assert rows[fx["correct"][0]]["tactical"] > 0, "the human's target is not even priced"
 
 
 def test_dont_fund_the_supporter_tutor_at_the_manual_attach_f84(lucario):
@@ -101,9 +114,22 @@ def test_dont_fund_the_supporter_tutor_at_the_manual_attach_f84(lucario):
 
 
 def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
-    """dragapult f21 (CRITICAL), the same rule cross-agent: Dunsparce evolves into a `draw` engine."""
+    """dragapult f21 (CRITICAL), the same rule cross-agent: Dunsparce evolves into a `draw` engine.
+
+    Satisfied structurally rather than by a weight: the board-evaluated role gate zeroes the draw
+    engine's ATTACK AXIS, so it can no longer read as an attacker just because its Colorless attack
+    makes any colour "payable". (This deck runs the JTG Dunsparce, 305, which does print Retreat 1 —
+    unlike the TEF printing — so its mobility channel is not zero; the gate is what carries the
+    exclusion here. The {D} also fills no slot of Phantom Dive's {R}{P}, so every bench option prices
+    near zero and the decider banks the Active's pivot instead of the human's tagged Dreepy — a
+    target-choice divergence ruled in docs/plans/attach-decider-swap-review.md.)"""
     fx = _fixture("dragapult_dont_feed_draw_engine_f21")
-    assert _decide(dragapult, fx)[0] == fx["correct"]
+    chosen, d = _decide(dragapult, fx)
+    rows = {r["i"]: r for r in d.attach_working["eq"]}
+    engine = next(r for r in rows.values() if r["target"] == 305)
+    assert engine["role_gated"] is True
+    assert engine["attack_axis"] == 0.0 and engine["build"] > 0   # gated, not merely unbuildable
+    assert chosen[0] != engine["i"], "the only {D} went into the draw engine again"
 
 
 def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):

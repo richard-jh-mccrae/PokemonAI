@@ -1,3 +1,11 @@
+> **AMENDED (2026-07-25) — historical.** The "Grill rulings — 2026-07-21" ledger below is the
+> SHADOW-era design. Where it conflicts with **ADR-0069** (#139, the decider-era grill), the ADR
+> wins: the marginal is an axes-sum rather than a max over five terms; build is a TYPED slot-fraction
+> (off-type waste is emergent, not a flag); the role gate is BOARD-EVALUATED and zeroes the attack
+> axis only; burst units are the printed provision with the spend discipline in-equation; and the
+> tactical may go NEGATIVE. Ruling 4 (prize math stays out) and Ruling 5a (evolution-lookahead
+> payoff pricing) carry over unchanged.
+
 # Attach valuation — grill-session seed: one equation for the Energy attach
 
 **Status (updated 2026-07-19, post-rebase).** SEED for a grill session — NOT designed, NOT built —

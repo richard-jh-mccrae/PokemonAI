@@ -68,7 +68,10 @@ def test_f85_concentrate_on_the_started_line_preevo():
     fx = _fixture("dragapult_concentrate_line_preevo_f85")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [3] the started Dreepy
-    assert "concentrate-energy-on-wincon" in _fired_ids(dec.options[fx["correct"][0]])
+    # `concentrate-energy-on-wincon` is DELETED (#139, ADR-0069): concentration falls out of the
+    # convex typed build, so the started Line pre-evo simply out-builds the bare one.
+    assert next(r for r in dec.attach_working["eq"]
+                if r["i"] == fx["correct"][0])["build"] > 0
 
 
 @pytest.mark.req("REQ-GEN-0073")

@@ -63,7 +63,10 @@ def test_build_active_wincon_keeps_loading_the_active_toward_its_big_attack():
     # max-damage attack (maxDamageCost 3) -> keep building it.
     attach = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([attach], current=state(active=poke(WINCON, energy=1, hp=330), hand=[WATER]))
-    assert "build-active-wincon" in _fired(pilot.explain(obs).options[0])
+    # `build-active-wincon` is DELETED (#139, ADR-0069): "keep loading toward the BIGGEST attack" is
+    # what the convex typed build says by construction — the k-th Energy is worth more than the
+    # (k-1)-th, so a body short of its payoff keeps earning. Assert that, not the rung.
+    assert next(r for r in pilot.explain(obs).attach_working["eq"] if r["i"] == 0)["build"] > 0
 
     # Already at max-damage cost (3) -> fully online -> stands down (no needless over-stack).
     full = make_select([attach], current=state(active=poke(WINCON, energy=3, hp=330), hand=[WATER]))
@@ -88,12 +91,16 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
     wat = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Water (hand idx 0)
     obs_w = make_select([wat], current=state(active=poke(WINCON, energy=1, hp=330),
                                              opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
-    assert "build-active-wincon" in _fired(pilot.explain(obs_w).options[0])
+    assert next(r for r in pilot.explain(obs_w).attach_working["eq"] if r["i"] == 0)["build"] > 0
 
-    # Control B — when cheap attack can't KO (Nebula IS needed), Ignition is the intended power.
+    # Control B — a LATER correction (83116501 f70, `conserve-burst-when-no-ko`) refined this: when
+    # even the fully-powered big attack cannot KO either, the burst buys nothing worth its one-shot.
+    # The decider states both facts at once — the no-KO cap holds tonight's credit to what the
+    # reusable Basic would have bought, and a burst earns NO forward build (it is discarded at end of
+    # turn) — so the Ignition scores BELOW doing nothing here.
     obs_n = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
                                              opp_active=poke(OPP, hp=300), hand=[WATER, IGNITION]))
-    assert "build-active-wincon" in _fired(pilot.explain(obs_n).options[0])
+    assert pilot.explain(obs_n).options[0].tactical < 0
 
 
 @pytest.mark.req("REQ-GEN-0025")

@@ -1,3 +1,12 @@
+> **SUPERSEDED (2026-07-25) — historical.** The staged, shadow-first swap plan below was replaced
+> by the NO-SHADOW charter of issue #139 and its decision record **ADR-0069** ("The attach marginal
+> is an axes-sum, and the decider may say no"). What actually shipped: the oracle became the real
+> decider in one swap, 19 of the 23 rungs were DELETED (not staged), the shadow wrapper and its
+> agreement bit were retired, and `attach_shadow` became `attach_working` — the decider's own
+> legible working. The `attach_sweep` probe described here is gone, replaced by
+> `tools/train/probes/attach_decider_sweep.py` (the batched review's input, run while both deciders
+> still existed). Kept because its per-rung fold analysis is still the best map of the retired pile.
+
 # Energy-attach valuation — Phase 2 handoff (staged swaps)
 
 Phase 1 (the grill + the shadow oracle) is DONE and committed on

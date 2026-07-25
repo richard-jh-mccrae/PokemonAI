@@ -74,9 +74,17 @@ def test_keep_a_bench_fires_only_when_the_bench_is_empty():
 
 @pytest.mark.req("REQ-GEN-0004")
 def test_attach_energy_last_defers_attachments_during_setup():
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
-    obs = make_select([opt(ATTACH)], current=state())   # state() -> SETUP
-    assert "attach-energy-last" in _fired(pilot.explain(obs).options[0])
+    """`attach-energy-last` is no longer a −5 weight (#139, ADR-0069 §7) — it is a decide()-only
+    ORDERING deferral in `_finish_turn_last`'s tiers, so an attach keeps its full marginal and simply
+    happens AFTER the free development that might reveal a better target. Score-invisible, which is
+    what freed the desperation floor from having to out-score that −5."""
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                  functions=CardFunctions({222: ["energy_accel"]}))
+    obs = make_select([opt(ATTACH), opt(PLAY, area=HAND, index=0)],
+                      current=state(hand=[222]))   # state() -> SETUP
+    obs["select"]["maxCount"] = 2
+    order = pilot.decide(obs)
+    assert order == [1, 0], "the free development no longer sequences ahead of the blind attach"
 
 
 @pytest.mark.req("REQ-GEN-0005")
@@ -93,10 +101,14 @@ def test_pre_position_attacker_develops_the_bench_during_race():
 @pytest.mark.req("REQ-GEN-0011")
 def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
     WATER, LIGHTNING = 3, 4
+    # Both of my bodies need a real attack for the decider to price: a stat-blind body earns no build
+    # on either side of the gate, and the pin would then pass on a coincidence rather than on the rule.
     stats = DictCardStatProvider({
-        700: CardStat(700, energyType=WATER, weakness=LIGHTNING, hp=70),   # my Active (Weak to L)
+        700: CardStat(700, energyType=WATER, weakness=LIGHTNING, hp=70,    # my Active (Weak to L)
+                      maxDamage=60, maxDamageCost=2, minAttackCost=1),
         900: CardStat(900, energyType=LIGHTNING, maxDamage=120),           # opp Active: 120, Lightning
-        800: CardStat(800, energyType=WATER, hp=110),                      # my benched successor
+        800: CardStat(800, energyType=WATER, hp=110,                       # my benched successor
+                      maxDamage=60, maxDamageCost=2, minAttackCost=1),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # ATTACH_FROM (pick Pokémon to attach to): opt0 = my Active (30 HP left, doomed — 120 x2
@@ -104,8 +116,12 @@ def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
     obs = make_select([card_opt(ACTIVE, 0), card_opt(BENCH, 0)], context=ATTACH_FROM,
                       current=state(active=poke(700, hp=30), bench=[poke(800, hp=110)],
                                     opp_active=poke(900, hp=160)))
+    # `dont-feed-the-doomed` is DELETED (#139, ADR-0069 §7): the SURVIVAL gate zeroes a doomed body's
+    # forward build outright, so a dying Active simply earns nothing to bank.
+    rows = {r["i"]: r for r in pilot.explain(obs).attach_working["eq"]}
+    assert rows[0]["doomed"] is True and rows[0]["build"] == 0.0
+    assert rows[1]["build"] > 0.0
     assert pilot.decide(obs) == [1]   # attach to Bench successor, not doomed Active
-    assert "dont-feed-the-doomed" in _fired(pilot.explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0010")
@@ -156,15 +172,19 @@ def test_open_the_accelerator_prefers_the_accel_opener_at_setup_active():
 
 
 @pytest.mark.req("REQ-GEN-0057")
-def test_advance_the_accel_pieces_lifts_playing_or_attaching_an_accel_roled_card():
-    # Folded from mega_starmie `accel-into-main`: during SETUP, advance deck's own
-    # `accel_source`-Roled pieces (e.g. attach the burst Energy that IS the acceleration).
+def test_use_acceleration_is_the_one_home_for_advancing_an_accel_piece():
+    """`advance-the-accel-pieces` is DELETED (#139, ADR-0069 §7). Its ATTACH half folded into the
+    decider's accel-routing term; its PLAY half is `use-acceleration`'s job, and that rung keys on the
+    `energy_accel` FUNCTION TAG rather than on an `accel_source` ROLE — one card fact, one home. A deck
+    that wants its accelerator advanced tags it (as every shipped deck does); a ROLE alone no longer
+    lifts a PLAY, which is the ruled disposition, not an oversight."""
     pilot = Pilot(Strategy(roles={17: ["accel_source"]}), deck=[1] * 60,
-                  general_strategy=GENERAL_STRATEGY)
+                  general_strategy=GENERAL_STRATEGY,
+                  functions=CardFunctions({17: ["energy_accel"]}))
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
                       current=state(hand=[111, 17]))
     assert pilot.decide(obs) == [1]
-    assert "advance-the-accel-pieces" in _fired(pilot.explain(obs).options[1])
+    assert "use-acceleration" in _fired(pilot.explain(obs).options[1])
     assert "advance-the-accel-pieces" not in _fired(pilot.explain(obs).options[0])  # role-keyed
 
 
@@ -193,11 +213,13 @@ def test_honor_preferred_start_penalizes_the_coin_toss_option_that_contradicts_t
 @pytest.mark.req("REQ-GEN-0007")
 def test_power_up_attacker_attaches_energy_rather_than_passing():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
-    # SETUP, options = [attach Energy, do-nothing play]. Attaching must win: power-up-attacker
-    # (+15) overcomes attach-energy-last (-5) so plain attachment nets positive (the blunder fix).
+    # SETUP, options = [attach Energy, do-nothing play]. Attaching must still win. Both rungs that used
+    # to net this out (`power-up-attacker` +15 over `attach-energy-last` −5) are DELETED (#139,
+    # ADR-0069 §7): the attach now wins on ORDERING — an unendorsed do-nothing play sequences with the
+    # turn-enders while the attach holds its own tier, so a blind attach is never passed over for
+    # nothing.
     obs = make_select([opt(ATTACH), opt(PLAY)], current=state())   # state() -> SETUP
     assert pilot.decide(obs) == [0]
-    assert "power-up-attacker" in _fired(pilot.explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0012")

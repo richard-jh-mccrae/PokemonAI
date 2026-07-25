@@ -85,15 +85,21 @@ def test_never_fetch_cinderace_silent_when_choosing_the_opening_active():
 
 # --- conserve-discard-energy-prefer-basic (needs the minCostDamage + active_cheap_attack_kos signals) ---
 WATER_ENERGY, IGNITION = 3, 17
-_A_JET_IGN = 51   # Jetting Blow as a real record (the minCostDamage fallback is retired, ADR-0052)
+_A_JET_IGN, _A_NEB_IGN = 51, 52   # Jetting Blow / Nebula Beam as real records (the minCostDamage
+                                  # fallback is retired, ADR-0052). Card facts VERIFIED at source
+                                  # (data/EN_Card_Data.csv): Mega Starmie ex is a Stage 1 evolving from
+                                  # Staryu — which is what makes Ignition provide {C}{C}{C} on it — with
+                                  # Jetting Blow {W} 120 and Nebula Beam ●●● 210.
 _IGN_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
-                           hp=330, minAttackCost=1, minCostDamage=120,   # Jetting Blow (cheap) prints 120
-                           attacks=(_A_JET_IGN,)),
+                           hp=330, minAttackCost=1, minCostDamage=120, maxDamage=210,
+                           maxDamageCost=3, evolvesFrom="Staryu",
+                           attacks=(_A_JET_IGN, _A_NEB_IGN)),
     WATER_ENERGY: CardStat(WATER_ENERGY, hp=0, energyType=WATER),   # reusable Basic
     IGNITION: CardStat(IGNITION, hp=0, energyType=0),              # special discard-EOT Energy
     9999: CardStat(9999),                                          # generic opp body (HP set via poke)
-}, attacks={_A_JET_IGN: AttackStat(_A_JET_IGN, damage=120, cost=1)})
+}, attacks={_A_JET_IGN: AttackStat(_A_JET_IGN, damage=120, cost=1, energyTypes=(WATER,)),
+            _A_NEB_IGN: AttackStat(_A_NEB_IGN, damage=210, cost=3, energyTypes=(0, 0, 0))})
 _IGN_TAGS = CardFunctions({IGNITION: ["discard_eot"], CINDERACE: ["opener"]})
 
 
@@ -115,15 +121,23 @@ def test_conserve_ignition_fires_when_the_cheap_attack_already_kos():
     finite Ignition (CCC→Nebula); prefer the Water. (dont-waste-discard-energy exempts the wincon,
     so this deck rule is what covers it.)"""
     obs = _attach_ignition_onto_active_wincon(opp_hp=120, hand=[WATER_ENERGY, IGNITION])
-    assert "conserve-discard-energy-prefer-basic" in _fired(_ign_pilot().explain(obs).options[0])
+    # `conserve-discard-energy-prefer-basic` is DELETED (#139, ADR-0069 §7): the burst's tonight-credit
+    # is CAPPED at what the reusable Basic in hand would have bought unless its attack converts a KO,
+    # and the resource tie-break then spends the renewable card — so the Basic wins on arithmetic.
+    row = _ign_pilot().explain(obs).attach_working["eq"][0]
+    assert row["units"] == 3, "the burst's printed provision must stay honest — only its CREDIT is capped"
+    assert row["this_turn"] == 120.0, (
+        "the burst still claims Nebula Beam's 210 while a reusable Basic reaches the same KO with "
+        f"Jetting Blow 120: {row}")
 
 
 @pytest.mark.req("REQ-MS-0003")
 def test_conserve_ignition_silent_when_nebula_is_actually_needed():
     """Cheap attack (120) does NOT KO the 200-HP Active → you need Nebula (CCC via Ignition) → the
-    rule must stay silent so the Ignition attach isn't penalised."""
+    no-KO cap must LIFT so the burst keeps its full tonight-credit (ADR-0069 §5b)."""
     obs = _attach_ignition_onto_active_wincon(opp_hp=200, hand=[WATER_ENERGY, IGNITION])
-    assert "conserve-discard-energy-prefer-basic" not in _fired(_ign_pilot().explain(obs).options[0])
+    row = _ign_pilot().explain(obs).attach_working["eq"][0]
+    assert row["this_turn"] == 210.0, f"the burst's KO-converting credit was capped away: {row}"
 
 
 @pytest.mark.req("REQ-MS-0003")

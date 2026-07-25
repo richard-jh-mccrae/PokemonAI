@@ -103,14 +103,16 @@ PROFILE = {
                                     # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off
                                     # submission. Kill-switch if its ladder value is weak. Needs the live
                                     # search token, so it no-ops (defers) on offline correction retests
-    "attach_value": False,          # attach marginal-fold armed-OFF 2026-07-22: the energy-attach oracle's
-                                    # `marginal` (`_attach_value`) scores each attach in place of the 8
-                                    # positive-endorsement rungs it shadows (`_ATTACH_VALUE_FOLDED`, all
-                                    # Round-0 measured-safe), calibrated by `_ATTACH_VALUE_SCALE`. Negative
-                                    # guards + tiebreak rungs stay (marginal is 0 where they fire → no
-                                    # double-count, whether-to-attach protection kept). Shadows only until
-                                    # flipped; the flip is gated on a score_diff / win-rate bench that tunes
-                                    # the scale (attach-valuation-phase2-handoff.md).
+    "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069, the FIRST
+                                    # no-shadow decider swap): the axes-sum marginal (`_attach_value`)
+                                    # IS the energy-attach decision — attack axis (tonight's
+                                    # counterfactual under the full Attach Budget / typed slot-fraction
+                                    # build / accel routing) + Retreat Equity + Ability Fuel −
+                                    # evaporation, per-axis gated, scaled by `_ATTACH_VALUE_SCALE`.
+                                    # Nineteen of the 23 baseline_energy rungs are DELETED, so this is
+                                    # an EMERGENCY LEVER, not a comparison baseline: OFF is documented
+                                    # degraded mode (attach endorsements silent, only the three
+                                    # structure rungs speak), never a rollback to the deleted pile.
     "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: behind a γ-matched Brief
                                     # (and no discard-recur fuel) a worst-case `active_doomed` cry
                                     # stands only if the CHARGED Threat-Clock curve confirms it

@@ -118,6 +118,46 @@ resurrectable, per the tracker's deletion directive.
 - The desperation floor depends on the Retreat Equity band clearing zero competitors only (End) —
   the −5 that would have silently killed it is gone from the score channel by ruling 7.
 
+## Amendments from the build (2026-07-25, #139)
+
+Five refinements the corpus forced during the swap. Each STATES a rule the decision above implied but
+did not spell out; none reverses a ruling. Evidence: `docs/plans/attach-decider-swap-review.md`.
+
+1. **The survival gate has a THIS-TURN half.** Decision 4 gave it a build half only, so a doomed
+   Active could be armed in front of an available pivot — 83007714-65, the charter frame of the very
+   rung being deleted. Tonight's credit now stands down on a doomed Active when a ready benched
+   win-condition exists AND the engine is offering the retreat. The MENU read is load-bearing:
+   82525101-69 has a "ready" bench Mega too poor to pay its own 2-cost retreat, and arming the doomed
+   Active for 120 is the play there.
+2. **A burst earns no BUILD, ever.** Decision 5 made the units honest and capped tonight's credit, but
+   build is FORWARD value and a `discard_eot` card is discarded at end of turn. Without this the
+   honest 3 units read as a full payoff build and out-bid the reusable Basic underneath the cap.
+3. **The role gate reads the deck's DECLARED roles.** A body given roles, none of them an attacker
+   Role, has been declared a non-attacking plan piece — the general form of the `engine`-only read,
+   and what catches a `counter_mover` or a sacrificial `starter`. Its exemption set is ADR-0048's
+   BROADENED line set, so a secondary attacker's base (`evolution_base`) is a plan piece too.
+4. **The gate stays IN PLAY, not per-colour.** Making it "an attacker who can use THIS colour" was
+   measured: it fixes two follow-up doctrine pins and INVERTS the committed 86091728-19 correction.
+   The correction wins; the doctrine's real content is a resource-sequencing claim no gate expresses.
+5. **The scale is 1.0, not 0.3.** Solved constraint-first, then corpus score-diff: agreement is flat
+   over [1.0, 1.5] and three regressions worse at the shadow-era seed, which was sized against a flat
+   +15 rung floor that no longer exists. At 1.0 the marginal IS a damage currency. The two surviving
+   band-constrained weights were re-derived against it (`prefer-active-attach-in-setup` +8 -> +1;
+   `feed-the-line-for-disruptor-lock` +20 -> +55), and the inequalities are CI-asserted in
+   `tests/strategy/test_attach_bands.py`.
+
+## Merge evidence (2026-07-25)
+
+Decision 8's paired A/B, run as a BUILD A/B rather than a flag A/B — with the rungs deleted,
+`attach_value` OFF is degraded mode and an on/off delta would have measured the decider against
+nothing (`tools/sim/gauntlet_swap_ab.py`; six directed matchups, opponent fixed at the pre-swap
+build, seat-balanced, n=200 per arm):
+
+**delta +2.92 pp, 95% CI [−0.46, +6.30] pp, 0 crashes in 2400 games** — the grilled flip rule
+(`delta >= 0 AND CI-lo >= -1% AND crashes == 0`) PASSES. It passes on the delta, not on precision:
+±3.4 pp could never have cleared −1% on width alone. Five of six matchups improve or hold. Full
+table: `docs/plans/attach-decider-swap-review.md`.
+
 ## Alternatives rejected
 
 - **Budget-as-gate-only `this_turn`** (keep count-delta, veto phantom credit): leaves the f70

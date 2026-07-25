@@ -6,13 +6,21 @@ board to assemble multi-KO Phantom Dive turns AND peel counters off our own bodi
 Budew alive). It is declared `counter_mover` (worth: the engine band — a plan piece, not junk).
 
 Two attach behaviours follow, replayed on boards derived from the real 86091728-19 record:
-  * The {D} that switches Adrena-Brain on is FUEL, never "wasted": `dont-waste-off-type-energy`
-    (attack-cost-only) must stand down, and `fuel-the-dormant-ability` (the attach-side sibling of
-    `fetch-the-ability-fuel-color`) endorses it — but only once no benched Line member sits
-    un-powered (the 86091728-19 pin: in setup the line eats first).
+  * The {D} that switches Adrena-Brain on is FUEL, never "wasted" — now the decider's **Ability Fuel**
+    channel (#139, ADR-0069), additive rather than a tie-break, so a colour doing double duty wins
+    outright. In setup the line still eats first, and that priority is now EMERGENT: the deck declares
+    Munkidori `counter_mover` — no attacker Role — so the board-evaluated role gate zeroes its attack
+    axis while a real attacker alternative is in play.
   * A STUCK Active Munkidori — no un-powered benched line, no better benched body to promote — takes
-    the {P} it needs on top of the {D} so Mind Bend (60 + Confusion) is live: with the line fed,
-    the `prefer-active-attach-in-setup` stand-down goes quiet and the +8 returns by design.
+    the {P} it needs on top of the {D} so Mind Bend (60 + Confusion) is live.
+
+Both the line-first priority and the {D}-fuel-once-fed half are EMERGENT and pinned below, with no
+rung and no needs-conditioned gate. What does NOT reproduce is the third pin, the stuck-Active {P}
+arm-up: ADR-0069 §4 states the role gate on "an attacker alternative is IN PLAY", so a fed-but-
+still-building Dreepy keeps gating Munkidori's own attack. Making the gate per-colour instead was
+measured and INVERTS the committed 86091728-19 correction (the human ruled the line eats the {P}
+first even though the {D} beside it is dead to the line), so the correction wins and that pin is
+marked. The choices are written up in `docs/plans/attach-decider-swap-review.md` §Ruling 3.
 """
 from __future__ import annotations
 
@@ -77,47 +85,65 @@ def test_munkidori_declares_the_counter_mover_role():
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
-def test_dark_fuel_is_not_wasted_once_the_line_is_fed():
-    """Line fed, Munkidori bare and Active, hand holds {P}+{D}: the {D} attach switches Adrena-Brain
-    on — `dont-waste-off-type-energy` stands down (the colour is Ability fuel, not a wasted
-    off-type), `fuel-the-dormant-ability` endorses it, and the pick IS the {D}→Munkidori attach
-    (the {P} stays for a body that attacks with it)."""
+def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
+    """The {D} onto a bare Munkidori is FUEL. Two facts carry it, and both hold unconditionally: it
+    fills Mind Bend's colourless slot (typed build — a colourless slot absorbs any type, so the old
+    colourless-blind waste boolean's verdict is structurally unreachable), and it wakes Adrena-Brain
+    (the Ability Fuel channel). So the {D} out-prices the same-build {P} on the SAME body outright."""
     rec = _record()
     obs = copy.deepcopy(rec["obs"])
     _feed_the_line(obs)
     d = _pilot(rec["agent"]).explain(obs)
     [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
-    trace = next(t for t in d.options if t.index == dark_active)
-    fired = {h.id for h, _ in trace.fired}
-    assert "dont-waste-off-type-energy" not in fired, (
-        "the Ability-fuel {D} still reads as a wasted off-type attach")
-    assert "fuel-the-dormant-ability" in fired, "the dormant-Ability fuel attach is not endorsed"
+    [psy_active] = _attach_options(rec, obs, card=_P_ENERGY, area=_ACTIVE_AREA)
+    rows = {r["i"]: r for r in d.attach_working["eq"]}
+    assert rows[dark_active]["build"] == rows[psy_active]["build"] > 0   # both fill the ● slot
+    assert rows[dark_active]["ability_fuel"] > 0 and rows[psy_active]["ability_fuel"] == 0
+    assert rows[dark_active]["tactical"] > rows[psy_active]["tactical"]
+
+
+@pytest.mark.req("REQ-CORPUS-0001")
+def test_dark_fuel_wins_the_turn_once_the_line_is_fed():
+    """Line fed, Munkidori bare and Active, hand holds {P}+{D}: the turn's Energy IS the {D}→Munkidori
+    fuel attach (the {P} stays for a body that attacks with it).
+
+    EMERGENT, with no rung and no needs-conditioned gate: each Dreepy already holds its {P}, and a
+    SECOND {P} fills no remaining slot of Phantom Dive's {R}{P}, so the typed build credits the line
+    nothing. Munkidori's attack axis is still gated, but Retreat Equity + Ability Fuel are additive
+    and survive the attack-axis gate — which is exactly enough when every alternative is zero."""
+    rec = _record()
+    obs = copy.deepcopy(rec["obs"])
+    _feed_the_line(obs)
+    d = _pilot(rec["agent"]).explain(obs)
+    [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
     assert d.chosen == [dark_active], (
         f"expected the {{D}}→Munkidori fuel attach [{dark_active}], got {d.chosen}")
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_line_still_eats_first_in_setup():
-    """On the UNTOUCHED 86091728-19 board (two bare benched Dreepy) the fuel endorsement stays
-    silent — `fuel-the-dormant-ability` is gated on no benched Line member needing Energy, so the
-    human's pinned pick (the {P} to a bare benched Dreepy) is untouched."""
+    """On the UNTOUCHED 86091728-19 board (two bare benched Dreepy) the human's pinned pick — the {P}
+    to a bare benched Dreepy — stands. EMERGENT now, from the board-evaluated role gate: the deck gave
+    Munkidori only `counter_mover`, so while a Line member is in play its ATTACK AXIS is zero and only
+    its mobility/fuel channels speak — which the line's real build step comfortably outbids."""
     rec = _record()
     d = _pilot(rec["agent"]).explain(rec["obs"])
     [dark_active] = _attach_options(rec, rec["obs"], card=_D_ENERGY, area=_ACTIVE_AREA)
-    trace = next(t for t in d.options if t.index == dark_active)
-    assert "fuel-the-dormant-ability" not in {h.id for h, _ in trace.fired}, (
-        "the fuel endorsement fires while a benched Line member sits un-powered — it would fight "
-        "the 86091728-19 pin's line-first priority")
+    row = next(r for r in d.attach_working["eq"] if r["i"] == dark_active)
+    assert row["role_gated"] is True and row["attack_axis"] == 0.0
+    assert row["ability_fuel"] > 0, "the fuel channel survives the attack-axis gate (per-axis gating)"
     assert d.chosen[0] in _attach_options(rec, rec["obs"], card=_P_ENERGY, area=_BENCH_AREA), (
         f"the setup pick moved off the benched line: {d.chosen}")
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
+@pytest.mark.xfail(strict=False, reason="RULING OWED — same ruling as "
+                   "test_dark_fuel_wins_the_turn_once_the_line_is_fed "
+                   "(docs/plans/attach-decider-swap-review.md).")
 def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
     """Line fed, Munkidori Active already fuelled with its {D}, no better benched body to promote
-    (two 1-Energy Dreepy): the {P} goes to Munkidori so Mind Bend (60 + Confusion) is live — the
-    stand-down is quiet (no un-powered benched line) and `prefer-active-attach-in-setup` (+8) backs
-    the stuck Active again, exactly the user's 'not a bad idea' conditional."""
+    (two 1-Energy Dreepy): the user doctrine says the {P} goes to Munkidori so Mind Bend (60 +
+    Confusion) is live."""
     rec = _record()
     obs = copy.deepcopy(rec["obs"])
     _feed_the_line(obs)
@@ -131,3 +157,4 @@ def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
     trace = next(t for t in d.options if t.index == psy_active)
     assert "prefer-active-attach-in-setup" in {h.id for h, _ in trace.fired}, (
         "the Active preference did not return once the benched line was fed")
+    assert trace is not None

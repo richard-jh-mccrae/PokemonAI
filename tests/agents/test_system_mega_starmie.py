@@ -122,9 +122,10 @@ def test_agent_keeps_a_startable_cinderace_hand_rather_than_mulliganing():
 
 @pytest.mark.req("REQ-SYS-0006")
 def test_agent_attaches_energy_during_setup_rather_than_passing():
-    # Blunder #1: in SETUP, attaching Energy must beat doing nothing (power-up-attacker), so
-    # agent powers up its attacker instead of only ever playing the special accel energy.
+    # Blunder #1: in SETUP, attaching Energy must beat doing nothing, so the agent powers up its
+    # attacker instead of only ever playing the special accel energy. `power-up-attacker`'s flat +15
+    # is DELETED (#139, ADR-0069 §7) — the attach now wins on ORDERING: an unendorsed do-nothing play
+    # sequences with the turn-enders while the attach keeps its own tier.
     p = _pilot()
     obs = make_select([opt(ATTACH), opt(PLAY)], current=state(active=poke(STARYU, energy=0)))
     assert p.decide(obs) == [0]    # attach the Energy
-    assert "power-up-attacker" in {h.id for h, _ in p.explain(obs).options[0].fired}

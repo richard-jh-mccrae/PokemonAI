@@ -60,7 +60,9 @@ def test_advance_the_line_beats_spreading_f29():
     """f29: advancing the started line (evolve Drakloak) out-values a spread attach onto a bare base."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_charge_the_line_f29")
     assert evolve[fx["correct"][0]] > 0
-    # the evolve out-scores every non-evolve option (the spread attach it should beat)
-    non_evolve = [d.options[i].score for i, o in
-                  enumerate(fx["obs"]["select"]["option"]) if o.get("type") != 9]
-    assert evolve[fx["correct"][0]] >= max(non_evolve, default=0.0), evolve
+    # The DECISION is the claim. Since the attach swap (#139, ADR-0069) an attach's score is a real
+    # damage currency rather than a flat rung, so a build step can out-NUMBER an evolve rung — and it
+    # no longer needs to lose on score to lose the turn: free development is tier 0 and the
+    # irreversible attach is tier 2, so the evolve is taken first and the attach follows.
+    assert d.chosen == fx["correct"], (
+        f"the evolve lost the turn to a non-evolve option: chosen={d.chosen}, correct={fx['correct']}")

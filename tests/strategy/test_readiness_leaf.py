@@ -85,8 +85,9 @@ class _Hyp:
 
 
 class _Trace:
-    def __init__(self, fired):
+    def __init__(self, fired, attach_spend=0.0):
         self.fired = fired
+        self.attach_spend = attach_spend
 
 
 # --- attack readiness: the gate, progress, position, type-awareness -------------------------------
@@ -284,18 +285,32 @@ def test_readiness_stays_capped_below_one_prize():
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_line_account_credits_ability_fire_and_subtracts_spend():
     """`_line_account` is the signed path term: a fired ability-USE rule (`fire-lunar-cycle`) adds its
-    positive weight; a fired spend rule (`dont-waste-discard-energy`) subtracts its magnitude; a rule
+    positive weight; a fired spend rule (`dont-waste-clutch-heal`) subtracts its magnitude; a rule
     NOT in either set is ignored; the sign filter drops a positive spend-id / negative ability-id."""
     p = _pilot()
     traces = [
         _Trace([(_Hyp("fire-lunar-cycle"), 15.0)]),                 # ability fire → +15
-        _Trace([(_Hyp("dont-waste-discard-energy"), -60.0)]),       # spend → -60
-        _Trace([(_Hyp("power-up-attacker"), 15.0)]),                # not a line rule → 0
+        _Trace([(_Hyp("dont-waste-clutch-heal"), -60.0)]),          # spend → -60
+        _Trace([(_Hyp("hold-position-in-setup"), 15.0)]),           # not a line rule → 0
     ]
     assert p._line_account(traces, [0]) == 15.0
     assert p._line_account(traces, [1]) == -60.0
     assert p._line_account(traces, [2]) == 0.0
     assert p._line_account(traces, [0, 1]) == pytest.approx(-45.0)
+
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_line_account_subtracts_the_attach_deciders_evaporation_spend():
+    """The five `discard_eot` rungs the spend account used to read are DELETED (#139, ADR-0069): a
+    one-shot Energy attached where it buys nothing before end of turn is now the decider's EVAPORATION
+    LOSS, carried on `OptionTrace.attach_spend`. Same referent (a consumed card, invisible on the end
+    board), same account — so a line that torches an Ignition still costs what it spent."""
+    p = _pilot()
+    traces = [_Trace([]), _Trace([])]
+    traces[1].attach_spend = -30.0
+    assert p._line_account(traces, [0]) == 0.0
+    assert p._line_account(traces, [1]) == -30.0
+    assert p._line_account(traces, [0, 1]) == -30.0
 
 
 @pytest.mark.req("REQ-PLANNER-0011")

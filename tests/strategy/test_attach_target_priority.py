@@ -87,6 +87,8 @@ def test_prefer_active_stands_down_for_the_roleless_offline_active(decision):
                     == _PSYCHIC_ENERGY)
     fired = {h.id for h, _ in active_p.fired}
     assert "prefer-active-attach-in-setup" not in fired, (
-        "the +8 still fires on the role-less off-Line Active — the stand-down is not live")
-    assert "power-up-attacker" in fired, (
-        "the Active attach lost more than the tie-break — power-up-attacker should still price it")
+        "the prior still fires on the role-less off-Line Active — the stand-down is not live")
+    # ... and the stand-down is all that is missing: the option is still PRICED (the decider gives the
+    # Active its channels), so this asserts the tie-break went quiet, not that the option went dead.
+    # (`power-up-attacker`, the flat +15 that used to carry it, is deleted — ADR-0069 §7.)
+    assert next(r for r in d.attach_working["eq"] if r["i"] == active_p.index)["marginal"] > 0
