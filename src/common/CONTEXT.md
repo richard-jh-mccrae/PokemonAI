@@ -563,6 +563,35 @@ _Avoid_: active_attack_payable (the attached-now truth — no budget), active_at
 (the retired +1/cheapest-only/untyped approximation), payable (unqualified — attached-now or
 budget-aware?)
 
+**Retreat Equity**:
+The mobility value of Energy attached toward a body's printed Retreat cost — an ADDITIVE orthogonal
+channel of the attach marginal (`attack_axis + retreat_equity + ability_fuel`, #139; the attack axis
+is `max(this_turn, build, accel_value)` — max WITHIN an axis, sum ACROSS axes, because the three
+attack terms re-read one progress while the channels are independent card features). A Retreat slot
+is colourless (any Energy pays, rules.md §per-turn), so an off-type attach still earns it — the
+desperation-attach channel: a lone utility body (turn-1 Lunatone) takes the Energy so a
+later-benched attacker can pivot in behind it. Low-band by construction (sits below the smallest
+live build credit, so it never outbids genuine attack progress); threshold-shaped toward the printed
+Retreat cost; SURVIVES the attack-axis gates (a role-gated or overkill-capped body still banks
+mobility); ZERO once the retreat is already funded, on a free-retreat body (TEF Dunsparce), and
+for a `discard_eot` burst (evaporates end of turn — funds no future retreat). Deliberately blind to
+*why* the body would retreat: 1a prices the FUNDING, 1c decides the PIVOT.
+_Avoid_: retreat value (1c's pivot-decision currency), mobility bonus (vague), restricting it to
+utility bodies (every body earns it — attack terms dominate wherever they exist)
+
+**Ability Fuel**:
+The attach marginal's second additive channel (#139): the value of attaching the colour a DORMANT
+in-play Ability needs while none of that colour is attached (`abilityEnergyTypes` — Munkidori's
+Adrena-Brain {D}, predicate `_attach_fuels_dormant_ability`). Value the attack axis structurally
+cannot see: real even when the attack's slots are already covered, and ADDITIVE so a colour doing
+double duty (fills a colourless slot AND wakes the Ability) beats the same-build alternative
+outright — the ideal-case ruling ({D} > {P} onto a bare Munkidori). Low-band like **Retreat
+Equity**; zero for an evaporating burst; the equation form of the deleted `fuel-the-dormant-ability`
+rung, whose "line eats first" stand-down is EMERGENT (a needy Line body's build credit dominates
+the band).
+_Avoid_: ability value (the Ability's own recurring worth — planner scope), fuel (unqualified),
+re-gating it on `bench_line_member_needs` (the band ordering already does it)
+
 **Survival Window**:
 How many turns one of my bodies withstands the predicted **Incoming** before it is Knocked Out. The
 lever a defensive +HP Tool pays for: the Tool earns its slot when its boost widens this window by a
