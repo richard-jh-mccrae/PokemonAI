@@ -63,6 +63,31 @@ def test_engine_confirms_a_shipped_lethal_wins_end_to_end():
 _F24_WIN_LINE = [[5], [1], [1], [2], [0], [0], [2]]
 
 
+# The verdict of ONE `engine_confirms` drive is not a fact about the agent — it is a sample. The
+# native engine's RNG stream is process-global and unseedable, so each drive shuffles the seeded
+# hidden zones afresh and the cascade's draws differ; on ml f24 the [correct]-only form refutes on
+# essentially every stream but confirms on a rare lucky one (measured 1-in-150 in suite context,
+# and it is what turned this test red on CI twice). So both directions below are stated as claims
+# over K INDEPENDENT streams instead of over one:
+#
+#   * the target win is REAL          -> confirmed on at least one stream (an existence claim; one
+#                                        engine verdict of True is a proof, and a stray None/False
+#                                        on another stream cannot unprove it),
+#   * decide() cannot COMPOSE it      -> refuted on at least one stream (the capability is unbuilt;
+#                                        a lucky confirm is engine noise, not a shipped hook).
+#
+# The gate the docstring below promises is preserved and made sharper: once the Phase-3 steering
+# hooks ship, the [correct] form confirms on EVERY stream, no refute survives, and this test goes
+# red — which is exactly the signal the fix is meant to trip.
+_F24_STREAMS = 5
+
+
+def _verdicts(fx, agent, line=None, k=_F24_STREAMS):
+    """``engine_confirms`` sampled over ``k`` independent engine RNG streams (each drive advances the
+    process-global stream, so repeated calls are genuinely different samples)."""
+    return [engine_confirms(fx, _pilot(agent), line=line) for _ in range(k)]
+
+
 @pytest.mark.req("REQ-LETHAL-SEED-0005")
 def test_engine_confirms_multi_step_line_proves_a_real_missed_win():
     """The multi-step gate (proof-of-target for a capability-gap): ml f24 is a REAL bench-empty win when
@@ -72,5 +97,9 @@ def test_engine_confirms_multi_step_line_proves_a_real_missed_win():
     form goes green on its own — that is the fix's gate."""
     require_cg()
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
-    assert engine_confirms(fx, _pilot("mega_lucario"), line=_F24_WIN_LINE) is True   # target win is real
-    assert engine_confirms(fx, _pilot("mega_lucario")) is False                      # [correct]+decide() can't
+    driven = _verdicts(fx, "mega_lucario", line=_F24_WIN_LINE)
+    assert True in driven, f"the explicitly driven win line never confirmed: {driven}"
+    composed = _verdicts(fx, "mega_lucario")
+    assert False in composed, (
+        f"[correct]+decide() confirmed the win on every stream ({composed}) — the follow-up steering "
+        f"hooks now compose the line, so this capability-gap gate has been met and should be retired")
