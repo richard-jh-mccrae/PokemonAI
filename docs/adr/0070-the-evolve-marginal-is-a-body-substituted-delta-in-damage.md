@@ -153,10 +153,9 @@ strictly opt-in. Every existing call site now states its claim in the source.
 (+40) and `advance-the-evolution-line` (+15) are the deploy term; both `+5` energized tie-breaks are
 EMERGENT (an energized body has higher standing, so its delta is naturally larger — which is what
 they were compensating for). All four delete, as does dragapult's `hold-evolution-until-attacker-
-ready` (−46), which is `income_loss`, via `/deck-align` (ADR-0034). **Overturning Ruling 7:**
-`prefer-rush-evolve-tutor` (+30) does NOT merely survive — its worth IS the evolve it enables one
-turn early, which decision 2 can now compute, so it folds to `evolve_value` over the hypothetical
-result (1a's hypothetical-body pattern) while its three premises stay structural gates.
+ready` (−46), which is `income_loss`, via `/deck-align` (ADR-0034). **`prefer-rush-evolve-tutor` (+30) SURVIVES as a rung — the fold is DEFERRED to #145** (amendment
+G below overturns this decision's original "folds to `evolve_value`" disposition, which the build
+found under-determined).
 `dont-rush-evolve-without-target` (−60) survives as a pure **Gate** — structural absence, not value
 — and MUST keep its `_CLASS_B_SPEND_IDS` membership or the develop-rollout planner's spend account
 loses a term.
@@ -227,6 +226,33 @@ built on speculation, and named here so a future frame can settle it.
 With both removed the sweep stands at 24 frames / 14 agree / 10 flips: **6 FIX, 0 REGRESSION**, 2
 re-ruled out of scope, 2 DIVERGENT (both correct on the evolve axis — 86091435-35 is f35 and the
 hold fires as designed).
+
+**G. The rush-evolve tutor fold was BUILT, then REVERTED — it is under-determined without #145.**
+Decision 10 ruled that `prefer-rush-evolve-tutor`'s worth IS the evolve it enables, so it should
+fold to `evolve_value` over the hypothetical result. Built (`_rush_evolve_tutor_tactical`, with
+`_evolve_inputs` factored out so the tutor could never be priced by a different equation than the
+evolve it buys) and reverted on measurement: Salvatore scored **0.0** where the rung gave +30
+(`test_a_free_item_dig_is_sequenced_before_the_one_per_turn_supporter`).
+
+The cause is a gap in the ruling, not the implementation. A rush-evolve tutor does TWO things —
+it **fetches a Pokémon onto the bench** and **evolves it the same turn**. The fold priced only the
+second, so whenever the enabled evolve's clocks do not move (which decision 6 establishes is often
+and correctly zero) the tutor read as worthless despite having put a body on the board a turn early.
+**The deployment half is unpriced.**
+
+Pricing it here would mean inventing a damage-denominated "what is a body on my board worth" term —
+which is precisely the question `state_value` exists to answer (#145 build shape 1 counts *"my
+development (readiness + Needs coverage)"*, and build shape 3 differences it per option). But whether
+that actually absorbs a tutor is UNSETTLED: #145's grill agenda item 2 owns the simulability
+boundary and names only *"attach/evolve/retreat likely differenced"* — a deck search's outcome is a
+choice over hidden cards, so it may land as an explicit action term instead.
+
+So the rung stays, at its **unchanged +30**, as one acknowledged currency mismatch — visible and
+documented rather than papered over with a re-banded figure that would be a guess dressed as a
+derivation. Unlike the four deleted rungs, where f29 gave a concrete leak (a 37.5-damage build step
+out-numbering a +20 rung), **no frame currently demonstrates that +30 is wrong.** #145's ruling on
+the simulability boundary decides whether this fold is worth doing at all — if tutors are
+differenced, it is dead work.
 
 ## Consequences
 
