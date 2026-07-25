@@ -37,6 +37,11 @@ def _fixture(name: str) -> dict:
 
 # ── PINS: covered today; must survive the rung→equation fold ─────────────────────────────────────
 @pytest.mark.parametrize("agent,fixture,leg", [
+    # ⚠️ CROSS-LAYER (ADR-0070, user ruling 2026-07-25): this frame is won by a five-step TURN-PLANNER
+    # maneuver (Crispin -> evolve -> Adrena-Brain 3 counters -> Recon -> Dragon Headbutt KO), not by
+    # the evolve equation, whose standalone read prefers the benched body. It passes today because the
+    # decider is armed OFF; it REGRESSES when the flag flips unless the planner commits the maneuver —
+    # and no lethal tier currently reaches a counter-moving Ability. Blocking for the swap.
     ("dragapult_ex", "dp_evolve_energized_line_body_first_f82", "which-body"),
     ("dragapult_ex", "dragapult_promote_over_fragile_base_f31", "promote-preserve-the-line"),
     ("dragapult_ex", "dp_charge_the_line_f29", "line-progress (advance over spread)"),

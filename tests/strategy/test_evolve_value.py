@@ -57,12 +57,16 @@ def test_hold_the_income_off_unready_evolve_f35():
     assert only_evolve < 40                     # far below a READY-wincon deploy (the old flat +40 bug)
 
 
-@pytest.mark.xfail(strict=True, reason="FLIP AWAITING USER RULING (#140 swap protocol, ADR-0069 §8): "
-                   "the decider prefers evolving the BENCHED bare Dreepy (37.5) over the energized "
-                   "ACTIVE one (30.0). The Active body is doomed either way (ko 1 -> 1), so its evolve "
-                   "buys only tempo — a real 70 swing; the benched body's evolve crosses the snipe "
-                   "threshold (70 -> 90 HP, ko 1 -> 3) and banks survival. Rule: is the rescue right, "
-                   "or is the forward payoff over-credited on a body two turns from arming?")
+@pytest.mark.xfail(strict=True, reason="RECLASSIFIED as a TURN-PLANNER maneuver (user ruling "
+                   "2026-07-25), the f32 precedent applied: the correct play is a five-step chain "
+                   "whose value is the END STATE — Crispin attaches {D} to Munkidori, evolve the "
+                   "Active Dreepy (40 damage carries -> Drakloak 50/90), Adrena-Brain moves 3 "
+                   "counters (my Drakloak -> 80/90, their Drakloak -> 60/90), Recon Directive, then "
+                   "Dragon Headbutt 70 >= 60 KOs. A single-action equation cannot see that chain, so "
+                   "the standalone deploy (30.0 for the Active vs 37.5 for the benched body) is "
+                   "CORRECT and the maneuver is simply better. CROSS-LAYER REQUIREMENT for the swap: "
+                   "no lethal tier currently reaches an Ability that moves damage counters onto the "
+                   "defender, so this frame's corpus PIN regresses when the flag flips ON.")
 def test_which_body_prefers_the_energized_f82():
     """f82: two mid-line Dreepy→Drakloak evolves; the energized body's deploy carries the +5 which-body
     bonus, so its value out-ranks the bare copy."""

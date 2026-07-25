@@ -165,6 +165,43 @@ loses a term.
 agent; branching off an unmerged #159 would leave any regression ambiguous between two swaps,
 defeating the protocol ADR-0069 established. (Executed: #159 merged at `13a0c81`.)
 
+## Amendments from the build
+
+**A. The composition of §2 and §6 was underspecified, and resolving it cost the headline.** Both the
+`build_standing` reading and the clock reading estimate one forward payoff on one body, so they
+compose with `max` (ADR-0069 §1) — under which the clock term swamps standing and the "+70 from
+removing the `0.25`" becomes zero. Ruled (user, 2026-07-25): the discount and the hop clock are TWO
+MODELS OF ONE FACT, so the decider uses only the measured one. `deploy(X) = max(this_turn(X),
+payoff_damage(X) · p_arrive(X) · p_survive(X))`. A hop costs a turn only when hops OUTNUMBER the
+energy turns owed — attaching and evolving run in parallel — and in the frame the grill quoted they
+tie, so the honest delta there is 0. The recorded gap's frame instead earns from `this_turn`
+(Jetting Blow `{W}` 120 vs Water Gun 20) and from survivability (70 → 330 HP). Because both bodies
+build toward the SAME line payoff, `payoff_damage` cancels: the deploy delta is driven purely by
+what evolving does to the two clocks.
+
+**B. `turns_to_afford`'s energy leg is COUNT-based, which broke the hold frame.** It read Drakloak
+on `{R}{D}` as armed for Phantom Dive's `{R}{P}` and priced f35 — the hold frame — as a 100-point
+evolve. Fixed with a `typed=` parameter rather than a global change, because the reading is a
+FAIL-DIRECTION choice: the count reading is pessimistic about THEIR clock (safe for a threat read)
+and wrong for mine. My side passes `typed=True`.
+
+**C. f82 is a TURN-PLANNER maneuver, not an evolve gap** (user ruling 2026-07-25, applying the f32
+precedent verbatim). The frame is won by a five-step chain whose value is the END STATE: Crispin
+attaches `{D}` to Munkidori, evolve the Active Dreepy (40 damage carries → Drakloak 50/90),
+Adrena-Brain moves 3 counters (mine → 80/90, theirs → 60/90), Recon Directive, then Dragon Headbutt
+70 ≥ 60 KOs. The standalone deploy (30.0 Active vs 37.5 benched) is CORRECT; the maneuver is simply
+better and belongs to the Turn Planner. **CROSS-LAYER REQUIREMENT, BLOCKING THE SWAP:** f82 is a
+corpus PIN, and no lethal tier currently reaches an Ability that moves damage counters onto the
+defender (the ladder covers develop, attach, energy-tutor, evolution-tutor, damage-boost retreat and
+retreat-enabler). The pin therefore regresses the moment the flag flips ON, unless the planner gains
+that reach or the pin is re-ruled to planner scope.
+
+**D. The bench survival read prices a SHARED spread budget per-body.** `turns_to_ko_me` asks "can 60
+kill this body?" once per body, so it credits rescuing one benched Pokémon as though the whole
+spread were dedicated to it — when the opponent simply redirects the counters to another body in
+range. Parked as its own issue rather than fixed here (user ruling 2026-07-25); it inflates every
+bench survival delta, so it touches 1c and 1d as well.
+
 ## Consequences
 
 - `evolve_value`'s five calibration constants and the `doom` field all disappear. What replaces them
