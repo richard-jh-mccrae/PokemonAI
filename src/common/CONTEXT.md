@@ -698,6 +698,72 @@ _Avoid_: Engine Search (the primitive it drives — Escalation Search is the bud
 Lethal Solver (sound, this-turn win; escalation is heuristic tie-breaking), Turn Planner (the whole
 optimizer; escalation is its last, opt-in rung)
 
+**StateModel**:
+The ONE enriched, two-sided board snapshot computed per decision point that every value equation
+**reads** instead of recomputing (#138) — the cure for the near-duplicate reads (three attack-payability
+approximations, doom vs threat-clock re-expressions) and the substrate for the single `state_value`
+scalar (#145). Holds two **SideState**s plus the cross-side facts (prize race, the matched Read). Fields
+are **lazy** — derived on first access and memoized — so the model is *maximal* in what it OFFERS while
+each consumer pays only for what it READS; adding a field costs an unrelated consumer nothing. Derived
+from the obs, never mutated by an `apply(action)` delta path: the engine's simulated obs already IS the
+authoritative post-action state, so a Python action-applier would be a second rules engine (rejected —
+ADR-0059's trace-verification cost is the precedent).
+_Avoid_: Board (the flat 129-field dataclass it supersedes — Board becomes a derived adapter over it),
+obs / game state (the raw engine dict the StateModel derives FROM), belief (a StateModel is derived fact
+plus the Read; a *sampled world* is #150's unit and carries its own StateModel)
+
+**SideState**:
+One side's half of the **StateModel** — mine or theirs — and the unit of **reuse**. Asymmetric by
+information, deliberately: my side carries actual hand cards, the **Attach Budget** / **Reachable
+Attach** / readiness results and Needs coverage; their side carries hand *size* plus inference hooks,
+the `incoming(t)` clocks, and the archetype Read. The expensive derivations sit on OPPOSITE sides (my
+Needs assignment DP vs their per-body clock curves), which is what makes side-level sharing pay: a
+planner leaf inside MY turn reuses the opponent SideState unmodified (they cannot act during my turn),
+and #150's K sampled worlds reuse MY SideState unmodified. Reuse is **guarded** by a zone fingerprint
+(bodies + damage + prizes + discard), never assumed — an attack, a KO, or a cross-table effect rebuilds.
+_Avoid_: player (the engine obs dict for one seat), Opponent Model (the KNOWLEDGE facade, ADR-0047 —
+their SideState *composes* it rather than being it)
+
+**Carried State**:
+The narrow, explicitly-declared channel of facts that persist ACROSS decision points, as opposed to
+the **StateModel**'s per-obs derivations. Members: the phase hysteresis (`_phase_prev` — STABILIZE's
+Schmitt trigger, `objectives._derive_phase`), the Prize-Path stickiness (`_my_path_prev`,
+`objectives._sticky_path`), and later #149's `known_top` (we know our deck's top card because we placed
+it; the obs never shows it). Each is READ IN as an argument and HANDED BACK as a return value — the
+caller decides whether to store it — so no derivation mutates Pilot state as a side effect of being
+computed. This is what keeps the StateModel **pure**, which in turn is what makes SideState sharing and
+the **Leaf Profile** pin sound: a model that rewrote itself on read could be neither shared nor pinned.
+Before this channel existed the two hysteresis memories were mutated by `_board` and defended by
+hand-written snapshot/restore at two separate call sites (`planner.py:3050`, `planner.py:3473`) — a
+planner fork's *hypothetical* phase could otherwise leak into the real game's memory.
+_Avoid_: cache (a cache is a recomputable memo — Carried State is genuinely unrecoverable from the
+current obs), belief (#149's `known_top` is one MEMBER of this channel, not the channel), turn state
+(engine per-turn flags like `supporterPlayed` are obs facts, not Carried State)
+
+**Count Triple**:
+The three-legged shape of a hidden-zone count field (first instance: `deck_energy_counts`, per-type
+Basic Energy still in MY deck): **floor** (provably at least — pigeonhole over hidden prizes; sound,
+safe for `>=` checks), **expected** (the hypergeometric prize-split average — EV math only, a fraction
+of a card, never comparable to a cost), and **ceiling** (provably at most; the fail-open "could it be
+there" leg — 0a's sound type-set gate is exactly `ceiling > 0`). Two regimes, one interface: PRE-ANCHOR
+(before the first deck-revealing search) the legs honestly diverge; ANCHORED (`deck_known_counts`
+resolved, `obs['own_prizes']` exact) all three collapse to the same integer — so consumers never branch
+on "are we anchored?", and a consumer must NAME the epistemic it reads (`.floor`/`.expected`/`.ceiling`),
+making the estimate-smuggled-into-sound-math mistake (ADR-0067's contamination) ungrammatical rather
+than merely discouraged. The pre-anchor window is short (turns 1–2) but is exactly where the famine
+misreads live (f70; ADR-0067's pre-anchor ruling).
+_Avoid_: expected count alone (that's ONE leg — a bare expectation invites `1.6 >= 1` on a deck that
+holds zero), deck tracker (the SOUND per-card ledger the triple's anchored regime reads from)
+
+**Leaf Profile**:
+The measured subset of **StateModel** fields a planner-leaf evaluation actually touches, plus its
+measured cost — the budget #145's `state_value` and #150's K-sample search size against. **CI-pinned as
+a field-SET snapshot**, not as wall-clock (a timing assertion is flaky across the Windows and Linux
+runners): a leaf that begins reading a new field fails the pin, forcing a deliberate re-measure rather
+than a silent per-leaf cost creep. Reported **per side**, so the side-sharing rationale stays falsifiable.
+_Avoid_: leaf value (the SCALAR a leaf evaluates to — the Profile is what computing it costs), profiling
+run (the one-off measurement; the Leaf Profile is the pinned contract that outlives it)
+
 ### Strategy lifecycle
 
 **Fold**:

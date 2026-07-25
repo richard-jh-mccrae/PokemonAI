@@ -15,6 +15,7 @@ from common import deck_odds
 from common.evolve_value import EvolveInputs, evolve_value
 from common.promote_retreat_value import PromoteRetreatInputs, promote_retreat_value
 from common.opponent_model import OpponentModel
+from common.state_model import StateModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
@@ -1266,8 +1267,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # burst_on_evo=2: Ignition on an Evolution). RELAX-ONLY:
                                                         # it clears phantom doom, never adds one. Unmatched/
                                                         # fueled/OFF = byte-identical worst-case (ADR-0064 §2)
-        self._phase_prev = None                         # the hysteresis memory (Schmitt trigger) —
-                                                        # the ONE stateful bit of the phase label
+        self._phase_prev = None                         # Carried State (ADR-0068): the phase
+                                                        # hysteresis memory (Schmitt trigger) — read
+                                                        # via `carried()`, never mutated by a
+                                                        # hypothetical build
         self.gamble_lines = gamble_lines                # ADR-0039 kill-switch: the Tier-2 Gamble rung —
                                                         # play a Hand Refresh FIRST when the draw's
                                                         # exact-odds EV beats the held (banked) line
@@ -1320,7 +1323,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Plan, the card) — the legibility record the writeup is generated from (ADR-0008)."""
         return self._evaluate(obs)
 
-    def _evaluate(self, obs: dict) -> Decision:
+    def _evaluate(self, obs: dict, *, carried=None) -> Decision:
+        """Rank this decision's options. ``carried`` forwards a Carried State snapshot to the board
+        build, making the whole evaluation non-mutating in the two memories (ADR-0068 decision 2) —
+        what a re-score of the root inside a simulated line needs."""
         select = obs.get("select")
         if select is None:                       # initial deck-submission step
             return Decision(chosen=list(self.deck))
@@ -1328,7 +1334,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             self._transients.observe(obs)        # engine-sim future must never mutate match state
             self._turn_boosts.observe(obs)
         options = select.get("option") or []
-        board = self._board(obs, select)
+        board = self._board(obs, select, carried=carried)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
         replayed = self.replay_locked_line(obs, select)   # ADR-0037 stage 3: a verified locked line
         if replayed is not None:                          # owns the turn — identity-matched replay,
@@ -4958,8 +4964,33 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             hand = len(opp.get("hand") or [])
         return per_card * (hand or 0)
 
-    def _board(self, obs: dict, select: dict | None = None) -> Board:
-        """Summarise the shared board once per decision (see Board)."""
+    def carried(self):
+        """A frozen :class:`~common.state_model.CarriedState` snapshot of the facts that persist
+        ACROSS decision points (ADR-0068 decision 2).
+
+        The declared channel, and the whole of it: the phase hysteresis and the Prize-Path stickiness
+        today, #149's ``known_top`` later. Everything else the Pilot knows is either an observation
+        fact or a recomputable memo, and belongs in neither this channel nor a derivation that
+        mutates on read.
+
+        Pass it to any build of a HYPOTHETICAL board (``_board(..., carried=...)`` /
+        ``_evaluate(obs, carried=...)``): the carried values are then read from the snapshot and the
+        new ones discarded, so a simulated line's phase or path can never leak into the live turn's
+        memory. That guarantee used to be a hand-written snapshot/restore at each site that
+        remembered to add one."""
+        from common.state_model import CarriedState
+        return CarriedState.of(phase_prev=getattr(self, "_phase_prev", None),
+                               my_path_prev=getattr(self, "_my_path_prev", None))
+
+    def _board(self, obs: dict, select: dict | None = None, *, carried=None) -> Board:
+        """Summarise the shared board once per decision (see Board).
+
+        ``carried`` (a :class:`~common.state_model.CarriedState` snapshot) makes the build PURE
+        (ADR-0068 decision 2): the two hysteresis memories — the phase Schmitt trigger and the
+        Prize-Path stickiness — are then read from the snapshot instead of ``self``, and the new
+        values are not written back. Callers building a HYPOTHETICAL board pass it, which is what
+        retires the hand-written snapshot/restore guards that each such site previously had to
+        remember. A live decision passes nothing and keeps the in-order write, byte-identically."""
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -4975,6 +5006,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             prizes = {int(k): v for k, v in prizes.items()}   # obs (a Correction) matches the int decklist
 
         deck_empty = self._deck_empty_ids(me, prizes)
+        # The StateModel for this decision (ADR-0068) — the ONE two-sided snapshot the migrated Board
+        # fields below read instead of each calling its own hand-rolled helper. Construction computes
+        # NOTHING (every field is lazy), so building it here costs only the fields actually read; new
+        # consumers from Phase 1a on take it directly rather than going through Board at all.
+        self._state_model = model = StateModel.build(
+            obs, combat=self.combat, my_index=yi, deck=self.deck, deck_empty=deck_empty,
+            carried=carried if carried is not None else self.carried())
         deck_known = self._deck_known_counts(me, prizes)
         deck_odds_map = self._deck_contains_prob(me, deck_known)   # probabilistic complement (ADR-0029)
         read = self.opponent.observe(obs)            # ADR-0047 fan-out: Identity (Scout) + Resources
@@ -5019,10 +5057,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
                                       len(me.get("prize") or []),   # re-derived every decision,
                                       len(opp.get("prize") or []),  # ranking data only; their-side
-                                      read, gamma)                  # sees the γ-gated Read overlay (T4)
+                                      read, gamma,                  # sees the γ-gated Read overlay (T4)
+                                      carried=carried)              # snapshot ⇒ pure (ADR-0068)
         phase = self._derive_phase(base_plan, path_sig["race_ahead"], active_doomed,
                                    len(me.get("prize") or []),   # derived ADVISORY phase (hysteretic)
-                                   favorability=fav, coverage=cov)   # + Tier-4 favorability (Lever A)
+                                   favorability=fav, coverage=cov,  # + Tier-4 favorability (Lever A)
+                                   carried=carried)                 # snapshot ⇒ pure (ADR-0068)
         opp_doomed = oa is None or (oa or {}).get("hp", 1) <= 0    # ADR-0044: forced promote next turn
         board = Board(
             opp_active_doomed=opp_doomed,
@@ -5048,8 +5088,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             menu_attack_total_prizes=self._menu_attack_total_prizes(ma, oa, opp, payable),
             gust_ko_energy_swing=self._gust_ko_energy_swing_calc(ma, oa, opp, payable),
             stall_swap_pointless=self._stall_swap_pointless(opp),
-            my_prizes_remaining=len(me.get("prize") or []),
-            opp_prizes_remaining=len(opp.get("prize") or []),
+            my_prizes_remaining=model.prize_race.my_prizes_remaining,   # ← StateModel (ADR-0068):
+            opp_prizes_remaining=model.prize_race.opp_prizes_remaining,  # the ONE prize-race read
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             recycle_dead_only=self._recycle_dead_only(me),
             active_attack_payable=(self._active_attack_payable(ma, payable)
@@ -5100,17 +5140,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             bench_wincon_underpowered=self._bench_wincon_underpowered(me),
             opp_cannot_punish_wincon=self._opp_cannot_punish_wincon(me, opp),
             basic_energy_in_deck=self._basic_energy_in_deck(deck_empty),
-            my_discard_basic_energy=self._discard_energy_counts(me.get("discard") or [])[1],
-            opp_discard_energy=self._discard_energy_counts(opp.get("discard") or [])[1],
+            my_discard_basic_energy=model.mine.discard_energy_counts,    # ← StateModel: both discards
+            opp_discard_energy=model.theirs.discard_energy_counts,        # are PUBLIC, so sound counts
             active_best_attack_locked=self._active_best_attack_locked(ma),
             opp_has_stage2=self._board_has_stage2(opp),
             opp_has_colorless_ability=self._board_has_colorless_ability(opp),
-            hand_ids=frozenset(c.get("id") for c in (me.get("hand") or [])
-                               if c and c.get("id") is not None),
+            hand_ids=frozenset(model.mine.hand_ids),                      # ← StateModel
             search_deck_ids=(frozenset(c.get("id") for c in (select.get("deck") or [])
                                        if c and c.get("id") is not None)
                              if select and select.get("deck") else None),
-            hand_basic_energy=self._hand_basic_energy(me.get("hand") or []),
+            hand_basic_energy=model.mine.hand_energy_counts,               # ← StateModel
             no_supporter_in_hand=self._no_supporter_in_hand(me),
             opp_has_played_gust=self._opp_has_played_gust(opp),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),

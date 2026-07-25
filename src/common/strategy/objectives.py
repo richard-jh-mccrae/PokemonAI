@@ -191,6 +191,50 @@ def prize_paths(bodies, prizes_needed: int, reach=None):
     return best[4], float(best[0])
 
 
+def _phase_from(prev, base, race_ahead, active_doomed: bool, my_prizes: int,
+                favorability: float, coverage: float, *, enabled: bool):
+    """The advisory phase's PURE core (ADR-0068): previous label in, new label out.
+
+    Extracted so the STABILIZE hysteresis stops being a side effect of building a board. The
+    Schmitt trigger genuinely needs memory — enter clearly behind, leave only clearly ahead — but
+    memory passed as an argument cannot leak a planner fork's hypothetical phase into the live game,
+    where memory read off ``self`` did (and needed a hand-written guard at each site to stop it).
+    """
+    from common.strategy.strategy import Plan
+    if not enabled:
+        return base
+    enter = _STAB_ENTER
+    if coverage >= _FAV_MIN_COVERAGE and favorability <= _UNFAVORED:
+        enter += _FAV_STAB_SHIFT                    # unfavored: enter STABILIZE one turn sooner
+    phase = base
+    if race_ahead is not None and active_doomed:
+        if prev == Plan.STABILIZE:
+            if race_ahead < _STAB_EXIT:            # keep stabilizing until clearly ahead
+                phase = Plan.STABILIZE
+        elif race_ahead <= enter:                  # enter clearly behind (bar relaxed if unfavored)
+            phase = Plan.STABILIZE
+    if base == Plan.RACE and 0 < my_prizes <= _CLOSE_PRIZES:
+        phase = Plan.CLOSE                         # endgame overrides: force the finishing line
+    return phase
+
+
+def _sticky_path_from(prev, mine: list, my_prizes: int, best_keys, best_turns):
+    """Path stickiness's PURE core (ADR-0068): previous path in, ``(keys, turns, new_prev)`` out.
+
+    Same rationale as :func:`_phase_from` — coherent multi-turn targeting needs the previous choice,
+    but the caller decides whether to store the new one, so a simulated board cannot repoint the
+    live turn's path.
+    """
+    current = frozenset(cid for k, _pv, _t, cid in mine if k in best_keys and cid is not None)
+    if best_turns is not None and prev and prev != current:
+        held = [(k, pv, t) for k, pv, t, cid in mine if cid in prev]
+        keys2, turns2 = prize_paths(held, my_prizes)
+        if turns2 is not None and turns2 <= best_turns + _PATH_STICKY:
+            return keys2, turns2, frozenset(
+                cid for k, _pv, _t, cid in mine if k in keys2 and cid is not None)
+    return best_keys, best_turns, (current if best_turns is not None else prev)
+
+
 class ObjectivesMixin:
     """Pilot-side Tier-3 Match Objectives (ADR-0040). Depends on Pilot internals (``stats``,
     ``attack_costs``, ``predicted_damage``, the rider lookups, ``_opp_active``), so it is mixed
@@ -358,7 +402,8 @@ class ObjectivesMixin:
         return _PATH_BENCH_EXTRA
 
     def _path_signals(self, obs, me: dict, opp: dict, ma: dict | None, oa: dict | None,
-                      my_prizes: int, opp_prizes: int, read=None, gamma: float = 0.0) -> dict:
+                      my_prizes: int, opp_prizes: int, read=None, gamma: float = 0.0,
+                      *, carried=None) -> dict:
         """The per-decision two-sided Prize Path read (ADR-0040): my cheapest path over their
         visible bodies and their cheapest path over mine, feasibility-weighted by turns-to-KO
         (`_my_turns_to_ko` / `_their_turns_to_ko` + the bench surcharge; the their-side sees
@@ -385,7 +430,7 @@ class ObjectivesMixin:
                 theirs.append((id(body), self._prize_value(body), t + extra, body.get("id")))
         my_keys, my_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in mine], my_prizes,
                                         reach=reach or None)
-        my_keys, my_turns = self._sticky_path(mine, my_prizes, my_keys, my_turns)
+        my_keys, my_turns = self._sticky_path(mine, my_prizes, my_keys, my_turns, carried=carried)
         their_keys, their_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in theirs], opp_prizes)
         return {
             "my_path_turns": my_turns,
@@ -403,9 +448,12 @@ class ObjectivesMixin:
         }
 
     # --------------------------------------------------------------------- the derived advisory phase
+    # The two Carried State members' PURE cores (ADR-0068 decision 2). Previous value in, new value
+    # out — no `self`, so a derivation can never mutate Pilot state as a side effect of being
+    # computed. The methods below are the thin live-path wrappers that choose whether to store.
 
     def _derive_phase(self, base, race_ahead, active_doomed: bool, my_prizes: int,
-                      favorability: float = 0.5, coverage: float = 0.0):
+                      favorability: float = 0.5, coverage: float = 0.0, *, carried=None):
         """The ADVISORY match phase (ADR-0040, hardened by the 2026-07-05 phase grilling): a pure
         function of the objectives — memoryless (backwards transitions free) except the STABILIZE
         label's hysteresis (enter clearly behind at ``<= _STAB_ENTER``, leave only clearly ahead at
@@ -419,42 +467,37 @@ class ObjectivesMixin:
         hysteresis is unchanged), so it can't cause phase flicker.
 
         NEVER an eligibility gate — consumed only by the small baseline_phases band weights and the
-        trace; ``objectives_phases`` off → the readiness base (SETUP/RACE) unchanged."""
-        from common.strategy.strategy import Plan
-        if not getattr(self, "objectives_phases", False):
-            self._phase_prev = base
-            return base
-        enter = _STAB_ENTER
-        if coverage >= _FAV_MIN_COVERAGE and favorability <= _UNFAVORED:
-            enter += _FAV_STAB_SHIFT                    # unfavored: enter STABILIZE one turn sooner
-        phase = base
-        if race_ahead is not None and active_doomed:
-            if getattr(self, "_phase_prev", None) == Plan.STABILIZE:
-                if race_ahead < _STAB_EXIT:            # keep stabilizing until clearly ahead
-                    phase = Plan.STABILIZE
-            elif race_ahead <= enter:                  # enter clearly behind (bar relaxed if unfavored)
-                phase = Plan.STABILIZE
-        if base == Plan.RACE and 0 < my_prizes <= _CLOSE_PRIZES:
-            phase = Plan.CLOSE                         # endgame overrides: force the finishing line
-        self._phase_prev = phase
+        trace; ``objectives_phases`` off → the readiness base (SETUP/RACE) unchanged.
+
+        ``carried`` (a :class:`~common.state_model.CarriedState` snapshot) makes this call PURE: the
+        hysteresis memory is read from the snapshot and the new value is NOT written back to the
+        Pilot (ADR-0068 decision 2). The hypothetical/re-score paths pass it so a *simulated* board's
+        phase can never leak into the live turn's memory — which is what the two hand-written
+        snapshot/restore guards used to buy at every call site that remembered to write them. Live
+        decisions pass nothing and keep the in-order write, byte-identically."""
+        prev = (carried.get("phase_prev") if carried is not None
+                else getattr(self, "_phase_prev", None))
+        phase = _phase_from(prev, base, race_ahead, active_doomed, my_prizes, favorability,
+                            coverage, enabled=getattr(self, "objectives_phases", False))
+        if carried is None:
+            self._phase_prev = phase                    # the live, in-order decision sequence
         return phase
 
-    def _sticky_path(self, mine: list, my_prizes: int, best_keys, best_turns):
-        """Path stickiness (ADR-0040): when LAST decision's chosen path (by opponent card-id set,
-        `self._my_path_prev`) is still feasible and within ``_PATH_STICKY`` turns of the new
-        cheapest, keep it — coherent multi-turn targeting without commitment (a clearly better
-        path always wins; an infeasible previous path is dropped instantly). Updates the memory."""
-        current = frozenset(cid for k, _pv, _t, cid in mine if k in best_keys and cid is not None)
-        prev = getattr(self, "_my_path_prev", None)
-        if best_turns is not None and prev and prev != current:
-            held = [(k, pv, t) for k, pv, t, cid in mine if cid in prev]
-            keys2, turns2 = prize_paths(held, my_prizes)
-            if turns2 is not None and turns2 <= best_turns + _PATH_STICKY:
-                self._my_path_prev = frozenset(
-                    cid for k, _pv, _t, cid in mine if k in keys2 and cid is not None)
-                return keys2, turns2
-        self._my_path_prev = current if best_turns is not None else prev
-        return best_keys, best_turns
+    def _sticky_path(self, mine: list, my_prizes: int, best_keys, best_turns, *, carried=None):
+        """Path stickiness (ADR-0040): when LAST decision's chosen path (by opponent card-id set) is
+        still feasible and within ``_PATH_STICKY`` turns of the new cheapest, keep it — coherent
+        multi-turn targeting without commitment (a clearly better path always wins; an infeasible
+        previous path is dropped instantly).
+
+        ``carried`` makes the call PURE (ADR-0068 decision 2): the previous path is read from the
+        snapshot and the new one is not written back, so a hypothetical board cannot repoint the live
+        turn's targeting. Live decisions pass nothing and keep the in-order write."""
+        prev = (carried.get("my_path_prev") if carried is not None
+                else getattr(self, "_my_path_prev", None))
+        keys, turns, new_prev = _sticky_path_from(prev, mine, my_prizes, best_keys, best_turns)
+        if carried is None:
+            self._my_path_prev = new_prev               # the live, in-order decision sequence
+        return keys, turns
 
     # ---------------------------------------------------------------------- the Match Planner (ADR-0045)
 
