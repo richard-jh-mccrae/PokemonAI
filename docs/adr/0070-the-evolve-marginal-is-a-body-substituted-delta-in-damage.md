@@ -202,6 +202,32 @@ spread were dedicated to it — when the opponent simply redirects the counters 
 range. Parked as its own issue rather than fixed here (user ruling 2026-07-25); it inflates every
 bench survival delta, so it touches 1c and 1d as well.
 
+**E. §6's "structural tier-0 free evolve" is WITHDRAWN — the corpus argues against it.** The grill
+supposed a strictly-dominant free evolve should be sequenced ahead structurally, on the reasoning
+that evolving is free. The sweep says otherwise: three mega_starmie frames (81785223-32/38/44) are
+FIXES precisely BECAUSE the decider declines a zero-value evolve and plays a free dig instead. Ruled
+(user, 2026-07-25): **information before commitment** — within tier 0 a free dig precedes an evolve,
+then the Supporter if applicable. That is the sequencer's own stated doctrine ("take the most
+informative, reversible actions first"), applied within a tier rather than across tiers.
+
+No code implements a tier-0 evolve rule, and none is needed: a valueless evolve scores 0.0, and
+`_finish_turn_last` sequences early only on `score > 0`, so the dig wins by construction. The one
+case no frame exercises is a HIGH-value evolve competing with a free dig — left unbuilt rather than
+built on speculation, and named here so a future frame can settle it.
+
+**F. Two corpus frames left the evolve lane on re-ruling** (user, 2026-07-25), neither an evolve gap:
+
+- **82525741-78** — labelled "Evolve: Mega Starmie ex", but the blunder was playing a DEAD
+  Buddy-Buddy Poffin: it fetches Basics of 70 HP or less, Staryu is the only such card in the deck,
+  and all 3 copies were already on the board. Evolving either Staryu is merely fine (the decider
+  scores both 0.0, i.e. exactly indifferent). The defect belongs to the fetch/search family's
+  exhausted-target gate. Re-ruled out of scope; tracked separately.
+- **85785609-82 (f82)** — the turn-planner maneuver of amendment C.
+
+With both removed the sweep stands at 24 frames / 14 agree / 10 flips: **6 FIX, 0 REGRESSION**, 2
+re-ruled out of scope, 2 DIVERGENT (both correct on the evolve axis — 86091435-35 is f35 and the
+hold fires as designed).
+
 ## Consequences
 
 - `evolve_value`'s five calibration constants and the `doom` field all disappear. What replaces them
