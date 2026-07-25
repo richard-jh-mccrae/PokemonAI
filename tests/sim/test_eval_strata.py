@@ -72,36 +72,60 @@ class _RampModel:
         return max(0.0, min(1.0, 0.5 + prize_diff / 12.0))
 
 
+# A generated film is a REAL self-play game, and the native engine that plays it has a
+# process-global, unseedable RNG stream — so the film is a fresh random game every run, not a
+# fixture. Most are long enough for the prize lead to move across the arm's own decisions, but a
+# short one is not: measured over 8 generated films the arm's trajectory ran 9-53 frames long and
+# one of the 8 came back swing 0.0 (a 9-frame game whose prize differential never moved). A
+# single film therefore cannot carry a POSITIVE-swing assertion — that is the ~1-in-8 flake that
+# turned this red on CI.
+#
+# So the fixture deals several films and the claim below becomes an existence claim: the proxy
+# produces a real non-degenerate swing on a real game. That is the property under test (the proxy
+# reads a live trajectory rather than a constant), and it is exactly what one flat blowout game
+# does not disprove. Bounds are still asserted on EVERY film, since those must hold universally.
+_STRATA_FILMS = 5
+
+
 @pytest.fixture(scope="module")
-def one_film(tmp_path_factory):
-    """One real mega_starmie mirror film (same live path as test_corpus)."""
+def films(tmp_path_factory):
+    """Several real mega_starmie mirror films (same live path as test_corpus)."""
     from sim.corpus import generate_corpus_run
     from meta_tracker.parse import load_replay
     out = tmp_path_factory.mktemp("strata")
     run_dir = generate_corpus_run(
         run_id="strata", created_at="2026-07-19T00:00:00", git_rev="x", agents=["mega_starmie"],
         agents_root=FIXTURE_AGENTS, out_root=out, agent_versions={"mega_starmie": "x"},
-        per_pairing=1, extra_syspath=SRC)
-    return load_replay(sorted(run_dir.rglob("*.json.gz"))[0])
+        per_pairing=_STRATA_FILMS, extra_syspath=SRC)
+    loaded = [load_replay(p) for p in sorted(run_dir.rglob("*.json.gz"))]
+    assert loaded, "corpus generation produced no films"
+    return loaded
 
 
 @pytest.mark.req("REQ-SIM-0021")
-def test_game_sensitivity_is_a_real_swing_over_a_real_film(one_film):
+def test_game_sensitivity_is_a_real_swing_over_a_real_film(films):
     """The proxy runs the shipped Pilot's _board over a real film through a value model and returns
     a bounded, positive swing — the arm's own-decision trajectory spans a real range as prizes are
     taken. Only the arm's OWN (seat) frames are scored (D5), never the opponent's."""
     from sim.eval_strata import game_sensitivity, own_winprob
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
-    traj = own_winprob(pilot, _RampModel(), one_film, arm_seat=0)
-    assert len(traj) > 5                                           # a real game -> many own decisions
-    assert all(not isinstance(p, complex) for p in traj)
-    swing = game_sensitivity(pilot, _RampModel(), one_film, arm_seat=0)
-    assert swing is not None and 0.0 < swing <= 1.0
+    trajs = [own_winprob(pilot, _RampModel(), f, arm_seat=0) for f in films]
+    swings = [game_sensitivity(pilot, _RampModel(), f, arm_seat=0) for f in films]
+
+    for traj, swing in zip(trajs, swings):                         # must hold of EVERY real game
+        assert all(not isinstance(p, complex) for p in traj)
+        assert swing is not None and 0.0 <= swing <= 1.0
+
+    assert any(len(t) > 5 for t in trajs), (                       # a real game -> many own decisions
+        f"no film produced a scorable trajectory: lengths {[len(t) for t in trajs]}")
+    assert any(s > 0.0 for s in swings), (                         # the trajectory is live, not constant
+        f"every one of {len(films)} real films scored a flat swing ({swings}) — the proxy is "
+        f"reading a constant, not the arm's own-decision value trajectory")
 
 
 @pytest.mark.req("REQ-SIM-0021")
-def test_game_sensitivity_none_when_no_scorable_frame(one_film):
+def test_game_sensitivity_none_when_no_scorable_frame():
     """A film with no scorable decision (empty steps) yields None — excluded from stratification,
     not counted as a zero-swing blowout."""
     from sim.eval_strata import game_sensitivity
