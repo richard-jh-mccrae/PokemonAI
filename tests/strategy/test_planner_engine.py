@@ -310,3 +310,74 @@ def test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder():
     chosen = decision.options[decision.chosen[0]]
     assert getattr(chosen, "card_id", None) == 1122          # opens with Pokégear 3.0 (the human's step 1)
     assert decision.chosen != fx["chosen"]                   # NOT the old turn-ending Attack blunder ([12])
+
+
+# ── #138 Leaf Profile — the ENGINE-DRIVEN halves (ADR-0068 decision 1) ─────────────────────────
+#
+# These live here rather than beside the rest of the pin in `test_leaf_profile.py` for a specific
+# reason. That module collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and
+# `ml_lethal_retreat_boost_to_ko_f24` is documented in `planner._develop_rollout_line` as depending
+# on "the process's RNG position — the CI heisenbug". Starting a native battle ahead of those pins
+# shifts that position and fires the heisenbug (it did, in CI, on this branch). This module already
+# drives battles AND sorts after the lethal pins, so the engine work belongs here.
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
+    """A real engine drive to a live turn menu, then a leaf evaluation, probed.
+
+    The leaf's StateModel field set must stay WITHIN the ordinary per-decision profile: a leaf reads
+    the model only through the policy re-run inside `_simulate_line`, so reading anything the ordinary
+    decision path does not is the signal that a new consumer (#145) has arrived with its per-leaf cost
+    unmeasured. The probe must also see at least one build, so a green result can't mean "measured
+    nothing"."""
+    import math
+
+    from tests.strategy.test_leaf_profile import LEAF_PROFILE, _Probe
+    deck = _deck()
+    pilot = _engine_pilot(deck)
+    obs, start = battle_start(deck, list(deck))
+    assert start.errorPlayer < 0
+    try:
+        menu = _first_open_menu(pilot, obs)
+        assert menu is not None
+        chosen = pilot.decide(menu)
+        with _Probe() as probe:
+            value = pilot._engine_leaf_value(menu, chosen)
+        assert value is None or math.isfinite(value)          # the leaf still evaluates
+        assert probe.fields, "the probe measured nothing — a leaf builds at least one model"
+        assert probe.fields <= LEAF_PROFILE, (
+            "a planner leaf now reads a StateModel field the ordinary decision path does not — "
+            "measure the per-leaf cost per side against the 2-vCPU grader bank, then re-pin\n"
+            f"  added: {sorted(probe.fields - LEAF_PROFILE)}")
+    finally:
+        battle_finish()
+
+
+@pytest.mark.req("REQ-PLANNER-0011")
+def test_a_leaf_costs_one_model_build_per_simulated_decision():
+    """The sizing fact #145 and #150 need: a leaf's model cost is NOT one build. The simulated line
+    re-runs my policy to end-of-turn, so it pays one per-decision build per decision it makes
+    (measured N = 4 on a real turn-1 drive; the engine sim dominates the leaf's ~12.7 ms, and the
+    model's share is under 1%). If N ever collapses to 1 the sim stopped re-running the policy, and
+    much more than this test is wrong."""
+    from common.state_model import StateModel
+    deck = _deck()
+    pilot = _engine_pilot(deck)
+    obs, start = battle_start(deck, list(deck))
+    try:
+        menu = _first_open_menu(pilot, obs)
+        assert menu is not None
+        chosen = pilot.decide(menu)
+        descriptor, orig, builds = StateModel.__dict__["build"], StateModel.build, []
+
+        def counting(o, **kw):
+            builds.append(1)
+            return orig(o, **kw)
+        StateModel.build = staticmethod(counting)
+        try:
+            pilot._engine_leaf_value(menu, chosen)
+        finally:
+            StateModel.build = descriptor          # the descriptor, not the bound method
+        assert len(builds) >= 1
+    finally:
+        battle_finish()

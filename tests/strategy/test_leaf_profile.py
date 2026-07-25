@@ -14,7 +14,6 @@ design claims the expensive clusters sit on opposite sides of the table, so the 
 that would refute it.
 """
 import json
-import math
 import sys
 from pathlib import Path
 
@@ -148,62 +147,10 @@ def test_an_unread_expensive_cluster_costs_nothing(pilot):
     assert probe.fields == {"mine.prizes_remaining"}
     assert not any("incoming" in f or "deck_energy" in f for f in probe.fields)
 
-
-def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
-    """A real engine drive to a live turn menu, then a leaf evaluation, probed.
-
-    Two things get pinned. The leaf's field set must stay WITHIN the ordinary per-decision profile —
-    a leaf reads the model only through the policy re-run inside `_simulate_line`, so reading
-    anything the ordinary decision path does not is the signal that a new consumer (#145) has
-    arrived and its per-leaf cost is unmeasured. And the leaf must trigger at least one build, so
-    the probe is demonstrably wired rather than silently measuring nothing."""
-    from tests.strategy.test_planner_engine import (_deck, _engine_pilot, _first_open_menu,
-                                                    battle_finish, battle_start)
-    deck = _deck()
-    engine_pilot = _engine_pilot(deck)
-    obs, start = battle_start(deck, list(deck))
-    assert start.errorPlayer < 0
-    try:
-        menu = _first_open_menu(engine_pilot, obs)
-        assert menu is not None
-        chosen = engine_pilot.decide(menu)
-        with _Probe() as probe:
-            value = engine_pilot._engine_leaf_value(menu, chosen)
-        assert value is None or math.isfinite(value)      # the leaf still evaluates
-        assert probe.fields, "the probe measured nothing — a leaf builds at least one model"
-        assert probe.fields <= LEAF_PROFILE, (
-            "a planner leaf now reads a StateModel field the ordinary decision path does not — "
-            "measure the per-leaf cost per side against the 2-vCPU grader bank, then re-pin\n"
-            f"  added: {sorted(probe.fields - LEAF_PROFILE)}")
-    finally:
-        battle_finish()
-
-
-def test_a_leaf_costs_one_model_build_per_simulated_decision():
-    """The sizing fact #145 and #150 need, made explicit: a leaf's model cost is NOT one build. The
-    simulated line re-runs my policy to end-of-turn, so it pays one per-decision build per decision
-    it makes (measured N = 4 on a real turn-1 drive; the engine sim dominates the leaf's ~12.7 ms and
-    the model's share is under 1%). If N ever collapses to 1, the sim stopped re-running the policy
-    and much more than this test is wrong."""
-    from tests.strategy.test_planner_engine import (_deck, _engine_pilot, _first_open_menu,
-                                                    battle_finish, battle_start)
-    deck = _deck()
-    engine_pilot = _engine_pilot(deck)
-    obs, start = battle_start(deck, list(deck))
-    try:
-        menu = _first_open_menu(engine_pilot, obs)
-        assert menu is not None
-        chosen = engine_pilot.decide(menu)
-        descriptor, orig, builds = StateModel.__dict__["build"], StateModel.build, []
-
-        def counting(o, **kw):
-            builds.append(1)
-            return orig(o, **kw)
-        StateModel.build = staticmethod(counting)
-        try:
-            engine_pilot._engine_leaf_value(menu, chosen)
-        finally:
-            StateModel.build = descriptor        # restore the descriptor, not the bound method
-        assert len(builds) >= 1
-    finally:
-        battle_finish()
+# NB: the two ENGINE-DRIVEN halves of this pin live in `test_planner_engine.py`, not here.
+# `test_leaf_profile` collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and
+# `ml_lethal_retreat_boost_to_ko_f24` is documented in `planner._develop_rollout_line` as depending on
+# "the process's RNG position — the CI heisenbug". Starting a native battle ahead of those pins shifts
+# that position and fires the heisenbug (it did, in CI). `test_planner_engine` already drives battles
+# AND sorts after the lethal pins, so the engine halves belong there. Everything above is engine-free
+# by design — keep it that way.
