@@ -126,13 +126,28 @@ the agent can commit this blunder until #145 lands.
 opponent's full Active-attack damage against any body, with no Active/Bench branch — so a benched
 pre-evolution reads as doomed and the survival weighting of decision 2 would OVER-evolve, inverting
 the doctrine. Against a benched body only `rider_snipe` / `rider_spread` reach, and `is_tera` on MY
-body zeroes it (both card facts already shipped, used only offensively). Caller enumeration: exactly
-one existing consumer passes a benched body — `opp_cannot_punish_wincon` (`pilot.py:5834`) — and the
-branch CORRECTS it; the planner's catastrophe rung is Active-only by design (*"a bench body soaks —
-recoverable, not a loss"*). **The trap:** `_survives_after_ko` is called from the lethal tiers with
-bodies that are benched NOW but Active when the damage lands. The area is therefore an explicit
-caller-passed argument, never inferred from the board — inferring it would grant false bench
-immunity and manufacture phantom lethals.
+body zeroes it (both card facts already shipped, used only offensively).
+
+**Caller enumeration — corrected during the build.** The grill reported one existing consumer as a
+bench read that the branch would correct (`opp_cannot_punish_wincon`). That was WRONG, and the error
+is instructive enough to record: it passes a body that is benched *now*, but every consumer of that
+veto decides whether to **expose the wincon in the Active Spot** (`interpose-…` stands down so
+`promote-the-ready-wincon` wins; `dont-promote-into-their-prize-reach` stands down so the promote
+goes through). Its area-at-damage-time is ACTIVE, and its existing read is correct. It is the same
+class as `_survives_after_ko`, which the lethal tiers call about bodies benched now but Active when
+they swing.
+
+So **no existing consumer wants the bench branch**: it is entirely new surface for this phase's
+deploy term, and the blast radius on shipped behaviour is zero (1564 strategy/agent tests unchanged).
+The planner's catastrophe rung is Active-only by design (*"a bench body soaks — recoverable, not a
+loss"*).
+
+**Which is exactly why the area is an explicit caller-passed argument, never inferred.** Two
+independent readers — the grill and the build — disagreed about the area of the *same* call site by
+reasoning from the board rather than from the decision. A board-inferred area would have silently
+granted a 3-prize wincon phantom safety and manufactured phantom lethals in the lethal tiers. The
+default is ACTIVE, so the conservative read is what an undeclared caller gets; the bench branch is
+strictly opt-in. Every existing call site now states its claim in the source.
 
 **10. Rung disposition — four delete, one folds, one survives as a Gate.** `evolve-into-wincon`
 (+40) and `advance-the-evolution-line` (+15) are the deploy term; both `+5` energized tie-breaks are

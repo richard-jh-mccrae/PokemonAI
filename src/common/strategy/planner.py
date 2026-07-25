@@ -2977,10 +2977,14 @@ class PlannerMixin:
         my_stat = self.stats.get(my_id) if (self.stats and my_id is not None) else None
         if not (my_stat and my_hp):                       # unknown my card → no claim (contract-preserving)
             return 0
+        # AREA-AT-DAMAGE-TIME (ADR-0070 §9): ACTIVE, declared explicitly. `_survives_after_ko` asks
+        # about the body that will be Active AFTER my line resolves — the lethal tiers promote a
+        # benched body before it swings — so its CURRENT board area is irrelevant here. Inferring the
+        # area from the board would hand those bodies bench immunity and manufacture phantom lethals.
         return int(self.combat.reachable_incoming(
             {"id": my_id, "hp": my_hp}, opp_bodies,
             charged=getattr(self, "_incoming_budget", None),
-            context=getattr(self, "_opp_attack_context", None)))
+            context=getattr(self, "_opp_attack_context", None), my_benched=False))
 
     def _threat_magnitude(self, opp) -> float:
         """The threat magnitude of the opponent's Active — its biggest printed attack — as the

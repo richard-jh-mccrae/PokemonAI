@@ -138,3 +138,92 @@ def test_charged_returns_zero_when_body_cannot_afford_anything():
     c = CombatMath(stats, None, None)
     lucario0 = {"id": MEGA_LUC, "hp": 340, "energies": []}    # 0 attached, only a 2-cost attack
     assert c.reachable_incoming(MY_BODY, [lucario0], charged={"base_attach": 1, "burst_on_evo": 0}) == 0
+
+
+# ---- the BENCH branch: area-at-damage-time (ADR-0070 §9) ---------------------------------------
+#
+# An attack's printed damage hits the ACTIVE. A benched body is reachable only by the snipe/spread
+# RIDERS, which ignore Weakness/Resistance (ADR-0022) — and not at all if it is Tera (rules.md §185).
+# Without this branch every benched pre-evolution reads as doomed, which would make the evolve
+# decider OVER-evolve. ``my_benched`` is the area the body occupies WHEN THE DAMAGE LANDS, declared
+# by the caller: the lethal tiers ask about bodies benched now but Active when the opponent replies.
+
+DRAKLOAK = 120          # 90 HP, no Tera
+DRAGAPULT = 121         # Tera: no attack damage while Benched
+SNIPER = 700
+SNIPE_ATK, SPREAD_ATK = 901, 902
+
+
+def _bench_combat(*, both_riders=False, second_attack=False):
+    attacks = {SNIPE_ATK: AttackStat(SNIPE_ATK, damage=270, cost=1, energyTypes=(FIGHTING,),
+                                     benchSnipe=30, benchSpread=60 if both_riders else 0)}
+    aids = (SNIPE_ATK,)
+    if second_attack:
+        attacks[SPREAD_ATK] = AttackStat(SPREAD_ATK, damage=200, cost=3,
+                                         energyTypes=(FIGHTING, FIGHTING, FIGHTING), benchSpread=60)
+        aids = (SNIPE_ATK, SPREAD_ATK)
+    stats = DictCardStatProvider({
+        DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, maxDamage=70, minAttackCost=2,
+                           attacks=(), evolvesFrom="Dreepy", energyType=8),
+        DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, tera=True,
+                            maxDamage=200, minAttackCost=1, attacks=(), evolvesFrom="Drakloak",
+                            energyType=8),
+        SNIPER: CardStat(SNIPER, name="Sniper", hp=200, maxDamage=270, minAttackCost=1,
+                         attacks=aids, energyType=6),
+    }, attacks=attacks)
+    return CombatMath(stats, functions=None, transients=None)
+
+
+def _sniper(n=1):
+    return {"id": SNIPER, "hp": 200, "energies": [FIGHTING] * n}
+
+
+def test_benched_body_takes_only_the_rider_never_the_active_damage():
+    c, me = _bench_combat(), {"id": DRAKLOAK, "hp": 90}
+    # Declared ACTIVE (the default): the printed 270 lands.
+    assert c.reachable_incoming(me, [_sniper()]) == 270
+    # Declared BENCHED: only the snipe rider reaches it.
+    assert c.reachable_incoming(me, [_sniper()], my_benched=True) == 30
+
+
+def test_benched_tera_body_takes_nothing():
+    c, me = _bench_combat(), {"id": DRAGAPULT, "hp": 320}
+    assert c.reachable_incoming(me, [_sniper()], my_benched=True) == 0
+    # ...but a Tera body in the ACTIVE spot is an ordinary target.
+    assert c.reachable_incoming(me, [_sniper()]) == 270
+
+
+def test_bench_riders_are_additive_on_one_body():
+    # One attack carrying BOTH riders can put both on a single benched body — the worst case, and the
+    # additive convention `objectives.py` already uses for a bench pool.
+    me = {"id": DRAKLOAK, "hp": 90}
+    assert _bench_combat(both_riders=True).reachable_incoming(me, [_sniper()], my_benched=True) == 90
+    assert _bench_combat().reachable_incoming(me, [_sniper()], my_benched=True) == 30
+
+
+def test_bench_read_counts_only_riders_the_attacker_can_afford():
+    # Under the CHARGED policy an unaffordable attack lands no rider, exactly as it lands no damage.
+    c, me = _bench_combat(second_attack=True), {"id": DRAKLOAK, "hp": 90}
+    charged = {"base_attach": 1, "burst_on_evo": 0}
+    # 0 attached + 1 wild = 1 -> only the 1-cost SNIPE_ATK is payable, so its 30 is the read; the
+    # bigger 60-point spread rider sits behind a 3-cost attack and does not count.
+    assert c.reachable_incoming(me, [_sniper(0)], my_benched=True, charged=charged) == 30
+    # 2 attached + 1 wild = 3 -> the spread attack comes into reach and dominates.
+    assert c.reachable_incoming(me, [_sniper(2)], my_benched=True, charged=charged) == 60
+
+
+def test_turns_to_ko_me_honours_the_bench_branch():
+    # The KO-clock is the survival half of the two clocks (ADR-0070 §6). `turns_to_ko_me` asks when
+    # ONE swing fells the body, and riders do not scale with t — so a 90 HP benched Drakloak under a
+    # 30-point snipe survives the whole horizon, where the Active read says it dies next turn.
+    c, me = _bench_combat(), {"id": DRAKLOAK, "hp": 90}
+    assert c.turns_to_ko_me(me, [_sniper()]) == 1
+    assert c.turns_to_ko_me(me, [_sniper()], my_benched=True) == 9      # max_t + 1: survives
+
+
+def test_default_is_active_so_an_undeclared_caller_stays_pessimistic():
+    # Fail direction: the survival family must OVER-count their threat, never under-count it. A
+    # caller that does not declare the area gets the Active read — the conservative answer — so the
+    # bench branch is strictly opt-in and cannot silently grant immunity.
+    c = _bench_combat()
+    assert c.reachable_incoming({"id": DRAGAPULT, "hp": 320}, [_sniper()]) == 270

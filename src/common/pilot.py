@@ -3517,17 +3517,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         aids = tuple(getattr(payoff_stat, "attacks", None) or ())
         return max(aids, key=self.combat.attack_damage) if aids else None
 
-    def _attach_build_delta(self, target: dict | None, extra_units) -> float:
-        """The CONVEX, TYPED build progress ``extra_units`` buys on ``target`` (ADR-0069 §3).
+    def _build_standing(self, target: dict | None, extra_units=()) -> float:
+        """**Build Standing** — the LEVEL of ``target``'s convex typed build credit, optionally over a
+        hypothetical body also carrying ``extra_units`` (ADR-0070 §2).
 
         ``(matched/slots)**2 * maxDamage``, where ``matched`` is the greedy typed assignment of the
-        body's attached Energy (plus the option's provision) against the LINE PAYOFF attack's cost
-        shape — by the SAME matcher `reachable_attach` uses, so "fits" and "reaches" can never
-        disagree. Two consequences that used to need their own rungs: an Energy filling no slot earns
-        ZERO build (off-type waste is emergent, never a separate colourless-blind boolean), and a
-        colourless slot absorbs any type (so Munkidori's {D} in Mind Bend's ● is real progress, not
-        "wasted"). Pre-evolution build keeps the `_ATTACH_PREEVO_DISCOUNT`; the evolution-lookahead
-        payoff pricing carries over unchanged from the count reading."""
+        body's attached Energy against the LINE PAYOFF attack's cost shape — by the SAME matcher
+        `reachable_attach` uses, so "fits" and "reaches" can never disagree. Two consequences that
+        used to need their own rungs: an Energy filling no slot earns ZERO build (off-type waste is
+        emergent, never a separate colourless-blind boolean), and a colourless slot absorbs any type
+        (so Munkidori's {D} in Mind Bend's ● is real progress, not "wasted"). A pre-evolution keeps
+        the `_ATTACH_PREEVO_DISCOUNT`; the evolution-lookahead payoff pricing carries over unchanged
+        from the count reading, which is the fallback when the payoff attack's per-slot cost does not
+        resolve (where a typed claim would be a guess).
+
+        The LEVEL is the shared form: #139 needs only its DIFFERENCE under an option's provision
+        (`_attach_build_delta`, below), while #140 needs the level itself — an evolve moves no Energy,
+        so its deploy value is `standing(evolved) − standing(pre-evolution)` on the SAME attached
+        Energy, and **evolving is precisely the removal of the pre-evolution discount**. One function
+        owns build credit so the two readings cannot drift."""
         if not target:
             return 0.0
         tcid = target.get("id")
@@ -3535,13 +3543,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
         aid = self._payoff_attack_id(st)
         if aid is not None and dmax > 0:
-            matched_0, slots = self.combat.matched_slots(target, aid)
+            matched, slots = self.combat.matched_slots(target, aid, extra_units=extra_units)
             if slots:
-                matched_1, _ = self.combat.matched_slots(target, aid, extra_units=extra_units)
-                value = ((matched_1 / slots) ** 2 - (matched_0 / slots) ** 2) * dmax
+                value = ((matched / slots) ** 2) * dmax
                 return value * (_ATTACH_PREEVO_DISCOUNT if tcid in self._line_preevo_set() else 1.0)
         have = len(target.get("energies") or [])          # no typed cost record -> the count reading
-        return self._attach_progress(tcid, have + len(extra_units)) - self._attach_progress(tcid, have)
+        return self._attach_progress(tcid, have + len(extra_units))
+
+    def _attach_build_delta(self, target: dict | None, extra_units) -> float:
+        """The CONVEX, TYPED build progress ``extra_units`` buys on ``target`` (ADR-0069 §3) — the
+        DIFFERENCE of :meth:`_build_standing` with and without the option's provision.
+
+        The branch (typed vs the count fallback) is chosen by the payoff attack's cost record, which
+        no attach changes, so both legs always read the same way and the difference is exact."""
+        return self._build_standing(target, extra_units) - self._build_standing(target)
 
     def _partner_absent(self, cid, obs: dict) -> bool:
         """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play
@@ -5831,10 +5846,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not (wincon and wincon.get("hp")):
             return False
         opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        # AREA-AT-DAMAGE-TIME (ADR-0070 §9): the wincon is benched NOW, but every consumer of this
+        # veto decides whether to EXPOSE it in the Active Spot (`interpose-...` stands down so
+        # `promote-the-ready-wincon` wins; `dont-promote-into-their-prize-reach` stands down so the
+        # promote goes through). So the opponent replies against it as the ACTIVE — the full printed
+        # damage, not the bench riders. Declared explicitly: reading it as benched here would grant
+        # phantom safety and expose a 3-prize wincon on a false read.
         incoming = self.combat.reachable_incoming(
             {"id": wincon.get("id"), "hp": wincon.get("hp")}, opp_bodies,
             charged=getattr(self, "_incoming_budget", None),
-            context=getattr(self, "_opp_attack_context", None))
+            context=getattr(self, "_opp_attack_context", None), my_benched=False)
         return incoming < wincon.get("hp")
 
     def _best_promote_slot(self, me: dict) -> tuple | None:

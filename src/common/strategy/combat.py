@@ -803,7 +803,7 @@ class CombatMath:
     # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
                            charged: dict | None = None, evo_min_energy: int = 0,
-                           context: dict | None = None) -> int:
+                           context: dict | None = None, my_benched: bool = False) -> int:
         """The **Incoming that counts ONE development step** (ADR-0064): worst W/R-adjusted damage
         the opponent's affordable attackers among ``opp_bodies`` could deal ``my_body`` NEXT TURN —
         each body's CURRENT form plus its reachable EVOLUTION forms (promote → evolve → attach →
@@ -816,11 +816,12 @@ class CombatMath:
         arguments (``forward_ids`` availability gate, ``charged`` energy policy, ``evo_min_energy``
         bare-pre-evo guard, transient locks) are documented on :meth:`incoming`."""
         return self.incoming(my_body, opp_bodies, 1, forward_ids=forward_ids, charged=charged,
+                             my_benched=my_benched,
                              evo_min_energy=evo_min_energy, context=context)
 
     def incoming(self, my_body: dict | None, opp_bodies, t: int = 1, *, forward_ids=None,
                  charged: dict | None = None, evo_min_energy: int = 0,
-                 context: dict | None = None) -> int:
+                 context: dict | None = None, my_benched: bool = False) -> int:
         """Worst W/R-adjusted damage the opponent's affordable attackers among ``opp_bodies`` could
         deal ``my_body`` at future turn ``t`` — the **Threat-Clock curve**, the N-turn generalisation
         of ``reachable_incoming`` (ADR-0064 was ``t=1``; S1 of
@@ -875,28 +876,46 @@ class CombatMath:
             attached = len(body.get("energies") or [])
             worst = max(worst, self._reach_form_damage(
                 my_body, body.get("id"), body, attached, charged, context,
-                exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0), attaches=turns))
+                exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0), attaches=turns,
+                my_benched=my_benched))
             if attached < evo_min_energy:
                 continue                              # bare pre-evo — not a credible evolving threat here
             for fid in (fwd(body.get("id")) or ()):   # forward forms — carry the attached Energy
                 evo = {"id": fid, "energies": body.get("energies") or []}
                 worst = max(worst, self._reach_form_damage(
                     my_body, fid, evo, attached, charged, context, exclude=None, bonus=0,
-                    attaches=turns))
+                    attaches=turns, my_benched=my_benched))
         return worst
 
+    def _bench_rider(self, attack_id) -> int:
+        """What ``attack_id`` puts on ONE of my BENCHED bodies: its snipe and spread riders, summed
+        (an attack carrying both can aim both at the same body — the worst case, and the additive
+        convention `objectives.py` already uses over a bench pool). Riders ignore Weakness and
+        Resistance (ADR-0022), so this is deliberately NOT routed through the W/R damage oracle."""
+        return self.rider_snipe(attack_id) + self.rider_spread(attack_id)
+
     def _reach_form_damage(self, my_body, form_id, form_body, attached, charged, context, *,
-                           exclude, bonus, attaches: int = 1) -> int:
+                           exclude, bonus, attaches: int = 1, my_benched: bool = False) -> int:
         """The worst damage ONE attacker form (current or evolved) deals ``my_body`` under the
         ``charged`` energy policy (see :meth:`incoming`), given ``attaches`` manual attach-turns of
         Energy available (1 = the ADR-0064 one-step read; the Threat-Clock curve passes ``t``). 0
-        when the form resolves no stat, cannot afford to attack, or deals nothing."""
+        when the form resolves no stat, cannot afford to attack, or deals nothing.
+
+        ``my_benched`` is the AREA-AT-DAMAGE-TIME of ``my_body`` (ADR-0070 §9): an attack's printed
+        damage lands on the ACTIVE, so a benched body is reachable only by the snipe/spread riders —
+        and not at all if it is Tera (rules.md §185). The attacker-side self-bonus grant raises
+        printed damage, not a rider, so it is not applied on the bench path."""
         stat = self._card_stat(form_id)
         if not stat:
             return 0
+        if my_benched and self.is_tera((my_body or {}).get("id")):
+            return 0                                  # Tera: no attack damage while Benched
         if charged is None:                           # ceiling: pay cheapest, credit biggest
             if not stat.can_pay_cheapest(attached + attaches):
                 return 0
+            if my_benched:
+                return max((self._bench_rider(aid) for aid in (stat.attacks or ())
+                            if aid != exclude), default=0)
             dmg = self.predicted_max_damage(stat, my_body, exclude_attack=exclude, context=context)
             return int(dmg) + bonus if dmg else 0
         base = charged.get("base_attach", 1)
@@ -913,8 +932,11 @@ class CombatMath:
                 continue                              # count-unaffordable even with the burst allowance
             if not self.attack_type_payable(aid, form_body, wild_units=wild):
                 continue                              # a typed slot can't be paid (burst is colourless-only)
-            best = max(best, int(self.predicted_damage(form_id, aid, my_body,
-                                                       bound="max", context=context)))
+            best = max(best, self._bench_rider(aid) if my_benched
+                       else int(self.predicted_damage(form_id, aid, my_body,
+                                                      bound="max", context=context)))
+        if my_benched:
+            return best
         return best + bonus if best else 0
 
     def turns_to_ko(self, attacker_id, energy: int, body: dict | None, *,
@@ -979,7 +1001,7 @@ class CombatMath:
                                     attaches_per_turn=attaches_per_turn)
 
     def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
-                       max_t: int = 8, context: dict | None = None) -> int:
+                       max_t: int = 8, context: dict | None = None, my_benched: bool = False) -> int:
         """The earliest future turn the opponent's board can KO ``my_body`` — the survival-window
         inversion of the Threat-Clock curve (S3 of docs/plans/opponent-value-equation-unification.md):
         ``min{ t ∈ 1..max_t : incoming(t, policy) >= my_body HP }``, or ``max_t + 1`` when it survives
@@ -990,7 +1012,8 @@ class CombatMath:
         if not hp:
             return max_t + 1
         for t in range(1, max(1, int(max_t)) + 1):
-            if self.incoming(my_body, opp_bodies, t, charged=charged, context=context) >= hp:
+            if self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
+                             my_benched=my_benched) >= hp:
                 return t
         return max_t + 1
 
