@@ -61,15 +61,20 @@ LEAF_PROFILE = PER_DECISION_PROFILE
 
 
 class _Probe:
-    """Captures the field set a call touches by handing every model build a shared probe."""
+    """Captures the field set a call touches by handing every model build a shared probe.
+
+    Restores the original **class-dict entry** (the `classmethod` descriptor), not the bound callable
+    that attribute access yields — assigning the latter back would leave `StateModel.build` globally
+    rebound for every test that runs afterwards, which is test pollution regardless of whether it
+    changes an answer.
+    """
 
     def __init__(self):
         self.fields: set = set()
-        self._orig = StateModel.build
 
     def __enter__(self):
-        probe = self.fields
-        orig = self._orig
+        self._descriptor = StateModel.__dict__["build"]     # the classmethod itself
+        probe, orig = self.fields, StateModel.build         # orig: bound, for delegation
 
         def build(obs, **kw):
             kw["probe"] = probe
@@ -79,7 +84,7 @@ class _Probe:
         return self
 
     def __exit__(self, *exc):
-        StateModel.build = self._orig
+        StateModel.build = self._descriptor                 # exact original semantics restored
         return False
 
     def split(self) -> dict:
@@ -189,8 +194,7 @@ def test_a_leaf_costs_one_model_build_per_simulated_decision():
         menu = _first_open_menu(engine_pilot, obs)
         assert menu is not None
         chosen = engine_pilot.decide(menu)
-        builds = []
-        orig = StateModel.build
+        descriptor, orig, builds = StateModel.__dict__["build"], StateModel.build, []
 
         def counting(o, **kw):
             builds.append(1)
@@ -199,7 +203,7 @@ def test_a_leaf_costs_one_model_build_per_simulated_decision():
         try:
             engine_pilot._engine_leaf_value(menu, chosen)
         finally:
-            StateModel.build = orig
+            StateModel.build = descriptor        # restore the descriptor, not the bound method
         assert len(builds) >= 1
     finally:
         battle_finish()
