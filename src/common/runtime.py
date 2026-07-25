@@ -103,6 +103,11 @@ PROFILE = {
                                     # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off
                                     # submission. Kill-switch if its ladder value is weak. Needs the live
                                     # search token, so it no-ops (defers) on offline correction retests
+    "evolve_value": False,          # the EVOLVE DECIDER (ADR-0070, #140 Phase 1b): the body-substituted
+                                    # deploy delta + the odds-priced income. Armed OFF until the
+                                    # corpus sweep's flips are user-ruled and the deletion commit
+                                    # lands — the swap protocol keeps BOTH deciders alive until then
+                                    # (ADR-0069 §8), so the rungs still decide while this is OFF.
     "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069, the FIRST
                                     # no-shadow decider swap): the axes-sum marginal (`_attach_value`)
                                     # IS the energy-attach decision — attack axis (tonight's

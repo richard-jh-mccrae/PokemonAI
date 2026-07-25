@@ -572,7 +572,7 @@ class MySide(_SideBase):
             return None
         return self._memoized(("mine_turns_to_afford", id(body.body), attaches_per_turn),
                               lambda: self._combat.turns_to_afford(
-                                  body.body, attaches_per_turn=attaches_per_turn))
+                                  body.body, attaches_per_turn=attaches_per_turn, typed=True))
 
     @lazy
     def famine(self) -> bool:

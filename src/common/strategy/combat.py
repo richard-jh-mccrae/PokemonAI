@@ -960,7 +960,8 @@ class CombatMath:
         return float(math.ceil(hp / best))
 
     def turns_to_afford(self, body: dict | None, *, forward_ids=None,
-                        attaches_per_turn: int = 1, max_hops: int = 3) -> int | None:
+                        attaches_per_turn: int = 1, max_hops: int = 3,
+                        typed: bool = False) -> int | None:
         """The earliest future turn ``body``'s LINE is ARMED — its biggest-damage attack's COST is
         payable (NOT lethality — the armed-threshold blocker) — the Threat Clock's affordability +
         evolve leg behind the deny-slot deadline (S1c of
@@ -975,7 +976,16 @@ class CombatMath:
         legs (the damage curve + the affordability clock) in ONE home. ``forward_ids`` overrides the
         forward callable (the availability gate); ``attaches_per_turn`` is the policy attach rate
         (1 = the slow deny read, the per-consumer conservatism kept as a parameter). The deny-clock
-        consumer ``pilot._opp_turns_to_ready`` DELEGATES here (byte-identical)."""
+        consumer ``pilot._opp_turns_to_ready`` DELEGATES here (byte-identical).
+
+        ``typed`` picks the energy leg's reading, and it is a FAIL-DIRECTION choice, not a quality
+        one — which is why it is a per-consumer parameter like ``charged`` rather than a fix applied
+        everywhere. The default COUNT reading (cost minus attached) over-credits off-colour Energy,
+        so a body reads armed sooner than it is: pessimistic about THEIR clock, which is the safe
+        direction for a threat read. ``typed=True`` counts only Energy that fills a slot of the
+        payoff's real cost shape, by the same matcher :meth:`reachable_attach` uses — correct for MY
+        bodies, where over-crediting a {D} toward a {P} would price an unpayable line as armed
+        (ADR-0070 §2: the evolve decider's deploy delta rides this clock)."""
         from common import needs
         cid = (body or {}).get("id")
         st = self._card_stat(cid)
@@ -987,7 +997,16 @@ class CombatMath:
                              for s in (st, *fwd_stats) if s is not None) if c is not None]
         if not costs:
             return None
+        deepest = max(((s, getattr(s, "maxDamageCost", 0) or 0) for s in (st, *fwd_stats)
+                       if s is not None and getattr(s, "maxDamageCost", None) is not None),
+                      key=lambda pair: pair[1], default=(None, 0))[0]
         deficit = max(costs) - len((body or {}).get("energies") or [])
+        if typed and deepest is not None:
+            aid = max((getattr(deepest, "attacks", None) or ()), key=self.attack_damage, default=None)
+            if aid is not None:
+                matched, slots = self.matched_slots(body, aid)
+                if slots:
+                    deficit = slots - matched
         parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd_stats
                   if s is not None and s.name}
         hops = 0

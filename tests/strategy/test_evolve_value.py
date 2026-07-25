@@ -1,8 +1,13 @@
-"""Evolve-value oracle (common/evolve_value.py) — docs/plans/evolve-valuation-grill-spec.md.
+"""Evolve DECIDER on real frames (common/evolve_value.py) — ADR-0070, #140.
 
-The full equation, emitted on `OptionTrace.evolve_shadow`. While it is REPORTING-ONLY (pre-swap) these
-assert the equation RANKS the evolve options correctly — the design proof that must hold before the
-`baseline_evolution` rungs are deleted. Card facts verified at source (grill spec §Machinery).
+The equation's per-option TERM row, read off `OptionTrace.evolve_working` with the decider's
+kill-switch forced ON. These assert it RANKS the corpus frames correctly — the design proof that
+must hold before the `baseline_evolution` rungs are deleted. The algebra itself is pinned at the
+pure-function seam (`test_evolve_decider.py`); this is the same claims through the real Pilot.
+
+Card facts verified at source (data/EN_Card_Data.csv): Drakloak (120) HP 90, Dragon Headbutt {R}{P}
+70, Recon Directive "top 2, put 1 in hand"; Dragapult ex (121) HP 320, Phantom Dive {R}{P} 200 —
+the IDENTICAL cost that makes the doctrine derive.
 """
 from __future__ import annotations
 
@@ -24,10 +29,14 @@ def _pilot(agent: str):
 
 
 def _shadows(agent, fixture):
+    """(fixture, decision, {option index -> the evolve decider's total}) with the switch forced ON."""
     fx = json.loads((FIXTURES / f"{fixture}.json").read_text(encoding="utf-8"))
-    d = _pilot(agent).explain(fx["obs"])
+    pilot = _pilot(agent)
+    pilot.evolve_value = True                    # price the frames even while PROFILE ships it OFF
+    d = pilot.explain(fx["obs"])
     opts = fx["obs"]["select"]["option"]
-    evolve = {i: d.options[i].evolve_shadow for i, o in enumerate(opts) if o.get("type") == 9}
+    evolve = {i: (d.options[i].evolve_working or {}).get("tactical", 0.0)
+              for i, o in enumerate(opts) if o.get("type") == 9}
     return fx, d, evolve
 
 
@@ -48,6 +57,12 @@ def test_hold_the_income_off_unready_evolve_f35():
     assert only_evolve < 40                     # far below a READY-wincon deploy (the old flat +40 bug)
 
 
+@pytest.mark.xfail(strict=True, reason="FLIP AWAITING USER RULING (#140 swap protocol, ADR-0069 §8): "
+                   "the decider prefers evolving the BENCHED bare Dreepy (37.5) over the energized "
+                   "ACTIVE one (30.0). The Active body is doomed either way (ko 1 -> 1), so its evolve "
+                   "buys only tempo — a real 70 swing; the benched body's evolve crosses the snipe "
+                   "threshold (70 -> 90 HP, ko 1 -> 3) and banks survival. Rule: is the rescue right, "
+                   "or is the forward payoff over-credited on a body two turns from arming?")
 def test_which_body_prefers_the_energized_f82():
     """f82: two mid-line Dreepy→Drakloak evolves; the energized body's deploy carries the +5 which-body
     bonus, so its value out-ranks the bare copy."""

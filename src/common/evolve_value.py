@@ -1,101 +1,151 @@
-"""Evolve-value oracle — docs/plans/evolve-valuation-grill-spec.md.
+"""Evolve DECIDER — ADR-0070 (grill: docs/plans/evolve-valuation-grill-spec.md, #140).
 
-The evolve decision as ONE equation, replacing the `baseline_evolution.py` rung pile (+ the dragapult
-`hold-evolution` deck rung): the marginal change in board need-coverage an evolve produces, priced in
-the one currency (Needs). No per-case rungs — the whole "when and how to evolve" mechanic is this
-function reading the board.
+The evolve decision as ONE equation, in the DAMAGE currency #139 established (ADR-0069), replacing
+the `baseline_evolution.py` rung pile and the dragapult `hold-evolution` deck rung:
 
-    evolve_value(body B → result R) =
-        deploy_gain(R)        the worth of having R on board, readiness-conditioned (the line/deploy Δ)
-      + income_gain(R)        R's own draw/dig ability turned ON
-      − income_loss(B)        B's draw/dig ability the evolve FORFEITS (the hold pressure)
-      − exposure_cost(R)      R fragile in a threatened slot
-      (+ doom override)       secure the body when the opponent can ACTUALLY KO it this turn (scoped)
+    deploy(X) = max( this_turn(X), payoff_damage(X) x p_arrive(X) x p_survive(X) )
+    value     = deploy(R) - deploy(B) + income_gain - income_loss
 
-The unification (why no readiness GATE is needed): megas (Staryu/Riolu — no pre-evo ability) have
-income_loss 0, so an evolve is always net-positive → they evolve on sight; dragapult's Drakloak carries
-a PERSISTENT Recon stream, so evolving into an unready Dragapult only fires once deploy_gain exceeds
-that stream — "delay until strictly necessary" DERIVED, not asserted. Calibrated at the old rung
-currency (ROLE_TIER + the +40/+15/+5 seeds) so the fold holds the suite.
+`this_turn` is IMMEDIATE, typed and certain — the #137 reachability read of what the body can swing
+for right now. The forward term is the LINE PAYOFF discounted twice: by **when the line arms**
+(`turns_to_afford`, whose energy and forward-hop legs run in PARALLEL, never summed) and by
+**whether the body survives to use it** (`turns_to_ko_me`). `max` between them because both read one
+progress on one body (ADR-0069 §1) — a body is never paid twice for the same Energy.
 
-Emitted REPORTING-ONLY on `OptionTrace.evolve_shadow` until the swap gate
-(`tests/strategy/test_evolve_valuation_corpus.py`) is green.
+Because a pre-evolution and its result build toward the SAME line payoff, `payoff_damage` cancels in
+the difference: **the deploy delta is driven purely by what evolving does to the two clocks.** Which
+is the whole claim — attaching and evolving run in parallel, so a hop is worth a turn only when hops
+OUTNUMBER the energy turns owed, and worth nothing when they do not. The old flat
+`_ATTACH_PREEVO_DISCOUNT` charged a 4x penalty either way; this measures it (ADR-0070 §2, §6).
+
+Three doctrines that used to be rungs, now DERIVED — the Dragapult line makes them one arithmetic
+fact, because Drakloak's Dragon Headbutt and Dragapult ex's Phantom Dive have the IDENTICAL {R}{P}
+cost (verified at source):
+
+  * **can pay {R}{P}** -> `this_turn` 70 vs 200, and the evolved form owes no hop -> evolve and swing.
+  * **cannot pay it**  -> neither body attacks, both clocks read alike, deploy is ZERO, and the
+    persistent Recon stream is the only term left -> hold and keep digging. `hold-evolution` DELETED.
+  * **body armed**     -> the engine buys no readiness, `ready_loss` is 0, and the hold pressure
+    vanishes on its own. Ruling 1's collapse, with no `turns_to_ready` gate.
+
+There is no exposure term (refuted twice at source — evolving usually makes the body STURDIER) and
+no doom override: "this body is about to die" is a statement about what its banked Energy is worth,
+so it lives INSIDE the comparison as the survival weighting, not stapled outside it (ADR-0070 §4,
+§5). The decider is PRIZE-BLIND: the race arrives once, in #145's scalar (ADR-0069 §6).
+
+A pure function of its inputs — the Pilot reads the board into `EvolveInputs`, so the equation stays
+testable at the seam and cannot reach for state it was not handed.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from common import needs
+#: Turns of survival beyond which nothing on the board threatens the body — `turns_to_ko_me`'s
+#: "survives the horizon" answer (``max_t + 1``). Not a tunable: it mirrors the clock's own horizon.
+_HORIZON = 9
 
-# Calibration constants — the old rung currency (baseline_evolution.py seeds + ROLE_TIER).
-_DEPLOY_WINCON_READY = 40.0     # evolve into the payoff that can ATTACK now (was `evolve-into-wincon`)
-_DEPLOY_WINCON_UNREADY = 10.0   # the payoff on board but not yet attacking — insurance/body only
-_DEPLOY_LINE = 15.0             # advance a MID-line pre-evo (was `advance-the-evolution-line`)
-_ENERGIZED_BONUS = 5.0          # which-body: the body already carrying Energy (was the two `+5` rungs)
-_ENGINE = float(needs.ROLE_TIER["engine"])   # a draw/dig ability's per-turn worth (12)
+
+def _halve(turns: float) -> float:
+    """The shipped grading convention — `deny_slot`'s ``value / 2**t``, reused rather than a new
+    decay rate invented for this equation (ADR-0070 §6)."""
+    return 0.5 ** max(0.0, float(turns))
+
+
+@dataclass
+class EvolveBody:
+    """The damage-currency reading of ONE body — the pre-evolution B, or the result R it becomes.
+
+    Filled by the Pilot from the StateModel; every field is a measurement, never a tier."""
+    #: Best damage this body can reach THIS turn under its own Attach Budget (#137). Typed and
+    #: sound: an attack whose colours are unpayable is not reachable.
+    this_turn: float = 0.0
+    #: The LINE PAYOFF's damage — the attack this body's Energy is ultimately building toward. The
+    #: same number for a pre-evolution and its result (both read `_line_payoff_stat`), which is why
+    #: it cancels in the deploy difference.
+    payoff_damage: float = 0.0
+    #: `turns_to_afford` — the hop-aware armed clock: MAX of the energy deficit and the forward-hop
+    #: depth, never the sum. 0 = armed now. None = unreadable, and the forward term then makes NO
+    #: claim (fail-closed, ADR-0067).
+    arm: int | None = None
+    #: `turns_to_ko_me` — turns until the opponent's board can fell this body in one swing, read at
+    #: its AREA-AT-DAMAGE-TIME (a benched body is reachable only by snipe/spread riders, and a Tera
+    #: body not at all). Large = safe.
+    ko: int = _HORIZON
+
+    def p_arrive(self) -> float:
+        """P(the line arms) — the armed clock, halved per turn out. Fail-CLOSED at 0.0 on an
+        unreadable clock: an unknown is worth nothing, never its optimistic reading."""
+        return 0.0 if self.arm is None else _halve(self.arm)
+
+    def p_survive(self) -> float:
+        """P(the body lives to use the payoff) — the race between the two clocks. Whole while it
+        arms strictly before it can be felled; graded by the same halving once the KO clock catches
+        up, so the boundary is continuous rather than a cliff."""
+        if self.arm is None:
+            return 0.0
+        return 1.0 if self.arm < self.ko else _halve(self.arm - self.ko + 1)
+
+    def deploy(self) -> float:
+        """What having this body on the board is worth, in damage. `max` because the immediate and
+        forward terms re-read ONE progress on ONE body (ADR-0069 §1)."""
+        return max(self.this_turn, self.payoff_damage * self.p_arrive() * self.p_survive())
 
 
 @dataclass
 class EvolveInputs:
-    """The board facts an evolve option's value reads — filled by the Pilot, so the equation stays a
-    pure function of the situation."""
-    result_has_draw: bool = False       # R carries a draw/dig ability (turned ON by evolving)
-    result_ability_oneshot: bool = False  # R's ability self-shuffles (a one-shot burst, not a stream)
-    body_has_draw: bool = False         # B carries a draw/dig ability (FORFEITED by evolving)
+    """The board facts an evolve option's value reads, so the equation stays a pure function."""
+    body: EvolveBody = field(default_factory=EvolveBody)      # B — the pre-evolution, as it stands
+    result: EvolveBody = field(default_factory=EvolveBody)    # R — the form it becomes
+
+    # -- income: an ODDS read, never a tier (ADR-0070 §3) ---------------------------------------
+    #: Δ`readiness_p` the RESULT's draw/dig Ability buys — the exact hypergeometric that its dig
+    #: depth finds the enabler the payoff still lacks. 0 on a body that already reaches, which is
+    #: what makes a redundant engine worth exactly nothing without a saturation rule.
+    ready_gain: float = 0.0
+    #: Δ`readiness_p` the BODY's Ability buys — the stream evolving forfeits.
+    ready_loss: float = 0.0
+    #: R's Ability is usable THIS turn (evolve -> use it is one legal turn: Abilities fire "per the
+    #: ability's own text", rules.md:91, and the engine re-presents the menu after each non-ending
+    #: action). The gain is then undiscounted.
+    result_ability_now: bool = False
+    #: B's Ability is STILL on the menu — i.e. not yet used this turn. Read off the menu, never
+    #: inferred from an assumed ordering: the sequencer usually fires it at tier 0 before the evolve,
+    #: in which case evolving forfeits no use THIS turn and the loss is purely future (ADR-0070 §7).
+    body_ability_on_menu: bool = False
+    #: B's Ability self-shuffles (Run Away Draw) — a single deadline-0 burst rather than a stream, so
+    #: there is no future to lose. The recycle card-fact splits the HORIZON, not the magnitude.
     body_ability_oneshot: bool = False
-    result_is_wincon: bool = False      # R carries a win_condition / primary_attacker Role
-    result_is_line_preevo: bool = False  # R is a MID-line pre-evolution (advances the line, not payoff)
-    result_can_attack_now: bool = False  # R can TYPED-pay a valued attack on the body's current Energy
-    body_has_energy: bool = False       # the evolving body already carries Energy (which-body tie-break)
-    hold_turns: int = 1                 # turns the body would keep a PERSISTENT engine before it's
-                                        # usable as the payoff (turns_to_ready, typed) — the stream length
-    engines_online: int = 0             # draw engines already online (slot saturation)
-    body_doomed_affordable: bool = False  # the opponent can ACTUALLY KO this body next turn (SCOPED —
-                                        # their real turns_to_ready, not the affordability-blind oracle)
+    #: Turns B would remain un-ready, i.e. how long a persistent engine would keep paying. Sourced
+    #: from B's own armed clock; 0 once the body is armed, which collapses the hold to nothing.
+    hold_turns: int = 0
 
 
 @dataclass
 class EvolveValue:
-    """The evolve value with its inner terms (gamble-trace legibility). ``total`` is the sum."""
+    """The evolve value with its terms — the decider's legible working (ADR-0008/0019), carried on
+    the decision record as the per-option rows #146/#148 consume. ``total`` is the sum."""
     deploy: float = 0.0
     income_gain: float = 0.0
     income_loss: float = 0.0
-    doom: float = 0.0
     total: float = 0.0
 
 
-def _ability_income(has_draw: bool, oneshot: bool, engines_online: int, hold_turns: int) -> float:
-    """cover(a draw/dig ability) in the one currency. A ONE-SHOT (self-shuffle: Run Away Draw) is a
-    single deadline-0 burst worth one engine-tier; a PERSISTENT engine (Recon) is a STREAM worth the
-    tier over the turns it stays online (`hold_turns`). Saturates with an engine already up."""
-    if not has_draw:
-        return 0.0
-    base = float(needs.draw_engine_slot(engines_online=engines_online).value)
-    return base if oneshot else base * max(1, int(hold_turns))
-
-
 def evolve_value(inp: EvolveInputs) -> EvolveValue:
-    """The value of an EVOLVE option in the one currency (see module docstring)."""
-    # deploy_gain — the worth of having R on board.
-    if inp.result_is_wincon:
-        deploy = _DEPLOY_WINCON_READY if inp.result_can_attack_now else _DEPLOY_WINCON_UNREADY
-    elif inp.result_is_line_preevo:
-        deploy = _DEPLOY_LINE
-    else:
-        deploy = 0.0                                    # a utility body: its worth IS its income
-    if inp.body_has_energy and (inp.result_is_wincon or inp.result_is_line_preevo):
-        deploy += _ENERGIZED_BONUS                      # which-body: advance the energized one
+    """The value of an EVOLVE option, in damage (see module docstring)."""
+    deploy = inp.result.deploy() - inp.body.deploy()
 
-    income_gain = _ability_income(inp.result_has_draw, inp.result_ability_oneshot,
-                                  inp.engines_online, inp.hold_turns)
-    income_loss = _ability_income(inp.body_has_draw, inp.body_ability_oneshot,
-                                  inp.engines_online, inp.hold_turns)
+    # Income GAIN — immediate when R's Ability fires this turn, else one turn out.
+    gain = inp.result.payoff_damage * inp.ready_gain
+    if not inp.result_ability_now:
+        gain *= _halve(1)
 
-    # doom override: if the opponent can ACTUALLY KO this body next turn, securing the (usually sturdier)
-    # evolved body is worth the payoff-ready deploy even when it can't yet attack — the ability stream is
-    # moot if the body dies. Scoped to a REAL threat (not the affordability-blind doom oracle).
-    doom = (_DEPLOY_WINCON_READY - deploy) if (inp.body_doomed_affordable and inp.result_is_wincon) else 0.0
+    # Income LOSS — the SPLIT horizon. This turn's use is forfeit only while it is still on the menu;
+    # the future stream is the geometric sum of the halving over the turns B would stay un-ready
+    # (sum_{t=1..n} 2^-t == 1 - 2^-n), and a one-shot has no future to lose.
+    per_use = inp.body.payoff_damage * inp.ready_loss
+    loss = per_use if inp.body_ability_on_menu else 0.0
+    if not inp.body_ability_oneshot:
+        loss += per_use * (1.0 - _halve(max(0, int(inp.hold_turns))))
 
-    total = deploy + income_gain - income_loss + doom
-    return EvolveValue(deploy=deploy, income_gain=income_gain, income_loss=income_loss,
-                       doom=doom, total=total)
+    return EvolveValue(deploy=deploy, income_gain=gain, income_loss=loss,
+                       total=deploy + gain - loss)
