@@ -1,0 +1,181 @@
+# ADR-0070: The evolve marginal is a body-substituted delta, and its constants are odds
+
+**Status.** Accepted (grilled 2026-07-25, `/grill-with-docs` on issue #140 — eleven locked
+decisions). Build: #140 (Phase 1b of the Value System, tracker #136), the second no-shadow decider
+swap, following the pattern ADR-0069 set (fold → diff → user-ruled review → delete → retune →
+paired A/B). Companion vocabulary: **Build Standing · The Two Clocks · Income Horizon ·
+Area-at-Damage-Time** in the Agent Runtime [`CONTEXT.md`](../../src/common/CONTEXT.md). Consumes
+ADR-0067 (#137, the Budget/reachability family), ADR-0068 (#138, the snapshot) and ADR-0069 (#139,
+the attach decider). Amends the 2026-07-15 evolve grill
+(`docs/plans/evolve-valuation-grill-spec.md`), whose Rulings 5 and 7 it partially overturns.
+
+## Context
+
+`evolve_value` computed a full equation and decided nothing. A swap was attempted on 2026-07-15 and
+REVERTED on two recorded calibration gaps. This grill found the record stale and the equation
+thinner than its own design in three ways:
+
+- **The units collided.** ADR-0069 moved the attach decider to a real **damage** currency at
+  `_ATTACH_VALUE_SCALE = 1.0` (thinnest build step 5.83). `evolve_value` still spoke Needs
+  (`_DEPLOY_WINCON_READY = 40`, `_ENGINE = ROLE_TIER["engine"] = 12`). The leak was already
+  observable: `test_advance_the_line_beats_spreading_f29` had to be rewritten from a score claim to
+  a decision claim because *"a 37.5-damage build step out-numbers a +20 evolve rung"*
+  (`docs/plans/attach-decider-swap-review.md`). The evolve survived on planner tier ordering, not on
+  value. The recorded gap ("an unready Mega evolve scores 10 but must beat a competing attach at
+  45") was measured in a currency that no longer exists.
+- **Four of eleven `EvolveInputs` fields were never filled.** `pilot._evolve_shadow` passed seven;
+  `result_ability_oneshot`, `body_ability_oneshot`, `hold_turns` and `engines_online` sat at
+  defaults. `_ability_income` therefore computed `base × max(1, 1)` for everything, so Ruling 1's
+  one-shot/persistent split — the mechanism by which "hold until ready" is DERIVED rather than
+  asserted — was inert. Recon priced identically to Run Away Draw.
+- **A target with no term.** Ruling 5's exposure term was struck on 2026-07-15 (f32 showed evolving
+  *reduces* exposure: Drakloak 90 HP > Dreepy 70), yet xfail target `f2` remained in the evolve
+  corpus labelled "exposure / opener" — on a `_SETUP_ACTIVE` path this equation never reaches.
+
+Card facts load-bearing here, all verified at source 2026-07-25 (`data/EN_Card_Data.csv`,
+`docs/rules.md`):
+
+- Drakloak (120): 90 HP; *Recon Directive* — "look at the top **2** cards of your deck and put 1 of
+  them into your hand", once per turn, persistent. Dragon Headbutt `{R}{P}` **70**.
+- Dragapult ex (121): 320 HP; Phantom Dive `{R}{P}` **200** + 6 damage counters. **Identical cost to
+  Drakloak's attack** — so the evolve decision collapses to "can I pay `{R}{P}`?", and the doctrine
+  derives without a threshold. Tera: no attack damage while Benched (rules.md §185).
+- Manual Energy attachment is capped at **1 per turn** (rules.md:86) — which refutes pricing a draw
+  engine as "more Energy drawn ⇒ more build".
+- Prize value (rules.md §136-142): `megaEx` **3**, `ex` **2**, regular **1** — project-verified,
+  "Mega-ex = 2" refuted.
+- Abilities are usable "per the ability's own text" (rules.md:91), and the engine re-presents the
+  menu after each non-ending action — so **Recon → evolve → use R's ability** is one legal turn.
+
+## Decision
+
+**1. The evolve marginal is damage-denominated — one currency with the attach decider.** Two units
+in one `score` means every retune on either side silently re-opens the other, and a single
+Needs→damage conversion scalar cannot serve both a damage-shaped deploy term and a not-damage-shaped
+income term.
+
+**2. `deploy` is ADR-0069's attack axis with the BODY SUBSTITUTED.**
+`deploy = max(this_turn(R), build_standing(R))·P(R survives) − max(this_turn(B), build_standing(B))·P(B survives)`,
+`max` within, per ADR-0069 §1 — the terms re-read one progress on one body. Budgets built
+per-body (the #137 consumer contract), R inheriting B's attached Energy. The recorded gap dissolves
+with **zero new constants**: `_line_payoff_stat` already credits a pre-evolution against its
+evolution's attack at `_ATTACH_PREEVO_DISCOUNT = 0.25`, so **evolving is precisely the removal of
+that discount**. Staryu at 2 of Nebula Beam's 3 typed slots: `(2/3)²×210×0.25 = 23.3` becomes
+`(2/3)²×210 = 93.3`, a **+70** deploy where the shipped equation scored 10. Requires extracting the
+LEVEL form (`build_standing`) out of `_attach_build_delta`, which is then defined as its difference.
+
+**3. The engine's worth is an ODDS READ, not a constant.**
+`income = dmax × [readiness_p(…, draws=D) − readiness_p(…)]`, the exact hypergeometric already
+shipped in `deck_odds.draw_hit_probability`. This DERIVES three things the constant only asserted:
+saturation (`readiness_p` returns 1.0 when the body already reaches, so a redundant engine is worth
+exactly zero — what `draw_engine_slot`'s halving approximated); Ruling 1's collapse ("the hold
+pressure collapses to 0 exactly when the body is typed-ready"); and the one-shot/persistent split's
+SHAPE. The one remaining per-card number — dig depth `D` (Recon: 2) — moves into
+`card_functions.json` as **data** maintained by the card-functions pipeline, where it ages with the
+card pool, rather than into code as a constant. Accepted limitation: this prices only the engine's
+attach-enabling half (Recon also finds Supporters, the payoff, a tutor), so it is a FLOOR and will
+systematically under-hold.
+
+**4. No exposure term.** Struck for the second time: refuted at source by f32, and its one
+motivating frame (`f2`) is a `_SETUP_ACTIVE` placement decision off the `_EVOLVE` path. `f2` is
+**re-ruled out of scope** and relocated out of `test_evolve_valuation_corpus.py` to a placement
+follow-up, leaving 4 pins + 2 in-path targets. Should a genuine exposure frame appear, it lands as a
+per-axis **Gate** (ADR-0069 §4), never as a subtracted term.
+
+**5. The doom override is deleted, not re-expressed.** "This body is about to die" is a statement
+about what its banked Energy is worth, which is the same currency as everything else — so it belongs
+INSIDE the comparison as the survival weighting of decision 2, not stapled outside it. This also
+fixes a blindness: the shipped override fired whenever the body could be KO'd, never checking
+whether evolving *escapes* the KO. ADR-0069's Out of Scope explicitly parked "requiring the
+evolution be reachable for the evolution-escape — refinement later, with a frame"; 1b is the phase
+that knows, and takes the 1b half. Tightening 1a's own exemption still awaits a frame.
+
+**6. A bare-body evolve earns THE TWO CLOCKS, and where they are silent, sequencing owns it.**
+`build_standing` is zero at zero Energy on both sides, so a naive port scores a bare evolve 0 — and
+`_finish_turn_last` sequences early only when `score > 0`, which would have regressed "megas evolve
+on sight". Rejected: a low-band constant floor (ages with the card pool) and crediting the next
+attach's un-discounting (double-counts within one turn). Instead the value is the race between
+`turns_to_afford` (mine, **hop-aware** — `combat.py:940` already takes the `evolvesFrom` chain depth
+as a parallel leg) and `turns_to_ko_me` (theirs, HP-driven): evolving shortens the first and
+lengthens the second, and is worth `dmax × ΔP(fires)`. Where it changes neither clock the value is
+LEGITIMATELY zero, and "evolve on sight" is then not a value claim but a free-action claim —
+sequenced tier-0 structurally from card facts, the same move ADR-0069 §7 made converting
+`attach-energy-last` from a weight to a decide()-only ordering mechanism. `P(fires)` grades by
+`deny_slot`'s shipped halving (`/2**t`), never a new decay rate.
+
+**7. The income horizon is SPLIT, because the turn structure is asymmetric.** The sequencer takes
+the free ability before the evolve (both tier 0; the menu re-presents), so evolving does not cost
+this turn's Recon. `income_gain` is immediate and undiscounted when R's ability is usable now;
+`income_loss` is a strictly FUTURE stream, halved per turn out. This-turn loss is counted only when
+B's ability is **still on the menu** — the fact is read, never inferred from an assumed ordering.
+Consequence to measure, not assume: an honestly discounted future stream is a much LOWER bar than
+the deleted `−46` rung, so `f35` (the hold frame) may get harder, not easier. That would be evidence
+about the doctrine, not licence to bend the discount.
+
+**8. The decider stays PRIZE-BLIND, with no gate.** Evolving a doomed body into a higher-prize form
+(Drakloak 1 → Dragapult ex 2; Staryu 1 → Mega Starmie ex **3**) is a real blunder, and the tier-0
+free-action rule of decision 6 actively drives it. It is nonetheless NOT fixed here: in the end
+state #145's `state_value` is prize-denominated and evolve is differenced
+(`state_value(after) − state_value(before)`), so the conceded prize appears automatically, and
+pricing it here too would double-count the race — ADR-0069 §6's reasoning exactly. A temporary gate
+was considered and REJECTED on the user's ruling that only the epic's end state matters. What 1b
+owes instead is a **named acceptance case registered on #145**, not scaffolding. Accepted exposure:
+the agent can commit this blunder until #145 lands.
+
+**9. `incoming` gains a bench branch, keyed on AREA-AT-DAMAGE-TIME.** Today `incoming` credits the
+opponent's full Active-attack damage against any body, with no Active/Bench branch — so a benched
+pre-evolution reads as doomed and the survival weighting of decision 2 would OVER-evolve, inverting
+the doctrine. Against a benched body only `rider_snipe` / `rider_spread` reach, and `is_tera` on MY
+body zeroes it (both card facts already shipped, used only offensively). Caller enumeration: exactly
+one existing consumer passes a benched body — `opp_cannot_punish_wincon` (`pilot.py:5834`) — and the
+branch CORRECTS it; the planner's catastrophe rung is Active-only by design (*"a bench body soaks —
+recoverable, not a loss"*). **The trap:** `_survives_after_ko` is called from the lethal tiers with
+bodies that are benched NOW but Active when the damage lands. The area is therefore an explicit
+caller-passed argument, never inferred from the board — inferring it would grant false bench
+immunity and manufacture phantom lethals.
+
+**10. Rung disposition — four delete, one folds, one survives as a Gate.** `evolve-into-wincon`
+(+40) and `advance-the-evolution-line` (+15) are the deploy term; both `+5` energized tie-breaks are
+EMERGENT (an energized body has higher standing, so its delta is naturally larger — which is what
+they were compensating for). All four delete, as does dragapult's `hold-evolution-until-attacker-
+ready` (−46), which is `income_loss`, via `/deck-align` (ADR-0034). **Overturning Ruling 7:**
+`prefer-rush-evolve-tutor` (+30) does NOT merely survive — its worth IS the evolve it enables one
+turn early, which decision 2 can now compute, so it folds to `evolve_value` over the hypothetical
+result (1a's hypothetical-body pattern) while its three premises stay structural gates.
+`dont-rush-evolve-without-target` (−60) survives as a pure **Gate** — structural absence, not value
+— and MUST keep its `_CLASS_B_SPEND_IDS` membership or the develop-rollout planner's spend account
+loses a term.
+
+**11. 1a merges before 1b branches.** 1b's corpus diff and paired A/B measure against the SHIPPED
+agent; branching off an unmerged #159 would leave any regression ambiguous between two swaps,
+defeating the protocol ADR-0069 established. (Executed: #159 merged at `13a0c81`.)
+
+## Consequences
+
+- `evolve_value`'s five calibration constants and the `doom` field all disappear. What replaces them
+  is one extracted level function, two shipped clocks, one shipped hypergeometric, and one per-card
+  data field.
+- The equation's quality now depends on read quality — the doom/incoming reads (worst-case and
+  sometimes phantom, ADR-0064) and `readiness_p`'s fail-closed-at-0.0 contract (ADR-0067), under
+  which an engine whose enabler is unmodelled prices at zero and would be evolved away. That wants
+  the same coverage-gate treatment the Attach Budget got.
+- Scope grows beyond the `_EVOLVE` path in two places, both deliberate: the `build_standing`
+  extraction refactors freshly-merged 1a code, and the bench branch touches shared `incoming`.
+- `_ATTACH_PREEVO_DISCOUNT = 0.25` becomes redundant in principle — `turns_to_afford`'s forward-hop
+  leg does its job properly. Retiring it is a FOLLOW-UP with its own frame and its own A/B, not 1b.
+- Two known-open items ship with the phase: the #145 prize acceptance case, and the `f2` placement
+  follow-up.
+
+## Alternatives rejected
+
+- **A Needs→damage conversion scalar** (`_EVOLVE_VALUE_SCALE`, mirroring `_ATTACH_VALUE_SCALE`'s
+  0.3→1.0) — one exchange rate cannot be right for both a damage-shaped deploy term and a
+  not-damage-shaped income term.
+- **Deriving the engine's worth from expected draws** (`P(Energy) × build step × cards/turn`) —
+  refuted by the one-attach-per-turn cap (rules.md:86); more Energy drawn buys no more build.
+- **A low-band constant floor for the bare-body evolve** — rejected on the user's objection that
+  constants age with the card pool; superseded by decision 6's clocks.
+- **Loosening `_finish_turn_last`'s `score > 0` endorsement to `>= 0`** — load-bearing across the
+  whole sequencer; would pull every neutral option into tier 0.
+- **A temporary prize gate as Phase-2 scaffolding** — rejected: the epic's end state is what
+  matters, and a permanent veto would additionally foreclose the correct sacrifice evolve.
