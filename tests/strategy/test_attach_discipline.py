@@ -1,9 +1,11 @@
 """Attach DISCIPLINE: concentrate Energy on one win-condition, and prefer a reusable Basic over a
 discard-EOT burst (the b7e483a misattachment blunders).
 
-`concentrate-energy-on-wincon` reads `board.priority_wincon_slot` — the win-condition carrying the
-most Energy while still short of its biggest attack — so the deck loads ONE attacker instead of
-dribbling Energy across the Bench. `prefer-reusable-over-burst` breaks the Basic-vs-Ignition tie.
+Both behaviours OUTLIVED the rungs that used to carry them (#139, ADR-0069): concentrate is now a
+consequence of the CONVEX typed build (finishing a started carrier is worth more than starting a
+fresh one, because the marginal of the k-th Energy rises with k), and reusable-over-burst is the
+decider's resource tie-break plus its evaporation loss. So these pins assert the DECISION and the
+axes that produced it, not which rung fired.
 """
 import pytest
 
@@ -61,8 +63,8 @@ def test_concentrate_loads_the_most_built_wincon_over_a_bare_body():
     obs = _obs(bench, hand, opts)
     assert p._board(obs, obs["select"]).priority_wincon_slot == (BENCH, 0)
     dec = p.explain(obs)
-    assert "concentrate-energy-on-wincon" in _fired(dec.options[0])
-    assert "concentrate-energy-on-wincon" not in _fired(dec.options[1])
+    rows = {r["i"]: r for r in dec.attach_working["eq"]}
+    assert rows[0]["build"] > rows[1]["build"]                        # convexity, not a rung
     assert p.decide(obs) == [0]                                       # load the most-built Mega
 
 
@@ -78,8 +80,8 @@ def test_prefer_reusable_basic_over_ignition_onto_the_wincon():
            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
                       "option": [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)]}}   # Ignition vs Water
     dec = p.explain(obs)
-    assert "prefer-reusable-over-burst" in _fired(dec.options[0])     # Ignition attach: penalised
-    assert "prefer-reusable-over-burst" not in _fired(dec.options[1])  # Water attach: clean
+    rows = {r["i"]: r for r in dec.attach_working["eq"]}
+    assert rows[0]["tactical"] < rows[1]["tactical"]                  # the burst is the dearer spend
     assert p.decide(obs) == [1]                                       # attach the reusable Water
 
 
@@ -109,8 +111,10 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
 
 @pytest.mark.req("REQ-GEN-0016")
 def test_attach_completes_biggest_attack_boundary():
-    """The go-down-swinging gate on `dont-overbuild-the-doomed-wincon` (ms 85163079 f51) turns on ONLY
-    when THIS attach crosses the Active up to its biggest-attack cost. Guards the un-fixtured counter-case
+    """`_attach_completes_biggest_attack` — the board fact behind `_active_arm_available` (ms 85163079
+    f51). It turns on ONLY when THIS attach crosses the Active up to its biggest-attack cost. Its
+    doom-rung consumer is deleted (#139); the fact still gates the go-down-swinging read that the
+    decider's survival gate and the Lunar-Cycle famine share. Guards the un-fixtured counter-case
     ep83037962 f48 (1W->2W, still short of Nebula CCC=3) — a synthetic boundary probe, no real replay frame.
     Mega Starmie ex maxDamageCost=3 (Nebula Beam CCC)."""
     p = _pilot()

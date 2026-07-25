@@ -75,9 +75,9 @@ EXPECTED_SHIPPED = {
     "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
                                     # term (readiness consumes needs), gated on the leaf-lab bench before arming
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
-    "attach_value": False,          # attach marginal-fold armed-OFF 2026-07-22: the energy-attach oracle's
-                                    # `marginal` scores each attach in place of the positive-endorsement rungs;
-                                    # ships OFF (shadows only) until the flip is gated on a score_diff bench
+    "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069): the axes-sum
+                                    # marginal IS the energy-attach decision; 19 baseline_energy rungs are
+                                    # DELETED, so OFF is documented DEGRADED MODE, never a rollback
     "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: matched-Read charged doom
                                     # (`_DOOM_CHARGED`) confirms-or-clears a worst-case `active_doomed`
                                     # cry (relax-only); unmatched = worst-case

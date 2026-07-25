@@ -77,7 +77,9 @@ def test_dont_waste_ignition_on_an_already_powered_cinderace():
                       current=state(active=poke(CINDER, energy=1, hp=160),
                                     opp_active=poke(OPP, hp=60), hand=[IGNITION]))
     traces = pilot.explain(obs)
-    assert "dont-waste-discard-energy" in _fired(traces.options[0])   # the wasteful Ignition attach
+    # the wasteful Ignition attach: it evaporates uncashed, so it costs its own worth (ADR-0069 §5a)
+    assert next(r for r in traces.attach_working["eq"] if r["i"] == 0)["evaporates"] is True
+    assert traces.options[0].tactical < 0
     assert traces.options[0].score <= 0                               # sunk -> sequenced last (tier 4)
     assert pilot.decide(obs) == [1]                                   # attack, don't waste it
 
@@ -93,7 +95,9 @@ def test_lethal_attach_stands_down_on_turn_one_going_first():
     # Cinderace 0 Energy; opp 60 HP weak to {R} -> +Ignition lets Turbo Flare (50x2=100) KO.
     cur = state(active=poke(CINDER, energy=0, hp=160), opp_active=poke(OPP, hp=60), hand=[IGNITION], turn=1)
     obs = make_select([attach_ign, opt(END)], current=cur)
-    assert pilot.explain(obs).options[0].tactical == 0               # no phantom lethal on turn 1
+    # no phantom lethal on turn 1 — and the burst is scored BELOW doing nothing, which is the whole
+    # of `dont-attach-discard-energy-turn1` without a −60 rung (ADR-0069 §5a).
+    assert pilot.explain(obs).options[0].tactical < 0
     assert pilot.decide(obs) == [1]                                  # End beats the wasted attach
 
     # Control: same board, later turn -> lethal attach is real (CAN attack) -> KO-class.
@@ -176,7 +180,7 @@ def test_spread_attach_to_the_needy_at_attach_from():
     obs = make_select([powered, bare], context=ATTACH_FROM, current=cur)
     traces = pilot.explain(obs)
     assert "spread-attach-to-the-needy" not in _fired(traces.options[0])   # already powered
-    assert "spread-attach-to-the-needy" in _fired(traces.options[1])       # bare body needs it
+    assert next(r for r in traces.attach_working["eq"] if r["i"] == 1)["build"] > 0  # bare body needs it
     assert pilot.decide(obs) == [1]
 
 
@@ -205,7 +209,8 @@ def test_concentrate_accel_on_one_line_body_at_attach_from():
                 bench=[poke(PREEVO, energy=1, hp=70), poke(PREEVO, energy=0, hp=70)])
     obs = make_select([started, bare], context=ATTACH_FROM, current=cur)
     traces = pilot.explain(obs)
-    assert "concentrate-accel-on-one-line-body" in _fired(traces.options[0])       # started body
+    rows = {r["i"]: r for r in traces.attach_working["eq"]}
+    assert rows[0]["build"] > rows[1]["build"]                          # convexity concentrates
     assert "concentrate-accel-on-one-line-body" not in _fired(traces.options[1])   # bare body
     assert pilot.decide(obs) == [0]
 
@@ -230,7 +235,8 @@ def test_conserve_burst_when_the_opponent_cannot_be_koed_even_maxed():
                 hand=[IGNITION, WATER])
     obs = make_select([ign, water, opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert "conserve-burst-when-no-ko" in _fired(traces.options[0])       # penalizes Ignition burst
+    rows = {r["i"]: r for r in traces.attach_working["eq"]}
+    assert rows[0]["tactical"] < rows[1]["tactical"]     # the burst is capped + costs the tie-break
     assert "conserve-burst-when-no-ko" not in _fired(traces.options[1])   # not the reusable Basic
     assert pilot.decide(obs) == [1]                                       # attach the Basic, keep Ignition
 

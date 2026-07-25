@@ -19,7 +19,7 @@ from common.strategy import Line, Strategy
 from pilot_helpers import (ACTIVE, BENCH, HAND, PLAY, attack_opt, fetch_effects, make_select,
                            opt, poke, state)
 
-ATTACH = 8
+ATTACH, RETREAT = 8, 12   # engine OptionType mirrors (src/cg/api.py)
 WINCON = 900        # Mega Starmie ex shape: Stage-1 Mega ex, Jetting Blow (cost 1, 120) + Nebula (CCC, 210)
 PREEVO = 800        # Staryu (the Line base)
 ACCEL = 666         # Cinderace shape: accel_source (Turbo Flare, cost 1, accelerates the Bench)
@@ -78,7 +78,10 @@ def test_dont_overbuild_the_doomed_wincon_feeds_the_bench_successor():
                    opp_active=poke(678, hp=210), hand=[WATER])
     obs = make_select([to_active, to_bench], current=doomed)
     assert pilot._board(obs).active_doomed                                  # the premise
-    assert "dont-overbuild-the-doomed-wincon" in _fired(pilot.explain(obs).options[0])
+    # `dont-overbuild-the-doomed-wincon` is DELETED (#139, ADR-0069): the SURVIVAL gate zeroes a doomed
+    # Active's forward build outright, so there is no overbuild left to penalise.
+    assert next(r for r in pilot.explain(obs).attach_working["eq"]
+                if r["i"] == 0)["build"] == 0.0
     assert pilot.decide(obs) == [1]                                         # feed the Bench successor
 
     # Control — a HEALTHY wincon Active (not doomed) still builds toward Nebula (rule stands down).
@@ -183,7 +186,12 @@ def test_feed_the_firing_accelerator_over_a_bench_body_even_when_doomed():
     b = pilot._board(obs)
     assert b.active_doomed and not b.bench_wincon_ready and not b.accel_recipient_missing
     active_ctx = pilot.explain(obs).options[0]
-    assert "feed-the-firing-accelerator" in _fired(active_ctx)   # only fires on attach_feeds_firing_accel
+    # `feed-the-firing-accelerator` is DELETED (#139, ADR-0069). The feed still wins on arithmetic:
+    # arming the doomed accelerator unlocks its attack TONIGHT, which out-values one Energy of forward
+    # build on a bench body. (This synthetic's Turbo Flare carries no `recoverN` rider, so the
+    # accel-ROUTING term is silent here by construction — the credit is `this_turn`.)
+    rows = {r["i"]: r for r in pilot.explain(obs).attach_working["eq"]}
+    assert rows[0]["this_turn"] > 0 and rows[0]["marginal"] > rows[1]["marginal"]
     assert "dont-feed-the-doomed" not in _fired(active_ctx)     # firing accelerator is exempt
     assert pilot.decide(obs) == [0]                             # feed the accelerator
 
@@ -192,11 +200,14 @@ def test_feed_the_firing_accelerator_over_a_bench_body_even_when_doomed():
     ready = state(active=poke(ACCEL, energy=0, hp=210),
                   bench=[poke(WINCON, energy=1, hp=330)],           # a ready Mega (1 W = Jetting Blow)
                   opp_active=poke(678, hp=190), hand=[WATER])
-    obs_r = make_select([to_accel, to_bench], current=ready)
+    # The menu must OFFER the retreat: the survival gate's this-turn half stands the doomed Active's
+    # tonight-credit down only when the pivot is legally available now, which is the fact that
+    # separates this frame from 82525101-69 (a "ready" bench body too poor to pay its own retreat).
+    obs_r = make_select([to_accel, to_bench, opt(RETREAT)], current=ready)
     assert pilot._board(obs_r).bench_wincon_ready
-    r_active = pilot.explain(obs_r).options[0]
-    assert "feed-the-firing-accelerator" not in _fired(r_active)
-    assert "dont-feed-the-doomed" in _fired(r_active)
+    rows = {r["i"]: r for r in pilot.explain(obs_r).attach_working["eq"]}
+    assert rows[0]["this_turn"] == 0.0, "the doomed Active is still bought a swing in front of the pivot"
+    assert rows[0]["marginal"] < rows[1]["marginal"], "feed the bench successor, not the doomed body"
 
 
 # ---------------------------------------------------------- f40: benchless refresh over a redundant tutor

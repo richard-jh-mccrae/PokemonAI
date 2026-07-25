@@ -23,19 +23,14 @@ def _ids(hyps):
 
 # The decision-context contract: which rule lives in which cluster (ADR-0025).
 CLUSTERS = {
+    # ENERGY is deliberately TINY since the attach-decider swap (#139, ADR-0069): 19 of its 23 rungs
+    # were DELETED when `Pilot._attach_value` became the real decider, and only STRUCTURE survives —
+    # a PLAY-side source pick plus two band-constrained positional claims. This set is the deletion's
+    # characterization guard: a rung reappearing here means a weight coincidence came back.
     "energy": (ENERGY_HYPOTHESES, {
-        "power-up-attacker", "attach-energy-last", "use-acceleration", "dont-feed-the-doomed",
-        "dont-waste-discard-energy", "build-active-wincon", "spread-attach-to-the-needy",
-        "concentrate-energy-on-wincon", "prefer-reusable-over-burst", "prefer-active-attach-in-setup",
-        "dont-overbuild-the-doomed-wincon", "feed-the-firing-accelerator",
-        "dont-attach-discard-energy-turn1", "concentrate-accel-on-one-line-body",
-        "conserve-burst-when-no-ko", "advance-the-accel-pieces",
-        "conserve-discard-energy-prefer-basic", "dont-waste-off-type-energy",
-        "dont-power-the-draw-engine",           # draw-engine attach at _ATTACH (dragapult f21)
-        "fuel-the-dormant-ability",             # attach the Ability-fuel colour (Adrena-Brain {D}, 86091728 f19)
-        "dont-fund-the-non-attacking-body",     # broader: engine/tutor/stall at _ATTACH + _ATTACH_FROM (ml f121/f84)
-        "feed-the-line-for-disruptor-lock",     # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
-        "arm-the-doomed-active"}),              # go down swinging: arm a doomed Active whose attack this completes (ml f21/f19)
+        "use-acceleration",                     # PLAY-side accel source pick (currency-clean)
+        "prefer-active-attach-in-setup",        # positional prior, below one scaled build step
+        "feed-the-line-for-disruptor-lock"}),   # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
     "snipe": (SNIPE_HYPOTHESES, {
         "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
         "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)

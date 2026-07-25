@@ -199,8 +199,11 @@ _CLASS_B_SPEND_IDS = frozenset({   # the "spend account" rules (t0-planner-dispo
     # board (spent cards don't show; hand hidden) and legitimately additive along the line (pure spends
     # don't double-count state). REUSED from the live tuned weight set (`OptionTrace.fired`), never
     # re-derived. `turn_value = readiness(end) − Σ spend_costs(line)`.
-    "dont-waste-discard-energy", "conserve-discard-energy-prefer-basic", "conserve-burst-when-no-ko",
-    "dont-attach-discard-energy-turn1", "prefer-reusable-over-burst", "dont-waste-clutch-heal",
+    # NB the five `discard_eot` burst rungs that used to lead this list are DELETED (ADR-0069 §7).
+    # Their referent — spending a one-shot Energy that buys nothing — is now the decider's
+    # EVAPORATION LOSS, carried on `OptionTrace.attach_spend` and added below, so the account keeps
+    # the signal without keeping the weight coincidences.
+    "dont-waste-clutch-heal",
     "dont-rush-evolve-without-target", "dont-play-switch-for-no-gain",
     "dont-play-damage-boost-when-cant-attack", "dont-spend-unneeded-supporter",
     "hold-wincon-dont-shuffle", "hold-line-piece", "hold-wincon-with-base", "hold-successor-when-doomed",
@@ -215,9 +218,13 @@ _ABILITY_FIRE_IDS = frozenset({    # the "ability-readiness co-equal — fire it
     # Its value (the CARDS drawn) is a future resource the end board can't show; the greedy continuation
     # converges the boards, so the leaf can't see the draw. Credited POSITIVELY along the simmed line
     # (symmetric to the spend account), REUSED from the live tuned weight set — never re-derived.
+    # `advance-the-accel-pieces` / `feed-the-firing-accelerator` are DELETED (ADR-0069 §7) and are
+    # deliberately NOT re-routed: their referent was the ATTACH side of acceleration, whose value is
+    # now the decider's `accel_value` — forward build the end board DOES show (Energy landing on
+    # bench bodies), so crediting it here as well would double-count. `use-acceleration` survives and
+    # keeps the PLAY-side credit, which the end board genuinely cannot show.
     "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f", "use-the-draw-engine-ability",
-    "advance-the-accel-pieces", "use-acceleration", "bench-the-comeback-drawer",
-    "feed-the-firing-accelerator",
+    "use-acceleration", "bench-the-comeback-drawer",
 })
 
 
@@ -3407,6 +3414,7 @@ class PlannerMixin:
                     total += w
                 elif w < 0 and hid in _CLASS_B_SPEND_IDS:
                     total += w                            # w is negative — a spend subtracts
+            total += getattr(traces[i], "attach_spend", 0.0) or 0.0   # the burst evaporation loss
         return total
 
     def _simulate_line(self, obs, first_step, max_steps: int = 40, *, opponent_reply: bool = False):

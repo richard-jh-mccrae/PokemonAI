@@ -473,7 +473,7 @@ class MySide(_SideBase):
         return possible & surviving
 
     # -- the affordability family (0a's oracle; the model holds the RESULTS) --------------------
-    def attach_budget(self, body: BodyView | None):
+    def attach_budget(self, body: BodyView | None, *, manual_spent: bool = False):
         """This turn's full **Attach Budget** toward ``body`` (ADR-0067).
 
         Memoized PER BODY, because the Budget genuinely is per-target: a bench-restricted clause
@@ -483,13 +483,26 @@ class MySide(_SideBase):
         under the commonest in-turn action is a large part of why a fine-grained ``apply(action)``
         delta path was rejected: it would bookkeep per-field invalidation and then invalidate
         everything anyway (ADR-0068 decision 1).
+
+        ``manual_spent`` forces the manual-attach leg CLOSED — "the Budget this body still has once
+        the turn's one attachment is committed". It is what makes the attach marginal a true
+        counterfactual (ADR-0069 §2): both legs of ``best_dmg(committed) − best_dmg(baseline)`` must
+        price the SAME residual capacity, or every option on a body the accel already reaches would
+        read as load-bearing. It only ever narrows the Budget, so a caller that omits it is
+        unchanged.
+
+        Keyed by VALUE — ``(card id, benched, manual_spent)`` — not by ``id(body)``. The Budget
+        depends on the target only through its ``CardStat`` and its area (that is the whole of what
+        ``attach_budget`` reads off it), so a value key is exact; and it lets the decider price a
+        HYPOTHETICAL body (the real one plus an option's provision) against the real body's Budget
+        without an identity-keyed memo that a freed-and-reallocated dict could collide with.
         """
         if body is None:
             return None
-        key = ("attach_budget", id(body.body))
+        key = ("attach_budget", body.card_id, body.is_active, bool(manual_spent))
         return self._memoized(key, lambda: self._combat.attach_budget(
             body.body, self.hand_ids,
-            energy_attached=self.energy_attached,
+            energy_attached=self.energy_attached or bool(manual_spent),
             supporter_played=self.supporter_played,
             deck_energy_types=self.deck_energy_types,
             hand_energy_types=self.hand_energy_types,
@@ -507,6 +520,33 @@ class MySide(_SideBase):
             ("reachable_attach", id(body.body), attack_id),
             lambda: self._combat.reachable_attach(body.body, attack_id,
                                                   budget=self.attach_budget(body)))
+
+    def best_reachable_damage(self, body: BodyView | None, *, extra_energy_ids=(),
+                              manual_spent: bool = False) -> float:
+        """Biggest PRINTED damage ``body`` can reach this turn under its Budget — optionally over a
+        HYPOTHETICAL body carrying ``extra_energy_ids`` on top of the Energy it already holds.
+
+        The two legs of the attach counterfactual (ADR-0069 §2) are this read with and without the
+        option's provision, at the SAME ``manual_spent`` residual capacity. The hypothetical body
+        shares the real one's Budget by construction — ``attach_budget`` reads the target only
+        through its ``CardStat`` and its area, neither of which an attach changes — so committing an
+        Energy never silently re-prices the accel clauses it is being compared against.
+
+        Memoized by VALUE (card, area, attached Energy, provision, residual capacity), so the
+        per-option sweep over an attach menu pays once per distinct hypothetical body rather than
+        once per option."""
+        if body is None:
+            return 0.0
+        extra = tuple(extra_energy_ids)
+        key = ("best_reachable_damage", body.card_id, body.is_active,
+               tuple(body.body.get("energies") or ()), extra, bool(manual_spent))
+
+        def _make():
+            raw = body.body if not extra else dict(
+                body.body, energies=list(body.body.get("energies") or ()) + list(extra))
+            return self._combat.best_reachable_damage(
+                raw, budget=self.attach_budget(body, manual_spent=manual_spent))
+        return self._memoized(key, _make)
 
     def readiness_p(self, body: BodyView | None, attack_id=None, *, enabler_budget=None,
                     copies: int = 0, pool: int = 0, draws: int = 0) -> float:

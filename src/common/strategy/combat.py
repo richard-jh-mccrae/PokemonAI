@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import combinations
 
 from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
@@ -164,6 +165,26 @@ def _can_pay(slots, units, caps=None) -> bool:
         return False
 
     return assign(0, 0, {})
+
+
+def _matched_slots(slots, units, caps=None) -> int:
+    """How many of ``slots`` ``units`` can SIMULTANEOUSLY pay — the partial-credit reading of
+    :func:`_can_pay`, and the arithmetic behind typed slot-fraction build progress (ADR-0069 §3).
+
+    Defined AS a search over sub-costs of :func:`_can_pay` rather than as a second assignment
+    routine: "fits" (build) and "reaches" (:meth:`CombatMath.reachable_attach`) must be the same
+    matcher, so a partial match can never disagree with the payability it is a fraction of. Bounded
+    and tiny — costs run to a handful of slots, so the ``2**len(slots)`` subset walk is smaller than
+    the assignment inside it.
+    """
+    n = len(slots)
+    if n == 0 or not units:
+        return 0
+    for k in range(min(n, len(units)), 0, -1):
+        for subset in combinations(range(n), k):
+            if _can_pay(tuple(slots[i] for i in subset), units, caps):
+                return k
+    return 0
 
 
 class CombatMath:
@@ -712,6 +733,53 @@ class CombatMath:
                    for aid in attack_ids if aid != grant.get("same_lock")
                    for slots in (self._attack_slots(aid),) if slots
                    for option in budget.options)
+
+    def attach_units(self, card_id, count: int = 1) -> tuple:
+        """``count`` Budget units of the Energy card ``card_id`` — the PROVISION an attach delivers.
+
+        The same typing rule :meth:`_attached_units` applies to Energy already in play, so a
+        hypothetical body built from these units is indistinguishable from the real board it
+        models: a typed Basic keeps its colour, a colourless/special Energy (Ignition's {C}{C}{C})
+        carries ``{0}`` and so pays colourless slots ONLY, and an unresolvable card is wild."""
+        etype = getattr(self._card_stat(card_id), "energyType", None)
+        pool = frozenset() if etype is None else frozenset({etype})
+        return tuple(AttachUnit(pool) for _ in range(max(0, int(count))))
+
+    @staticmethod
+    def wild_units(count: int = 1) -> tuple:
+        """``count`` UNTYPED Budget units — Energy whose colour is not yet chosen (an accelerator's
+        routed Basics, drawn from a zone the recipient pick does not fix). Each pays any one slot:
+        fail-OPEN, exactly as :meth:`attack_type_payable` treats an unresolvable attached Energy."""
+        return tuple(AttachUnit(frozenset()) for _ in range(max(0, int(count))))
+
+    def matched_slots(self, my_body: dict | None, attack_id, *, extra_units=()) -> tuple:
+        """``(matched, total)`` typed cost slots of ``attack_id`` that ``my_body``'s attached Energy
+        plus ``extra_units`` covers — the typed BUILD read (ADR-0069 §3).
+
+        Uses the matcher :meth:`reachable_attach` uses, so build progress and reachability can never
+        disagree: an Energy that fills no slot scores no build (off-type waste is then an emergent
+        zero, not a separate flag) and a colourless slot absorbs any type (so a genuinely usable
+        off-colour attach is never mislabeled). ``(0, 0)`` when no cost record resolves — the caller
+        then makes no typed claim and falls back to the count reading."""
+        slots = self._attack_slots(attack_id)
+        if not slots:
+            return (0, 0)
+        units = self._attached_units(my_body) + tuple(extra_units)
+        return (_matched_slots(slots, units), len(slots))
+
+    def best_reachable_damage(self, my_body: dict | None, *, budget: Budget) -> float:
+        """The biggest PRINTED damage among the attacks ``my_body`` can reach this turn under
+        ``budget`` — the counterfactual leg of the attach marginal (ADR-0069 §2).
+
+        ANY reachable attack, not the biggest one it might someday afford: a doomed Active that
+        unlocks a smaller real attack tonight is credited for exactly that (the Mega-Starmie tempo
+        case the rung layer's biggest-attack-only exemption lost). Opponent-independent — the
+        overkill cap, not this read, owns "a bigger attack buys nothing". Fail-CLOSED at 0.0."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        return float(max((self.attack_damage(aid) for aid in (stat.attacks or ())
+                          if self.reachable_attach(my_body, aid, budget=budget)), default=0))
 
     def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
                     enabler_budget: Budget | None = None,

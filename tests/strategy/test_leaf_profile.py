@@ -41,6 +41,33 @@ PER_DECISION_PROFILE = frozenset({
     "theirs.prizes_remaining",
 })
 
+#: The model fields the ATTACH DECIDER adds on any menu that offers an energy attach (#139,
+#: ADR-0069), measured on the mega_starmie attach corpus. They are NOT in the per-decision profile
+#: above because the sampled `dp_*` frames happen to carry no attach option — the two sets are
+#: measurements of different menus, not a discrepancy.
+#:
+#: The cluster it drags in is the deck-availability chain (`visible_counts` -> `unseen_counts` ->
+#: `deck_energy_counts` -> `deck_energy_types`), which the Attach Budget needs to know which colours
+#: the deck can still yield (ADR-0067's fail-OPEN presence gate). That is a deliberate, bounded cost:
+#: one pass over my zones per decision, memoized for the whole decision, and it is the price of the
+#: Budget being typed at all. Everything else here is body-view construction (dict wrapping, no
+#: derivation) plus the memoized per-body Budget and reachable-damage reads.
+ATTACH_DECIDER_PROFILE = frozenset({
+    "mine.active",
+    "mine.attach_budget",
+    "mine.bench",
+    "mine.best_reachable_damage",
+    "mine.bodies",
+    "mine.body_raws",
+    "mine.deck_count",
+    "mine.deck_energy_counts",
+    "mine.deck_energy_types",
+    "mine.hand_energy_types",
+    "mine.prizes_hidden",
+    "mine.unseen_counts",
+    "mine.visible_counts",
+})
+
 #: The CEILING on the model field set one PLANNER-LEAF evaluation may touch.
 #:
 #: A leaf does not read the model directly — its own terms (`_readiness`, `_incoming_worst`,
@@ -56,7 +83,9 @@ PER_DECISION_PROFILE = frozenset({
 #: decision path does not — the Needs assignment, the clock curves, the deck Count Triples — this
 #: fails, which is exactly when the per-leaf cost needs measuring against the 2-vCPU / ~10-min grader
 #: bank and exactly when nobody would otherwise think to look.
-LEAF_PROFILE = PER_DECISION_PROFILE
+#: A leaf's simulated line re-runs my policy to end of turn, so it reaches menus WITH attaches and
+#: pays the attach decider's reads too — hence the union rather than the per-decision set alone.
+LEAF_PROFILE = PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE
 
 
 class _Probe:
@@ -100,6 +129,24 @@ def _frames(n=8):
     return [json.loads(f.read_text(encoding="utf-8"))["obs"] for f in files]
 
 
+#: Committed mega_starmie frames whose menu DOES offer an energy attach — the attach decider's
+#: profile is meaningless on a menu it stays silent on.
+_ATTACH_FRAMES = (("82523811", 59), ("83664340", 45), ("82750161", 59))
+
+
+def _attach_frames():
+    wanted, out = {(e, f) for e, f in _ATTACH_FRAMES}, []
+    for jf in sorted((REPO / "data" / "corrections").glob("*/corrections.jsonl")):
+        for line in jf.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            d = json.loads(line)
+            if (str(d.get("episode_id")), d.get("decision", {}).get("frame")) in wanted:
+                out.append(d["obs"])
+    assert len(out) == len(wanted), "an attach profile frame went missing from data/corrections/"
+    return out
+
+
 @pytest.fixture(scope="module")
 def pilot():
     sys.path.insert(0, str(REPO / "tools"))
@@ -135,6 +182,25 @@ def test_construction_itself_touches_nothing(pilot):
         for obs in _frames():
             StateModel.build(obs, combat=pilot.combat, deck=pilot.deck)
     assert probe.fields == set()
+
+
+def test_the_attach_decider_profile_is_pinned(pilot):
+    """The attach decider's model reads, pinned on a menu that actually offers an energy attach. Same
+    tripwire as the per-decision pin: if the decider starts reading the Needs assignment or a clock
+    curve, this moves and the per-leaf cost needs re-measuring before it merges."""
+    sys.path.insert(0, str(REPO / "tools"))
+    from train.tune import _build_pilot
+    ms = _build_pilot("mega_starmie")[0]
+    with _Probe() as probe:
+        for obs in _attach_frames():
+            ms.explain(obs)
+    added = probe.fields - PER_DECISION_PROFILE
+    assert added == ATTACH_DECIDER_PROFILE, (
+        "the attach decider's field set moved — re-measure before re-pinning\n"
+        f"  added:   {sorted(added - ATTACH_DECIDER_PROFILE)}\n"
+        f"  removed: {sorted(ATTACH_DECIDER_PROFILE - added)}")
+    assert not any("incoming" in f or "needs" in f for f in added), (
+        "the attach decider reached an expensive cluster it has no term for")
 
 
 def test_an_unread_expensive_cluster_costs_nothing(pilot):

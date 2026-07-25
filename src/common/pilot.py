@@ -31,7 +31,8 @@ from common.strategy.planner import PlannerMixin, TurnLine
 
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 # (_EFFICIENCY/_BENCH_SNIPE* moved to the KO oracle, ADR-0052 — the one home for combat valuation.)
-from common.strategy.combat import _EFFICIENCY  # noqa: E402  (re-used by the tactical scorers)
+from common.card_worth import ENERGY_TIER      # the attach decider's resource tie-break anchor
+from common.strategy.combat import Budget, _EFFICIENCY  # noqa: E402  (re-used by the tactical scorers)
 from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
@@ -740,9 +741,6 @@ class Context:
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
                                            # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
-    attach_type_wasted: bool = False       # this ATTACH provides an Energy TYPE the target already has
-                                           # enough of for its attack, while a DIFFERENT specific type is
-                                           # still short — a wasted off-type attach (Phantom Dive needs Fire+Psychic; 2nd Psychic wasted). Gates `dont-waste-off-type-energy`
     attach_fuels_dormant_ability: bool = False  # this ATTACH's typed Basic Energy is a colour the target's
                                            # ABILITY needs as fuel (CardStat.abilityEnergyTypes) and none is
                                            # attached — the attach switches a dormant Ability on (Adrena-Brain's
@@ -938,23 +936,37 @@ class Context:
                                    # PROBABLY misses every needed card (post-anchor hypergeometric over the
                                    # shuffle-grown pool, ADR-0024 amendment). Drives `dont-refresh-into-a-probable-miss`.
 
-# The ATTACH marginal-fold set (kill-switch `attach_value`): the POSITIVE-endorsement `baseline_energy`
-# rungs whose job the energy oracle's `marginal` term reproduces (concentrate/build/power-up/spread +
-# accel-routing + arm-the-doomed). All MEASURED-SAFE at Round-0 (marginal 24/0, doomed-sign 4/4,
-# accel-routing 4/4; attach-valuation-phase2-handoff.md). When the switch is ON these are suppressed on
-# ATTACH options and replaced by `_attach_value_tactical`. The NEGATIVE guards and tiebreak rungs are
-# deliberately NOT folded — marginal is 0 where they fire, so keeping them adds no double-count and
-# preserves the whether-to-attach protection the oracle does not provide.
-_ATTACH_VALUE_FOLDED = frozenset({
-    "concentrate-energy-on-wincon", "build-active-wincon", "power-up-attacker",
-    "spread-attach-to-the-needy", "concentrate-accel-on-one-line-body",
-    "feed-the-firing-accelerator", "arm-the-doomed-active", "advance-the-accel-pieces",
-})
-# Damage->weight calibration seed (ADR-0060 calibration-anchor): the oracle's `marginal` is in damage
-# units (~0-210); the folded rungs span ~+15..+35 single / ~+60 co-fired. 0.3 seeds a completing
-# attach (~70) at the concentrate band (~21) and a full payoff (~210) at the co-fire max (~63).
-# BENCH-TUNABLE — the flip to ON is gated on a score_diff / win-rate bench that fits this scale.
-_ATTACH_VALUE_SCALE = 0.3
+# ── the ATTACH DECIDER's constants (ADR-0069; kill-switch `attach_value`, shipped ON) ─────────
+# Every one is DERIVED, not folklore: each is pinned by an inequality in
+# tests/strategy/test_attach_bands.py, solved against the SHIPPED decks' real build steps. Change a
+# constant and the band tests re-check the whole set — that is the retune protocol, not a comment.
+#
+# Damage->weight calibration (ADR-0060 calibration-anchor). Retuned CONSTRAINT-FIRST for the swap:
+# the written inequalities give a feasible region, `tools/train/probes/attach_decider_sweep.py`
+# picks inside it on corpus score-diff (agreement with the retired pile peaks flat over [1.0, 1.5];
+# 0.3 — the shadow-era seed, sized so a flat +15 rung floor still carried small attaches — costs 3
+# extra corpus regressions because a real early build step then scores below a +8 Tool equip).
+# 1.0 is the region's lower edge AND makes the marginal a DIRECT damage currency: one point of
+# marginal is one rung point, the same units the ADR-0062 damage tacticals already speak.
+_ATTACH_VALUE_SCALE = 1.0
+# The two orthogonal CHANNELS, in DAMAGE units so they sum with the attack axis before scaling.
+# Both are LOW-BAND by ruling: a mobility/fuel signal breaks ties among build-equal options and must
+# never outrank one real build step (the thinnest shipped step is Staryu's first slot toward Nebula
+# Beam, 210/9 x 0.25 = 5.83). "~half the smallest live build credit" -> 3.0.
+# NB the channels are in damage units BEFORE the scale, so raising the scale never lets a channel
+# overtake a build step — the constraint is scale-invariant by construction.
+_ATTACH_RETREAT_EQUITY = 3.0   # FULL coverage of the printed Retreat cost (colourless -> type-agnostic)
+_ATTACH_ABILITY_FUEL = 3.0     # a dormant in-play Ability switched on (the {D} a bare Munkidori wants)
+# The resource TIE-BREAK (ADR-0069 §5c): among equal marginals, spend the RENEWABLE card. Charged on
+# the worth a card carries ABOVE a reusable Basic (`card_worth.ENERGY_TIER`), so a plain Basic pays
+# nothing and only a one-shot (Ignition's `discard_eot` band, 30) is nudged. Sub-band by
+# construction: 0.05 x (30 - 8) = 1.1 < one scaled build step (1.0 x 5.83 = 5.83), so it can order
+# equals and never overturn a real build difference.
+_ATTACH_RESOURCE_TIEBREAK = 0.05
+# A pre-evolution's Energy carries through evolution, but the body must still EVOLVE before the
+# payoff fires — so its forward build is discounted below an already-evolved body's (83007714-22)
+# and below a this-turn arm of the doomed Active (82522726-7, 85785606-19/21).
+_ATTACH_PREEVO_DISCOUNT = 0.25
 
 
 @dataclass
@@ -968,6 +980,13 @@ class OptionTrace:
     fired: list                  # [(Hypothesis, effective_weight)] whose trigger fired
     tactical: float = 0.0
     deferred: bool = False       # a turn-ending attack held behind beneficial development (attack-last)
+    attach_spend: float = 0.0    # the attach decider's ACTION-referent SPEND on this option (ADR-0069):
+                                 # minus the scaled evaporation loss when a `discard_eot` Energy is
+                                 # attached where it buys nothing before end of turn. Negative or 0.
+                                 # Feeds the develop-rollout planner's Class-B spend account — a
+                                 # consumed one-shot is invisible on the end board (spent cards don't
+                                 # show), which is exactly the account's contract. It replaces the five
+                                 # deleted burst rungs the account used to read out of `fired`.
     attach_to_needy_line: bool = False  # this option attaches Energy to a NEEDY win-condition Line body
                                  # (a base that builds the payoff) — decide()-only ORDERING tie-break: among
                                  # EQUAL-score attaches, feed Line base first. W-route-invisible, never enters weight fit. ep82867148 f87
@@ -1044,14 +1063,14 @@ class Decision:
                                      # swapping the shed flip play/don't-play?). Deciding NOTHING — the
                                      # sets-not-sums evidence the refresh swap rides. Sparse: None off
                                      # a real refresh PLAY option / mid-sim
-    attach_shadow: dict | None = None   # the ENERGY-ATTACH valuation shadow (attach-valuation-grill-
-                                     # spec.md "Grill rulings — 2026-07-21"; the fourth shadow): every
-                                     # energy-attach option priced in one currency — the marginal
-                                     # readiness the attach buys, the value of the line it advances
-                                     # (role-gated), the burst-waste of a discard-EOT Energy — plus the
-                                     # pick (`eq_pick`) and the agreement bit vs the shipped rungs'
-                                     # `chosen`. A Pokémon Tool ABSTAINS (Ruling 3: not Energy). Deciding
-                                     # NOTHING — sparse: None off a real attach choice / mid-sim
+    attach_working: dict | None = None  # the ENERGY-ATTACH DECIDER's legible working (ADR-0069 §9):
+                                     # the per-option AXES rows — attack_axis (this_turn / build /
+                                     # accel_value), retreat_equity, ability_fuel, evaporation_loss,
+                                     # which gate fired, and the `tactical` each option actually
+                                     # scored. This DECIDES (the rows are the decider's own arithmetic,
+                                     # not a shadow's), so there is no agreement bit: one emission path,
+                                     # one truth. A Pokémon Tool ABSTAINS (not Energy) and is counted.
+                                     # Sparse: None off an attach menu / mid-sim
     promote_retreat_shadow: dict | None = None  # the PROMOTE/RETREAT value shadow (promote-retreat-grill-
                                      # spec.md §Settled design; the fifth shadow): every promote/retreat
                                      # option's two-sided window-rollout total (common/promote_retreat_value.py)
@@ -1103,7 +1122,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False, attach_value=False, doom_matched_relax=False):
+                 leaf_hand_value=False, attach_value=True, doom_matched_relax=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1242,17 +1261,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
-        self.attach_value = attach_value                # ATTACH marginal-fold kill-switch (default OFF): the
-                                                        # energy-attach oracle's `marginal` (`_attach_value`)
-                                                        # scores each attach option in place of the POSITIVE-
-                                                        # endorsement rungs it shadows (`_ATTACH_VALUE_FOLDED`),
-                                                        # calibrated into the rung band by `_ATTACH_VALUE_SCALE`.
-                                                        # The NEGATIVE guards (doomed / overkill / role-gate /
-                                                        # burst-veto) and the tiebreak rungs (type-fit /
-                                                        # resource_cost) STAY — marginal is 0 exactly where they
-                                                        # fire, so no double-count and no whether-to-attach
-                                                        # regression. OFF = the rungs decide and the oracle only
-                                                        # shadows. Flip is gated on a score_diff / win-rate bench.
+        self.attach_value = attach_value                # the ATTACH DECIDER's emergency lever (ADR-0069 §9,
+                                                        # shipped ON): the axes-sum marginal (`_attach_value`)
+                                                        # IS the energy-attach decision, scaled into the rung
+                                                        # band by `_ATTACH_VALUE_SCALE`. OFF is DEGRADED MODE,
+                                                        # not a rollback — the 19 rungs it replaced are deleted,
+                                                        # so OFF means attach endorsements go silent and only
+                                                        # the surviving structure rungs speak. An incident
+                                                        # lever, never a comparison baseline.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1355,8 +1371,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
                                              if planned.goal == "develop" else None),  # rung's ranking (sparse)
                             gamble=getattr(self, "_gamble_trace", None),
-                            attach_shadow=self._attach_shadow(obs, select, board, options, traces,
-                                                              planned.next_step),  # attaches often route here
+                            attach_working=self._attach_working(obs, select, board, options),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
         # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
@@ -1402,7 +1417,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         gamble=getattr(self, "_gamble_trace", None),
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
-                        attach_shadow=self._attach_shadow(obs, select, board, options, traces, chosen),
+                        attach_working=self._attach_working(obs, select, board, options),
                         promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
                         threat_shadow=self._threat_shadow(obs, board),
                         recur_shadow=self._recur_shadow(obs, board),
@@ -1563,13 +1578,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # option) below a setup Supporter that ate
                                                                      # the one-per-turn slot (dragapult f81)
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
-                return 4
+                return 4                                             # — incl. an attach the decider prices at
+                                                                     # ZERO: sequencing that ahead of End is
+                                                                     # attach-anyway, the blunder class
+                                                                     # ADR-0069 rejected an epsilon floor for
+                                                                     # (measured: 82749168-21, 82867148-34)
             if t == _PLAY and _is_shuffle_refresh(i):                # hand-nuke: AFTER the Energy attach, so
                 return 3                                             # held Energy placed before the shuffle
             if t == _PLAY and _is_supporter(i):                      # one-per-turn Supporter: after the
                 return 1                                             # free Item digs, before the blind attach
             if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # blind/costly commitment: after free dev
-                return 2
+                return 2                                             # THIS is `attach-energy-last` (ADR-0069
+                                                                     # §7): the deleted −5 rung became this
+                                                                     # deferral, so attach-late costs an attach
+                                                                     # no SCORE — an irreversible commitment is
+                                                                     # simply ORDERED after the draw/search that
+                                                                     # would reveal a better target. Tier-aware
+                                                                     # by construction: it stands DOWN against a
+                                                                     # hand-shuffle finisher (tier 3 above), so
+                                                                     # development → attach → hand-shuffle →
+                                                                     # attack is structural, not a coincidence
+                                                                     # of −5 vs −60. Score-invisible, which is
+                                                                     # what let the desperation floor stop
+                                                                     # depending on out-scoring that −5.
             return 0
 
         if any(_tier(i) < 4 for i in order):                         # legibility: mark the held-back attacks
@@ -1582,6 +1613,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                       index: int) -> OptionTrace:
         ctx = self._context(obs, select, board, option)   # built first: the matchup snipe steer
                                                            # respects its ADR-0044 redundancy flags
+        attach_row = self._attach_decision(obs, select, board, option)   # priced ONCE: the score term
+                                                           # and the planner's spend account read it
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -1599,21 +1632,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._grab_enabler_lethal_tactical(obs, select, board, option)
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
                     + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
-                    + self._attach_value_tactical(obs, select, board, option))
+                    + (attach_row["tactical"] if attach_row is not None else 0.0))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
-        # ATTACH marginal fold (kill-switch): on an energy-attach option, suppress the positive-
-        # endorsement rungs `_attach_value_tactical` replaces (`_ATTACH_VALUE_FOLDED`) so they don't
-        # double-count. Per-option, so `advance-the-accel-pieces` keeps its PLAY-side (source-selection)
-        # role. OFF (default) leaves `fired` untouched. Suppressed rungs stay in the trace `fired` list
-        # for legibility; only their weight is dropped from `score`.
-        _fold = (getattr(self, "attach_value", False)
-                 and (option.get("type") == _ATTACH
-                      or (select.get("context") == _ATTACH_FROM and option.get("type") == _CARD)))
-        score = sum(w for h, w in fired if not (_fold and h.id in _ATTACH_VALUE_FOLDED)) + tactical
+        # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
+        # replaced are DELETED (ADR-0069 §7), not shadowed, so nothing on an energy-attach option can
+        # double-count with `_attach_value_tactical`.
+        score = sum(w for _h, w in fired) + tactical
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
                            fired=fired, tactical=tactical,
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
+                           attach_spend=(-attach_row["evaporation_loss"] * _ATTACH_VALUE_SCALE
+                                         if attach_row is not None else 0.0),
                            hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
                            evolve_shadow=self._evolve_shadow(obs, ctx, option),  # REPORTING-ONLY (shadow oracle)
                            promote_retreat_shadow=self._promote_retreat_shadow(obs, select, ctx, option))  # REPORTING-ONLY
@@ -3459,14 +3489,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return st
 
     def _attach_progress(self, cid, energy: int) -> float:
-        """CONVEX forward-build value of body ``cid`` at ``energy`` Energy toward the biggest attack it
-        FUELS (attach grill Ruling 1 + 5a evolution-lookahead). ``(min(e, M) / M)**2 * maxDamage`` — the
-        SQUARE makes the marginal of the k-th Energy INCREASE with k, so completing a started carrier is
-        worth more than starting a fresh body: concentrate on the most-built survivable carrier falls out
+        """The COUNT reading of convex forward-build value — body ``cid`` at ``energy`` Energy toward
+        the biggest attack it FUELS. ``(min(e, M) / M)**2 * maxDamage`` — the SQUARE makes the
+        marginal of the k-th Energy INCREASE with k, so completing a started carrier is worth more
+        than starting a fresh body: concentrate on the most-built survivable carrier falls out
         (82523811-59, 82749168-61), while the maxed body's marginal is 0 (over-attach). `M`/`maxDamage`
         come from the LINE PAYOFF (`_line_payoff_stat`), so a wincon pre-evo builds toward its evolution's
-        attack, not its own cheap one (82752604-61, 83116081-21, 85059103-84). Falls back to the flat
-        2-point readiness when the biggest-attack cost is unknown."""
+        attack, not its own cheap one (82752604-61, 83116081-21, 85059103-84).
+
+        The DECIDER prefers the TYPED slot-fraction reading (`_attach_build_delta`, ADR-0069 §3) and
+        only falls back here when the payoff attack's per-slot cost does not resolve — where a typed
+        claim would be a guess and the count reading makes none."""
         st = self._line_payoff_stat(cid)
         maxc = getattr(st, "maxDamageCost", None) if st is not None else None
         dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
@@ -3474,15 +3507,41 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return self._attach_readiness(cid, energy)
         frac = min(energy, maxc) / maxc
         value = frac * frac * dmax
-        # A pre-evolution's Energy carries through, but the body must still EVOLVE before the payoff
-        # fires — so its forward build is DISCOUNTED below an already-evolved body's build and below a
-        # this-turn arm of the doomed Active. Without it the payoff-priced pre-evo over-credits and
-        # beats both (83007714-22: evolved > pre-evo; 82522726-7 / 85785606-19/21: arm-the-doomed >
-        # banking on a bench pre-evo). The discount cancels in a pre-evo-vs-pre-evo compare, so
-        # concentrate on the started pre-evo is preserved (83116081-21).
         if cid in self._line_preevo_set():
-            value *= 0.25
+            value *= _ATTACH_PREEVO_DISCOUNT
         return value
+
+    def _payoff_attack_id(self, payoff_stat):
+        """The attack a body's Energy is ultimately BUILDING toward — the biggest-damage attack of
+        the line payoff. None when no attack record resolves (the caller then makes no typed claim)."""
+        aids = tuple(getattr(payoff_stat, "attacks", None) or ())
+        return max(aids, key=self.combat.attack_damage) if aids else None
+
+    def _attach_build_delta(self, target: dict | None, extra_units) -> float:
+        """The CONVEX, TYPED build progress ``extra_units`` buys on ``target`` (ADR-0069 §3).
+
+        ``(matched/slots)**2 * maxDamage``, where ``matched`` is the greedy typed assignment of the
+        body's attached Energy (plus the option's provision) against the LINE PAYOFF attack's cost
+        shape — by the SAME matcher `reachable_attach` uses, so "fits" and "reaches" can never
+        disagree. Two consequences that used to need their own rungs: an Energy filling no slot earns
+        ZERO build (off-type waste is emergent, never a separate colourless-blind boolean), and a
+        colourless slot absorbs any type (so Munkidori's {D} in Mind Bend's ● is real progress, not
+        "wasted"). Pre-evolution build keeps the `_ATTACH_PREEVO_DISCOUNT`; the evolution-lookahead
+        payoff pricing carries over unchanged from the count reading."""
+        if not target:
+            return 0.0
+        tcid = target.get("id")
+        st = self._line_payoff_stat(tcid)
+        dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
+        aid = self._payoff_attack_id(st)
+        if aid is not None and dmax > 0:
+            matched_0, slots = self.combat.matched_slots(target, aid)
+            if slots:
+                matched_1, _ = self.combat.matched_slots(target, aid, extra_units=extra_units)
+                value = ((matched_1 / slots) ** 2 - (matched_0 / slots) ** 2) * dmax
+                return value * (_ATTACH_PREEVO_DISCOUNT if tcid in self._line_preevo_set() else 1.0)
+        have = len(target.get("energies") or [])          # no typed cost record -> the count reading
+        return self._attach_progress(tcid, have + len(extra_units)) - self._attach_progress(tcid, have)
 
     def _partner_absent(self, cid, obs: dict) -> bool:
         """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play
@@ -3518,6 +3577,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         me = self._my_player(obs)
         line_ids = self._line_preevo_set() | self._wincon_set()
+        wild = self.combat.wild_units(routed)   # the routed colours aren't fixed by this pick — fail-open
         best = 0.0
         for b in (me.get("bench") or []):
             if not b:
@@ -3525,31 +3585,129 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             cid = b.get("id")
             if cid not in line_ids and self._is_utility_body(cid):
                 continue                                       # don't credit routing onto a utility body
-            have = len(b.get("energies") or [])
-            best = max(best, self._attach_progress(cid, have + routed) - self._attach_progress(cid, have))
+            best = max(best, self._attach_build_delta(b, wild))
         return best
 
-    def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
-        """Phase-1 shadow of ONE energy-attach option (attach grill ruling, 2026-07-21). DECIDES
-        NOTHING. Returns a per-option working row, or None to ABSTAIN — Ruling 3: a Pokémon Tool
-        rides `OptionType.ATTACH` but is not Energy, so it is never priced here.
+    def _attach_provision(self, target_stat, burst: bool) -> int:
+        """Energy UNITS this attach delivers, at PRINTED provision (ADR-0069 §5).
 
-        The row's fields ARE the ruled terms (ranked lexicographically in `_attach_shadow`):
-          * `marginal`      — max(`this_turn`, survival-weighted `build`, `accel_value`), gated to 0
-                              for a non-attacking role (Ruling 5b/6-partial) and for a discard-EOT burst
-                              that EVAPORATES on a body that can't attack this turn (the guard).
-                              `this_turn` is the attack the Active unlocks tonight; `build` is the CONVEX
-                              forward progress toward the biggest attack (Ruling 1), zeroed for a doomed
-                              carrier; `accel_value` is the forward build the Energy an ACTIVE
-                              accelerator ROUTES buys on the survivable carrier (Ruling 4).
-          * `line_value`    — worth of the line the body advances (`_role_value`, line-aware); the
-                              target-choice tie-break (wincon line over filler).
-          * `resource_cost` — the spent Energy's own worth (`_role_value`); breaks the same-target,
-                              same-marginal tie toward the reusable Basic over the burst.
-        The partner-conditional role (Ruling 6) is LIVE via `_partner_absent` (deck-declared
-        `strategy.partners`): a partnerless co-dependent engine body gates to a non-attacking role
-        (marginal 0). Pinned by test_attach_shadow.py (`84889539-87` and the synthetic partner
-        gated/valued pair)."""
+        Ignition Energy provides {C} on a Basic and {C}{C}{C} on an Evolution Pokémon (card text,
+        verified at source) — a CARD FACT, never bent by a valuation heuristic. The old unit gate
+        falsified it to 1 unless the 3 happened to unlock a KO; the spend discipline that gate was
+        smuggling now lives in the equation (the evaporation loss and the no-KO cap below), where it
+        can be read. Colourless provision pays colourless slots only — that typing is carried by the
+        units themselves, not by this count."""
+        if burst and bool(getattr(target_stat, "evolvesFrom", None)):
+            return 3
+        return 1
+
+    def _attach_body_view(self, target: dict | None):
+        """The StateModel :class:`BodyView` wrapping this raw board dict — the handle the
+        affordability family (Budget / reachability) is keyed on. None off-board or when no model has
+        been built (the decider then makes no this-turn claim)."""
+        model = getattr(self, "_state_model", None)
+        if model is None or not target:
+            return None
+        return next((b for b in model.mine.bodies if b.body is target), None)
+
+    def _reusable_hand_energy_id(self, obs: dict):
+        """A REUSABLE (non-`discard_eot`) Energy card id in my hand — the conservation alternative a
+        burst's tonight-credit is capped against (ADR-0069 §5b). ONE predicate, at two arities:
+        `_has_reusable_energy` is this lookup's boolean projection, so "does one exist" and "which
+        one" cannot disagree — which the cap depends on, since it would otherwise fire with no
+        alternative to fall back to. None when the hand holds none."""
+        return self._reusable_energy_id(self._my_player(obs).get("hand") or [])
+
+    def _attacker_alternative_in_play(self, obs: dict, target: dict | None) -> bool:
+        """Is a REAL attacker alternative on my board right now — some OTHER body of mine that is a
+        win-condition Line member or carries an attacker Role (not itself dead through a missing
+        partner) AND that would gain actual build from THIS Energy?
+
+        This is what makes the role gate BOARD-EVALUATED (ADR-0069 §4, the Ruling-6 pattern
+        generalized). "This body's job is not attacking" is only a reason to withhold Energy while
+        somebody else can take it; on a lone or attacker-less board the utility body IS the attacker,
+        and pricing it at zero would score the only legal home BELOW ending the turn.
+
+        Deliberately IN PLAY, not "could use THIS colour". Making the test per-provision is tempting
+        once build is typed — a dead colour is withheld on behalf of a body that cannot take it — but
+        it was MEASURED and rejected: it inverts 86091728-19, where the human ruled that the line eats
+        the {P} first even though the {D} in the same hand is useless to the line. That frame says the
+        priority is a resource-sequencing doctrine (which Energy to spend this turn), not a gating
+        one, and ADR-0069 §4 states the gate as written here. See
+        docs/plans/attach-decider-swap-review.md for the ruling the two follow-up doctrine pins owe."""
+        line_ids = self._recognized_line_preevo_set() | self._wincon_set()
+        me = self._my_player(obs)
+        for p in ((me.get("active") or []) + (me.get("bench") or [])):
+            if not p or p is target:
+                continue
+            cid = p.get("id")
+            if (cid in line_ids
+                    or ((_ATTACKER_ROLES & set(self._roles_of(cid)))
+                        and not self._partner_absent(cid, obs))):
+                return True
+        return False
+
+    def _attach_retreat_equity(self, target: dict | None, units: int, burst: bool) -> float:
+        """**Retreat Equity** — the mobility an attach buys by paying toward the body's printed
+        Retreat cost (ADR-0069 §1; glossary in `common/CONTEXT.md`).
+
+        The attack terms structurally cannot see this: the turn-1 Energy onto a lone Lunatone buys no
+        damage tonight and no build the deck cares about, but it pays the pivot that later lets
+        Solrock attack. TYPE-AGNOSTIC, because Retreat slots are colourless (rules.md §3) — which is
+        exactly the value an off-type desperation attach buys. Zero on a body already funded for its
+        retreat, on a free-retreat body (TEF Dunsparce has NO Retreat cost, so the "don't feed
+        Dunsparce the only {D}" lesson survives any mobility credit), and on a burst (it leaves play
+        at end of turn, so it funds no future pivot)."""
+        if burst or not target:
+            return 0.0
+        st = self.stats.get(target.get("id")) if self.stats else None
+        cost = int(getattr(st, "retreatCost", 0) or 0)
+        if cost <= 0:
+            return 0.0
+        have = len(target.get("energies") or [])
+        if have >= cost:
+            return 0.0                                     # already funded — the pivot is already paid
+        covered = min(have + units, cost) - min(have, cost)
+        return _ATTACH_RETREAT_EQUITY * covered / cost
+
+    def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
+        """The ATTACH DECIDER: price ONE energy-attach option as an AXES-SUM (ADR-0069).
+
+            marginal = attack_axis + retreat_equity + ability_fuel − evaporation_loss
+            attack_axis = max(this_turn, build, accel_value)
+
+        MAX within the attack axis because its three terms re-read ONE progress (a single Energy is
+        never double-paid for the same attack); SUM across the channels because Retreat Equity and
+        Ability Fuel are INDEPENDENT card features — a {D} that both fills Mind Bend's colourless slot
+        and wakes Adrena-Brain beats the same-build {P} outright, with no tie-break coincidence.
+
+        Returns a per-option working row (the decider's legible working, ADR-0008/0019 — the
+        substrate #146/#148 consume), or None to ABSTAIN: a Pokémon Tool rides `OptionType.ATTACH`
+        but is not Energy, so it is never priced here.
+
+        The terms, and the rung each one retired:
+          * `this_turn`      — a TRUE COUNTERFACTUAL under the full Attach Budget: best reachable
+                               damage with this Energy committed minus best reachable damage without
+                               it, both legs typed and sound (ADR-0067), both at the same residual
+                               capacity. So an attach that needs a budget partner is credited instead
+                               of read as futile (the f70 under-read), a type-unpayable attack stops
+                               reading as reachable, ANY attack a doomed Active unlocks counts (not
+                               only its biggest — the Mega-Starmie tempo arm), and an option on a body
+                               the accel already reaches is credited only for what it UNIQUELY adds.
+          * `build`          — typed slot-fraction progress toward the line payoff (`_attach_build_delta`).
+          * `accel_value`    — the forward build the Energy an ACTIVE accelerator ROUTES buys.
+          * `retreat_equity` / `ability_fuel` — the two orthogonal channels.
+          * `evaporation_loss` — a `discard_eot` Energy that leaves play UNCASHED costs its own worth,
+                               so ending the turn genuinely beats torching an Ignition on turn 1.
+        Gates land PER-AXIS: the board-evaluated role gate and the overkill cap zero the ATTACK AXIS
+        only (a role-gated body still banks mobility and fuel); the survival gate zeroes `build` for a
+        doomed Active EXCEPT a wincon-Line pre-evolution (the evolution-escape: Energy carries through
+        evolution, and a Mega evolving does not end the turn); evaporation is GLOBAL.
+
+        `tactical` is what the option actually scores: the marginal scaled into the rung band, less
+        the sub-band resource tie-break that spends the renewable card among equals. It MAY be
+        NEGATIVE — the decider is allowed to say "attach nothing" and mean it.
+        """
         ctx = select.get("context")
         is_attach = option.get("type") == _ATTACH
         is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
@@ -3558,65 +3716,64 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ecid = self._option_card_id(obs, select, option)
         estat = self.stats.get(ecid) if (self.stats and ecid is not None) else None
         if is_attach and not self._attach_is_energy(estat):
-            return None                                        # Ruling 3: a Tool is not Energy
+            return None                                        # a Pokémon Tool is not Energy
         target = self._attach_target(obs, option)
         if target is None and is_from:
             target = self._option_pokemon(obs, select, option)
         if target is None:
             return None
         tcid = target.get("id")
-        have = len(target.get("energies") or [])
-        area = option.get("inPlayArea") if is_attach else _BENCH   # accel recipients are benched
-        etags = set(self.functions.tags(ecid)) if (self.functions and ecid is not None) else set()
-        burst = "discard_eot" in etags
-        # ENERGY UNITS this attach delivers: a Basic/Special provides 1, but Ignition (`discard_eot`)
-        # provides {C}{C}{C}=3 on an EVOLUTION Pokémon (card text; the load-bearing rule). A burst is
-        # one-shot and precious, so its 3 units are credited ONLY when they UNLOCK A KO of the opp
-        # Active that the reusable Basic (+1) can't reach — the lethal the +1 model missed (82523811-105:
-        # 1 W + Ignition = 4 -> Nebula 210 KOs the 200-HP Active). When the bigger attack does NOT KO
-        # (83664340-45: Nebula 210 vs 300-HP Archaludon) the burst buys nothing extra, so it counts as 1
-        # and the reusable Basic wins on resource_cost (conserve-burst-when-no-KO).
         target_stat = self.stats.get(tcid) if (self.stats and tcid is not None) else None
-        units = 1
-        if burst and bool(getattr(target_stat, "evolvesFrom", None)) and area == _ACTIVE and board.turn > 1:
-            opp_hp = (self._opp_active(obs) or {}).get("hp", 0)
-            if opp_hp and self._attach_readiness(tcid, have + 3) >= opp_hp > self._attach_readiness(tcid, have + 1):
-                units = 3
-        # a burst that can't be cashed THIS turn evaporates at end of turn — no durable progress
-        can_cash = area == _ACTIVE and board.turn > 1
-        evaporates = burst and not can_cash
-        # Ruling 5b/6-partial: a body whose job is non-attacking (wall / draw-engine, and not a
-        # win-condition Line member) advances no valued attack — its marginal is 0.
-        line_ids = self._line_preevo_set() | self._wincon_set()
-        non_attacking = tcid not in line_ids and (
-            self._is_utility_body(tcid) or self._is_draw_engine_body(tcid)
-            or self._partner_absent(tcid, obs))         # Ruling 6: a partnerless co-dependent engine
-        # Ruling 1 (carrier-survival forward P-term) + 2a (arm-the-doomed): the attach's marginal is the
-        # BETTER of two readings — the immediate attack it unlocks THIS turn (only the Active fires this
-        # turn), and the survival-weighted forward BUILD toward the body's biggest attack. A DOOMED
-        # carrier earns no build credit (it won't live to fire the bigger attack — `dont-feed-the-
-        # doomed`), so a doomed Active scores only if this Energy arms an attack tonight (arm-the-doomed);
-        # a survivable carrier banks the build, so the most-built survivable body wins the concentrate.
-        this_turn = (self._attach_readiness(tcid, have + units)
-                     - self._attach_readiness(tcid, have)) if area == _ACTIVE else 0.0
-        survives = not (area == _ACTIVE and board.active_doomed)      # forward-survival of the carrier
-        build = (self._attach_progress(tcid, have + units)
-                 - self._attach_progress(tcid, have)) if survives else 0.0
-        # Ruling 2b (overkill cap): once the ACTIVE already KOs the opponent's Active AND its current
-        # affordable attack already covers the biggest body on their board, a bigger attack buys
-        # nothing more this game-state — stop over-building it and develop a second threat instead
-        # (82750161-59: Jetting KOs the 80-HP Riolu, Nebula 210 overkills a 110-HP board). Opponent-
-        # aware, so it does NOT fire when a bench threat still out-HPs the cheap attack (82523811-59:
-        # Hariyama 150 needs Nebula), where Ruling 1's build stands.
-        overkill = False
-        if area == _ACTIVE and board.active_cheap_attack_kos:
-            opp_hp = self._opp_body_hps(obs)
-            if opp_hp and max(opp_hp) <= self._attach_readiness(tcid, have):
-                overkill = True
-        # Ruling 4 (accel-routing): an attach that lets an ACTIVE accelerator FIRE (Cinderace's Turbo
-        # Flare) is worth the forward build the Energy it ROUTES buys on the survivable carrier, not the
-        # accelerator's own face damage — holds even for a doomed accelerator (it powers the successor
-        # before falling, 83037962-70). Prize-math delay stays OUT (planner-scope).
+        # The recipient's real board AREA. An ATTACH_FROM option carries it as `area` (an accel usually
+        # routes to the Bench, but the engine does offer the Active — and the survival gate has to see
+        # a DOOMED Active recipient, or the accelerated Energy sinks into a body that dies holding it).
+        area = option.get("inPlayArea") if is_attach else option.get("area", _BENCH)
+        etags = set(self.functions.tags(ecid)) if (self.functions and is_attach and ecid is not None) else set()
+        burst = "discard_eot" in etags
+        units = self._attach_provision(target_stat, burst) if is_attach else 1
+        # The PROVISION as Budget units: an ATTACH commits a known card (a typed Basic keeps its
+        # colour; Ignition's {C}{C}{C} pays colourless slots only), while an ATTACH_FROM recipient
+        # pick receives an Energy whose colour this decision does not fix — wild, fail-open.
+        provision = (self.combat.attach_units(ecid, units) if is_attach
+                     else self.combat.wild_units(units))
+        # -- the attack axis, term 1: tonight's counterfactual ------------------------------------
+        # The survival gate's THIS-TURN half: going down swinging is only worth buying when it is
+        # actually the line. A READY benched win-condition that I can pivot into strictly dominates
+        # whatever the doomed Active could swing for, so tonight's damage is not this attach's to buy
+        # (83007714-65: the Ignition onto doomed Cinderace before the retreat into a ready Mega
+        # Starmie ex was pure waste — the charter frame of the deleted `dont-feed-the-doomed`).
+        # The pivot must be LEGAL NOW, which only the engine's own menu can say: at 82525101-69 the
+        # bench Mega is "ready" for Jetting Blow but carries too little Energy to pay the 2-cost
+        # retreat, so no RETREAT option is offered and arming the doomed Active for 120 IS the play.
+        # Reading `bench_wincon_ready` alone would call both frames the same and break that one.
+        arm_dominated = (area == _ACTIVE and board.active_doomed and board.bench_wincon_ready
+                         and any(o.get("type") == _RETREAT for o in (select.get("option") or ())))
+        # Only the ACTIVE fires this turn, and the player going FIRST cannot attack on its turn 1
+        # (rules.md §2 / rulebook L152), so on either of those there is no tonight to buy.
+        view = self._attach_body_view(target)
+        can_attack_tonight = (area == _ACTIVE and board.turn > 1 and view is not None
+                              and not arm_dominated)
+        this_turn = base_dmg = committed_dmg = 0.0
+        if can_attack_tonight and is_attach:
+            mine = self._state_model.mine
+            base_dmg = mine.best_reachable_damage(view, manual_spent=True)
+            committed_dmg = mine.best_reachable_damage(view, extra_energy_ids=(ecid,) * units,
+                                                       manual_spent=True)
+            this_turn = max(0.0, committed_dmg - base_dmg)
+            if burst and this_turn > 0:
+                this_turn = self._burst_capped_tonight(obs, view, this_turn, base_dmg, committed_dmg)
+        # -- the attack axis, terms 2 and 3 -------------------------------------------------------
+        # The survival gate: a doomed carrier banks no forward build — EXCEPT a wincon-Line
+        # pre-evolution, whose Energy carries through evolution (the evolution-escape).
+        survives = not (area == _ACTIVE and board.active_doomed)
+        # A `discard_eot` burst earns NO build, ever: build is FORWARD value and the card is discarded
+        # at end of turn, so there is nothing forward about it. Only `this_turn` — what it cashes
+        # before it goes — can credit a burst. (Without this the Ignition's honest 3 units read as a
+        # full Nebula Beam build and beat the reusable Basic even where its attack cannot KO, which is
+        # exactly the 83116501-70 blunder the no-KO cap exists to prevent; the cap alone does not
+        # reach it, because it caps `this_turn` and the build axis was quietly out-bidding it.)
+        build = (self._attach_build_delta(target, provision)
+                 if (not burst and (survives or tcid in self._line_preevo_set())) else 0.0)
         accel_value = 0.0
         feeds_accel = (area == _ACTIVE and "accel_source" in self._roles_of(tcid)
                        and self._attach_target_needs(target)
@@ -3626,84 +3783,146 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             ast = self._attack_stat(aid) if aid is not None else None
             if ast is not None:
                 # EXPECTED routing for the value estimate: the printed ceiling capped by what the
-                # recipients can actually use. (The live decider's `_recover_units` also floors this by
-                # the prize-paranoid deck-fuel bound — a grader-safety concern for a COMMITMENT, not for
-                # a shadow value read.)
+                # recipients can actually use. (The live accel commitment's `_recover_units` also
+                # floors this by the prize-paranoid deck-fuel bound — a grader-safety concern for a
+                # COMMITMENT, not for a valuation.)
                 routed = min(getattr(ast, "recoverN", 0), self._recover_recipient_need(ast, board, obs))
                 accel_value = self._accel_routed_value(obs, board, routed)
-        marginal = 0.0 if (non_attacking or evaporates or overkill) else max(this_turn, build, accel_value, 0.0)
-        type_wasted = bool(self._attach_type_wasted(estat, target))   # off-type: doesn't cover the need
-        # The resolved target SLOT (board area, position) — the comparison key for agreement and the
-        # sweep, NOT the raw option index. type-8 ATTACH carries inPlayArea/inPlayIndex; the type-3
-        # ATTACH_FROM recipient carries area/index (accel recipients are benched).
+        # -- the per-axis gates -------------------------------------------------------------------
+        # The ROLE gate, board-evaluated: a body whose job is non-attacking (wall / draw-engine /
+        # partnerless co-dependent engine, and not a win-condition Line member) advances no valued
+        # attack — but only while somebody else can take the Energy.
+        # The bodies the deck's PLAN attacks with: every declared attacker Line's members (ADR-0048's
+        # broadened set, so a secondary attacker's base is a plan piece too — Makuhita on the
+        # Makuhita -> Hariyama prize-wall line is `evolution_base`, a Role that names a Line stage
+        # rather than an attack) plus the win-condition payoffs. NARROWER sets stay narrow elsewhere in
+        # this equation on purpose: the pre-evolution discount and the evolution-escape read
+        # `_line_preevo_set`, which is win-condition-only by design.
+        line_ids = self._recognized_line_preevo_set() | self._wincon_set()
+        # A body the deck gave ROLES, none of which is an attacker Role, has been DECLARED a
+        # non-attacking plan piece — the general form of the `engine`-only read `_is_utility_body`
+        # already makes. It is what catches a `counter_mover` (dragapult's Munkidori: "the attach seam
+        # reads the Role — a stuck-Active Munkidori may take its {P} … once the benched line is fed")
+        # and a sacrificial `starter`, neither of which carries a `_UTILITY_TAGS` tag. Reading it here
+        # rather than widening `_is_utility_body` keeps the change inside the attack axis, which is the
+        # only place a declared role means "do not fund this to attack".
+        declared = set(self._roles_of(tcid))
+        non_attacking = tcid not in line_ids and (
+            self._is_utility_body(tcid) or self._is_draw_engine_body(tcid)
+            or self._partner_absent(tcid, obs)
+            or (bool(declared) and not (_ATTACKER_ROLES & declared)))
+        role_gated = non_attacking and self._attacker_alternative_in_play(obs, target)
+        # The OVERKILL cap: once the ACTIVE already KOs the opponent's Active AND what it can afford
+        # RIGHT NOW already covers the biggest body on their board, a bigger attack buys nothing more
+        # this game-state — develop a second threat instead (82750161-59). Opponent-aware, so it
+        # stands down while a bench threat still out-HPs the affordable attack (82523811-59).
+        overkill = False
+        if area == _ACTIVE and board.active_cheap_attack_kos:
+            opp_hp = self._opp_body_hps(obs)
+            if opp_hp and max(opp_hp) <= self.combat.best_reachable_damage(target, budget=Budget()):
+                overkill = True
+        # The EVAPORATION gate, global: a `discard_eot` Energy that buys nothing before it is
+        # discarded at end of turn banks nothing durable — and costs what it was worth.
+        cashed = this_turn > 0 and not role_gated and not overkill
+        evaporates = burst and not cashed
+        resource_cost = self._role_value(ecid) if (is_attach and ecid is not None) else 0.0
+        evaporation_loss = resource_cost if evaporates else 0.0
+        # -- the axes-sum -------------------------------------------------------------------------
+        attack_axis = 0.0 if (role_gated or overkill or evaporates) else max(
+            this_turn, build, accel_value, 0.0)
+        retreat_equity = self._attach_retreat_equity(target, units, burst)
+        ability_fuel = (_ATTACH_ABILITY_FUEL if (not burst and is_attach
+                                                and self._attach_fuels_dormant_ability(estat, target))
+                        else 0.0)
+        marginal = attack_axis + retreat_equity + ability_fuel - evaporation_loss
+        # The resource TIE-BREAK: charged on worth ABOVE a reusable Basic, so a plain Basic pays
+        # nothing and only the one-shot is nudged. Sub-band — it orders equals, never overturns build.
+        tactical = (marginal * _ATTACH_VALUE_SCALE
+                    - _ATTACH_RESOURCE_TIEBREAK * max(0.0, resource_cost - ENERGY_TIER))
+        # The resolved target SLOT (board area, position) — the comparison key for the corpus sweep,
+        # NOT the raw option index: duplicate energy-source options and identical-effect target copies
+        # otherwise read as false disagreements (82523811-59, 82750161-59). type-8 ATTACH carries
+        # inPlayArea/inPlayIndex; the type-3 ATTACH_FROM recipient carries area/index.
         slot = [area, option.get("inPlayIndex") if is_attach else option.get("index")]
         return {"i": None, "target": tcid, "energy": ecid, "slot": slot,
-                "marginal": round(marginal, 1), "this_turn": round(this_turn, 1),
-                "build": round(build, 1), "accel_value": round(accel_value, 1), "doomed": not survives,
-                "line_value": round(0.0 if non_attacking else self._role_value(tcid), 1),
-                "resource_cost": round(self._role_value(ecid) if ecid is not None else 0.0, 1),
-                "type_wasted": type_wasted, "burst": burst, "evaporates": evaporates}
+                "marginal": round(marginal, 2), "tactical": round(tactical, 2),
+                "attack_axis": round(attack_axis, 2), "this_turn": round(this_turn, 2),
+                "build": round(build, 2), "accel_value": round(accel_value, 2),
+                "retreat_equity": round(retreat_equity, 2), "ability_fuel": round(ability_fuel, 2),
+                "evaporation_loss": round(evaporation_loss, 2), "units": units,
+                "role_gated": role_gated, "overkill": overkill, "doomed": not survives,
+                "burst": burst, "evaporates": evaporates,
+                "line_value": round(0.0 if role_gated else self._role_value(tcid), 1),
+                "resource_cost": round(resource_cost, 1)}
+
+    def _burst_capped_tonight(self, obs: dict, view, this_turn: float,
+                              base_dmg: float, committed_dmg: float) -> float:
+        """The burst's no-KO CAP (ADR-0069 §5b): a cashable one-shot earns at most what the best
+        REUSABLE Basic in hand would have earned tonight — UNLESS its attack converts a KO the Basic
+        cannot reach.
+
+        This is the whole of `conserve-burst-when-no-ko` / `conserve-discard-energy-prefer-basic` as
+        arithmetic: when Ignition's {C}{C}{C} unlocks Nebula Beam 210 against a 200-HP Active the cap
+        lifts and the burst is spent (82523811-105); when even the big attack cannot KO (Nebula 210
+        vs a 300-HP wall) the Basic does tonight's job just as well, so the burst keeps only the
+        Basic's credit and loses the resource tie-break (83664340-45). No reusable Basic in hand ->
+        no alternative -> no cap."""
+        reusable = self._reusable_hand_energy_id(obs)
+        if reusable is None:
+            return this_turn
+        opp_hp = (self._opp_active(obs) or {}).get("hp", 0) or 0
+        reusable_dmg = self._state_model.mine.best_reachable_damage(
+            view, extra_energy_ids=(reusable,), manual_spent=True)
+        if committed_dmg >= opp_hp > reusable_dmg:
+            return this_turn                                   # the burst converts a KO the Basic misses
+        return min(this_turn, max(0.0, reusable_dmg - base_dmg))
+
+    def _attach_decision(self, obs: dict, select: dict, board: Board, option: dict):
+        """The decider's working ROW for this option, or None when the decider does not speak here:
+        the kill-switch is OFF, the option is not an energy attach, or it is a Pokémon Tool. The ONE
+        pricing call per option — the score term and the planner's spend account both read it, so
+        neither can price a different attach than the other."""
+        if not getattr(self, "attach_value", False):
+            return None
+        return self._attach_value(obs, select, board, option)
 
     def _attach_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
-        """The ATTACH marginal fold (kill-switch `attach_value`, default OFF). Scores an energy-attach
-        option by the shadow oracle's `marginal` (`_attach_value`) scaled into the rung band
-        (`_ATTACH_VALUE_SCALE`), REPLACING the positive-endorsement rungs suppressed in `_option_trace`
-        (`_ATTACH_VALUE_FOLDED`). 0 when the switch is OFF, off an energy-attach option, or on a Tool
-        (`_attach_value` abstains). Prize-math stays out (Ruling 4). Signed like the ADR-0062 tacticals,
-        but never negative — the surviving guard rungs carry the penalties."""
-        if not getattr(self, "attach_value", False):
-            return 0.0
-        row = self._attach_value(obs, select, board, option)
-        if row is None:
-            return 0.0
-        return row["marginal"] * _ATTACH_VALUE_SCALE
+        """The ATTACH decider's contribution to an option's score (kill-switch `attach_value`,
+        shipped ON). 0 when the switch is OFF — DEGRADED MODE, not a rollback: the rungs this
+        replaced are deleted, so OFF means attach endorsements go SILENT and the surviving structure
+        rungs decide alone. Also 0 off an energy-attach option and on a Tool (`_attach_value`
+        abstains). Prize math stays OUT (ADR-0069 §6) — the race belongs to one scalar, in Phase 2.
 
-    def _attach_shadow(self, obs: dict, select: dict, board: Board, options: list,
-                       traces: list, chosen: list):
-        """The energy-attach valuation shadow (the fourth shadow) — price every energy-attach option
-        in `options` via `_attach_value`, emit the working rows + the top pick + the agreement bit vs
-        the shipped rungs' `chosen`. DECIDES NOTHING. None off a real attach choice (fewer than two
-        priced options) or mid-sim (`self._planning`).
+        Signed like the ADR-0062 tacticals and — unlike every shadow-era fold — allowed to go
+        NEGATIVE, which is what lets the decider score an attach below ending the turn."""
+        row = self._attach_decision(obs, select, board, option)
+        return 0.0 if row is None else row["tactical"]
 
-        `eq_pick` ranks rows lexicographically by the ruled priority: (marginal, line_value,
-        ¬type_wasted, −resource_cost) — durable progress first, then the wincon line, then on-type
-        over a wasted attach, then the reusable Energy over the burst."""
+    def _attach_working(self, obs: dict, select: dict, board: Board, options: list):
+        """The attach decider's LEGIBLE WORKING (ADR-0069 §9): the per-option axes rows for every
+        energy-attach option on the menu, attached to the decision record.
+
+        This replaces the fourth shadow and its self-referential agreement bit — one emission path
+        carrying one truth. The rows are the substrate the value-working emitter (#146) and the
+        term-level blunder loop (#148) consume: a reader sees WHICH axis carried a pick, not just
+        that it won. A Pokémon Tool ABSTAINS (not Energy) and is counted, never priced. None off an
+        attach menu or mid-sim (`self._planning`), so the wire key stays sparse."""
         if self._planning:
             return None
         ctx = select.get("context")
         attach_idx = [i for i, o in enumerate(options)
                       if o.get("type") == _ATTACH or (ctx == _ATTACH_FROM and o.get("type") == _CARD)]
-        if len(attach_idx) < 2:
+        if not attach_idx:
             return None
         rows, abstained = [], 0
         for i in attach_idx:
             row = self._attach_value(obs, select, board, options[i])
-            if row is None:                                    # Ruling 3 abstain (Tool) — no row
+            if row is None:                                    # a Tool abstains — no row
                 abstained += 1
                 continue
             row["i"] = i
             rows.append(row)
-        # Agreement is keyed on the resolved target SLOT (area, position), NOT the raw option index:
-        # duplicate energy-source options and identical-effect target copies otherwise read as false
-        # disagreements (82523811-59: three identical Water->active copies; 82750161-59: duplicate
-        # Ignition sources). Keyed off `rows` (energy attaches only), so a chosen Pokémon Tool — which
-        # abstains and has no row — never counts as an energy-attach agreement.
-        slot_by_i = {r["i"]: tuple(r["slot"]) for r in rows}
-        # Rank only options that buy DURABLE progress; if none does, the oracle attaches NOTHING
-        # (`eq_pick = None`) — an all-Tool menu or a purely-wasteful attach. Priority (the ruled
-        # order): marginal readiness, then the wincon line, then on-type over wasted, then reusable.
-        positive = [r for r in rows if r["marginal"] > 0]
-        if positive:
-            best = max(positive, key=lambda r: (r["marginal"], r["line_value"],
-                                                not r["type_wasted"], -r["resource_cost"]))
-            eq_pick = best["i"]
-            chosen_slots = {slot_by_i[c] for c in (chosen or []) if c in slot_by_i}
-            agree = slot_by_i.get(eq_pick) in chosen_slots
-        else:
-            eq_pick = None                                     # attach nothing beats a valueless attach
-            agree = not (set(chosen or []) & set(slot_by_i))   # agree iff the rung also made no energy attach
-        return {"eq": rows, "eq_pick": eq_pick, "abstained": abstained,
-                "picks": sorted(chosen or []), "agree": agree}
+        return {"eq": rows, "abstained": abstained} if rows else None
 
     def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
         """Energy this attack's accel rider would actually attach AND that a recipient can
@@ -4412,7 +4631,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_completes_biggest_attack=attach_completes_biggest_attack,
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
-                       attach_type_wasted=self._attach_type_wasted(stat, at_target),
                        attach_fuels_dormant_ability=self._attach_fuels_dormant_ability(stat, at_target),
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
                        attach_feeds_firing_accel=attach_feeds_firing_accel,
@@ -4554,10 +4772,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """True iff this ATTACH's typed Basic Energy is a colour the TARGET's Ability needs as fuel
         (`CardStat.abilityEnergyTypes`) and the target carries NONE of it — the attach switches a
         dormant Ability on (the {D} for a bare Munkidori's Adrena-Brain). The attach-target-level
-        mirror of `_in_play_unfueled_ability_colors` (which backs the fetch side); backs
-        `fuel-the-dormant-ability` and exempts the fuel from `_attach_type_wasted`, whose attack-cost
-        read called Adrena-Brain's {D} 'wasted' (86091728 f19, measured −12). Sound-or-silent:
-        False for an untyped/colourless Energy, a targetless option, or missing stats."""
+        mirror of `_in_play_unfueled_ability_colors` (which backs the fetch side); it is the
+        predicate behind the decider's **Ability Fuel** channel (ADR-0069 §1) — the value an attack
+        cost structurally cannot see, and the reason the old colourless-blind waste boolean called
+        Adrena-Brain's {D} 'wasted' (86091728 f19, measured −12). Sound-or-silent: False for an
+        untyped/colourless Energy, a targetless option, or missing stats."""
         etype = getattr(energy_stat, "energyType", None) if energy_stat else None
         if etype in (None, 0) or getattr(energy_stat, "hp", 1) != 0:   # a typed Basic Energy only
             return False
@@ -4568,43 +4787,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if etype not in fuels:
             return False
         return self._attached_type_counts(target).get(etype, 0) == 0
-
-    def _attach_type_wasted(self, energy_stat, target: dict | None) -> bool:
-        """True iff this ATTACH puts an Energy of a TYPE the target already has ENOUGH of for its
-        most type-demanding attack, while that attack still LACKS a DIFFERENT specific type — a wasted
-        attach when the needed type is on offer (ep83686860 f45: a 2nd Psychic onto a Drakloak that
-        holds its Psychic but needs the Fire for Phantom Dive [Fire, Psychic]). Sound-or-silent: False
-        for an untyped/colourless Energy, a targetless option, or a target whose attack type-costs can't
-        be resolved. Colourless (type-0) cost slots never make an attach wasted — only an unmet SPECIFIC
-        type on another slot does. A colour that switches the target's DORMANT Ability on is FUEL, not
-        waste (`_attach_fuels_dormant_ability`): the attack-cost read alone called Adrena-Brain's {D}
-        wasted while it is the whole point of the body (86091728 f19)."""
-        etype = getattr(energy_stat, "energyType", None) if energy_stat else None
-        if etype in (None, 0) or getattr(energy_stat, "hp", 1) != 0:   # a typed Basic Energy only
-            return False
-        if not target:
-            return False
-        if self._attach_fuels_dormant_ability(energy_stat, target):
-            return False                       # the "off-type" colour switches an Ability on — fuel
-        tst = self.stats.get(target.get("id")) if self.stats else None
-        aids = getattr(tst, "attacks", ()) if tst else ()
-        if not aids:
-            return False
-        best_types, best_specific = (), -1                 # the attack demanding the most typed Energy
-        for aid in aids:
-            ast = self._attack_stat(aid)
-            types = getattr(ast, "energyTypes", ()) if ast else ()
-            n_specific = sum(1 for t in types if t not in (0, None))
-            if n_specific > best_specific:
-                best_types, best_specific = types, n_specific
-        if best_specific <= 0:
-            return False
-        from collections import Counter
-        cost = Counter(t for t in best_types if t not in (0, None))
-        attached = self._attached_type_counts(target)
-        if cost.get(etype, 0) - attached.get(etype, 0) > 0:   # this type fills its own unmet need
-            return False
-        return any(cost.get(t, 0) - attached.get(t, 0) > 0 for t in cost if t != etype)
 
     def _in_play_attack_colors(self, me: dict) -> frozenset:
         """The specific Energy-type colors my IN-PLAY attackers' attacks require — every non-colourless
@@ -6190,12 +6372,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return True
         return False
 
-    def _has_reusable_energy(self, hand: list) -> bool:
-        """True if a **reusable** (non-discard) Energy is in hand — a *typed* Energy card (hp 0 with a
-        real `energyType`) that is not tagged `discard_eot`. Used to prefer a Basic over a
-        discard-at-end-of-turn Energy when both are available (deck-agnostic). NB the engine reports
+    def _reusable_energy_id(self, hand: list):
+        """The first **reusable** (non-discard) Energy card id in ``hand`` — a *typed* Energy card
+        (hp 0 with a real `energyType`) that is not tagged `discard_eot`. NB the engine reports
         `energyType == 0` for Trainers *and* colourless special energies (e.g. Ignition), so a typed
-        basic Energy is `energyType not in (None, 0)` — that excludes Trainers and Ignition."""
+        basic Energy is `energyType not in (None, 0)` — that excludes Trainers and Ignition. None when
+        the hand holds none."""
         for c in hand:
             cid = c.get("id") if c else None
             if cid is None:
@@ -6203,8 +6385,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             stat = self.stats.get(cid) if self.stats else None
             tags = self.functions.tags(cid) if self.functions else []
             if stat and stat.hp == 0 and stat.energyType not in (None, 0) and "discard_eot" not in tags:
-                return True
-        return False
+                return cid
+        return None
+
+    def _has_reusable_energy(self, hand: list) -> bool:
+        """Is a reusable Energy in hand? The boolean projection of `_reusable_energy_id` — used to
+        prefer a Basic over a discard-at-end-of-turn Energy when both are available (deck-agnostic)."""
+        return self._reusable_energy_id(hand) is not None
 
     def _hand_duplicate_ids(self, me: dict) -> frozenset:
         """Card ids I hold 2+ copies of in hand, EXCLUDING fungible Energy (Basic / Special). The

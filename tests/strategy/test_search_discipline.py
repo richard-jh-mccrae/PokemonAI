@@ -154,12 +154,17 @@ def test_prefer_bench_fill_first_stands_down_on_a_full_bench():
 #  they suppressed a useful chip below End when no dev was available.)
 @pytest.mark.req("REQ-GEN-0016")
 def test_development_still_beats_a_weak_chip_via_attack_last():
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30),
+    # The attach must be PRICEABLE for the decider to endorse it (#139, ADR-0069): a real ATTACH names
+    # its TARGET, and the target needs an attack to build toward. A stat-blind body earns nothing on any
+    # axis, so without this the pin would be asserting the absence of a signal, not attack-last ordering.
+    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30, maxDamage=90,
+                                                maxDamageCost=2, minAttackCost=1, attacks=(11, 12)),
                                   900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)},
-                                 attacks={11: AttackStat(11, damage=50)})
+                                 attacks={11: AttackStat(11, damage=50, cost=1),
+                                          12: AttackStat(12, damage=90, cost=2)})
     strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])  # active=payoff -> RACE
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([attack_opt(11), opt(ATTACH)], context=MAIN,
+    obs = make_select([attack_opt(11), opt(ATTACH, inPlayArea=4, inPlayIndex=0)], context=MAIN,
                       current=state(active=poke(700, energy=1, hp=30), opp_active=poke(900, hp=200)))
     assert pilot.decide(obs) == [1]            # attack-last: develop (attach) ahead of the weak chip
     assert pilot.explain(obs).options[0].deferred

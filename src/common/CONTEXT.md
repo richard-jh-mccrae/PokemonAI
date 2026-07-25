@@ -587,10 +587,13 @@ cannot see: real even when the attack's slots are already covered, and ADDITIVE 
 double duty (fills a colourless slot AND wakes the Ability) beats the same-build alternative
 outright — the ideal-case ruling ({D} > {P} onto a bare Munkidori). Low-band like **Retreat
 Equity**; zero for an evaporating burst; the equation form of the deleted `fuel-the-dormant-ability`
-rung, whose "line eats first" stand-down is EMERGENT (a needy Line body's build credit dominates
-the band).
+rung, whose "line eats first" stand-down is EMERGENT — not from the band, as first supposed, but from
+the BOARD-EVALUATED role gate: a `counter_mover` carries no attacker Role, so its ATTACK AXIS is zero
+while a Line member is in play, and the fuel channel alone cannot outbid a real build step. The
+converse half of that doctrine ("once the line is fed, the fuel follows") does NOT reproduce and is an
+open ruling — `docs/plans/attach-decider-swap-review.md` §Ruling 3.
 _Avoid_: ability value (the Ability's own recurring worth — planner scope), fuel (unqualified),
-re-gating it on `bench_line_member_needs` (the band ordering already does it)
+re-gating it on `bench_line_member_needs` (the role gate carries the priority)
 
 **Survival Window**:
 How many turns one of my bodies withstands the predicted **Incoming** before it is Knocked Out. The

@@ -385,7 +385,9 @@ def test_aura_jab_load_concentrates_on_the_benched_second_mega():
     obs = make_select([card_opt(BENCH, 0), card_opt(BENCH, 1)], context=ATTACH_FROM, current=cur)
     p = _pilot()
     opts = p.explain(obs).options
-    assert "concentrate-accel-on-one-line-body" in _fired(opts[0])       # the 2nd Mega
+    # `concentrate-accel-on-one-line-body` is DELETED (#139, ADR-0069 §7): concentration falls out of
+    # the CONVEX typed build, so the body closest to its payoff simply out-builds the bare ones.
+    assert opts[0].score == max(o.score for o in opts)
     assert "concentrate-accel-on-one-line-body" not in _fired(opts[1])   # Hariyama — off-Line
     assert p.decide(obs) == [0]
 

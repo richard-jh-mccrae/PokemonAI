@@ -147,7 +147,10 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     mechanism end to end, and the fit is *adopted* only because it satisfies the correction."""
     pilot, seeds = real_pilot
     play = {"type": PLAY, "area": 2, "index": 0, "playerIndex": 0}     # play Staryu from hand
-    attach = {"type": ATTACH, "area": 4, "index": 0, "playerIndex": 0}  # attach to Active
+    # A real ATTACH names its TARGET (`inPlayArea`/`inPlayIndex`), not just the hand slot — without it
+    # the attach decider abstains and the W route has no Hypothesis on that option to move.
+    attach = {"type": ATTACH, "area": 2, "index": 0, "playerIndex": 0,
+              "inPlayArea": 4, "inPlayIndex": 0}                    # attach to Active
     obs = make_select([play, attach], context=MAIN,
                       current=state(hand=[STARYU], active=poke(CINDERACE, hp=70)))
     d = Decision(episode_id="synthetic", frame=0, seat=0, turn=2, select_context="Main",
@@ -175,13 +178,17 @@ def test_packaged_agent_applies_tuned_weight_in_a_decision(tmp_path):
     picks — an extreme override flips the choice an empty file would have made."""
     package(AGENT, tmp_path)
     bundle = tmp_path / AGENT
-    obs = make_select([opt(type=ATTACH), opt(type=NO)], context=MAIN,
-                      current=state(active=poke(CINDERACE, hp=70)))
+    # `power-up-attacker` — the rung this used to move — is DELETED (#139, ADR-0069 §7). The plumbing
+    # claim is unchanged, so it is demonstrated on a rung that still exists and still drives an ATTACH:
+    # the Active-preference prior, which needs the option to name its TARGET.
+    obs = make_select([opt(type=ATTACH, area=2, index=0, inPlayArea=4, inPlayIndex=0), opt(type=NO)],
+                      context=MAIN, current=state(active=poke(CINDERACE, hp=70)))
 
     (bundle / "tuned.json").write_text("{}", encoding="utf-8")
-    assert _run_agent(bundle, obs) == [0]         # ATTACH preferred (power-up-attacker fires)
+    assert _run_agent(bundle, obs) == [0]         # ATTACH preferred
 
-    (bundle / "tuned.json").write_text(json.dumps({"power-up-attacker": -100000.0}), encoding="utf-8")
+    (bundle / "tuned.json").write_text(json.dumps({"prefer-active-attach-in-setup": -100000.0}),
+                                       encoding="utf-8")
     assert _run_agent(bundle, obs) == [1]         # tune flips the decision
 
 
