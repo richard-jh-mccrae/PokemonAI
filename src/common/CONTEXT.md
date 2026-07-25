@@ -677,6 +677,27 @@ generalizes across bodies, forward forms, and the energy timeline), Escalation S
 engine tree — the Threat Clock is opponent-static closed-form), Evolving Threat (the offensive snipe
 signal — the Threat Clock is the defensive projection that consumes the same forward-evo index).
 
+**Bench Harvest**:
+The set of MY benched bodies the opponent can Knock Out with ONE attack's bench-rider payload — the
+opponent's optimal allocation of a **shared budget**, not a per-body threshold. Attacking ends their
+turn (rules.md §5), so a turn's bench damage is exactly one attack's riders from one attacker: an
+**indivisible** `benchSnipe` (single-target text, all of it on one body) plus a **divisible**
+`benchSpread` ("in any way you like", 10-point counters across any bodies). Solved as the enumeration
+of snipe targets around the existing `best_ko_subset` knapsack, maximizing their total prize take;
+Tera bodies are not targetable (rules.md §11). It is the shared-budget correction to reading survival
+per-body: rescuing one benched body does not deny a Knock Out when the counters simply redirect onto
+another body still in range — it only picks which body dies. Read at one of two declared
+**Harvest Readings** — `POSSIBLE` (in the harvest under SOME optimal allocation; the conservative
+default, for threat/doom consumers) or `UNAVOIDABLE` (in the harvest under EVERY optimal allocation;
+declared by rescue/value consumers, so a redirectable Knock Out credits nothing). Never inferred from
+the board — the caller states which question it is asking, as with `my_benched` (ADR-0070 §9) and
+`charged` (ADR-0064 Decision 1). _(Accepted design 2026-07-25, `/grill-with-docs`; issue #163.)_
+_Avoid_: Incoming (the single-turn damage magnitude against ONE body — the Harvest is the joint
+allocation across my bench), Survival Window / Threat Clock (the turns-to-KO projection, which
+CONSUMES the Harvest on the bench path rather than replacing it), Prize Path (my offensive prize
+sequencing — the Harvest is theirs, over my bodies), Bench Snipe Bonus (the offensive sub-prize
+tiebreak that reads the same riders in the other direction).
+
 **KO Race**:
 The closed-form turns-to-KO computation, both directions: the fewest of MY turns to fell a standing
 target under my best attack SEQUENCE (damage accumulation across turns, snipe riders credited to
