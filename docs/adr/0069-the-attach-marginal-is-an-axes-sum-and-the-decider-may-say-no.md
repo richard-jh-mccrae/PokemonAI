@@ -146,6 +146,18 @@ did not spell out; none reverses a ruling. Evidence: `docs/plans/attach-decider-
    `feed-the-line-for-disruptor-lock` +20 -> +55), and the inequalities are CI-asserted in
    `tests/strategy/test_attach_bands.py`.
 
+## Merge evidence (2026-07-25)
+
+Decision 8's paired A/B, run as a BUILD A/B rather than a flag A/B — with the rungs deleted,
+`attach_value` OFF is degraded mode and an on/off delta would have measured the decider against
+nothing (`tools/sim/gauntlet_swap_ab.py`; six directed matchups, opponent fixed at the pre-swap
+build, seat-balanced, n=200 per arm):
+
+**delta +2.92 pp, 95% CI [−0.46, +6.30] pp, 0 crashes in 2400 games** — the grilled flip rule
+(`delta >= 0 AND CI-lo >= -1% AND crashes == 0`) PASSES. It passes on the delta, not on precision:
+±3.4 pp could never have cleared −1% on width alone. Five of six matchups improve or hold. Full
+table: `docs/plans/attach-decider-swap-review.md`.
+
 ## Alternatives rejected
 
 - **Budget-as-gate-only `this_turn`** (keep count-delta, veto phantom credit): leaves the f70

@@ -25,11 +25,12 @@ stages `common/` and `cg/` into the bundle) and is served by its own subprocess 
     python tools/sim/gauntlet_swap_ab.py --candidate /tmp/ab/new_bundles \\
         --incumbent /tmp/ab/old_bundles --n 200 --jobs 4 --out /tmp/ab
 
-**Read the power before reading the verdict.** The grilled flip rule wants a 95% CI lower bound at or
-above −1%, which at these variances needs thousands of games per arm per matchup. A short run cannot
-clear it and does not pretend to: the report prints the half-width it achieved, so "not powered" is
-visible rather than silently reported as "no regression". What a short run DOES establish soundly is
-the crash gate (a hard zero) and the exclusion of any regression larger than that half-width.
+**Read the precision beside the verdict.** The grilled flip rule is a 95% CI LOWER BOUND at or above
+−1%, so a clearly positive delta can clear it at a width that could never have done so on its own —
+and a delta near zero cannot clear it without thousands of games per arm per matchup. The report
+therefore prints both the rule's verdict and the half-width achieved, so a wide-but-passing interval
+is never read as precision it does not have. What any run of this establishes unconditionally is the
+crash gate (a hard zero) and the exclusion of a regression larger than the CI lower bound.
 """
 from __future__ import annotations
 
@@ -76,16 +77,21 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
     flip = flips_on(result, crashes=crashes)
     print(f"\nAGGREGATE delta={result['delta']:+.4f}  95% CI "
           f"[{result['ci_lo']:+.4f}, {result['ci_hi']:+.4f}]  (+-{half:.4f})  crashes={crashes}")
-    print(f"POWER: this run excludes a regression worse than {half:.1%}; the grilled rule wants "
-          f"the CI lower bound at or above -1.0%, so it is {'MET' if half <= 0.01 else 'NOT MET'} "
-          f"at n={n} per arm per matchup.")
+    # The rule is the CI LOWER BOUND, not the half-width: a positive enough delta clears -1% at a
+    # width that could never have done so on its own. Report both, so a wide-but-passing interval is
+    # not read as precision it does not have, and a narrow-but-failing one is not excused.
+    print(f"PRECISION: +-{half:.1%} at n={n} per arm per matchup — this run excludes a regression "
+          f"worse than {abs(result['ci_lo']):.1%}, and is {'' if half <= 0.01 else 'NOT '}tight "
+          f"enough to have cleared the rule on width alone.")
     print(f"FLIP: {flip}  (rule: delta>=0 AND CI-lo>=-0.01 AND crashes==0)")
     print(f"{sum(m[1] + m[3] for m in matchups)} games in {round(time.time() - started)}s")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / "swap_paired_ab.json"
     out.write_text(json.dumps({"table": table, "result": result, "crashes": crashes, "flip": flip,
                                "n_per_battle": n, "ci_half_width": half,
-                               "powered_for_flip_rule": half <= 0.01}, indent=2), encoding="utf-8")
+                               # NB the width criterion, NOT the flip rule (which is the CI lower
+                               # bound) — a run can fail this and still pass `flip` on a clear delta.
+                               "ci_width_under_1pct": half <= 0.01}, indent=2), encoding="utf-8")
     print(f"-> {out}")
     return result, flip
 

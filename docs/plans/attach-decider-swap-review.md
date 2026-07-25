@@ -126,10 +126,38 @@ corpus agreement is flat over `[1.0, 1.5]` and 3 regressions worse at the shadow
 early build step then scores below a +8 Tool equip). 1.0 is the region's lower edge and makes the
 marginal a direct damage currency.
 
+## The paired A/B gauntlet — RUN (merge evidence, directive 6)
+
+`tools/sim/gauntlet_swap_ab.py`. A flag A/B would have been the wrong instrument: with the 19 rungs
+deleted, `attach_value` OFF is degraded mode, not the incumbent, so an on/off delta measures the
+decider against nothing. This A/Bs two BUILDS — candidate (`463a508`) against the pre-swap commit
+(`2ba1035`) staged as self-contained bundles, opponent held FIXED at the incumbent so the raw deck
+matchup subtracts out. Six directed matchups, both arms seat-balanced (ADR-0021), n=200 per arm.
+
+| matchup | candidate | incumbent | delta |
+|---|---|---|---|
+| dragapult_ex vs mega_lucario | 72/200 = .360 | 65/200 = .325 | **+3.5 pp** |
+| dragapult_ex vs mega_starmie | 22/200 = .110 | 17/200 = .085 | **+2.5 pp** |
+| mega_lucario vs dragapult_ex | 145/200 = .725 | 129/200 = .645 | **+8.0 pp** |
+| mega_lucario vs mega_starmie | 69/200 = .345 | 58/200 = .290 | **+5.5 pp** |
+| mega_starmie vs dragapult_ex | 172/200 = .860 | 172/200 = .860 | +0.0 pp |
+| mega_starmie vs mega_lucario | 139/200 = .695 | 143/200 = .715 | −2.0 pp |
+
+**AGGREGATE delta +2.92 pp, 95% CI [−0.46, +6.30] pp, 0 crashes in 2400 games (45.6 min).**
+
+**FLIP: True** — the grilled rule is `delta >= 0 AND CI-lo >= -1% AND crashes == 0`, and −0.46 pp
+clears it. Read the precision beside the verdict: at ±3.4 pp this interval is nowhere near tight
+enough to have cleared −1% on width alone (that needs thousands of games per arm per matchup); it
+clears because the delta is clearly positive. What the run establishes unconditionally is the crash
+gate — a hard zero over 2400 games on the real engine, across every deck pairing — and that no
+regression worse than 0.46 pp is consistent with the data. Five of six matchups improve or hold; the
+one negative (−2.0 pp) sits well inside its own sampling noise at n=200.
+
+Raw: `swap_paired_ab.json` from the run (`reports/` is gitignored, so the numbers are transcribed
+here rather than committed).
+
 ## Still owed
 
-- **The paired A/B gauntlet** (matchup × seat balanced) — the merge evidence ADR-0069 §8 asks for
-  after this review. Not run here.
 - **Answers to Rulings 1–4.** The code shipped under the recommendation stated in each; the deletion
   commit could not wait on the answers without leaving two deciders alive indefinitely, which the
   protocol forbids for a different reason. Each ruling names the concrete change if you decide the
