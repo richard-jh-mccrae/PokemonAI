@@ -1642,7 +1642,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
                     + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
                     + (attach_row["tactical"] if attach_row is not None else 0.0)
-                    + (evolve_row["tactical"] if evolve_row is not None else 0.0))
+                    + (evolve_row["tactical"] if evolve_row is not None else 0.0)
+                    + self._rush_evolve_tutor_tactical(obs, board, ctx, option))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
@@ -1732,34 +1733,82 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if ctx.option_type != _EVOLVE or ctx.card_id is None:
             return None
         raw = self._evolve_body(obs, option) or {}
-        body_cid = raw.get("id")
         me = self._my_player(obs)
         is_active = any(raw is p for p in (me.get("active") or []))
-        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active)
-        # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
-        # hypothetical body differs from the real one ONLY in which card it is — exactly the
-        # substitution the deploy delta is asking about.
-        result_raw = dict(raw, id=ctx.card_id)
-        rstat = self.stats.get(ctx.card_id) if self.stats else None
-        if rstat is not None and getattr(rstat, "hp", None):
-            result_raw["hp"] = rstat.hp
-        result = self._evolve_side(obs, board, result_raw, ctx.card_id, is_active=is_active)
-        btags = self.functions.tags(body_cid) if (self.functions and body_cid is not None) else []
-        inp = EvolveInputs(
-            body=body, result=result,
-            ready_gain=self._evolve_income_delta(result_raw, ctx.card_id, is_active=is_active),
-            ready_loss=self._evolve_income_delta(raw, body_cid, is_active=is_active),
-            # An Ability the engine still offers has NOT been used this turn — the menu is the fact,
-            # never an assumption about whether the tier-0 sequencer already fired it (ADR-0070 §7).
-            result_ability_now=self._ability_on_menu(obs, ctx.card_id),
-            body_ability_on_menu=self._ability_on_menu(obs, body_cid),
-            body_ability_oneshot=("self_shuffle" in btags),
-            hold_turns=(body.arm or 0))
+        inp = self._evolve_inputs(obs, board, raw, ctx.card_id, is_active=is_active)
+        body, result = inp.body, inp.result
         val = evolve_value(inp)
         return {"deploy": val.deploy, "income_gain": val.income_gain,
                 "income_loss": val.income_loss, "tactical": val.total,
                 "body": {"this_turn": body.this_turn, "arm": body.arm, "ko": body.ko},
                 "result": {"this_turn": result.this_turn, "arm": result.arm, "ko": result.ko}}
+
+    def _evolve_inputs(self, obs: dict, board: Board, raw: dict, result_cid, *,
+                       is_active: bool) -> EvolveInputs:
+        """Read a body and the form it would become into the decider's inputs (ADR-0070).
+
+        The result inherits the pre-evolution's attached Energy and its slot (rules.md §4), so the
+        hypothetical body differs from the real one ONLY in which card it is — exactly the
+        substitution the deploy delta asks about. Shared by the EVOLVE option itself and by the
+        rush-evolve tutor fold, so a tutor is never priced by a different equation than the evolve
+        it buys."""
+        body_cid = raw.get("id")
+        result_raw = dict(raw, id=result_cid)
+        rstat = self.stats.get(result_cid) if self.stats else None
+        if rstat is not None and getattr(rstat, "hp", None):
+            result_raw["hp"] = rstat.hp
+        btags = self.functions.tags(body_cid) if (self.functions and body_cid is not None) else []
+        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active)
+        return EvolveInputs(
+            body=body,
+            result=self._evolve_side(obs, board, result_raw, result_cid, is_active=is_active),
+            ready_gain=self._evolve_income_delta(result_raw, result_cid, is_active=is_active),
+            ready_loss=self._evolve_income_delta(raw, body_cid, is_active=is_active),
+            # An Ability the engine still offers has NOT been used this turn — the menu is the fact,
+            # never an assumption about whether the tier-0 sequencer already fired it (ADR-0070 §7).
+            result_ability_now=self._ability_on_menu(obs, result_cid),
+            body_ability_on_menu=self._ability_on_menu(obs, body_cid),
+            body_ability_oneshot=("self_shuffle" in btags),
+            hold_turns=(body.arm or 0))
+
+    def _line_next_form(self, cid):
+        """The card this body becomes one hop along its win-condition Line, or None off a Line /
+        already at the payoff. The Line's declared `path` IS the succession (ADR-0048)."""
+        for line in self._wincon_lines():
+            path = list(getattr(line, "path", None) or ())
+            if cid in path:
+                i = path.index(cid)
+                return path[i + 1] if i + 1 < len(path) else None
+        return None
+
+    def _rush_evolve_tutor_tactical(self, obs: dict, board: Board, ctx, option: dict) -> float:
+        """The RUSH-EVOLVE TUTOR fold (ADR-0070 §10): a tutor that fetches a Pokémon and evolves it
+        the same turn (Salvatore) is worth exactly the EVOLVE it buys a turn early — so price it with
+        the evolve decider over the hypothetical result rather than asserting a flat +30 beside an
+        equation that knows better. The best enabled evolve on my board is the magnitude.
+
+        The retired rung's three PREMISES survive here as structural gates, unchanged: a Line
+        pre-evolution must be in play (something to evolve), the payoff must not already be in hand
+        (nothing to fetch for), and the target must not be provably exhausted from the deck — that
+        last one is what kept the old +30 from swamping `dont-search-an-empty-deck` (ep83117367).
+        0 while the kill-switch is OFF, so degraded mode silences this with the rest."""
+        if not getattr(self, "evolve_value", False):
+            return 0.0
+        if ctx.option_type != _PLAY or "rush_evolve" not in (ctx.tags or ()):
+            return 0.0
+        if (board.line_ready or not board.line_preevo_in_play or board.wincon_in_hand
+                or ctx.search_targets_exhausted):
+            return 0.0
+        me = self._my_player(obs)
+        best = 0.0
+        for bodies, is_active in (((me.get("active") or []), True), ((me.get("bench") or []), False)):
+            for raw in bodies:
+                nxt = self._line_next_form(raw.get("id")) if raw else None
+                if nxt is None:
+                    continue
+                best = max(best, evolve_value(
+                    self._evolve_inputs(obs, board, raw, nxt, is_active=is_active)).total)
+        return best
 
     def _ability_on_menu(self, obs: dict, card_id) -> bool:
         """Is this card's Ability still offered on the current menu — i.e. not yet used this turn?
