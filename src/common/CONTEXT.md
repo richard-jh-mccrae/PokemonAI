@@ -563,6 +563,19 @@ _Avoid_: active_attack_payable (the attached-now truth — no budget), active_at
 (the retired +1/cheapest-only/untyped approximation), payable (unqualified — attached-now or
 budget-aware?)
 
+**Retreat Equity**:
+The mobility value of Energy attached toward a body's printed Retreat cost — the attach marginal's
+fourth candidate (`max(this_turn, build, accel_value, retreat_equity)`, #139). A Retreat slot is
+colourless (any Energy pays, rules.md §per-turn), so an off-type attach still earns it — the
+desperation-attach channel: a lone utility body (turn-1 Lunatone) takes the Energy so a
+later-benched attacker can pivot in behind it. Low-band by construction (sits below the smallest
+live build credit, so it never outbids genuine attack progress); threshold-shaped toward the printed
+Retreat cost; ZERO once the retreat is already funded, on a free-retreat body (TEF Dunsparce), and
+for a `discard_eot` burst (evaporates end of turn — funds no future retreat). Deliberately blind to
+*why* the body would retreat: 1a prices the FUNDING, 1c decides the PIVOT.
+_Avoid_: retreat value (1c's pivot-decision currency), mobility bonus (vague), restricting it to
+utility bodies (every body earns it — attack terms dominate wherever they exist)
+
 **Survival Window**:
 How many turns one of my bodies withstands the predicted **Incoming** before it is Knocked Out. The
 lever a defensive +HP Tool pays for: the Tool earns its slot when its boost widens this window by a
