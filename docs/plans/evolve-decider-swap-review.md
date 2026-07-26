@@ -122,14 +122,24 @@ ruling — information before commitment — but it means a class of evolves tha
 that survival weighting is inside the deploy term this section fingers. The bias is parked
 deliberately, but it sits in the suspect term.
 
-## What is owed
+## The ruling (user, 2026-07-26) — MERGE
 
-A user ruling (directive 2). The options, stated without a recommendation:
+Option 2 of the three below was taken: the instrument, not the build, is what failed. A Phase-1
+decider swap makes one axis correct in one currency so #165 and #145 can compose the axes; grading it
+by whole-agent win rate measures it through the weakest consumer it will ever have. Recorded as
+ADR-0070 amendment H. The general re-scope of directive 6, and the leaf-lab discrimination gate that
+should replace it mid-build, is **#167**.
+
+The options as they stood:
 
 - Spend the ~27,000-game run and pre-commit to its result, accepting the coin-flip clause.
-- Re-rule the flip rule for a swap whose design intent is corpus-correctness rather than win rate.
+- **Re-rule the flip rule for a swap whose design intent is corpus-correctness rather than win rate.**
+  ← taken
 - Treat −1 pp as a real regression and investigate term 1 (which would put #165 on the critical path
   rather than deferred).
+
+Not discharged by the merge, and carried to #167: term 1's diagnosis stands, and the sign pattern
+still points at it. If #165's planner does not absorb the f32/f82 class, this is where to look first.
 
 Raw: `swap_paired_ab.json` from each run (`reports/` is gitignored, so the numbers are transcribed
 here rather than committed).

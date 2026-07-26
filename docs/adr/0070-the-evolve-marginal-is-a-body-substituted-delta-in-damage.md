@@ -254,6 +254,45 @@ out-numbering a +20 rung), **no frame currently demonstrates that +30 is wrong.*
 the simulability boundary decides whether this fold is worth doing at all — if tutors are
 differenced, it is dead work.
 
+**H. The paired A/B returned FLIP: False, and 1b merged anyway — on a user ruling, recorded here so
+the red gate is never silently passed.** Directive 6's A/B (`gauntlet_swap_ab.py`, candidate
+`a8b6127` vs `origin/main` `25fa8e5`, n=200/arm/matchup) returned **−1.17 pp, 95% CI [−4.59, +2.25],
+0 crashes / 2400 games**. The verdict rested on one cell (−9.5 pp); re-measured at n=600 **both**
+dragapult/lucario cells changed sign (−9.5 → +2.2; +7.5 → −3.3). Pooled over 4800 games the best
+estimate is **−1.06 pp, 95% CI [−3.90, +1.78], 0 crashes**. The run demonstrated neither a regression
+nor a non-regression. Full working: `docs/plans/evolve-decider-swap-review.md`.
+
+Ruled (user, 2026-07-26): **merge.** The reasoning is that the instrument, not the build, is what
+failed. Clearing `CI-lo >= −1%` near a zero delta needs n ≈ 2270/arm/matchup (~27,000 games), and
+even then `delta >= 0` is a coin flip on a neutral swap — so the rule can only be passed by a swap
+with a positive *win-rate* effect, which a mid-build decider swap is not trying to have. A Phase-1
+swap makes one axis correct in one currency so #165 and #145 can compose the axes; grading it by
+whole-agent win rate measures it through the weakest consumer it will ever have. The general
+re-scope of directive 6 — and the discrimination gate that should replace it mid-build, on the
+267-frame leaf lab that Gate 0 already used — is **#167**, not this ADR.
+
+What the run establishes unconditionally still stands and is not small: **0 crashes in 4800 games**
+on the real engine across every deck pairing and both seats, and the exclusion of a regression worse
+than 3.90 pp.
+
+The one signal worth carrying forward: 5 of 6 cells are negative, 1 exactly zero, none positive. That
+is weak (≈3% under a null, and the cells share a build so they are not independent), but it points
+the same way as the term diagnosis — the deploy **re-banding** of decision 2, which moved evolves
+from 15–20 in Needs to 30–50 in damage and lets an evolve out-score a **non-evolve** option. f32's
+correct answer is a retreat-to-item-lock-wall; `docs/plans/turn-planner-retreat-to-item-lock-wall.md`
+called this exact shot on 2026-07-15, during the first reverted swap attempt, and ruled it the
+planner's to own rather than the equation's to nerf. §7's income-discount worry is **refuted** as the
+cause: on both f35 frames the candidate scores the premature evolve **0.0 where the incumbent scored
+45.0** — it holds MORE, not less, and the deleted −46 rung was not firing there at all (its `when`
+needs `evolve_body_energy < 2`; the body holds 2 wrong-typed Energy). Amendment B's `typed=` fix does
+that work.
+
+**I. "Suite green both OS" was not measurable on this build.** #140's acceptance and directive 3 both
+require Windows + Linux, but `.github/workflows/ci.yml:33` is `os: [ubuntu-latest]` — on `main` too,
+so this predates 1b. CI on `a8b6127` ran exactly one job (`tests (ubuntu-latest, py3.12)`, success,
+the suite genuinely ran). `CLAUDE.md:33` and directive 3 both still claim CI runs both. Recorded as a
+known gap in this phase's evidence rather than marked satisfied; the CI defect is not 1b's to fix.
+
 ## Consequences
 
 - `evolve_value`'s five calibration constants and the `doom` field all disappear. What replaces them
