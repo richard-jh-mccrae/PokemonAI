@@ -1776,7 +1776,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         pool = mine.deck_count
         best = 0.0
-        for etype, copies in (mine.deck_energy_counts or {}).items():
+        for etype, count in (mine.deck_energy_counts or {}).items():
+            # NAME the epistemic. `deck_energy_counts` holds `CountTriple`s, which refuse to be a
+            # bare number precisely so a consumer cannot smuggle an estimate into sound math
+            # (ADR-0068). A dig's odds ARE an estimate — ADR-0070 §3 calls income "an ODDS read,
+            # never a tier" — so `expected` is the leg. `floor` is the leg for comparisons against a
+            # COST, and while prizes are hidden it is 0 for almost every energy type: passing the
+            # triple itself used to raise TypeError into `draw_hit_probability`'s "bad input -> 0.0"
+            # guard, which silently zeroed §3, §7 and amendment B on EVERY board (#167).
+            # Truncated, not rounded — the conservative direction for an endorser.
+            copies = int(getattr(count, "expected", count) or 0)
             enabler = self.combat.attach_budget(
                 raw, mine.hand_ids, energy_attached=mine.energy_attached,
                 supporter_played=mine.supporter_played,
@@ -1841,11 +1850,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _ability_on_menu(self, obs: dict, card_id) -> bool:
         """Is this card's Ability still offered on the current menu — i.e. not yet used this turn?
         Abilities fire "per the ability's own text" (rules.md:91), and the engine simply stops
-        offering a once-per-turn one after use, so the MENU is the fact. False without a menu."""
+        offering a once-per-turn one after use, so the MENU is the fact. False without a menu.
+
+        An ABILITY option names its body by **slot** (``area``/``index``) and carries no ``cardId``
+        at all, so matching on one was False on every board ever built — silently killing
+        ``body_ability_on_menu`` (§7's "this turn's use is forfeit" half of the split-horizon loss)
+        and ``result_ability_now`` (which un-halves a gain that fires THIS turn). Resolve the slot
+        and compare the card sitting in it (#167)."""
         if card_id is None:
             return False
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
         for o in ((obs.get("select") or {}).get("option") or ()):
-            if o.get("type") == _ABILITY and o.get("cardId") == card_id:
+            if o.get("type") != _ABILITY:
+                continue
+            bodies = me.get(_ZONE.get(o.get("area"), "")) or []
+            idx = o.get("index")
+            if idx is None or not (0 <= idx < len(bodies)) or not bodies[idx]:
+                continue
+            if bodies[idx].get("id") == card_id:
                 return True
         return False
 

@@ -89,3 +89,48 @@ def test_advance_the_line_beats_spreading_f29():
     # irreversible attach is tier 2, so the evolve is taken first and the attach follows.
     assert d.chosen == fx["correct"], (
         f"the evolve lost the turn to a non-evolve option: chosen={d.chosen}, correct={fx['correct']}")
+
+
+# ── the income half must actually COMPUTE (ADR-0070 amendment K, #167) ────────────────────────────
+
+@pytest.mark.req("REQ-GEN-0091")
+def test_the_dig_income_term_is_not_structurally_dead():
+    """`_evolve_income_delta` was IDENTICALLY ZERO on every board — measured across the whole
+    corpus, 49 priced evolve options on 31 frames returned a non-zero income term exactly 0 times.
+
+    The cause: `mine.deck_energy_counts` holds `CountTriple`s, which deliberately refuse to be bare
+    numbers (ADR-0068: "a consumer must NAME its epistemic"). The value went straight into
+    `draw_hit_probability`, whose `int(copies)` raised TypeError into its own documented
+    "bad input -> 0.0" guard — so §3's odds read, §7's split-horizon loss and amendment B's `typed=`
+    fix all silently computed nothing.
+
+    f35 is the case: the machinery correctly identifies that a **{P}** is the enabler the Drakloak's
+    line lacks (Phantom Dive / Dragon Headbutt are both {R}{P} while it holds {R}{D}), with ~2.6
+    expected copies left in a 39-card deck — and then threw that answer away. Recon Directive digs 2,
+    so the hold has to be worth something."""
+    fx = json.loads((FIXTURES / "dp_hold_evolve_until_typed_ready_f35.json").read_text(encoding="utf-8"))
+    pilot = _pilot("dragapult_ex")
+    pilot.evolve_value = True
+    pilot.explain(fx["obs"])                       # populate the StateModel
+    me = fx["obs"]["current"]["players"][0]
+    drakloak = next(x for x in (me.get("active") or []) if x)
+
+    income = pilot._evolve_income_delta(drakloak, 120, is_active=True)
+    assert 0.0 < income <= 1.0, (
+        f"the Recon Directive dig is priced at {income} — the income half is dead")
+
+
+@pytest.mark.req("REQ-GEN-0092")
+def test_an_ability_still_on_the_menu_is_detected_by_its_SLOT_not_a_cardId():
+    """`_ability_on_menu` matched `option["cardId"]`, but an ABILITY option carries **area/index**
+    and no `cardId` at all — so it returned False on every board ever. Two ADR-0070 inputs died with
+    it: `body_ability_on_menu` (§7's "this turn's use is forfeit" half of the split-horizon loss) and
+    `result_ability_now` (which un-halves an income gain that fires THIS turn).
+
+    f35's menu carries `{'area': 4, 'index': 0, 'type': 10}` — the Active Drakloak's Recon Directive,
+    demonstrably unused this turn. The docstring's intent ("the MENU is the fact") was right; the key
+    was wrong."""
+    fx = json.loads((FIXTURES / "dp_hold_evolve_until_typed_ready_f35.json").read_text(encoding="utf-8"))
+    pilot = _pilot("dragapult_ex")
+    assert pilot._ability_on_menu(fx["obs"], 120) is True     # Drakloak, at area 4 / index 0
+    assert pilot._ability_on_menu(fx["obs"], 121) is False    # Dragapult ex is in HAND, not in play
