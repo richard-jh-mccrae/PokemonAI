@@ -387,6 +387,14 @@ changing nothing else, makes the greedy rollout reach the evolve from BOTH candi
 
 (It evolves whichever Staryu is left over; the two are interchangeable, so both are the same state.)
 
+The test now holds across **three different openings on three frames** — attach-first
+(`81905522|0|decision|64`), Boss's-Orders-first (same frame, the agent's live pick) and Poffin-first
+(`82229122|0|decision|17`). On the last of these the +10.0 price reproduces the evolve-first end board
+**exactly** — `Mega Starmie ex 430 active (Hero's Cape +100), Cinderace 160 + two Staryu benched` —
+closing a 54.0 gap that includes a downstream retreat/promote and a tool attach. So the cascade those
+larger gaps represent is reachable from the human's own opening; nothing beyond the evolve's price
+needs to move.
+
 So this class is **Phase 1b's own defect to price**, not Turn-Planner work. Contrast f32/f82, which
 are **Maneuvers** — ordered, mutually dependent steps whose value is the end state — and correctly
 stay with #165. The discriminator is mechanical: *do the actions commute?*
