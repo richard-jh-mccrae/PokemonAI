@@ -161,6 +161,54 @@ whatever the new code prints (ADR-0070 amendment A: a number that cannot be deri
 tracked on #165); #163 pins its bench SHAPE as a unit test on the survival read, and asserts nothing
 about the action taken.
 
+## Amendments from the build
+
+**A. `best_harvest` GENERALISES `best_ko_subset` rather than wrapping it.** Decision 2 described the
+solver as *"enumerating snipe targets around the existing `best_ko_subset` knapsack"*. That shape
+does not compose with decision 4: once the budget accumulates, each candidate subset has its own
+post-snipe residual, so the knapsack's fixed-HP items are no longer the right items. The solver
+enumerates subsets directly (bench ≤ 5, so ≤ 32) and, per subset, spends the indivisible units
+greedily — largest unit onto largest remaining need, which is exact for equal-size units because
+maximising `Σ min(unit·kᵢ, hpᵢ)` under a unit budget is separable and concave. `best_ko_subset` is
+untouched and still serves the offensive side.
+
+**B. f82's two strict xfails were PROMOTED to pins — ADR-0070 amendment C's premise was the
+inflation itself.** That amendment recorded *"the evolve equation's standalone read is CORRECT (it
+prefers the benched body, whose clocks genuinely move)"*. The clocks did **not** genuinely move: the
+bench held two more bodies at 50 against a single 60 spread, so evolving one Dreepy out of range only
+chose which body died. Measured here, the benched option falls from **37.5 to 25.0** against the
+Active's **30.0**, and both bodies now read `ko = 2` — evolving buys exactly **zero** survival, with
+the residual 25.0 coming from terms that are not the survival leg. The Pilot reaches the human's
+answer with no lethal tier having landed, so the **CROSS-LAYER REQUIREMENT those xfails carried is
+discharged**. The five-step maneuver is still the better play and still belongs to #165; what is
+retired is the claim that the pin *depends* on it. (Same tripwire as f40 in #166 — a strict xfail
+that XPASSes is the design telling you a premise moved.)
+
+**C. The result must be SUBSTITUTED into the bench, not read alone.** Found during the build, and a
+direct consequence of making survival sensitive to a body's company: `_evolve_decision` builds the
+evolved form as `dict(raw, id=…)`, a COPY, so it is not the pre-evolution's bench entry. Read naively
+the pre-evolution is scored among its bench-mates and the result in isolation — and the result then
+looks fragile for no reason but being alone, which is a fact about the read, not about evolving. Both
+sides now see the same bench with exactly one body swapped, which is ADR-0070's own
+body-substituted-delta framing made true of the bench read. Pinned by
+`test_a_bodys_survival_depends_on_the_company_it_keeps`.
+
+**D. The promotion gate ships CALLER-PASSED and default-OPEN.** Decision 6 put the gate on
+`incoming`, which could be read as applying it to every consumer. It must not: the gate makes a
+threat read *less* pessimistic, and `CONTEXT.md`'s Threat Clock entry explicitly protects the
+survival-critical worst-case path — *"it does NOT feed the survival-critical one-turn `active_doomed`
+boolean, which stays worst-case — a hidden Ignition-class burst must never be under-counted"*. So
+`opp_active` defaults to `None` (gate open, today's behaviour) and is opted into by the two ADR-0071
+consumers. Same convention as `my_benched` and `reading`: the conservative answer is what an
+undeclared caller gets.
+
+**E. Decision 10's re-derivation found the existing pins UNCHANGED, and the reason matters.**
+`test_opponent_target_value.py`'s `turns_to_ko_me == 1` / `== 3` survive accumulation — not by luck:
+the fast attacker deals its whole 100 at `t=1`, and the slow one is cost-3 off 0 Energy so it deals
+literally 0 at `t=1` and `t=2`, leaving the running sum `0 + 0 + 100` to first reach 100 at `t=3`.
+Accumulation moves a pin only when an earlier turn contributes non-zero damage. The derivation is
+written into the test so the numbers are not mistaken for untouched ones.
+
 ## Accepted exposure
 
 Named so a later frame can point at them, rather than discovered:

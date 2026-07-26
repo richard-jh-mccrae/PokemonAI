@@ -16,6 +16,14 @@ from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
 from common.strategy.damage import compute_active_damage, wr_adjust
 
+# The Harvest Readings (ADR-0071 decision 3) — WHICH survival question a caller is asking. One read
+# cannot serve both: per-body worst case is conservative for a THREAT read (it over-counts their
+# reach) and inflationary for a RESCUE read (it over-credits saving one body), and those pull
+# opposite ways. Caller-passed, never inferred from the board — the same convention as `charged`
+# (ADR-0064 Decision 1) and `my_benched` (ADR-0070 §9), with the conservative one as the default.
+HARVEST_POSSIBLE = "possible"          # in the harvest under SOME optimal allocation — threat/doom
+HARVEST_UNAVOIDABLE = "unavoidable"    # ...under EVERY optimal allocation — rescue/value
+
 # Tactical scalars owned by the oracle (ADR-0052) — used solely by closed-form combat valuation.
 _EFFICIENCY = 0.1          # per-Energy tiebreak: among equal-outcome attacks prefer the cheaper one;
                            # far below prize granularity (1) so it never overrides prize value
@@ -334,6 +342,81 @@ class CombatMath:
                                    or (prize == best_prize and prize and cost < best_cost)):
                 best_prize, best_cost, best_mask = prize, cost, mask
         return frozenset(i for i in range(len(items)) if best_mask & (1 << i))
+
+    @staticmethod
+    def _harvest_residual(needs: list, snipes: list) -> int:
+        """Spread still owed to fell every body in ``needs`` after spending the INDIVISIBLE
+        ``snipes`` optimally — the allocation core of :meth:`best_harvest` (ADR-0071 decision 2).
+
+        Each snipe unit lands entirely on ONE body (single-target text), so a unit applied to a body
+        saves ``min(unit, that body's remaining need)``. Maximising the total saved is a separable
+        concave problem under a unit budget, so assigning the LARGEST unit to the LARGEST remaining
+        need is exact for equal-size units — the shipped case, since a turn's payload is re-read off
+        the same attacker pool each turn. Unequal sizes fall back to the same greedy, which is a
+        bound rather than a proof; it can only OVER-state the residual, i.e. under-state their reach
+        on the rescue reading and never manufacture a phantom knockout."""
+        rest = list(needs)
+        for unit in sorted(snipes, reverse=True):
+            if unit <= 0 or not rest:
+                continue
+            i = max(range(len(rest)), key=lambda j: rest[j])
+            rest[i] = max(0, rest[i] - unit)
+        return sum(rest)
+
+    @staticmethod
+    def best_harvest(items, snipes, spread: int, *, reading: str = HARVEST_POSSIBLE) -> frozenset:
+        """Indices of MY benched bodies the opponent takes with a SHARED rider budget — the **Bench
+        Harvest** (ADR-0071). ``items`` = ``((hp, prize, is_key), …)`` of the bodies riders can
+        reach; ``snipes`` = the indivisible single-target units (one per turn read); ``spread`` =
+        the total divisible counter budget ("in any way you like").
+
+        Their objective is max total PRIZE, then — strictly SUB-prize, never overriding a real prize
+        difference — the count of my role-carrying bodies, then the cheapest allocation (decision 8:
+        the `opponent_target_value` discipline applied to their model of us).
+
+        ``reading`` selects WHICH question is being asked (decision 3), because one answer cannot
+        serve both consumers:
+        - ``HARVEST_POSSIBLE`` — in the harvest under SOME optimal allocation. The conservative
+          default: a threat/doom read must not call a body safe just because they could kill a
+          different one.
+        - ``HARVEST_UNAVOIDABLE`` — in the harvest under EVERY optimal allocation. The rescue/value
+          read: a knockout they can simply redirect is worth nothing to deny, so rescuing that body
+          credits zero.
+
+        Generalises :meth:`best_ko_subset` rather than calling it: once the budget accumulates over
+        turns each candidate subset has its own post-snipe residual, so the knapsack's fixed-HP
+        items no longer compose (ADR-0071 amendment A)."""
+        n = len(items)
+        best_key, optimal = None, []
+        for mask in range(1 << n):                   # bench <= 5 -> <= 32 subsets
+            chosen = [i for i in range(n) if mask & (1 << i)]
+            residual = CombatMath._harvest_residual([items[i][0] for i in chosen], snipes)
+            if residual > spread:
+                continue                             # the shared budget does not stretch this far
+            prize = sum(items[i][1] for i in chosen)
+            keys = sum(1 for i in chosen if items[i][2])
+            key = (prize, keys, -residual)
+            if best_key is None or key > best_key:
+                best_key, optimal = key, [frozenset(chosen)]
+            elif key == best_key:
+                optimal.append(frozenset(chosen))
+        if not optimal:                              # only reachable if the empty set is infeasible
+            return frozenset()
+        if reading == HARVEST_UNAVOIDABLE:
+            return frozenset.intersection(*optimal)
+        return frozenset().union(*optimal)
+
+    def bench_harvest(self, my_bench, *, snipe: int = 0, spread: int = 0, turns: int = 1,
+                      reading: str = HARVEST_POSSIBLE, key_ids=frozenset()) -> frozenset:
+        """:meth:`best_harvest` over MY benched body dicts — indices into ``my_bench``.
+
+        Resolves prize value and Tera immunity off the card records (Tera takes NO attack damage
+        while Benched, rules.md §11, so it is never a target); ``key_ids`` is the deck-DECLARED
+        role-carrying set, passed by the caller because `CombatMath` is deck-agnostic. ``turns``
+        payloads are spent jointly, because damage counters persist (decision 4)."""
+        t = max(1, int(turns))
+        return self._harvest_of(list(my_bench or ()), [snipe] * t if snipe > 0 else [], spread * t,
+                                reading=reading, key_ids=key_ids)
 
     def spread_ko_prizes(self, opp_bench, spread: int) -> int:
         """Max total prizes from distributing a ``spread`` (Phantom Dive's ``benchSpread``) across
@@ -819,9 +902,30 @@ class CombatMath:
                              my_benched=my_benched,
                              evo_min_energy=evo_min_energy, context=context)
 
+    def _promotion_open(self, opp_bodies, opp_active, *, switch_enabler: bool = False) -> bool:
+        """Can a BENCHED opponent body attack next turn — the promotion gate (ADR-0071 decision 6).
+
+        Retreat is an ordinary turn action (rules.md:74) limited to once per turn and paid in
+        **Energy discard** (:89), and attacking ends the turn, so retreat-then-attack is legal in ONE
+        turn: a benched attacker owes Energy, never tempo. Open when their Active can pay its printed
+        retreat cost, when the Read credits a `switch`/`gust` enabler, or when ``opp_active`` is
+        absent — a body removed from the list is a body that was Knocked Out, and the replacement
+        Active is chosen from the Bench for FREE (rulebook.txt:176), which is exactly the case
+        `survival_shift` constructs. Fail-OPEN on an unreadable retreat cost."""
+        if opp_active is None or switch_enabler:
+            return True
+        if not any(b is opp_active for b in opp_bodies):
+            return True                               # their Active is off the board — free promotion
+        st = self._card_stat((opp_active or {}).get("id"))
+        cost = getattr(st, "retreatCost", None) if st else None
+        if cost is None:
+            return True                               # unreadable -> admit (pessimistic on threat)
+        return len((opp_active or {}).get("energies") or []) >= int(cost)
+
     def incoming(self, my_body: dict | None, opp_bodies, t: int = 1, *, forward_ids=None,
                  charged: dict | None = None, evo_min_energy: int = 0,
-                 context: dict | None = None, my_benched: bool = False) -> int:
+                 context: dict | None = None, my_benched: bool = False,
+                 opp_active: dict | None = None, switch_enabler: bool = False) -> int:
         """Worst W/R-adjusted damage the opponent's affordable attackers among ``opp_bodies`` could
         deal ``my_body`` at future turn ``t`` — the **Threat-Clock curve**, the N-turn generalisation
         of ``reachable_incoming`` (ADR-0064 was ``t=1``; S1 of
@@ -866,10 +970,13 @@ class CombatMath:
             return 0
         turns = max(1, int(t))
         fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        promotable = self._promotion_open(opp_bodies, opp_active, switch_enabler=switch_enabler)
         worst = 0
         for body in opp_bodies:
             if not body:
                 continue
+            if not promotable and opp_active is not None and body is not opp_active:
+                continue                              # stuck behind an Active that can't pay retreat
             grant = self._grant(body) or {}
             if grant.get("self_lock"):
                 continue                              # this body can't attack at all next turn
@@ -911,27 +1018,19 @@ class CombatMath:
         if my_benched and self.is_tera((my_body or {}).get("id")):
             return 0                                  # Tera: no attack damage while Benched
         if charged is None:                           # ceiling: pay cheapest, credit biggest
-            if not stat.can_pay_cheapest(attached + attaches):
+            if not self._affords(stat, form_body, None, attached, attaches, charged):
                 return 0
             if my_benched:
                 return max((self._bench_rider(aid) for aid in (stat.attacks or ())
                             if aid != exclude), default=0)
             dmg = self.predicted_max_damage(stat, my_body, exclude_attack=exclude, context=context)
             return int(dmg) + bonus if dmg else 0
-        base = charged.get("base_attach", 1)
-        # Ignition-class colourless burst lands its full {C}{C}{C} only on an Evolution (rules.md /
-        # card text) — a Basic form gets the plain single attach, no burst. A single-card allowance,
-        # so it is flat in the turn count, never scaled by ``attaches``.
-        burst = charged.get("burst_on_evo", 0) if getattr(stat, "evolvesFrom", None) else 0
-        wild = attaches * base
         best = 0
         for aid in (stat.attacks or ()):
             if aid == exclude:
                 continue
-            if self.attack_cost(aid) > attached + wild + burst:
-                continue                              # count-unaffordable even with the burst allowance
-            if not self.attack_type_payable(aid, form_body, wild_units=wild):
-                continue                              # a typed slot can't be paid (burst is colourless-only)
+            if not self._affords(stat, form_body, aid, attached, attaches, charged):
+                continue                              # unaffordable in count or in colour
             best = max(best, self._bench_rider(aid) if my_benched
                        else int(self.predicted_damage(form_id, aid, my_body,
                                                       bound="max", context=context)))
@@ -1019,22 +1118,130 @@ class CombatMath:
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
 
+    def _bench_payload(self, opp_bodies, t: int, *, charged=None, forward_ids=None,
+                       opp_active=None, switch_enabler: bool = False) -> tuple:
+        """The best ``(snipe, spread)`` rider payload their board can put on my Bench at turn ``t``.
+
+        Attacking ends their turn (rules.md §5), so a turn's bench damage is ONE attack's payload
+        from ONE attacker. Selected by the same summed metric `_bench_rider` already uses, but the
+        two halves are returned SPLIT, because they allocate differently: the snipe is indivisible
+        and the spread is not (ADR-0071 decision 2)."""
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        promotable = self._promotion_open(opp_bodies, opp_active, switch_enabler=switch_enabler)
+        best = (0, 0)
+        for body in opp_bodies:
+            if not body:
+                continue
+            if not promotable and opp_active is not None and body is not opp_active:
+                continue
+            grant = self._grant(body) or {}
+            if grant.get("self_lock"):
+                continue
+            attached = len(body.get("energies") or [])
+            forms = [(body.get("id"), body)]
+            forms += [(fid, {"id": fid, "energies": body.get("energies") or []})
+                      for fid in (fwd(body.get("id")) or ())]
+            for fid, form_body in forms:
+                stat = self._card_stat(fid)
+                if not stat:
+                    continue
+                for aid in (stat.attacks or ()):
+                    if aid == grant.get("same_lock"):
+                        continue
+                    if not self._affords(stat, form_body, aid, attached, t, charged):
+                        continue
+                    pair = (self.rider_snipe(aid), self.rider_spread(aid))
+                    if sum(pair) > sum(best):
+                        best = pair
+        return best
+
+    def _affords(self, stat, form_body, aid, attached: int, t: int, charged) -> bool:
+        """Whether ``aid`` is payable at turn ``t`` under the ``charged`` policy (see :meth:`incoming`).
+
+        ONE function owns affordability, so the damage read (:meth:`_reach_form_damage`) and the
+        rider read (:meth:`_bench_payload`) cannot drift about which attacks are on the menu — the
+        `_build_standing` lesson from ADR-0070, applied here because #163 added a second consumer.
+
+        Under the ceiling policy (``charged is None``) the question is per-FORM, not per-attack: a
+        form contributes once it can pay its CHEAPEST attack, and ``aid`` is then irrelevant."""
+        if charged is None:                           # ceiling: pay cheapest, credit anything
+            return bool(stat.can_pay_cheapest(attached + t))
+        base = charged.get("base_attach", 1)
+        # Ignition-class colourless burst lands its full {C}{C}{C} only on an Evolution (rules.md /
+        # card text) — a Basic form gets the plain single attach, no burst. A single-card allowance,
+        # so it is flat in the turn count, never scaled by ``t``.
+        burst = charged.get("burst_on_evo", 0) if getattr(stat, "evolvesFrom", None) else 0
+        wild = t * base
+        if self.attack_cost(aid) > attached + wild + burst:
+            return False
+        return bool(self.attack_type_payable(aid, form_body, wild_units=wild))
+
     def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
-                       max_t: int = 8, context: dict | None = None, my_benched: bool = False) -> int:
+                       max_t: int = 8, context: dict | None = None, my_benched: bool = False,
+                       my_bench=(), key_ids=frozenset(), reading: str = HARVEST_POSSIBLE,
+                       forward_ids=None, opp_active: dict | None = None,
+                       switch_enabler: bool = False) -> int:
         """The earliest future turn the opponent's board can KO ``my_body`` — the survival-window
-        inversion of the Threat-Clock curve (S3 of docs/plans/opponent-value-equation-unification.md):
-        ``min{ t ∈ 1..max_t : incoming(t, policy) >= my_body HP }``, or ``max_t + 1`` when it survives
-        the horizon. Removing an opponent body can only RAISE this (less incoming), so the Δ across a
-        removal is the *turns of survival bought* — the Layer-2 marginal's survival term. ``max_t + 1``
-        for an unknown/HP-less body (nothing threatens it in-horizon)."""
+        inversion of the Threat-Clock curve — or ``max_t + 1`` when it survives the horizon.
+
+        **Damage ACCUMULATES** (ADR-0071 decision 4). The Active leg is
+        ``min{ t : Σᵢ₌₁..ᵗ incoming(i) ≥ hp }``: counters persist, so a body that survives one swing
+        is not safe forever. That is not a new semantic — CONTEXT.md's Threat Clock already specified
+        *"accumulating over turns when one hit doesn't KO"*, and the offensive twin
+        :meth:`turns_to_ko` is already rate-based; the one-swing reading was the outlier. The sum of
+        per-turn maxima errs PESSIMISTIC — it charges nothing for the retreat that switching
+        attackers costs — which is the bounded-pessimism convention (ADR-0064) and the direction that
+        deflates rescue credit. So this is deliberately NOT the exact mirror of single-attacker
+        :meth:`turns_to_ko`.
+
+        The BENCH leg asks the shared-budget question instead: the first ``t`` at which ``my_body``
+        falls in the :meth:`bench_harvest` of ``t`` allocated payloads. The two areas never contend —
+        printed damage always lands on the Active and riders always on the Bench — so they are
+        independent by card mechanics rather than by assumption.
+
+        ``my_bench`` / ``key_ids`` / ``reading`` are the harvest inputs; omitting ``my_bench`` reads
+        the body ALONE, which reproduces the per-body answer for an undeclared caller, and the
+        default ``reading`` is the conservative one. Removing an opponent body can only RAISE the
+        result, so the Δ across a removal is the turns of survival bought."""
         hp = (my_body or {}).get("hp", 0)
         if not hp:
             return max_t + 1
-        for t in range(1, max(1, int(max_t)) + 1):
-            if self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
-                             my_benched=my_benched) >= hp:
+        horizon = max(1, int(max_t))
+        if my_benched:
+            bench = list(my_bench) or [my_body]
+            try:
+                me = next(i for i, b in enumerate(bench) if b is my_body)
+            except StopIteration:                     # not in the snapshot — read it alone
+                bench, me = [my_body], 0
+            snipes, spread = [], 0
+            for t in range(1, horizon + 1):
+                s, p = self._bench_payload(opp_bodies, t, charged=charged, forward_ids=forward_ids,
+                                           opp_active=opp_active, switch_enabler=switch_enabler)
+                if s:
+                    snipes.append(s)
+                spread += p
+                if me in self._harvest_of(bench, snipes, spread, reading=reading, key_ids=key_ids):
+                    return t
+            return horizon + 1
+        dealt = 0
+        for t in range(1, horizon + 1):
+            dealt += self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
+                                   forward_ids=forward_ids, opp_active=opp_active,
+                                   switch_enabler=switch_enabler)
+            if dealt >= hp:
                 return t
-        return max_t + 1
+        return horizon + 1
+
+    def _harvest_of(self, bench, snipes, spread: int, *, reading: str, key_ids) -> frozenset:
+        """:meth:`bench_harvest` for an already-accumulated budget — indices into ``bench``."""
+        items, idx = [], []
+        for i, b in enumerate(bench):
+            bhp = (b or {}).get("hp", 0)
+            if not bhp or self.is_tera((b or {}).get("id")):
+                continue
+            items.append((int(bhp), self.prize_value(b), (b or {}).get("id") in key_ids))
+            idx.append(i)
+        return frozenset(idx[i] for i in self.best_harvest(items, snipes, spread, reading=reading))
 
     def discard_recur_fuel(self, body: dict | None, opp_discard_energy: dict | None, *,
                            forward_ids=None) -> int:

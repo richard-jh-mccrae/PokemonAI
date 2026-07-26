@@ -686,7 +686,8 @@ opponent's optimal allocation of a **shared budget**, not a per-body threshold. 
 turn (rules.md §5), so a turn's bench damage is exactly one attack's riders from one attacker: an
 **indivisible** `benchSnipe` (single-target text, all of it on one body) plus a **divisible**
 `benchSpread` ("in any way you like", 10-point counters across any bodies). Solved as the enumeration
-of snipe targets around the existing `best_ko_subset` knapsack, maximizing their total **prize** take,
+of the subsets their budget reaches — GENERALIZING `best_ko_subset` rather than wrapping it, since an
+accumulated budget gives each subset its own post-snipe residual — maximizing their total **prize** take,
 then preferring my role-carrying bodies (`_ATTACKER_ROLES`, deck-declared) as a **sub-prize tie-break**
 — the `opponent_target_value` discipline applied to their model of us, never overriding a real prize
 difference; Tera bodies are not targetable (rules.md §11). Over `t` turns it allocates `t` payloads

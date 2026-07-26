@@ -305,6 +305,15 @@ class _SideBase(_Lazily):
     def body_raws(self) -> tuple:
         return tuple(b.body for b in self.bodies)
 
+    @lazy
+    def bench_raws(self) -> tuple:
+        """The BENCHED bodies' raw engine dicts — the Bench Harvest's input (ADR-0071 decision 7).
+
+        A shared rider budget is a fact about the whole bench, so a per-body survival read cannot
+        express it; the snapshot owns the list because it is lazy and pure (ADR-0068), which is what
+        stops the bench shifting under a memoized clock."""
+        return tuple(b.body for b in self.bench)
+
     # -- prizes / zones -------------------------------------------------------------------------
     @lazy
     def prizes_remaining(self) -> int:
@@ -640,6 +649,13 @@ class TheirSide(_SideBase):
                                   attaches_per_turn=attaches_per_turn))
 
     def turns_to_ko_me(self, my_body: dict | None) -> int:
+        """The ACTIVE-area survival clock — accumulating, per ADR-0071 decision 4.
+
+        UNCONSUMED today: both live callers reach `CombatMath` directly (`pilot.py`'s evolve read and
+        `survival_shift`). Deliberately NOT bench-aware — it is one-sided, so it cannot see MY bench,
+        and a Bench Harvest is a fact about the whole bench. A caller wanting the benched area must
+        pass `my_bench` / `key_ids` / `reading` itself (`MySide.bench_raws` supplies the first);
+        through here it would silently get the solo body at the conservative reading."""
         return self._memoized(("turns_to_ko_me", id(my_body) if my_body is not None else None),
                               lambda: self._combat.turns_to_ko_me(my_body, self.body_raws,
                                                                   charged=self._charged))

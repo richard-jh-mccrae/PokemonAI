@@ -57,19 +57,21 @@ def test_hold_the_income_off_unready_evolve_f35():
     assert only_evolve < 40                     # far below a READY-wincon deploy (the old flat +40 bug)
 
 
-@pytest.mark.xfail(strict=True, reason="RECLASSIFIED as a TURN-PLANNER maneuver (user ruling "
-                   "2026-07-25), the f32 precedent applied: the correct play is a five-step chain "
-                   "whose value is the END STATE — Crispin attaches {D} to Munkidori, evolve the "
-                   "Active Dreepy (40 damage carries -> Drakloak 50/90), Adrena-Brain moves 3 "
-                   "counters (my Drakloak -> 80/90, their Drakloak -> 60/90), Recon Directive, then "
-                   "Dragon Headbutt 70 >= 60 KOs. A single-action equation cannot see that chain, so "
-                   "the standalone deploy (30.0 for the Active vs 37.5 for the benched body) is "
-                   "CORRECT and the maneuver is simply better. CROSS-LAYER REQUIREMENT for the swap: "
-                   "no lethal tier currently reaches an Ability that moves damage counters onto the "
-                   "defender, so this frame's corpus PIN regresses when the flag flips ON.")
 def test_which_body_prefers_the_energized_f82():
-    """f82: two mid-line Dreepy→Drakloak evolves; the energized body's deploy carries the +5 which-body
-    bonus, so its value out-ranks the bare copy."""
+    """f82: two mid-line Dreepy→Drakloak evolves — the equation must prefer the ACTIVE body.
+
+    PROMOTED from strict-xfail to PIN by ADR-0071 (#163). It was xfailed on the reading that the
+    frame is a Turn-Planner maneuver and the standalone deploy `30.0 Active vs 37.5 benched` was
+    CORRECT (ADR-0070 amendment C). **That 37.5 was the shared-budget inflation.** The bench held
+    Dreepy 50, Dunsparce 50, Dreepy 50 against a 60 spread, so evolving one Dreepy out of range
+    merely redirected the counters onto the other — it bought nothing. With the Harvest read at
+    UNAVOIDABLE the benched option prices **0.0** against the Active's 30.0, and the equation now
+    reaches the human's answer on its own terms.
+
+    The maneuver claim itself is untouched and still belongs to #165: the chain is a better play for
+    a reason no single-action equation can see. What is discharged is the CROSS-LAYER REQUIREMENT
+    this xfail carried — the pin no longer depends on a lethal tier reaching a counter-moving
+    Ability, because it no longer depends on the inflated benched credit."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_evolve_energized_line_body_first_f82")
     best = max(evolve, key=evolve.get)
     assert best == fx["correct"][0], evolve
