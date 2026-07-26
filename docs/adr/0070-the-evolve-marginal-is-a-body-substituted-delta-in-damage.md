@@ -287,11 +287,18 @@ cause: on both f35 frames the candidate scores the premature evolve **0.0 where 
 needs `evolve_body_energy < 2`; the body holds 2 wrong-typed Energy). Amendment B's `typed=` fix does
 that work.
 
-**I. "Suite green both OS" was not measurable on this build.** #140's acceptance and directive 3 both
-require Windows + Linux, but `.github/workflows/ci.yml:33` is `os: [ubuntu-latest]` — on `main` too,
-so this predates 1b. CI on `a8b6127` ran exactly one job (`tests (ubuntu-latest, py3.12)`, success,
-the suite genuinely ran). `CLAUDE.md:33` and directive 3 both still claim CI runs both. Recorded as a
-known gap in this phase's evidence rather than marked satisfied; the CI defect is not 1b's to fix.
+**I. "Suite green both OS" was not measurable on this build — and the DOCS were wrong, not the CI.**
+#140's acceptance and directive 3 both required Windows + Linux, but `.github/workflows/ci.yml:33` is
+`os: [ubuntu-latest]` — on `main` too, so this predates 1b. CI on `a8b6127` ran exactly one job
+(`tests (ubuntu-latest, py3.12)`, success, the suite genuinely ran).
+
+**Resolved 2026-07-26 (user ruling): the Linux-only matrix is DELIBERATE.** Windows is covered by
+developing on it, so cross-platform discipline is upheld by the local run and review rather than by a
+second CI job. The stale claims were corrected at source — `CLAUDE.md` and #136 directive 3 now say
+Linux-only CI is intentional and keep the *code* requirement (both OSes must work; `pathlib`, explicit
+`encoding="utf-8"`, binary-safe writes to the CRLF data stores). `docs/ci.md` was already accurate.
+So this was never a CI defect to fix; it was three documents overstating a gate, which is the same
+class of error #167 exists to stop — a gate claimed but not run.
 
 ## Consequences
 
