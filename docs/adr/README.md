@@ -21,6 +21,10 @@ verification), and its filename prefix is correct.
 
 **Next free number: 0072.**
 
+⚠️ The index below is **incomplete**: 0067, 0069 and 0070 exist on disk but have never been given
+rows (they landed on the #137 / #139 / #140 branches). Re-indexing them is unowned work, not this
+ADR's to invent statuses for — see #167's grill notes.
+
 ## Index
 
 | # | Title | Status |
@@ -97,3 +101,4 @@ verification), and its filename prefix is correct.
 | [0069](0069-the-attach-marginal-is-an-axes-sum-and-the-decider-may-say-no.md) | The attach marginal is an axes-sum, and the decider may say no | Accepted (grilled 2026-07-25, `/grill-with-docs` on #139 — thirteen locked decisions) and **BUILT** — Phase 1a, the FIRST no-shadow decider swap; its shape (fold → delete → retune → corpus re-rule → paired A/B) is the pattern 1b–1e follow *(index row backfilled 2026-07-26)* |
 | [0070](0070-the-evolve-marginal-is-a-body-substituted-delta-in-damage.md) | The evolve marginal is a body-substituted delta, and its constants are odds | Accepted (grilled 2026-07-25, `/grill-with-docs` on #140) and **BUILT/MERGED 2026-07-26** — Phase 1b, the evolve decider ships ON; amendments A–I. §9's bench branch is corrected by ADR-0071, and amendment C's f82 planner-scope premise is retired by it *(index row backfilled 2026-07-26)* |
 | [0071](0071-bench-survival-is-a-shared-budget-harvest-and-the-clock-accumulates.md) | Bench survival is a shared-budget Harvest, and the clock accumulates | Accepted (grilled 2026-07-26, `/grill-with-docs` on #163 — twelve locked decisions); build = #163, branching after #166 merges. Amends ADR-0070 §9 (amendment D) and the shipped `turns_to_ko_me`; corrects the CONTEXT.md Threat Clock promotion surcharge. *(0070 = the evolve marginal, authored on the #140/1b branch.)* |
+| [0071](0071-mid-build-swaps-are-gated-by-deterministic-instruments.md) | A mid-build decider swap is gated by deterministic instruments; the paired A/B becomes a crash-and-catastrophe tripwire | Accepted (grilled 2026-07-26, `/grill-with-docs` on #167); build = #167. Amends #136 directive 6 and promotes ADR-0069 §8's sweep to a gate. Decisions 3–4 land as amendments |

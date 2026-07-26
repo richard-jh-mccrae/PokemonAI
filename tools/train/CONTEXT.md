@@ -108,3 +108,22 @@ and accept only if it satisfies its target cluster (`correct ≻ chosen`), regre
 were previously satisfied, and keeps the test suite green. What makes an LLM-authored trigger
 trustworthy. See [ADR-0017](../../docs/adr/0017-corrections-compile-to-hypotheses.md).
 _Avoid_: validator, checker, test
+
+**Leaf Lab**:
+The offline instrument that re-scores a **Leaf Frame**'s board through `_engine_leaf_value` — once
+per menu option — and reports whether the leaf ranks the human's `correct` option top
+(`tools/train/leaf_lab.py`). cgpy-backed and **deterministic** (`SeededRng(0)`), so two builds
+measured over the same **Corrections** store differ by exactly the code between them: no sampling,
+no confidence interval, ~20 min per arm over 267 scorable frames. This is what the **Discrimination
+Gate** (see [Agent Checks](../sim/CONTEXT.md)) captures before and after a **Mid-build Swap**.
+It measures the *leaf's ranking*, **not the shipped decision** — a `MISS` says the end-of-turn board
+evaluation buries the human's option, not that the live agent played the frame worse.
+_Avoid_: leaf test, leaf eval, leaf benchmark (it is an instrument, and its readings are rankings)
+
+**Leaf Frame**:
+A **Correction** the **Leaf Lab** can score: a reseedable MAIN-select (context 0) board carrying
+something to rank — either a `turn_plan` payload or any MAIN-select pick correction naming a
+`correct` option (`is_leaf_frame`). Non-MAIN and obs-less records are excluded because the offline
+sim reseeds only from a MAIN-select board. 276 today, of which 267 are *scorable*.
+_Avoid_: frame (bare — that's a replay timeline index), fixture (a committed corpus pin under
+`tests/fixtures/corrections/`), leaf case
