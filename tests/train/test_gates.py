@@ -14,10 +14,10 @@ the gates run in the offline cross-platform suite. Prior art for the style: `tes
 """
 import pytest
 
-from train.gates import (EVOLVE_LANE, AxisClaim, DecisionClaim, decision_gate_verdict,
-                         discrimination_gate_verdict, evaluate_axis_claim,
-                         evaluate_decision_claim, held_out_owner, lane_slots, leaf_lab_diff,
-                         option_slot, parse_claims)
+from train.gates import (EVOLVE_LANE, OWNER_RE, AxisClaim, DecisionClaim, EndorsementClaim,
+                         decision_gate_verdict, discrimination_gate_verdict, evaluate_axis_claim,
+                         evaluate_decision_claim, evaluate_endorsement_claim, held_out_owner,
+                         lane_slots, leaf_lab_diff, option_slot, parse_claims)
 
 # ── slot resolution — the shared basis both sweeps and Axis Claims compare on ─────────────────────
 
@@ -102,6 +102,38 @@ def test_an_axis_claim_ignores_options_outside_its_lane():
 
 
 @pytest.mark.req("REQ-TRAIN-0041")
+def test_an_endorsement_claim_asserts_a_lane_option_is_or_is_not_taken_at_all():
+    """The single-option-lane case, which ordering cannot reach. f35 has exactly ONE evolve option,
+    so "prefer X over Y" is inexpressible — yet the swap's real fix there is that the premature evolve
+    went 45.0 -> 0.0 with no rule firing. An Endorsement Claim states that: does the option clear the
+    endorsement floor (`score > 0`, `_finish_turn_last`'s gate) at all?
+
+    Zero is a STRUCTURAL boundary — where the agent decides whether to act — not a tuned magnitude,
+    so this survives a currency re-banding exactly as ordering does. It is NOT the score claim 1a's
+    f29 rewrite rejected: no magnitude is compared."""
+    options = [{"type": 9, "inPlayArea": 4, "inPlayIndex": 0}]
+    declined = EndorsementClaim(lane=EVOLVE_LANE, slot=(4, 0), endorsed=False, owner=None)
+
+    assert evaluate_endorsement_claim(declined, options=options, scores=[0.0]) is True
+    assert evaluate_endorsement_claim(declined, options=options, scores=[-4.0]) is True
+    assert evaluate_endorsement_claim(declined, options=options, scores=[45.0]) is False   # incumbent
+    # re-banding-proof: an endorsed option stays endorsed at any scale
+    endorsed = EndorsementClaim(lane=EVOLVE_LANE, slot=(4, 0), endorsed=True, owner=None)
+    assert evaluate_endorsement_claim(endorsed, options=options, scores=[8.75]) is True
+    assert evaluate_endorsement_claim(endorsed, options=options, scores=[8750.0]) is True
+    assert evaluate_endorsement_claim(endorsed, options=options, scores=[0.0]) is False
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_an_endorsement_claim_for_an_absent_slot_is_unprovable_not_vacuously_true():
+    """A claim whose slot is not on the menu must never read as satisfied — a vacuous pass is how a
+    stale claim survives the board changing underneath it."""
+    claim = EndorsementClaim(lane=EVOLVE_LANE, slot=(2, 9), endorsed=False, owner=None)
+    assert evaluate_endorsement_claim(claim, options=[{"type": 9, "inPlayArea": 4, "inPlayIndex": 0}],
+                                      scores=[0.0]) is None
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
 def test_held_out_status_is_per_claim_not_per_fixture():
     """f35's shape: its Decision Claim is owned by #165 (a non-evolve lane decides the frame) while
     its Axis Claim still GATES. A per-fixture flag could not express that, and would either hide a
@@ -181,6 +213,27 @@ def test_discrimination_gate_passes_on_improvements_alone():
     """A swap that only sharpens the leaf in the human's favour is not blocked by its own gains."""
     diff = {"ok_to_miss": [], "miss_to_ok": [{"key": "b"}], "added": [], "removed": []}
     assert discrimination_gate_verdict(diff, held_out={}) is True
+
+
+@pytest.mark.req("REQ-TRAIN-0044")
+def test_every_committed_fixture_parses_and_every_held_out_claim_names_an_issue():
+    """The Held-out Ledger's shape check, over the real corpus. A malformed ruling must be caught
+    offline — the suite has no network, so whether that issue is still OPEN is explicitly NOT checked
+    and belongs on the phase checklist (ADR-0071 decision 4)."""
+    import json
+    from pathlib import Path
+    fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
+    paths = sorted(fixtures.glob("*.json"))
+    assert paths, "the corpus fixtures moved"
+    for p in paths:
+        fx = json.loads(p.read_text(encoding="utf-8"))
+        claims = parse_claims(fx)                     # must never raise on a committed fixture
+        for c in claims.all_claims():
+            owner = held_out_owner(c)
+            if owner is not None:
+                assert OWNER_RE.match(owner), f"{p.name}: owner {owner!r} is not an issue reference"
+        if fx.get("frame_key"):
+            assert fx["frame_key"].count("|") == 3, f"{p.name}: frame_key is not an identity_key"
 
 
 @pytest.mark.req("REQ-TRAIN-0043")

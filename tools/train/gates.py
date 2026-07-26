@@ -108,11 +108,35 @@ class AxisClaim:
 
 
 @dataclass(frozen=True)
+class EndorsementClaim:
+    """*This slot is (or is not) taken at all.* The claim an **ordering** cannot make when a lane
+    holds a single option — and single-option lanes are common.
+
+    f35 is the case that forced it (ADR-0071 amendment A): exactly one evolve option is on the menu,
+    so "prefer X over Y" is inexpressible, yet 1b's real fix there is that the premature evolve went
+    **45.0 -> 0.0 with no rule firing**. This states that directly, against ``score > 0`` — the
+    endorsement floor `_finish_turn_last` already gates on.
+
+    Zero is a **structural** boundary (act / don't act), not a tuned magnitude, so this survives a
+    currency re-banding exactly as ordering does. It is *not* the score claim 1a's f29 rewrite
+    rejected: no magnitude is ever compared."""
+    lane: Lane
+    slot: tuple
+    endorsed: bool
+    owner: str | None = None
+    why: str | None = None
+
+
+@dataclass(frozen=True)
 class Claims:
     """What one corpus fixture asserts. Held-out status is **per claim, not per fixture**: f35's
     Decision Claim is owned by #165 while its Axis Claim still gates."""
     decision: DecisionClaim | None = None
     axis: list = field(default_factory=list)
+    endorsement: list = field(default_factory=list)
+
+    def all_claims(self) -> list:
+        return ([self.decision] if self.decision else []) + list(self.axis) + list(self.endorsement)
 
 
 def _lane_from(spec) -> Lane:
@@ -145,7 +169,11 @@ def parse_claims(fixture: dict) -> Claims:
                       over=[tuple(o) for o in (a.get("over") or [])],
                       owner=a.get("owner"), why=a.get("why"))
             for a in (block.get("axis") or [])]
-    return Claims(decision=dec, axis=axis)
+    endorsement = [EndorsementClaim(lane=_lane_from(e["lane"]), slot=tuple(e["slot"]),
+                                    endorsed=bool(e["endorsed"]),
+                                    owner=e.get("owner"), why=e.get("why"))
+                   for e in (block.get("endorsement") or [])]
+    return Claims(decision=dec, axis=axis, endorsement=endorsement)
 
 
 def held_out_owner(claim) -> str | None:
@@ -166,6 +194,14 @@ def evaluate_axis_claim(claim: AxisClaim, *, options, scores, select_context=Non
     a shared top would let the wrong body be picked while the claim read green. Options outside the
     lane are ignored entirely, which is the whole point: on f35 an ABILITY out-scoring the evolve
     says nothing about whether the evolve axis is right."""
+    best = _lane_best(claim, options, scores, select_context)
+    if claim.prefer not in best:
+        return False
+    return all(best[claim.prefer] > best[rival] for rival in claim.over if rival in best)
+
+
+def _lane_best(claim, options, scores, select_context):
+    """``{slot: best score}`` within a claim's lane — the shared basis both lane claims read."""
     best: dict = {}
     for i, opt in enumerate(options or []):
         if not in_lane(opt, claim.lane, select_context):
@@ -175,9 +211,20 @@ def evaluate_axis_claim(claim: AxisClaim, *, options, scores, select_context=Non
             continue
         if slot not in best or scores[i] > best[slot]:
             best[slot] = scores[i]
-    if claim.prefer not in best:
-        return False
-    return all(best[claim.prefer] > best[rival] for rival in claim.over if rival in best)
+    return best
+
+
+def evaluate_endorsement_claim(claim: EndorsementClaim, *, options, scores,
+                               select_context=None) -> bool | None:
+    """Does ``slot`` clear the endorsement floor (``score > 0``), and does that match the claim?
+
+    Returns **None** when the slot is not on the menu at all — unprovable, never vacuously true. A
+    claim that silently passes once its board changes underneath it is how a stale assertion outlives
+    the thing it was asserting."""
+    best = _lane_best(claim, options, scores, select_context)
+    if claim.slot not in best:
+        return None
+    return (best[claim.slot] > 0) is claim.endorsed
 
 
 def leaf_lab_diff(before: dict, after: dict) -> dict:
@@ -225,3 +272,33 @@ def held_out_map(claims_by_key: dict) -> dict:
     """``{frame key: owner}`` for every claim that has been ruled onto an owner — the Held-out
     Ledger both gates consult."""
     return {k: held_out_owner(c) for k, c in claims_by_key.items() if held_out_owner(c)}
+
+
+# ── the one I/O function in this module ───────────────────────────────────────────────────────────
+# Everything above is pure so it unit-tests without a filesystem. This reads the committed corpus,
+# and lives here rather than in either gate because BOTH consult the same Ledger — putting it in one
+# gate would make the other import its sibling just to read a ruling.
+
+def held_out_frames(fixtures_dir=None) -> dict:
+    """The **Held-out Ledger**: ``{frame key: owner}`` over the committed corpus fixtures.
+
+    A fixture opts in by declaring ``frame_key`` (the Correction's ``identity_key``, the same shape
+    both gates key on) and an ``owner`` on its Decision Claim. The leaf verdict is a whole-frame
+    property rather than a per-lane one, so it is the DECISION claim's owner that holds a frame out
+    of the Discrimination Gate; lane claims stay independently gated (decision 4). Deleting the owner
+    returns the frame to gating."""
+    import json
+    from pathlib import Path
+    root = Path(fixtures_dir) if fixtures_dir else \
+        Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
+    out = {}
+    for path in sorted(root.glob("*.json")):
+        fx = json.loads(path.read_text(encoding="utf-8"))
+        key = fx.get("frame_key")
+        if not key:
+            continue
+        claims = parse_claims(fx)
+        owner = held_out_owner(claims.decision) if claims.decision else None
+        if owner:
+            out[key] = owner
+    return out

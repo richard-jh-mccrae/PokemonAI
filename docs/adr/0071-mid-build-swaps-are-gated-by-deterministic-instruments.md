@@ -249,6 +249,59 @@ negotiable.
 **Accepted cost.** A six-frame ruling sitting blocks #167 closing, and some frames may turn into real
 work rather than a one-line held-out entry.
 
+## Amendment A — the Endorsement Claim, and f35 re-ruled (2026-07-26, build)
+
+Decision 3 shipped two claim types. Building it surfaced a case neither can express, and the user's
+ruling on that case changed what f35 asserts.
+
+**The gap: a single-option lane.** f35 has **exactly one** evolve option on the menu (active Drakloak
+→ Dragapult ex; the other four are PLAY, ABILITY, RETREAT, END). "Prefer X over Y within the lane" is
+inexpressible with one option — and it is trivially top. Yet the swap's real fix on that frame is
+that the premature evolve went **45.0 → 0.0 with no rule firing at all.** Decision 3 as written could
+not credit it.
+
+**Ruled: a third claim type, the Endorsement Claim** — *this slot is (or is not) taken at all*,
+evaluated against ``score > 0``, the endorsement floor `_finish_turn_last` already gates on. Zero is
+a **structural** boundary (act / don't act), not a tuned magnitude, so it survives a currency
+re-banding exactly as ordering does; no magnitude is ever compared, so it is not the score claim 1a's
+f29 rewrite rejected. A claim whose slot is absent from the menu returns **unprovable**, never
+vacuously true — that is how a stale claim would otherwise outlive the board it described.
+
+**f35 re-ruled (user, the decision-5 sitting).** The frame's `correct` moves from `[2]` (Recon
+Directive first) to **`[1]` (Poké Pad first)** — the agent's own pick. Verified at source:
+
+| the line | verification |
+|---|---|
+| Poké Pad fetches the 2nd Drakloak | deck runs **4× Drakloak** (1 in play, 0 in discard); Drakloak has **no Rule Box**, so it is a legal target |
+| a bench Dreepy evolves into it | **both bench Dreepy carry `appearThisTurn=False`** — legal (`rules.md:96`) |
+| that yields **2× Recon Directive** | "once during your turn" is **per body** — two Drakloak, two digs (see 4, keep 2) |
+| the {P} out is real | deck runs **3× Basic {P} Energy** (plus 3× Crispin) |
+| the fallback branch | Drakloak **Retreat 1** → discard the dead {D}; Budew **Itchy Pollen, No cost** → 10 dmg + *"opponent can't play any Item cards next turn"* |
+
+Two reasons the tutor goes first, and the second is the sharper one: the tutor is **deterministic**,
+so waiting reveals nothing; and resolving it **thins the deck by a known non-{P} card**, improving
+both subsequent digs. **Deterministic tutor before stochastic dig.**
+
+f35's Decision Claim is therefore `[1]` (passes today), plus an Endorsement Claim that the sole
+evolve is **not** endorsed (passes today, and is what credits 1b). The full conditional maneuver —
+Poké Pad → evolve a Dreepy → Recon ×2 → branch on whether a {P} appeared → *either* attach/evolve/
+Phantom Dive *or* retreat/promote Budew/item-lock — is recorded on the fixture as `turn_plan` owned
+by **#165**.
+
+**Two corrections this forces to the record:**
+
+1. **f35 and f32 are the same maneuver class.** f35's fallback branch *is* f32's retreat-to-
+   sacrificial-item-lock-wall (`docs/plans/turn-planner-retreat-to-item-lock-wall.md`, and the
+   `can_wall_line_with_disruptor` stand-down `hold-position-in-setup` already carries). Two
+   independent frames landing on one maneuver is a stronger signal for #165 than this ADR recorded.
+2. **The 20-vs-18 "weight collision" was not a defect.** During the investigation `dig-before-commit`
+   (w=20, fires on the Poké Pad) looked wrongly ranked above `use-the-draw-engine-ability` (w=18,
+   fires on Recon), since the Ability is free and the Item costs a card. Flipping them **would have
+   broken this frame** — the 20 produces the correct first action. What remains true is far narrower:
+   the agent reaches `[1]` for a *generic* reason ("free search before commitments") rather than the
+   deck-specific one (manufacture a second Recon body, thin the deck). Right answer, weak reason —
+   not a bug, and no weight change is warranted.
+
 ## Alternatives rejected
 
 - **Pay for the real bound** (`ci_lo >= -1%`, ~28,000 games, 8–10 h/phase): buys a tightening from

@@ -252,7 +252,8 @@ def main(argv=None) -> int:
         return 0
 
     if args.cmd == "diff":
-        from train.gates import discrimination_gate_verdict, leaf_lab_diff
+        from train.gates import (discrimination_gate_verdict, held_out_frames,
+                                 leaf_lab_diff)
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
         diff = leaf_lab_diff(before, rpt)
         held_out = held_out_frames()
@@ -263,24 +264,6 @@ def main(argv=None) -> int:
 
     _print_report(rpt)
     return 0
-
-
-def held_out_frames() -> dict:
-    """The Held-out Ledger: ``{frame key: owner}`` read from the committed corpus fixtures. A frame
-    whose claim names an ``owner`` reports but does not gate; deleting the owner returns it to
-    gating."""
-    from train.gates import held_out_owner, parse_claims
-    out = {}
-    for path in sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json")):
-        fx = json.loads(path.read_text(encoding="utf-8"))
-        key = fx.get("frame_key")
-        if not key:
-            continue
-        claims = parse_claims(fx)
-        owner = held_out_owner(claims.decision) if claims.decision else None
-        if owner:
-            out[key] = owner
-    return out
 
 
 if __name__ == "__main__":

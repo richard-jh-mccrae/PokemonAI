@@ -128,6 +128,17 @@ sim reseeds only from a MAIN-select board. 276 today, of which 267 are *scorable
 _Avoid_: frame (bare — that's a replay timeline index), fixture (a committed corpus pin under
 `tests/fixtures/corrections/`), leaf case
 
+**Endorsement Claim**:
+The third thing a fixture can assert (ADR-0071 amendment A): *this slot is (or is not) taken at all*,
+evaluated against `score > 0` — the endorsement floor `_finish_turn_last` gates on. It exists for the
+**single-option lane**, where an ordering claim has nothing to rank: f35 carries exactly one evolve
+option, yet the 1b swap's real fix there is that the premature evolve went 45.0 → **0.0 with no rule
+firing**. Zero is a *structural* boundary (act / don't act), not a tuned magnitude, so it survives a
+currency re-banding as ordering does — and no magnitude is compared, so it is **not** the score claim
+1a's f29 rewrite rejected. A claim whose slot is absent from the menu is **unprovable**, never
+vacuously true.
+_Avoid_: score claim (rejected — this compares no magnitude), threshold claim, zero claim, veto
+
 **Decision Claim** / **Axis Claim**:
 The two things a corpus fixture can assert, declared explicitly in its `claims` block
 ([ADR-0071](../../docs/adr/0071-mid-build-swaps-are-gated-by-deterministic-instruments.md)
