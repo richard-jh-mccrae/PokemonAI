@@ -66,14 +66,15 @@ def _wins(results):
 #: Tripwire — crashes==0 AND CI-lo >= -5%, NO delta clause; merit lives in the two deterministic
 #: per-frame gates (`train.gates`). ``post-composition`` (#145 onward) is `flips_on` verbatim.
 STAGES = {
-    "mid-build": (mid_build_verdict, MID_BUILD_REG_TOL, "CI-lo>=-0.05 AND crashes==0 (NO delta clause)"),
-    "post-composition": (flips_on, _REG_TOL, "delta>=0 AND CI-lo>=-0.01 AND crashes==0"),
+    "mid-build": (mid_build_verdict, MID_BUILD_REG_TOL,
+                  "CI-lo>=-0.05 AND crashes==0 (NO delta clause)", "TRIPWIRE"),
+    "post-composition": (flips_on, _REG_TOL,
+                         "delta>=0 AND CI-lo>=-0.01 AND crashes==0", "FLIP"),
 }
 
 
-def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path,
-        stage: str = "mid-build"):
-    verdict_fn, reg_tol, rule_text = STAGES[stage]
+def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path, stage: str):
+    verdict_fn, reg_tol, rule_text, verdict_label = STAGES[stage]
     matchups, table, crashes = [], [], 0
     started = time.time()
     for d, o in itertools.permutations(agents, 2):
@@ -93,7 +94,7 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
               f"crashes={on_c + off_c}", flush=True)
     result = paired_delta(matchups)
     half = (result["ci_hi"] - result["ci_lo"]) / 2
-    flip = verdict_fn(result, crashes=crashes)
+    verdict = verdict_fn(result, crashes=crashes)
     print(f"\nAGGREGATE delta={result['delta']:+.4f}  95% CI "
           f"[{result['ci_lo']:+.4f}, {result['ci_hi']:+.4f}]  (+-{half:.4f})  crashes={crashes}")
     # The rule is the CI LOWER BOUND, not the half-width: a positive enough delta clears the bound at
@@ -103,7 +104,10 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
           f"worse than {abs(result['ci_lo']):.1%}, and is {'' if half <= reg_tol else 'NOT '}tight "
           f"enough to have cleared the rule on width alone.")
     print(f"STAGE: {stage}")
-    print(f"FLIP: {flip}  (rule: {rule_text})")
+    # The label follows the stage: mid-build is a TRIPWIRE, never a "flip rule" — that phrase is on
+    # the Tripwire's _Avoid_ list (tools/sim/CONTEXT.md) precisely because it claims more than the
+    # verdict means.
+    print(f"{verdict_label}: {verdict}  (rule: {rule_text})")
     if stage == "mid-build":
         # Say what this verdict does NOT claim, next to the verdict itself — the whole failure mode
         # ADR-0071 exists to fix was a red/green symbol read as more than it meant.
@@ -112,14 +116,15 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
     print(f"{sum(m[1] + m[3] for m in matchups)} games in {round(time.time() - started)}s")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / "swap_paired_ab.json"
-    out.write_text(json.dumps({"table": table, "result": result, "crashes": crashes, "flip": flip,
+    out.write_text(json.dumps({"table": table, "result": result, "crashes": crashes,
+                               "verdict": verdict, "verdict_label": verdict_label,
                                "stage": stage, "rule": rule_text, "reg_tol": reg_tol,
                                "n_per_battle": n, "ci_half_width": half,
-                               # NB the width criterion, NOT the flip rule (which is the CI lower
-                               # bound) — a run can fail this and still pass `flip` on a clear delta.
+                               # NB the width criterion, NOT the stage rule (which is the CI lower
+                               # bound) — a run can fail this and still pass on a clear delta.
                                "ci_width_under_1pct": half <= 0.01}, indent=2), encoding="utf-8")
     print(f"-> {out}")
-    return result, flip
+    return result, verdict
 
 
 if __name__ == "__main__":
@@ -131,10 +136,11 @@ if __name__ == "__main__":
     ap.add_argument("--n", type=int, default=200, help="matches per arm per directed matchup")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--out", type=Path, default=REPO / "reports")
-    ap.add_argument("--stage", choices=sorted(STAGES), default="mid-build",
+    ap.add_argument("--stage", choices=sorted(STAGES), required=True,
                     help="which #136 directive-6 rule grades this run (ADR-0071): 'mid-build' "
                          "(Phases 1a-1g) is the Tripwire — crashes==0 AND CI-lo>=-5%%, no delta "
-                         "clause; 'post-composition' (#145 onward) is the original flip rule")
+                         "clause; 'post-composition' (#145 onward) is the original flip rule. "
+                         "REQUIRED: a run must name the rule that graded it")
     a = ap.parse_args()
     run(a.agents, a.n, candidate=a.candidate, incumbent=a.incumbent, jobs=a.jobs, out_dir=a.out,
         stage=a.stage)

@@ -335,7 +335,9 @@
         3
       ],
       "owner": "#165",
-      "why": "Re-ruled to the Turn Planner (#167 item 4): the correct play is retreat Dreepy -> promote Budew, a sacrificial item-lock wall whose value is the END STATE. Deliberately gets NO Axis Claim -- the evolve equation does rank the right body, and the defect is only visible cross-lane, so an axis rescue would launder a composition defect into green. NO frame_key: this fixture was REFRAMED (its correct=[3] differs from the source Correction 85046350|0|decision|32's correct=[1]), so it does not map 1:1 to a leaf frame."
+      "ruled": "2026-07-25",
+      "why": "Re-ruled to the Turn Planner: the correct play is retreat Dreepy -> promote Budew, a sacrificial item-lock wall whose value is the END STATE. Deliberately gets NO Axis Claim -- the evolve equation does rank the right body and the defect is only visible cross-lane, so an axis rescue would launder a composition defect into green. frame_key verified by an EXACT match of this fixture's `select` payload to Correction 85046350|0|decision|32; the fixture's correct=[3] is a 2026-07-10 REFRAME of that record's correct=[1], so the LABEL differs while the board -- and therefore the frame the ruling holds out -- is the same."
     }
-  }
+  },
+  "frame_key": "85046350|0|decision|32"
 }

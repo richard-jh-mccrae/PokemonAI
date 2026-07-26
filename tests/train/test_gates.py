@@ -14,12 +14,31 @@ the gates run in the offline cross-platform suite. Prior art for the style: `tes
 """
 import pytest
 
-from train.gates import (EVOLVE_LANE, OWNER_RE, AxisClaim, DecisionClaim, EndorsementClaim,
+from train import gates
+from train.gates import (EVOLVE_LANE, OWNER_RE, RULED_RE, AxisClaim, DecisionClaim, EndorsementClaim,
                          decision_gate_verdict, discrimination_gate_verdict, evaluate_axis_claim,
                          evaluate_decision_claim, evaluate_endorsement_claim, held_out_owner,
                          lane_slots, leaf_lab_diff, option_slot, parse_claims)
 
 # ── slot resolution — the shared basis both sweeps and Axis Claims compare on ─────────────────────
+
+
+@pytest.mark.req("REQ-TRAIN-0040")
+def test_lane_constants_match_the_engine_enums():
+    """CLAUDE.md: engine vocabulary (option types, select contexts) comes from `src/cg/api.py`, never
+    from memory. But importing `cg.api` MAPS THE NATIVE LIBRARY (`libcg` shows up in /proc/self/maps
+    on a bare import), and `train.gates` must stay loadable with no DLL — the same reason
+    `planner.py` keeps its engine import lazy. So the lane constants are written literally there and
+    PINNED here: this test is what makes them sourced rather than remembered, and it fails the moment
+    one drifts."""
+    from cg.api import OptionType, SelectContext
+    assert gates.OPTION_TYPE_EVOLVE == int(OptionType.EVOLVE)
+    assert gates.OPTION_TYPE_ATTACH == int(OptionType.ATTACH)
+    assert gates.OPTION_TYPE_CARD == int(OptionType.CARD)
+    assert gates.SELECT_CONTEXT_ATTACH_FROM == int(SelectContext.ATTACH_FROM)
+    assert EVOLVE_LANE == ((int(OptionType.EVOLVE), None),)
+    assert gates.ATTACH_LANE == ((int(OptionType.ATTACH), None),
+                                 (int(OptionType.CARD), int(SelectContext.ATTACH_FROM)))
 
 
 @pytest.mark.req("REQ-TRAIN-0040")
@@ -232,8 +251,27 @@ def test_every_committed_fixture_parses_and_every_held_out_claim_names_an_issue(
             owner = held_out_owner(c)
             if owner is not None:
                 assert OWNER_RE.match(owner), f"{p.name}: owner {owner!r} is not an issue reference"
+                assert c.ruled, f"{p.name}: a held-out claim must record WHEN it was ruled"
+                assert RULED_RE.match(c.ruled), f"{p.name}: ruled {c.ruled!r} is not YYYY-MM-DD"
+                assert c.why, f"{p.name}: a held-out claim must record WHY"
         if fx.get("frame_key"):
             assert fx["frame_key"].count("|") == 3, f"{p.name}: frame_key is not an identity_key"
+
+
+@pytest.mark.req("REQ-TRAIN-0044")
+def test_the_held_out_ledger_is_populated_and_every_entry_names_a_live_owner():
+    """The Ledger must not be inert. #167's Problem Statement names the exact defect it fixes —
+    "nothing in code knows f32/f82 were re-ruled, and the sweep reads '0 REGRESSION' while the loss
+    goes uncharged" — so a ruling that exists in prose but produces no Ledger entry has not been
+    encoded. Each entry's frame_key was verified by an EXACT `select`-payload match to its source
+    Correction."""
+    ledger = gates.held_out_frames()
+    assert ledger, "the Held-out Ledger is empty — re-rulings have not been encoded as data"
+    assert "85046350|0|decision|32" in ledger and ledger["85046350|0|decision|32"] == "#165"   # f32
+    assert "85785609|0|turn|8" in ledger and ledger["85785609|0|turn|8"] == "#165"             # f82
+    assert "86091728|0|decision|2" in ledger and ledger["86091728|0|decision|2"] == "#161"     # f2
+    for key, owner in ledger.items():
+        assert key.count("|") == 3 and OWNER_RE.match(owner)
 
 
 @pytest.mark.req("REQ-TRAIN-0043")

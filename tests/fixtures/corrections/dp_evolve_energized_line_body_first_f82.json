@@ -457,7 +457,9 @@
         1
       ],
       "owner": "#165",
-      "why": "Re-ruled to the Turn Planner (#167 item 4): won by a five-step maneuver whose value is the END STATE (see the xfail reason in test_evolve_valuation_corpus.py). NO frame_key: 1:1 correspondence to a source Correction not verified."
+      "ruled": "2026-07-25",
+      "why": "Re-ruled to the Turn Planner: won by a five-step maneuver whose value is the END STATE (see the xfail reason in test_evolve_valuation_corpus.py). frame_key verified by an EXACT match of this fixture's `select` payload to Correction 85785609|0|turn|8, whose correct=[1] agrees with this fixture's."
     }
-  }
+  },
+  "frame_key": "85785609|0|turn|8"
 }

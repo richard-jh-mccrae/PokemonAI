@@ -29,6 +29,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from train.gates import print_gate_report                     # noqa: E402
+
 _PLACEHOLDER_SBI = "leaf-lab-cgpy-reseed"   # any non-empty token passes `_simulate_line`'s gate; cgpy
                                             # then reconstructs the search state from the structured obs
 
@@ -60,7 +62,8 @@ def frame_key(correction) -> str:
     it merged frames from one episode and collapsed a real 276-row diff to 221. A gate that
     under-reports is the exact failure it exists to prevent."""
     from train.blunder.correction import identity_key
-    return "|".join("" if p is None else str(p) for p in identity_key(correction))
+    from train.gates import frame_key_of
+    return frame_key_of(*identity_key(correction))
 
 
 def evaluate_leaf_on_correction(pilot, correction) -> dict:
@@ -162,7 +165,8 @@ def _git_rev() -> str:
     import subprocess
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, check=True,
-                              capture_output=True, text=True).stdout.strip()
+                              capture_output=True, text=True,
+                              encoding="utf-8").stdout.strip()
     except Exception:                       # noqa: BLE001 — provenance is best-effort, never fatal
         return "unknown"
 
@@ -197,12 +201,10 @@ def _print_report(rpt) -> None:
                   f"  correct={r['correct_value']} top={r['top_value']} top_tie={r['top_tie']}")
 
 
-def _print_diff(diff, held_out, passed, before_meta) -> None:
+def _print_diff(diff, held_out, before_meta) -> None:
     """The Discrimination Gate's report. The aggregate metrics are printed by `_print_report` for
     context and are deliberately absent from the verdict — over 1b they moved the GOOD way while six
     frames broke, so a gate keyed on them would have passed the swap that motivated this gate."""
-    print(f"\n=== DISCRIMINATION GATE (ADR-0071) — {diff['compared']} frames compared "
-          f"vs {before_meta.get('git_rev', '?')} ===")
     if diff["added"] or diff["removed"]:
         # Never silently tolerated: a shifted corpus means the two captures are not comparable, and a
         # diff that quietly skips frames reads green for the wrong reason.
@@ -212,18 +214,13 @@ def _print_diff(diff, held_out, passed, before_meta) -> None:
         print(f"  IMPROVED  {f['key']}  MISS -> OK")
     gating = [f for f in diff["ok_to_miss"] if f["key"] not in held_out]
     ruled = [f for f in diff["ok_to_miss"] if f["key"] in held_out]
-    for f in gating:
-        print(f"  REGRESSED {f['key']}  OK -> MISS   rank {f['before'].get('correct_rank')}"
-              f" -> {f['after'].get('correct_rank')}")
-    if ruled:
-        # ALWAYS visible, NEVER gating (ADR-0071 decision 4) — a re-ruling is a state the gate reads,
-        # not prose in a review doc, and a frame broken for three phases must not become scenery.
-        print(f"\n  HELD OUT ({len(ruled)}) — reported, not gated:")
-        for f in ruled:
-            print(f"    {f['key']}  OK -> MISS   owner={held_out[f['key']]}")
-    print(f"\n  gated on {diff['compared'] - len(ruled)} frame(s), held out {len(ruled)}")
-    print(f"GATE: {'PASS' if passed else 'FAIL'}  "
-          f"(rule: zero unruled OK->MISS; {len(gating)} unruled, {len(ruled)} ruled)")
+    print_gate_report(
+        f"DISCRIMINATION GATE (ADR-0071) — {diff['compared']} frames compared "
+        f"vs {before_meta.get('git_rev', '?')}",
+        gating=gating, ruled=ruled, held_out=held_out, total=diff["compared"],
+        rule="zero unruled OK->MISS",
+        line=lambda f: (f"REGRESSED {f['key']}  OK -> MISS   "
+                        f"rank {f['before'].get('correct_rank')} -> {f['after'].get('correct_rank')}"))
 
 
 def main(argv=None) -> int:
@@ -239,6 +236,8 @@ def main(argv=None) -> int:
     cap.add_argument("--out", type=Path, required=True)
     dif = sub.add_parser("diff", help="Discrimination Gate: diff this build against a capture")
     dif.add_argument("--baseline", type=Path, required=True)
+    dif.add_argument("--out", type=Path, default=None,
+                     help="write the gate verdict as JSON (machine-readable, for a phase checklist)")
     args = ap.parse_args(argv)
 
     rpt = _build_report(args.store, args.agent)
@@ -254,12 +253,23 @@ def main(argv=None) -> int:
     if args.cmd == "diff":
         from train.gates import (discrimination_gate_verdict, held_out_frames,
                                  leaf_lab_diff)
+        import json as _json
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
         diff = leaf_lab_diff(before, rpt)
         held_out = held_out_frames()
         passed = discrimination_gate_verdict(diff, held_out=held_out)
         _print_report(rpt)
-        _print_diff(diff, held_out, passed, before)
+        _print_diff(diff, held_out, before)
+        if args.out:                      # US6: the gate's verdict as a machine-readable artifact
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(_json.dumps(
+                {"gate": "discrimination", "passed": passed, "git_rev": _git_rev(),
+                 "baseline_git_rev": before.get("git_rev"), "compared": diff["compared"],
+                 "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
+                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
+                 "added": diff["added"], "removed": diff["removed"],
+                 "held_out": held_out}, indent=2), encoding="utf-8")
+            print(f"-> {args.out}")
         return 0 if passed else 1
 
     _print_report(rpt)

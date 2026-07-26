@@ -35,8 +35,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (EVOLVE_LANE, decision_gate_verdict, held_out_frames,  # noqa: E402
-                         in_lane, lane_slots, option_slot)
+from train.gates import (EVOLVE_LANE, decision_gate_verdict, frame_key_of,  # noqa: E402
+                         held_out_frames, in_lane, lane_slots, option_slot,
+                         print_gate_report)
 
 _EVOLVE = 9
 
@@ -83,8 +84,7 @@ def _frame_key(rec, ep, fr) -> str:
     subject = rec.get("subject")
     if subject is None:
         subject = fr if scope == "decision" else (rec.get("decision") or {}).get("turn")
-    parts = (ep, rec.get("seat"), scope, subject)
-    return "|".join("" if x is None else str(x) for x in parts)
+    return frame_key_of(ep, rec.get("seat"), scope, subject)
 
 
 def _agent(rec) -> str:
@@ -125,19 +125,6 @@ def _seams():
             "briefs": load_briefs()}
 
 
-def _opt_slot(option: dict) -> tuple | None:
-    """The BODY an evolve option targets — which is the whole content of the pick. Delegates to
-    `train.gates.option_slot` so the sweep and an Axis Claim can never disagree about what a slot
-    is (ADR-0071 decision 3)."""
-    if not in_lane(option, EVOLVE_LANE):
-        return None
-    return option_slot(option)
-
-
-def _slots(indices, options) -> set:
-    return lane_slots(indices, options, lane=EVOLVE_LANE)
-
-
 def _cell(slots) -> str:
     return f"{sorted(slots)[0]}" if slots else "(no-evolve)"
 
@@ -151,7 +138,7 @@ def _term_line(row) -> str:
             f"{('  [' + terms + ']') if terms else ''}  {clocks}")
 
 
-def sweep(show_all: bool, quiet: bool = False) -> None:
+def sweep(show_all: bool, quiet: bool = False) -> int:
     names, frames, seams = _names(), _frames(), _seams()
     hdr = (f"{'id':<14} {'agent':<13} {'NEW pick':<14} {'OLD pick':<14} {'correct':<14} "
            f"{'verdict':<12}")
@@ -175,13 +162,14 @@ def sweep(show_all: bool, quiet: bool = False) -> None:
             if show_all:
                 print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} ERROR {exc}")
             continue
-        rows = [dict(t.evolve_working, slot=_opt_slot(options[i]))
+        rows = [dict(t.evolve_working, slot=(option_slot(options[i])
+                                     if in_lane(options[i], EVOLVE_LANE) else None))
                 for i, t in enumerate(dec_new.options)
                 if i < len(options) and t.evolve_working is not None]
         correct = rec.get("correct") or []
-        new_slots = _slots(dec_new.chosen, options)
-        old_slots = _slots(dec_old.chosen, options)
-        correct_slots = _slots(correct, options)
+        new_slots = lane_slots(dec_new.chosen, options, lane=EVOLVE_LANE)
+        old_slots = lane_slots(dec_old.chosen, options, lane=EVOLVE_LANE)
+        correct_slots = lane_slots(correct, options, lane=EVOLVE_LANE)
         agree = new_slots == old_slots
         tally["frames"] += 1
         if agree:
@@ -236,16 +224,10 @@ def sweep(show_all: bool, quiet: bool = False) -> None:
     regressions = [g for g in graded if g["verdict"] == "REGRESSION"]
     ruled = [g for g in regressions if g["key"] in held_out]
     unruled = [g for g in regressions if g["key"] not in held_out]
-    print(f"\n=== DECISION GATE — {len(graded)} labelled flip(s) graded ===")
-    for g in unruled:
-        print(f"  REGRESSION {g['key']}  {g['label']}")
-    if ruled:
-        print(f"\n  HELD OUT ({len(ruled)}) — reported, not gated:")
-        for g in ruled:
-            print(f"    {g['key']}  owner={held_out[g['key']]}  {g['label']}")
-    print(f"\n  gated on {len(graded) - len(ruled)} flip(s), held out {len(ruled)}")
-    print(f"GATE: {'PASS' if passed else 'FAIL'}  "
-          f"(rule: zero unruled REGRESSION; {len(unruled)} unruled, {len(ruled)} ruled)")
+    print_gate_report(f"DECISION GATE — {len(graded)} labelled flip(s) graded",
+                      gating=unruled, ruled=ruled, held_out=held_out, total=len(graded),
+                      rule="zero unruled REGRESSION",
+                      line=lambda g: f"REGRESSION {g['key']}  {g['label']}")
     return 0 if passed else 1
 
 

@@ -34,16 +34,33 @@ from dataclasses import dataclass, field
 #: A **Lane** is the set of option shapes one Axis Claim ranks within, as
 #: ``(option_type, required_select_context | None)`` members. Data, not a call-site special case:
 #: the evolve lane is one plain member, while attach is ATTACH always PLUS a CARD that only counts
-#: under the ATTACH_FROM context (`attach_decider_sweep.py`). `cg.api.OptionType` owns the numbers.
+#: under the ATTACH_FROM context (`attach_decider_sweep.py`).
 Lane = tuple
 
-EVOLVE_LANE: Lane = ((9, None),)                    # OptionType.EVOLVE
-ATTACH_LANE: Lane = ((8, None), (3, 21))            # OptionType.ATTACH, + CARD under ATTACH_FROM
+#: `cg.api`'s enums own these numbers (CLAUDE.md: engine vocabulary comes from `src/cg/api.py`), but
+#: importing `cg.api` MAPS THE NATIVE LIBRARY — verified: `libcg` appears in /proc/self/maps on a bare
+#: `import cg.api`. This module is the gates' pure core and must stay loadable with no DLL, the same
+#: reason `planner.py` keeps its engine import lazy ("keeps the fast unit suite from ever loading the
+#: native engine"). So the values are written literally and **pinned to the enums by a test**
+#: (`test_lane_constants_match_the_engine_enums`), which is what makes them sourced rather than
+#: remembered. Change one here and that test fails.
+OPTION_TYPE_EVOLVE = 9                              # cg.api.OptionType.EVOLVE
+OPTION_TYPE_ATTACH = 8                              # cg.api.OptionType.ATTACH
+OPTION_TYPE_CARD = 3                                # cg.api.OptionType.CARD
+SELECT_CONTEXT_ATTACH_FROM = 21                     # cg.api.SelectContext.ATTACH_FROM
+
+EVOLVE_LANE: Lane = ((OPTION_TYPE_EVOLVE, None),)
+ATTACH_LANE: Lane = ((OPTION_TYPE_ATTACH, None),
+                     (OPTION_TYPE_CARD, SELECT_CONTEXT_ATTACH_FROM))
 
 #: A held-out claim must name its owner as an issue reference — the shape CI can check offline.
 #: Whether that issue is still OPEN cannot be checked here (the suite is offline, CLAUDE.md) and
 #: belongs on the phase checklist.
 OWNER_RE = re.compile(r"^#\d+$")
+
+#: A held-out claim also records WHEN it was ruled, so a stale ruling is visible as an old date
+#: rather than as undated prose.
+RULED_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def option_slot(option: dict) -> tuple | None:
@@ -87,6 +104,7 @@ class DecisionClaim:
     thing a fixture could say before ADR-0071, and still the only thing that tests composition."""
     correct: list
     owner: str | None = None
+    ruled: str | None = None
     why: str | None = None
 
 
@@ -104,6 +122,7 @@ class AxisClaim:
     prefer: tuple
     over: list
     owner: str | None = None
+    ruled: str | None = None
     why: str | None = None
 
 
@@ -124,6 +143,7 @@ class EndorsementClaim:
     slot: tuple
     endorsed: bool
     owner: str | None = None
+    ruled: str | None = None
     why: str | None = None
 
 
@@ -162,16 +182,17 @@ def parse_claims(fixture: dict) -> Claims:
     if block.get("decision") is not None:
         d = block["decision"]
         d = {"correct": d} if isinstance(d, list) else d
-        dec = DecisionClaim(correct=list(d.get("correct") or []),
-                            owner=d.get("owner"), why=d.get("why"))
+        dec = DecisionClaim(correct=list(d.get("correct") or []), owner=d.get("owner"),
+                            ruled=d.get("ruled"), why=d.get("why"))
     axis = [AxisClaim(lane=_lane_from(a["lane"]),
                       prefer=tuple(a["prefer"]),
                       over=[tuple(o) for o in (a.get("over") or [])],
-                      owner=a.get("owner"), why=a.get("why"))
+                      owner=a.get("owner"), ruled=a.get("ruled"), why=a.get("why"))
             for a in (block.get("axis") or [])]
     endorsement = [EndorsementClaim(lane=_lane_from(e["lane"]), slot=tuple(e["slot"]),
                                     endorsed=bool(e["endorsed"]),
-                                    owner=e.get("owner"), why=e.get("why"))
+                                    owner=e.get("owner"), ruled=e.get("ruled"),
+                                    why=e.get("why"))
                    for e in (block.get("endorsement") or [])]
     return Claims(decision=dec, axis=axis, endorsement=endorsement)
 
@@ -266,6 +287,40 @@ def decision_gate_verdict(rows, *, held_out: dict) -> bool:
     blocker."""
     return all(r["key"] in held_out
                for r in rows or [] if r.get("verdict") == "REGRESSION")
+
+
+def frame_key_of(episode_id, seat, scope, subject) -> str:
+    """The flat string form of a Correction's ``identity_key`` — ``episode|seat|scope|subject``.
+
+    THE one place that shape is built. Both gates key on it and one ruling must hold a frame out of
+    either, so a second implementation that drifted by a field would silently stop matching. The
+    Leaf Lab passes the values straight off a Correction; the sweeps read them off the raw record."""
+    return "|".join("" if p is None else str(p) for p in (episode_id, seat, scope, subject))
+
+
+def print_gate_report(title, *, gating, ruled, held_out, total, rule, line) -> bool:
+    """Print one gate's verdict block and return whether it PASSED — shared by both gates so their
+    reports cannot drift in shape or in what they claim.
+
+    ``ruled`` frames are printed in an always-visible ``HELD OUT`` section and excluded from the
+    verdict (ADR-0071 decision 4): a re-ruling is a state the gate reads, and a frame broken for
+    three phases must not become scenery. ``line(item)`` renders one row."""
+    print(f"\n=== {title} ===")
+    for item in gating:
+        print(f"  {line(item)}")
+    if ruled:
+        print(f"\n  HELD OUT ({len(ruled)}) — reported, not gated:")
+        for item in ruled:
+            print(f"    {line(item)}  owner={held_out.get(_key_of(item))}")
+    print(f"\n  gated on {total - len(ruled)} frame(s), held out {len(ruled)}")
+    passed = not gating
+    print(f"GATE: {'PASS' if passed else 'FAIL'}  "
+          f"(rule: {rule}; {len(gating)} unruled, {len(ruled)} ruled)")
+    return passed
+
+
+def _key_of(item) -> str:
+    return item["key"] if isinstance(item, dict) else str(item)
 
 
 def held_out_map(claims_by_key: dict) -> dict:
