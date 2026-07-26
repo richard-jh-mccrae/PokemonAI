@@ -322,3 +322,49 @@ known gap in this phase's evidence rather than marked satisfied; the CI defect i
   whole sequencer; would pull every neutral option into tier 0.
 - **A temporary prize gate as Phase-2 scaffolding** — rejected: the epic's end state is what
   matters, and a permanent veto would additionally foreclose the correct sacrifice evolve.
+
+**J. Term 3 (the bare-body evolve floor) is a MEASURED regression, not an accepted cost — ruled by
+the user 2026-07-26 in #167's decision-5 sitting.** Amendment E priced a bare-body evolve at exactly
+**0.0**, and the swap review recorded the consequence as term 3: *"a class of evolves that used to be
+endorsed at +15 now never clears `_finish_turn_last`'s `score > 0`."* That was logged as "correct by
+ruling." It has now been measured, and it costs real board.
+
+**The evidence — `81785223|0|decision|44` (mega_starmie, turn 9).** My Active is Mega Starmie ex
+330/330 on one {W}; bench holds Cinderace 160 and a bare **Staryu 70**; hand holds a second **Mega
+Starmie ex**, Pokégear 3.0, Hilda, Salvatore ×2, Lillie's Determination, Night Stretcher. The
+opponent's Active is Lillie's Clefairy ex at **70 HP remaining** behind a Lillie's Pearl.
+
+Simulating the two candidate openings to end-of-turn produces boards that differ in **exactly one
+slot**:
+
+```
+Pokégear-first  -> my bench ends:  Cinderace 160,  Staryu 70
+Evolve-first    -> my bench ends:  Cinderace 160,  Mega Starmie ex 330
+```
+
+Identical otherwise — same KO, same discards, same empty hand. The greedy continuation after
+Pokégear-first **never evolves the Staryu**, because the evolve scores 0.0 with no rule firing and
+`_finish_turn_last` only sequences options above zero. The evolve happens *only* when it is forced as
+the first action.
+
+So the leaf's preference for evolve-first is not an ordering opinion — it is the only line in which
+the evolve occurs at all. The user's own ruled line for this turn (Pokégear → **evolve the Staryu** →
+Hilda for an Energy → attach → Jetting Blow, sniping the energised benched Clefairy) contains the
+evolve; **the shipped agent cannot reach it.** A 70 HP Staryu stays a 70 HP Staryu instead of becoming
+a second 330 HP Mega Starmie ex, on the turn we take their Active.
+
+**Scope: 4 of the 5 outstanding leaf regressions share this cause.** Of #167's six `OK -> MISS`
+frames, `81785223|0|decision|44`, `81905522|0|decision|64`, `82226116|0|decision|48` and
+`82229122|0|decision|17` all show every evolve on the menu at 0.0 with the leaf's top line being an
+evolve-first. `83968638|1|decision|17` has no evolve on the menu and is a different defect.
+The −9.72 leaf decrement is exact on the first three; frames 4 and 5 drop further (−54.0, −1054.0).
+
+**The fix is NOT the obvious one.** Loosening `_finish_turn_last` to `>= 0` is already rejected above
+— it is load-bearing across the whole sequencer and would pull every neutral option into tier 0. What
+this amendment establishes is narrower: **a bare-body evolve that materially upgrades a body is not
+worth zero**, and pricing it at exactly zero makes it unreachable rather than merely unattractive.
+Where that value comes from — a survivability/HP-substitution term, a development term, or #145's
+`state_value` differencing the board — is not ruled here.
+
+**Not discharged.** #167's baseline capture stays blocked on this: re-baselining now would bake four
+frames of this regression into the Discrimination Gate's reference.

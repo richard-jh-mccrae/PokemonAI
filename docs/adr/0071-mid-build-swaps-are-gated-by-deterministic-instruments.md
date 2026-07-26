@@ -251,6 +251,18 @@ negotiable.
 **Accepted cost.** A six-frame ruling sitting blocks #167 closing, and some frames may turn into real
 work rather than a one-line held-out entry.
 
+**Sitting progress (2026-07-26).**
+
+| # | frame | ruling |
+|---|---|---|
+| 1 | `86091435\|0\|decision\|35` (f35) | **re-ruled** — `correct` `[2]` → `[1]`, Poké Pad first; Endorsement Claim credits the evolve decline (amendment A) |
+| 2 | `81785223\|0\|decision\|44` | **REAL REGRESSION** — the bare-body evolve floor; recorded as ADR-0070 amendment J. No `owner`; stays gated |
+| 3–5 | `81905522\|0\|decision\|64`, `82226116\|0\|decision\|48`, `82229122\|0\|decision\|17` | share frame 2's cause (every menu evolve at 0.0, leaf top is an evolve-first) — grill pending |
+| 6 | `83968638\|1\|decision\|17` | no evolve on the menu; a different defect — grill pending |
+
+The cost of ruling frame 2 as a regression is that **the baseline cannot be pinned yet**: capturing
+now would bake four frames of it into the gate's own reference.
+
 ## Amendment A — the Endorsement Claim, and f35 re-ruled (2026-07-26, build)
 
 Decision 3 shipped two claim types. Building it surfaced a case neither can express, and the user's
