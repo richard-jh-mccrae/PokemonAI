@@ -3,10 +3,13 @@
 Merge evidence for #140 / PR #166 (ADR-0070), owed by #136 standing directive 6: every decider swap
 runs a paired A/B before merge. Companion to `attach-decider-swap-review.md`, which is 1a's.
 
-**Verdict: FLIP is False. The swap is NOT cleared to merge, and it is NOT demonstrated to regress.**
-The rule fails, but the run is under-powered for an effect of the size 1b actually has. The ruling on
-what to do about that is the user's (directive 2 — a regressing swap is re-ruled WITH the user); this
-document records the measurement and the diagnosis, and proposes nothing.
+**Verdict: FLIP is False. The swap is NOT demonstrated to regress, and NOT demonstrated not to.**
+The rule fails, but the run is under-powered for an effect of the size 1b actually has.
+
+**Ruled by the user 2026-07-26: MERGE anyway** — the instrument is what failed, not the build. See
+[The ruling](#the-ruling-user-2026-07-26--merge) at the foot, ADR-0070 amendment H, and #167, which
+owns the general re-scope of directive 6. Everything between here and there is the measurement as it
+stood BEFORE that ruling, and is left unedited on purpose.
 
 ## The instrument
 
