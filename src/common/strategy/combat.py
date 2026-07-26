@@ -364,6 +364,36 @@ class CombatMath:
         return sum(rest)
 
     @staticmethod
+    def _harvest_optima(items, snipes, spread: int):
+        """``(objective key, [optimal subsets])`` for ONE payload — the solver core.
+
+        Returns EVERY subset tying at the best objective, because the two Harvest Readings are the
+        union and the intersection of exactly that set."""
+        best_key, optimal = None, []
+        for mask in range(1 << len(items)):          # bench <= 5 -> <= 32 subsets
+            chosen = [i for i in range(len(items)) if mask & (1 << i)]
+            residual = CombatMath._harvest_residual([items[i][0] for i in chosen], snipes)
+            if residual > spread:
+                continue                             # the shared budget does not stretch this far
+            key = (sum(items[i][1] for i in chosen),         # prize — their win condition
+                   sum(1 for i in chosen if items[i][2]),    # ...then my role-carrying bodies
+                   -residual)                                # ...then the cheapest allocation
+            if best_key is None or key > best_key:
+                best_key, optimal = key, [frozenset(chosen)]
+            elif key == best_key:
+                optimal.append(frozenset(chosen))
+        return best_key, optimal
+
+    @staticmethod
+    def _read_optima(optimal, reading: str) -> frozenset:
+        """Collapse the tied-optimal subsets to one answer under ``reading``."""
+        if not optimal:
+            return frozenset()
+        if reading == HARVEST_UNAVOIDABLE:
+            return frozenset.intersection(*optimal)
+        return frozenset().union(*optimal)
+
+    @staticmethod
     def best_harvest(items, snipes, spread: int, *, reading: str = HARVEST_POSSIBLE) -> frozenset:
         """Indices of MY benched bodies the opponent takes with a SHARED rider budget — the **Bench
         Harvest** (ADR-0071). ``items`` = ``((hp, prize, is_key), …)`` of the bodies riders can
@@ -386,37 +416,47 @@ class CombatMath:
         Generalises :meth:`best_ko_subset` rather than calling it: once the budget accumulates over
         turns each candidate subset has its own post-snipe residual, so the knapsack's fixed-HP
         items no longer compose (ADR-0071 amendment A)."""
-        n = len(items)
+        return CombatMath._read_optima(CombatMath._harvest_optima(items, snipes, spread)[1], reading)
+
+    def _harvest_items(self, bench, key_ids):
+        """``(items, index map)`` for :meth:`best_harvest` — my benched bodies riders can reach.
+
+        Tera bodies take NO attack damage while Benched (rules.md §11), so they are dropped rather
+        than scored, and drop out of the index map with them."""
+        items, idx = [], []
+        for i, b in enumerate(bench or ()):
+            hp = (b or {}).get("hp", 0)
+            if not hp or self.is_tera((b or {}).get("id")):
+                continue
+            items.append((int(hp), self.prize_value(b), (b or {}).get("id") in key_ids))
+            idx.append(i)
+        return items, idx
+
+    def bench_harvest(self, my_bench, payloads, *, reading: str = HARVEST_POSSIBLE,
+                      key_ids=frozenset()) -> frozenset:
+        """The Bench Harvest over MY benched body dicts — indices into ``my_bench``.
+
+        ``payloads`` are the CANDIDATE attacks, each ``(snipes, spread)``: attacking ends their turn,
+        so they commit to one attack, and WHICH one is part of the choice being solved — not a
+        pre-filter. Selecting a payload by a proxy metric (largest total rider) is unsound: a 70
+        single-target snipe beats a 60 spread on that sum, yet the spread takes three 20 HP bodies
+        where the snipe takes one. Under-reading their reach that way is the phantom-safety fail
+        direction ADR-0070 §9 refused, so every candidate is scored and the opponent's own objective
+        picks (ADR-0071 amendment F).
+
+        ``key_ids`` is the deck-DECLARED role-carrying set, passed in because `CombatMath` is
+        deck-agnostic."""
+        items, idx = self._harvest_items(my_bench, key_ids)
         best_key, optimal = None, []
-        for mask in range(1 << n):                   # bench <= 5 -> <= 32 subsets
-            chosen = [i for i in range(n) if mask & (1 << i)]
-            residual = CombatMath._harvest_residual([items[i][0] for i in chosen], snipes)
-            if residual > spread:
-                continue                             # the shared budget does not stretch this far
-            prize = sum(items[i][1] for i in chosen)
-            keys = sum(1 for i in chosen if items[i][2])
-            key = (prize, keys, -residual)
+        for snipes, spread in payloads:
+            key, opts = self._harvest_optima(items, snipes, spread)
+            if key is None:
+                continue
             if best_key is None or key > best_key:
-                best_key, optimal = key, [frozenset(chosen)]
+                best_key, optimal = key, list(opts)
             elif key == best_key:
-                optimal.append(frozenset(chosen))
-        if not optimal:                              # only reachable if the empty set is infeasible
-            return frozenset()
-        if reading == HARVEST_UNAVOIDABLE:
-            return frozenset.intersection(*optimal)
-        return frozenset().union(*optimal)
-
-    def bench_harvest(self, my_bench, *, snipe: int = 0, spread: int = 0, turns: int = 1,
-                      reading: str = HARVEST_POSSIBLE, key_ids=frozenset()) -> frozenset:
-        """:meth:`best_harvest` over MY benched body dicts — indices into ``my_bench``.
-
-        Resolves prize value and Tera immunity off the card records (Tera takes NO attack damage
-        while Benched, rules.md §11, so it is never a target); ``key_ids`` is the deck-DECLARED
-        role-carrying set, passed by the caller because `CombatMath` is deck-agnostic. ``turns``
-        payloads are spent jointly, because damage counters persist (decision 4)."""
-        t = max(1, int(turns))
-        return self._harvest_of(list(my_bench or ()), [snipe] * t if snipe > 0 else [], spread * t,
-                                reading=reading, key_ids=key_ids)
+                optimal.extend(opts)                 # tied attacks widen the allocation choice
+        return frozenset(idx[i] for i in self._read_optima(optimal, reading))
 
     def spread_ko_prizes(self, opp_bench, spread: int) -> int:
         """Max total prizes from distributing a ``spread`` (Phantom Dive's ``benchSpread``) across
@@ -902,7 +942,7 @@ class CombatMath:
                              my_benched=my_benched,
                              evo_min_energy=evo_min_energy, context=context)
 
-    def _promotion_open(self, opp_bodies, opp_active, *, switch_enabler: bool = False) -> bool:
+    def _promotion_open(self, opp_bodies, opp_active) -> bool:
         """Can a BENCHED opponent body attack next turn — the promotion gate (ADR-0071 decision 6).
 
         Retreat is an ordinary turn action (rules.md:74) limited to once per turn and paid in
@@ -912,20 +952,20 @@ class CombatMath:
         absent — a body removed from the list is a body that was Knocked Out, and the replacement
         Active is chosen from the Bench for FREE (rulebook.txt:176), which is exactly the case
         `survival_shift` constructs. Fail-OPEN on an unreadable retreat cost."""
-        if opp_active is None or switch_enabler:
+        if opp_active is None:
             return True
         if not any(b is opp_active for b in opp_bodies):
             return True                               # their Active is off the board — free promotion
-        st = self._card_stat((opp_active or {}).get("id"))
+        st = self._card_stat(opp_active.get("id"))
         cost = getattr(st, "retreatCost", None) if st else None
         if cost is None:
             return True                               # unreadable -> admit (pessimistic on threat)
-        return len((opp_active or {}).get("energies") or []) >= int(cost)
+        return len(opp_active.get("energies") or []) >= int(cost)
 
     def incoming(self, my_body: dict | None, opp_bodies, t: int = 1, *, forward_ids=None,
                  charged: dict | None = None, evo_min_energy: int = 0,
                  context: dict | None = None, my_benched: bool = False,
-                 opp_active: dict | None = None, switch_enabler: bool = False) -> int:
+                 opp_active: dict | None = None) -> int:
         """Worst W/R-adjusted damage the opponent's affordable attackers among ``opp_bodies`` could
         deal ``my_body`` at future turn ``t`` — the **Threat-Clock curve**, the N-turn generalisation
         of ``reachable_incoming`` (ADR-0064 was ``t=1``; S1 of
@@ -969,9 +1009,33 @@ class CombatMath:
         if not (self.stats and my_hp):
             return 0
         turns = max(1, int(t))
-        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
-        promotable = self._promotion_open(opp_bodies, opp_active, switch_enabler=switch_enabler)
         worst = 0
+        for form_id, form_body, attached, grant, is_current in self._attacker_forms(
+                opp_bodies, forward_ids=forward_ids, evo_min_energy=evo_min_energy,
+                opp_active=opp_active):
+            worst = max(worst, self._reach_form_damage(
+                my_body, form_id, form_body, attached, charged, context,
+                exclude=grant.get("same_lock") if is_current else None,
+                bonus=grant.get("self_bonus", 0) if is_current else 0,
+                attaches=turns, my_benched=my_benched))
+        return worst
+
+    def _attacker_forms(self, opp_bodies, *, forward_ids=None, evo_min_energy: int = 0,
+                        opp_active=None):
+        """Every opponent FORM that could attack next turn — ``(form_id, form_body, attached, grant,
+        is_current)`` per form, current forms plus their forward evolutions.
+
+        ONE enumeration, because two reads consume it: :meth:`incoming` (the damage curve) and
+        :meth:`_bench_payload` (the rider payload). Keeping them separate let them drift — the rider
+        read silently skipped the ``evo_min_energy`` bounded-pessimism guard (ADR-0064), crediting a
+        bare 0-Energy pre-evolution's riders where the damage read would not. Same reasoning as
+        `_build_standing` in ADR-0070: one function owns the fact, so the readings cannot disagree.
+
+        Applies the transient self-lock (a body that cannot attack at all is skipped entirely,
+        ADR-0033) and the promotion gate (ADR-0071 decision 6). A forward form is grant-free —
+        evolving clears attack effects (rules.md §4)."""
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        promotable = self._promotion_open(opp_bodies, opp_active)
         for body in opp_bodies:
             if not body:
                 continue
@@ -981,18 +1045,11 @@ class CombatMath:
             if grant.get("self_lock"):
                 continue                              # this body can't attack at all next turn
             attached = len(body.get("energies") or [])
-            worst = max(worst, self._reach_form_damage(
-                my_body, body.get("id"), body, attached, charged, context,
-                exclude=grant.get("same_lock"), bonus=grant.get("self_bonus", 0), attaches=turns,
-                my_benched=my_benched))
+            yield body.get("id"), body, attached, grant, True
             if attached < evo_min_energy:
-                continue                              # bare pre-evo — not a credible evolving threat here
+                continue                              # bare pre-evo — not a credible evolving threat
             for fid in (fwd(body.get("id")) or ()):   # forward forms — carry the attached Energy
-                evo = {"id": fid, "energies": body.get("energies") or []}
-                worst = max(worst, self._reach_form_damage(
-                    my_body, fid, evo, attached, charged, context, exclude=None, bonus=0,
-                    attaches=turns, my_benched=my_benched))
-        return worst
+                yield fid, {"id": fid, "energies": body.get("energies") or []}, attached, grant, False
 
     def _bench_rider(self, attack_id) -> int:
         """What ``attack_id`` puts on ONE of my BENCHED bodies: its snipe and spread riders, summed
@@ -1118,42 +1175,28 @@ class CombatMath:
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
 
-    def _bench_payload(self, opp_bodies, t: int, *, charged=None, forward_ids=None,
-                       opp_active=None, switch_enabler: bool = False) -> tuple:
-        """The best ``(snipe, spread)`` rider payload their board can put on my Bench at turn ``t``.
+    def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None) -> set:
+        """Every ``(snipe, spread)`` rider payload their board could put on my Bench at turn ``t``.
 
         Attacking ends their turn (rules.md §5), so a turn's bench damage is ONE attack's payload
-        from ONE attacker. Selected by the same summed metric `_bench_rider` already uses, but the
-        two halves are returned SPLIT, because they allocate differently: the snipe is indivisible
-        and the spread is not (ADR-0071 decision 2)."""
-        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
-        promotable = self._promotion_open(opp_bodies, opp_active, switch_enabler=switch_enabler)
-        best = (0, 0)
-        for body in opp_bodies:
-            if not body:
+        from ONE attacker — but the CHOICE of attack belongs to the harvest solver, not to a
+        pre-filter here, so this returns all of them. The two halves stay SPLIT because they
+        allocate differently: the snipe is indivisible and the spread is not (ADR-0071 decision 2)."""
+        pairs = set()
+        for form_id, form_body, attached, grant, is_current in self._attacker_forms(
+                opp_bodies, opp_active=opp_active):
+            stat = self._card_stat(form_id)
+            if not stat:
                 continue
-            if not promotable and opp_active is not None and body is not opp_active:
-                continue
-            grant = self._grant(body) or {}
-            if grant.get("self_lock"):
-                continue
-            attached = len(body.get("energies") or [])
-            forms = [(body.get("id"), body)]
-            forms += [(fid, {"id": fid, "energies": body.get("energies") or []})
-                      for fid in (fwd(body.get("id")) or ())]
-            for fid, form_body in forms:
-                stat = self._card_stat(fid)
-                if not stat:
+            for aid in (stat.attacks or ()):
+                if is_current and aid == grant.get("same_lock"):
                     continue
-                for aid in (stat.attacks or ()):
-                    if aid == grant.get("same_lock"):
-                        continue
-                    if not self._affords(stat, form_body, aid, attached, t, charged):
-                        continue
-                    pair = (self.rider_snipe(aid), self.rider_spread(aid))
-                    if sum(pair) > sum(best):
-                        best = pair
-        return best
+                if not self._affords(stat, form_body, aid, attached, t, charged):
+                    continue
+                pair = (self.rider_snipe(aid), self.rider_spread(aid))
+                if any(pair):
+                    pairs.add(pair)
+        return pairs
 
     def _affords(self, stat, form_body, aid, attached: int, t: int, charged) -> bool:
         """Whether ``aid`` is payable at turn ``t`` under the ``charged`` policy (see :meth:`incoming`).
@@ -1179,8 +1222,7 @@ class CombatMath:
     def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
                        max_t: int = 8, context: dict | None = None, my_benched: bool = False,
                        my_bench=(), key_ids=frozenset(), reading: str = HARVEST_POSSIBLE,
-                       forward_ids=None, opp_active: dict | None = None,
-                       switch_enabler: bool = False) -> int:
+                       opp_active: dict | None = None) -> int:
         """The earliest future turn the opponent's board can KO ``my_body`` — the survival-window
         inversion of the Threat-Clock curve — or ``max_t + 1`` when it survives the horizon.
 
@@ -1213,35 +1255,26 @@ class CombatMath:
                 me = next(i for i, b in enumerate(bench) if b is my_body)
             except StopIteration:                     # not in the snapshot — read it alone
                 bench, me = [my_body], 0
-            snipes, spread = [], 0
+            # Count, per candidate attack, how many of turns 1..t it is affordable for — they commit
+            # to a bench line and use it whenever they can, and counters PERSIST, so `k` turns of one
+            # attack is `k` indivisible snipes plus `k` spreads of divisible budget.
+            seen: dict = {}
             for t in range(1, horizon + 1):
-                s, p = self._bench_payload(opp_bodies, t, charged=charged, forward_ids=forward_ids,
-                                           opp_active=opp_active, switch_enabler=switch_enabler)
-                if s:
-                    snipes.append(s)
-                spread += p
-                if me in self._harvest_of(bench, snipes, spread, reading=reading, key_ids=key_ids):
+                for pair in self._bench_payload_pairs(opp_bodies, t, charged=charged,
+                                                      opp_active=opp_active):
+                    seen[pair] = seen.get(pair, 0) + 1
+                payloads = [([s] * k if s else [], p * k) for (s, p), k in seen.items()]
+                if me in self.bench_harvest(bench, payloads, reading=reading, key_ids=key_ids):
                     return t
             return horizon + 1
         dealt = 0
         for t in range(1, horizon + 1):
             dealt += self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
-                                   forward_ids=forward_ids, opp_active=opp_active,
-                                   switch_enabler=switch_enabler)
+                                   opp_active=opp_active)
             if dealt >= hp:
                 return t
         return horizon + 1
 
-    def _harvest_of(self, bench, snipes, spread: int, *, reading: str, key_ids) -> frozenset:
-        """:meth:`bench_harvest` for an already-accumulated budget — indices into ``bench``."""
-        items, idx = [], []
-        for i, b in enumerate(bench):
-            bhp = (b or {}).get("hp", 0)
-            if not bhp or self.is_tera((b or {}).get("id")):
-                continue
-            items.append((int(bhp), self.prize_value(b), (b or {}).get("id") in key_ids))
-            idx.append(i)
-        return frozenset(idx[i] for i in self.best_harvest(items, snipes, spread, reading=reading))
 
     def discard_recur_fuel(self, body: dict | None, opp_discard_energy: dict | None, *,
                            forward_ids=None) -> int:

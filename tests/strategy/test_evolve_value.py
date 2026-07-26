@@ -65,8 +65,10 @@ def test_which_body_prefers_the_energized_f82():
     CORRECT (ADR-0070 amendment C). **That 37.5 was the shared-budget inflation.** The bench held
     Dreepy 50, Dunsparce 50, Dreepy 50 against a 60 spread, so evolving one Dreepy out of range
     merely redirected the counters onto the other — it bought nothing. With the Harvest read at
-    UNAVOIDABLE the benched option prices **0.0** against the Active's 30.0, and the equation now
-    reaches the human's answer on its own terms.
+    UNAVOIDABLE both bodies read `ko = 2`, so evolving buys exactly ZERO survival: the benched
+    option falls to **25.0** against the Active's **30.0** (measured), and the equation reaches the
+    human's answer on its own terms. The residual 25.0 is deploy value that is not the survival leg
+    — the inflation removed is the 37.5 -> 25.0, not the whole score.
 
     The maneuver claim itself is untouched and still belongs to #165: the chain is a better play for
     a reason no single-action equation can see. What is discharged is the CROSS-LAYER REQUIREMENT

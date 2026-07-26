@@ -74,8 +74,9 @@ def test_evolve_corpus_planner_scope_f82():
     equation's standalone read is CORRECT (it prefers the benched body, whose clocks genuinely
     move)"* — but those clocks did NOT genuinely move. The bench held two more bodies at 50 against
     a single 60 spread, so evolving one Dreepy out of range only chose which body died; the 37.5 it
-    scored was the per-body reading of a shared budget. Read as a Harvest at UNAVOIDABLE it prices
-    0.0, and the Pilot reaches `correct` without any lethal tier having landed.
+    scored was the per-body reading of a shared budget. Read as a Harvest at UNAVOIDABLE both bodies
+    read `ko = 2` — evolving buys zero survival — the benched option falls to 25.0 against the
+    Active's 30.0, and the Pilot reaches `correct` without any lethal tier having landed.
 
     The five-step maneuver is still the better play and still belongs to #165. This pin no longer
     waits on it."""

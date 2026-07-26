@@ -209,6 +209,31 @@ literally 0 at `t=1` and `t=2`, leaving the running sum `0 + 0 + 100` to first r
 Accumulation moves a pin only when an earlier turn contributes non-zero damage. The derivation is
 written into the test so the numbers are not mistaken for untouched ones.
 
+**F. The attack CHOICE is solved, not pre-filtered — decision 2's shape was unsound as written.**
+The first build picked each turn's payload by the summed metric `_bench_rider` already uses, then
+harvested with it. Adversarial review killed it: a 70-point single-target snipe outranks a 60-point
+spread on that sum, yet the snipe fells one 20 HP body where the spread fells three. Selecting by a
+proxy **understates** their reach — phantom bench safety on the `POSSIBLE` reading, precisely the
+fail direction ADR-0070 §9 refused. Which attack they use is part of the allocation being solved, so
+every affordable payload is scored and their own objective picks. `bench_harvest` therefore takes a
+LIST of candidate payloads rather than one. Pinned by
+`test_the_attack_choice_is_solved_not_pre_filtered_by_total_rider`.
+
+**G. The seam names differ from decision 7, and one of its clauses is moot.** Shipped is
+`_SideBase.bench_raws` (both sides, mirroring `body_raws`) rather than `StateModel.my_bench_raws` —
+the fact is one side's, so it belongs on the side. Decision 7 also required memo keys to extend to
+`(id(my_body), reading)`; they do not, because `TheirSide.turns_to_ko_me` is one-sided and therefore
+cannot be bench-aware at all. It is left ACTIVE-only and labelled as such in the source, so a future
+caller cannot mistake it for the harvest-aware read. `_affords` was extracted from
+`_reach_form_damage` in the same spirit — one owner for affordability, since #163 added a second
+consumer — and `_attacker_forms` likewise, after the duplicated enumeration had already drifted (the
+rider read was skipping ADR-0064's `evo_min_energy` guard).
+
+**H. The switch-enabler leg of decision 6 is NOT built.** It shipped first as a plumbed-but-never-
+passed `switch_enabler` parameter, which is dead surface pretending to be a feature; it is removed.
+The gate therefore reads retreat affordability only, and an opponent holding a `switch`/`gust` card
+defeats it. Recorded below as exposure rather than left as an unused hook.
+
 ## Accepted exposure
 
 Named so a later frame can point at them, rather than discovered:
@@ -222,6 +247,13 @@ Named so a later frame can point at them, rather than discovered:
 - **Ability-placed bench damage is invisible.** `_bench_rider` reads *attack* riders only; an Ability
   that places counters on the Bench contributes nothing to the payload. Pre-existing, fail-open,
   unchanged by this ADR and deliberately not smuggled into it.
+- **A hidden switch card defeats the promotion gate** (amendment H). The gate reads their Active's
+  retreat affordability, which is visible; whether they hold a `switch`/`gust` is not, and no Read
+  signal is wired. A benched attacker they can promote for free therefore reads one turn further off
+  than it is. Bounded: it affects only the two consumers that opt into the gate.
+- **Asleep/Paralyzed on their Active is not read**, though it blocks retreat (`rules.md:167`) and
+  would tighten the gate. `CombatMath` never receives the Board, which is where the condition signal
+  lives (`opp_active_condition_gift`), so wiring it is a plumbing change this issue did not take.
 
 ## Consequences
 

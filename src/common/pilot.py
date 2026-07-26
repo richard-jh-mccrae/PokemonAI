@@ -1683,12 +1683,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # it so the harvest and the promotion gate cannot drift from the rest of the turn's reads.
         # `bench` is caller-supplied because the RESULT side reads a substituted bench, not the
         # board's; falling back to the real bench keeps a direct caller sound.
-        if bench is not None:
-            my_bench = list(bench)
-        elif model is not None:
-            my_bench = list(model.mine.bench_raws)
-        else:
-            my_bench = [p for p in ((self._my_player(obs) or {}).get("bench") or []) if p]
+        my_bench = list(bench) if bench is not None else self._my_bench_raws(obs)
         opp_active = (model.theirs.active_raw if model is not None
                       else next((p for p in (opp.get("active") or []) if p), None))
         return EvolveBody(
@@ -1709,6 +1704,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                           my_bench=my_bench, key_ids=self._harvest_key_ids(),
                                           reading=HARVEST_UNAVOIDABLE,
                                           opp_active=opp_active))
+
+    def _my_bench_raws(self, obs: dict) -> list:
+        """MY benched bodies' raw dicts — the Bench Harvest's input, from the SNAPSHOT when one is
+        built (ADR-0068 keeps it lazy and pure, so the bench cannot shift under a memoized clock) and
+        off the observation otherwise."""
+        if self._state_model is not None:
+            return list(self._state_model.mine.bench_raws)
+        return [p for p in ((self._my_player(obs) or {}).get("bench") or []) if p]
 
     def _harvest_key_ids(self) -> frozenset:
         """Card ids the OPPONENT prefers to knock out among equal-prize targets — my deck-declared
@@ -1774,8 +1777,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         body_cid = raw.get("id")
         me = self._my_player(obs)
         is_active = any(raw is p for p in (me.get("active") or []))
-        bench = list(self._state_model.mine.bench_raws) if self._state_model is not None else \
-            [p for p in (me.get("bench") or []) if p]
+        bench = self._my_bench_raws(obs)
         body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active, bench=bench)
         # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
         # hypothetical body differs from the real one ONLY in which card it is — exactly the

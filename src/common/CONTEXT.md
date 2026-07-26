@@ -663,8 +663,10 @@ doesn't KO (the **Survival Window** generalized). A benched attacker owes **Ener
 (ADR-0071 decision 6, correcting this entry): retreat is an ordinary turn action paid in Energy
 discard (rules.md:74, :89) and attacking ends the turn, so retreat-then-attack is legal in ONE turn.
 It is therefore an affordability GATE — a benched attacker counts once the opponent's Active can pay
-its retreat cost, or a promotion enabler (a `switch`/`gust` card, or a free retreat) is credited, and
-their Active being Asleep/Paralyzed blocks it (rules.md:167). The Read γ-sharpens the attach
+its retreat cost, or their Active is absent (a knocked-out Active's replacement is promoted FREE,
+rulebook.txt:176). NOT yet read, though both would tighten it: a `switch`/`gust` card in their hand
+(hidden, so the gate can under-read an opponent holding one) and Asleep/Paralyzed on their Active,
+which blocks retreat (rules.md:167). The Read γ-sharpens the attach
 rate and which line the opponent actually runs; with no Read it is pure card fact (the base fallback).
 Feeds the Match Planner's confidence (defensive survival) and the proactive prep it directs (pre-snipe /
 pre-gust / heal-a-turn-early). Same worst-case-but-accurate epistemic as Incoming/Survival Window/KO

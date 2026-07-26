@@ -58,14 +58,24 @@ def _body(cid, hp, energies=()):
     return {"id": cid, "hp": hp, "energies": list(energies)}
 
 
+def _spread(n, turns=1):
+    """A candidate payload of `turns` divisible spreads — counters persist, so they pool."""
+    return ([], n * turns)
+
+
+def _snipe(n, turns=1):
+    """A candidate payload of `turns` INDIVISIBLE single-target snipes."""
+    return ([n] * turns, 0)
+
+
 # ---- the shared budget (decisions 1-2) --------------------------------------------------------
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_spread_is_one_shared_budget_not_a_threshold_per_body():
     o = _combat()
     # Three bodies at 50 remaining vs Phantom Dive's 60: 50 fits, 50+50=100 does not.
     bench = [_body(DREEPY, 50), _body(DUNSPARCE, 50), _body(DREEPY, 50)]
-    possible = o.bench_harvest(bench, spread=60, reading=HARVEST_POSSIBLE, key_ids=KEY_IDS)
-    unavoidable = o.bench_harvest(bench, spread=60, reading=HARVEST_UNAVOIDABLE, key_ids=KEY_IDS)
+    possible = o.bench_harvest(bench, [_spread(60)], reading=HARVEST_POSSIBLE, key_ids=KEY_IDS)
+    unavoidable = o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE, key_ids=KEY_IDS)
     # Exactly one body dies, and the two KEY bodies are the interchangeable candidates.
     assert possible == {0, 2}          # either Dreepy — the Dunsparce is a strictly worse target
     assert unavoidable == frozenset()  # neither is unavoidable: the counters simply redirect
@@ -76,18 +86,18 @@ def test_a_snipe_is_indivisible_and_cannot_be_split_across_two_bodies():
     o = _combat()
     # 20 + 20 = 40 <= 50, so a FUNGIBLE pool would take both. Jetting Blow's 50 is single-target.
     bench = [_body(DUNSPARCE, 20), _body(DUNSPARCE, 20)]
-    possible = o.bench_harvest(bench, snipe=50, reading=HARVEST_POSSIBLE)
+    possible = o.bench_harvest(bench, [_snipe(50)], reading=HARVEST_POSSIBLE)
     assert possible == {0, 1}          # either could be the target...
     # ...but only ONE dies, so neither is unavoidable.
-    assert o.bench_harvest(bench, snipe=50, reading=HARVEST_UNAVOIDABLE) == frozenset()
+    assert o.bench_harvest(bench, [_snipe(50)], reading=HARVEST_UNAVOIDABLE) == frozenset()
 
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_lone_body_in_range_is_unavoidable_under_both_readings():
     o = _combat()
     bench = [_body(DREEPY, 50)]
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_POSSIBLE) == {0}
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_UNAVOIDABLE) == {0}
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_POSSIBLE) == {0}
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE) == {0}
 
 
 @pytest.mark.req("REQ-COMBAT-0071")
@@ -95,14 +105,36 @@ def test_a_tera_body_is_never_in_the_harvest():
     o = _combat()
     bench = [_body(TERA_EX, 10), _body(DUNSPARCE, 50)]
     # Tera takes NO attack damage while Benched, so the 60 must land on the Dunsparce.
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_UNAVOIDABLE) == {1}
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE) == {1}
 
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_nothing_in_range_harvests_nothing():
     o = _combat()
     bench = [_body(DREEPY, 70), _body(DUNSPARCE, 70)]
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_POSSIBLE) == frozenset()
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_POSSIBLE) == frozenset()
+
+
+@pytest.mark.req("REQ-COMBAT-0071")
+def test_the_attack_choice_is_solved_not_pre_filtered_by_total_rider():
+    """WHICH attack they use is part of the choice. Picking the payload by "largest total rider"
+    would take the 70 snipe over the 60 spread — but the snipe fells ONE 20 HP body and the spread
+    fells all three. Under-reading their reach that way is the phantom-safety fail direction
+    ADR-0070 §9 refused, so every candidate is scored and their own objective picks."""
+    o = _combat()
+    bench = [_body(DUNSPARCE, 20), _body(DUNSPARCE, 20), _body(DUNSPARCE, 20)]
+    picked = o.bench_harvest(bench, [_snipe(70), _spread(60)], reading=HARVEST_UNAVOIDABLE)
+    assert picked == {0, 1, 2}, "the spread takes 3 prizes; the bigger snipe takes 1"
+
+
+@pytest.mark.req("REQ-COMBAT-0071")
+def test_an_empty_payload_harvests_nothing():
+    """Distinct from `test_nothing_in_range_harvests_nothing`: there the bodies are out of a real
+    budget's reach; here the opponent has NO bench-rider attack at all, so there is no budget."""
+    o = _combat()
+    bench = [_body(DREEPY, 10), _body(DUNSPARCE, 10)]
+    assert o.bench_harvest(bench, [], reading=HARVEST_POSSIBLE) == frozenset()
+    assert o.bench_harvest(bench, [([], 0)], reading=HARVEST_POSSIBLE) == frozenset()
 
 
 # ---- the objective (decision 8) ---------------------------------------------------------------
@@ -111,7 +143,7 @@ def test_the_wincon_tiebreak_settles_a_prize_tie():
     o = _combat()
     # Both 1-prize; only one can die. The KEY body is the one they take.
     bench = [_body(DUNSPARCE, 50), _body(DREEPY, 50)]
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_UNAVOIDABLE,
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE,
                            key_ids=KEY_IDS) == {1}
 
 
@@ -121,7 +153,7 @@ def test_a_real_prize_difference_outranks_the_wincon_tiebreak():
     # The ex is worth 2 prizes and carries no Role; the Dreepy is KEY but worth 1. Prize wins —
     # the tie-break is SUB-prize (the `opponent_target_value` discipline).
     bench = [_body(DREEPY, 50), _body(PLAIN_EX, 50)]
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_UNAVOIDABLE,
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE,
                            key_ids=KEY_IDS) == {1}
 
 
@@ -130,7 +162,7 @@ def test_with_no_roles_declared_the_objective_is_pure_prize_max():
     o = _combat()
     bench = [_body(DUNSPARCE, 50), _body(DREEPY, 50)]
     # key_ids empty (a deck declaring no Roles) -> the two 1-prize bodies tie and neither is forced.
-    assert o.bench_harvest(bench, spread=60, reading=HARVEST_UNAVOIDABLE) == frozenset()
+    assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE) == frozenset()
 
 
 # ---- accumulation (decisions 4-5) -------------------------------------------------------------
