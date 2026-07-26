@@ -185,7 +185,9 @@ responsible.
 
 **What this does NOT fix, deliberately.** f32 gets no axis rescue — an axis claim on the evolve lane
 would pass, because the evolve equation does rank the right body. Its defect is only visible
-cross-lane, and it stays a Decision-Claim failure owned by #165. That is the correct outcome: axis
+cross-lane, and it stays a Decision-Claim failure owned by #165. *(Amendment B corrects the further
+claim made here at the time — that f32's reframed fixture cannot map to a leaf frame. It can: the
+`select` payloads match exactly, and only the label was reframed.)* That is the correct outcome: axis
 claims must not be able to launder a composition defect into green.
 
 **Accepted costs.** A fixture schema addition and a shared helper; back-filling axis claims across
@@ -301,6 +303,45 @@ by **#165**.
    the agent reaches `[1]` for a *generic* reason ("free search before commitments") rather than the
    deck-specific one (manufacture a second Recon body, thin the deck). Right answer, weak reason —
    not a bug, and no weight change is warranted.
+
+## Amendment B — what the build's code review changed (2026-07-26)
+
+Two findings were defects in the build rather than in the design, and both are worth recording
+because the design reads fine either way — the record should not imply the first attempt worked.
+
+**The Held-out Ledger shipped INERT.** Decision 4's mechanism was built and unit-tested, but every
+fixture carrying an `owner` had been given no `frame_key`, each for an individually defensible
+reason. The net effect was that **no frame could enter either gate's `HELD OUT` section** — the exact
+defect this ADR's decision 4 exists to remove would have survived the fix. Each ruling's frame is now
+identified by an **exact `select`-payload match** to its source Correction, and the Ledger is live:
+
+| fixture | frame | owner |
+|---|---|---|
+| f32 | `85046350\|0\|decision\|32` | #165 |
+| f82 | `85785609\|0\|turn\|8` | #165 |
+| f2 | `86091728\|0\|decision\|2` | #161 |
+
+This also **overturns amendment A's aside** that f32's reframed fixture cannot map 1:1 to a leaf
+frame. Its `select` payload matches the Correction exactly; only the *label* was reframed
+(`correct=[3]` vs the record's `[1]`). The board — and therefore the frame a ruling holds out — is
+the same. A test now asserts the Ledger is non-empty and names all three, so it cannot silently go
+inert again.
+
+Verified end to end on 33 real dragapult frames, one run, two identical regressions:
+`85785609|0|turn|8` (held out) printed under `HELD OUT` and excluded from the verdict, while
+`86091728|0|decision|19` (unruled) gated — `GATE: FAIL`, exit 1, "gated on 32, held out 1".
+
+**A `ruled` date is now required beside every `owner`**, shape-checked `YYYY-MM-DD`, with `why`
+mandatory alongside. Decision 4 listed the field; the first implementation parsed only `owner`/`why`
+and buried the date in prose, which is the undated-ruling problem it was meant to prevent.
+
+**Smaller corrections, all from the same review:** the mid-build verdict was printed as `FLIP`, a
+phrase on the Tripwire's own `_Avoid_` list; each stage now carries its own label (`TRIPWIRE` /
+`FLIP`). `--stage` is **required**, so a post-composition run can never be silently graded by the
+looser mid-build bound. The lane constants are pinned to `cg.api`'s enums **by a test** rather than
+imported — verified that a bare `import cg.api` maps the native library (`libcg` in
+`/proc/self/maps`), which would drag the DLL into the offline unit path that `planner.py` keeps lazy
+for the same reason.
 
 ## Alternatives rejected
 
