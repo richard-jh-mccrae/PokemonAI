@@ -215,7 +215,7 @@ def _print_diff(diff, held_out, before_meta) -> None:
     gating = [f for f in diff["ok_to_miss"] if f["key"] not in held_out]
     ruled = [f for f in diff["ok_to_miss"] if f["key"] in held_out]
     print_gate_report(
-        f"DISCRIMINATION GATE (ADR-0071) — {diff['compared']} frames compared "
+        f"DISCRIMINATION GATE (ADR-0072) — {diff['compared']} frames compared "
         f"vs {before_meta.get('git_rev', '?')}",
         gating=gating, ruled=ruled, held_out=held_out, total=diff["compared"],
         rule="zero unruled OK->MISS",

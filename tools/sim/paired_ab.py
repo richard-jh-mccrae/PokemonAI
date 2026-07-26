@@ -12,7 +12,7 @@ import math
 
 _Z95 = 1.959964            # standard normal 97.5th percentile
 _REG_TOL = 0.01            # a CI lower bound below −1% is a real regression → park (POST-COMPOSITION)
-MID_BUILD_REG_TOL = 0.05   # mid-build (ADR-0071): the bound the standing n=200/arm/matchup run can
+MID_BUILD_REG_TOL = 0.05   # mid-build (ADR-0072): the bound the standing n=200/arm/matchup run can
                            # actually adjudicate. Achieved half-width there is ~3.4 pp, so a truly
                            # neutral swap clears −5 pp with margin; −3 pp would need ~7,100 games and
                            # −1 pp ~28,000. Wide on purpose: it excludes CATASTROPHES, nothing more.
@@ -47,14 +47,14 @@ def flips_on(result: dict, *, crashes: int, reg_tol: float = _REG_TOL) -> bool:
     """The grilled T5 flip rule: value_model ON iff the aggregate delta ≥ 0 AND the CI lower bound is
     at or above −``reg_tol`` (rules out a real regression) AND zero games crashed. Otherwise park OFF.
 
-    This is the **post-composition** rule (#136 directive 6, ADR-0071 decision 1): it applies from
+    This is the **post-composition** rule (#136 directive 6, ADR-0072 decision 1): it applies from
     #145 onward, once `state_value` and the Turn Planner consume the equations and a positive
     win-rate delta is a meaningful thing to demand. Mid-build, use `mid_build_verdict`."""
     return result["delta"] >= 0 and result["ci_lo"] >= -reg_tol and crashes == 0
 
 
 def mid_build_verdict(result: dict, *, crashes: int, reg_tol: float = MID_BUILD_REG_TOL) -> bool:
-    """The **mid-build Tripwire** (ADR-0071 decision 1, #167): zero crashes AND a CI lower bound at or
+    """The **mid-build Tripwire** (ADR-0072 decision 1, #167): zero crashes AND a CI lower bound at or
     above −``reg_tol``. **There is no delta clause.**
 
     A mid-build decider swap (Phases 1a–1g) is not trying to raise win rate — it makes ONE axis

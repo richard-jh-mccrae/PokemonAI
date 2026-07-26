@@ -25,7 +25,7 @@ stages `common/` and `cg/` into the bundle) and is served by its own subprocess 
     python tools/sim/gauntlet_swap_ab.py --candidate /tmp/ab/new_bundles \\
         --incumbent /tmp/ab/old_bundles --n 200 --jobs 4 --out /tmp/ab
 
-**Two stage rules, chosen by ``--stage`` (#136 directive 6, re-scoped by ADR-0071).** ``mid-build``
+**Two stage rules, chosen by ``--stage`` (#136 directive 6, re-scoped by ADR-0072).** ``mid-build``
 (Phases 1a–1g) is the **Tripwire**: ``crashes == 0 AND CI-lo >= -5%``, with **no delta clause** — a
 mid-build decider swap is not trying to raise win rate, so merit belongs to the two deterministic
 per-frame gates in ``train.gates`` and this run only excludes catastrophes. ``post-composition``
@@ -62,7 +62,7 @@ def _wins(results):
     return sum(1 for r in results if r.winner == 0), n, sum(len(r.crashed) for r in results)
 
 
-#: The two stage rules of #136 directive 6 (ADR-0071 decision 1). ``mid-build`` (Phases 1a–1g) is the
+#: The two stage rules of #136 directive 6 (ADR-0072 decision 1). ``mid-build`` (Phases 1a–1g) is the
 #: Tripwire — crashes==0 AND CI-lo >= -5%, NO delta clause; merit lives in the two deterministic
 #: per-frame gates (`train.gates`). ``post-composition`` (#145 onward) is `flips_on` verbatim.
 STAGES = {
@@ -110,7 +110,7 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
     print(f"{verdict_label}: {verdict}  (rule: {rule_text})")
     if stage == "mid-build":
         # Say what this verdict does NOT claim, next to the verdict itself — the whole failure mode
-        # ADR-0071 exists to fix was a red/green symbol read as more than it meant.
+        # ADR-0072 exists to fix was a red/green symbol read as more than it meant.
         print("NOTE: mid-build excludes CATASTROPHES only — this is NOT a claim of non-regression. "
               "Merit is the Decision Gate + Discrimination Gate (train.gates), not this number.")
     print(f"{sum(m[1] + m[3] for m in matchups)} games in {round(time.time() - started)}s")
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--out", type=Path, default=REPO / "reports")
     ap.add_argument("--stage", choices=sorted(STAGES), required=True,
-                    help="which #136 directive-6 rule grades this run (ADR-0071): 'mid-build' "
+                    help="which #136 directive-6 rule grades this run (ADR-0072): 'mid-build' "
                          "(Phases 1a-1g) is the Tripwire — crashes==0 AND CI-lo>=-5%%, no delta "
                          "clause; 'post-composition' (#145 onward) is the original flip rule. "
                          "REQUIRED: a run must name the rule that graded it")

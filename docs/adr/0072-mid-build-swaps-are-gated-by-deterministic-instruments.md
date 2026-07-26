@@ -1,4 +1,4 @@
-# ADR-0071 — A mid-build decider swap is gated by deterministic instruments; the paired A/B becomes a crash-and-catastrophe tripwire
+# ADR-0072 — A mid-build decider swap is gated by deterministic instruments; the paired A/B becomes a crash-and-catastrophe tripwire
 
 **Status:** Accepted (grilled 2026-07-26, `/grill-with-docs` on #167 — five locked decisions). Amends
 **#136 standing directive 6**. Build = #167.

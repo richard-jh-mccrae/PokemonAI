@@ -97,7 +97,7 @@ _Avoid_: Battle Report (that's the printed view), Performance Log (that's real-l
 
 **Mid-build Swap** / **Post-composition Swap**:
 The two build stages a decider swap can be in, and the reason directive 6 has two rules
-([ADR-0071](../../docs/adr/0071-mid-build-swaps-are-gated-by-deterministic-instruments.md)). A
+([ADR-0072](../../docs/adr/0072-mid-build-swaps-are-gated-by-deterministic-instruments.md)). A
 **Mid-build Swap** (Phase 1a–1g) makes ONE axis correct in ONE currency so #165 and #145 can later
 compose the axes — it is not trying to move win rate, so its paired A/B is a **Tripwire** and its
 merit is carried by the **Decision Gate** + **Discrimination Gate**. A **Post-composition Swap**

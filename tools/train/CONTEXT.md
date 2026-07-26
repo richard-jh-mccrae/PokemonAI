@@ -129,7 +129,7 @@ _Avoid_: frame (bare — that's a replay timeline index), fixture (a committed c
 `tests/fixtures/corrections/`), leaf case
 
 **Endorsement Claim**:
-The third thing a fixture can assert (ADR-0071 amendment A): *this slot is (or is not) taken at all*,
+The third thing a fixture can assert (ADR-0072 amendment A): *this slot is (or is not) taken at all*,
 evaluated against `score > 0` — the endorsement floor `_finish_turn_last` gates on. It exists for the
 **single-option lane**, where an ordering claim has nothing to rank: f35 carries exactly one evolve
 option, yet the 1b swap's real fix there is that the premature evolve went 45.0 → **0.0 with no rule
@@ -141,7 +141,7 @@ _Avoid_: score claim (rejected — this compares no magnitude), threshold claim,
 
 **Decision Claim** / **Axis Claim**:
 The two things a corpus fixture can assert, declared explicitly in its `claims` block
-([ADR-0071](../../docs/adr/0071-mid-build-swaps-are-gated-by-deterministic-instruments.md)
+([ADR-0072](../../docs/adr/0072-mid-build-swaps-are-gated-by-deterministic-instruments.md)
 decision 3). A **Decision Claim** (`{"decision": [2]}`) is cross-lane and end-to-end: given the whole
 board, the agent picks this — today's only assertion. An **Axis Claim**
 (`{"axis": {"option_type": 9, "prefer": <slot>, "over": [...]}}`) is within ONE lane: among the
@@ -155,7 +155,7 @@ _Avoid_: pin (the older word for a fixture that asserts *something* — say whic
 
 **Held-out Frame** / **Held-out Ledger**:
 A frame whose failure has been ruled OUT of the current decider's scope and onto a named owner —
-`{"owner": "#165", "ruled": "...", "why": "..."}` in its `claims` block (ADR-0071 decision 4). The
+`{"owner": "#165", "ruled": "...", "why": "..."}` in its `claims` block (ADR-0072 decision 4). The
 **Held-out Ledger** is the set of them, printed as an always-visible `HELD OUT (n)` section by both
 the **Decision Gate** and the **Discrimination Gate**, carrying each frame's current verdict but
 **never gating**. Deleting `owner` returns the frame to gating. The point is that a re-ruling is a

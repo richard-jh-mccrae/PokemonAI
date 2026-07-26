@@ -52,7 +52,7 @@ def test_evolve_corpus_pin(agent, fixture, leg):
         f"[{leg}] regression: {fixture} chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
 
 
-# ── CLAIMS: what a fixture asserts, declared in its own `claims` block (ADR-0071 decision 3) ──────
+# ── CLAIMS: what a fixture asserts, declared in its own `claims` block (ADR-0072 decision 3) ──────
 @pytest.mark.parametrize("agent,fixture", [
     ("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35"),
 ])
@@ -65,7 +65,7 @@ def test_evolve_corpus_claims(agent, fixture):
     of one — and resolving the deterministic tutor first also thins the deck by a known non-{P} card,
     improving both digs. Its **Endorsement Claim** is what credits the 1b swap: the sole evolve on the
     menu went 45.0 -> 0.0 with no rule firing, and a single-option lane cannot express that as an
-    ordering (ADR-0071 amendment A)."""
+    ordering (ADR-0072 amendment A)."""
     from train.gates import (evaluate_axis_claim, evaluate_decision_claim,
                              evaluate_endorsement_claim, parse_claims)
     fx = _fixture(fixture)

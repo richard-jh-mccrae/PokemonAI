@@ -1,4 +1,4 @@
-"""The two deterministic merge gates a mid-build decider swap owes (ADR-0071, #167).
+"""The two deterministic merge gates a mid-build decider swap owes (ADR-0072, #167).
 
 #136 standing directive 6 used to grade every decider swap on a paired A/B win-rate test. Phase 1b
 measured what that costs: **−1.17 pp, 95% CI [−4.59, +2.25], 0 crashes / 2400 games** — and pooled
@@ -101,7 +101,7 @@ def lane_slots(indices, options, *, lane: Lane, select_context=None) -> set:
 @dataclass(frozen=True)
 class DecisionClaim:
     """*Given the whole board, the agent picks this.* The cross-lane, end-to-end assertion — the only
-    thing a fixture could say before ADR-0071, and still the only thing that tests composition."""
+    thing a fixture could say before ADR-0072, and still the only thing that tests composition."""
     correct: list
     owner: str | None = None
     ruled: str | None = None
@@ -131,7 +131,7 @@ class EndorsementClaim:
     """*This slot is (or is not) taken at all.* The claim an **ordering** cannot make when a lane
     holds a single option — and single-option lanes are common.
 
-    f35 is the case that forced it (ADR-0071 amendment A): exactly one evolve option is on the menu,
+    f35 is the case that forced it (ADR-0072 amendment A): exactly one evolve option is on the menu,
     so "prefer X over Y" is inexpressible, yet 1b's real fix there is that the premature evolve went
     **45.0 -> 0.0 with no rule firing**. This states that directly, against ``score > 0`` — the
     endorsement floor `_finish_turn_last` already gates on.
@@ -199,7 +199,7 @@ def parse_claims(fixture: dict) -> Claims:
 
 def held_out_owner(claim) -> str | None:
     """The issue a claim has been ruled onto, or None when the claim GATES. Deleting ``owner`` is
-    what returns a frame to gating — no other ceremony (ADR-0071 decision 4)."""
+    what returns a frame to gating — no other ceremony (ADR-0072 decision 4)."""
     return getattr(claim, "owner", None) or None
 
 
@@ -303,7 +303,7 @@ def print_gate_report(title, *, gating, ruled, held_out, total, rule, line) -> b
     reports cannot drift in shape or in what they claim.
 
     ``ruled`` frames are printed in an always-visible ``HELD OUT`` section and excluded from the
-    verdict (ADR-0071 decision 4): a re-ruling is a state the gate reads, and a frame broken for
+    verdict (ADR-0072 decision 4): a re-ruling is a state the gate reads, and a frame broken for
     three phases must not become scenery. ``line(item)`` renders one row."""
     print(f"\n=== {title} ===")
     for item in gating:

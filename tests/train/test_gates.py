@@ -1,4 +1,4 @@
-"""The two deterministic merge gates for a mid-build decider swap (ADR-0071, #167).
+"""The two deterministic merge gates for a mid-build decider swap (ADR-0072, #167).
 
 #136 directive 6 used to gate a swap on a paired A/B win-rate test. Phase 1b measured what that
 costs: −1.17 pp, 95% CI [−4.59, +2.25] over 2400 games — a run that demonstrated neither a
@@ -76,7 +76,7 @@ def test_lane_slots_filters_to_the_lane_and_honours_a_context_qualified_member()
     assert lane_slots([0, 1, 2], options, lane=attach_lane, select_context=0) == set()
 
 
-# ── claims — what a corpus fixture asserts (ADR-0071 decision 3) ──────────────────────────────────
+# ── claims — what a corpus fixture asserts (ADR-0072 decision 3) ──────────────────────────────────
 
 
 @pytest.mark.req("REQ-TRAIN-0041")
@@ -219,7 +219,7 @@ def test_a_row_present_on_only_one_side_is_reported_rather_than_ignored():
 
 @pytest.mark.req("REQ-TRAIN-0043")
 def test_discrimination_gate_fails_on_an_unruled_flip_and_passes_when_it_is_held_out():
-    """The Held-out Ledger in one assertion (ADR-0071 decision 4): a re-ruling is a STATE the gate
+    """The Held-out Ledger in one assertion (ADR-0072 decision 4): a re-ruling is a STATE the gate
     reads, not prose in a review doc. Deleting the owner returns the frame to gating."""
     diff = {"ok_to_miss": [{"key": "a"}], "miss_to_ok": [], "added": [], "removed": []}
     assert discrimination_gate_verdict(diff, held_out={}) is False
@@ -238,7 +238,7 @@ def test_discrimination_gate_passes_on_improvements_alone():
 def test_every_committed_fixture_parses_and_every_held_out_claim_names_an_issue():
     """The Held-out Ledger's shape check, over the real corpus. A malformed ruling must be caught
     offline — the suite has no network, so whether that issue is still OPEN is explicitly NOT checked
-    and belongs on the phase checklist (ADR-0071 decision 4)."""
+    and belongs on the phase checklist (ADR-0072 decision 4)."""
     import json
     from pathlib import Path
     fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"

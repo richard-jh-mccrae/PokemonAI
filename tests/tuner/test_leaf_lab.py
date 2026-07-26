@@ -22,7 +22,7 @@ def _frame(*, obs=None, turn_plan=None, correct=None, episode_id=1, seat=0, scop
            subject=7, agent="dragapult_ex"):
     """A stand-in Correction. It carries the four `identity_key` fields (episode, seat, scope,
     subject) because a lab row is keyed by them — `episode_id` alone is not unique, and keying on it
-    collapsed a real 276-row diff to 221 (ADR-0071)."""
+    collapsed a real 276-row diff to 221 (ADR-0072)."""
     return SimpleNamespace(obs=obs, turn_plan=turn_plan, correct=correct or [], agent=agent,
                            episode_id=episode_id, seat=seat, scope=scope, subject=subject)
 

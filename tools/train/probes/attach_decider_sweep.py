@@ -123,7 +123,7 @@ def _seams():
 
 def _opt_slot(option: dict, ctx) -> tuple | None:
     """The target slot an attach option names. Delegates to the shared resolver so this sweep, the
-    evolve sweep and an Axis Claim can never disagree about what a slot is (ADR-0071 decision 3);
+    evolve sweep and an Axis Claim can never disagree about what a slot is (ADR-0072 decision 3);
     ATTACH_LANE carries this lane's rule as DATA — ATTACH always, CARD only under ATTACH_FROM."""
     if not in_lane(option, ATTACH_LANE, ctx):
         return None

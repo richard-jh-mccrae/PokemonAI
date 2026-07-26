@@ -349,7 +349,7 @@
      0
     ],
     "endorsed": false,
-    "why": "The ONLY evolve on the menu (active Drakloak -> Dragapult ex), and it must not be taken: the active holds {R}{D} while Phantom Dive costs {R}{P}, so the {D} is dead and no {P} has appeared yet. 1b's fix, and what this frame credits -- the premature evolve went 45.0 (incumbent) -> 0.0 with NO rule firing. Single-option lane, so an Axis ordering claim cannot express it (ADR-0071 amendment A).",
+    "why": "The ONLY evolve on the menu (active Drakloak -> Dragapult ex), and it must not be taken: the active holds {R}{D} while Phantom Dive costs {R}{P}, so the {D} is dead and no {P} has appeared yet. 1b's fix, and what this frame credits -- the premature evolve went 45.0 (incumbent) -> 0.0 with NO rule firing. Single-option lane, so an Axis ordering claim cannot express it (ADR-0072 amendment A).",
     "ruled": "2026-07-26"
    }
   ]

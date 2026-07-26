@@ -148,7 +148,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
         print("-" * len(hdr))
     tally = defaultdict(int)
     flips = []
-    graded = []          # per-frame verdicts — the Decision Gate's input (ADR-0071 decision 2)
+    graded = []          # per-frame verdicts — the Decision Gate's input (ADR-0072 decision 2)
     for (ep, fr), rec in frames:
         agent = _agent(rec)
         options = (rec["obs"].get("select") or {}).get("option") or []
@@ -218,7 +218,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
     print(f"\n{len(flips)} frame(s) need a user ruling before the deletion commit: "
           f"{', '.join(f'{e}-{f}' for e, f in flips) or '(none)'}")
 
-    # DECISION GATE (ADR-0071 decision 2): zero unruled REGRESSION. Held-out frames still RUN and
+    # DECISION GATE (ADR-0072 decision 2): zero unruled REGRESSION. Held-out frames still RUN and
     # still REPORT — a re-ruling is a state the gate reads, not prose in a review doc, and a frame
     # broken for three phases must not become scenery (decision 4).
     regressions = [g for g in graded if g["verdict"] == "REGRESSION"]

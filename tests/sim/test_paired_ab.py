@@ -43,7 +43,7 @@ def test_paired_delta_ci_tightens_with_n():
     assert (small["ci_hi"] - small["ci_lo"]) > (big["ci_hi"] - big["ci_lo"])
 
 
-# --- the mid-build Tripwire (ADR-0071 decision 1, #167) -------------------------------------------
+# --- the mid-build Tripwire (ADR-0072 decision 1, #167) -------------------------------------------
 
 @pytest.mark.req("REQ-SIM-0031")
 def test_mid_build_verdict_passes_a_negative_delta_that_flips_on_refuses():
