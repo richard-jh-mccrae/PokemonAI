@@ -165,6 +165,33 @@ zeroed three of ADR-0070's terms on every board (#167). Three sub-rulings:
 The interim `min(1.0, p) x _READY` cap disappears: `Δ ≤ 1` bounds the term below `damage(a)` by
 construction, so "closure can never beat actually being ready" becomes structural rather than clamped.
 
+**6. `_STALL` is DELETED as a measured double-count; `tempo_denied` is DERIVED from the Threat Clock.**
+The shipped wiring sets `is_staller = ("opener" in tags or item_lock_live)` AND `is_item_lock =
+item_lock_live` — both True for a Budew on turn ≤ 3, from ONE card feature through ONE gate, paying
+`_STALL` 20 + `_ITEM_LOCK_TEMPO` 12 = **32**. Sweep #3 tuned `_item_lock_live` to stop the +27
+over-fires without noticing the credit was doubled at source.
+
+*(a)* A disposable staller decomposes with no remainder into terms decisions 3–4 already build: its own
+damage, its LOW `exposure` (1 prize x 100 x clock — "disposable" IS the exposure term), and the
+`preservation` credit for the body it replaces (the "wall absorbs a hit" intuition, priced on the body
+being protected rather than the wall). `_STALL` was a rung-era proxy for "cheap to lose"; the honest
+version now exists, so the proxy goes.
+
+*(b)* `tempo_denied = incoming(my_next_active, t=2) − incoming(my_next_active, t=1)` — one development
+step's threat growth, off the live Threat-Clock curve (`combat.py:970`, whose docstring notes `t` moves
+only the ENERGY budget since evolution reach is maximal at `t=1`, so the delta IS one step). Gated on
+the opponent actually holding live Items — `opponent.copies_left_odds()` filtered by `stats.is_item`
+(`provider.py:133`), the shape of `_opp_switch_enabler` but failing **CLOSED** (no matched Read → no
+credit), because this term ENDORSES a play and ADR-0067's rule is fail-closed on yield. The grill spec
+deferred this term to the unified Threat Clock; that clock is now live, so the deferral's condition is
+met. `_ITEM_LOCK_TEMPO` and `_item_lock_live`'s `turn <= 3` both die, and with them the code comment
+wishing for "a real opponent-Item-reliance read".
+
+**Stated honestly:** this swaps one proxy for a better-grounded one, not for an identity. Item lock
+denies ITEMS while the curve delta measures a whole development step, so the term is a **CEILING**.
+The over-credit direction is exactly Sweep #2 Finding A's over-fire, and the Item-copies gate is what
+bounds it.
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
