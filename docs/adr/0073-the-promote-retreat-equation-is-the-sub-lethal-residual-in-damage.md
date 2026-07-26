@@ -231,6 +231,43 @@ the Bench — which decision 4's `preservation` leg already models via the Bench
 (b) and (c) are ARGUMENTS that the effects are emergent, not measurements. If the corpus disagrees at
 the Decision Gate they return as ruled flips.
 
+**8. Retreat cost is the BUILD it destroys plus the resource premium — and the cost READ becomes
+grant-aware, fail-closed.**
+`retreat_worth = _effective_retreat_cost(ma) x ENERGY_TIER` priced a Mega's retreat at 16 in
+card-Worth units — the third currency decision 3 set out to eliminate, and near-free against attacks
+scoring hundreds. Replaced by the exact mirror of the attach decider (1a prices an attach as `+build`;
+a retreat pays `−build`), so the two cannot disagree about what an Energy is worth:
+
+```
+retreat_cost = [ build_standing(A) - build_standing(A less the N discarded) ]
+             + _ATTACH_RESOURCE_TIEBREAK x SUM( worth(e) - ENERGY_TIER )
+```
+
+Worked: Mega Starmie ex at 3/3 of Nebula Beam is `(3/3)^2 x 210 = 210`; after paying retreat 2,
+`(1/3)^2 x 210 = 23` — the retreat costs **187 damage** of build, which is two turns of attaching
+thrown away and is exactly why "insanely retreat happy" opened this grill. Free-retreat bodies pay 0.
+`_effective_retreat_cost` still supplies N (Air Balloon aware). **Zero new constants.** Retreat slots
+being colourless (`docs/rules.md` §89), the discarded set is the greedy cheapest-to-lose typed choice
+— competent play, not optimism; VERIFY at build time that the engine lets us choose. Deliberately NOT
+refunded for discard-recursion decks (Aura Jab attaches Basic {F} from the discard): `_recover_units`
+already credits that recycling on the attack option, and discounting here would pay it twice.
+
+**The cost READ becomes grant-aware.** `retreatReduction` is parsed from skill text, **Tool-only and
+flat** (`provider.py:58`). This set has five other shapes and one is in our decks: **Rescue Board**
+(1157) is a Tool but CONDITIONAL ("{C} less; no Retreat Cost at HP <= 30"), and **Latias ex** (184,
+"Your Basic Pokémon in play have no Retreat Cost") is a BOARD-LEVEL Ability that `_effective_retreat_
+cost` cannot see — and `slowking` runs it (`grimmsnarl_ex`/`mega_lucario` run Air Balloon, handled;
+`dragapult_ex`/`mega_starmie` neither). Under a flat `x 8` a missed reduction cost 8 points; under the
+convex build delta, over-charging one Energy on a 3-slot attacker is `(3/3)^2 - (2/3)^2 = 5/9 x
+maxDamage` ~ **117 damage of phantom cost**, systematic on an archetype built around free-retreat
+pivoting. So the read is extended at the PROVIDER seam (ADR-0056's one card-knowledge seam, where
+`hpBonus`/`recoil`/`benchSnipeDamage` are already text-parsed) to cover the conditional Tool and
+board-level grants scoped by their own predicate — **fail-CLOSED: an unreadable or unmodelled grant
+charges the PRINTED cost**, erring toward not retreating, never toward the retreat-happy pathology.
+Scoped to the shapes our decks and the tracked meta run, one named test each — NOT a general effects
+DSL. The engine cannot supply this: `retreatCost` exists only on `CardData` (`api.py:468`), the static
+printed value; the in-play `Pokemon` carries no effective-cost field.
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
