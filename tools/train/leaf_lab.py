@@ -22,6 +22,7 @@ and counted (never silently dropped).
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -50,6 +51,18 @@ def board_leaf_values(pilot, obs) -> list:
     return values
 
 
+def frame_key(correction) -> str:
+    """The **stable identity** of a leaf frame, as a flat string a JSON capture can key on.
+
+    This is the Correction's own ``identity_key`` — ``(episode, seat, scope, subject)``, already the
+    repo's answer to "are these two records the same blunder" (ADR-0049). It matters because the
+    Discrimination Gate diffs captures per frame, and ``episode_id`` alone is NOT unique: keying on
+    it merged frames from one episode and collapsed a real 276-row diff to 221. A gate that
+    under-reports is the exact failure it exists to prevent."""
+    from train.blunder.correction import identity_key
+    return "|".join("" if p is None else str(p) for p in identity_key(correction))
+
+
 def evaluate_leaf_on_correction(pilot, correction) -> dict:
     """Score one `turn_plan` correction's board and rank the human's `correct` pick under the leaf.
 
@@ -64,7 +77,9 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     correct = list(correction.correct or [])
     scored = [v for v in values if v is not None]
     correct_vals = [values[i] for i in correct if 0 <= i < len(values) and values[i] is not None]
-    base = {"episode_id": getattr(correction, "episode_id", None), "correct": correct,
+    base = {"key": frame_key(correction),
+            "episode_id": getattr(correction, "episode_id", None),
+            "agent": getattr(correction, "agent", None), "correct": correct,
             "values": values, "scored": len(scored), "n_options": len(values)}
     if not scored or not correct_vals:
         return {**base, "unscorable": True, "correct_value": None, "top_value": None,
@@ -142,26 +157,30 @@ def _cgpy_pilot_builder():
     return build
 
 
-def main(argv=None) -> int:
+def _git_rev() -> str:
+    """The build a capture was taken at, so a diff against the wrong baseline is detectable."""
+    import subprocess
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-    except (AttributeError, ValueError):
-        pass
-    ap = argparse.ArgumentParser(description="Measure the develop-rung leaf on tagged MAIN-select corrections")
-    ap.add_argument("--agent", default=None, help="restrict to one agent (default: all)")
-    ap.add_argument("--store", default=str(REPO / "data" / "corrections"))
-    args = ap.parse_args(argv)
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, check=True,
+                              capture_output=True, text=True).stdout.strip()
+    except Exception:                       # noqa: BLE001 — provenance is best-effort, never fatal
+        return "unknown"
 
+
+def _build_report(store, agent):
     from train.blunder.store import load_corrections
-    corrs = [c for c in load_corrections(args.store) if is_leaf_frame(c)]
-    if args.agent:
-        corrs = [c for c in corrs if c.agent == args.agent]
+    corrs = [c for c in load_corrections(store) if is_leaf_frame(c)]
+    if agent:
+        corrs = [c for c in corrs if c.agent == agent]
+    return leaf_lab_report(_cgpy_pilot_builder(), corrs)
 
-    rpt = leaf_lab_report(_cgpy_pilot_builder(), corrs)
+
+def _print_report(rpt) -> None:
     print(f"\n=== leaf lab: {rpt['n']} leaf frames "
           f"({rpt['scorable']} scorable, {rpt['unscorable']} unscorable, {rpt['skipped_agent']} agent-skip) ===")
     strict, lenient = rpt["leaf_correct_strict_rate"], rpt["leaf_correct_rate"]
     tie = rpt["avg_top_tie"]
+
     def _pct(x):
         return f" ({x:.0%})" if x is not None else ""
     tie_s = f"{tie:.1f}" if tie is not None else "n/a"
@@ -176,7 +195,92 @@ def main(argv=None) -> int:
             flag = "OK " if r["correct_is_top"] else "MISS"
             print(f"  ep{r['episode_id']} correct={r['correct']}: {flag} rank {r['correct_rank']}/{r['n_options']}"
                   f"  correct={r['correct_value']} top={r['top_value']} top_tie={r['top_tie']}")
+
+
+def _print_diff(diff, held_out, passed, before_meta) -> None:
+    """The Discrimination Gate's report. The aggregate metrics are printed by `_print_report` for
+    context and are deliberately absent from the verdict — over 1b they moved the GOOD way while six
+    frames broke, so a gate keyed on them would have passed the swap that motivated this gate."""
+    print(f"\n=== DISCRIMINATION GATE (ADR-0071) — {diff['compared']} frames compared "
+          f"vs {before_meta.get('git_rev', '?')} ===")
+    if diff["added"] or diff["removed"]:
+        # Never silently tolerated: a shifted corpus means the two captures are not comparable, and a
+        # diff that quietly skips frames reads green for the wrong reason.
+        print(f"  CORPUS SHIFTED: +{len(diff['added'])} frame(s) added, "
+              f"-{len(diff['removed'])} removed since the capture — re-capture the baseline.")
+    for f in diff["miss_to_ok"]:
+        print(f"  IMPROVED  {f['key']}  MISS -> OK")
+    gating = [f for f in diff["ok_to_miss"] if f["key"] not in held_out]
+    ruled = [f for f in diff["ok_to_miss"] if f["key"] in held_out]
+    for f in gating:
+        print(f"  REGRESSED {f['key']}  OK -> MISS   rank {f['before'].get('correct_rank')}"
+              f" -> {f['after'].get('correct_rank')}")
+    if ruled:
+        # ALWAYS visible, NEVER gating (ADR-0071 decision 4) — a re-ruling is a state the gate reads,
+        # not prose in a review doc, and a frame broken for three phases must not become scenery.
+        print(f"\n  HELD OUT ({len(ruled)}) — reported, not gated:")
+        for f in ruled:
+            print(f"    {f['key']}  OK -> MISS   owner={held_out[f['key']]}")
+    print(f"\n  gated on {diff['compared'] - len(ruled)} frame(s), held out {len(ruled)}")
+    print(f"GATE: {'PASS' if passed else 'FAIL'}  "
+          f"(rule: zero unruled OK->MISS; {len(gating)} unruled, {len(ruled)} ruled)")
+
+
+def main(argv=None) -> int:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+    ap = argparse.ArgumentParser(description="Measure the develop-rung leaf on tagged MAIN-select corrections")
+    ap.add_argument("--agent", default=None, help="restrict to one agent (default: all)")
+    ap.add_argument("--store", default=str(REPO / "data" / "corrections"))
+    sub = ap.add_subparsers(dest="cmd")
+    cap = sub.add_parser("capture", help="write a baseline report artifact (the gate's reference)")
+    cap.add_argument("--out", type=Path, required=True)
+    dif = sub.add_parser("diff", help="Discrimination Gate: diff this build against a capture")
+    dif.add_argument("--baseline", type=Path, required=True)
+    args = ap.parse_args(argv)
+
+    rpt = _build_report(args.store, args.agent)
+
+    if args.cmd == "capture":
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps({"git_rev": _git_rev(), "agent": args.agent, **rpt},
+                                       indent=2), encoding="utf-8")
+        _print_report(rpt)
+        print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
+        return 0
+
+    if args.cmd == "diff":
+        from train.gates import discrimination_gate_verdict, leaf_lab_diff
+        before = json.loads(args.baseline.read_text(encoding="utf-8"))
+        diff = leaf_lab_diff(before, rpt)
+        held_out = held_out_frames()
+        passed = discrimination_gate_verdict(diff, held_out=held_out)
+        _print_report(rpt)
+        _print_diff(diff, held_out, passed, before)
+        return 0 if passed else 1
+
+    _print_report(rpt)
     return 0
+
+
+def held_out_frames() -> dict:
+    """The Held-out Ledger: ``{frame key: owner}`` read from the committed corpus fixtures. A frame
+    whose claim names an ``owner`` reports but does not gate; deleting the owner returns it to
+    gating."""
+    from train.gates import held_out_owner, parse_claims
+    out = {}
+    for path in sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json")):
+        fx = json.loads(path.read_text(encoding="utf-8"))
+        key = fx.get("frame_key")
+        if not key:
+            continue
+        claims = parse_claims(fx)
+        owner = held_out_owner(claims.decision) if claims.decision else None
+        if owner:
+            out[key] = owner
+    return out
 
 
 if __name__ == "__main__":

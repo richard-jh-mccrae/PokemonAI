@@ -18,8 +18,13 @@ def _obs(n_options, context=0):
             "current": {}}
 
 
-def _frame(*, obs=None, turn_plan=None, correct=None):
-    return SimpleNamespace(obs=obs, turn_plan=turn_plan, correct=correct or [])
+def _frame(*, obs=None, turn_plan=None, correct=None, episode_id=1, seat=0, scope="decision",
+           subject=7, agent="dragapult_ex"):
+    """A stand-in Correction. It carries the four `identity_key` fields (episode, seat, scope,
+    subject) because a lab row is keyed by them — `episode_id` alone is not unique, and keying on it
+    collapsed a real 276-row diff to 221 (ADR-0071)."""
+    return SimpleNamespace(obs=obs, turn_plan=turn_plan, correct=correct or [], agent=agent,
+                           episode_id=episode_id, seat=seat, scope=scope, subject=subject)
 
 
 @pytest.mark.req("REQ-TUNER-0019")
@@ -54,8 +59,8 @@ def test_evaluate_reports_the_correct_pick_rank_and_top_tie():
     it. The lab must report `correct` is NOT top, its rank (5th — four strictly outscore it), and the
     degenerate 4-way tie at the top (the leaf can't discriminate)."""
     values = {0: 60.0, 1: 65.0, 2: 65.0, 3: 65.0, 4: 65.0, 5: 60.0, 6: 55.0, 7: 50.0}
-    v = evaluate_leaf_on_correction(_pilot(values), SimpleNamespace(correct=[0], obs=_obs(8),
-                                                                    episode_id=86090164))
+    v = evaluate_leaf_on_correction(_pilot(values), _frame(correct=[0], obs=_obs(8),
+                                                              episode_id=86090164))
     assert v["scored"] == 8
     assert v["correct_value"] == 60.0
     assert v["top_value"] == 65.0
@@ -70,7 +75,7 @@ def test_evaluate_reports_the_correct_pick_rank_and_top_tie():
 def test_leaf_correct_when_the_human_pick_is_the_unique_top():
     """A healthy leaf: the correct pick is the strict maximum → correct_is_top AND unique_top, rank 1."""
     v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 40.0, 2: 55.0}),
-                                    SimpleNamespace(correct=[0], obs=_obs(3), episode_id=1))
+                                    _frame(correct=[0], obs=_obs(3), episode_id=1))
     assert v["correct_is_top"] is True
     assert v["correct_is_unique_top"] is True
     assert v["correct_rank"] == 1
@@ -85,7 +90,7 @@ def test_shared_top_is_lenient_hit_but_not_a_unique_top():
     the argmax rung breaks the tie by option order, not by the human's intent, so it would only land on
     `correct` by luck. This is why the lab reports SOLE-top, not just shared-top."""
     v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 90.0, 2: 55.0}),
-                                    SimpleNamespace(correct=[0], obs=_obs(3), episode_id=1))
+                                    _frame(correct=[0], obs=_obs(3), episode_id=1))
     assert v["correct_is_top"] is True                  # shares the max → lenient hit
     assert v["correct_is_unique_top"] is False          # but NOT the sole max → not the rung's guaranteed pick
     assert v["top_tie"] == 2
