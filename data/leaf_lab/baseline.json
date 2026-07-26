@@ -1,0 +1,7711 @@
+{
+  "git_rev": "81eac82",
+  "agent": null,
+  "n": 276,
+  "scorable": 267,
+  "unscorable": 9,
+  "skipped_agent": 1,
+  "leaf_correct": 188,
+  "leaf_correct_rate": 0.704119850187266,
+  "leaf_correct_strict": 36,
+  "leaf_correct_strict_rate": 0.1348314606741573,
+  "avg_top_tie": 3.1048689138576777,
+  "rows": [
+    {
+      "key": "83686860|1|decision|13",
+      "episode_id": 83686860,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        50.025,
+        48.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 48.0,
+      "top_value": 50.025,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "83686860|1|decision|29",
+      "episode_id": 83686860,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        48.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 174.0,
+      "top_value": 174.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "83686860|1|decision|45",
+      "episode_id": 83686860,
+      "agent": "dragapult_ex",
+      "correct": [
+        4
+      ],
+      "values": [
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        174.0,
+        138.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 174.0,
+      "top_value": 174.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "85045840|0|decision|6",
+      "episode_id": 85045840,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        10.025,
+        10.025,
+        10.025,
+        10.025,
+        10.025,
+        0.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 10.025,
+      "top_value": 10.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "85045840|0|decision|10",
+      "episode_id": 85045840,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        10.025,
+        10.025,
+        10.025,
+        0.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 10.025,
+      "top_value": 10.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "85045840|0|decision|12",
+      "episode_id": 85045840,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        10.025,
+        10.025,
+        0.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 10.025,
+      "top_value": 10.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "85045840|0|decision|8",
+      "episode_id": 85045840,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        10.025,
+        10.025,
+        10.025,
+        10.025,
+        0.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 10.025,
+      "top_value": 10.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "85046350|0|decision|21",
+      "episode_id": 85046350,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        10.025,
+        10.025,
+        10.025,
+        10.025,
+        12.05,
+        10.025
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 10.025,
+      "top_value": 12.05,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85046350|0|decision|45",
+      "episode_id": 85046350,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        107.05,
+        2152.05,
+        119.19999999999999,
+        105.025,
+        34.775,
+        105.025
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 119.19999999999999,
+      "top_value": 2152.05,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85046350|0|decision|32",
+      "episode_id": 85046350,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        14.75,
+        77.75,
+        75.05,
+        77.75,
+        12.05
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 77.75,
+      "top_value": 77.75,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "85046350|0|decision|79",
+      "episode_id": 85046350,
+      "agent": "dragapult_ex",
+      "correct": [
+        4
+      ],
+      "values": [
+        1140.025,
+        1189.325,
+        1080.025,
+        1080.025,
+        1140.025,
+        140.025,
+        1140.025,
+        118.0,
+        140.025
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 1140.025,
+      "top_value": 1189.325,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85046350|0|decision|81",
+      "episode_id": 85046350,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        1140.025,
+        1189.325,
+        1140.025,
+        140.025,
+        1140.025,
+        118.0,
+        140.025
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1140.025,
+      "top_value": 1189.325,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85046350|0|decision|85",
+      "episode_id": 85046350,
+      "agent": "dragapult_ex",
+      "correct": [
+        3
+      ],
+      "values": [
+        1164.325,
+        1152.175,
+        1154.2,
+        1164.325,
+        1164.325,
+        1152.175,
+        152.175,
+        1152.175,
+        97.05,
+        152.175
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1164.325,
+      "top_value": 1164.325,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "85785609|0|turn|8",
+      "episode_id": 85785609,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        119.1525,
+        106.3275,
+        120.975,
+        8.0,
+        8.0,
+        1109.5,
+        8.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 106.3275,
+      "top_value": 1109.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 1
+    },
+    {
+      "key": "85786096|0|decision|24",
+      "episode_id": 85786096,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        55.025,
+        55.025,
+        55.025,
+        55.025,
+        57.05,
+        55.025,
+        55.025
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 55.025,
+      "top_value": 57.05,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85786096|0|turn|2",
+      "episode_id": 85786096,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        55.025,
+        55.025,
+        55.025,
+        55.025,
+        57.05,
+        55.025
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 55.025,
+      "top_value": 57.05,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85786096|0|decision|38",
+      "episode_id": 85786096,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        138.5,
+        138.5,
+        102.5,
+        136.025,
+        102.5
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 138.5,
+      "top_value": 138.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "85786096|0|decision|70",
+      "episode_id": 85786096,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        77.75,
+        1116.0,
+        141.0,
+        53.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 141.0,
+      "top_value": 1116.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86089120|0|decision|14",
+      "episode_id": 86089120,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        -1000.0,
+        -1000.0,
+        -1000.0,
+        -1000.0,
+        -1000.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": -1000.0,
+      "top_value": -1000.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "86089638|0|decision|18",
+      "episode_id": 86089638,
+      "agent": "dragapult_ex",
+      "correct": [
+        8
+      ],
+      "values": [
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0,
+        98.0
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 98.0,
+      "top_value": 98.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 11
+    },
+    {
+      "key": "86090164|1|turn|2",
+      "episode_id": 86090164,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        10.025,
+        10.025,
+        10.025,
+        10.025,
+        12.05,
+        10.025,
+        10.025,
+        10.025
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 10.025,
+      "top_value": 12.05,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86090164|1|decision|40",
+      "episode_id": 86090164,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        1091.025,
+        1055.025,
+        55.025
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 1091.025,
+      "top_value": 1091.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "86090164|1|turn|6",
+      "episode_id": 86090164,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        257.525,
+        242.025,
+        1134.925,
+        6000,
+        257.525,
+        349.525,
+        242.025,
+        242.025,
+        302.275,
+        322.525,
+        242.025,
+        349.525,
+        242.025,
+        242.025,
+        302.275,
+        322.525,
+        242.025,
+        302.275,
+        321.175,
+        302.275,
+        302.275,
+        322.525,
+        302.275,
+        242.025,
+        1055.025,
+        242.025,
+        55.025
+      ],
+      "scored": 27,
+      "n_options": 27,
+      "unscorable": false,
+      "correct_value": 242.025,
+      "top_value": 6000,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 18,
+      "outscored_by": 17,
+      "top_tie": 1
+    },
+    {
+      "key": "86090164|1|decision|67",
+      "episode_id": 86090164,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        169.275,
+        217.025,
+        217.025,
+        111.275,
+        136.025,
+        217.025,
+        1059.2775,
+        217.025,
+        59.277499999999996
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 217.025,
+      "top_value": 1059.2775,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86090164|1|turn|10",
+      "episode_id": 86090164,
+      "agent": "dragapult_ex",
+      "correct": [],
+      "values": [
+        111.1,
+        1150.025,
+        1107.05,
+        1113.53,
+        1113.53,
+        1105.025,
+        1107.05,
+        1113.53,
+        1111.1,
+        111.1,
+        1105.025,
+        105.025
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "86090676|1|decision|39",
+      "episode_id": 86090676,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        103.0,
+        105.025,
+        103.0,
+        103.0,
+        103.0,
+        103.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 103.0,
+      "top_value": 105.025,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|decision|13",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        3
+      ],
+      "values": [
+        62.05,
+        62.05,
+        62.05,
+        62.5,
+        60.025
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 62.5,
+      "top_value": 62.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|decision|20",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        62.5,
+        60.025
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 62.5,
+      "top_value": 62.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|decision|30",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        123.025,
+        125.5,
+        105.025
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 123.025,
+      "top_value": 125.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|decision|35",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        1
+      ],
+      "values": [
+        105.025,
+        186.025,
+        123.025,
+        159.25,
+        105.025
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 186.025,
+      "top_value": 186.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|turn|8",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [],
+      "values": [
+        null,
+        null
+      ],
+      "scored": 0,
+      "n_options": 2,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "86091435|0|decision|60",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        204.025,
+        226.525,
+        231.025,
+        206.275,
+        206.275,
+        226.525,
+        208.3,
+        226.525,
+        240.025,
+        125.275
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 231.025,
+      "top_value": 240.025,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|decision|96",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        0
+      ],
+      "values": [
+        2316.025,
+        271.025,
+        271.025,
+        271.025,
+        271.025,
+        273.05,
+        271.025,
+        271.025,
+        235.025,
+        240.2,
+        235.025
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 2316.025,
+      "top_value": 2316.025,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "86091435|0|turn|14",
+      "episode_id": 86091435,
+      "agent": "dragapult_ex",
+      "correct": [
+        2
+      ],
+      "values": [
+        2273.275,
+        2273.275,
+        2273.275,
+        2273.275,
+        2273.275,
+        2273.275,
+        249.2,
+        1249.2,
+        228.275,
+        249.2
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 2273.275,
+      "top_value": 2273.275,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "86091728|0|decision|19",
+      "episode_id": 86091728,
+      "agent": "dragapult_ex",
+      "correct": [
+        3
+      ],
+      "values": [
+        58.0,
+        71.5,
+        58.0,
+        58.0,
+        71.5,
+        58.0,
+        58.0,
+        58.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 71.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "83661652|0|decision|19",
+      "episode_id": 83661652,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        1143.0,
+        93.0,
+        1143.0,
+        1143.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1143.0,
+      "top_value": 1143.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83661652|0|decision|29",
+      "episode_id": 83661652,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        1124.5,
+        1124.5,
+        1124.5,
+        93.0,
+        93.0,
+        93.0,
+        1124.5,
+        93.0,
+        107.175,
+        93.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1124.5,
+      "top_value": 1124.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83661652|0|decision|33",
+      "episode_id": 83661652,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 93.0,
+      "top_value": 93.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "83661652|0|decision|40",
+      "episode_id": 83661652,
+      "agent": "mega_lucario",
+      "correct": [
+        3
+      ],
+      "values": [
+        141.75,
+        141.75,
+        141.75,
+        141.75,
+        140.175,
+        141.75,
+        93.0,
+        141.75,
+        93.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 141.75,
+      "top_value": 141.75,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "83661652|0|decision|44",
+      "episode_id": 83661652,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        97.5,
+        97.5,
+        97.5,
+        93.0,
+        97.5,
+        93.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 97.5,
+      "top_value": 97.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83966336|0|decision|14",
+      "episode_id": 83966336,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        41.0,
+        41.0,
+        53.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 53.0,
+      "top_value": 53.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "83966336|0|decision|27",
+      "episode_id": 83966336,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        115.175,
+        1210.925,
+        1198.925,
+        53.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1210.925,
+      "top_value": 1210.925,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "83966336|0|decision|44",
+      "episode_id": 83966336,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        67.175,
+        67.175,
+        53.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 67.175,
+      "top_value": 67.175,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83967841|1|decision|17",
+      "episode_id": 83967841,
+      "agent": "mega_lucario",
+      "correct": [
+        3
+      ],
+      "values": [
+        45.5,
+        45.5,
+        57.5,
+        57.5
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 57.5,
+      "top_value": 57.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "84071010|0|decision|15",
+      "episode_id": 84071010,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        107.67500000000001,
+        7000,
+        107.67500000000001,
+        87.0875,
+        62.675000000000004,
+        35.337500000000006
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 7000,
+      "top_value": 7000,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "84071010|0|decision|30",
+      "episode_id": 84071010,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        237.175,
+        223.0,
+        223.0,
+        205.26250000000002,
+        223.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 237.175,
+      "top_value": 237.175,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "84071010|0|decision|64",
+      "episode_id": 84071010,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        2263.0,
+        2263.0,
+        2266.375,
+        2263.0,
+        1266.375,
+        2266.375,
+        2266.375,
+        2266.0375,
+        2266.0375,
+        2266.0375,
+        2263.0,
+        2263.0,
+        2266.375,
+        2263.0,
+        2263.0,
+        123.375,
+        263.0
+      ],
+      "scored": 17,
+      "n_options": 17,
+      "unscorable": false,
+      "correct_value": 2266.375,
+      "top_value": 2266.375,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "84889011|0|decision|24",
+      "episode_id": 84889011,
+      "agent": "mega_lucario",
+      "correct": [
+        5
+      ],
+      "values": [
+        71.675,
+        104.675,
+        104.675,
+        162.0,
+        90.5,
+        122.0,
+        7000,
+        90.5,
+        122.0,
+        7000,
+        7000,
+        104.675,
+        57.5
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 122.0,
+      "top_value": 7000,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 5,
+      "outscored_by": 4,
+      "top_tie": 3
+    },
+    {
+      "key": "84889539|1|decision|30",
+      "episode_id": 84889539,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        -4.0,
+        0.0,
+        8.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 8.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "84889539|1|decision|48",
+      "episode_id": 84889539,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        1118.75,
+        118.75,
+        118.75
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 118.75,
+      "top_value": 1118.75,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "84890060|1|decision|11",
+      "episode_id": 84890060,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        136.0,
+        151.75,
+        136.0,
+        118.75,
+        136.0,
+        151.75,
+        136.0,
+        167.5,
+        103.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 151.75,
+      "top_value": 167.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "84890060|1|decision|12",
+      "episode_id": 84890060,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        103.0,
+        136.0,
+        103.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 103.0,
+      "top_value": 136.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85058051|1|decision|4",
+      "episode_id": 85058051,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        19.5,
+        8.0,
+        39.5,
+        39.5,
+        0.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 39.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 2
+    },
+    {
+      "key": "85058574|1|decision|16",
+      "episode_id": 85058574,
+      "agent": "mega_lucario",
+      "correct": [
+        6
+      ],
+      "values": [
+        115.175,
+        101.0,
+        53.0,
+        53.0,
+        67.175,
+        115.175,
+        101.0,
+        53.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 101.0,
+      "top_value": 115.175,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "85058574|1|decision|69",
+      "episode_id": 85058574,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        41.0,
+        53.0,
+        53.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 53.0,
+      "top_value": 53.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "85058574|1|decision|87",
+      "episode_id": 85058574,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        2306.625,
+        2302.98,
+        2302.98,
+        2302.98,
+        2302.98,
+        2302.98,
+        1223.0,
+        269.98,
+        1223.0,
+        86.0,
+        223.0
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 2306.625,
+      "top_value": 2306.625,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85058574|1|decision|88",
+      "episode_id": 85058574,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        1223.0,
+        269.98,
+        1223.0,
+        86.0,
+        223.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 269.98,
+      "top_value": 1223.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "85058574|1|decision|114",
+      "episode_id": 85058574,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        232.6,
+        232.6,
+        136.0,
+        150.175,
+        163.3375,
+        150.175,
+        144.505,
+        232.6,
+        2232.6,
+        103.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 232.6,
+      "top_value": 2232.6,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85058574|1|decision|109",
+      "episode_id": 85058574,
+      "agent": "mega_lucario",
+      "correct": [
+        9
+      ],
+      "values": [
+        265.6,
+        2241.85,
+        2182.6,
+        2196.775,
+        2196.775,
+        2170.45,
+        2191.105,
+        2182.6,
+        2241.85,
+        2241.85,
+        2229.85,
+        160.73,
+        113.75
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 2241.85,
+      "top_value": 2241.85,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "85059103|0|decision|84",
+      "episode_id": 85059103,
+      "agent": "mega_lucario",
+      "correct": [
+        3
+      ],
+      "values": [
+        99.75,
+        93.0,
+        93.0,
+        93.0,
+        99.75,
+        93.0,
+        93.0,
+        93.0,
+        99.75,
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 93.0,
+      "top_value": 99.75,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 3
+    },
+    {
+      "key": "85785067|0|decision|14",
+      "episode_id": 85785067,
+      "agent": "mega_lucario",
+      "correct": [
+        2
+      ],
+      "values": [
+        59.175,
+        53.0,
+        84.5
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 84.5,
+      "top_value": 84.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85785067|0|decision|42",
+      "episode_id": 85785067,
+      "agent": "mega_lucario",
+      "correct": [
+        4
+      ],
+      "values": [
+        73.925,
+        67.175,
+        94.5125,
+        67.175,
+        115.175,
+        67.175
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 115.175,
+      "top_value": 115.175,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85785067|0|decision|54",
+      "episode_id": 85785067,
+      "agent": "mega_lucario",
+      "correct": [
+        4
+      ],
+      "values": [
+        1180.9625,
+        94.5125,
+        121.85,
+        97.55,
+        142.5125,
+        94.5125
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 142.5125,
+      "top_value": 1180.9625,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "85785606|0|decision|19",
+      "episode_id": 85785606,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        84.5,
+        84.5,
+        56.0375,
+        53.0,
+        53.0,
+        68.3375,
+        53.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 84.5,
+      "top_value": 84.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "85785606|0|decision|21",
+      "episode_id": 85785606,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        84.5,
+        56.0375,
+        53.0,
+        53.0,
+        68.3375,
+        53.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 84.5,
+      "top_value": 84.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85709280|1|decision|42",
+      "episode_id": 85709280,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        1139.8375,
+        1151.8375,
+        134.5125,
+        134.5125,
+        134.5125,
+        134.5125,
+        134.5125,
+        134.5125
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1151.8375,
+      "top_value": 1151.8375,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85709280|1|decision|55",
+      "episode_id": 85709280,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        1151.8375,
+        134.5125,
+        134.5125,
+        134.5125,
+        134.5125,
+        134.5125,
+        134.5125
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1151.8375,
+      "top_value": 1151.8375,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85709280|1|decision|111",
+      "episode_id": 85709280,
+      "agent": "mega_lucario",
+      "correct": [
+        6
+      ],
+      "values": [
+        2257.55,
+        2257.55,
+        2290.55,
+        2257.55,
+        2257.55,
+        257.55,
+        2257.55,
+        278.675,
+        257.55
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 2257.55,
+      "top_value": 2290.55,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "86088989|0|decision|4",
+      "episode_id": 86088989,
+      "agent": "mega_lucario",
+      "correct": [
+        1
+      ],
+      "values": [
+        8.0,
+        8.0,
+        14.75,
+        14.75,
+        8.0,
+        0.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 14.75,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "86088989|0|turn|0",
+      "episode_id": 86088989,
+      "agent": "mega_lucario",
+      "correct": [],
+      "values": [
+        null
+      ],
+      "scored": 0,
+      "n_options": 1,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "86089617|1|decision|4",
+      "episode_id": 86089617,
+      "agent": "mega_lucario",
+      "correct": [
+        4
+      ],
+      "values": [
+        33.0,
+        45.0,
+        45.0,
+        45.0,
+        45.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 45.0,
+      "top_value": 45.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "86090147|0|turn|1",
+      "episode_id": 86090147,
+      "agent": "mega_lucario",
+      "correct": [],
+      "values": [
+        86.0,
+        8.0,
+        98.0,
+        0.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "86090147|0|turn|3",
+      "episode_id": 86090147,
+      "agent": "mega_lucario",
+      "correct": [
+        4
+      ],
+      "values": [
+        157.175,
+        157.175,
+        98.0,
+        157.175,
+        143.0,
+        98.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 143.0,
+      "top_value": 157.175,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 3
+    },
+    {
+      "key": "86090147|0|decision|22",
+      "episode_id": 86090147,
+      "agent": "mega_lucario",
+      "correct": [
+        7
+      ],
+      "values": [
+        176.0,
+        176.0,
+        176.0,
+        176.0,
+        176.0,
+        176.0,
+        176.0,
+        126.0,
+        98.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 126.0,
+      "top_value": 176.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 8,
+      "outscored_by": 7,
+      "top_tie": 7
+    },
+    {
+      "key": "86090666|1|turn|2",
+      "episode_id": 86090666,
+      "agent": "mega_lucario",
+      "correct": [],
+      "values": [
+        126.0,
+        126.0,
+        126.0,
+        126.0,
+        126.0,
+        114.0,
+        100.175,
+        -1000.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "86091172|1|turn|2",
+      "episode_id": 86091172,
+      "agent": "mega_lucario",
+      "correct": [],
+      "values": [
+        136.0,
+        150.175,
+        150.175,
+        136.0,
+        95.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "86091172|1|turn|4",
+      "episode_id": 86091172,
+      "agent": "mega_lucario",
+      "correct": [],
+      "values": [
+        1136.0,
+        1136.0,
+        1167.5,
+        150.175,
+        1136.0,
+        1136.0,
+        1167.5,
+        150.175,
+        1136.0,
+        1136.0,
+        1136.0,
+        1136.0,
+        1136.0,
+        1167.5,
+        150.175,
+        1136.0,
+        1136.0,
+        103.0
+      ],
+      "scored": 18,
+      "n_options": 18,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "81785223|0|decision|12",
+      "episode_id": 81785223,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        113.0,
+        113.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "81785223|0|decision|32",
+      "episode_id": 81785223,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        176.0,
+        167.0,
+        176.0,
+        176.0,
+        176.0,
+        167.0,
+        167.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 176.0,
+      "top_value": 176.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "81785223|0|decision|38",
+      "episode_id": 81785223,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        2207.5,
+        167.0,
+        176.0,
+        176.0,
+        176.0,
+        167.0,
+        167.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 176.0,
+      "top_value": 2207.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "81785223|0|decision|44",
+      "episode_id": 81785223,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        2167.0,
+        2167.0,
+        2191.3,
+        2191.3,
+        2191.3,
+        2167.0,
+        2167.0,
+        167.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 2191.3,
+      "top_value": 2191.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81903490|0|decision|10",
+      "episode_id": 81903490,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        113.0,
+        113.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "81903490|0|decision|49",
+      "episode_id": 81903490,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1167.0,
+        110.25,
+        1167.0,
+        79.2,
+        79.2,
+        63.0,
+        1167.0,
+        110.25,
+        1177.5,
+        33.0,
+        33.0,
+        1167.0,
+        63.0
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 110.25,
+      "top_value": 1177.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 6,
+      "outscored_by": 5,
+      "top_tie": 1
+    },
+    {
+      "key": "81903490|0|decision|5",
+      "episode_id": 81903490,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        113.0,
+        113.0,
+        83.0,
+        83.0,
+        113.0,
+        113.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "81903490|0|decision|27",
+      "episode_id": 81903490,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        33.0,
+        33.0,
+        33.0,
+        63.0,
+        63.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "81903490|0|decision|67",
+      "episode_id": 81903490,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1167.08,
+        1152.5,
+        1167.08,
+        1167.08,
+        8.0,
+        1167.08,
+        1167.08,
+        8.0,
+        8.0,
+        1129.01,
+        8.0
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 1167.08,
+      "top_value": 1167.08,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "81903490|0|decision|74",
+      "episode_id": 81903490,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1112.0,
+        1112.0,
+        1112.0,
+        1112.0,
+        1112.0,
+        1112.0,
+        1112.0,
+        8.0,
+        58.0,
+        8.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1112.0,
+      "top_value": 1112.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "81904064|0|decision|9",
+      "episode_id": 81904064,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        63.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "81904064|0|decision|17",
+      "episode_id": 81904064,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1167.0,
+        73.0,
+        1167.0,
+        113.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "81904064|0|decision|29",
+      "episode_id": 81904064,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        73.0,
+        1167.0,
+        1167.0,
+        113.0,
+        1167.0,
+        113.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 1167.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 3
+    },
+    {
+      "key": "81904064|0|decision|44",
+      "episode_id": 81904064,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        113.0,
+        113.0,
+        113.0,
+        110.25,
+        113.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "81904064|0|decision|49",
+      "episode_id": 81904064,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        3207.5,
+        3207.5,
+        3207.5,
+        110.25,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 3207.5,
+      "top_value": 3207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81904064|0|decision|59",
+      "episode_id": 81904064,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1167.0,
+        1167.0,
+        1167.0,
+        167.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81904451|0|decision|6",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        33.0,
+        55.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81904451|0|decision|9",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        63.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "81904451|0|decision|15",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        63.0,
+        63.0,
+        1167.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "81904451|0|decision|17",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81904451|0|decision|24",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        110.25,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 110.25,
+      "top_value": 110.25,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "81904451|0|decision|37",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1063.0,
+        1172.08,
+        1157.5,
+        1157.5,
+        1172.08,
+        1172.08,
+        1127.5,
+        1127.5,
+        1136.005,
+        1063.0,
+        1172.08,
+        63.0
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 1172.08,
+      "top_value": 1172.08,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "81904451|0|decision|50",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1222.08,
+        1231.8,
+        1207.5,
+        1207.5,
+        1231.8,
+        1231.8,
+        1177.5,
+        1177.5,
+        1220.025,
+        1231.8,
+        1222.08,
+        1207.5,
+        1207.5,
+        1231.8,
+        1206.8,
+        1206.8,
+        1206.8,
+        63.0,
+        1231.8,
+        63.0
+      ],
+      "scored": 20,
+      "n_options": 20,
+      "unscorable": false,
+      "correct_value": 1231.8,
+      "top_value": 1231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "81904451|0|decision|53",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        1222.08,
+        1231.8,
+        1207.5,
+        1207.5,
+        1231.8,
+        1231.8,
+        1231.8,
+        1063.0,
+        1207.5,
+        1207.5,
+        1231.8,
+        1206.8,
+        1206.8,
+        1206.8,
+        1231.8,
+        1063.0,
+        1231.8,
+        63.0
+      ],
+      "scored": 18,
+      "n_options": 18,
+      "unscorable": false,
+      "correct_value": 1231.8,
+      "top_value": 1231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "81904451|0|decision|58",
+      "episode_id": 81904451,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        1063.0,
+        1231.8,
+        1207.5,
+        1207.5,
+        1231.8,
+        1231.8,
+        1231.8,
+        1222.08,
+        1207.5,
+        1207.5,
+        1231.8,
+        1206.8,
+        1206.8,
+        1206.8,
+        1231.8,
+        1231.8,
+        1063.0,
+        1231.8,
+        63.0
+      ],
+      "scored": 19,
+      "n_options": 19,
+      "unscorable": false,
+      "correct_value": 1231.8,
+      "top_value": 1231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "81905063|1|decision|10",
+      "episode_id": 81905063,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        8.0,
+        8.0,
+        8.0,
+        -1000.0,
+        -1000.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 8.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81905063|1|decision|16",
+      "episode_id": 81905063,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        8.0,
+        8.0,
+        8.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 8.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81905522|0|decision|10",
+      "episode_id": 81905522,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        113.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "81905522|0|decision|28",
+      "episode_id": 81905522,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1167.0,
+        1167.0,
+        95.4,
+        1167.0,
+        63.0,
+        110.25,
+        63.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81905522|0|decision|47",
+      "episode_id": 81905522,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        176.0,
+        176.0,
+        176.0,
+        167.0,
+        176.0,
+        191.3,
+        191.3,
+        176.0,
+        137.0,
+        137.0,
+        107.30000000000001,
+        107.30000000000001,
+        167.0,
+        176.0,
+        191.3,
+        191.3,
+        124.83000000000001,
+        1176.0,
+        90.0
+      ],
+      "scored": 19,
+      "n_options": 19,
+      "unscorable": false,
+      "correct_value": 191.3,
+      "top_value": 1176.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "81905522|0|decision|64",
+      "episode_id": 81905522,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        176.8,
+        1176.8,
+        1176.8,
+        1176.8,
+        1152.5,
+        1176.8,
+        1176.8,
+        1176.8,
+        1122.5,
+        1165.025,
+        1165.025,
+        1152.5,
+        1176.8,
+        1176.8,
+        1116.8,
+        152.5,
+        152.5,
+        1140.35,
+        152.5
+      ],
+      "scored": 19,
+      "n_options": 19,
+      "unscorable": false,
+      "correct_value": 1176.8,
+      "top_value": 1176.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "81906131|1|decision|25",
+      "episode_id": 81906131,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        -945.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "81906131|1|decision|26",
+      "episode_id": 81906131,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        -945.0,
+        -945.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "81906755|1|decision|9",
+      "episode_id": 81906755,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        58.0,
+        58.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 58.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "81906755|1|decision|77",
+      "episode_id": 81906755,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        112.0,
+        112.0,
+        112.0,
+        112.0,
+        112.0,
+        112.0,
+        112.0,
+        112.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 112.0,
+      "top_value": 112.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "81906755|1|decision|93",
+      "episode_id": 81906755,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        3136.3,
+        3136.3,
+        3121.0,
+        3136.3,
+        3126.58,
+        3136.3,
+        3126.58,
+        3126.58,
+        3136.3,
+        3136.3,
+        3112.0,
+        62.0
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 3136.3,
+      "top_value": 3136.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "82224509|1|decision|29",
+      "episode_id": 82224509,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        1207.5,
+        1207.5,
+        1231.8,
+        1222.08,
+        1231.8,
+        2231.8,
+        1185.765,
+        1231.8,
+        110.25
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 1231.8,
+      "top_value": 2231.8,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82224509|1|decision|40",
+      "episode_id": 82224509,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1207.5,
+        1207.5,
+        1231.8,
+        1222.08,
+        1231.8,
+        1231.8,
+        1231.8,
+        152.775,
+        1231.8,
+        110.25
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1231.8,
+      "top_value": 1231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82224509|1|decision|41",
+      "episode_id": 82224509,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        1207.5,
+        1207.5,
+        1207.5,
+        152.775,
+        1207.5,
+        110.25
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 1207.5,
+      "top_value": 1207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82224509|1|decision|46",
+      "episode_id": 82224509,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1176.8,
+        1152.5,
+        1152.5,
+        1152.5,
+        1152.5,
+        1152.5,
+        100.525,
+        152.5
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1152.5,
+      "top_value": 1176.8,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82224509|1|decision|67",
+      "episode_id": 82224509,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1176.8,
+        1126.8,
+        1072.5,
+        1072.5,
+        1072.5,
+        1126.8,
+        1102.5,
+        102.5,
+        74.825,
+        102.5
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1126.8,
+      "top_value": 1176.8,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82224509|1|decision|71",
+      "episode_id": 82224509,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        4000,
+        4000,
+        4000,
+        4000,
+        1112.0,
+        1102.5,
+        4000,
+        32.3,
+        102.5
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82225138|0|decision|19",
+      "episode_id": 82225138,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        113.0,
+        45.0,
+        105.0,
+        105.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82225138|0|decision|82",
+      "episode_id": 82225138,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        207.5,
+        207.5,
+        177.5,
+        177.5,
+        207.5,
+        207.5,
+        207.5,
+        174.83,
+        207.5
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 207.5,
+      "top_value": 207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "82225643|1|decision|11",
+      "episode_id": 82225643,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        113.0,
+        63.0,
+        33.0,
+        63.0,
+        113.0,
+        63.0,
+        38.0,
+        38.0,
+        63.0,
+        63.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82225643|1|decision|12",
+      "episode_id": 82225643,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        113.0,
+        63.0,
+        113.0,
+        63.0,
+        38.0,
+        38.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 113.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82225643|1|decision|34",
+      "episode_id": 82225643,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        2207.5,
+        2207.5,
+        2182.5,
+        2177.5,
+        2177.5,
+        2207.5,
+        1207.5,
+        160.25,
+        207.5
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 2207.5,
+      "top_value": 2207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82225643|1|decision|57",
+      "episode_id": 82225643,
+      "agent": "mega_starmie",
+      "correct": [
+        11
+      ],
+      "values": [
+        1207.5,
+        1207.5,
+        1207.5,
+        1207.5,
+        1182.5,
+        1177.5,
+        1177.5,
+        1207.5,
+        1207.5,
+        1207.5,
+        1207.5,
+        1207.5,
+        1207.5,
+        1207.5,
+        144.5,
+        207.5
+      ],
+      "scored": 16,
+      "n_options": 16,
+      "unscorable": false,
+      "correct_value": 1207.5,
+      "top_value": 1207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 11
+    },
+    {
+      "key": "82226116|0|decision|7",
+      "episode_id": 82226116,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        25.0,
+        55.0
+      ],
+      "scored": 2,
+      "n_options": 2,
+      "unscorable": false,
+      "correct_value": 55.0,
+      "top_value": 55.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82226116|0|decision|48",
+      "episode_id": 82226116,
+      "agent": "mega_starmie",
+      "correct": [
+        13
+      ],
+      "values": [
+        2231.8,
+        2231.8,
+        2207.5,
+        2207.5,
+        2231.8,
+        2231.8,
+        2207.5,
+        2207.5,
+        2231.8,
+        2231.8,
+        2231.8,
+        2231.8,
+        135.76500000000001,
+        2231.8,
+        110.25
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 2231.8,
+      "top_value": 2231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 9
+    },
+    {
+      "key": "82226116|0|decision|70",
+      "episode_id": 82226116,
+      "agent": "mega_starmie",
+      "correct": [
+        11
+      ],
+      "values": [
+        1167.0,
+        1167.0,
+        1172.08,
+        113.0,
+        113.0,
+        137.3,
+        137.3,
+        113.0,
+        113.0,
+        137.3,
+        137.3,
+        1167.0,
+        1167.0,
+        1167.0,
+        1157.5,
+        1157.5,
+        134.55,
+        157.5
+      ],
+      "scored": 18,
+      "n_options": 18,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1172.08,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82226116|0|decision|100",
+      "episode_id": 82226116,
+      "agent": "mega_starmie",
+      "correct": [
+        13
+      ],
+      "values": [
+        1117.0,
+        1117.0,
+        110.25,
+        1117.0,
+        1117.0,
+        110.25,
+        1117.0,
+        1117.0,
+        1117.0,
+        80.25,
+        1127.5,
+        1127.5,
+        110.25,
+        1117.0,
+        63.0
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 1117.0,
+      "top_value": 1127.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82226759|1|decision|16",
+      "episode_id": 82226759,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        2136.3,
+        2126.58,
+        2112.0,
+        112.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 2136.3,
+      "top_value": 2136.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82226759|1|decision|29",
+      "episode_id": 82226759,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        2136.3,
+        2126.58,
+        2126.58,
+        2136.3,
+        2112.0,
+        112.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 2136.3,
+      "top_value": 2136.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82226759|1|decision|64",
+      "episode_id": 82226759,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        1152.5,
+        1152.5,
+        1102.5,
+        1144.5,
+        1152.5,
+        94.5,
+        -1000.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1144.5,
+      "top_value": 1152.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 3
+    },
+    {
+      "key": "82227388|0|decision|7",
+      "episode_id": 82227388,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        88.0,
+        38.0,
+        38.0,
+        63.0,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 88.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82227388|0|decision|22",
+      "episode_id": 82227388,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        110.25,
+        1167.0,
+        124.83000000000001,
+        1207.5,
+        80.25,
+        1177.5,
+        80.25,
+        110.25,
+        1207.5,
+        63.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 124.83000000000001,
+      "top_value": 1207.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 5,
+      "outscored_by": 4,
+      "top_tie": 2
+    },
+    {
+      "key": "82227388|0|decision|30",
+      "episode_id": 82227388,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1207.5,
+        1207.5,
+        1222.08,
+        1222.08,
+        1177.5,
+        1177.5,
+        1186.005,
+        1207.5,
+        1207.5,
+        127.25999999999999,
+        207.5
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 1222.08,
+      "top_value": 1222.08,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82227388|0|decision|43",
+      "episode_id": 82227388,
+      "agent": "mega_starmie",
+      "correct": [
+        7
+      ],
+      "values": [
+        113.0,
+        113.0,
+        127.58,
+        167.0,
+        83.0,
+        83.0,
+        83.0,
+        167.0,
+        83.0,
+        83.0,
+        83.0,
+        157.5,
+        157.5,
+        124.83000000000001,
+        157.5
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 167.0,
+      "top_value": 167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82227388|0|decision|50",
+      "episode_id": 82227388,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        113.0,
+        113.0,
+        167.0,
+        83.0,
+        83.0,
+        167.0,
+        83.0,
+        83.0,
+        157.5,
+        157.5,
+        110.25,
+        157.5
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 167.0,
+      "top_value": 167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82228017|0|decision|4",
+      "episode_id": 82228017,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        105.0,
+        105.0,
+        80.0,
+        105.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 105.0,
+      "top_value": 105.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82228017|0|decision|16",
+      "episode_id": 82228017,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1113.0,
+        1113.0,
+        1105.0,
+        105.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82228640|0|decision|7",
+      "episode_id": 82228640,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        0.0,
+        8.0,
+        0.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 0.0,
+      "top_value": 8.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82228640|0|decision|25",
+      "episode_id": 82228640,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1152.5,
+        28.0,
+        1152.5,
+        1127.5,
+        1152.5,
+        1112.0,
+        72.58,
+        1112.0,
+        72.58,
+        8.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1112.0,
+      "top_value": 1152.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 5,
+      "outscored_by": 4,
+      "top_tie": 3
+    },
+    {
+      "key": "82228640|0|decision|48",
+      "episode_id": 82228640,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        121.0,
+        121.0,
+        121.0,
+        136.3,
+        121.0,
+        112.0,
+        112.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 121.0,
+      "top_value": 136.3,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82228640|0|decision|53",
+      "episode_id": 82228640,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        86.3,
+        86.3,
+        71.0,
+        86.3,
+        86.3,
+        71.0,
+        86.3,
+        62.0,
+        62.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 71.0,
+      "top_value": 86.3,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 6,
+      "outscored_by": 5,
+      "top_tie": 5
+    },
+    {
+      "key": "82229122|0|decision|17",
+      "episode_id": 82229122,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        1160.25,
+        1167.0,
+        1167.0,
+        1113.0,
+        1167.0,
+        1113.0,
+        1167.0,
+        113.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82229122|0|decision|33",
+      "episode_id": 82229122,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1222.08,
+        1207.5,
+        1207.5,
+        1222.08,
+        113.0,
+        1222.08,
+        1207.5,
+        1207.5,
+        1177.5,
+        1177.5,
+        113.0,
+        1222.08,
+        113.0
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 1222.08,
+      "top_value": 1222.08,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82229122|0|decision|45",
+      "episode_id": 82229122,
+      "agent": "mega_starmie",
+      "correct": [
+        16
+      ],
+      "values": [
+        1200.345,
+        1185.765,
+        1185.765,
+        1200.345,
+        1200.345,
+        1200.345,
+        1185.765,
+        1185.765,
+        1200.345,
+        1200.345,
+        1155.765,
+        1155.765,
+        1170.345,
+        1170.345,
+        207.5,
+        1207.5,
+        1200.345,
+        207.5
+      ],
+      "scored": 18,
+      "n_options": 18,
+      "unscorable": false,
+      "correct_value": 1200.345,
+      "top_value": 1207.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82522698|1|decision|36",
+      "episode_id": 82522698,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        72.0,
+        72.0,
+        176.8,
+        152.5,
+        152.5,
+        176.8,
+        152.5,
+        152.5,
+        136.3,
+        152.5
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 176.8,
+      "top_value": 176.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82522698|1|decision|62",
+      "episode_id": 82522698,
+      "agent": "mega_starmie",
+      "correct": [
+        15
+      ],
+      "values": [
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        1112.0,
+        4000,
+        112.0
+      ],
+      "scored": 17,
+      "n_options": 17,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 15
+    },
+    {
+      "key": "82522726|1|decision|7",
+      "episode_id": 82522726,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        58.0,
+        58.0,
+        58.0,
+        58.0,
+        8.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 58.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82522726|1|decision|23",
+      "episode_id": 82522726,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        7000,
+        7000,
+        7000,
+        7000,
+        7000,
+        8.0,
+        58.0,
+        8.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 7000,
+      "top_value": 7000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82523164|1|decision|11",
+      "episode_id": 82523164,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        105.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "82523164|1|decision|75",
+      "episode_id": 82523164,
+      "agent": "mega_starmie",
+      "correct": [
+        8
+      ],
+      "values": [
+        175.60000000000002,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        256.1,
+        3000,
+        215.60000000000002,
+        256.1
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 3000,
+      "top_value": 3000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "82523811|1|decision|15",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        8.0,
+        -17.0,
+        -17.0,
+        8.0,
+        8.0,
+        8.0,
+        8.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 8.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82523811|1|decision|59",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1121.0,
+        1121.0,
+        1136.3,
+        1121.0,
+        1136.3,
+        1121.0,
+        1136.3,
+        1072.0,
+        1112.0,
+        112.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 1121.0,
+      "top_value": 1136.3,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 3
+    },
+    {
+      "key": "82523811|1|decision|79",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1136.3,
+        1136.3,
+        136.3
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 1136.3,
+      "top_value": 1136.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82523811|1|decision|84",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        90.35,
+        95.3,
+        90.35,
+        -29.650000000000006,
+        95.3,
+        90.35,
+        56.3,
+        56.3,
+        86.3,
+        86.3,
+        86.3
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 95.3,
+      "top_value": 95.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82523811|1|decision|93",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1113.0,
+        1113.0,
+        1113.0,
+        1114.5,
+        1113.0,
+        1113.0,
+        1104.0,
+        104.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1114.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82523811|1|decision|95",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1113.0,
+        1104.0,
+        104.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82523811|1|decision|105",
+      "episode_id": 82523811,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        54.0,
+        3000,
+        63.0,
+        3000,
+        3000,
+        54.0,
+        -946.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 3000,
+      "top_value": 3000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82524455|1|decision|6",
+      "episode_id": 82524455,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        58.0,
+        58.0,
+        58.0,
+        58.0,
+        50.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 58.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82524455|1|decision|27",
+      "episode_id": 82524455,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1113.0,
+        1064.0,
+        1113.0,
+        1104.0,
+        104.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82524455|1|decision|55",
+      "episode_id": 82524455,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        5000,
+        5000,
+        3104.0,
+        5000,
+        -1000.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 5000,
+      "top_value": 5000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82525101|1|decision|69",
+      "episode_id": 82525101,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        32.3,
+        32.3,
+        86.3,
+        36.349999999999994,
+        32.3
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 86.3,
+      "top_value": 86.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82525101|1|decision|87",
+      "episode_id": 82525101,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1121.0,
+        1121.0,
+        1104.0,
+        104.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1121.0,
+      "top_value": 1121.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82525101|1|decision|92",
+      "episode_id": 82525101,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1113.0,
+        1113.0,
+        1113.0,
+        1104.0,
+        104.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82525101|1|decision|102",
+      "episode_id": 82525101,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        104.0,
+        104.0,
+        104.0,
+        104.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 104.0,
+      "top_value": 104.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82525101|1|decision|110",
+      "episode_id": 82525101,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        -937.0,
+        -937.0,
+        -1057.0,
+        76.58,
+        -937.0,
+        -937.0,
+        71.0,
+        -946.0,
+        -946.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": -937.0,
+      "top_value": 76.58,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 1
+    },
+    {
+      "key": "82525741|0|decision|58",
+      "episode_id": 82525741,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        71.0,
+        71.0,
+        76.58,
+        71.0,
+        -997.0,
+        -946.0,
+        -946.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 71.0,
+      "top_value": 76.58,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82525741|0|decision|77",
+      "episode_id": 82525741,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        121.0,
+        126.58,
+        126.58,
+        121.0,
+        126.58,
+        126.58,
+        121.0,
+        112.0,
+        112.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 121.0,
+      "top_value": 126.58,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 5,
+      "outscored_by": 4,
+      "top_tie": 4
+    },
+    {
+      "key": "82525741|0|decision|78",
+      "episode_id": 82525741,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        121.0,
+        121.0,
+        121.0,
+        121.0,
+        61.0,
+        121.0,
+        136.3,
+        136.3,
+        112.0,
+        112.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 121.0,
+      "top_value": 136.3,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82525741|0|decision|81",
+      "episode_id": 82525741,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        121.0,
+        121.0,
+        136.3,
+        126.58,
+        112.0,
+        112.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 136.3,
+      "top_value": 136.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82525741|0|decision|100",
+      "episode_id": 82525741,
+      "agent": "mega_starmie",
+      "correct": [
+        10
+      ],
+      "values": [
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        3000,
+        110.6
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 3000,
+      "top_value": 3000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 11
+    },
+    {
+      "key": "82717711|0|decision|18",
+      "episode_id": 82717711,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1075.0,
+        1105.0,
+        105.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 1105.0,
+      "top_value": 1105.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82717711|0|decision|37",
+      "episode_id": 82717711,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1160.25,
+        1207.5,
+        160.25
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 1207.5,
+      "top_value": 1207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82866415|0|decision|43",
+      "episode_id": 82866415,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        176.8,
+        176.8,
+        176.8,
+        176.8,
+        151.8,
+        176.8,
+        167.07999999999998,
+        167.07999999999998,
+        136.3,
+        167.07999999999998
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 176.8,
+      "top_value": 176.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82866415|0|decision|48",
+      "episode_id": 82866415,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        107.07999999999998,
+        107.07999999999998,
+        167.07999999999998,
+        167.07999999999998,
+        142.07999999999998,
+        167.07999999999998,
+        167.07999999999998,
+        64.7,
+        167.07999999999998
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 167.07999999999998,
+      "top_value": 167.07999999999998,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82867148|0|decision|34",
+      "episode_id": 82867148,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1063.0,
+        55.0,
+        -945.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 55.0,
+      "top_value": 1063.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82867148|0|decision|52",
+      "episode_id": 82867148,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82867148|0|decision|62",
+      "episode_id": 82867148,
+      "agent": "mega_starmie",
+      "correct": [
+        8
+      ],
+      "values": [
+        1063.0,
+        1063.0,
+        1063.0,
+        1063.0,
+        1033.0,
+        1033.0,
+        1063.0,
+        1063.0,
+        1063.0,
+        1063.0,
+        63.0
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 1063.0,
+      "top_value": 1063.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "82867148|0|decision|87",
+      "episode_id": 82867148,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        63.0,
+        33.0,
+        33.0,
+        33.0,
+        33.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 33.0,
+      "top_value": 63.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 10,
+      "outscored_by": 9,
+      "top_tie": 9
+    },
+    {
+      "key": "82748422|0|decision|26",
+      "episode_id": 82748422,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1064.0,
+        1113.0,
+        1113.0,
+        1053.0,
+        1113.0,
+        1104.0,
+        104.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82748422|0|decision|51",
+      "episode_id": 82748422,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        6000,
+        6000,
+        6000,
+        -946.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 6000,
+      "top_value": 6000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82748522|0|decision|15",
+      "episode_id": 82748522,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        8.0,
+        8.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 8.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82749168|1|decision|21",
+      "episode_id": 82749168,
+      "agent": "mega_starmie",
+      "correct": [
+        7
+      ],
+      "values": [
+        -945.0,
+        -945.0,
+        -975.0,
+        -945.0,
+        -945.0,
+        -1005.0,
+        -975.0,
+        -945.0,
+        -945.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": -945.0,
+      "top_value": -945.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "82749168|1|decision|29",
+      "episode_id": 82749168,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        110.25,
+        167.0,
+        124.83000000000001,
+        80.25,
+        2177.5,
+        80.25,
+        110.25,
+        167.0,
+        124.83000000000001,
+        167.0,
+        167.0,
+        80.25,
+        2177.5,
+        80.25,
+        63.0,
+        2207.5,
+        63.0
+      ],
+      "scored": 17,
+      "n_options": 17,
+      "unscorable": false,
+      "correct_value": 124.83000000000001,
+      "top_value": 2207.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 8,
+      "outscored_by": 7,
+      "top_tie": 1
+    },
+    {
+      "key": "82749168|1|decision|61",
+      "episode_id": 82749168,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        1176.0,
+        1146.0,
+        1146.0,
+        1176.0,
+        1146.0,
+        1146.0,
+        1207.5,
+        1176.0,
+        1200.3,
+        1176.0,
+        184.55,
+        176.0
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 1207.5,
+      "top_value": 1207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82749168|1|decision|62",
+      "episode_id": 82749168,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1176.0,
+        176.0,
+        160.25,
+        176.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1176.0,
+      "top_value": 1176.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82749168|1|decision|65",
+      "episode_id": 82749168,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        3207.5,
+        3207.5,
+        2207.5,
+        184.55,
+        207.5
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 3207.5,
+      "top_value": 3207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82749168|1|decision|88",
+      "episode_id": 82749168,
+      "agent": "mega_starmie",
+      "correct": [
+        8
+      ],
+      "values": [
+        2000,
+        1207.5,
+        2000,
+        1207.5,
+        2000,
+        2000,
+        2000,
+        2000,
+        2000,
+        2000,
+        207.5
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 2000,
+      "top_value": 2000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "82749656|0|decision|62",
+      "episode_id": 82749656,
+      "agent": "mega_starmie",
+      "correct": [
+        12
+      ],
+      "values": [
+        167.0,
+        167.0,
+        137.0,
+        137.0,
+        137.0,
+        167.0,
+        167.0,
+        107.0,
+        176.0,
+        167.0,
+        181.57999999999998,
+        4000,
+        167.0,
+        167.0
+      ],
+      "scored": 14,
+      "n_options": 14,
+      "unscorable": false,
+      "correct_value": 167.0,
+      "top_value": 4000,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 1
+    },
+    {
+      "key": "82750161|1|decision|16",
+      "episode_id": 82750161,
+      "agent": "mega_starmie",
+      "correct": [
+        7
+      ],
+      "values": [
+        -22.0,
+        -22.0,
+        -22.0,
+        8.0,
+        8.0,
+        8.0,
+        8.0,
+        8.0,
+        8.0,
+        8.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 8.0,
+      "top_value": 8.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "82750161|1|decision|29",
+      "episode_id": 82750161,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1167.08,
+        1107.08,
+        1167.08,
+        40.4,
+        72.58
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1167.08,
+      "top_value": 1167.08,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "82750161|1|decision|59",
+      "episode_id": 82750161,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1146.8,
+        1133.525,
+        1123.805,
+        1146.8,
+        1133.525,
+        1123.805,
+        1089.35,
+        1096.3,
+        1176.8,
+        1149.35,
+        1159.88,
+        1096.3,
+        1149.35,
+        1145.3,
+        1136.3,
+        145.3
+      ],
+      "scored": 16,
+      "n_options": 16,
+      "unscorable": false,
+      "correct_value": 1133.525,
+      "top_value": 1176.8,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 9,
+      "outscored_by": 8,
+      "top_tie": 1
+    },
+    {
+      "key": "82750161|1|decision|60",
+      "episode_id": 82750161,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        1116.8,
+        42.3,
+        42.3,
+        1176.8,
+        1176.8,
+        1176.8,
+        1136.3,
+        176.8
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1176.8,
+      "top_value": 1176.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82751468|1|decision|14",
+      "episode_id": 82751468,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        110.25,
+        1167.0,
+        110.25,
+        1167.0,
+        1167.0,
+        63.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82751468|1|decision|57",
+      "episode_id": 82751468,
+      "agent": "mega_starmie",
+      "correct": [
+        11
+      ],
+      "values": [
+        76.58,
+        86.3,
+        86.3,
+        71.0,
+        76.58,
+        71.0,
+        76.58,
+        71.0,
+        76.58,
+        71.0,
+        76.58,
+        76.58,
+        76.58,
+        62.0,
+        62.0
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 76.58,
+      "top_value": 86.3,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82751468|1|decision|68",
+      "episode_id": 82751468,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        4000,
+        4000,
+        4000,
+        102.5,
+        4000,
+        102.5,
+        4000,
+        82.3,
+        102.5
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82751468|1|decision|70",
+      "episode_id": 82751468,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        4000,
+        4000,
+        102.5,
+        102.5,
+        4000,
+        82.3,
+        102.5
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82752045|1|decision|18",
+      "episode_id": 82752045,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1105.0,
+        1075.0,
+        1105.0,
+        1075.0,
+        1105.0,
+        1105.0,
+        105.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1105.0,
+      "top_value": 1105.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82752045|1|decision|80",
+      "episode_id": 82752045,
+      "agent": "mega_starmie",
+      "correct": [
+        8
+      ],
+      "values": [
+        2116.8,
+        2146.8,
+        2165.025,
+        2189.325,
+        2116.8,
+        2146.8,
+        2165.025,
+        2189.325,
+        2180.85,
+        2056.8,
+        2116.8,
+        2176.8,
+        1176.8,
+        2180.85,
+        176.8
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 2180.85,
+      "top_value": 2189.325,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82752045|1|decision|94",
+      "episode_id": 82752045,
+      "agent": "mega_starmie",
+      "correct": [
+        14
+      ],
+      "values": [
+        116.80000000000001,
+        146.8,
+        146.8,
+        146.8,
+        116.80000000000001,
+        146.8,
+        146.8,
+        146.8,
+        180.85,
+        56.80000000000001,
+        116.80000000000001,
+        180.85,
+        56.80000000000001,
+        176.8,
+        176.8,
+        140.35,
+        176.8
+      ],
+      "scored": 17,
+      "n_options": 17,
+      "unscorable": false,
+      "correct_value": 176.8,
+      "top_value": 180.85,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82752045|1|decision|97",
+      "episode_id": 82752045,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        146.8,
+        146.8,
+        146.8,
+        176.8,
+        180.85,
+        201.1,
+        176.8,
+        176.8,
+        154.525,
+        176.8
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 146.8,
+      "top_value": 201.1,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 8,
+      "outscored_by": 7,
+      "top_tie": 1
+    },
+    {
+      "key": "82752045|1|decision|115",
+      "episode_id": 82752045,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        3000,
+        3000,
+        3000,
+        3000,
+        136.3,
+        3000,
+        112.0,
+        136.3
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 3000,
+      "top_value": 3000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82752604|0|decision|14",
+      "episode_id": 82752604,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        113.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 113.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82752604|0|decision|16",
+      "episode_id": 82752604,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82752604|0|decision|61",
+      "episode_id": 82752604,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1231.8,
+        1231.8,
+        1235.85,
+        1222.08,
+        1222.08,
+        1152.775,
+        222.08
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1235.85,
+      "top_value": 1235.85,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82752604|0|decision|88",
+      "episode_id": 82752604,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1181.8,
+        1181.8,
+        1185.85,
+        1065.85,
+        1151.8,
+        1151.8,
+        1151.8,
+        1181.8,
+        181.8,
+        1200.3,
+        181.8
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 1185.85,
+      "top_value": 1200.3,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82752604|0|decision|106",
+      "episode_id": 82752604,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        3167.0,
+        4000,
+        167.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "82753102|1|decision|9",
+      "episode_id": 82753102,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1063.0,
+        113.0,
+        1063.0,
+        1110.25,
+        1003.0,
+        105.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 1063.0,
+      "top_value": 1110.25,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82753102|1|decision|37",
+      "episode_id": 82753102,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        -5.0,
+        105.0,
+        113.0,
+        105.0,
+        55.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 105.0,
+      "top_value": 113.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82753102|1|decision|109",
+      "episode_id": 82753102,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1157.5,
+        113.0,
+        1157.5,
+        2157.5,
+        1157.5,
+        1157.5,
+        1124.83,
+        157.5
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1157.5,
+      "top_value": 2157.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "82754241|1|decision|12",
+      "episode_id": 82754241,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        63.0,
+        3.0,
+        1113.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "82754241|1|decision|41",
+      "episode_id": 82754241,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        2205.88,
+        1153.18,
+        2205.88,
+        128.88
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 1153.18,
+      "top_value": 2205.88,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "82754875|0|decision|8",
+      "episode_id": 82754875,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1113.0,
+        1113.0,
+        1113.0,
+        1105.0,
+        105.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82754875|0|decision|52",
+      "episode_id": 82754875,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        -945.0,
+        -945.0,
+        -945.0,
+        -945.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": -945.0,
+      "top_value": -945.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82756021|1|decision|101",
+      "episode_id": 82756021,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        4000,
+        4000,
+        2112.0,
+        4000,
+        4000,
+        112.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "82756664|1|decision|9",
+      "episode_id": 82756664,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        113.0,
+        88.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 88.0,
+      "top_value": 113.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 7,
+      "outscored_by": 6,
+      "top_tie": 6
+    },
+    {
+      "key": "82756664|1|decision|35",
+      "episode_id": 82756664,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        1231.8,
+        1231.8,
+        1231.8,
+        1206.8,
+        1200.3,
+        1231.8,
+        1204.35,
+        1214.88,
+        1231.8,
+        152.775,
+        1231.8,
+        118.8
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 1231.8,
+      "top_value": 1231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "82756664|1|decision|36",
+      "episode_id": 82756664,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        1214.88,
+        1214.88,
+        1214.88,
+        1189.88,
+        1214.88,
+        167.35500000000002,
+        1214.88,
+        133.38
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1214.88,
+      "top_value": 1214.88,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "82756664|1|decision|37",
+      "episode_id": 82756664,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        1214.88,
+        1214.88,
+        167.35500000000002,
+        1214.88,
+        133.38
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1214.88,
+      "top_value": 1214.88,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "82756664|1|decision|74",
+      "episode_id": 82756664,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        165.60000000000002,
+        165.60000000000002,
+        101.88,
+        111.6,
+        81.6,
+        81.6,
+        81.6,
+        105.60000000000002,
+        165.60000000000002,
+        111.6,
+        115.64999999999999,
+        115.64999999999999,
+        165.60000000000002,
+        111.6,
+        115.64999999999999,
+        115.64999999999999,
+        101.88,
+        101.88
+      ],
+      "scored": 18,
+      "n_options": 18,
+      "unscorable": false,
+      "correct_value": 111.6,
+      "top_value": 165.60000000000002,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 9,
+      "outscored_by": 8,
+      "top_tie": 4
+    },
+    {
+      "key": "83053965|1|decision|6",
+      "episode_id": 83053965,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        113.0,
+        83.0,
+        83.0,
+        83.0,
+        113.0,
+        113.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83053965|1|decision|28",
+      "episode_id": 83053965,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1167.0,
+        1167.0,
+        1167.0,
+        1167.0,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83053965|1|decision|32",
+      "episode_id": 83053965,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        110.25,
+        1167.0,
+        1167.0,
+        1167.0,
+        63.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1167.0,
+      "top_value": 1167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83053965|1|decision|91",
+      "episode_id": 83053965,
+      "agent": "mega_starmie",
+      "correct": [
+        13
+      ],
+      "values": [
+        2171.8,
+        1231.8,
+        2111.8,
+        1170.3,
+        2201.8,
+        2205.85,
+        1200.3,
+        2231.8,
+        1204.35,
+        1170.3,
+        2201.8,
+        2205.85,
+        202.775,
+        2231.8,
+        168.8
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 2231.8,
+      "top_value": 2231.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83054602|1|decision|17",
+      "episode_id": 83054602,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        112.0,
+        7000,
+        58.0,
+        112.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 7000,
+      "top_value": 7000,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "83054602|1|decision|32",
+      "episode_id": 83054602,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        18.0,
+        121.0,
+        58.0,
+        121.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 121.0,
+      "top_value": 121.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83007714|1|decision|7",
+      "episode_id": 83007714,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        63.0,
+        33.0,
+        33.0,
+        63.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 33.0,
+      "top_value": 63.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 6,
+      "outscored_by": 5,
+      "top_tie": 5
+    },
+    {
+      "key": "83007714|1|decision|8",
+      "episode_id": 83007714,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83007714|1|decision|65",
+      "episode_id": 83007714,
+      "agent": "mega_starmie",
+      "correct": [
+        7
+      ],
+      "values": [
+        164.32500000000002,
+        194.32500000000002,
+        194.32500000000002,
+        244.32500000000005,
+        222.05,
+        104.32500000000002,
+        164.32500000000002,
+        224.32500000000002,
+        177.07500000000002
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 224.32500000000002,
+      "top_value": 244.32500000000005,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "83007714|1|decision|135",
+      "episode_id": 83007714,
+      "agent": "mega_starmie",
+      "correct": [
+        9
+      ],
+      "values": [
+        2176.8,
+        3000,
+        3000,
+        3000,
+        3000,
+        176.8,
+        3000,
+        3000,
+        176.8,
+        3000,
+        136.3,
+        176.8
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 3000,
+      "top_value": 3000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "83037962|0|decision|48",
+      "episode_id": 83037962,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        76.58,
+        76.58,
+        71.0,
+        76.58,
+        71.0,
+        76.58,
+        71.0,
+        76.58,
+        62.0,
+        62.0
+      ],
+      "scored": 10,
+      "n_options": 10,
+      "unscorable": false,
+      "correct_value": 76.58,
+      "top_value": 76.58,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "83037962|0|decision|49",
+      "episode_id": 83037962,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        71.0,
+        71.0,
+        71.0,
+        8.0,
+        71.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 71.0,
+      "top_value": 71.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83037962|0|decision|78",
+      "episode_id": 83037962,
+      "agent": "mega_starmie",
+      "correct": [
+        9
+      ],
+      "values": [
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        4000,
+        112.0,
+        4000,
+        102.5,
+        4000,
+        36.349999999999994,
+        102.5
+      ],
+      "scored": 12,
+      "n_options": 12,
+      "unscorable": false,
+      "correct_value": 4000,
+      "top_value": 4000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "83038055|0|decision|40",
+      "episode_id": 83038055,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        3152.5,
+        3122.5,
+        3144.5,
+        3144.5,
+        -905.5,
+        3144.5,
+        -905.5
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 3152.5,
+      "top_value": 3152.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "83038055|0|decision|51",
+      "episode_id": 83038055,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        167.07999999999998,
+        167.07999999999998,
+        167.07999999999998,
+        167.07999999999998,
+        64.7,
+        167.07999999999998
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 167.07999999999998,
+      "top_value": 167.07999999999998,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "83116081|0|decision|17",
+      "episode_id": 83116081,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "83116081|0|decision|76",
+      "episode_id": 83116081,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        3096.8,
+        3083.525,
+        3136.3,
+        3099.35,
+        3099.35,
+        3136.3,
+        3126.8,
+        3099.35,
+        3095.3,
+        3121.0,
+        95.3
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 3136.3,
+      "top_value": 3136.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83116501|0|decision|60",
+      "episode_id": 83116501,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        107.07999999999998,
+        167.07999999999998,
+        167.07999999999998,
+        82.925,
+        167.07999999999998
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 167.07999999999998,
+      "top_value": 167.07999999999998,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83116501|0|decision|70",
+      "episode_id": 83116501,
+      "agent": "mega_starmie",
+      "correct": [
+        7
+      ],
+      "values": [
+        72.58,
+        42.58,
+        42.58,
+        66.58,
+        72.58,
+        42.58,
+        42.58,
+        126.58,
+        75.00999999999999,
+        87.16,
+        126.58,
+        75.00999999999999,
+        87.16,
+        126.58,
+        75.00999999999999,
+        87.16,
+        126.58,
+        75.00999999999999,
+        87.16,
+        126.58,
+        75.00999999999999,
+        87.16,
+        126.58,
+        75.00999999999999,
+        87.16,
+        72.58
+      ],
+      "scored": 26,
+      "n_options": 26,
+      "unscorable": false,
+      "correct_value": 126.58,
+      "top_value": 126.58,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 6
+    },
+    {
+      "key": "83116501|0|decision|89",
+      "episode_id": 83116501,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        30.349999999999994,
+        56.3,
+        56.3,
+        56.3,
+        95.3,
+        90.35,
+        110.6,
+        95.3,
+        90.35,
+        110.6,
+        95.3,
+        90.35,
+        110.6,
+        95.3,
+        90.35,
+        110.6,
+        95.3,
+        90.35,
+        110.6,
+        90.35,
+        56.3,
+        56.3,
+        56.3,
+        86.3,
+        86.3
+      ],
+      "scored": 25,
+      "n_options": 25,
+      "unscorable": false,
+      "correct_value": 56.3,
+      "top_value": 110.6,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 19,
+      "outscored_by": 18,
+      "top_tie": 5
+    },
+    {
+      "key": "83117367|0|decision|34",
+      "episode_id": 83117367,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scored": 0,
+      "n_options": 7,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "83117367|0|decision|45",
+      "episode_id": 83117367,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "scored": 0,
+      "n_options": 4,
+      "unscorable": true,
+      "correct_value": null,
+      "top_value": null,
+      "correct_is_top": null,
+      "correct_is_unique_top": null,
+      "correct_rank": null,
+      "outscored_by": null,
+      "top_tie": null
+    },
+    {
+      "key": "83661649|0|decision|30",
+      "episode_id": 83661649,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        176.8,
+        42.3,
+        176.8,
+        176.8,
+        136.3,
+        176.8
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 176.8,
+      "top_value": 176.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83661649|0|decision|54",
+      "episode_id": 83661649,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        1056.3,
+        1056.3,
+        1090.35,
+        1090.35,
+        1095.3,
+        1090.35,
+        1095.3,
+        1090.35,
+        1095.3,
+        1090.35,
+        1095.3,
+        1090.35,
+        1030.35,
+        1086.3,
+        86.3
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 1095.3,
+      "top_value": 1095.3,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83662396|1|decision|19",
+      "episode_id": 83662396,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1055.0,
+        1055.0,
+        55.0
+      ],
+      "scored": 3,
+      "n_options": 3,
+      "unscorable": false,
+      "correct_value": 1055.0,
+      "top_value": 1055.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83663053|1|decision|22",
+      "episode_id": 83663053,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        2113.0,
+        6000,
+        6000,
+        6000,
+        6000,
+        6000,
+        104.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 6000,
+      "top_value": 6000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "83664340|1|decision|24",
+      "episode_id": 83664340,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        1152.5,
+        1152.5,
+        10.0,
+        1152.5,
+        1084.5,
+        1144.5,
+        50.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 1152.5,
+      "top_value": 1152.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83664340|1|decision|45",
+      "episode_id": 83664340,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        62.0,
+        32.3,
+        22.58,
+        8.0,
+        -22.0,
+        -22.0,
+        8.0,
+        -22.0,
+        -22.0,
+        62.0,
+        32.3,
+        22.58,
+        8.0
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 62.0,
+      "top_value": 62.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83664991|0|decision|25",
+      "episode_id": 83664991,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1157.5,
+        1157.5,
+        1181.8,
+        1142.5149999999999,
+        1181.8,
+        135.765,
+        1181.8,
+        91.35
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 1181.8,
+      "top_value": 1181.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83664991|0|decision|43",
+      "episode_id": 83664991,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        63.0,
+        63.0,
+        63.0,
+        110.25,
+        63.0,
+        63.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 110.25,
+      "top_value": 110.25,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "83665798|1|decision|12",
+      "episode_id": 83665798,
+      "agent": "mega_starmie",
+      "correct": [
+        7
+      ],
+      "values": [
+        113.0,
+        113.0,
+        83.0,
+        83.0,
+        88.0,
+        88.0,
+        88.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        63.0,
+        113.0
+      ],
+      "scored": 13,
+      "n_options": 13,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "83665798|1|decision|39",
+      "episode_id": 83665798,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        7000,
+        7000,
+        7000,
+        7000,
+        7000,
+        1207.5,
+        207.5
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 7000,
+      "top_value": 7000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "83666442|1|decision|27",
+      "episode_id": 83666442,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        -905.5,
+        72.5,
+        117.08,
+        72.5,
+        -905.5,
+        -905.5,
+        -905.5
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 117.08,
+      "top_value": 117.08,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "83667237|0|decision|87",
+      "episode_id": 83667237,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1152.5,
+        1092.5,
+        1113.0,
+        1152.5,
+        1104.0,
+        104.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 1113.0,
+      "top_value": 1152.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
+    },
+    {
+      "key": "83667237|0|decision|120",
+      "episode_id": 83667237,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        1102.5,
+        2094.5,
+        3042.5,
+        3102.5,
+        3102.5,
+        3102.5,
+        -946.0,
+        2094.5,
+        -946.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 3102.5,
+      "top_value": 3102.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83455356|0|decision|11",
+      "episode_id": 83455356,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        113.0,
+        1167.0,
+        63.0,
+        7000,
+        129.2,
+        129.2,
+        7000,
+        7000,
+        63.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 7000,
+      "top_value": 7000,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "83456015|0|decision|35",
+      "episode_id": 83456015,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        3092.5,
+        3102.5,
+        28.0,
+        3152.5,
+        58.0,
+        82.3,
+        58.0,
+        82.3,
+        3042.5,
+        58.0,
+        82.3,
+        3102.5,
+        3152.5,
+        62.0,
+        62.0
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 3152.5,
+      "top_value": 3152.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83456015|0|decision|38",
+      "episode_id": 83456015,
+      "agent": "mega_starmie",
+      "correct": [
+        6
+      ],
+      "values": [
+        3042.5,
+        58.0,
+        3042.5,
+        3102.5,
+        1102.5,
+        62.0,
+        3102.5,
+        58.0,
+        62.0
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 3102.5,
+      "top_value": 3102.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83456015|0|decision|47",
+      "episode_id": 83456015,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        3042.5,
+        58.0,
+        3042.5,
+        3102.5,
+        62.0,
+        3102.5,
+        58.0,
+        62.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 3102.5,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 7,
+      "outscored_by": 6,
+      "top_tie": 2
+    },
+    {
+      "key": "83457493|1|decision|20",
+      "episode_id": 83457493,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        63.0,
+        3.0,
+        3.0,
+        63.0,
+        63.0,
+        63.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 63.0,
+      "top_value": 63.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83457493|1|decision|31",
+      "episode_id": 83457493,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        58.0,
+        -2.0,
+        -2.0,
+        58.0,
+        58.0,
+        58.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 58.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "83457493|1|decision|33",
+      "episode_id": 83457493,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        58.0,
+        -2.0,
+        -2.0,
+        58.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 58.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83966968|0|decision|45",
+      "episode_id": 83966968,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        107.07999999999998,
+        107.07999999999998,
+        176.8,
+        176.8,
+        32.58,
+        167.07999999999998,
+        167.07999999999998,
+        40.4,
+        167.07999999999998
+      ],
+      "scored": 9,
+      "n_options": 9,
+      "unscorable": false,
+      "correct_value": 176.8,
+      "top_value": 176.8,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
+    },
+    {
+      "key": "83966968|0|decision|78",
+      "episode_id": 83966968,
+      "agent": "mega_starmie",
+      "correct": [
+        2
+      ],
+      "values": [
+        1011.0,
+        1011.0,
+        86.3,
+        86.3,
+        1071.0,
+        1076.58,
+        1071.0,
+        1076.58,
+        1071.0,
+        1076.58,
+        1071.0,
+        1076.58,
+        1071.0,
+        62.0,
+        62.0
+      ],
+      "scored": 15,
+      "n_options": 15,
+      "unscorable": false,
+      "correct_value": 86.3,
+      "top_value": 1076.58,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 12,
+      "outscored_by": 11,
+      "top_tie": 4
+    },
+    {
+      "key": "83968638|1|decision|17",
+      "episode_id": 83968638,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        2167.0,
+        2167.0,
+        1160.25,
+        2167.0,
+        2167.0,
+        1160.25,
+        2167.0,
+        2167.0,
+        1113.0,
+        2167.0,
+        113.0
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 2167.0,
+      "top_value": 2167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 7
+    },
+    {
+      "key": "83969481|0|decision|55",
+      "episode_id": 83969481,
+      "agent": "mega_starmie",
+      "correct": [
+        4
+      ],
+      "values": [
+        113.0,
+        121.0,
+        10.0,
+        53.0,
+        113.0,
+        113.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 121.0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    },
+    {
+      "key": "84897262|1|decision|100",
+      "episode_id": 84897262,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        58.0,
+        58.0,
+        58.0,
+        58.0,
+        58.0,
+        50.0,
+        50.0
+      ],
+      "scored": 7,
+      "n_options": 7,
+      "unscorable": false,
+      "correct_value": 58.0,
+      "top_value": 58.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "85163079|0|decision|30",
+      "episode_id": 85163079,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        1207.5,
+        1147.5,
+        1207.5,
+        1207.5,
+        207.5
+      ],
+      "scored": 5,
+      "n_options": 5,
+      "unscorable": false,
+      "correct_value": 1207.5,
+      "top_value": 1207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "85163079|0|decision|51",
+      "episode_id": 85163079,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        97.5,
+        157.5,
+        126.0,
+        126.0,
+        110.25,
+        126.0
+      ],
+      "scored": 6,
+      "n_options": 6,
+      "unscorable": false,
+      "correct_value": 157.5,
+      "top_value": 157.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 1
+    },
+    {
+      "key": "85163634|1|decision|17",
+      "episode_id": 85163634,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0,
+        113.0
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 113.0,
+      "top_value": 113.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 8
+    },
+    {
+      "key": "85163634|1|decision|41",
+      "episode_id": 85163634,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        2207.5,
+        2207.5,
+        2207.5,
+        2207.5,
+        207.5,
+        2207.5,
+        144.5,
+        207.5
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 2207.5,
+      "top_value": 2207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 5
+    },
+    {
+      "key": "85164131|1|decision|31",
+      "episode_id": 85164131,
+      "agent": "mega_starmie",
+      "correct": [
+        1
+      ],
+      "values": [
+        167.0,
+        167.0,
+        63.0,
+        167.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 167.0,
+      "top_value": 167.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
+    },
+    {
+      "key": "85164605|1|decision|6",
+      "episode_id": 85164605,
+      "agent": "mega_starmie",
+      "correct": [
+        0
+      ],
+      "values": [
+        105.0,
+        105.0,
+        105.0,
+        105.0
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 105.0,
+      "top_value": 105.0,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 4
+    },
+    {
+      "key": "85164605|1|decision|41",
+      "episode_id": 85164605,
+      "agent": "mega_starmie",
+      "correct": [
+        3
+      ],
+      "values": [
+        2207.5,
+        2207.5,
+        2207.5,
+        2207.5,
+        2207.5,
+        2207.5,
+        2207.5,
+        2207.5,
+        63.0,
+        2207.5,
+        63.0
+      ],
+      "scored": 11,
+      "n_options": 11,
+      "unscorable": false,
+      "correct_value": 2207.5,
+      "top_value": 2207.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 9
+    },
+    {
+      "key": "85164605|1|decision|64",
+      "episode_id": 85164605,
+      "agent": "mega_starmie",
+      "correct": [
+        5
+      ],
+      "values": [
+        2231.8,
+        2207.5,
+        2147.5,
+        2207.5,
+        2087.5,
+        2207.5,
+        1207.5,
+        207.5
+      ],
+      "scored": 8,
+      "n_options": 8,
+      "unscorable": false,
+      "correct_value": 2207.5,
+      "top_value": 2231.8,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
+    }
+  ]
+}

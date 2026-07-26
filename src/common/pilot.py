@@ -1387,6 +1387,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
         by_score = sorted(range(len(options)),
                           key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
+        by_score = self._prefer_soonest_arming_evolve(by_score, options, traces)
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
         # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
@@ -1484,6 +1485,53 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return {"mode": gp.mode.name, "conf": round(gp.confidence, 3), "goal": gp.directed_goal,
                 "route": len(gp.route), "route_turns": gp.route_turns}
+
+    def _prefer_soonest_arming_evolve(self, order: list, options: list, traces: list) -> list:
+        """Break an EXACT tie between EVOLVE options toward the body that arms soonest — i.e. put the
+        evolution where the Energy already is (ADR-0070 amendment M, #167).
+
+        `evolve-the-energized-body-first` was one of the five rungs the 1b swap retired, on the
+        premise that `evolve_value` subsumes it. It does not, and the reason is structural rather
+        than a missing read: `deploy = result.deploy() - body.deploy()` cancels **per slot**, because
+        the body and its result share that slot's Energy, arm and ko. So an energised Staryu cancels
+        2-against-2 and a bare one cancels 3-against-3 — both exactly 0.0 — and the tie then broke by
+        raw option INDEX. Measured on 81905522|0|decision|64: the equation reads the post-attach board
+        correctly (bench0's arm drops 3 -> 2), and the delta erases what it read. The consequence was
+        the Energy and the evolution landing on DIFFERENT bodies, stranding an Energy on a Staryu that
+        must still evolve before it can attack.
+
+        So consult the one term that does not cancel — the RESULT's arm clock — and only where it can
+        change nothing else: a run must be **all EVOLVE options at an identical score** before it is
+        reordered, so an evolve can never be promoted past a tied non-evolve. Ordering only; no score
+        moves, so f35's hold, the attach-anyway floor and the free-development exemption are all
+        untouched. The arm clock is already in `evolve_working["result"]`, so a trace reader can see
+        why one body won.
+
+        Tied evolves need NOT be adjacent: on 81905522|0|decision|64 the equal-score run is
+        ``[2, 0, 1, 6]`` with a non-evolve sitting BETWEEN the two evolves, so a consecutive-run
+        implementation never forms a run and never fires. This permutes the evolves *within the
+        positions they already occupy*, leaving every non-evolve exactly where it was — which is what
+        keeps "an evolve is never promoted past a tied non-evolve" true while still ordering the
+        evolves against each other."""
+        def arm(i):
+            w = getattr(traces[i], "evolve_working", None)
+            return (w or {}).get("result", {}).get("arm") if w else None
+
+        def is_evolve(i):
+            return options[i].get("type") == _EVOLVE and arm(i) is not None
+
+        out, n = list(order), len(order)
+        i = 0
+        while i < n:
+            j = i                           # the maximal run of options sharing one score
+            while j + 1 < n and traces[out[j + 1]].score == traces[out[i]].score:
+                j += 1
+            slots = [k for k in range(i, j + 1) if is_evolve(out[k])]
+            if len(slots) > 1:              # permute ONLY the evolves, into their own slots
+                for slot, opt in zip(slots, sorted((out[k] for k in slots), key=arm)):
+                    out[slot] = opt
+            i = j + 1
+        return out
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
@@ -1586,6 +1634,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # buried Boss's Orders (+50, the top-scored
                                                                      # option) below a setup Supporter that ate
                                                                      # the one-per-turn slot (dragapult f81)
+            if (t == _EVOLVE and o.get("inPlayArea") != _ACTIVE      # FREE DEVELOPMENT, tier 0 already
+                    and traces[i].score >= 0):                       # names it: "evolve a benched
+                return 0                                             # Pokémon". A same-line bench evolve
+                                                                     # nets to exactly 0.0 — the pre-evo is
+                                                                     # pre-credited with the LINE's payoff
+                                                                     # (`_line_payoff_stat`), so the deploy
+                                                                     # delta CANCELS — and the `score <= 0`
+                                                                     # gate below then starved it, ending
+                                                                     # turns with bare 70 HP Staryu instead
+                                                                     # of 330 HP Mega Starmie ex (#167's
+                                                                     # six-frame sitting).
+                                                                     # Scoped deliberately: `>= 0` only, so
+                                                                     # an evolve the equation prices as a
+                                                                     # WEAKENING (f35's -30.36 forfeited
+                                                                     # Recon dig) still falls to tier 4; and
+                                                                     # BENCHED only, leaving the Active's
+                                                                     # KO-forfeit guard above untouched.
+                                                                     # This is NOT the `>= 0` loosening
+                                                                     # ADR-0070 rejected — that was the whole
+                                                                     # sequencer; a zero-priced ATTACH still
+                                                                     # drops to 4 below (the attach-anyway
+                                                                     # blunder class, 82749168-21/82867148-34).
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
                 return 4                                             # — incl. an attach the decider prices at
                                                                      # ZERO: sequencing that ahead of End is
@@ -1776,7 +1846,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         pool = mine.deck_count
         best = 0.0
-        for etype, copies in (mine.deck_energy_counts or {}).items():
+        for etype, count in (mine.deck_energy_counts or {}).items():
+            # NAME the epistemic. `deck_energy_counts` holds `CountTriple`s, which refuse to be a
+            # bare number precisely so a consumer cannot smuggle an estimate into sound math
+            # (ADR-0068). A dig's odds ARE an estimate — ADR-0070 §3 calls income "an ODDS read,
+            # never a tier" — so `expected` is the leg. `floor` is the leg for comparisons against a
+            # COST, and while prizes are hidden it is 0 for almost every energy type: passing the
+            # triple itself used to raise TypeError into `draw_hit_probability`'s "bad input -> 0.0"
+            # guard, which silently zeroed §3, §7 and amendment B on EVERY board (#167).
+            # Truncated, not rounded — the conservative direction for an endorser.
+            copies = int(getattr(count, "expected", count) or 0)
             enabler = self.combat.attach_budget(
                 raw, mine.hand_ids, energy_attached=mine.energy_attached,
                 supporter_played=mine.supporter_played,
@@ -1841,11 +1920,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _ability_on_menu(self, obs: dict, card_id) -> bool:
         """Is this card's Ability still offered on the current menu — i.e. not yet used this turn?
         Abilities fire "per the ability's own text" (rules.md:91), and the engine simply stops
-        offering a once-per-turn one after use, so the MENU is the fact. False without a menu."""
+        offering a once-per-turn one after use, so the MENU is the fact. False without a menu.
+
+        An ABILITY option names its body by **slot** (``area``/``index``) and carries no ``cardId``
+        at all, so matching on one was False on every board ever built — silently killing
+        ``body_ability_on_menu`` (§7's "this turn's use is forfeit" half of the split-horizon loss)
+        and ``result_ability_now`` (which un-halves a gain that fires THIS turn). Resolve the slot
+        and compare the card sitting in it (#167)."""
         if card_id is None:
             return False
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
         for o in ((obs.get("select") or {}).get("option") or ()):
-            if o.get("type") == _ABILITY and o.get("cardId") == card_id:
+            if o.get("type") != _ABILITY:
+                continue
+            bodies = me.get(_ZONE.get(o.get("area"), "")) or []
+            idx = o.get("index")
+            if idx is None or not (0 <= idx < len(bodies)) or not bodies[idx]:
+                continue
+            if bodies[idx].get("id") == card_id:
                 return True
         return False
 

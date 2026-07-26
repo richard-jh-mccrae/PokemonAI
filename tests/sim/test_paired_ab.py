@@ -41,3 +41,49 @@ def test_paired_delta_ci_tightens_with_n():
     small = paired_delta([(55, 100, 50, 100)])
     big = paired_delta([(5500, 10000, 5000, 10000)])
     assert (small["ci_hi"] - small["ci_lo"]) > (big["ci_hi"] - big["ci_lo"])
+
+
+# --- the mid-build Tripwire (ADR-0072 decision 1, #167) -------------------------------------------
+
+@pytest.mark.req("REQ-SIM-0031")
+def test_mid_build_verdict_passes_a_negative_delta_that_flips_on_refuses():
+    """THE re-scope, in one assertion. A mid-build decider swap is not trying to raise win rate — it
+    makes one axis correct so #165/#145 can compose the axes — so the Tripwire drops `delta >= 0` and
+    asks only that no CATASTROPHE is consistent with the data. Phase 1b's real numbers (−1.17 pp,
+    CI [−4.59, +2.25]) are the case: `flips_on` says no, the Tripwire says yes."""
+    from sim.paired_ab import flips_on, mid_build_verdict
+
+    b1 = {"delta": -0.0117, "ci_lo": -0.0459, "ci_hi": 0.0225, "n_matchups": 6}
+    assert flips_on(b1, crashes=0) is False           # the rule that forced a user override
+    assert mid_build_verdict(b1, crashes=0) is True   # the rule that grades what 1b was actually doing
+
+
+@pytest.mark.req("REQ-SIM-0031")
+def test_mid_build_verdict_still_hard_fails_on_any_crash():
+    """The crash gate is the clause that WAS working (4800 games, zero crashes) and it survives the
+    re-scope unchanged — a hard zero, never traded against precision."""
+    from sim.paired_ab import mid_build_verdict
+    neutral = {"delta": 0.0, "ci_lo": -0.02, "ci_hi": 0.02, "n_matchups": 6}
+    assert mid_build_verdict(neutral, crashes=0) is True
+    assert mid_build_verdict(neutral, crashes=1) is False
+
+
+@pytest.mark.req("REQ-SIM-0031")
+def test_mid_build_verdict_fails_a_catastrophe_below_the_bound():
+    """It excludes catastrophes and claims nothing more: a CI lower bound worse than −5 pp is the one
+    win-rate fact the standing n=200/arm/matchup run CAN resolve, so it is the one it gates on."""
+    from sim.paired_ab import mid_build_verdict
+    bad = {"delta": -0.06, "ci_lo": -0.091, "ci_hi": -0.029, "n_matchups": 6}
+    assert mid_build_verdict(bad, crashes=0) is False
+
+
+@pytest.mark.req("REQ-SIM-0031")
+def test_mid_build_bound_is_looser_than_the_post_composition_one():
+    """The two stages are calibrated to what their instrument can adjudicate: a −1 pp bound needs
+    ~28,000 games near a zero delta, a −5 pp bound is decidable at the standing 2400. A swap sitting
+    between the two bounds is exactly the band the split exists to separate."""
+    from sim.paired_ab import _REG_TOL, MID_BUILD_REG_TOL, flips_on, mid_build_verdict
+    assert MID_BUILD_REG_TOL > _REG_TOL
+    between = {"delta": 0.001, "ci_lo": -0.03, "ci_hi": 0.032, "n_matchups": 6}
+    assert flips_on(between, crashes=0) is False        # post-composition: not precise enough
+    assert mid_build_verdict(between, crashes=0) is True  # mid-build: no catastrophe, that's the ask

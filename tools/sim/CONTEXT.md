@@ -94,3 +94,39 @@ seat-balancing is auditable) that are the **source of truth** every aggregate re
 Distinct from the printed **Battle Report**; the join key is `battle_id`. A `verdict` is never
 stored — it's interpretation, derived on read.
 _Avoid_: Battle Report (that's the printed view), Performance Log (that's real-ladder Submission samples, ADR-0019)
+
+**Mid-build Swap** / **Post-composition Swap**:
+The two build stages a decider swap can be in, and the reason directive 6 has two rules
+([ADR-0072](../../docs/adr/0072-mid-build-swaps-are-gated-by-deterministic-instruments.md)). A
+**Mid-build Swap** (Phase 1a–1g) makes ONE axis correct in ONE currency so #165 and #145 can later
+compose the axes — it is not trying to move win rate, so its paired A/B is a **Tripwire** and its
+merit is carried by the **Decision Gate** + **Discrimination Gate**. A **Post-composition Swap**
+(#145 onward, once `state_value` and the Turn Planner consume the equations) is graded by
+`flips_on` verbatim, where a positive win-rate delta is a meaningful thing to demand.
+_Avoid_: phase (a #136 tracker item, not a grading stage), early/late, pre-/post-value-model
+
+**Tripwire**:
+What the paired A/B *is* for a **Mid-build Swap**: `crashes == 0 AND ci_lo >= -0.05` at the standing
+n=200/arm/directed matchup. It excludes catastrophes and proves the agent doesn't crash on the real
+engine — it makes **no** claim of non-regression, and it carries no merit clause (`delta >= 0` is
+deleted mid-build, because it is a coin flip on a neutral swap at any n). The delta, CI and achieved
+half-width are recorded beside the verdict and never gate.
+_Avoid_: A/B gate, flip rule, non-regression check (it demonstrates none of those)
+
+**Decision Gate**:
+The merit gate that asks *did any decision I own get worse*: the phase's
+`tools/train/probes/*_decider_sweep.py` must show **zero unruled `REGRESSION` frames**, every flip
+ruled with the user in the swap-review doc before the deletion commit. ADR-0069 §8's protocol,
+promoted from convention to a merge gate. Blind by construction to changes that reach behaviour
+through the rollout's greedy continuation rather than through its own decider's pick — which is
+what the **Discrimination Gate** exists to see.
+_Avoid_: corpus gate, sweep (name the gate, not the tool), regression test
+
+**Discrimination Gate**:
+The merit gate that asks *did the end-of-turn board evaluation get worse at telling boards apart in
+the human's favour*: a **Leaf Lab** capture before and after the swap, over all 267 scorable frames,
+must show **zero unruled `OK → MISS` frame flips**. Per-frame, never aggregate — 1b netted to −6
+shared-top (arguable) but was 6-for-0 one-directional (not). SOLE-top / shared-top / avg top-tie are
+reported beside it and **do not gate**: on 1b the tie metrics moved the "good" way while six frames
+broke, so tie-reduction is not a merit signal.
+_Avoid_: leaf gate, sharpness gate, tie gate (tie counts explicitly do not gate)

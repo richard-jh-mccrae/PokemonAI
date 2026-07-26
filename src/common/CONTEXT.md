@@ -912,3 +912,29 @@ identical; the vocabulary-fix bar). Intended divergences are enumerated and just
 escalate to match-level A/B.
 _Avoid_: divergence replay (unshipped synonym), A/B (match-level winrate evidence — the
 complementary gate), regression test (a fixed assert on one state)
+
+**Commutative Set** / **Maneuver**:
+The two shapes a multi-action turn can take, and **the test for which layer owns a defect**
+(user ruling 2026-07-26, #167's decision-5 sitting; ADR-0070 amendment J).
+
+A **Commutative Set** is a group of this-turn actions that reach the SAME end-of-turn state in any
+order — e.g. *evolve a benched Staryu · attach an Energy · Boss's Orders to gust*. Three rules make
+that true: actions may be taken **in any order** (`docs/rules.md:76-77`), **evolving keeps attached
+cards** so attach-then-evolve ≡ evolve-then-attach (`:98`), and evolving into a Mega Evolution ex
+**does not end the turn** (`:103`). Only the attack is order-forced, because it ends the turn.
+A Commutative Set needs **no planner**: the sequencer already takes every option scoring above
+`_finish_turn_last`'s floor before the turn-ender, so the only way one can be missed is if an action
+is **priced at or below zero** — then it is unreachable rather than merely unattractive. **The fix is
+the equation's price, and it belongs to that equation's own phase.**
+
+A **Maneuver** is a step sequence whose value exists only as the END STATE and whose steps DEPEND on
+each other — f32's *retreat Dreepy → promote Budew → item-lock wall* (you cannot promote before
+retreating), f82's five-step Adrena-Brain KO line. Re-ordering it destroys it. A Maneuver is
+**#165's** (the Turn Planner), because no per-option marginal can express it.
+
+**The discriminator is mechanical: do the actions commute?** If yes it is an equation-pricing defect;
+if no it is a planner defect. Verified empirically on `81905522|0|decision|64` — pricing the evolve
+`+10.0` instead of `0.0`, changing nothing else, makes the greedy rollout reach the evolve from BOTH
+candidate openings.
+_Avoid_: sequence / line (a **Maneuver** is the ordered, dependent kind — say which), combo, turn
+plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a pricing bug)

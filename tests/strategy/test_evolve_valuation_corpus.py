@@ -52,9 +52,44 @@ def test_evolve_corpus_pin(agent, fixture, leg):
         f"[{leg}] regression: {fixture} chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
 
 
+# ── CLAIMS: what a fixture asserts, declared in its own `claims` block (ADR-0072 decision 3) ──────
+@pytest.mark.parametrize("agent,fixture", [
+    ("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35"),
+])
+def test_evolve_corpus_claims(agent, fixture):
+    """Assert exactly what the fixture declares, rather than only whole-decision equality.
+
+    f35 is the worked case. Its Decision Claim was RE-RULED 2026-07-26 (user, #167 decision-5
+    sitting) from `[2]` (Recon first) to `[1]` (Poké Pad first): the Poké Pad's job in this deck is
+    fetching the 2nd Drakloak so a bench Dreepy becomes a 2nd Recon Directive body — two digs instead
+    of one — and resolving the deterministic tutor first also thins the deck by a known non-{P} card,
+    improving both digs. Its **Endorsement Claim** is what credits the 1b swap: the sole evolve on the
+    menu went 45.0 -> 0.0 with no rule firing, and a single-option lane cannot express that as an
+    ordering (ADR-0072 amendment A)."""
+    from train.gates import (evaluate_axis_claim, evaluate_decision_claim,
+                             evaluate_endorsement_claim, parse_claims)
+    fx = _fixture(fixture)
+    claims = parse_claims(fx)
+    dec = _pilot(agent).explain(fx["obs"])
+    options = (fx["obs"].get("select") or {}).get("option") or []
+    ctx = (fx["obs"].get("select") or {}).get("context")
+    scores = [None] * len(options)
+    for o in dec.options:
+        scores[o.index] = o.score
+
+    assert evaluate_decision_claim(claims.decision, chosen=dec.chosen) is True, (
+        f"{fixture} decision claim: chose {dec.chosen}, claimed {claims.decision.correct}")
+    for c in claims.axis:
+        assert evaluate_axis_claim(c, options=options, scores=scores, select_context=ctx) is True, (
+            f"{fixture} axis claim {c.prefer} over {c.over}: scores={scores}")
+    for c in claims.endorsement:
+        assert evaluate_endorsement_claim(c, options=options, scores=scores,
+                                          select_context=ctx) is True, (
+            f"{fixture} endorsement claim slot={c.slot} endorsed={c.endorsed}: scores={scores}")
+
+
 # ── TARGETS: the equation's job. xfail(strict) → XPASS (hard fail) the moment it lands. ───────────
 @pytest.mark.parametrize("agent,fixture,leg", [
-    ("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35", "income-OFF hold + typed readiness + scoped doom"),
     ("dragapult_ex", "dp_open_utility_over_fragile_line_base_f2", "exposure / opener (line-shape)"),
 ])
 @pytest.mark.xfail(strict=True, reason="awaits the evolve-value equation (evolve-valuation-grill-spec.md)")

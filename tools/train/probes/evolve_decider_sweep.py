@@ -35,6 +35,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from train.gates import (EVOLVE_LANE, decision_gate_verdict, frame_key_of,  # noqa: E402
+                         held_out_frames, in_lane, lane_slots, option_slot,
+                         print_gate_report)
+
 _EVOLVE = 9
 
 #: The rungs the evolve decider retires (ADR-0070 §10). Forced to 0 in the NEW pilot so this probe
@@ -70,6 +74,17 @@ def _frames():
                 d = json.loads(line)
                 index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
     return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
+
+
+def _frame_key(rec, ep, fr) -> str:
+    """The frame's stable identity, in the SAME form the Leaf Lab and the Held-out Ledger use — the
+    Correction's `identity_key` (episode, seat, scope, subject). One key shape across both gates is
+    what lets a single ruling hold a frame out of either."""
+    scope = rec.get("scope") or "decision"
+    subject = rec.get("subject")
+    if subject is None:
+        subject = fr if scope == "decision" else (rec.get("decision") or {}).get("turn")
+    return frame_key_of(ep, rec.get("seat"), scope, subject)
 
 
 def _agent(rec) -> str:
@@ -110,23 +125,6 @@ def _seams():
             "briefs": load_briefs()}
 
 
-def _opt_slot(option: dict) -> tuple | None:
-    """The BODY an evolve option targets — which is the whole content of the pick."""
-    if option.get("type") != _EVOLVE:
-        return None
-    return (option.get("inPlayArea"), option.get("inPlayIndex"))
-
-
-def _slots(indices, options) -> set:
-    out = set()
-    for i in indices or []:
-        if 0 <= i < len(options):
-            s = _opt_slot(options[i])
-            if s is not None:
-                out.add(s)
-    return out
-
-
 def _cell(slots) -> str:
     return f"{sorted(slots)[0]}" if slots else "(no-evolve)"
 
@@ -140,7 +138,7 @@ def _term_line(row) -> str:
             f"{('  [' + terms + ']') if terms else ''}  {clocks}")
 
 
-def sweep(show_all: bool, quiet: bool = False) -> None:
+def sweep(show_all: bool, quiet: bool = False) -> int:
     names, frames, seams = _names(), _frames(), _seams()
     hdr = (f"{'id':<14} {'agent':<13} {'NEW pick':<14} {'OLD pick':<14} {'correct':<14} "
            f"{'verdict':<12}")
@@ -150,6 +148,7 @@ def sweep(show_all: bool, quiet: bool = False) -> None:
         print("-" * len(hdr))
     tally = defaultdict(int)
     flips = []
+    graded = []          # per-frame verdicts — the Decision Gate's input (ADR-0072 decision 2)
     for (ep, fr), rec in frames:
         agent = _agent(rec)
         options = (rec["obs"].get("select") or {}).get("option") or []
@@ -163,13 +162,14 @@ def sweep(show_all: bool, quiet: bool = False) -> None:
             if show_all:
                 print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} ERROR {exc}")
             continue
-        rows = [dict(t.evolve_working, slot=_opt_slot(options[i]))
+        rows = [dict(t.evolve_working, slot=(option_slot(options[i])
+                                     if in_lane(options[i], EVOLVE_LANE) else None))
                 for i, t in enumerate(dec_new.options)
                 if i < len(options) and t.evolve_working is not None]
         correct = rec.get("correct") or []
-        new_slots = _slots(dec_new.chosen, options)
-        old_slots = _slots(dec_old.chosen, options)
-        correct_slots = _slots(correct, options)
+        new_slots = lane_slots(dec_new.chosen, options, lane=EVOLVE_LANE)
+        old_slots = lane_slots(dec_old.chosen, options, lane=EVOLVE_LANE)
+        correct_slots = lane_slots(correct, options, lane=EVOLVE_LANE)
         agree = new_slots == old_slots
         tally["frames"] += 1
         if agree:
@@ -192,6 +192,8 @@ def sweep(show_all: bool, quiet: bool = False) -> None:
             else:
                 verdict = "unlabelled"
             tally[verdict] += 1
+            graded.append({"key": _frame_key(rec, ep, fr), "verdict": verdict,
+                           "label": rec.get("correct_label") or ""})
         if not quiet:
             print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {_cell(new_slots):<14} "
                   f"{_cell(old_slots):<14} {_cell(correct_slots):<14} {verdict:<12}")
@@ -203,15 +205,30 @@ def sweep(show_all: bool, quiet: bool = False) -> None:
                     print(f"      correct_label: {lbl}")
                 for row in sorted(rows, key=lambda r: -r["tactical"]):
                     print(_term_line(row))
+    held_out = held_out_frames()
+    passed = decision_gate_verdict(graded, held_out=held_out)
     if quiet:
         print(" ".join(f"{k}={tally[k]}" for k in ("frames", "agree", "flip", "FIX", "REGRESSION",
-                                                   "DIVERGENT", "unlabelled")))
-        return
+                                                   "DIVERGENT", "unlabelled")) +
+              f" gate={'PASS' if passed else 'FAIL'}")
+        return 0 if passed else 1
     print("\nTALLY")
     for k in ("frames", "agree", "flip", "FIX", "REGRESSION", "DIVERGENT", "unlabelled", "error"):
         print(f"  {k:<12} {tally[k]}")
     print(f"\n{len(flips)} frame(s) need a user ruling before the deletion commit: "
           f"{', '.join(f'{e}-{f}' for e, f in flips) or '(none)'}")
+
+    # DECISION GATE (ADR-0072 decision 2): zero unruled REGRESSION. Held-out frames still RUN and
+    # still REPORT — a re-ruling is a state the gate reads, not prose in a review doc, and a frame
+    # broken for three phases must not become scenery (decision 4).
+    regressions = [g for g in graded if g["verdict"] == "REGRESSION"]
+    ruled = [g for g in regressions if g["key"] in held_out]
+    unruled = [g for g in regressions if g["key"] not in held_out]
+    print_gate_report(f"DECISION GATE — {len(graded)} labelled flip(s) graded",
+                      gating=unruled, ruled=ruled, held_out=held_out, total=len(graded),
+                      rule="zero unruled REGRESSION",
+                      line=lambda g: f"REGRESSION {g['key']}  {g['label']}")
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
@@ -219,4 +236,4 @@ if __name__ == "__main__":
     ap.add_argument("--all", action="store_true", help="print every frame, not only the flips")
     ap.add_argument("--quiet", action="store_true", help="tally line only")
     a = ap.parse_args()
-    sweep(a.all, quiet=a.quiet)
+    raise SystemExit(sweep(a.all, quiet=a.quiet))

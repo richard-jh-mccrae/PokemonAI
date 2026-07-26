@@ -25,12 +25,19 @@ stages `common/` and `cg/` into the bundle) and is served by its own subprocess 
     python tools/sim/gauntlet_swap_ab.py --candidate /tmp/ab/new_bundles \\
         --incumbent /tmp/ab/old_bundles --n 200 --jobs 4 --out /tmp/ab
 
-**Read the precision beside the verdict.** The grilled flip rule is a 95% CI LOWER BOUND at or above
-−1%, so a clearly positive delta can clear it at a width that could never have done so on its own —
-and a delta near zero cannot clear it without thousands of games per arm per matchup. The report
-therefore prints both the rule's verdict and the half-width achieved, so a wide-but-passing interval
-is never read as precision it does not have. What any run of this establishes unconditionally is the
-crash gate (a hard zero) and the exclusion of a regression larger than the CI lower bound.
+**Two stage rules, chosen by ``--stage`` (#136 directive 6, re-scoped by ADR-0072).** ``mid-build``
+(Phases 1a–1g) is the **Tripwire**: ``crashes == 0 AND CI-lo >= -5%``, with **no delta clause** — a
+mid-build decider swap is not trying to raise win rate, so merit belongs to the two deterministic
+per-frame gates in ``train.gates`` and this run only excludes catastrophes. ``post-composition``
+(#145 onward) is the original `flips_on` verbatim, where a positive delta is meaningful.
+
+**Read the precision beside the verdict.** Both rules are a 95% CI LOWER BOUND, so a clearly positive
+delta can clear one at a width that could never have done so on its own — and under the
+post-composition rule a delta near zero cannot clear it without thousands of games per arm per
+matchup (1b: n ≈ 2340/arm/matchup, ~28,000 games). The report prints the rule's verdict, the stage it
+applied, and the half-width achieved, so a wide-but-passing interval is never read as precision it
+does not have. What any run establishes unconditionally is the crash gate (a hard zero) and the
+exclusion of a regression larger than the CI lower bound.
 """
 from __future__ import annotations
 
@@ -45,7 +52,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from sim.battle import read_deck, run_battle          # noqa: E402
-from sim.paired_ab import flips_on, paired_delta       # noqa: E402
+from sim.paired_ab import (MID_BUILD_REG_TOL, _REG_TOL, flips_on,  # noqa: E402
+                           mid_build_verdict, paired_delta)
 
 
 def _wins(results):
@@ -54,7 +62,19 @@ def _wins(results):
     return sum(1 for r in results if r.winner == 0), n, sum(len(r.crashed) for r in results)
 
 
-def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path):
+#: The two stage rules of #136 directive 6 (ADR-0072 decision 1). ``mid-build`` (Phases 1a–1g) is the
+#: Tripwire — crashes==0 AND CI-lo >= -5%, NO delta clause; merit lives in the two deterministic
+#: per-frame gates (`train.gates`). ``post-composition`` (#145 onward) is `flips_on` verbatim.
+STAGES = {
+    "mid-build": (mid_build_verdict, MID_BUILD_REG_TOL,
+                  "CI-lo>=-0.05 AND crashes==0 (NO delta clause)", "TRIPWIRE"),
+    "post-composition": (flips_on, _REG_TOL,
+                         "delta>=0 AND CI-lo>=-0.01 AND crashes==0", "FLIP"),
+}
+
+
+def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path, stage: str):
+    verdict_fn, reg_tol, rule_text, verdict_label = STAGES[stage]
     matchups, table, crashes = [], [], 0
     started = time.time()
     for d, o in itertools.permutations(agents, 2):
@@ -74,26 +94,37 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
               f"crashes={on_c + off_c}", flush=True)
     result = paired_delta(matchups)
     half = (result["ci_hi"] - result["ci_lo"]) / 2
-    flip = flips_on(result, crashes=crashes)
+    verdict = verdict_fn(result, crashes=crashes)
     print(f"\nAGGREGATE delta={result['delta']:+.4f}  95% CI "
           f"[{result['ci_lo']:+.4f}, {result['ci_hi']:+.4f}]  (+-{half:.4f})  crashes={crashes}")
-    # The rule is the CI LOWER BOUND, not the half-width: a positive enough delta clears -1% at a
-    # width that could never have done so on its own. Report both, so a wide-but-passing interval is
+    # The rule is the CI LOWER BOUND, not the half-width: a positive enough delta clears the bound at
+    # a width that could never have done so on its own. Report both, so a wide-but-passing interval is
     # not read as precision it does not have, and a narrow-but-failing one is not excused.
     print(f"PRECISION: +-{half:.1%} at n={n} per arm per matchup — this run excludes a regression "
-          f"worse than {abs(result['ci_lo']):.1%}, and is {'' if half <= 0.01 else 'NOT '}tight "
+          f"worse than {abs(result['ci_lo']):.1%}, and is {'' if half <= reg_tol else 'NOT '}tight "
           f"enough to have cleared the rule on width alone.")
-    print(f"FLIP: {flip}  (rule: delta>=0 AND CI-lo>=-0.01 AND crashes==0)")
+    print(f"STAGE: {stage}")
+    # The label follows the stage: mid-build is a TRIPWIRE, never a "flip rule" — that phrase is on
+    # the Tripwire's _Avoid_ list (tools/sim/CONTEXT.md) precisely because it claims more than the
+    # verdict means.
+    print(f"{verdict_label}: {verdict}  (rule: {rule_text})")
+    if stage == "mid-build":
+        # Say what this verdict does NOT claim, next to the verdict itself — the whole failure mode
+        # ADR-0072 exists to fix was a red/green symbol read as more than it meant.
+        print("NOTE: mid-build excludes CATASTROPHES only — this is NOT a claim of non-regression. "
+              "Merit is the Decision Gate + Discrimination Gate (train.gates), not this number.")
     print(f"{sum(m[1] + m[3] for m in matchups)} games in {round(time.time() - started)}s")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / "swap_paired_ab.json"
-    out.write_text(json.dumps({"table": table, "result": result, "crashes": crashes, "flip": flip,
+    out.write_text(json.dumps({"table": table, "result": result, "crashes": crashes,
+                               "verdict": verdict, "verdict_label": verdict_label,
+                               "stage": stage, "rule": rule_text, "reg_tol": reg_tol,
                                "n_per_battle": n, "ci_half_width": half,
-                               # NB the width criterion, NOT the flip rule (which is the CI lower
-                               # bound) — a run can fail this and still pass `flip` on a clear delta.
+                               # NB the width criterion, NOT the stage rule (which is the CI lower
+                               # bound) — a run can fail this and still pass on a clear delta.
                                "ci_width_under_1pct": half <= 0.01}, indent=2), encoding="utf-8")
     print(f"-> {out}")
-    return result, flip
+    return result, verdict
 
 
 if __name__ == "__main__":
@@ -105,5 +136,11 @@ if __name__ == "__main__":
     ap.add_argument("--n", type=int, default=200, help="matches per arm per directed matchup")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--out", type=Path, default=REPO / "reports")
+    ap.add_argument("--stage", choices=sorted(STAGES), required=True,
+                    help="which #136 directive-6 rule grades this run (ADR-0072): 'mid-build' "
+                         "(Phases 1a-1g) is the Tripwire — crashes==0 AND CI-lo>=-5%%, no delta "
+                         "clause; 'post-composition' (#145 onward) is the original flip rule. "
+                         "REQUIRED: a run must name the rule that graded it")
     a = ap.parse_args()
-    run(a.agents, a.n, candidate=a.candidate, incumbent=a.incumbent, jobs=a.jobs, out_dir=a.out)
+    run(a.agents, a.n, candidate=a.candidate, incumbent=a.incumbent, jobs=a.jobs, out_dir=a.out,
+        stage=a.stage)

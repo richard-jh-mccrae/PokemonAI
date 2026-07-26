@@ -213,5 +213,16 @@
  ],
  "chosen_label": "Dreepy",
  "correct_label": "Munkidori",
- "note": "86091728 f2: opener exposure. Dreepy (2-hop, no attack) ~0 Active-coverage vs Munkidori. Line-shape term, no card-id. correct=[1] Munkidori."
+ "note": "86091728 f2: opener exposure. Dreepy (2-hop, no attack) ~0 Active-coverage vs Munkidori. Line-shape term, no card-id. correct=[1] Munkidori.",
+ "claims": {
+  "decision": {
+   "correct": [
+    1
+   ],
+   "owner": "#161",
+   "ruled": "2026-07-25",
+   "why": "Re-ruled out of the evolve decider's scope. frame_key verified by an EXACT `select` match to Correction 86091728|0|decision|2. That record sits at select context 1, not MAIN, so `is_leaf_frame` excludes it and it can never reach the DISCRIMINATION gate -- this entry holds it out of the DECISION gate and documents the ruling."
+  }
+ },
+ "frame_key": "86091728|0|decision|2"
 }

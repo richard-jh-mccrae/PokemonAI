@@ -328,5 +328,16 @@
   ],
   "chosen_label": "Play Crushing Hammer",
   "correct_label": "Retreat Dreepy → promote Budew (sacrificial item-lock wall)",
-  "note": "f32 Main (REFRAMED 2026-07-10, /update-strategy grill): NOT evolve-vs-strip — a Turn-Planner MANEUVER. My Active is a fragile developing Dreepy (a win-condition LINE pre-evo), Budew (item_lock) is benched, and opp Active Cynthia's Gabite can damage the line (Dragonslice 40; the pilot's oracle does not model the benched Cynthia's Roserade +30 buff that would make it 70=lethal). The sound line: RETREAT Dreepy (pay the retreat with its {F}) -> promote Budew -> evolve the benched Dreepy->Drakloak (Recon dig) -> Crushing Hammer -> Itchy Pollen (item-lock). Budew is the sacrificial wall; the line assembles safely behind it. Verified single-frame: decide() picks Retreat [3] via retreat-to-wall-the-line (+30, tier-0 in _finish_turn_last), ahead of the tier-0 evolve (+15) / Hammer (+20). Follow-through rides existing rungs. Unifies f32 + the deferred f20 retreat-to-promote-disruptor. Correct=[3] Retreat."
+  "note": "f32 Main (REFRAMED 2026-07-10, /update-strategy grill): NOT evolve-vs-strip — a Turn-Planner MANEUVER. My Active is a fragile developing Dreepy (a win-condition LINE pre-evo), Budew (item_lock) is benched, and opp Active Cynthia's Gabite can damage the line (Dragonslice 40; the pilot's oracle does not model the benched Cynthia's Roserade +30 buff that would make it 70=lethal). The sound line: RETREAT Dreepy (pay the retreat with its {F}) -> promote Budew -> evolve the benched Dreepy->Drakloak (Recon dig) -> Crushing Hammer -> Itchy Pollen (item-lock). Budew is the sacrificial wall; the line assembles safely behind it. Verified single-frame: decide() picks Retreat [3] via retreat-to-wall-the-line (+30, tier-0 in _finish_turn_last), ahead of the tier-0 evolve (+15) / Hammer (+20). Follow-through rides existing rungs. Unifies f32 + the deferred f20 retreat-to-promote-disruptor. Correct=[3] Retreat.",
+  "claims": {
+    "decision": {
+      "correct": [
+        3
+      ],
+      "owner": "#165",
+      "ruled": "2026-07-25",
+      "why": "Re-ruled to the Turn Planner: the correct play is retreat Dreepy -> promote Budew, a sacrificial item-lock wall whose value is the END STATE. Deliberately gets NO Axis Claim -- the evolve equation does rank the right body and the defect is only visible cross-lane, so an axis rescue would launder a composition defect into green. frame_key verified by an EXACT match of this fixture's `select` payload to Correction 85046350|0|decision|32; the fixture's correct=[3] is a 2026-07-10 REFRAME of that record's correct=[1], so the LABEL differs while the board -- and therefore the frame the ruling holds out -- is the same."
+    }
+  },
+  "frame_key": "85046350|0|decision|32"
 }

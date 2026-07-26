@@ -28,12 +28,15 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
 
 ## Conventions (override global standards)
 
-- **Windows + Linux are both first-class.** Dev/build is on Windows; the Kaggle grader is
-  Linux — both must work. `.github/workflows/ci.yml` runs the pytest suite + the Scouting
-  coverage gate on `windows-latest` and `ubuntu-latest` (Python 3.12). The committed
-  `cg/cg.dll` (Windows) and `cg/libcg.so` (Linux) let the native engine load on both, so the
-  whole suite runs offline. Keep code cross-platform: `pathlib` not string paths, explicit
-  `encoding="utf-8"`, no OS-only assumptions.
+- **Windows + Linux are both first-class *as a code requirement*.** Dev/build is on Windows;
+  the Kaggle grader is Linux — both must work. The committed `cg/cg.dll` (Windows) and
+  `cg/libcg.so` (Linux) let the native engine load on either, so the whole suite runs offline
+  on both. Keep code cross-platform: `pathlib` not string paths, explicit `encoding="utf-8"`,
+  binary-safe writes to committed data (several stores are CRLF), no OS-only assumptions.
+  **CI itself runs Linux only** — `.github/workflows/ci.yml` is `os: [ubuntu-latest]`
+  (Python 3.12), and that is **deliberate**, not a gap. Windows is covered by developing on
+  it, so cross-platform discipline is upheld by the local run and review rather than by a
+  second CI job. Widening the matrix is a one-line change (`docs/ci.md`) if that ever changes.
 - **CI runs tests only.** The rest of the global CI spec (Doxygen / Sphinx / GitHub Pages /
   PDF) stays out until those toolchains exist here. Run locally: `python -m pytest tests/ -q`.
   Details: `docs/ci.md`.

@@ -36,6 +36,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from train.gates import ATTACH_LANE, in_lane, lane_slots, option_slot   # noqa: E402
+
 _ATTACH, _CARD, _ATTACH_FROM = 8, 3, 21
 
 #: The 19 rungs the decider retires (ADR-0069 §7 / the issue's build addendum). Forced to 0 in the
@@ -120,22 +122,16 @@ def _seams():
 
 
 def _opt_slot(option: dict, ctx) -> tuple | None:
-    t = option.get("type")
-    if t == _ATTACH:
-        return (option.get("inPlayArea"), option.get("inPlayIndex"))
-    if t == _CARD and ctx == _ATTACH_FROM:
-        return (option.get("area"), option.get("index"))
-    return None
+    """The target slot an attach option names. Delegates to the shared resolver so this sweep, the
+    evolve sweep and an Axis Claim can never disagree about what a slot is (ADR-0072 decision 3);
+    ATTACH_LANE carries this lane's rule as DATA — ATTACH always, CARD only under ATTACH_FROM."""
+    if not in_lane(option, ATTACH_LANE, ctx):
+        return None
+    return option_slot(option)
 
 
 def _slots(indices, options, ctx) -> set:
-    out = set()
-    for i in indices or []:
-        if 0 <= i < len(options):
-            s = _opt_slot(options[i], ctx)
-            if s is not None:
-                out.add(s)
-    return out
+    return lane_slots(indices, options, lane=ATTACH_LANE, select_context=ctx)
 
 
 def _cell(slots, names=None, energy=None) -> str:

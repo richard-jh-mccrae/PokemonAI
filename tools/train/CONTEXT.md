@@ -108,3 +108,59 @@ and accept only if it satisfies its target cluster (`correct ≻ chosen`), regre
 were previously satisfied, and keeps the test suite green. What makes an LLM-authored trigger
 trustworthy. See [ADR-0017](../../docs/adr/0017-corrections-compile-to-hypotheses.md).
 _Avoid_: validator, checker, test
+
+**Leaf Lab**:
+The offline instrument that re-scores a **Leaf Frame**'s board through `_engine_leaf_value` — once
+per menu option — and reports whether the leaf ranks the human's `correct` option top
+(`tools/train/leaf_lab.py`). cgpy-backed and **deterministic** (`SeededRng(0)`), so two builds
+measured over the same **Corrections** store differ by exactly the code between them: no sampling,
+no confidence interval, ~20 min per arm over 267 scorable frames. This is what the **Discrimination
+Gate** (see [Agent Checks](../sim/CONTEXT.md)) captures before and after a **Mid-build Swap**.
+It measures the *leaf's ranking*, **not the shipped decision** — a `MISS` says the end-of-turn board
+evaluation buries the human's option, not that the live agent played the frame worse.
+_Avoid_: leaf test, leaf eval, leaf benchmark (it is an instrument, and its readings are rankings)
+
+**Leaf Frame**:
+A **Correction** the **Leaf Lab** can score: a reseedable MAIN-select (context 0) board carrying
+something to rank — either a `turn_plan` payload or any MAIN-select pick correction naming a
+`correct` option (`is_leaf_frame`). Non-MAIN and obs-less records are excluded because the offline
+sim reseeds only from a MAIN-select board. 276 today, of which 267 are *scorable*.
+_Avoid_: frame (bare — that's a replay timeline index), fixture (a committed corpus pin under
+`tests/fixtures/corrections/`), leaf case
+
+**Endorsement Claim**:
+The third thing a fixture can assert (ADR-0072 amendment A): *this slot is (or is not) taken at all*,
+evaluated against `score > 0` — the endorsement floor `_finish_turn_last` gates on. It exists for the
+**single-option lane**, where an ordering claim has nothing to rank: f35 carries exactly one evolve
+option, yet the 1b swap's real fix there is that the premature evolve went 45.0 → **0.0 with no rule
+firing**. Zero is a *structural* boundary (act / don't act), not a tuned magnitude, so it survives a
+currency re-banding as ordering does — and no magnitude is compared, so it is **not** the score claim
+1a's f29 rewrite rejected. A claim whose slot is absent from the menu is **unprovable**, never
+vacuously true.
+_Avoid_: score claim (rejected — this compares no magnitude), threshold claim, zero claim, veto
+
+**Decision Claim** / **Axis Claim**:
+The two things a corpus fixture can assert, declared explicitly in its `claims` block
+([ADR-0072](../../docs/adr/0072-mid-build-swaps-are-gated-by-deterministic-instruments.md)
+decision 3). A **Decision Claim** (`{"decision": [2]}`) is cross-lane and end-to-end: given the whole
+board, the agent picks this — today's only assertion. An **Axis Claim**
+(`{"axis": {"option_type": 9, "prefer": <slot>, "over": [...]}}`) is within ONE lane: among the
+options of that `OptionType`, this one outranks those, resolved by body slot
+`(inPlayArea, inPlayIndex)` and **never** by raw option index. Ordering within a lane survives a
+currency re-banding; cross-lane *scores* do not — which is why an Axis Claim is an ordering claim and
+never a score claim (1a's f29 rewrite is the precedent). An Axis Claim must never be able to launder a
+composition defect into green: f35 is rescued by one, f32 is deliberately not.
+_Avoid_: pin (the older word for a fixture that asserts *something* — say which claim), score claim
+(rejected), expectation, label (a **Correction**'s `correct`, one layer down)
+
+**Held-out Frame** / **Held-out Ledger**:
+A frame whose failure has been ruled OUT of the current decider's scope and onto a named owner —
+`{"owner": "#165", "ruled": "...", "why": "..."}` in its `claims` block (ADR-0072 decision 4). The
+**Held-out Ledger** is the set of them, printed as an always-visible `HELD OUT (n)` section by both
+the **Decision Gate** and the **Discrimination Gate**, carrying each frame's current verdict but
+**never gating**. Deleting `owner` returns the frame to gating. The point is that a re-ruling is a
+*state the instruments read*, not prose in a swap-review doc — the sweep has no exclusion list, so
+before this nothing in code ever knew f32/f82 had been re-ruled. Useful only while small: past ~a
+dozen frames the section becomes wallpaper, which is the failure mode it exists to prevent.
+_Avoid_: excluded / skipped (it still runs and still reports), xfail (the pytest mechanism, a
+different surface), deferred frame, parked

@@ -287,11 +287,18 @@ cause: on both f35 frames the candidate scores the premature evolve **0.0 where 
 needs `evolve_body_energy < 2`; the body holds 2 wrong-typed Energy). Amendment B's `typed=` fix does
 that work.
 
-**I. "Suite green both OS" was not measurable on this build.** #140's acceptance and directive 3 both
-require Windows + Linux, but `.github/workflows/ci.yml:33` is `os: [ubuntu-latest]` — on `main` too,
-so this predates 1b. CI on `a8b6127` ran exactly one job (`tests (ubuntu-latest, py3.12)`, success,
-the suite genuinely ran). `CLAUDE.md:33` and directive 3 both still claim CI runs both. Recorded as a
-known gap in this phase's evidence rather than marked satisfied; the CI defect is not 1b's to fix.
+**I. "Suite green both OS" was not measurable on this build — and the DOCS were wrong, not the CI.**
+#140's acceptance and directive 3 both required Windows + Linux, but `.github/workflows/ci.yml:33` is
+`os: [ubuntu-latest]` — on `main` too, so this predates 1b. CI on `a8b6127` ran exactly one job
+(`tests (ubuntu-latest, py3.12)`, success, the suite genuinely ran).
+
+**Resolved 2026-07-26 (user ruling): the Linux-only matrix is DELIBERATE.** Windows is covered by
+developing on it, so cross-platform discipline is upheld by the local run and review rather than by a
+second CI job. The stale claims were corrected at source — `CLAUDE.md` and #136 directive 3 now say
+Linux-only CI is intentional and keep the *code* requirement (both OSes must work; `pathlib`, explicit
+`encoding="utf-8"`, binary-safe writes to the CRLF data stores). `docs/ci.md` was already accurate.
+So this was never a CI defect to fix; it was three documents overstating a gate, which is the same
+class of error #167 exists to stop — a gate claimed but not run.
 
 ## Consequences
 
@@ -322,3 +329,185 @@ known gap in this phase's evidence rather than marked satisfied; the CI defect i
   whole sequencer; would pull every neutral option into tier 0.
 - **A temporary prize gate as Phase-2 scaffolding** — rejected: the epic's end state is what
   matters, and a permanent veto would additionally foreclose the correct sacrifice evolve.
+
+**J. Term 3 (the bare-body evolve floor) is a MEASURED regression, not an accepted cost — ruled by
+the user 2026-07-26 in #167's decision-5 sitting.** Amendment E priced a bare-body evolve at exactly
+**0.0**, and the swap review recorded the consequence as term 3: *"a class of evolves that used to be
+endorsed at +15 now never clears `_finish_turn_last`'s `score > 0`."* That was logged as "correct by
+ruling." It has now been measured, and it costs real board.
+
+**The evidence — `81785223|0|decision|44` (mega_starmie, turn 9).** My Active is Mega Starmie ex
+330/330 on one {W}; bench holds Cinderace 160 and a bare **Staryu 70**; hand holds a second **Mega
+Starmie ex**, Pokégear 3.0, Hilda, Salvatore ×2, Lillie's Determination, Night Stretcher. The
+opponent's Active is Lillie's Clefairy ex at **70 HP remaining** behind a Lillie's Pearl.
+
+Simulating the two candidate openings to end-of-turn produces boards that differ in **exactly one
+slot**:
+
+```
+Pokégear-first  -> my bench ends:  Cinderace 160,  Staryu 70
+Evolve-first    -> my bench ends:  Cinderace 160,  Mega Starmie ex 330
+```
+
+Identical otherwise — same KO, same discards, same empty hand. The greedy continuation after
+Pokégear-first **never evolves the Staryu**, because the evolve scores 0.0 with no rule firing and
+`_finish_turn_last` only sequences options above zero. The evolve happens *only* when it is forced as
+the first action.
+
+So the leaf's preference for evolve-first is not an ordering opinion — it is the only line in which
+the evolve occurs at all. The user's own ruled line for this turn (Pokégear → **evolve the Staryu** →
+Hilda for an Energy → attach → Jetting Blow, sniping the energised benched Clefairy) contains the
+evolve; **the shipped agent cannot reach it.** A 70 HP Staryu stays a 70 HP Staryu instead of becoming
+a second 330 HP Mega Starmie ex, on the turn we take their Active.
+
+**Scope: 4 of the 5 outstanding leaf regressions share this cause** (three ruled so far —
+`81785223|0|decision|44`, `81905522|0|decision|64`, `82226116|0|decision|48` — each isolated by an
+end-board diff to a single un-evolved bench slot, with every other slot identical). Of #167's six `OK -> MISS`
+frames, `81785223|0|decision|44`, `81905522|0|decision|64`, `82226116|0|decision|48` and
+`82229122|0|decision|17` all show every evolve on the menu at 0.0 with the leaf's top line being an
+evolve-first. `83968638|1|decision|17` has no evolve on the menu and is a different defect.
+The −9.72 leaf decrement is exact on the first three; frames 4 and 5 drop further (−54.0, −1054.0).
+
+**The fix is NOT the obvious one.** Loosening `_finish_turn_last` to `>= 0` is already rejected above
+— it is load-bearing across the whole sequencer and would pull every neutral option into tier 0. What
+this amendment establishes is narrower: **a bare-body evolve that materially upgrades a body is not
+worth zero**, and pricing it at exactly zero makes it unreachable rather than merely unattractive.
+Where that value comes from — a survivability/HP-substitution term, a development term, or #145's
+`state_value` differencing the board — is not ruled here.
+
+**The fix belongs HERE, not to #165 — user ruling 2026-07-26.** The three actions this frame class
+misses are a **Commutative Set**: evolve the benched Staryu, attach an Energy, Boss's Orders to gust.
+They reach the same end-of-turn state in any order, because actions may be taken in any order
+(`docs/rules.md:76-77`), **evolving keeps attached cards** (`:98`), and evolving into a Mega ex does
+not end the turn (`:103`). Only the attack is order-forced.
+
+That is decisive for scope. The sequencer already takes every option above `_finish_turn_last`'s floor
+before the turn-ender, so a Commutative Set needs **no planner** — the sole reason one of its members
+is missed is that it is priced at zero, which makes it *unreachable* rather than merely unattractive.
+**Verified empirically on `81905522|0|decision|64`:** pricing the evolve `+10.0` instead of `0.0`,
+changing nothing else, makes the greedy rollout reach the evolve from BOTH candidate openings —
+
+| opening | evolve @ 0.0 (shipped) | evolve @ +10.0 |
+|---|---|---|
+| ATTACH-first (the human's `correct`) | Staryu 70, Staryu 70 | Staryu 70, **Mega Starmie ex 330** |
+| Boss's Orders-first (the agent's live pick) | Staryu 70, Staryu 70 | **Mega Starmie ex 330**, Staryu 70 |
+
+(It evolves whichever Staryu is left over; the two are interchangeable, so both are the same state.)
+
+The test now holds across **three different openings on three frames** — attach-first
+(`81905522|0|decision|64`), Boss's-Orders-first (same frame, the agent's live pick) and Poffin-first
+(`82229122|0|decision|17`). On the last of these the +10.0 price reproduces the evolve-first end board
+**exactly** — `Mega Starmie ex 430 active (Hero's Cape +100), Cinderace 160 + two Staryu benched` —
+closing a 54.0 gap that includes a downstream retreat/promote and a tool attach. So the cascade those
+larger gaps represent is reachable from the human's own opening; nothing beyond the evolve's price
+needs to move.
+
+So this class is **Phase 1b's own defect to price**, not Turn-Planner work. Contrast f32/f82, which
+are **Maneuvers** — ordered, mutually dependent steps whose value is the end state — and correctly
+stay with #165. The discriminator is mechanical: *do the actions commute?*
+
+**All SIX flipped frames are this one defect** (sitting closed 2026-07-26). The last,
+`83968638|1|decision|17`, looked different — the root menu carries no evolve at all — but **Hilda
+tutors the Mega Starmie ex, so the evolve materialises MID-ROLLOUT** and is priced 0.0 every time it
+appears. Pricing it `+10.0` turns that turn from **1 prize into 2**: the fetched body attacks with
+Jetting Blow (120 kills the Active Abra, the 50 snipe kills a benched Abra) instead of Cinderace's
+Turbo Flare 50. An earlier diagnostic reported "no evolve on the menu" and concluded a different
+defect; that was a root-only reading and is withdrawn.
+
+**Scope boundary — how far an equation reaches (user ruling 2026-07-26).** The test is: **is the
+action individually valuable at the moment it becomes legal?**
+
+* **Yes → the equation's job.** Frame 6's evolve turns a 70 HP Staryu into a 330 HP body whose attack
+  is Jetting Blow 120+50 rather than Water Gun 20 — a body-substituted damage delta visible with
+  **zero lookahead**, which is this ADR's own definition of the marginal.
+* **No → #165's job.** f32's retreat is individually *bad*; it pays only because it promotes Budew
+  into an item-lock wall. No per-option marginal can express that.
+
+**`evolve_value` does NOT model fetching, and never has to.** By the time the evolve option exists,
+the tutor has already resolved and was priced by the fetch rungs — on frame 6 those rungs are
+*correct*, choosing Hilda at 53.0 (`play-a-tutor-for-the-unfound-wincon`,
+`fetch-when-it-fills-a-need`). Two options, two equations, no overlap. An equation owes the marginal
+of the option in front of it **including that option's immediate this-turn consequence**; it does not
+owe how the card reached hand, or any value that exists only as a chain.
+
+**Why the planner cannot substitute for this fix.** `_engine_leaf_value` does not evaluate a static
+board — it builds its end state by **re-running `decide` as a greedy continuation**
+(`_simulate_line`, `planner.py:3424`). A mis-priced option therefore corrupts the leaf *itself*,
+which is exactly how these five frames produced wrong leaf values: the leaf under-rated every line
+that did not open with the evolve, because its own rollout could not take the evolve. #165 ranks
+candidate sequences **by that leaf**, so shipping it over a zero-priced evolve means searching harder
+over a corrupted evaluation — the Tier-6 lesson, and #167's own Gate-0 finding that leaf
+discrimination is the binding constraint. **Pricing is upstream of the planner, not an alternative
+to it.**
+
+**Not discharged.** #167's baseline capture stays blocked on this: re-baselining now would bake all
+six frames of this regression into the Discrimination Gate's reference.
+
+**K. The income half was structurally DEAD — two silent bugs, fixed 2026-07-26 (#167).** Measured
+before the fix: across **49 priced evolve options on 31 corpus frames**, `income_gain` and
+`income_loss` were non-zero **exactly zero times**. Everything §3 (income as an ODDS read), §7 (the
+split-horizon loss) and amendment B (the `typed=` fix) describe was computing nothing on every board
+ever played.
+
+1. `_evolve_income_delta` passed a `CountTriple` into `draw_hit_probability`. `CountTriple` refuses to
+   be a bare number by design — *"a consumer must NAME its epistemic"* (ADR-0068) — so `int()` raised
+   `TypeError` into that function's documented *"bad input → 0.0"* guard. **Ruled: `expected`,
+   truncated.** A dig's odds are an ESTIMATE, which is what `expected` exists for; `floor` is the leg
+   for comparisons against a COST and is 0 for nearly every energy type while prizes are hidden —
+   which is exactly what hid this.
+2. `_ability_on_menu` matched `option["cardId"]`, but an ABILITY option names its body by
+   **`area`/`index`** and carries no `cardId` at all — so it returned False always, killing
+   `body_ability_on_menu` (§7's "this turn's use is forfeit" half) and `result_ability_now`. Now
+   resolves the slot and compares the card in it.
+
+**Effect on f35, the frame these terms are supposed to carry:** its evolve went `0.0` → `−10.12` →
+**`−30.36`**. Before, the hold was a coincidental cancellation of two deploy terms; now it is EARNED
+by the forfeited Recon dig. That mattered structurally: at `0.0` *any* positive deploy delta would
+have flipped it, so the headroom these fixes created is what made amendment L safe.
+
+Both fixes are leaf-neutral on their own (0 of 267 frames moved) — they were a **prerequisite**, not
+a solution.
+
+**L. A benched evolve that does not weaken the board is FREE DEVELOPMENT — user ruling 2026-07-26.**
+The ruling was to take free moves that only strengthen the board, and to invent no numbers. The
+equation already separates the cases **by sign**: f35's Active evolve is `−30.36` (a measured
+weakening), the five bench evolves are exactly `0.0` (nothing forfeited, a strictly bigger body).
+
+`_finish_turn_last`'s tier 0 **already named this** — *"free informative development — draw / search,
+fill the Bench, **evolve a benched Pokémon**"* — and its own `score <= 0 → tier 4` gate was starving
+the case it names, because a same-line bench evolve nets to exactly 0.0 (`_line_payoff_stat`
+pre-credits the pre-evolution with the LINE's payoff, correct for the ATTACH decider per Ruling 5a,
+so the deploy delta cancels by construction).
+
+Scoped on two axes: **`>= 0` only**, so an evolve priced as a weakening still falls to tier 4; and
+**BENCHED only**, leaving the Active's KO-forfeit guard untouched. This is **not** the blanket `>= 0`
+loosening rejected above — that was the whole sequencer. A zero-priced ATTACH still drops to tier 4
+(the attach-anyway blunder class, 82749168-21 / 82867148-34), tests unchanged.
+
+**M. An equal evolve tie breaks toward the body that arms SOONEST.** `evolve-the-energized-body-first`
+was one of the five rungs this swap retired, on the premise the equation subsumes it. **It does
+not** — and not because of a stale read. Measured on `81905522|0|decision|64`: the equation re-reads
+the board every menu and correctly sees the attach (bench0's arm drops **3 → 2** while bench1 stays
+3). The **delta erases it**: `deploy = result − body` cancels PER SLOT, since a body and its result
+share that slot's Energy, arm and ko — so the energised Staryu cancels 2-against-2, the bare one
+3-against-3, both land on 0.0, and the tie broke by raw **option index**. The Energy and the
+evolution then landed on different bodies.
+
+So the ordering consults the one term that does **not** cancel — the RESULT's arm clock — restricted
+to runs of evolve options at an identical score, permuted **within the positions they already
+occupy** so an evolve is never promoted past a tied non-evolve. Ordering only; no score moves.
+(Tied evolves need not be adjacent: the real run is `[2, 0, 1, 6]`, with a non-evolve between them —
+a consecutive-run implementation never fires, which is how the first version passed its unit test
+while leaving the frame broken.)
+
+**Result — #167's six-frame sitting closes at ZERO.** Leaf lab vs the `25fa8e5` reference:
+
+| | SOLE-top | shared-top | avg top-tie | OK→MISS |
+|---|---|---|---|---|
+| `25fa8e5` reference | 36/267 | 188/267 | 3.105 | — |
+| `ac2271f` (sitting start) | 35 | 182 | 3.071 | **6** |
+| after K+L+M | **36** | **188** | 3.1 | **0** |
+
+Not merely the six frames cleared — the leaf's discrimination is restored to the incumbent's exactly.
+On frame 3 the two orderings now CONVERGE (`attach-first` and `evolve-first` both end
+`Mega Starmie ex 330 (1 energy), Staryu 70`), which is the commutativity the ruling described.

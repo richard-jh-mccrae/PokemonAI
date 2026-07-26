@@ -450,5 +450,16 @@
   ],
   "chosen_label": "Evolve Drakloak → Dreepy (bench 3 · 50/70)",
   "correct_label": "Evolve Drakloak → Dreepy (active · 30/70 · 2⚡)",
-  "note": "Turn 8, first divergence f82: chosen=[2] evolve BARE bench Dreepy; correct=[1] evolve ENERGIZED active Dreepy (Drakloak Dragon Headbutt 70 online this turn). +5 rung breaks the backwards attach_to_needy tiebreak on evolves."
+  "note": "Turn 8, first divergence f82: chosen=[2] evolve BARE bench Dreepy; correct=[1] evolve ENERGIZED active Dreepy (Drakloak Dragon Headbutt 70 online this turn). +5 rung breaks the backwards attach_to_needy tiebreak on evolves.",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ],
+      "owner": "#165",
+      "ruled": "2026-07-25",
+      "why": "Re-ruled to the Turn Planner: won by a five-step maneuver whose value is the END STATE. The DECISION side of this ruling is now satisfied on its own: ADR-0071 (#163) promoted the corpus case from strict-xfail to a PIN, so the Pilot reaches `correct` end-to-end. The ruling still stands for the LEAF, which is what holds the frame out of the Discrimination Gate \u2014 the board evaluation still buries `correct` at rank 4 of 7, because the maneuver's value is its END STATE and #165 owns seeing it. frame_key verified by an EXACT match of this fixture's `select` payload to Correction 85785609|0|turn|8, whose correct=[1] agrees with this fixture's."
+    }
+  },
+  "frame_key": "85785609|0|turn|8"
 }
