@@ -66,17 +66,20 @@ def test_evolve_corpus_target(agent, fixture, leg):
         f"[{leg}] {fixture} chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
 
 
-# ── PLANNER SCOPE: won by a maneuver, not by the evolve equation (ADR-0070 §C) ────────────────────
-@pytest.mark.xfail(strict=True, reason="CROSS-LAYER, user ruling 2026-07-25: f82 is won by a "
-                   "five-step TURN-PLANNER maneuver whose value is the END STATE — Crispin attaches "
-                   "{D} to Munkidori, evolve the Active Dreepy (40 damage carries -> Drakloak 50/90), "
-                   "Adrena-Brain moves 3 counters (mine -> 80/90, theirs -> 60/90), Recon Directive, "
-                   "then Dragon Headbutt 70 >= 60 KOs. The evolve equation's standalone read is "
-                   "CORRECT (it prefers the benched body, whose clocks genuinely move); the maneuver "
-                   "is simply better. No lethal tier reaches an Ability that moves damage counters "
-                   "onto the defender, so this XPASSes — and self-cleans — when that tier lands.")
+# ── f82: a PIN since ADR-0071 removed the shared-budget inflation (was PLANNER SCOPE) ─────────────
 def test_evolve_corpus_planner_scope_f82():
-    """f82: the which-body pick is decided by a turn-planner maneuver, not by the evolve marginal."""
+    """f82: the Pilot picks the human's body through the real decision path.
+
+    PROMOTED from strict-xfail to PIN by ADR-0071 (#163). The xfail's premise was that *"the evolve
+    equation's standalone read is CORRECT (it prefers the benched body, whose clocks genuinely
+    move)"* — but those clocks did NOT genuinely move. The bench held two more bodies at 50 against
+    a single 60 spread, so evolving one Dreepy out of range only chose which body died; the 37.5 it
+    scored was the per-body reading of a shared budget. Read as a Harvest at UNAVOIDABLE both bodies
+    read `ko = 2` — evolving buys zero survival — the benched option falls to 25.0 against the
+    Active's 30.0, and the Pilot reaches `correct` without any lethal tier having landed.
+
+    The five-step maneuver is still the better play and still belongs to #165. This pin no longer
+    waits on it."""
     fx = _fixture("dp_evolve_energized_line_body_first_f82")
     chosen = _pilot("dragapult_ex").explain(fx["obs"]).chosen
     assert chosen == fx["correct"], (

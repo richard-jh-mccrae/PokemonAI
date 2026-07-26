@@ -659,9 +659,14 @@ form its line forward-evolves INTO, or a Read-predicted not-yet-benched attacker
 earliest future turn it can afford a KO of a given body of mine: Energy modeled at the ~1-attach/turn
 rule floor plus known acceleration (`energy_accel`), evolution at one turn per hop, gated by the form's
 real attack cost and its Weakness/Resistance-adjusted damage, accumulating over turns when one hit
-doesn't KO (the **Survival Window** generalized). A benched attacker carries a promotion surcharge
-(bringing it Active), reduced when the opponent holds a promotion enabler (a `switch`/`gust` card, or a
-cheap/free retreat vs a stuck Active) and waived for a true bench-snipe. The Read γ-sharpens the attach
+doesn't KO (the **Survival Window** generalized). A benched attacker owes **Energy, not a turn**
+(ADR-0071 decision 6, correcting this entry): retreat is an ordinary turn action paid in Energy
+discard (rules.md:74, :89) and attacking ends the turn, so retreat-then-attack is legal in ONE turn.
+It is therefore an affordability GATE — a benched attacker counts once the opponent's Active can pay
+its retreat cost, or their Active is absent (a knocked-out Active's replacement is promoted FREE,
+rulebook.txt:176). NOT yet read, though both would tighten it: a `switch`/`gust` card in their hand
+(hidden, so the gate can under-read an opponent holding one) and Asleep/Paralyzed on their Active,
+which blocks retreat (rules.md:167). The Read γ-sharpens the attach
 rate and which line the opponent actually runs; with no Read it is pure card fact (the base fallback).
 Feeds the Match Planner's confidence (defensive survival) and the proactive prep it directs (pre-snipe /
 pre-gust / heal-a-turn-early). Same worst-case-but-accurate epistemic as Incoming/Survival Window/KO
@@ -676,6 +681,31 @@ energy/evolution-aware turns-to-KO that subsumes it), Survival Window (the singl
 generalizes across bodies, forward forms, and the energy timeline), Escalation Search (opponent-choice
 engine tree — the Threat Clock is opponent-static closed-form), Evolving Threat (the offensive snipe
 signal — the Threat Clock is the defensive projection that consumes the same forward-evo index).
+
+**Bench Harvest**:
+The set of MY benched bodies the opponent can Knock Out with ONE attack's bench-rider payload — the
+opponent's optimal allocation of a **shared budget**, not a per-body threshold. Attacking ends their
+turn (rules.md §5), so a turn's bench damage is exactly one attack's riders from one attacker: an
+**indivisible** `benchSnipe` (single-target text, all of it on one body) plus a **divisible**
+`benchSpread` ("in any way you like", 10-point counters across any bodies). Solved as the enumeration
+of the subsets their budget reaches — GENERALIZING `best_ko_subset` rather than wrapping it, since an
+accumulated budget gives each subset its own post-snipe residual — maximizing their total **prize** take,
+then preferring my role-carrying bodies (`_ATTACKER_ROLES`, deck-declared) as a **sub-prize tie-break**
+— the `opponent_target_value` discipline applied to their model of us, never overriding a real prize
+difference; Tera bodies are not targetable (rules.md §11). Over `t` turns it allocates `t` payloads
+jointly, because damage counters persist. It is the shared-budget correction to reading survival
+per-body: rescuing one benched body does not deny a Knock Out when the counters simply redirect onto
+another body still in range — it only picks which body dies. Read at one of two declared
+**Harvest Readings** — `POSSIBLE` (in the harvest under SOME optimal allocation; the conservative
+default, for threat/doom consumers) or `UNAVOIDABLE` (in the harvest under EVERY optimal allocation;
+declared by rescue/value consumers, so a redirectable Knock Out credits nothing). Never inferred from
+the board — the caller states which question it is asking, as with `my_benched` (ADR-0070 §9) and
+`charged` (ADR-0064 Decision 1). _(Accepted design 2026-07-25, `/grill-with-docs`; issue #163.)_
+_Avoid_: Incoming (the single-turn damage magnitude against ONE body — the Harvest is the joint
+allocation across my bench), Survival Window / Threat Clock (the turns-to-KO projection, which
+CONSUMES the Harvest on the bench path rather than replacing it), Prize Path (my offensive prize
+sequencing — the Harvest is theirs, over my bodies), Bench Snipe Bonus (the offensive sub-prize
+tiebreak that reads the same riders in the other direction).
 
 **KO Race**:
 The closed-form turns-to-KO computation, both directions: the fewest of MY turns to fell a standing

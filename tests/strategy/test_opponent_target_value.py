@@ -73,6 +73,13 @@ def test_two_term_value_prize_plus_capped_survival():
 def test_turns_to_ko_me_and_the_survival_shift():
     c = _combat()
     # A one-shots me next turn (t=1); B needs 3 turns of energy.
+    #
+    # RE-DERIVED by hand for ADR-0071 decision 10, when `turns_to_ko_me` became an ACCUMULATING
+    # read (`min{t : Σᵢ₌₁..ᵗ incoming(i) >= hp}`). Both numbers are unchanged, and NOT by luck:
+    # my HP is 100, A pays its 1-cost attack on the first attach and deals the whole 100 at t=1,
+    # while B is cost-3 off 0 Energy so it deals literally 0 at t=1 and t=2 — the running sum is
+    # 0 + 0 + 100, which still first reaches 100 at t=3. Accumulation only moves a pin when some
+    # earlier turn contributes non-zero damage.
     assert c.turns_to_ko_me(MY_BODY, [_b(A)]) == 1
     assert c.turns_to_ko_me(MY_BODY, [_b(B)]) == 3
     both = [_b(A), _b(B)]

@@ -213,12 +213,18 @@ def test_bench_read_counts_only_riders_the_attacker_can_afford():
 
 
 def test_turns_to_ko_me_honours_the_bench_branch():
-    # The KO-clock is the survival half of the two clocks (ADR-0070 §6). `turns_to_ko_me` asks when
-    # ONE swing fells the body, and riders do not scale with t — so a 90 HP benched Drakloak under a
-    # 30-point snipe survives the whole horizon, where the Active read says it dies next turn.
+    # The KO-clock is the survival half of the two clocks (ADR-0070 §6), read at the body's AREA:
+    # printed damage lands on the Active, so the benched read sees only the riders and the clock
+    # runs far slower there.
+    #
+    # RE-DERIVED for ADR-0071 decision 4, which made the read ACCUMULATE on BOTH areas. The old
+    # expectation here was 9 (`max_t + 1`, "survives the horizon") and it encoded the one-swing
+    # semantics this issue overturned: damage counters PERSIST, so a 30-point snipe fells a 90 HP
+    # benched Drakloak in exactly 3 turns (30 + 30 + 30), not never. CONTEXT.md's Threat Clock
+    # already specified "accumulating over turns when one hit doesn't KO"; the code was the outlier.
     c, me = _bench_combat(), {"id": DRAKLOAK, "hp": 90}
     assert c.turns_to_ko_me(me, [_sniper()]) == 1
-    assert c.turns_to_ko_me(me, [_sniper()], my_benched=True) == 9      # max_t + 1: survives
+    assert c.turns_to_ko_me(me, [_sniper()], my_benched=True) == 3      # 90 HP / 30 per turn
 
 
 def test_default_is_active_so_an_undeclared_caller_stays_pessimistic():

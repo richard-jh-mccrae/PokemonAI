@@ -32,7 +32,8 @@ from common.strategy.planner import PlannerMixin, TurnLine
 # Tactical-only scalars — used SOLELY by the closed-form combat evaluator below, never by a doctrine.
 # (_EFFICIENCY/_BENCH_SNIPE* moved to the KO oracle, ADR-0052 — the one home for combat valuation.)
 from common.card_worth import ENERGY_TIER      # the attach decider's resource tie-break anchor
-from common.strategy.combat import Budget, _EFFICIENCY  # noqa: E402  (re-used by the tactical scorers)
+from common.strategy.combat import (Budget, _EFFICIENCY,  # noqa: E402  (re-used by the tactical scorers)
+                                    HARVEST_UNAVOIDABLE)
 from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
@@ -1659,7 +1660,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                            promote_retreat_shadow=self._promote_retreat_shadow(obs, select, ctx, option))  # REPORTING-ONLY
 
     def _evolve_side(self, obs: dict, board: Board, raw: dict | None, card_id, *,
-                     is_active: bool) -> EvolveBody:
+                     is_active: bool, bench=None) -> EvolveBody:
         """Read ONE body — the pre-evolution as it stands, or the hypothetical form it becomes —
         into the decider's damage-currency view (ADR-0070 §2).
 
@@ -1677,15 +1678,83 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 BodyView(raw, combat=self.combat, is_active=True))
         opp = self._opp_player(obs) or {}
         opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        model = self._state_model
+        # The SNAPSHOT owns both sides' body lists (ADR-0068 / ADR-0071 decision 7) — read them from
+        # it so the harvest and the promotion gate cannot drift from the rest of the turn's reads.
+        # `bench` is caller-supplied because the RESULT side reads a substituted bench, not the
+        # board's; falling back to the real bench keeps a direct caller sound.
+        my_bench = list(bench) if bench is not None else self._my_bench_raws(obs)
+        opp_active = (model.theirs.active_raw if model is not None
+                      else next((p for p in (opp.get("active") or []) if p), None))
         return EvolveBody(
             this_turn=float(this_turn), payoff_damage=payoff,
             arm=self.combat.turns_to_afford(raw, typed=True),
             # AREA-AT-DAMAGE-TIME (ADR-0070 §9): an evolve does not move the body, so the area it
             # occupies now IS the area the reply lands on — the one place the board read is sound.
+            #
+            # HARVEST READING (ADR-0071 decision 3): this is a RESCUE read — it asks what evolving
+            # BUYS — so it declares UNAVOIDABLE. A benched knockout the opponent can simply redirect
+            # onto another body in range denies nothing; crediting it inflates every bench rescue.
+            # The bench snapshot is passed because a shared rider budget is unrepresentable from one
+            # body alone, and `key_ids` is deck-DECLARED (CombatMath is deck-agnostic).
             ko=self.combat.turns_to_ko_me(raw, opp_bodies,
                                           charged=getattr(self, "_incoming_budget", None),
                                           context=getattr(self, "_opp_attack_context", None),
-                                          my_benched=not is_active))
+                                          my_benched=not is_active,
+                                          my_bench=my_bench, key_ids=self._harvest_key_ids(),
+                                          reading=HARVEST_UNAVOIDABLE,
+                                          opp_active=opp_active,
+                                          switch_enabler=self._opp_switch_enabler()))
+
+    def _my_bench_raws(self, obs: dict) -> list:
+        """MY benched bodies' raw dicts — the Bench Harvest's input, from the SNAPSHOT when one is
+        built (ADR-0068 keeps it lazy and pure, so the bench cannot shift under a memoized clock) and
+        off the observation otherwise."""
+        if self._state_model is not None:
+            return list(self._state_model.mine.bench_raws)
+        return [p for p in ((self._my_player(obs) or {}).get("bench") or []) if p]
+
+    def _opp_switch_enabler(self) -> bool:
+        """Can the opponent promote a benched attacker WITHOUT paying retreat — the enabler leg of
+        the promotion gate (ADR-0071 decision 6).
+
+        True unless a switch-class out is PROVABLY gone: `copies_left_odds` returns 0 for a card only
+        when every copy in the matched Read's representative build is already accounted for on the
+        board or in the discard, so `p > 0` is exactly ADR-0067's *not-provably-absent* test — and a
+        copy sitting in their hidden HAND counts as unseen, which is the case that matters here.
+        Only the `switch` tag: a `gust` card drags one of MY bodies up, it does not promote theirs.
+
+        Same shape as `_opp_hand_strip_odds`, **opposite fail direction**. That one claims no
+        exposure on a guess because a veto must not fire on one; this one claims FULL exposure,
+        because it OPENS a threat gate — and the gate can only ever make a survival read less
+        pessimistic. CONTEXT.md's Threat Clock: *"A survival read must never under-prepare; a prep
+        read off by a turn is recoverable."* So no facade, no functions table, no confident Read, or
+        any error all mean "assume they can switch"."""
+        if self.opponent is None or not self.functions:
+            return True
+        try:
+            odds = self.opponent.copies_left_odds()
+            if not odds:                              # unrecognized opponent — cannot rule one out
+                return True
+            return any(p > 0 for cid, p in odds.items() if "switch" in self.functions.tags(cid))
+        except Exception:
+            return True
+
+    def _harvest_key_ids(self) -> frozenset:
+        """Card ids the OPPONENT prefers to knock out among equal-prize targets — my deck-declared
+        attacker/line Roles (ADR-0071 decision 8). A sub-prize tie-break, never a magnitude: it
+        cannot represent an opponent who forfeits a prize to kill an engine piece.
+
+        `_ATTACKER_ROLES` rather than `_WINCON_ROLES` because the narrow pair is verified INERT on
+        the Bench — the wincon itself is usually Active or in hand, and what sits benched is its
+        base (dragapult_ex declares Dreepy `win_condition_base`, Munkidori `counter_mover`, and
+        Dunsparce no Role at all). A deck declaring no Roles degrades to pure prize-max."""
+        cached = getattr(self, "_harvest_key_id_cache", None)
+        if cached is None:                            # deck Roles are static for the Pilot's life
+            roles = getattr(self.strategy, "roles", None) or {}
+            cached = frozenset(cid for cid, r in roles.items() if _ATTACKER_ROLES & set(r or ()))
+            self._harvest_key_id_cache = cached
+        return cached
 
     def _evolve_income_delta(self, raw: dict | None, card_id, *, is_active: bool) -> float:
         """Δ`readiness_p` an Ability's dig buys on this body — what the engine is actually worth
@@ -1735,7 +1804,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         body_cid = raw.get("id")
         me = self._my_player(obs)
         is_active = any(raw is p for p in (me.get("active") or []))
-        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active)
+        bench = self._my_bench_raws(obs)
+        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active, bench=bench)
         # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
         # hypothetical body differs from the real one ONLY in which card it is — exactly the
         # substitution the deploy delta is asking about.
@@ -1743,7 +1813,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         rstat = self.stats.get(ctx.card_id) if self.stats else None
         if rstat is not None and getattr(rstat, "hp", None):
             result_raw["hp"] = rstat.hp
-        result = self._evolve_side(obs, board, result_raw, ctx.card_id, is_active=is_active)
+        # SUBSTITUTE the hypothetical into the bench rather than reading it alone. `result_raw` is a
+        # COPY, so without this the Harvest would read B among its bench-mates and R in isolation —
+        # and R would look fragile purely for being alone, which is not a fact about evolving. Both
+        # sides must see the same bench with exactly one body swapped (ADR-0070's body-substituted
+        # delta; ADR-0071 makes the bench read sensitive to the company a body keeps).
+        result_bench = [result_raw if b is raw else b for b in bench]
+        result = self._evolve_side(obs, board, result_raw, ctx.card_id, is_active=is_active,
+                                   bench=result_bench)
         btags = self.functions.tags(body_cid) if (self.functions and body_cid is not None) else []
         inp = EvolveInputs(
             body=body, result=result,
@@ -6696,10 +6773,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         from common import needs
         phase = needs.phase_scale(race_ahead=getattr(board, "race_ahead", None),
                                   opp_prizes_remaining=getattr(board, "opp_prizes_remaining", 0))
-        base_t = self.combat.turns_to_ko_me(ma, bodies)
+        # A THREAT read, so it keeps the conservative default reading. `ma` is my ACTIVE, so this is
+        # the Active leg — no harvest, but it now ACCUMULATES (ADR-0071 decision 4). `opp_active` is
+        # passed for the promotion gate; when the loop removes it the gate correctly opens, because
+        # the replacement Active is chosen from the Bench for free (rulebook.txt:176).
+        opp_active = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        enabler = self._opp_switch_enabler()
+        base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
+                                            switch_enabler=enabler)
         rows = []
         for i, b in enumerate(bodies):
-            shift = self.combat.turns_to_ko_me(ma, bodies[:i] + bodies[i + 1:]) - base_t
+            shift = self.combat.turns_to_ko_me(ma, bodies[:i] + bodies[i + 1:],
+                                               opp_active=opp_active,
+                                               switch_enabler=enabler) - base_t
             prize = self.combat.prize_value(b)
             val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
             rows.append({"id": b.get("id"), "prize": prize, "survival_shift": shift,

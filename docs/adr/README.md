@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0067.**
+**Next free number: 0072.**
 
 ## Index
 
@@ -94,3 +94,6 @@ verification), and its filename prefix is correct.
 | [0065](0065-glossary.md) | Ubiquitous Language — Worth / Gates / Odds / Closure (ADR-0065) | —  *(companion vocabulary doc for ADR-0065, not an ADR)* |
 | [0066](0066-the-gust-baseline-is-rider-aware-and-denial-is-marginal.md) | The gust baseline is rider-aware, and gust denial is marginal | Accepted and **BUILT 2026-07-19** — the gusting Round-0 build (3 targeted fixes: rider-aware baseline + threat-forfeit premium, marginal famine stall, loaded-equal-KO tie-break); amends ADR-0022 |
 | [0068](0068-the-statemodel-is-a-lazy-pure-snapshot-shared-by-side.md) | The StateModel is a lazy, pure snapshot; reuse is by side, never by patch | Accepted (grilled 2026-07-24, `/grill-with-docs` on #138 — seven locked decisions); build = #138 (Phase 0b). `apply(action)` rejected; Carried State channel declared; Count Triple deck counts; Leaf Profile CI-pinned. *(0067 = the ADR-0067 epistemic split, authored on the #137/0a branch.)* |
+| [0069](0069-the-attach-marginal-is-an-axes-sum-and-the-decider-may-say-no.md) | The attach marginal is an axes-sum, and the decider may say no | Accepted (grilled 2026-07-25, `/grill-with-docs` on #139 — thirteen locked decisions) and **BUILT** — Phase 1a, the FIRST no-shadow decider swap; its shape (fold → delete → retune → corpus re-rule → paired A/B) is the pattern 1b–1e follow *(index row backfilled 2026-07-26)* |
+| [0070](0070-the-evolve-marginal-is-a-body-substituted-delta-in-damage.md) | The evolve marginal is a body-substituted delta, and its constants are odds | Accepted (grilled 2026-07-25, `/grill-with-docs` on #140) and **BUILT/MERGED 2026-07-26** — Phase 1b, the evolve decider ships ON; amendments A–I. §9's bench branch is corrected by ADR-0071, and amendment C's f82 planner-scope premise is retired by it *(index row backfilled 2026-07-26)* |
+| [0071](0071-bench-survival-is-a-shared-budget-harvest-and-the-clock-accumulates.md) | Bench survival is a shared-budget Harvest, and the clock accumulates | Accepted (grilled 2026-07-26, `/grill-with-docs` on #163 — twelve locked decisions); build = #163, branching after #166 merges. Amends ADR-0070 §9 (amendment D) and the shipped `turns_to_ko_me`; corrects the CONTEXT.md Threat Clock promotion surcharge. *(0070 = the evolve marginal, authored on the #140/1b branch.)* |
