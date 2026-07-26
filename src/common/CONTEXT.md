@@ -260,6 +260,20 @@ never replacing the sound gate. Own-deck only.
 _Avoid_: deck tracker / deck-emptiness oracle (that's the SOUND, certain-or-silent half — these two are
 deliberately distinct epistemics), Scout/Read (that's opponent-deck recognition)
 
+**Fetch Reach** / **Fetch Deadness**:
+The two **opposite** readings of one fetch clause (ADR-0073). **Reach** is the optimistic question —
+*"can this card get me card X back?"* — consumed by the card-worth closure's out-count
+([fetch_closure.py](fetch_closure.py) `reaccess_outs`), the recycler count, and the tutor-chain
+graph; it **rejects `dig` / `trigger` clauses**, because a 7-card dig is no guarantee. **Deadness**
+is the pessimistic one — *"is anything left in my deck for this card to find?"* — consumed by the
+play-side whiff veto (`dont-search-an-empty-deck`) and the fetcher deadline gate
+(`fetch_deploy_odds`); it **accepts** those clauses, because zero targets in deck means a dig
+provably whiffs. Both read the same clause row and the same sound deck facts; they differ only in
+which direction over-inclusion is safe (widening the target set can only *suppress* a deadness
+claim, never fabricate one). `fetch_target_matches(..., deadness=True)` is the single opt-out.
+_Avoid_: "the fetch predicate" (singular — there is one function, two readings, and conflating them
+is the ADR-0073 defect), whiff (that's the deadness reading's *outcome*, not the reading)
+
 **Stranded Payoff**:
 An evolved win-condition (a Stage-1/2/Mega) fetched or held with **no deployable base** — no Line
 pre-evolution in play **or hand** to evolve it from. A dead card until a base appears, so at a search
