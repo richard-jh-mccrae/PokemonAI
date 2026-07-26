@@ -283,8 +283,67 @@ def test_the_gate_opens_when_their_active_is_gone():
 
 
 @pytest.mark.req("REQ-COMBAT-0071")
+def test_a_switch_enabler_reopens_the_gate():
+    """The gate can only make a threat read LESS pessimistic, so every leg fails open. A Switch we
+    cannot rule out promotes their attacker without paying retreat — under-reading that is the
+    direction CONTEXT.md's Threat Clock forbids ("a survival read must never under-prepare")."""
+    o = _combat()
+    me = _body(DUNSPARCE, 70)
+    wall = _body(WALL, 200)                       # retreatCost 2, holding nothing
+    they = _opp(wall, _body(STARMIE, 300, energies=[1]))
+    assert o.incoming(me, they, 1, opp_active=wall) == 0
+    assert o.incoming(me, they, 1, opp_active=wall, switch_enabler=True) == 120
+
+
+@pytest.mark.req("REQ-COMBAT-0071")
 def test_their_own_active_is_never_gated():
     o = _combat()
     me = _body(DUNSPARCE, 70)
     starmie = _body(STARMIE, 300, energies=[1])
     assert o.incoming(me, _opp(starmie), 1, opp_active=starmie) == 120
+
+
+# ---- the enabler predicate's fail direction (ADR-0071 decision 6 / amendment H) ----------------
+class _Fn:
+    def __init__(self, tags):
+        self._t = tags
+
+    def tags(self, cid):
+        return self._t.get(cid, [])
+
+
+class _Opp:
+    def __init__(self, odds):
+        self._o = odds
+
+    def copies_left_odds(self, card_id=None):
+        return self._o
+
+
+def _pilot_stub(opponent, functions):
+    from common.pilot import Pilot
+    p = Pilot.__new__(Pilot)
+    p.opponent, p.functions = opponent, functions
+    return p
+
+
+@pytest.mark.req("REQ-COMBAT-0071")
+def test_the_switch_predicate_fails_open_on_every_unknown():
+    """No facade, no functions table, an unrecognized opponent, or an error must all read "assume
+    they can switch" — the opposite fail direction from `_opp_hand_strip_odds`, because this OPENS a
+    threat gate where that one fires a veto."""
+    assert _pilot_stub(None, _Fn({}))._opp_switch_enabler() is True
+    assert _pilot_stub(_Opp({1: 1.0}), None)._opp_switch_enabler() is True
+    assert _pilot_stub(_Opp({}), _Fn({}))._opp_switch_enabler() is True      # no confident Read
+
+
+@pytest.mark.req("REQ-COMBAT-0071")
+def test_the_switch_predicate_closes_only_when_provably_gone():
+    """`copies_left_odds` returns 0 only when every copy is accounted for on board or in discard, so
+    p > 0 is ADR-0067's not-provably-absent test — and a copy in their hidden HAND is unseen, so it
+    keeps the gate open."""
+    fn = _Fn({7: ["switch"], 8: ["draw"]})
+    assert _pilot_stub(_Opp({7: 0.4, 8: 1.0}), fn)._opp_switch_enabler() is True    # may hold one
+    assert _pilot_stub(_Opp({7: 0.0, 8: 1.0}), fn)._opp_switch_enabler() is False   # all accounted
+    # A deck that runs no switch-class card at all: nothing to rule out, so the gate may fire.
+    assert _pilot_stub(_Opp({8: 1.0}), fn)._opp_switch_enabler() is False

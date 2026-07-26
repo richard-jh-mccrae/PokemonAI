@@ -1703,7 +1703,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                           my_benched=not is_active,
                                           my_bench=my_bench, key_ids=self._harvest_key_ids(),
                                           reading=HARVEST_UNAVOIDABLE,
-                                          opp_active=opp_active))
+                                          opp_active=opp_active,
+                                          switch_enabler=self._opp_switch_enabler()))
 
     def _my_bench_raws(self, obs: dict) -> list:
         """MY benched bodies' raw dicts — the Bench Harvest's input, from the SNAPSHOT when one is
@@ -1712,6 +1713,32 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if self._state_model is not None:
             return list(self._state_model.mine.bench_raws)
         return [p for p in ((self._my_player(obs) or {}).get("bench") or []) if p]
+
+    def _opp_switch_enabler(self) -> bool:
+        """Can the opponent promote a benched attacker WITHOUT paying retreat — the enabler leg of
+        the promotion gate (ADR-0071 decision 6).
+
+        True unless a switch-class out is PROVABLY gone: `copies_left_odds` returns 0 for a card only
+        when every copy in the matched Read's representative build is already accounted for on the
+        board or in the discard, so `p > 0` is exactly ADR-0067's *not-provably-absent* test — and a
+        copy sitting in their hidden HAND counts as unseen, which is the case that matters here.
+        Only the `switch` tag: a `gust` card drags one of MY bodies up, it does not promote theirs.
+
+        Same shape as `_opp_hand_strip_odds`, **opposite fail direction**. That one claims no
+        exposure on a guess because a veto must not fire on one; this one claims FULL exposure,
+        because it OPENS a threat gate — and the gate can only ever make a survival read less
+        pessimistic. CONTEXT.md's Threat Clock: *"A survival read must never under-prepare; a prep
+        read off by a turn is recoverable."* So no facade, no functions table, no confident Read, or
+        any error all mean "assume they can switch"."""
+        if self.opponent is None or not self.functions:
+            return True
+        try:
+            odds = self.opponent.copies_left_odds()
+            if not odds:                              # unrecognized opponent — cannot rule one out
+                return True
+            return any(p > 0 for cid, p in odds.items() if "switch" in self.functions.tags(cid))
+        except Exception:
+            return True
 
     def _harvest_key_ids(self) -> frozenset:
         """Card ids the OPPONENT prefers to knock out among equal-prize targets — my deck-declared
@@ -6751,11 +6778,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # passed for the promotion gate; when the loop removes it the gate correctly opens, because
         # the replacement Active is chosen from the Bench for free (rulebook.txt:176).
         opp_active = next((p for p in ((opp or {}).get("active") or []) if p), None)
-        base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active)
+        enabler = self._opp_switch_enabler()
+        base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
+                                            switch_enabler=enabler)
         rows = []
         for i, b in enumerate(bodies):
             shift = self.combat.turns_to_ko_me(ma, bodies[:i] + bodies[i + 1:],
-                                               opp_active=opp_active) - base_t
+                                               opp_active=opp_active,
+                                               switch_enabler=enabler) - base_t
             prize = self.combat.prize_value(b)
             val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
             rows.append({"id": b.get("id"), "prize": prize, "survival_shift": shift,

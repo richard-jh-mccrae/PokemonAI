@@ -942,17 +942,22 @@ class CombatMath:
                              my_benched=my_benched,
                              evo_min_energy=evo_min_energy, context=context)
 
-    def _promotion_open(self, opp_bodies, opp_active) -> bool:
+    def _promotion_open(self, opp_bodies, opp_active, *, switch_enabler: bool = False) -> bool:
         """Can a BENCHED opponent body attack next turn — the promotion gate (ADR-0071 decision 6).
 
         Retreat is an ordinary turn action (rules.md:74) limited to once per turn and paid in
         **Energy discard** (:89), and attacking ends the turn, so retreat-then-attack is legal in ONE
         turn: a benched attacker owes Energy, never tempo. Open when their Active can pay its printed
-        retreat cost, when the Read credits a `switch`/`gust` enabler, or when ``opp_active`` is
-        absent — a body removed from the list is a body that was Knocked Out, and the replacement
-        Active is chosen from the Bench for FREE (rulebook.txt:176), which is exactly the case
-        `survival_shift` constructs. Fail-OPEN on an unreadable retreat cost."""
-        if opp_active is None:
+        retreat cost, when ``switch_enabler`` says a switch-class out cannot be ruled out, or when
+        ``opp_active`` is absent — a body removed from the list is a body that was Knocked Out, and
+        the replacement Active is chosen from the Bench for FREE (rulebook.txt:176), which is exactly
+        the case `survival_shift` constructs. Fail-OPEN on an unreadable retreat cost.
+
+        ``switch_enabler`` is caller-computed: whether they hold a Switch is a Read/deck-tracker
+        question, and `CombatMath` is board-only and deck-agnostic. Every leg here fails OPEN, because
+        this gate can only ever make a threat read LESS pessimistic and a survival read must never
+        under-prepare (CONTEXT.md, Threat Clock)."""
+        if opp_active is None or switch_enabler:
             return True
         if not any(b is opp_active for b in opp_bodies):
             return True                               # their Active is off the board — free promotion
@@ -965,7 +970,7 @@ class CombatMath:
     def incoming(self, my_body: dict | None, opp_bodies, t: int = 1, *, forward_ids=None,
                  charged: dict | None = None, evo_min_energy: int = 0,
                  context: dict | None = None, my_benched: bool = False,
-                 opp_active: dict | None = None) -> int:
+                 opp_active: dict | None = None, switch_enabler: bool = False) -> int:
         """Worst W/R-adjusted damage the opponent's affordable attackers among ``opp_bodies`` could
         deal ``my_body`` at future turn ``t`` — the **Threat-Clock curve**, the N-turn generalisation
         of ``reachable_incoming`` (ADR-0064 was ``t=1``; S1 of
@@ -1012,7 +1017,7 @@ class CombatMath:
         worst = 0
         for form_id, form_body, attached, grant, is_current in self._attacker_forms(
                 opp_bodies, forward_ids=forward_ids, evo_min_energy=evo_min_energy,
-                opp_active=opp_active):
+                opp_active=opp_active, switch_enabler=switch_enabler):
             worst = max(worst, self._reach_form_damage(
                 my_body, form_id, form_body, attached, charged, context,
                 exclude=grant.get("same_lock") if is_current else None,
@@ -1021,7 +1026,7 @@ class CombatMath:
         return worst
 
     def _attacker_forms(self, opp_bodies, *, forward_ids=None, evo_min_energy: int = 0,
-                        opp_active=None):
+                        opp_active=None, switch_enabler: bool = False):
         """Every opponent FORM that could attack next turn — ``(form_id, form_body, attached, grant,
         is_current)`` per form, current forms plus their forward evolutions.
 
@@ -1035,7 +1040,8 @@ class CombatMath:
         ADR-0033) and the promotion gate (ADR-0071 decision 6). A forward form is grant-free —
         evolving clears attack effects (rules.md §4)."""
         fwd = forward_ids if forward_ids is not None else self.forward_card_ids
-        promotable = self._promotion_open(opp_bodies, opp_active)
+        promotable = self._promotion_open(opp_bodies, opp_active,
+                                          switch_enabler=switch_enabler)
         for body in opp_bodies:
             if not body:
                 continue
@@ -1175,7 +1181,8 @@ class CombatMath:
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
 
-    def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None) -> set:
+    def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None,
+                             switch_enabler: bool = False) -> set:
         """Every ``(snipe, spread)`` rider payload their board could put on my Bench at turn ``t``.
 
         Attacking ends their turn (rules.md §5), so a turn's bench damage is ONE attack's payload
@@ -1184,7 +1191,7 @@ class CombatMath:
         allocate differently: the snipe is indivisible and the spread is not (ADR-0071 decision 2)."""
         pairs = set()
         for form_id, form_body, attached, grant, is_current in self._attacker_forms(
-                opp_bodies, opp_active=opp_active):
+                opp_bodies, opp_active=opp_active, switch_enabler=switch_enabler):
             stat = self._card_stat(form_id)
             if not stat:
                 continue
@@ -1222,7 +1229,7 @@ class CombatMath:
     def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
                        max_t: int = 8, context: dict | None = None, my_benched: bool = False,
                        my_bench=(), key_ids=frozenset(), reading: str = HARVEST_POSSIBLE,
-                       opp_active: dict | None = None) -> int:
+                       opp_active: dict | None = None, switch_enabler: bool = False) -> int:
         """The earliest future turn the opponent's board can KO ``my_body`` — the survival-window
         inversion of the Threat-Clock curve — or ``max_t + 1`` when it survives the horizon.
 
@@ -1270,7 +1277,7 @@ class CombatMath:
         dealt = 0
         for t in range(1, horizon + 1):
             dealt += self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
-                                   opp_active=opp_active)
+                                   opp_active=opp_active, switch_enabler=switch_enabler)
             if dealt >= hp:
                 return t
         return horizon + 1

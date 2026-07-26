@@ -229,10 +229,25 @@ caller cannot mistake it for the harvest-aware read. `_affords` was extracted fr
 consumer — and `_attacker_forms` likewise, after the duplicated enumeration had already drifted (the
 rider read was skipping ADR-0064's `evo_min_energy` guard).
 
-**H. The switch-enabler leg of decision 6 is NOT built.** It shipped first as a plumbed-but-never-
-passed `switch_enabler` parameter, which is dead surface pretending to be a feature; it is removed.
-The gate therefore reads retreat affordability only, and an opponent holding a `switch`/`gust` card
-defeats it. Recorded below as exposure rather than left as an unused hook.
+**H. The switch-enabler leg of decision 6 is BUILT, on ADR-0067's epistemic.** It shipped first as
+a plumbed-but-never-passed `switch_enabler` parameter — dead surface pretending to be a feature — and
+was removed; leaving it unbuilt was then reversed (user ruling 2026-07-26) because the gate can only
+ever make a threat read LESS pessimistic, and without this leg it blocks a benched attacker whenever
+their Active is Energy-poor even when they hold a Switch. That is the direction CONTEXT.md's Threat
+Clock forbids: *"A survival read must never under-prepare."*
+
+`Pilot._opp_switch_enabler` supplies it, because whether they hold a Switch is a Read/deck-tracker
+question and `CombatMath` is board-only. It reads the `switch` Function Tag over the matched Read's
+representative build through `copies_left_odds`, which returns 0 for a card ONLY when every copy is
+accounted for on the board or in the discard — so `p > 0` is exactly ADR-0067's *not-provably-absent*
+test, and a copy in their hidden HAND counts as unseen. Only `switch`: a `gust` card drags one of MY
+bodies up, it does not promote theirs.
+
+Its fail direction is the MIRROR of the structurally identical `_opp_hand_strip_odds`, which claims
+no exposure on a guess so that a veto never fires on one. This one claims FULL exposure — no facade,
+no functions table, no confident Read, or any error all read "assume they can switch" — because it
+opens a gate rather than firing a veto. The consequence is that the gate now fires only when the
+board really shows them stuck, which also shrinks its blast radius on `survival_shift`.
 
 ## Accepted exposure
 
@@ -247,10 +262,6 @@ Named so a later frame can point at them, rather than discovered:
 - **Ability-placed bench damage is invisible.** `_bench_rider` reads *attack* riders only; an Ability
   that places counters on the Bench contributes nothing to the payload. Pre-existing, fail-open,
   unchanged by this ADR and deliberately not smuggled into it.
-- **A hidden switch card defeats the promotion gate** (amendment H). The gate reads their Active's
-  retreat affordability, which is visible; whether they hold a `switch`/`gust` is not, and no Read
-  signal is wired. A benched attacker they can promote for free therefore reads one turn further off
-  than it is. Bounded: it affects only the two consumers that opt into the gate.
 - **Asleep/Paralyzed on their Active is not read**, though it blocks retreat (`rules.md:167`) and
   would tighten the gate. `CombatMath` never receives the Board, which is where the condition signal
   lives (`opp_active_condition_gift`), so wiring it is a plumbing change this issue did not take.
