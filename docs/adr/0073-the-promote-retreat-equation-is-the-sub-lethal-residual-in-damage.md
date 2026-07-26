@@ -138,6 +138,33 @@ reached by a gust. TO VERIFY at build time, not assumed: that `bench_harvest` ho
 immunity (`_is_tera` exists at `planner.py:1495` and `_snipe_tera_veto`, but the harvest path is
 untraced).
 
+**5. `fetch_enables_p` is retired into a Δ`readiness_p` term, shaped like ADR-0070 decision 3.**
+Decision 3 already subsumes the CERTAIN half — `best_reachable_damage` is Budget-aware — so the only
+thing left to build is the probabilistic middle, and 1b shipped that shape one phase ago:
+
+```
+closure(B) = max over attacks a of  damage(a) x [ readiness_p(B, a | enabler_budget, copies, pool, draws)
+                                                - readiness_p(B, a) ]
+```
+
+`_evolve_income_delta` (`pilot.py:1829`) is the wiring to copy, so this inherits its fixes rather than
+re-earning them — notably `CountTriple.expected` rather than the raw triple, whose absence silently
+zeroed three of ADR-0070's terms on every board (#167). Three sub-rulings:
+
+- **Per attack, never `attack_id=None`.** The #137 contract notes that `None` asks the famine question
+  across ALL attacks — correct for a boolean, wrong for a magnitude, since the reachable attack may be
+  the cheap one while `maxDamage` belongs to the dear one. `max` across attacks (ADR-0069 §1).
+- **One Budget per target body, `target_benched` per site** (#137 contract hazard 1).
+- **The draw window is SITE-DEPENDENT, and ZERO at the pick site.** `docs/rulebook.txt` L173-176/L183:
+  the replacement Active is chosen immediately after the KO'ing attack resolves, or at Checkup — and
+  attacking ends your turn (`docs/rules.md` §5). So at a TO_ACTIVE promote **no play window remains**
+  and `draws = 0`. This also EXPLAINS the handoff's open puzzle that no corpus frame drives
+  `fetch_enables_p` above 0: the term was structurally inert wherever it was mostly being asked. The
+  requested fixture must therefore be authored as a **SWITCH/whether** frame, not a TO_ACTIVE one.
+
+The interim `min(1.0, p) x _READY` cap disappears: `Δ ≤ 1` bounds the term below `damage(a)` by
+construction, so "closure can never beat actually being ready" becomes structural rather than clamped.
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
