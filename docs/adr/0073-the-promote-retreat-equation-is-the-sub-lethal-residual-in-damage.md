@@ -192,6 +192,45 @@ denies ITEMS while the curve delta measures a whole development step, so the ter
 The over-credit direction is exactly Sweep #2 Finding A's over-fire, and the Item-copies gate is what
 bounds it.
 
+**7. The endgame/positional constants collapse: `_FATAL_STEP` repriced at the dominance band,
+`_NEAR_GOAL`/`_GOAL_BAND` and `_PATH_TAX` deleted.**
+
+*(a)* The fatal-prize step — `prizes(B) >= opp_prizes_remaining >= 2`, i.e. Knocking B Out ENDS the
+match — is subtracted at **`KO_SCORE`**, the constant that already means "dominates any sub-lethal
+quantity" on the positive side, and gated on decision 4's clock (`turns_to_ko_me(B) == 1`) rather than
+the retired boolean, keeping ruling 5's provable-KO stand-down. A finite dominance band, not a veto:
+when EVERY option is fatal the residual still orders them, which a veto cannot.
+
+**Considered and rejected: giving this to the doom layer / #142.** `_active_doomed` (`pilot.py:6735`)
+is "the opponent can KO my Active next turn" — a BOOLEAN, worst-case, γ-gated read about one body. It
+owns DETECTION, not cost, and #142's charter is re-pointing famine/posture/doom onto
+`reachable_attach`, not acquiring a new responsibility. Splitting the term would put "will they KO B"
+in one layer and "what that costs" in another — the pathology decision 1 rejects — and would route a
+terminal-cost decision through a boolean, re-opening the cliff decision 4 removed. The detection IS
+already the doom family's: `turns_to_ko_me` is the graded member of the same CombatMath family.
+
+**CAVEAT, recorded so it is inherited rather than forgotten (user ruling, 2026-07-26).** This
+subtraction is a **local stand-in for a BOARD-LEVEL fact**. Nothing in the codebase today owns "they
+take their last prizes" — the nearest is `planner.py:3162`'s `_READINESS_FLOOR = 8.0` binary credit for
+"a bench exists", which is win-condition 2, not the prize count. Because only this equation prices it,
+the attach or evolve decider can still walk us into the same loss from a different seam. The correct
+home for a cross-decider "don't lose the game" term is **#145's `state_value`** — prize-denominated
+and whole-board by charter. #145 should ABSORB this term rather than let it duplicate.
+
+*(b)* `_NEAR_GOAL` / `_GOAL_BAND` (exposure super-linear over their last two prizes) DELETE as
+**emergent**: the fatal condition is `prizes(B) >= opp_prizes_remaining`, so as their count falls
+progressively more of our bodies become fatal automatically. The escalation near their goal is a
+consequence of the condition; modelling it twice is two mechanisms for one effect.
+
+*(c)* `_PATH_TAX` DELETES as **subsumed**, on a card-mechanics argument: the promoted body becomes the
+ACTIVE, and they attack the Active because it is the Active — path membership does not change whether
+it is hit. What the flag really encodes ("its prizes complete their route") is now exactly
+`prizes x 100` plus the fatal step. Path reasoning still earns its keep where targeting is a CHOICE —
+the Bench — which decision 4's `preservation` leg already models via the Bench Harvest.
+
+(b) and (c) are ARGUMENTS that the effects are emergent, not measurements. If the corpus disagrees at
+the Decision Gate they return as ruled flips.
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
