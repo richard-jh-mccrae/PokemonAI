@@ -266,7 +266,15 @@ work rather than a one-line held-out entry.
 0.0 is unreachable, because `_finish_turn_last` only sequences options above zero. Ruled to
 ADR-0070 amendment J, which also carries the scope boundary (individually-valuable-when-legal →
 equation; valuable-only-as-a-chain → #165) and the reason the planner cannot substitute for the fix.
-**The baseline stays unpinned until the pricing is fixed.**
+**SITTING CLOSED and BASELINE PINNED 2026-07-26.** The one defect was fixed under ADR-0070
+amendments K (two dead income terms), L (a benched evolve that does not weaken the board is free
+development) and M (an equal evolve tie breaks toward the body that arms soonest). The leaf lab now
+shows **0 OK→MISS vs the `25fa8e5` reference**, with SOLE-top 36/267 and shared-top 188/267 — the
+reference's own figures. `data/leaf_lab/baseline.json` is the pinned reference, captured at the fix
+commit; `leaf_lab.py diff --baseline data/leaf_lab/baseline.json` returns **PASS, exit 0**.
+
+The three Held-out Ledger entries (f2 → #161, f32/f82 → #165) were re-validated after the fixes
+rather than assumed: all three still fail at the decision level, so none is a stale deferral.
 
 The cost of ruling frame 2 as a regression is that **the baseline cannot be pinned yet**: capturing
 now would bake four frames of it into the gate's own reference.

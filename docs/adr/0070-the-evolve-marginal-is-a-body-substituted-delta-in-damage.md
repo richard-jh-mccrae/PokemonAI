@@ -435,3 +435,72 @@ to it.**
 
 **Not discharged.** #167's baseline capture stays blocked on this: re-baselining now would bake all
 six frames of this regression into the Discrimination Gate's reference.
+
+**K. The income half was structurally DEAD — two silent bugs, fixed 2026-07-26 (#167).** Measured
+before the fix: across **49 priced evolve options on 31 corpus frames**, `income_gain` and
+`income_loss` were non-zero **exactly zero times**. Everything §3 (income as an ODDS read), §7 (the
+split-horizon loss) and amendment B (the `typed=` fix) describe was computing nothing on every board
+ever played.
+
+1. `_evolve_income_delta` passed a `CountTriple` into `draw_hit_probability`. `CountTriple` refuses to
+   be a bare number by design — *"a consumer must NAME its epistemic"* (ADR-0068) — so `int()` raised
+   `TypeError` into that function's documented *"bad input → 0.0"* guard. **Ruled: `expected`,
+   truncated.** A dig's odds are an ESTIMATE, which is what `expected` exists for; `floor` is the leg
+   for comparisons against a COST and is 0 for nearly every energy type while prizes are hidden —
+   which is exactly what hid this.
+2. `_ability_on_menu` matched `option["cardId"]`, but an ABILITY option names its body by
+   **`area`/`index`** and carries no `cardId` at all — so it returned False always, killing
+   `body_ability_on_menu` (§7's "this turn's use is forfeit" half) and `result_ability_now`. Now
+   resolves the slot and compares the card in it.
+
+**Effect on f35, the frame these terms are supposed to carry:** its evolve went `0.0` → `−10.12` →
+**`−30.36`**. Before, the hold was a coincidental cancellation of two deploy terms; now it is EARNED
+by the forfeited Recon dig. That mattered structurally: at `0.0` *any* positive deploy delta would
+have flipped it, so the headroom these fixes created is what made amendment L safe.
+
+Both fixes are leaf-neutral on their own (0 of 267 frames moved) — they were a **prerequisite**, not
+a solution.
+
+**L. A benched evolve that does not weaken the board is FREE DEVELOPMENT — user ruling 2026-07-26.**
+The ruling was to take free moves that only strengthen the board, and to invent no numbers. The
+equation already separates the cases **by sign**: f35's Active evolve is `−30.36` (a measured
+weakening), the five bench evolves are exactly `0.0` (nothing forfeited, a strictly bigger body).
+
+`_finish_turn_last`'s tier 0 **already named this** — *"free informative development — draw / search,
+fill the Bench, **evolve a benched Pokémon**"* — and its own `score <= 0 → tier 4` gate was starving
+the case it names, because a same-line bench evolve nets to exactly 0.0 (`_line_payoff_stat`
+pre-credits the pre-evolution with the LINE's payoff, correct for the ATTACH decider per Ruling 5a,
+so the deploy delta cancels by construction).
+
+Scoped on two axes: **`>= 0` only**, so an evolve priced as a weakening still falls to tier 4; and
+**BENCHED only**, leaving the Active's KO-forfeit guard untouched. This is **not** the blanket `>= 0`
+loosening rejected above — that was the whole sequencer. A zero-priced ATTACH still drops to tier 4
+(the attach-anyway blunder class, 82749168-21 / 82867148-34), tests unchanged.
+
+**M. An equal evolve tie breaks toward the body that arms SOONEST.** `evolve-the-energized-body-first`
+was one of the five rungs this swap retired, on the premise the equation subsumes it. **It does
+not** — and not because of a stale read. Measured on `81905522|0|decision|64`: the equation re-reads
+the board every menu and correctly sees the attach (bench0's arm drops **3 → 2** while bench1 stays
+3). The **delta erases it**: `deploy = result − body` cancels PER SLOT, since a body and its result
+share that slot's Energy, arm and ko — so the energised Staryu cancels 2-against-2, the bare one
+3-against-3, both land on 0.0, and the tie broke by raw **option index**. The Energy and the
+evolution then landed on different bodies.
+
+So the ordering consults the one term that does **not** cancel — the RESULT's arm clock — restricted
+to runs of evolve options at an identical score, permuted **within the positions they already
+occupy** so an evolve is never promoted past a tied non-evolve. Ordering only; no score moves.
+(Tied evolves need not be adjacent: the real run is `[2, 0, 1, 6]`, with a non-evolve between them —
+a consecutive-run implementation never fires, which is how the first version passed its unit test
+while leaving the frame broken.)
+
+**Result — #167's six-frame sitting closes at ZERO.** Leaf lab vs the `25fa8e5` reference:
+
+| | SOLE-top | shared-top | avg top-tie | OK→MISS |
+|---|---|---|---|---|
+| `25fa8e5` reference | 36/267 | 188/267 | 3.105 | — |
+| `ac2271f` (sitting start) | 35 | 182 | 3.071 | **6** |
+| after K+L+M | **36** | **188** | 3.1 | **0** |
+
+Not merely the six frames cleared — the leaf's discrimination is restored to the incumbent's exactly.
+On frame 3 the two orderings now CONVERGE (`attach-first` and `evolve-first` both end
+`Mega Starmie ex 330 (1 energy), Staryu 70`), which is the commutativity the ruling described.
