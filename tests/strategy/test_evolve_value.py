@@ -134,3 +134,54 @@ def test_an_ability_still_on_the_menu_is_detected_by_its_SLOT_not_a_cardId():
     pilot = _pilot("dragapult_ex")
     assert pilot._ability_on_menu(fx["obs"], 120) is True     # Drakloak, at area 4 / index 0
     assert pilot._ability_on_menu(fx["obs"], 121) is False    # Dragapult ex is in HAND, not in play
+
+
+# ── free development: a benched evolve at 0 is tier-0, not tier-4 (ADR-0070 amendment L, #167) ────
+
+def _sequence(agent, fixture):
+    """The real `_finish_turn_last` order for a fixture's MAIN menu."""
+    fx = json.loads((FIXTURES / f"{fixture}.json").read_text(encoding="utf-8"))
+    pilot = _pilot(agent)
+    pilot.evolve_value = True
+    d = pilot.explain(fx["obs"])
+    select = fx["obs"]["select"]
+    options = select["option"]
+    board = pilot._board(fx["obs"], select)
+    by_score = sorted(range(len(options)), key=lambda i: -d.options[i].score)
+    order = pilot._finish_turn_last(fx["obs"], board, options, d.options, by_score, 1,
+                                    select.get("context"))
+    return fx, d, options, order
+
+
+@pytest.mark.req("REQ-GEN-0093")
+def test_a_benched_evolve_priced_at_zero_is_free_development_not_a_turn_ender():
+    """`_finish_turn_last`'s tier 0 already NAMES this: "free informative development — draw /
+    search, fill the Bench, **evolve a benched Pokémon**". The `score <= 0 -> tier 4` gate starved
+    it, because a same-line bench evolve nets to exactly 0.0 (the pre-evolution is pre-credited with
+    the LINE's payoff by `_line_payoff_stat`, so the deploy delta cancels).
+
+    Measured cost of that on 82229122|0|decision|17 (#167's sitting): the agent never evolves the
+    Staryu, so its turn ends with three bare 70 HP Staryu instead of a 330 HP Mega Starmie ex."""
+    fx, d, options, order = _sequence("mega_starmie", "ms_free_bench_evolve_f17")
+    ev = [i for i, o in enumerate(options)
+          if o.get("type") == 9 and o.get("inPlayArea") != 4]
+    ender = [i for i, o in enumerate(options) if o.get("type") in (13, 14)]
+    assert ev, "fixture carries no benched evolve"
+    assert all(d.options[i].score == 0.0 for i in ev), "fixture is meant to pin the ZERO case"
+    for i in ev:
+        assert order.index(i) < min(order.index(e) for e in ender), (
+            f"benched evolve {i} sequenced at/after the turn-ender — it is free development")
+
+
+@pytest.mark.req("REQ-GEN-0093")
+def test_an_evolve_that_MEASURABLY_weakens_the_board_stays_last():
+    """The other half of the ruling: only a move that strengthens the board rides the exemption.
+    f35's Drakloak -> Dragapult ex forfeits Recon Directive while the body still cannot pay Phantom
+    Dive {R}{P} on {R}{D}, which the income half now prices at **-30.36**. Negative, so it stays a
+    tier-4 option and the exemption must not rescue it."""
+    fx, d, options, order = _sequence("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35")
+    ev = [i for i, o in enumerate(options) if o.get("type") == 9]
+    assert ev and d.options[ev[0]].score < 0, "f35's evolve must be priced as a weakening"
+    ender = [i for i, o in enumerate(options) if o.get("type") in (13, 14)]
+    assert order.index(ev[0]) >= min(order.index(e) for e in ender), (
+        "a board-weakening evolve must not ride the free-development exemption")

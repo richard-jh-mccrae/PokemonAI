@@ -1586,6 +1586,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # buried Boss's Orders (+50, the top-scored
                                                                      # option) below a setup Supporter that ate
                                                                      # the one-per-turn slot (dragapult f81)
+            if (t == _EVOLVE and o.get("inPlayArea") != _ACTIVE      # FREE DEVELOPMENT, tier 0 already
+                    and traces[i].score >= 0):                       # names it: "evolve a benched
+                return 0                                             # Pokémon". A same-line bench evolve
+                                                                     # nets to exactly 0.0 — the pre-evo is
+                                                                     # pre-credited with the LINE's payoff
+                                                                     # (`_line_payoff_stat`), so the deploy
+                                                                     # delta CANCELS — and the `score <= 0`
+                                                                     # gate below then starved it, ending
+                                                                     # turns with bare 70 HP Staryu instead
+                                                                     # of 330 HP Mega Starmie ex (#167's
+                                                                     # six-frame sitting).
+                                                                     # Scoped deliberately: `>= 0` only, so
+                                                                     # an evolve the equation prices as a
+                                                                     # WEAKENING (f35's -30.36 forfeited
+                                                                     # Recon dig) still falls to tier 4; and
+                                                                     # BENCHED only, leaving the Active's
+                                                                     # KO-forfeit guard above untouched.
+                                                                     # This is NOT the `>= 0` loosening
+                                                                     # ADR-0070 rejected — that was the whole
+                                                                     # sequencer; a zero-priced ATTACH still
+                                                                     # drops to 4 below (the attach-anyway
+                                                                     # blunder class, 82749168-21/82867148-34).
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
                 return 4                                             # — incl. an attach the decider prices at
                                                                      # ZERO: sequencing that ahead of End is
