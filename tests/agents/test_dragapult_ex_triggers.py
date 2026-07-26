@@ -77,18 +77,6 @@ def test_bench_the_comeback_drawer_silent_in_setup():
 
 
 # --- hold-evolution-until-attacker-ready: don't evolve Drakloak->Dragapult before the FP is on it ---
-
-@pytest.mark.req("REQ-DP-0002")
-def test_hold_evolution_fires_when_body_lacks_fp():
-    """EVOLVE Drakloak (1 energy < FP) -> Dragapult, my Active not doomed -> penalise (hold + keep Recon)."""
-    p = _pilot()
-    obs = make_select([opt(EVOLVE, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
-                      current=state(active=poke(CINDERACE, hp=160),
-                                    bench=[poke(DRAKLOAK, energy=1, hp=90)], hand=[DRAGAPULT]))
-    assert "hold-evolution-until-attacker-ready" in _fired(p.explain(obs).options[0])
-
-
-@pytest.mark.req("REQ-DP-0002")
 def test_hold_evolution_silent_when_body_has_fp():
     """Body already carries 2 (FP) -> the evolved Dragapult can Phantom Dive -> no hold."""
     p = _pilot()

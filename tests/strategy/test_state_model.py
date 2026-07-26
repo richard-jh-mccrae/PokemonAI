@@ -479,3 +479,28 @@ def test_known_top_is_declared_so_149_attaches_without_reshaping_the_channel():
     assert "known_top" in CarriedState.MEMBERS
     assert CarriedState.of(known_top=(163,)).get("known_top") == (163,)
     assert CarriedState().get("known_top") is None
+
+
+# ── my armed-clock: the mirror of TheirSide's deny read (ADR-0070 §6) ──────────────────────────
+
+def test_my_turns_to_afford_is_the_hop_aware_armed_clock():
+    """**The Two Clocks**, my half: the earliest turn MY line is armed, MAX of the energy-deficit
+    leg and the FORWARD-HOP leg (never the sum). The same primitive `TheirSide` uses for the deny
+    clock, exposed for my own bodies — the evolve decider needs it to price what a hop buys."""
+    m = _model(_player(active=_pult(energies=[E_R, E_P]), bench=[], prize=4),
+               _player(active=_poke(RIOLU, hp=80, serial=3), bench=[], prize=6))
+    # Dragapult ex already pays Phantom Dive's {R}{P} -> armed now, no hops owed.
+    assert m.mine.turns_to_afford(m.mine.active) == 0
+
+
+def test_my_armed_clock_counts_the_energy_deficit():
+    m = _model(_player(active=_pult(energies=[]), bench=[], prize=4),
+               _player(active=_poke(RIOLU, hp=80, serial=3), bench=[], prize=6))
+    # 0 attached against Phantom Dive's 2-cost, one attach a turn -> 2 turns.
+    assert m.mine.turns_to_afford(m.mine.active) == 2
+
+
+def test_my_armed_clock_is_none_for_an_unknown_body():
+    m = _model(_player(active=_pult(energies=[]), bench=[], prize=4),
+               _player(active=_poke(RIOLU, hp=80, serial=3), bench=[], prize=6))
+    assert m.mine.turns_to_afford(None) is None

@@ -37,10 +37,12 @@ def _fixture(name: str) -> dict:
 
 # ── PINS: covered today; must survive the rung→equation fold ─────────────────────────────────────
 @pytest.mark.parametrize("agent,fixture,leg", [
-    ("dragapult_ex", "dp_evolve_energized_line_body_first_f82", "which-body"),
     ("dragapult_ex", "dragapult_promote_over_fragile_base_f31", "promote-preserve-the-line"),
     ("dragapult_ex", "dp_charge_the_line_f29", "line-progress (advance over spread)"),
     ("dragapult_ex", "dragapult_concentrate_line_preevo_f85", "concentrate on the started line"),
+    # Promoted from TARGET on the swap (#140): the income-ON one-shot burst the equation was built
+    # to fix. Its `xfail(strict)` XPASSed the moment the decider landed, which is what forced this move.
+    ("dragapult_ex", "dp_evolve_the_draw_engine_f40", "income-ON (one-shot burst)"),
 ])
 def test_evolve_corpus_pin(agent, fixture, leg):
     """A covered evolve/line decision the equation must keep correct after the fold."""
@@ -52,7 +54,6 @@ def test_evolve_corpus_pin(agent, fixture, leg):
 
 # ── TARGETS: the equation's job. xfail(strict) → XPASS (hard fail) the moment it lands. ───────────
 @pytest.mark.parametrize("agent,fixture,leg", [
-    ("dragapult_ex", "dp_evolve_the_draw_engine_f40", "income-ON (one-shot burst)"),
     ("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35", "income-OFF hold + typed readiness + scoped doom"),
     ("dragapult_ex", "dp_open_utility_over_fragile_line_base_f2", "exposure / opener (line-shape)"),
 ])
@@ -63,3 +64,20 @@ def test_evolve_corpus_target(agent, fixture, leg):
     chosen = _pilot(agent).explain(fx["obs"]).chosen
     assert chosen == fx["correct"], (
         f"[{leg}] {fixture} chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
+
+
+# ── PLANNER SCOPE: won by a maneuver, not by the evolve equation (ADR-0070 §C) ────────────────────
+@pytest.mark.xfail(strict=True, reason="CROSS-LAYER, user ruling 2026-07-25: f82 is won by a "
+                   "five-step TURN-PLANNER maneuver whose value is the END STATE — Crispin attaches "
+                   "{D} to Munkidori, evolve the Active Dreepy (40 damage carries -> Drakloak 50/90), "
+                   "Adrena-Brain moves 3 counters (mine -> 80/90, theirs -> 60/90), Recon Directive, "
+                   "then Dragon Headbutt 70 >= 60 KOs. The evolve equation's standalone read is "
+                   "CORRECT (it prefers the benched body, whose clocks genuinely move); the maneuver "
+                   "is simply better. No lethal tier reaches an Ability that moves damage counters "
+                   "onto the defender, so this XPASSes — and self-cleans — when that tier lands.")
+def test_evolve_corpus_planner_scope_f82():
+    """f82: the which-body pick is decided by a turn-planner maneuver, not by the evolve marginal."""
+    fx = _fixture("dp_evolve_energized_line_body_first_f82")
+    chosen = _pilot("dragapult_ex").explain(fx["obs"]).chosen
+    assert chosen == fx["correct"], (
+        f"dp_evolve_energized_line_body_first_f82 chose {chosen}, expected {fx['correct']}")

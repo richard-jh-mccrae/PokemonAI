@@ -595,6 +595,55 @@ open ruling — `docs/plans/attach-decider-swap-review.md` §Ruling 3.
 _Avoid_: ability value (the Ability's own recurring worth — planner scope), fuel (unqualified),
 re-gating it on `bench_line_member_needs` (the role gate carries the priority)
 
+**Build Standing**:
+The LEVEL of a body's convex typed build credit — `(matched/slots)² × maxDamage`, discounted by
+`_ATTACH_PREEVO_DISCOUNT` while the body is a line pre-evolution — as opposed to the DELTA an attach
+buys (`_attach_build_delta`, which is this level's difference under the option's provision). Named
+because #140 needs the level where #139 needed only the difference: an evolve moves no Energy, so
+its deploy value is `standing(evolved) − standing(pre-evolution)` on the SAME attached Energy, and
+**evolving is precisely the removal of the pre-evolution discount** (Staryu at 2 of Nebula Beam's 3
+typed slots: 23.3 → 93.3). Always read through `_line_payoff_stat`, so a pre-evolution builds toward
+its evolution's attack rather than its own cheap one.
+_Avoid_: build value (ambiguous between level and delta), attach progress (the retired COUNT
+reading, `_attach_progress`), treating standing as a per-option quantity (it is per-BODY)
+
+**The Two Clocks**:
+The pair of shipped turn-counters whose RACE prices a board change no damage term can see:
+`turns_to_afford` (mine — the earliest turn a line is armed, the MAX of the energy-deficit leg and
+the **forward-hop** leg, `combat.py:940`) against `turns_to_ko_me` (theirs — turns until the
+predicted **Incoming** removes the body). A payoff's damage only counts if the body lives to fire
+it, so `P(fires)` is the race between them, graded by `deny_slot`'s halving (`/2**t`) rather than a
+new decay rate. This is what makes a ZERO-Energy evolve worth something without a constant: evolving
+shortens the hop leg and lengthens the KO clock, and where it changes neither the value is
+legitimately zero (ADR-0070 §6). Note `turns_to_afford` is exposed on `TheirSide` only today, for
+deny slots; the mirror read on `MySide` is #140's to add.
+_Avoid_: turns_to_ready (the `needs.py` primitive both wrap — name the wrapper you mean), readiness
+clock (unqualified — whose?), treating the two as summable (they are raced, not added)
+
+**Income Horizon**:
+The deliberately ASYMMETRIC accounting of a draw/dig Ability across an evolve. Because
+`_finish_turn_last` sequences the free Ability at tier 0 and the engine re-presents the menu after
+each non-ending action, **Recon → evolve → use the evolved form's Ability** is one legal turn — so
+evolving does not forfeit *this* turn's use. `income_gain` is therefore IMMEDIATE and undiscounted
+when the evolved form's Ability is usable now, while `income_loss` is a strictly FUTURE stream,
+halved per turn out. The this-turn leg of the loss is charged only when the pre-evolution's Ability
+is **still on the menu** — the fact is read, never inferred from an assumed ordering. Priced as an
+odds read (`dmax × Δreadiness_p`), not a tier, so it saturates to exactly zero on a body that
+already reaches (ADR-0070 §3, §7).
+_Avoid_: ability income (the old symmetric `base × hold_turns` shape), hold pressure (the effect,
+not the quantity), assuming the ability was used (read the menu)
+
+**Area-at-Damage-Time**:
+The board area a body occupies **when the predicted damage lands** — an explicit argument to the
+`incoming` family, never inferred from where the body sits now. Load-bearing because bench-reach
+differs from Active-reach (only `rider_snipe` / `rider_spread` reach a benched body, and a Tera body
+takes NO attack damage while Benched, rules.md §185), and because `_survives_after_ko` asks about
+bodies that are benched NOW but Active when the opponent replies — the lethal tiers promote them
+first. Inferring the area from the board would hand those bodies false bench immunity and
+manufacture phantom lethals, the worst bug class in this codebase (ADR-0070 §9).
+_Avoid_: is_benched / body area (the CURRENT position — the thing this deliberately is not),
+inferring area inside `incoming` (the caller owns the claim)
+
 **Survival Window**:
 How many turns one of my bodies withstands the predicted **Incoming** before it is Knocked Out. The
 lever a defensive +HP Tool pays for: the Tool earns its slot when its boost widens this window by a

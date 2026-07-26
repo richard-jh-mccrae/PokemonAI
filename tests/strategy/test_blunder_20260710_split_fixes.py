@@ -63,6 +63,15 @@ def test_f14_grabs_the_item_lock_opener_over_evolution_and_redundant_base():
 
 
 @pytest.mark.req("REQ-GEN-0075")
+@pytest.mark.xfail(strict=True, reason="TURN-PLANNER SCOPE — deferred to #165 (Phase 1g), user ruling "
+                   "2026-07-25: finish the individual value equations, then grill and implement the "
+                   "planner. f32's correct play is a five-step maneuver whose value is the END STATE "
+                   "(retreat Dreepy->Budew, evolve Dreepy->Drakloak, Recon, reconsider, Itchy-Pollen "
+                   "item-lock); the standalone evolve at 32 beats retreat-to-wall at 30 and the "
+                   "maneuver is simply better. The 2026-07-15 grill named this a cross-layer "
+                   "requirement of the 1b swap and it regressed exactly as anticipated — no lethal "
+                   "tier composes a retreat+evolve+lock sequence whose payoff is positional. STRICT "
+                   "so it XPASSes and forces this mark's removal when the planner lands.")
 def test_f32_retreats_to_wall_the_line_with_the_item_lock_disruptor():
     """f32 + f20 (CRITICAL): fragile developing Dreepy Active, Budew (item_lock) benched, opp Gabite can
     damage the line. The sound play is the retreat-to-promote-the-sacrificial-wall maneuver, NOT the

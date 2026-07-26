@@ -1,57 +1,20 @@
-"""BASELINE cluster: EVOLUTION — bringing the line online (ADR-0025). Evolve into the win-condition,
-prefer a rush-evolve tutor in setup, and penalise a rush-evolve with no target. Pure data, no Mixin.
+"""BASELINE cluster: EVOLUTION — what survives the evolve-decider swap (ADR-0070 §10, #140).
+
+The four rungs that PRICED an evolve are DELETED, not suppressed: `evolve-into-wincon` (+40) and
+`advance-the-evolution-line` (+15) are the decider's deploy term, and both `+5` energized tie-breaks
+are EMERGENT — an energized body's clocks are nearer, so its evolve delta is naturally larger, which
+is the whole thing they were compensating for. The dragapult `hold-evolution-until-attacker-ready`
+(-46) deck rung goes with them: it is `income_loss` (via /deck-align, ADR-0034).
+
+What remains is the `_PLAY` side, which prices a TUTOR rather than an evolve — structure, not value.
+`dont-rush-evolve-without-target` is a Gate: structural ABSENCE (no pre-evolution in play means
+nothing to evolve), not a valuation, and it must keep its `_CLASS_B_SPEND_IDS` membership or the
+develop-rollout planner's spend account loses a term. Pure data, no Mixin.
 """
 from common.strategy.context import _EVOLVE, _PLAY, _WINCON_ROLES
 from common.strategy.strategy import Hypothesis, Plan
 
 HYPOTHESES = [
-    Hypothesis(
-        id="evolve-into-wincon",
-        rationale="Evolving into the win-condition (e.g. Staryu -> Mega Starmie ex) brings your main "
-                  "attacker online, so prefer an Evolve option whose result carries the "
-                  "`win_condition` / `primary_attacker` Role over a chip attack or lesser development. "
-                  "A lethal attack still wins — a positional weight never beats a KO.",
-        when=lambda c: c.option_type == _EVOLVE and bool(_WINCON_ROLES & set(c.roles)),
-        weight=40, status="testing"),
-    Hypothesis(
-        id="evolve-the-energized-body-first",
-        rationale="When two pre-evolutions can both become the win-condition, evolve the one that already "
-                  "carries Energy (`evolve_body_energy > 0`) — the result can ATTACK this turn (sprint), "
-                  "while evolving a bare body wastes the tempo (ep83664991 f25: two Staryu, one at 3 "
-                  "Energy — evolve THAT one, then disrupt). A small tie-break (+5) on top of "
-                  "`evolve-into-wincon` (+40) so it only orders the WHICH-body pick between equal evolves; "
-                  "a KO still dominates (KO_SCORE).",
-        when=lambda c: c.option_type == _EVOLVE and bool(_WINCON_ROLES & set(c.roles))
-        and (c.evolve_body_energy or 0) > 0,
-        weight=5, status="assumed"),
-    Hypothesis(
-        id="advance-the-evolution-line",
-        rationale="Evolving a MID-Line piece (e.g. Dreepy -> Drakloak toward Dragapult ex) advances the "
-                  "win-condition line even though the result isn't yet the payoff — `evolve-into-wincon` "
-                  "(+40) only fires on the final Role-carrying evolution, so a bare mid-line Evolve sat at "
-                  "score 0 and lost to a spread attach onto a 3rd bare base (ep83686860 f29: 'better to "
-                  "fully charge single wincon line then spread out energy'). Endorse it so concentrating "
-                  "the started line beats spreading; +15 clears `power-up-attacker` (+15 net +10 after "
-                  "`attach-energy-last`) but stays below `evolve-into-wincon` (+40). Gated on the result "
-                  "being a Line pre-evolution (`card_is_line_preevo`); a KO still dominates (KO_SCORE). "
-                  "Silent for single-hop lines (Riolu->Mega, Staryu->Mega) with no mid-Line piece.",
-        when=lambda c: c.option_type == _EVOLVE and c.card_is_line_preevo,
-        weight=15, status="assumed"),
-    Hypothesis(
-        id="advance-the-energized-line-body-first",
-        rationale="When two MID-line pre-evolutions can both advance the line, evolve the one that already "
-                  "carries Energy (`evolve_body_energy > 0`) — the evolved form can ATTACK this turn "
-                  "(dragapult f82: energized Active Dreepy -> Drakloak Dragon Headbutt {R}{P} 70 now, vs a "
-                  "bare bench Dreepy -> a Drakloak that can't attack). The mid-line analogue of "
-                  "`evolve-the-energized-body-first` (which only covers the wincon-Role final evolve); a "
-                  "small +5 WHICH-body tie-break on top of `advance-the-evolution-line` (+15), so the "
-                  "energized body nets 20 vs a bare one at 15. Needed because the decide() secondary sort "
-                  "key `attach_to_needy_line` fires BACKWARDS on an Evolve (it favours the energy-LESS bare "
-                  "body as 'needy'), handing the tie to the bare copy; this rung wins the pick on score "
-                  "outright. A KO still dominates (KO_SCORE).",
-        when=lambda c: c.option_type == _EVOLVE and c.card_is_line_preevo
-        and (c.evolve_body_energy or 0) > 0,
-        weight=5, status="assumed"),
     Hypothesis(
         id="prefer-rush-evolve-tutor",
         rationale="A `rush_evolve` tutor (e.g. Salvatore: fetch a Pokémon and evolve it the same turn "

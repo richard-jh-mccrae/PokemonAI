@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
-from common.evolve_value import EvolveInputs, evolve_value
+from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import PromoteRetreatInputs, promote_retreat_value
 from common.opponent_model import OpponentModel
 from common.state_model import StateModel
@@ -997,11 +997,12 @@ class OptionTrace:
                                  # refill that ARMS them). NOT in `score` — inert telemetry that makes the
                                  # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
                                  # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
-    evolve_shadow: float = 0.0   # REPORTING-ONLY (evolve-valuation grill, 2026-07-15): the SHADOW
-                                 # evolve-value oracle's output for an EVOLVE option (common/evolve_value.py)
-                                 # — the marginal Δ need-coverage the evolve produces. NOT in `score`; the
-                                 # baseline_evolution rungs still decide. Swap gated on the corpus family
-                                 # (test_evolve_valuation_corpus.py). 0.0 off an EVOLVE option.
+    evolve_working: dict | None = None  # the EVOLVE DECIDER's legible working (ADR-0070): the per-option
+                                 # TERM row — deploy (with each body's this_turn / payoff / the two clocks),
+                                 # income_gain, income_loss, and the `tactical` the option actually scored.
+                                 # Like `attach_working` this DECIDES, so there is no agreement bit: one
+                                 # emission path, one truth, and the substrate #146/#148 consume. Sparse:
+                                 # None off an EVOLVE option or while the kill-switch is OFF.
     promote_retreat_shadow: float = 0.0  # REPORTING-ONLY (promote/retreat grill, 2026-07-22): the SHADOW
                                  # promote/retreat value oracle's output for a TO_ACTIVE/SWITCH option
                                  # (common/promote_retreat_value.py) — the two-sided window-rollout diff. NOT
@@ -1122,7 +1123,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False, attach_value=True, doom_matched_relax=False):
+                 leaf_hand_value=False, attach_value=True, evolve_value=True,
+                 doom_matched_relax=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1261,6 +1263,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
+        self.evolve_value = evolve_value                # the EVOLVE DECIDER's emergency lever (ADR-0070,
+                                                        # shipped ON): the body-substituted deploy delta
+                                                        # + odds-priced income. OFF is DEGRADED MODE, not
+                                                        # a rollback — the four rungs it replaced are
+                                                        # deleted, so OFF silences evolve endorsements
+                                                        # and only the _PLAY-side Gate speaks.
         self.attach_value = attach_value                # the ATTACH DECIDER's emergency lever (ADR-0069 §9,
                                                         # shipped ON): the axes-sum marginal (`_attach_value`)
                                                         # IS the energy-attach decision, scaled into the rung
@@ -1615,6 +1623,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # respects its ADR-0044 redundancy flags
         attach_row = self._attach_decision(obs, select, board, option)   # priced ONCE: the score term
                                                            # and the planner's spend account read it
+        evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -1632,7 +1641,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._grab_enabler_lethal_tactical(obs, select, board, option)
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
                     + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
-                    + (attach_row["tactical"] if attach_row is not None else 0.0))
+                    + (attach_row["tactical"] if attach_row is not None else 0.0)
+                    + (evolve_row["tactical"] if evolve_row is not None else 0.0))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
@@ -1645,31 +1655,122 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                            attach_spend=(-attach_row["evaporation_loss"] * _ATTACH_VALUE_SCALE
                                          if attach_row is not None else 0.0),
                            hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
-                           evolve_shadow=self._evolve_shadow(obs, ctx, option),  # REPORTING-ONLY (shadow oracle)
+                           evolve_working=evolve_row,
                            promote_retreat_shadow=self._promote_retreat_shadow(obs, select, ctx, option))  # REPORTING-ONLY
 
-    def _evolve_shadow(self, obs: dict, ctx, option: dict) -> float:
-        """The SHADOW evolve-value oracle's output for an EVOLVE option (common/evolve_value.py) —
-        the marginal Δ need-coverage the evolve produces. REPORTING-ONLY, not in `score`; 0.0 off an
-        EVOLVE. Reads the board into `EvolveInputs`, so the equation stays a pure function."""
-        if ctx.option_type != _EVOLVE or ctx.card_id is None or self.functions is None:
+    def _evolve_side(self, obs: dict, board: Board, raw: dict | None, card_id, *,
+                     is_active: bool) -> EvolveBody:
+        """Read ONE body — the pre-evolution as it stands, or the hypothetical form it becomes —
+        into the decider's damage-currency view (ADR-0070 §2).
+
+        The hypothetical result carries the pre-evolution's attached Energy, because evolving keeps
+        attached cards (rules.md §4). Only the ACTIVE can swing tonight, and the player going first
+        cannot attack on turn 1 (rules.md §2), so `this_turn` is 0 elsewhere rather than optimistic."""
+        from common.state_model import BodyView
+        raw = raw or {}
+        st = self._line_payoff_stat(card_id)
+        payoff = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
+        this_turn = 0.0
+        mine = self._state_model.mine if self._state_model is not None else None
+        if mine is not None and is_active and board.turn > 1:
+            this_turn = mine.best_reachable_damage(
+                BodyView(raw, combat=self.combat, is_active=True))
+        opp = self._opp_player(obs) or {}
+        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        return EvolveBody(
+            this_turn=float(this_turn), payoff_damage=payoff,
+            arm=self.combat.turns_to_afford(raw, typed=True),
+            # AREA-AT-DAMAGE-TIME (ADR-0070 §9): an evolve does not move the body, so the area it
+            # occupies now IS the area the reply lands on — the one place the board read is sound.
+            ko=self.combat.turns_to_ko_me(raw, opp_bodies,
+                                          charged=getattr(self, "_incoming_budget", None),
+                                          context=getattr(self, "_opp_attack_context", None),
+                                          my_benched=not is_active))
+
+    def _evolve_income_delta(self, raw: dict | None, card_id, *, is_active: bool) -> float:
+        """Δ`readiness_p` an Ability's dig buys on this body — what the engine is actually worth
+        (ADR-0070 §3), as odds rather than a tier.
+
+        Zero on a body that ALREADY reaches, which is what makes a redundant engine worth exactly
+        nothing with no saturation rule, and what collapses the hold the moment the body is armed.
+        Otherwise the exact hypergeometric that the dig finds an enabler that WOULD pay — checked
+        per candidate Energy type against a Budget built as though that card were in hand. Fail-
+        CLOSED at 0.0 (ADR-0067): an untagged dig depth, or an enabler that still would not pay, is
+        worth nothing rather than its bare draw odds."""
+        from common.deck_odds import draw_hit_probability
+        from common.state_model import BodyView
+        depth = self.functions.dig_depth(card_id) if self.functions is not None else 0
+        mine = self._state_model.mine if self._state_model is not None else None
+        if depth <= 0 or mine is None or not raw:
             return 0.0
-        body = self._evolve_body(obs, option)
-        body_cid = body.get("id") if body else None
-        body_energies = (body.get("energies") or []) if body else []
-        rtags = self.functions.tags(ctx.card_id)
-        btags = self.functions.tags(body_cid) if body_cid is not None else []
-        can_attack = (ctx.card_is_wincon
-                      and self._typed_can_pay(self._valued_attack_types(ctx.card_id), body_energies))
+        if mine.reachable_attach(BodyView(raw, combat=self.combat, is_active=is_active), None):
+            return 0.0
+        pool = mine.deck_count
+        best = 0.0
+        for etype, copies in (mine.deck_energy_counts or {}).items():
+            enabler = self.combat.attach_budget(
+                raw, mine.hand_ids, energy_attached=mine.energy_attached,
+                supporter_played=mine.supporter_played,
+                deck_energy_types=mine.deck_energy_types,
+                hand_energy_types=frozenset(mine.hand_energy_types) | {etype},
+                discard_energy_counts=mine.discard_energy_counts,
+                target_benched=not is_active,
+                more_prizes_than_opp=mine.more_prizes_than_opp)
+            if self.combat.reachable_attach(raw, None, budget=enabler):
+                best = max(best, draw_hit_probability(copies, pool, depth))
+        return best
+
+    def _evolve_decision(self, obs: dict, board: Board, ctx, option: dict):
+        """The EVOLVE DECIDER: price ONE evolve option (ADR-0070). Returns the per-option TERM row —
+        the decider's legible working — or None to abstain: the kill-switch is OFF, or this is not
+        an EVOLVE option.
+
+        While the switch is OFF the `baseline_evolution` rungs decide alone, which is the swap
+        protocol (ADR-0069 §8): both deciders stay alive until the corpus flips are user-ruled."""
+        if not getattr(self, "evolve_value", False):
+            return None
+        if ctx.option_type != _EVOLVE or ctx.card_id is None:
+            return None
+        raw = self._evolve_body(obs, option) or {}
+        body_cid = raw.get("id")
+        me = self._my_player(obs)
+        is_active = any(raw is p for p in (me.get("active") or []))
+        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active)
+        # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
+        # hypothetical body differs from the real one ONLY in which card it is — exactly the
+        # substitution the deploy delta is asking about.
+        result_raw = dict(raw, id=ctx.card_id)
+        rstat = self.stats.get(ctx.card_id) if self.stats else None
+        if rstat is not None and getattr(rstat, "hp", None):
+            result_raw["hp"] = rstat.hp
+        result = self._evolve_side(obs, board, result_raw, ctx.card_id, is_active=is_active)
+        btags = self.functions.tags(body_cid) if (self.functions and body_cid is not None) else []
         inp = EvolveInputs(
-            result_has_draw=("draw" in rtags or "dig" in rtags),
-            body_has_draw=("draw" in btags or "dig" in btags),
-            result_is_wincon=ctx.card_is_wincon,
-            result_is_line_preevo=ctx.card_is_line_preevo,
-            result_can_attack_now=can_attack,
-            body_has_energy=bool(body_energies),
-            body_doomed_affordable=self._body_doomed_affordable(obs, ctx.board))
-        return evolve_value(inp).total
+            body=body, result=result,
+            ready_gain=self._evolve_income_delta(result_raw, ctx.card_id, is_active=is_active),
+            ready_loss=self._evolve_income_delta(raw, body_cid, is_active=is_active),
+            # An Ability the engine still offers has NOT been used this turn — the menu is the fact,
+            # never an assumption about whether the tier-0 sequencer already fired it (ADR-0070 §7).
+            result_ability_now=self._ability_on_menu(obs, ctx.card_id),
+            body_ability_on_menu=self._ability_on_menu(obs, body_cid),
+            body_ability_oneshot=("self_shuffle" in btags),
+            hold_turns=(body.arm or 0))
+        val = evolve_value(inp)
+        return {"deploy": val.deploy, "income_gain": val.income_gain,
+                "income_loss": val.income_loss, "tactical": val.total,
+                "body": {"this_turn": body.this_turn, "arm": body.arm, "ko": body.ko},
+                "result": {"this_turn": result.this_turn, "arm": result.arm, "ko": result.ko}}
+
+    def _ability_on_menu(self, obs: dict, card_id) -> bool:
+        """Is this card's Ability still offered on the current menu — i.e. not yet used this turn?
+        Abilities fire "per the ability's own text" (rules.md:91), and the engine simply stops
+        offering a once-per-turn one after use, so the MENU is the fact. False without a menu."""
+        if card_id is None:
+            return False
+        for o in ((obs.get("select") or {}).get("option") or ()):
+            if o.get("type") == _ABILITY and o.get("cardId") == card_id:
+                return True
+        return False
 
     def _promote_retreat_shadow(self, obs: dict, select: dict, ctx, option: dict) -> float:
         """The SHADOW promote/retreat value oracle's output for a TO_ACTIVE/SWITCH option
@@ -3517,17 +3618,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         aids = tuple(getattr(payoff_stat, "attacks", None) or ())
         return max(aids, key=self.combat.attack_damage) if aids else None
 
-    def _attach_build_delta(self, target: dict | None, extra_units) -> float:
-        """The CONVEX, TYPED build progress ``extra_units`` buys on ``target`` (ADR-0069 §3).
+    def _build_standing(self, target: dict | None, extra_units=()) -> float:
+        """**Build Standing** — the LEVEL of ``target``'s convex typed build credit, optionally over a
+        hypothetical body also carrying ``extra_units`` (ADR-0070 §2).
 
         ``(matched/slots)**2 * maxDamage``, where ``matched`` is the greedy typed assignment of the
-        body's attached Energy (plus the option's provision) against the LINE PAYOFF attack's cost
-        shape — by the SAME matcher `reachable_attach` uses, so "fits" and "reaches" can never
-        disagree. Two consequences that used to need their own rungs: an Energy filling no slot earns
-        ZERO build (off-type waste is emergent, never a separate colourless-blind boolean), and a
-        colourless slot absorbs any type (so Munkidori's {D} in Mind Bend's ● is real progress, not
-        "wasted"). Pre-evolution build keeps the `_ATTACH_PREEVO_DISCOUNT`; the evolution-lookahead
-        payoff pricing carries over unchanged from the count reading."""
+        body's attached Energy against the LINE PAYOFF attack's cost shape — by the SAME matcher
+        `reachable_attach` uses, so "fits" and "reaches" can never disagree. Two consequences that
+        used to need their own rungs: an Energy filling no slot earns ZERO build (off-type waste is
+        emergent, never a separate colourless-blind boolean), and a colourless slot absorbs any type
+        (so Munkidori's {D} in Mind Bend's ● is real progress, not "wasted"). A pre-evolution keeps
+        the `_ATTACH_PREEVO_DISCOUNT`; the evolution-lookahead payoff pricing carries over unchanged
+        from the count reading, which is the fallback when the payoff attack's per-slot cost does not
+        resolve (where a typed claim would be a guess).
+
+        The LEVEL is the shared form: #139 needs only its DIFFERENCE under an option's provision
+        (`_attach_build_delta`, below), while #140 needs the level itself — an evolve moves no Energy,
+        so its deploy value is `standing(evolved) − standing(pre-evolution)` on the SAME attached
+        Energy, and **evolving is precisely the removal of the pre-evolution discount**. One function
+        owns build credit so the two readings cannot drift."""
         if not target:
             return 0.0
         tcid = target.get("id")
@@ -3535,13 +3644,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
         aid = self._payoff_attack_id(st)
         if aid is not None and dmax > 0:
-            matched_0, slots = self.combat.matched_slots(target, aid)
+            matched, slots = self.combat.matched_slots(target, aid, extra_units=extra_units)
             if slots:
-                matched_1, _ = self.combat.matched_slots(target, aid, extra_units=extra_units)
-                value = ((matched_1 / slots) ** 2 - (matched_0 / slots) ** 2) * dmax
+                value = ((matched / slots) ** 2) * dmax
                 return value * (_ATTACH_PREEVO_DISCOUNT if tcid in self._line_preevo_set() else 1.0)
         have = len(target.get("energies") or [])          # no typed cost record -> the count reading
-        return self._attach_progress(tcid, have + len(extra_units)) - self._attach_progress(tcid, have)
+        return self._attach_progress(tcid, have + len(extra_units))
+
+    def _attach_build_delta(self, target: dict | None, extra_units) -> float:
+        """The CONVEX, TYPED build progress ``extra_units`` buys on ``target`` (ADR-0069 §3) — the
+        DIFFERENCE of :meth:`_build_standing` with and without the option's provision.
+
+        The branch (typed vs the count fallback) is chosen by the payoff attack's cost record, which
+        no attach changes, so both legs always read the same way and the difference is exact."""
+        return self._build_standing(target, extra_units) - self._build_standing(target)
 
     def _partner_absent(self, cid, obs: dict) -> bool:
         """Ruling 6: `cid` is a co-dependent ENGINE body whose value requires a partner in play
@@ -5831,10 +5947,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not (wincon and wincon.get("hp")):
             return False
         opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        # AREA-AT-DAMAGE-TIME (ADR-0070 §9): the wincon is benched NOW, but every consumer of this
+        # veto decides whether to EXPOSE it in the Active Spot (`interpose-...` stands down so
+        # `promote-the-ready-wincon` wins; `dont-promote-into-their-prize-reach` stands down so the
+        # promote goes through). So the opponent replies against it as the ACTIVE — the full printed
+        # damage, not the bench riders. Declared explicitly: reading it as benched here would grant
+        # phantom safety and expose a 3-prize wincon on a false read.
         incoming = self.combat.reachable_incoming(
             {"id": wincon.get("id"), "hp": wincon.get("hp")}, opp_bodies,
             charged=getattr(self, "_incoming_budget", None),
-            context=getattr(self, "_opp_attack_context", None))
+            context=getattr(self, "_opp_attack_context", None), my_benched=False)
         return incoming < wincon.get("hp")
 
     def _best_promote_slot(self, me: dict) -> tuple | None:

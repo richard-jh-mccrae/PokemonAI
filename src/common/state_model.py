@@ -558,6 +558,22 @@ class MySide(_SideBase):
                                         enabler_budget=enabler_budget, copies=copies,
                                         pool=pool, draws=draws)
 
+    def turns_to_afford(self, body: BodyView | None, *, attaches_per_turn: int = 1) -> int | None:
+        """**The Two Clocks**, my half (ADR-0070 §6): the earliest future turn ``body``'s line is
+        ARMED — the MAX of the energy-deficit leg and the FORWARD-HOP leg, never the sum.
+
+        The mirror of :meth:`TheirSide.turns_to_afford`, which has carried this read since the deny
+        clock (S1c) but only for the opponent's bodies. The evolve decider needs it for MY bodies:
+        evolving removes one forward hop, so the Δ across the hop is what an evolve buys on the
+        armed side — and where the energy leg dominates, that Δ is honestly zero. Uses the
+        pool-level forward index (my own deck's forward forms are exactly the right availability
+        gate for my line). None when unknown — fail-closed, the caller then makes no claim."""
+        if body is None:
+            return None
+        return self._memoized(("mine_turns_to_afford", id(body.body), attaches_per_turn),
+                              lambda: self._combat.turns_to_afford(
+                                  body.body, attaches_per_turn=attaches_per_turn, typed=True))
+
     @lazy
     def famine(self) -> bool:
         """My Active can reach NO attack this turn, even under the full Attach Budget — the sound
