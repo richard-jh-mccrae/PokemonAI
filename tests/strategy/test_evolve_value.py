@@ -225,3 +225,26 @@ def test_equal_scored_evolves_order_by_the_results_arm_clock():
     opts2 = [{"type": 7, "index": 0}, {"type": 9, "inPlayArea": 5, "inPlayIndex": 1}]
     traces2 = [tr(0.0, None), tr(0.0, 2)]
     assert pilot._prefer_soonest_arming_evolve([0, 1], opts2, traces2) == [0, 1]
+
+
+@pytest.mark.req("REQ-GEN-0094")
+def test_the_tied_evolves_need_not_be_ADJACENT_in_the_score_order():
+    """The real shape, and the one an adjacent-only implementation silently misses. On
+    81905522|0|decision|64 the equal-score run is `[2, 0, 1, 6]` — a NON-evolve sits between the two
+    evolves — so a "consecutive run" tie-break never forms a run and never fires, which is exactly
+    how the first version of this passed its unit test while leaving the real frame broken.
+
+    The evolves are permuted within the positions they already occupy; every non-evolve stays put."""
+    from types import SimpleNamespace
+    opts = [{"type": 9, "inPlayArea": 5, "inPlayIndex": 1},      # 0: bare body,      arm 3
+            {"type": 7, "index": 0},                              # 1: a non-evolve
+            {"type": 9, "inPlayArea": 5, "inPlayIndex": 0},      # 2: energised body, arm 2
+            {"type": 14}]                                         # 3: END, lower score
+    def tr(score, arm):
+        return SimpleNamespace(score=score,
+                               evolve_working=None if arm is None else {"result": {"arm": arm}})
+    traces = [tr(0.0, 3), tr(0.0, None), tr(0.0, 2), tr(-5.0, None)]
+    pilot = _pilot("mega_starmie")
+    # in: evolve(arm3) @pos0, non-evolve @pos1, evolve(arm2) @pos2
+    # out: the two evolves swap; the non-evolve does NOT move off position 1
+    assert pilot._prefer_soonest_arming_evolve([0, 1, 2, 3], opts, traces) == [2, 1, 0, 3]

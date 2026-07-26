@@ -1505,7 +1505,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         reordered, so an evolve can never be promoted past a tied non-evolve. Ordering only; no score
         moves, so f35's hold, the attach-anyway floor and the free-development exemption are all
         untouched. The arm clock is already in `evolve_working["result"]`, so a trace reader can see
-        why one body won."""
+        why one body won.
+
+        Tied evolves need NOT be adjacent: on 81905522|0|decision|64 the equal-score run is
+        ``[2, 0, 1, 6]`` with a non-evolve sitting BETWEEN the two evolves, so a consecutive-run
+        implementation never forms a run and never fires. This permutes the evolves *within the
+        positions they already occupy*, leaving every non-evolve exactly where it was — which is what
+        keeps "an evolve is never promoted past a tied non-evolve" true while still ordering the
+        evolves against each other."""
         def arm(i):
             w = getattr(traces[i], "evolve_working", None)
             return (w or {}).get("result", {}).get("arm") if w else None
@@ -1516,12 +1523,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         out, n = list(order), len(order)
         i = 0
         while i < n:
-            j = i
-            while (j + 1 < n and is_evolve(out[j + 1]) and is_evolve(out[i])
-                   and traces[out[j + 1]].score == traces[out[i]].score):
+            j = i                           # the maximal run of options sharing one score
+            while j + 1 < n and traces[out[j + 1]].score == traces[out[i]].score:
                 j += 1
-            if j > i:                       # a run of >=2 equally-scored evolves: order by arm, stable
-                out[i:j + 1] = sorted(out[i:j + 1], key=lambda k: arm(k))
+            slots = [k for k in range(i, j + 1) if is_evolve(out[k])]
+            if len(slots) > 1:              # permute ONLY the evolves, into their own slots
+                for slot, opt in zip(slots, sorted((out[k] for k in slots), key=arm)):
+                    out[slot] = opt
             i = j + 1
         return out
 
