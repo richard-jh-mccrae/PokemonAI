@@ -153,6 +153,49 @@ point: the escape is visible and recorded, not an aggregate that quietly absorbs
   never looked at. If #165's planner does not absorb the f32/f82 class, this is the first place to
   look.
 
+## Decision 3 — a corpus fixture declares its claims; axis ordering joins whole-decision
+
+Today every fixture asserts exactly one thing: `pilot.explain(obs).chosen == correct`. That is a
+**cross-lane** claim, and #140 showed it discards real signal. Measured on `ac2271f`:
+
+| fixture | chosen | correct | shape |
+|---|---|---|---|
+| `dp_hold_evolve_until_typed_ready_f35` | `[1]` @ 20.0 | `[2]` @ 18.0 | evolve option `i=0` @ **0.0** — the evolve axis is RIGHT (45 → 0); the frame fails by 2 points between two **non-evolve** options |
+| `dragapult_hammer_over_develop_f32` | `[1]` @ 37.5 (the evolve) | `[3]` @ 30.0 (retreat → item-lock wall) | the evolve axis **wins the frame and shouldn't** — the defect is cross-lane by nature |
+
+These are two different failures wearing one red mark. f35's swap-side improvement scored as nothing;
+f32's is genuinely a composition defect (#165).
+
+**Ruled:** a fixture carries an explicit `claims` block and the harness asserts exactly what is
+declared.
+
+- **Decision Claim** — `{"decision": [2]}`: given the whole board, the agent picks this. The
+  end-to-end composition assertion, unchanged in meaning from today.
+- **Axis Claim** — `{"axis": {"option_type": 9, "prefer": <slot>, "over": [<slot>, ...]}}`: within
+  ONE lane, this option outranks those. Resolved by `OptionType` and body slot
+  `(inPlayArea, inPlayIndex)` — the same comparison basis `evolve_decider_sweep.py` already uses —
+  **never** the raw option index.
+
+A fixture with no `claims` block keeps today's whole-decision behaviour, so nothing breaks on day one
+and back-fill is incremental. One shared assertion helper serves both claim types.
+
+**Why ordering and not scores.** 1a's precedent is the general rule: f29 was deliberately rewritten
+*from* a score claim *to* a decision claim because raw scores are not comparable across a currency
+change. Ordering *within* a lane survives re-banding; cross-lane *scores* do not. So the corpus stops
+decaying every time a currency changes, and the equation is tested at the seam where it is
+responsible.
+
+**What this does NOT fix, deliberately.** f32 gets no axis rescue — an axis claim on the evolve lane
+would pass, because the evolve equation does rank the right body. Its defect is only visible
+cross-lane, and it stays a Decision-Claim failure owned by #165. That is the correct outcome: axis
+claims must not be able to launder a composition defect into green.
+
+**Accepted costs.** A fixture schema addition and a shared helper; back-filling axis claims across
+~130 fixtures, incrementally and with a per-frame judgement each time; and a frame can now be wrong
+in two ways. The sharpest risk is presentational — a passing Axis Claim beside a deferred Decision
+Claim must never *read* as "OK". Reporting has to distinguish "axis OK, decision owned by #165" from
+"OK", or decision 3 re-creates the contamination it removes in a new place.
+
 ## Alternatives rejected
 
 - **Pay for the real bound** (`ci_lo >= -1%`, ~28,000 games, 8–10 h/phase): buys a tightening from
@@ -167,3 +210,11 @@ point: the escape is visible and recorded, not an aggregate that quietly absorbs
   merge decision, and demanding an increase from a swap with no leaf-side merit claim turns the gate
   into an override ritual.
 - **AIVAT variance reduction**: unavailable — `eval_aivat.py` is a null seam until #147.
+- **(Decision 3) Keep whole-decision claims only** and manage contamination by re-ruling frames to
+  the owning issue as `xfail(strict)`: the status quo, and the reason f35's clean fix scored as
+  nothing.
+- **(Decision 3) Move to axis-ordering claims only**: gives up the repo's only end-to-end assertion,
+  and f32's defect — visible *only* cross-lane — would become unrepresentable.
+- **(Decision 3) Assert raw per-option scores**: rejected once already by 1a's f29 rewrite; scores
+  are not comparable across a currency change, which is the whole reason re-banding decays the
+  corpus.
