@@ -1,8 +1,7 @@
 # ADR-0071 — A mid-build decider swap is gated by deterministic instruments; the paired A/B becomes a crash-and-catastrophe tripwire
 
-**Status:** Accepted (grilled 2026-07-26, `/grill-with-docs` on #167). Amends **#136 standing
-directive 6**. Build = #167. Decisions 3 and 4 are open at the time of writing and land as
-amendments to this ADR.
+**Status:** Accepted (grilled 2026-07-26, `/grill-with-docs` on #167 — five locked decisions). Amends
+**#136 standing directive 6**. Build = #167.
 
 **Context issues:** #167 (this re-scope), #136 (the Value System build tracker that carries
 directive 6), #140 / PR #166 (the swap whose A/B motivated it), ADR-0070 amendment H (the ruling
@@ -145,9 +144,8 @@ point: the escape is visible and recorded, not an aggregate that quietly absorbs
 - Directive 6 in #136 is rewritten to the mid-build / post-composition split and gains the two gates.
 - `flips_on` keeps its meaning; the mid-build rule is a new, separately-named function. No existing
   post-composition behaviour changes.
-- 1b's six `OK → MISS` flips are **not** retroactively ruled by this ADR — they are inherited debt.
-  The baseline capture that seeds the gate must either rule them or record them as a known-red
-  starting point, or the first gated phase inherits a red gate it did not cause.
+- 1b's six `OK → MISS` flips are inherited debt, ruled by **decision 5**: a one-sitting review before
+  the baseline is pinned, so Phase 1c does not inherit a red gate it did not cause.
 - Finding 2 is independent corroboration of ADR-0070 amendment H's term diagnosis: the deploy
   re-banding moves behaviour through the greedy continuation, on decks and lanes the evolve sweep
   never looked at. If #165's planner does not absorb the f32/f82 class, this is the first place to
@@ -227,6 +225,29 @@ predictive one does not and is not relied on here.
 not that `#165` is still open, so a closed issue can leave a frame parked until someone reads the
 checklist. And the section is only useful while it stays small — past roughly a dozen frames a
 permanently-visible held-out block becomes wallpaper, which is the failure mode it exists to prevent.
+
+## Decision 5 — the six inherited flips are ruled before the baseline is pinned
+
+Decision 2 needs a pinned reference, and 1b's six `OK → MISS` flips are on `main` now. Whatever seeds
+the baseline decides whether Phase 1c starts red for damage it did not cause.
+
+**Ruled:** the six are put in front of the user in **one sitting**, as part of #167's build, using the
+same protocol a decider swap's flips already get. Each gets an outcome — **fixed**, **held out with a
+named owner**, or **accepted as a real regression**. The baseline is captured at that ruling commit,
+so from 1c onward every red the gate shows is caused by the swap being measured.
+
+The before/after data already exists (`25fa8e5` vs `ac2271f`, same corrections store, `SeededRng(0)`,
+reproducible) — see the evidence table above. The sitting needs each frame's board read and its card
+facts verified at source (CLAUDE.md), so it is build work, not a grill tail.
+
+**Why not pin the debt away.** The six are the only evidence in the repo that the Discrimination Gate
+works at all: one-directional, five on a deck the swap never reviewed, two on frames no fixture pins.
+Pinning them away at birth discards the measurement that justified building the gate — and exempting
+ourselves from the standard decision 2 imposes on every future phase would establish it as
+negotiable.
+
+**Accepted cost.** A six-frame ruling sitting blocks #167 closing, and some frames may turn into real
+work rather than a one-line held-out entry.
 
 ## Alternatives rejected
 
