@@ -614,3 +614,67 @@ def test_dont_recycle_the_dead_stays_silent_on_a_live_target():
                            current=state(active=poke(900, energy=1), hand=[NIGHTS],
                                          discard=[LIVEMON]))
     assert "dont-recycle-the-dead" not in _fired(pilot.explain(live_mon).options[0])
+
+
+# ── the DIG class: a fetcher whose target class is exhausted (ADR-0073, issue #164) ───────────────
+GEAR = 2002            # a Pokégear-3.0-shaped Supporter fetcher: `target: supporter`, `dig: 7`
+SUPP = 2003            # the Supporter it digs for
+
+
+def _dig_pilot(deck):
+    """A Pilot holding a DIG-class Supporter fetcher — the shape that was invisible to the whiff
+    question before ADR-0073 (`fetch_target_matches` rejects a ``dig`` clause for REACH, and the
+    doctrine's reach set is Pokémon-only, so `_search_deck_set` was empty and the search could never
+    be read as dead however empty the deck was of Supporters)."""
+    from common.effects import CardEffects
+    fmap = {GEAR: ["search", "dig"]}
+    stats = DictCardStatProvider({
+        GEAR: CardStat(GEAR, hp=0, cardType=1),                 # CardType.ITEM
+        SUPP: CardStat(SUPP, hp=0, cardType=SUPPORTER_CT),
+        MEGA: CardStat(MEGA, hp=330, megaEx=True, evolvesFrom="Riolu"),
+    })
+    effects = CardEffects({GEAR: [{"kind": "fetch", "target": "supporter",
+                                   "zone": "deck", "dig": 7}]})
+    return Pilot(Strategy(roles={MEGA: ["win_condition"]}), deck=deck,
+                 general_strategy=GENERAL_STRATEGY, stats=stats,
+                 functions=CardFunctions(fmap), effects=effects)
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_the_dig_class_fetcher_is_vetoed_once_its_supporters_are_provably_gone():
+    """END TO END: a dig-7 Supporter fetcher over a deck PROVABLY empty of Supporters is dead, and
+    `dont-search-an-empty-deck` fires on it. The dig cannot find what is not there — deadness is
+    sound on a clause reach must reject. This is the #164 hole made behavioural: before ADR-0073 the
+    veto could not fire on this shape at all."""
+    pilot = _dig_pilot([SUPP] * 2 + [GEAR] * 2 + [FILLER] * 56)
+    play_gear = opt(PLAY, area=HAND, index=0)
+    cur = state(active=poke(FILLER, energy=1), hand=[GEAR], prizes=6, deck_count=20)
+    obs = make_select([play_gear, opt(END)], current=cur)
+    obs["own_prizes"] = {SUPP: 2, FILLER: 4}            # both Supporters prized -> provably gone
+    assert "dont-search-an-empty-deck" in _fired(pilot.explain(obs).options[0])
+    assert pilot.decide(obs) != [0]                     # ...and the dead dig is not played
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_the_dig_class_fetcher_is_left_alone_while_a_supporter_remains():
+    """The other half of soundness: with a Supporter still reachable the veto stays silent — the
+    widening suppresses nothing that could still be found."""
+    pilot = _dig_pilot([SUPP] * 2 + [GEAR] * 2 + [FILLER] * 56)
+    play_gear = opt(PLAY, area=HAND, index=0)
+    cur = state(active=poke(FILLER, energy=1), hand=[GEAR], prizes=6, deck_count=20)
+    obs = make_select([play_gear, opt(END)], current=cur)
+    obs["own_prizes"] = {FILLER: 6}                     # no Supporter prized -> both still in deck
+    assert "dont-search-an-empty-deck" not in _fired(pilot.explain(obs).options[0])
+
+
+@pytest.mark.req("REQ-GEN-0063")
+def test_the_dig_class_fetcher_never_claims_to_fill_a_need():
+    """The endorser stays on the REACH set: a dig-7 can only PROBABLY reach a Supporter, so it must
+    never claim `fetch-when-it-fills-a-need`, even with the class provably in deck. This is why the
+    two sets are distinct rather than one widened set (ADR-0073)."""
+    pilot = _dig_pilot([SUPP] * 2 + [GEAR] * 2 + [FILLER] * 56)
+    play_gear = opt(PLAY, area=HAND, index=0)
+    cur = state(active=poke(FILLER, energy=1), hand=[GEAR], prizes=6, deck_count=20)
+    obs = make_select([play_gear, opt(END)], current=cur)
+    obs["own_prizes"] = {FILLER: 6}
+    assert "fetch-when-it-fills-a-need" not in _fired(pilot.explain(obs).options[0])
