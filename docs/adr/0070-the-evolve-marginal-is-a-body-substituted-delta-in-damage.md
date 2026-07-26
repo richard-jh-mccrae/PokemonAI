@@ -399,5 +399,39 @@ So this class is **Phase 1b's own defect to price**, not Turn-Planner work. Cont
 are **Maneuvers** — ordered, mutually dependent steps whose value is the end state — and correctly
 stay with #165. The discriminator is mechanical: *do the actions commute?*
 
-**Not discharged.** #167's baseline capture stays blocked on this: re-baselining now would bake four
-frames of this regression into the Discrimination Gate's reference.
+**All SIX flipped frames are this one defect** (sitting closed 2026-07-26). The last,
+`83968638|1|decision|17`, looked different — the root menu carries no evolve at all — but **Hilda
+tutors the Mega Starmie ex, so the evolve materialises MID-ROLLOUT** and is priced 0.0 every time it
+appears. Pricing it `+10.0` turns that turn from **1 prize into 2**: the fetched body attacks with
+Jetting Blow (120 kills the Active Abra, the 50 snipe kills a benched Abra) instead of Cinderace's
+Turbo Flare 50. An earlier diagnostic reported "no evolve on the menu" and concluded a different
+defect; that was a root-only reading and is withdrawn.
+
+**Scope boundary — how far an equation reaches (user ruling 2026-07-26).** The test is: **is the
+action individually valuable at the moment it becomes legal?**
+
+* **Yes → the equation's job.** Frame 6's evolve turns a 70 HP Staryu into a 330 HP body whose attack
+  is Jetting Blow 120+50 rather than Water Gun 20 — a body-substituted damage delta visible with
+  **zero lookahead**, which is this ADR's own definition of the marginal.
+* **No → #165's job.** f32's retreat is individually *bad*; it pays only because it promotes Budew
+  into an item-lock wall. No per-option marginal can express that.
+
+**`evolve_value` does NOT model fetching, and never has to.** By the time the evolve option exists,
+the tutor has already resolved and was priced by the fetch rungs — on frame 6 those rungs are
+*correct*, choosing Hilda at 53.0 (`play-a-tutor-for-the-unfound-wincon`,
+`fetch-when-it-fills-a-need`). Two options, two equations, no overlap. An equation owes the marginal
+of the option in front of it **including that option's immediate this-turn consequence**; it does not
+owe how the card reached hand, or any value that exists only as a chain.
+
+**Why the planner cannot substitute for this fix.** `_engine_leaf_value` does not evaluate a static
+board — it builds its end state by **re-running `decide` as a greedy continuation**
+(`_simulate_line`, `planner.py:3424`). A mis-priced option therefore corrupts the leaf *itself*,
+which is exactly how these five frames produced wrong leaf values: the leaf under-rated every line
+that did not open with the evolve, because its own rollout could not take the evolve. #165 ranks
+candidate sequences **by that leaf**, so shipping it over a zero-priced evolve means searching harder
+over a corrupted evaluation — the Tier-6 lesson, and #167's own Gate-0 finding that leaf
+discrimination is the binding constraint. **Pricing is upstream of the planner, not an alternative
+to it.**
+
+**Not discharged.** #167's baseline capture stays blocked on this: re-baselining now would bake all
+six frames of this regression into the Discrimination Gate's reference.

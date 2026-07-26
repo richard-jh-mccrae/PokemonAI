@@ -260,7 +260,13 @@ work rather than a one-line held-out entry.
 | 3 | `81905522\|0\|decision\|64` | **REAL REGRESSION**, same cause — and the frame that established the scope ruling: its missed actions are a **Commutative Set**, so the fix is the evolve's PRICE, not #165 |
 | 4 | `82226116\|0\|decision\|48` | **REAL REGRESSION**, same cause. The agent already finds the free retreat (`retreat-to-ready-attacker`, 1061) and the Jetting Blow **double KO** (Kadabra 80, Abra 50); only the bench evolve is missed |
 | 5 | `82229122\|0\|decision\|17` | **REAL REGRESSION**, same cause, largest cost (gap 54.0, not 9.72). Its tagger wrote the Commutative Set longhand: *"filled up bench with buddy-buddy poffin AND attached energy AND evolved Staryu to main attacker"* |
-| 6 | `83968638\|1\|decision\|17` | no evolve on the menu; a different defect — grill pending |
+| 6 | `83968638\|1\|decision\|17` | **REAL REGRESSION**, same cause after all — the evolve materialises MID-ROLLOUT once Hilda tutors it. Costs a whole prize (1 → 2 KOs). The tagged CRITICAL Crushing-Hammer blunder is separately **fixed** |
+
+**Sitting CLOSED 2026-07-26: all six frames are ONE defect** — a bare-body evolve priced at exactly
+0.0 is unreachable, because `_finish_turn_last` only sequences options above zero. Ruled to
+ADR-0070 amendment J, which also carries the scope boundary (individually-valuable-when-legal →
+equation; valuable-only-as-a-chain → #165) and the reason the planner cannot substitute for the fix.
+**The baseline stays unpinned until the pricing is fixed.**
 
 The cost of ruling frame 2 as a regression is that **the baseline cannot be pinned yet**: capturing
 now would bake four frames of it into the gate's own reference.
