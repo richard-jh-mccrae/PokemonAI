@@ -1387,6 +1387,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
         by_score = sorted(range(len(options)),
                           key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
+        by_score = self._prefer_soonest_arming_evolve(by_score, options, traces)
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
         # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
@@ -1484,6 +1485,45 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return {"mode": gp.mode.name, "conf": round(gp.confidence, 3), "goal": gp.directed_goal,
                 "route": len(gp.route), "route_turns": gp.route_turns}
+
+    def _prefer_soonest_arming_evolve(self, order: list, options: list, traces: list) -> list:
+        """Break an EXACT tie between EVOLVE options toward the body that arms soonest — i.e. put the
+        evolution where the Energy already is (ADR-0070 amendment M, #167).
+
+        `evolve-the-energized-body-first` was one of the five rungs the 1b swap retired, on the
+        premise that `evolve_value` subsumes it. It does not, and the reason is structural rather
+        than a missing read: `deploy = result.deploy() - body.deploy()` cancels **per slot**, because
+        the body and its result share that slot's Energy, arm and ko. So an energised Staryu cancels
+        2-against-2 and a bare one cancels 3-against-3 — both exactly 0.0 — and the tie then broke by
+        raw option INDEX. Measured on 81905522|0|decision|64: the equation reads the post-attach board
+        correctly (bench0's arm drops 3 -> 2), and the delta erases what it read. The consequence was
+        the Energy and the evolution landing on DIFFERENT bodies, stranding an Energy on a Staryu that
+        must still evolve before it can attack.
+
+        So consult the one term that does not cancel — the RESULT's arm clock — and only where it can
+        change nothing else: a run must be **all EVOLVE options at an identical score** before it is
+        reordered, so an evolve can never be promoted past a tied non-evolve. Ordering only; no score
+        moves, so f35's hold, the attach-anyway floor and the free-development exemption are all
+        untouched. The arm clock is already in `evolve_working["result"]`, so a trace reader can see
+        why one body won."""
+        def arm(i):
+            w = getattr(traces[i], "evolve_working", None)
+            return (w or {}).get("result", {}).get("arm") if w else None
+
+        def is_evolve(i):
+            return options[i].get("type") == _EVOLVE and arm(i) is not None
+
+        out, n = list(order), len(order)
+        i = 0
+        while i < n:
+            j = i
+            while (j + 1 < n and is_evolve(out[j + 1]) and is_evolve(out[i])
+                   and traces[out[j + 1]].score == traces[out[i]].score):
+                j += 1
+            if j > i:                       # a run of >=2 equally-scored evolves: order by arm, stable
+                out[i:j + 1] = sorted(out[i:j + 1], key=lambda k: arm(k))
+            i = j + 1
+        return out
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:

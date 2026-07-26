@@ -185,3 +185,43 @@ def test_an_evolve_that_MEASURABLY_weakens_the_board_stays_last():
     ender = [i for i, o in enumerate(options) if o.get("type") in (13, 14)]
     assert order.index(ev[0]) >= min(order.index(e) for e in ender), (
         "a board-weakening evolve must not ride the free-development exemption")
+
+
+# ── tie-break: among EQUAL evolves, arm the payoff soonest (ADR-0070 amendment M, #167) ───────────
+
+@pytest.mark.req("REQ-GEN-0094")
+def test_equal_scored_evolves_order_by_the_results_arm_clock():
+    """`evolve-the-energized-body-first` was RETIRED by the 1b swap on the premise that the equation
+    subsumes it. It does not: `deploy = result - body` cancels PER SLOT, independently of how much
+    Energy sits there, so an energised Staryu and a bare one both price at exactly 0.0 and the tie
+    breaks by option INDEX.
+
+    Measured on 81905522|0|decision|64 — the board is read correctly and freshly (after the attach,
+    bench0's arm drops 3 -> 2 while bench1 stays 3); the delta simply erases it. So the ordering
+    consults the one term that does NOT cancel: the RESULT's arm clock. Lower = arms sooner = put the
+    evolution where the Energy already is."""
+    from types import SimpleNamespace
+    opts = [{"type": 9, "inPlayArea": 5, "inPlayIndex": 0},      # energised body
+            {"type": 9, "inPlayArea": 5, "inPlayIndex": 1},      # bare body
+            {"type": 14}]                                         # END
+    def tr(score, arm):
+        return SimpleNamespace(score=score,
+                               evolve_working=None if arm is None else {"result": {"arm": arm}})
+    pilot = _pilot("mega_starmie")
+
+    # bare body sits FIRST by index; the tie-break must pull the sooner-arming one ahead
+    traces = [tr(0.0, 3), tr(0.0, 2), tr(0.0, None)]
+    assert pilot._prefer_soonest_arming_evolve([0, 1, 2], opts, traces)[:2] == [1, 0]
+
+    # already in arm order -> unchanged (stable)
+    traces = [tr(0.0, 2), tr(0.0, 3), tr(0.0, None)]
+    assert pilot._prefer_soonest_arming_evolve([0, 1, 2], opts, traces)[:2] == [0, 1]
+
+    # DIFFERENT scores are never reordered — the tie-break only breaks EXACT ties
+    traces = [tr(5.0, 3), tr(0.0, 2), tr(0.0, None)]
+    assert pilot._prefer_soonest_arming_evolve([0, 1, 2], opts, traces) == [0, 1, 2]
+
+    # a non-evolve tied with an evolve is untouched: an evolve can never be promoted past it
+    opts2 = [{"type": 7, "index": 0}, {"type": 9, "inPlayArea": 5, "inPlayIndex": 1}]
+    traces2 = [tr(0.0, None), tr(0.0, 2)]
+    assert pilot._prefer_soonest_arming_evolve([0, 1], opts2, traces2) == [0, 1]
