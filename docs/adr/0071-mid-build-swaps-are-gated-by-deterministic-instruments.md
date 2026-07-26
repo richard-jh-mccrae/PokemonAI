@@ -258,7 +258,8 @@ work rather than a one-line held-out entry.
 | 1 | `86091435\|0\|decision\|35` (f35) | **re-ruled** — `correct` `[2]` → `[1]`, Poké Pad first; Endorsement Claim credits the evolve decline (amendment A) |
 | 2 | `81785223\|0\|decision\|44` | **REAL REGRESSION** — the bare-body evolve floor; recorded as ADR-0070 amendment J. No `owner`; stays gated |
 | 3 | `81905522\|0\|decision\|64` | **REAL REGRESSION**, same cause — and the frame that established the scope ruling: its missed actions are a **Commutative Set**, so the fix is the evolve's PRICE, not #165 |
-| 4–5 | `82226116\|0\|decision\|48`, `82229122\|0\|decision\|17` | share the cause (every menu evolve at 0.0, leaf top is an evolve-first) — grill pending |
+| 4 | `82226116\|0\|decision\|48` | **REAL REGRESSION**, same cause. The agent already finds the free retreat (`retreat-to-ready-attacker`, 1061) and the Jetting Blow **double KO** (Kadabra 80, Abra 50); only the bench evolve is missed |
+| 5 | `82229122\|0\|decision\|17` | shares the cause (every menu evolve at 0.0, leaf top is an evolve-first) — grill pending |
 | 6 | `83968638\|1\|decision\|17` | no evolve on the menu; a different defect — grill pending |
 
 The cost of ruling frame 2 as a regression is that **the baseline cannot be pinned yet**: capturing

@@ -353,7 +353,9 @@ Hilda for an Energy → attach → Jetting Blow, sniping the energised benched C
 evolve; **the shipped agent cannot reach it.** A 70 HP Staryu stays a 70 HP Staryu instead of becoming
 a second 330 HP Mega Starmie ex, on the turn we take their Active.
 
-**Scope: 4 of the 5 outstanding leaf regressions share this cause.** Of #167's six `OK -> MISS`
+**Scope: 4 of the 5 outstanding leaf regressions share this cause** (three ruled so far —
+`81785223|0|decision|44`, `81905522|0|decision|64`, `82226116|0|decision|48` — each isolated by an
+end-board diff to a single un-evolved bench slot, with every other slot identical). Of #167's six `OK -> MISS`
 frames, `81785223|0|decision|44`, `81905522|0|decision|64`, `82226116|0|decision|48` and
 `82229122|0|decision|17` all show every evolve on the menu at 0.0 with the leaf's top line being an
 evolve-first. `83968638|1|decision|17` has no evolve on the menu and is a different defect.
