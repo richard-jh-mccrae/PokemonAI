@@ -366,5 +366,28 @@ worth zero**, and pricing it at exactly zero makes it unreachable rather than me
 Where that value comes from — a survivability/HP-substitution term, a development term, or #145's
 `state_value` differencing the board — is not ruled here.
 
+**The fix belongs HERE, not to #165 — user ruling 2026-07-26.** The three actions this frame class
+misses are a **Commutative Set**: evolve the benched Staryu, attach an Energy, Boss's Orders to gust.
+They reach the same end-of-turn state in any order, because actions may be taken in any order
+(`docs/rules.md:76-77`), **evolving keeps attached cards** (`:98`), and evolving into a Mega ex does
+not end the turn (`:103`). Only the attack is order-forced.
+
+That is decisive for scope. The sequencer already takes every option above `_finish_turn_last`'s floor
+before the turn-ender, so a Commutative Set needs **no planner** — the sole reason one of its members
+is missed is that it is priced at zero, which makes it *unreachable* rather than merely unattractive.
+**Verified empirically on `81905522|0|decision|64`:** pricing the evolve `+10.0` instead of `0.0`,
+changing nothing else, makes the greedy rollout reach the evolve from BOTH candidate openings —
+
+| opening | evolve @ 0.0 (shipped) | evolve @ +10.0 |
+|---|---|---|
+| ATTACH-first (the human's `correct`) | Staryu 70, Staryu 70 | Staryu 70, **Mega Starmie ex 330** |
+| Boss's Orders-first (the agent's live pick) | Staryu 70, Staryu 70 | **Mega Starmie ex 330**, Staryu 70 |
+
+(It evolves whichever Staryu is left over; the two are interchangeable, so both are the same state.)
+
+So this class is **Phase 1b's own defect to price**, not Turn-Planner work. Contrast f32/f82, which
+are **Maneuvers** — ordered, mutually dependent steps whose value is the end state — and correctly
+stay with #165. The discriminator is mechanical: *do the actions commute?*
+
 **Not discharged.** #167's baseline capture stays blocked on this: re-baselining now would bake four
 frames of this regression into the Discrimination Gate's reference.
