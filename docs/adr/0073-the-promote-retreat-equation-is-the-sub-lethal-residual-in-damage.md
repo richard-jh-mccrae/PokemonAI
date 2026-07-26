@@ -105,6 +105,39 @@ The two frames that drove this, arithmetic in both currencies:
 | Mega Starmie ex (3 prizes, 170 dmg) → Cinderace (1 prize, 50×2 Weakness + 3 accel) | `their_yield` 12, `my_yield` 15+5, preservation **0** → ≈ **+8**, loses to a ~120 attack — **stay (wrong)** | 100 dmg + accel dividend − 100 exposure **+ 300 preserved** — **retreat (right)** |
 | Drakloak (90 HP, 70 dmg) → Budew (30 HP, 10 dmg + Item lock) | exposures cancel; `10 + 12` vs 70 — **stay (wrong)** | exposures cancel; `10 + 100` vs a five-turn-race-discounted 70 — **retreat (right)** |
 
+**4. Exposure is PER-BODY, CLOCK-GRADED and AREA-CORRECT — `opp_can_punish` is retired.**
+Decision 3 makes a 3-prize exposure worth 300 damage, which promotes `their_yield` to the equation's
+largest term and its input to the least sound thing in it. `opp_can_punish = not
+board.opp_cannot_punish_wincon` had three defects, all newly load-bearing: it is BOOLEAN (a 300-damage
+cliff, where ADR-0070 §4 chose "continuous rather than a cliff"); it reads the WRONG BODY
+(`_opp_cannot_punish_wincon` resolves `_best_promote_slot(me)` — my best benched wincon — and the
+verdict is then applied to every candidate B, the survival-read transposition of #137's contract
+hazard 1, "a Budget is PER-TARGET-BODY"); and it is matched-Read-only, failing to "punishable", so
+every body pays full exposure against an unrecognised opponent. Therefore:
+
+```
+exposure(B)     = prizes(B) x 100 x _halve(turns_to_ko_me(B) - 1) x prize_map_weight
+preservation(A) = prizes(A) x 100 x [ _halve(t_active(A) - 1) - _halve(t_bench(A) - 1) ]
+```
+
+`_halve` and `_HORIZON` are REUSED from `evolve_value` (ADR-0070 §6: "the shipped grading convention
+— `deny_slot`'s `value / 2**t`, reused rather than a new decay rate invented for this equation"), so
+**no new constants**; they move to a shared module now that two equations read them. The area reading
+is what makes `preservation` honest: B arrives in the ACTIVE area (the ADR-0071 decision-4
+accumulating clock), while A departs to the BENCH, whose leg is the **Bench Harvest** at
+`HARVEST_UNAVOIDABLE` — the RESCUE reading, for the reason `_evolve_side` already gives: "a benched
+knockout the opponent can simply redirect onto another body in range denies nothing; crediting it
+inflates every bench rescue."
+
+Two consequences fall out of card text rather than tuning. The doomed-Mega-Starmie frame needs **no
+new term** — the identical KO cancels and the clock DIFFERENCE decides. And the **35 bench-immune
+bodies** in this set (`"As long as this Pokémon is on your Bench, prevent all damage done to this
+Pokémon by attacks"` — including Dragapult ex (121) and Cinderace ex (153), both in our decks) get
+`t_bench = _HORIZON`, i.e. their full prize value as preservation credit: benched, they can only be
+reached by a gust. TO VERIFY at build time, not assumed: that `bench_harvest` honours bench-Tera
+immunity (`_is_tera` exists at `planner.py:1495` and `_snipe_tera_veto`, but the harvest path is
+untraced).
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
