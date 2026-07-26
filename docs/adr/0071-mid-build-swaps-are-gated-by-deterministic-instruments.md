@@ -196,6 +196,38 @@ in two ways. The sharpest risk is presentational — a passing Axis Claim beside
 Claim must never *read* as "OK". Reporting has to distinguish "axis OK, decision owned by #165" from
 "OK", or decision 3 re-creates the contamination it removes in a new place.
 
+## Decision 4 — a re-ruling is a state on the frame, not prose in a review doc
+
+**The gap, verified.** `evolve_decider_sweep.py` has **no exclusion list**: it computes `REGRESSION`
+for every labelled frame, including frames whose `correct` is a non-evolve play. So "0 REGRESSION
+partly by definition" (#167 item 4) is not a code-level exclusion — it is the *human ruling step*. A
+flip ruled to #165 is written up as out-of-scope prose in the swap-review doc, and nothing in code
+ever learns it happened. `xfail(strict)` covers part of this (f82 would fail loudly if it started
+passing) but lives in pytest — a surface neither the sweep's tally nor the Leaf Lab's report reads —
+and it is binary, so it cannot show "still broken, the same way, three phases later."
+
+**Ruled:** the ruling becomes data on the frame. Decision 3's `claims` block gains
+`{"owner": "#165", "ruled": "2026-07-25", "why": "..."}`. Both the **Decision Gate** and the
+**Discrimination Gate** keep running held-out frames and print a `HELD OUT (n)` section carrying
+their current verdicts — **always visible, never gating**. Deleting `owner` returns the frame to
+gating. CI asserts the field's *shape* only: the suite runs offline (CLAUDE.md), so issue-liveness
+cannot be checked there and belongs on the phase checklist.
+
+This also discharges the presentational risk decision 3 introduced: `HELD OUT` is where "axis OK,
+decision owned by #165" is displayed, so it can never read as plain "OK".
+
+**Correcting item 4's stated rationale.** #167 argues "a held-out set that still reports would have
+predicted #140's A/B result." **It would not have.** The held-out frames (f2 = ep86091728, f32, f82)
+are *not* among the six `OK → MISS` flips measured above; the only dragapult episode that flipped was
+ep86091435 (f35). What predicted the A/B was the **Discrimination Gate**, on five `mega_starmie`
+frames nobody had re-ruled. The accountability argument for the ledger stands on its own; the
+predictive one does not and is not relied on here.
+
+**Accepted costs.** A field that rots if a ruling is made without updating it. CI can check shape but
+not that `#165` is still open, so a closed issue can leave a frame parked until someone reads the
+checklist. And the section is only useful while it stays small — past roughly a dozen frames a
+permanently-visible held-out block becomes wallpaper, which is the failure mode it exists to prevent.
+
 ## Alternatives rejected
 
 - **Pay for the real bound** (`ci_lo >= -1%`, ~28,000 games, 8–10 h/phase): buys a tightening from
@@ -218,3 +250,8 @@ Claim must never *read* as "OK". Reporting has to distinguish "axis OK, decision
 - **(Decision 3) Assert raw per-option scores**: rejected once already by 1a's f29 rewrite; scores
   are not comparable across a currency change, which is the whole reason re-banding decays the
   corpus.
+- **(Decision 4) Rely on `xfail(strict)` alone**: correct as far as it goes, but invisible to both
+  gates and binary — it cannot show a frame has been broken the same way for three phases.
+- **(Decision 4) Move re-ruled fixtures to a separate directory**: makes "held out" a location rather
+  than a property. A frame held out for #165 on the evolve axis is still live for every other axis,
+  which a directory cannot express.

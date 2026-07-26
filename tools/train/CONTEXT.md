@@ -141,3 +141,15 @@ never a score claim (1a's f29 rewrite is the precedent). An Axis Claim must neve
 composition defect into green: f35 is rescued by one, f32 is deliberately not.
 _Avoid_: pin (the older word for a fixture that asserts *something* — say which claim), score claim
 (rejected), expectation, label (a **Correction**'s `correct`, one layer down)
+
+**Held-out Frame** / **Held-out Ledger**:
+A frame whose failure has been ruled OUT of the current decider's scope and onto a named owner —
+`{"owner": "#165", "ruled": "...", "why": "..."}` in its `claims` block (ADR-0071 decision 4). The
+**Held-out Ledger** is the set of them, printed as an always-visible `HELD OUT (n)` section by both
+the **Decision Gate** and the **Discrimination Gate**, carrying each frame's current verdict but
+**never gating**. Deleting `owner` returns the frame to gating. The point is that a re-ruling is a
+*state the instruments read*, not prose in a swap-review doc — the sweep has no exclusion list, so
+before this nothing in code ever knew f32/f82 had been re-ruled. Useful only while small: past ~a
+dozen frames the section becomes wallpaper, which is the failure mode it exists to prevent.
+_Avoid_: excluded / skipped (it still runs and still reports), xfail (the pytest mechanism, a
+different surface), deferred frame, parked
