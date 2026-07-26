@@ -12,7 +12,10 @@ signals. See docs/general-strategy.md and docs/adr/0023-fetch-is-a-shared-value-
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import NamedTuple
 
+from common.fetch_closure import (FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
+                                  FETCH_POKEMON_TARGETS as _FETCH_POKEMON_TARGETS)
 from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
                                       _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
                                       _TO_HAND, _WINCON_ROLES)
@@ -28,12 +31,29 @@ _KEEP_ENGINE_TAGS = frozenset({"draw", "search", "dig", "heal", "clutch_heal"})
 # 2nd Dreepy is a 2nd LINE, not junk). ep83661652 f30 / ep83686860 f18.
 _BASE_ROLES = frozenset({"win_condition_base", "evolution_base"})
 
-# The Pokémon target classes a `_search_deck_set` whiff/redundancy question ranges over — the scope
-# the retired `_FETCH_FILTERS` covered (bench_fill / tutor_mega / tutor_pokemon / rush_evolve). Energy
-# and Trainer tutors carry no deck whiff-set (as before). The per-card PREDICATE now lives in the card
-# REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032; hypergeometric-fetch-closure WP3),
-# read by `_fetch_target_matches` — so the doctrine never re-encodes card knowledge in a private table.
-_FETCH_POKEMON_TARGETS = frozenset({"pokemon", "basic_pokemon", "mega", "evolution"})
+# The two target-class scopes (ADR-0073) live in `fetch_closure`, imported at the top of this file —
+# `_FETCH_POKEMON_TARGETS` is the REACH scope `_search_deck_set` ranges over (the scope the retired
+# `_FETCH_FILTERS` covered: bench_fill / tutor_mega / tutor_pokemon / rush_evolve), and
+# `_FETCH_DEADNESS_TARGETS` is the wider DEADNESS scope `_fetch_deadness_set` ranges over. The
+# per-card PREDICATE lives in the card REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032;
+# hypergeometric-fetch-closure WP3), read by `_fetch_target_matches` — so the doctrine never
+# re-encodes card knowledge in a private table.
+
+class _Reading(NamedTuple):
+    """One of the TWO readings of a fetch clause (ADR-0073), as a single value: the target-class
+    scope, the clause-predicate mode, and the memo cache that holds its answers. They are bundled
+    because they are co-determined — a deadness answer written into the reach memo is the precise
+    unsoundness the ADR's build-time amendment exists to prevent, and passing three loose arguments
+    leaves that mismatch constructible."""
+    targets: frozenset
+    deadness: bool
+    cache_attr: str
+
+
+#: The optimistic reading: what a search can be RELIED ON to pull. Feeds the endorsers.
+_REACH = _Reading(_FETCH_POKEMON_TARGETS, False, "_fetch_cache")
+#: The pessimistic reading: what a search could find AT ALL. Feeds the whiff veto and deadline gate.
+_DEADNESS = _Reading(_FETCH_DEADNESS_TARGETS, True, "_deadness_cache")
 
 # PROBABLE-WHIFF threshold (ADR-0029): `dont-search-a-probable-whiff` fires when best reachable target's
 # hypergeometric P(still in deck) < this. Conservative (refuted ep82524455-f6: P~=0.98 stays above bar). SOUND whiff (P=0) is separate/unconditional.
@@ -118,12 +138,16 @@ class FetchMixin:
         alternative narrowing so the SOUND `play-a-tutor-for-the-unfound-wincon` setup case stays."""
         if option.get("type") != _PLAY:
             return False, False, False
+        deadness_set = self._fetch_deadness_set(cid)
         fetch_set = self._search_deck_set(cid)
-        if not fetch_set:
+        if not deadness_set and not fetch_set:
             return False, False, False
-        exhausted = all(c in board.deck_empty_ids for c in fetch_set)
+        # WHIFF reads the DEADNESS set (ADR-0073) — a dig-7 Pokégear over a Supporter-empty deck
+        # provably finds nothing, though it is no closure edge. The wincon-tutor questions below stay
+        # on the REACH set: they ask what a tutor can be relied on to pull, not what it might touch.
+        exhausted = bool(deadness_set) and all(c in board.deck_empty_ids for c in deadness_set)
         wincon = self._wincon_set()
-        wincon_only = bool(wincon) and fetch_set <= wincon
+        wincon_only = bool(wincon) and bool(fetch_set) and fetch_set <= wincon
         wincon_undeployable_in_play = board.wincon_in_play and not board.wincon_base_deployable
         redundant = (wincon_only
                      and (board.wincon_in_hand or wincon_undeployable_in_play))
@@ -163,35 +187,68 @@ class FetchMixin:
         return any(board.deck_definitely_has(c) and self._grab_value_of(board, c, plan) > 0
                    for c in fetch_set)
 
-    def _fetch_target_matches(self, clause: dict, stat) -> bool:
+    def _fetch_target_matches(self, clause: dict, stat, *, deadness: bool = False) -> bool:
         """True iff a card with ``stat`` matches a FETCH clause's target class — the ONE predicate that
-        REPLACED the tag-keyed `_FETCH_FILTERS`, shared by the doctrine's `_search_deck_set` and the
+        REPLACED the tag-keyed `_FETCH_FILTERS`, shared by the doctrine's two set-builders and the
         gamble closure. Delegates to `common.fetch_closure` (WP7, ADR-0065) so the whole graph — this
-        doctrine, the planner gamble outs, the card-worth keep-cost — reads ONE implementation."""
+        doctrine, the planner gamble outs, the card-worth keep-cost — reads ONE implementation.
+        ``deadness`` selects the pessimistic reading (ADR-0073); see `fetch_closure`."""
         from common import fetch_closure
-        return fetch_closure.fetch_target_matches(clause, stat)
+        return fetch_closure.fetch_target_matches(clause, stat, deadness=deadness)
 
-    def _search_deck_set(self, cid) -> set:
-        """The set of deck card ids the search/tutor ``cid`` can pull OUT of the deck — the POKÉMON
-        targets of its ``zone: deck`` FETCH clauses (`card_effects.json`, read by `_fetch_target_matches`),
-        REPLACING the tag-keyed `_FETCH_FILTERS`. Scope stays Pokémon (`_FETCH_POKEMON_TARGETS` — the
-        bench_fill/tutor_mega/tutor_pokemon/rush_evolve tags the old filter covered); an energy / Trainer
-        tutor and a recycle (discard-zone) carry no deck whiff-set, exactly as before. Empty for a card
-        with no such clause. Deck-fixed, so memoised per card id."""
+    def _deck_fetch_set(self, cid, reading: _Reading) -> set:
+        """The deck card ids ``cid``'s ``zone: deck`` FETCH clauses reach under ONE ``reading``
+        (ADR-0073) — the shared body of `_search_deck_set` and `_fetch_deadness_set`. Empty for a card
+        with no such clause. Deck-fixed, so memoised per card id, in the reading's OWN cache.
+
+        The reading travels as one value rather than three co-determined arguments: target scope,
+        predicate mode and memo cache must agree, and passing them separately makes the mismatch that
+        would silently write a deadness answer into the reach memo constructible. That mismatch IS the
+        unsoundness this ADR's build-time amendment exists to prevent, so it is made unrepresentable
+        rather than merely avoided."""
         if cid is None:
             return set()
-        if cid not in self._fetch_cache:
+        cache = getattr(self, reading.cache_attr)
+        if cid not in cache:
             clauses = [cl for cl in (self.effects.clauses(cid) if self.effects else ())
                        if cl.get("kind") == "fetch" and cl.get("zone") == "deck"
-                       and cl.get("target") in _FETCH_POKEMON_TARGETS]
+                       and cl.get("target") in reading.targets]
             ids: set = set()
             if clauses:
                 for tid in set(self.deck):
                     stat = self.stats.get(tid) if self.stats else None
-                    if any(self._fetch_target_matches(cl, stat) for cl in clauses):
+                    if any(self._fetch_target_matches(cl, stat, deadness=reading.deadness)
+                           for cl in clauses):
                         ids.add(tid)
-            self._fetch_cache[cid] = ids
-        return self._fetch_cache[cid]
+            cache[cid] = ids
+        return cache[cid]
+
+    def _search_deck_set(self, cid) -> set:
+        """The REACH set (ADR-0073): deck card ids the search/tutor ``cid`` can be RELIED ON to pull —
+        the POKÉMON targets of its ``zone: deck`` FETCH clauses, `dig`/`trigger` carriers rejected.
+
+        This is the set the ENDORSERS read — `fetch-when-it-fills-a-need`, the deferral deadline
+        (`_fetch_target_deferred`), the probabilistic whiff, and the wincon-tutor redundancy question.
+        It must NOT widen with the deadness scope: a dig-7 Pokégear over a deck that still holds a
+        Supporter would then claim it FILLS that need, when it can only probably reach it — a
+        fabricated endorsement, the fail direction `fetch_closure` forbids. For "is this search
+        dead?" use `_fetch_deadness_set`, which is a superset."""
+        return self._deck_fetch_set(cid, _REACH)
+
+    def _fetch_deadness_set(self, cid) -> set:
+        """The DEADNESS set (ADR-0073): deck card ids the search/tutor ``cid`` could find AT ALL —
+        every ``zone: deck`` FETCH target class (`_FETCH_DEADNESS_TARGETS`), `dig`/`trigger` carriers
+        INCLUDED. The set the sound whiff question ranges over: the search is dead iff every member is
+        provably gone (`Board.deck_empty_ids`), which both `dont-search-an-empty-deck` and the fetcher
+        deadline gate (`gate_library.fetch_deploy_odds`) ask — one derivation, so the play side and
+        the keep side cannot disagree about whether a card is dead.
+
+        Wider than the reach set on purpose, and sound BECAUSE the consumer is a conjunction: adding a
+        target makes `all(gone)` harder, so over-inclusion can only suppress a whiff claim, never
+        fabricate one. That is what admits a `dig` clause here (a top-7 look over a deck holding zero
+        Supporters provably finds nothing) and the documented over-inclusion of an energy-type lock on
+        a Pokémon target. Empty for a card with no deck-zone fetch clause."""
+        return self._deck_fetch_set(cid, _DEADNESS)
 
     def _chain_fetch_targets(self, cid) -> set:
         """The FULL-scope set of deck card ids card ``cid``'s ``zone: deck`` FETCH clauses can pull —

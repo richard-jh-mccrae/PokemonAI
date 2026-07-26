@@ -1930,7 +1930,7 @@ class PlannerMixin:
         Lucario ex with every Riolu evolved/gone).
 
         **Fetcher gate (searcher/recycler leg — acceptance pin ep83457493 f31):** a fetch TRAINER
-        whose every target is provably dead — its deck whiff-set exhausted (`_search_deck_set` ⊆
+        whose every target is provably dead — its deck whiff-set exhausted (`_fetch_deadness_set` ⊆
         `Board.deck_empty_ids`, the SOUND predicate behind `dont-search-an-empty-deck`) or its
         recycle pool all-dead (`Board.recycle_dead_only`, behind `dont-recycle-the-dead`) — realises
         no role, so it sheds freely instead of propping up the SHED at its tutor/recovery worth.
@@ -1962,7 +1962,7 @@ class PlannerMixin:
             tags = self.functions.tags(cid) if self.functions else ()
             if ({"rush_evolve", "tutor_mega"} & set(tags)) and getattr(board, "wincon_in_hand", False):
                 return gate_library.need_met_odds(need_met=True)   # wincon-tutor, wincon already in hand
-            fetch_set = self._search_deck_set(cid)
+            fetch_set = self._fetch_deadness_set(cid)
             empty = getattr(board, "deck_empty_ids", None) or frozenset()
             if fetch_set and all(t in empty for t in fetch_set):
                 return gate_library.fetch_deploy_odds(targets_exhausted=True)

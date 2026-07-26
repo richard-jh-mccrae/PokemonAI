@@ -1325,7 +1325,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self._turn_boosts = TurnBoostTracker(            # this-turn flat damage-boost plays (Power Pro
             lambda cid: self.stats.get(cid) if (self.stats and cid is not None) else None)
                                                         # class) — OHKO-line model's play half
-        self._fetch_cache: dict = {}                    # memo: search card id -> deck ids it can fetch
+        self._fetch_cache: dict = {}                    # memo: search card id -> deck ids it can be
+                                                        # RELIED ON to fetch (the REACH set, ADR-0073)
+        self._deadness_cache: dict = {}                 # memo: search card id -> deck ids it could find
+                                                        # AT ALL (the DEADNESS set, ADR-0073) — wider:
+                                                        # every deck-zone target class, dig/trigger included
         self._chain_target_cache: dict = {}             # memo: tutor card id -> FULL-scope deck fetch
                                                         # targets (the tutor-chain graph leg, seam C)
         self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)

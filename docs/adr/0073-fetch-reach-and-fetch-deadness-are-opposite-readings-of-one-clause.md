@@ -36,6 +36,16 @@ The motivating frame is `82525741-78` (issue #164): a target-exhausted Buddy-Bud
 Pokémon-class clause *is* covered — the `-60` fires on today's build — but the deck's four Pokégear
 3.0 sit in the same hand under the same defect, invisible to the same predicate.
 
+**Found at build time: for a MULTI-clause fetcher the defect was not blindness but UNSOUNDNESS.**
+Fighting Gong and Hilda each carry two deck-zone clauses, one class in the old scope and one outside
+it — Gong fetches a Basic {F} Energy *or* a Basic {F} Pokémon, Hilda an Energy *or* an evolution. A
+fetcher is dead only when **every** class it can search is exhausted, so dropping a class from the
+set makes the `all(gone)` conjunction range over too little and go True too early. Verified against
+the pre-change tree: `_search_deck_set(Fighting Gong)` returned the five Pokémon ids and nothing
+else, so once those were gone the `-60` would have vetoed a Gong that could still find Energy — a
+**fabricated** deadness claim, the exact fail direction `fetch_closure` forbids of an endorser. That
+reframes this ADR: it is a soundness fix that also closes a coverage hole, not the reverse.
+
 **No new deck knowledge is required for any of this.** `StateModel.unseen_counts` (decklist −
 visible − anchored prizes) and the sound `Board.deck_empty_ids` already answer "what is left in my
 deck" per card id on every frame, with or without a prior deck-revealing search — all three Staryu
@@ -59,10 +69,22 @@ implied.**
    to satisfy, so an over-broad target class can only **suppress** a whiff claim, never fabricate
    one. The documented over-inclusion of `energy_type` on a Pokémon target (unresolvable from
    `CardStat`) is therefore safe here for the same reason it is flagged as a caveat for reach.
-4. **One deadness fact, two consumers.** The widened `_search_deck_set` feeds both the play-side
-   `dont-search-an-empty-deck` rung and the keep-side `_deploy_odds` fetcher gate. This closes issue
-   #164's "widen the predicate **or** price by deploy odds" as a false choice: they read the same
-   set, so widening it prices the gate too.
+4. **One deadness fact, two consumers — carried by a SEPARATE set from the reach one.** A single
+   `_fetch_deadness_set` feeds both the play-side `dont-search-an-empty-deck` rung and the keep-side
+   `_deploy_odds` fetcher gate. This closes issue #164's "widen the predicate **or** price by deploy
+   odds" as a false choice: they read the same set, so widening it prices the gate too.
+
+   **Amended at build time (2026-07-26).** This decision originally said the *widened
+   `_search_deck_set`* feeds both. That was wrong, and shipping it would have been unsound.
+   `_search_deck_set` has five consumers, and three of them are **endorsers**, not deadness
+   questions: `fetch-when-it-fills-a-need`, the deferral deadline (`_fetch_target_deferred`), and the
+   wincon-tutor redundancy read. Decision 3's soundness argument covers only the conjunction
+   (`all(gone)`); under an *existential* (`any(reachable and worth grabbing)`) a wider set
+   **fabricates** endorsement — a dig-7 Pokégear over a Supporter-holding deck would claim it FILLS
+   that need, when it can only probably reach it. So the two readings carry two memoised sets:
+   `_search_deck_set` (reach scope, unchanged) and `_fetch_deadness_set` (deadness scope), with the
+   reach set a **subset** of the deadness set for every card of every shipped deck — pinned by a
+   test. Only the two deadness consumers were re-pointed.
 
 **Rejected: moving the `dig` / `trigger` rejection out to the five reach consumers**, leaving the
 shared predicate policy-free. That is the tidier seam and it loses on fail direction. Under the
@@ -86,3 +108,18 @@ anchor frame — shipping.
   reason for *not* applying to deadness, replacing what was an unremarked inheritance.
 - Extension point unchanged: a new fetch card is a new **clause row**, and it is now read by both
   questions automatically rather than only by reach.
+- **A `supporter` branch was added to the predicate, DEADNESS-ONLY** — found at build time. The class
+  had no branch at all, so a `supporter`-target clause matched nothing and the deadness set came back
+  empty even once the target class was in scope. It is gated on `deadness` so reach stays unchanged
+  *provably* rather than incidentally: reading it for reach would be inert today (both carriers are
+  `dig`/`trigger` clauses) but would rest the guarantee on which cards happen to exist. A future
+  *plain* Supporter search genuinely is a deterministic whole-deck search and so a real closure edge —
+  un-gating it is then a deliberate, measured change to the out-count rather than a silent
+  consequence of a new card row. Until then the omission under-counts outs, this module's safe
+  direction.
+- **Measured before landing.** The Score-Diff Gate over the corrections corpus (372 frames × three
+  shipped agents, `scores` mode) reports **0 divergent**. That is the expected shape, not a null
+  result: the six newly-readable Trainers only fire once their whole target class is provably
+  exhausted, a late-game condition the corpus does not contain. Reachability is carried instead by
+  behavioural tests — a dig-class fetcher vetoed once its Supporters are provably gone, left alone
+  while one remains, and never claiming to fill a need in either case.
