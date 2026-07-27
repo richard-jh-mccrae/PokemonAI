@@ -268,6 +268,33 @@ Scoped to the shapes our decks and the tracked meta run, one named test each —
 DSL. The engine cannot supply this: `retreatCost` exists only on `CardData` (`api.py:468`), the static
 printed value; the in-play `Pokemon` carries no effective-cost field.
 
+**9. ONE evaluator, three call sites — the two-site divergence becomes structurally impossible.**
+The whether-site priced the retreat option off its own best-destination loop while a SEPARATE path
+picked the body at the follow-up SWITCH select, so the agent could retreat BECAUSE Cinderace is worth
+promoting and then promote Budew. They already diverged: two near-duplicate `PromoteRetreatInputs`
+constructions (`pilot.py:1971` pick, `:2056` whether) disagreeing on `on_their_path` (**hardcoded
+`False`** at the whether site), `is_best_target`, `can_attack` and `prize_value`. Decisions 3 and 7c
+dissolve two of those four, but not the structure that produced them. Therefore:
+
+```
+promote_value(B) = my_yield(B) + closure(B) - exposure(B) + tempo_denied(B) - fatal(B)
+retreat_option   = max over bench B of promote_value(B)  +  preservation(A) - retreat_cost(A)
+pick_option(B)   = promote_value(B)
+```
+
+`preservation(A)` and `retreat_cost(A)` are CONSTANT across destinations, so they belong only on the
+whether-site's retreat option and are correctly absent from the pick site, where they could change no
+ordering. The forced TO_ACTIVE promote is the same `promote_value(B)` with no A-side terms at all.
+Consequence: the pick site stops reading `ctx.*` Context flags and reads the BODY — the direction
+decisions 3/4 force anyway, since both need `BodyView`/clock reads rather than Context booleans. Some
+Board flags may thereby lose their last consumer.
+
+**10. HORIZON is ruled PER TERM, not globally** (the grill agenda's own recommendation). `my_yield` is
+this-turn damage plus closure odds (decisions 3, 5); `exposure`/`preservation` are the N-turn
+accumulating clock (decision 4); `tempo_denied` is the `t=2 − t=1` curve delta (decision 6). Both
+"curve terms" the 2026-07-22 spec deferred to the unified Threat Clock — the preservation dividend and
+the tempo slip — are hereby LIVE, because that clock shipped. The 1-exchange slice is retired.
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
