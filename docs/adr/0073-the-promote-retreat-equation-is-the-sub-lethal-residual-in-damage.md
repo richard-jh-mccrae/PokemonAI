@@ -333,6 +333,33 @@ Switch Item is a `_PLAY` option and the whether-site emitted only on a native RE
 rungs fire on `_PLAY` + `switch`), with `retreat_cost` = the **card's** Worth rather than a build
 delta, since a Switch costs a card and no Energy.
 
+**12. The instruments are ADR-0072's, unchanged — 1c adds NO gate, and the corpus is left alone.**
+The issue's grill agenda item 4 ("what sweep disagreement rate is a pass") is **SUPERSEDED**: the issue
+was written 2026-07-23, ADR-0072 was ruled 2026-07-26, and there is no rate. The Decision Gate wants
+**zero unruled `REGRESSION` frames**, the Discrimination Gate **zero unruled `OK → MISS` flips**, and
+the paired A/B is a crash tripwire only (`--stage mid-build`, `crashes == 0 AND ci_lo >= −5pp`). Every
+flip is ruled with the user before the deletion commit.
+
+Two entailments, not choices: the sweep is rebuilt as
+`tools/train/probes/promote_retreat_decider_sweep.py` (OLD pilot at shipped rung weights vs NEW with
+the equation on and the rungs forced to 0, compared by **body slot** per `evolve_decider_sweep.py`),
+because today's `tools/train/promote_retreat_sweep.py` reads a shadow record and a sign bit that
+decision 2 retires; and deleting the recusal returns the 24 `active_can_ko` frames, so the whether-site
+corpus goes from 72 priced back to ~96.
+
+On CLAIMS, the measured position: **131 corpus fixtures, only 4 carry claims** — the other 127 are a
+bare `correct: [index]`, which IS a Decision Claim. An earlier draft of this ruling proposed adopting
+the richer shapes across both sites; that was over-built, since the extra shapes buy DIAGNOSTIC
+STABILITY, not correctness, and nothing in the corpus is pinned to a score. So: the 131 fixtures are
+left alone; **Axis Claims are added only to the ~6 pick-site frames** (where "promote this body over
+that one" is what the frame means, and is immune to the ~10x re-banding), via one `PROMOTE_LANE`
+constant in `gates.py` pinned by the existing `test_lane_constants_match_the_engine_enums`;
+Endorsement Claims only if a frame demands one at the ruling sitting. The switch-Item lane wrinkle
+dissolves — `in_lane` matches type+context and cannot express a tag predicate, but Decision Claims are
+cross-lane by nature, so those frames need no lane at all.
+
+Net new artifacts in 1c: **one rebuilt sweep script and one lane constant.**
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
