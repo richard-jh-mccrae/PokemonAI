@@ -371,6 +371,55 @@ imported — verified that a bare `import cg.api` maps the native library (`libc
 `/proc/self/maps`), which would drag the DLL into the offline unit path that `planner.py` keeps lazy
 for the same reason.
 
+## Amendment C — a frame is only an instrument if its answer is reproducible (2026-07-27, #178)
+
+Both mid-build merit gates in decision 2 read **per-frame verdict flips**: the Decision Gate's
+`REGRESSION` table and the Discrimination Gate's `OK → MISS` diff. Both silently assume a frame has
+*an* answer. One did not, and had not for as long as it had been pinned.
+
+**Measured.** `ml_lethal_retreat_boost_to_ko_f24` failed the full suite on `main` in 2 of 3 runs,
+through two different tests, while passing in isolation every time. It is not test pollution and not
+hash ordering (`PYTHONHASHSEED` 1/2/3/5/7/11 all pass). `pilot.explain()` on that fixture returns
+`[5]` or `[3]` from a **fresh process with a fresh Pilot**, and two identical fresh processes disagree
+on the very first call — the native engine's shuffle is entropy-seeded and unseedable (the fact this
+ADR already records for common-random-numbers pairing, `src/cgpy/rng.py`).
+
+The channel is `_seed_zones` → `search_begin`: the planner hands the engine a *predicted multiset*
+for its own deck and prizes, and the engine **shuffles** it. Every card the sim then takes off the
+top of that shuffle is a sample. On f24 all 13 candidate first actions draw, and their leaf values
+swing 7000 / 162 / 129 / 122 / 89 / 57.5 on the same first step across processes — so whether the
+develop rung overrode greedy came down to whether any candidate happened to roll a phantom win that
+turn.
+
+**Ruled: reproducibility is an admission criterion, not a property to hope for.**
+
+- A frame may gate an instrument only if the decision under measurement is **reproducible** — no
+  outcome on any path that decides it may be taken positionally out of a shuffled hidden zone
+  (a draw, a top-N peek, a mill, a face-down prize) or off a coin.
+- Where the criterion is stated, it is **measured in code**, never asserted in a comment. The
+  `SEEDED_FIXTURES` list in `tests/strategy/test_engine_agreement_engine.py` carried "whose cascade
+  is DRAW-FREE" in prose for its whole life while one member drew eleven cards; a test now drives
+  each cascade and counts, and a second test pins the excluded fixture as the counter-example so the
+  exclusion cannot rot into a stale deferral.
+- A frame that fails the criterion is **excluded by a re-ruling** with its measurement recorded
+  (f24 joins f15), not conformed away and not silenced by moving tests around it. An ordering
+  workaround — the one that existed in `test_planner_engine.py` — treats the symptom and leaves both
+  gates reading noise.
+
+**The underlying defect is fixed, not just ruled.** A rollout that ranks on a sampled end-board has
+no override authority to begin with, so `_develop_rollout_line` now defers whenever **any** candidate
+sim consumed engine randomness (all-or-nothing: excluding just the offenders selects for the lines
+that touch nothing — a bare END never draws — and on f24 would have committed the END). The
+predecessor guard excluded **coin**-riding sims only and its docstring claimed coin-free values are
+stream-invariant; f24 carries no coin log at all, which is why that guard could not settle it. The
+develop rung still commits on roughly half its calls on a live mirror drive.
+
+**Accepted costs.** The develop rung defers more often, on turns where the tuned scoring keeps the
+turn — a real behaviour change on a flag (`develop_rollout`) that is armed ON in the shipped PROFILE,
+and one that is *not* covered by a ladder A/B here. The criterion also cannot be checked once and
+forgotten: a fixture that is draw-free today can start drawing when the policy that builds its
+cascade changes, which is why the check is a test rather than a review step.
+
 ## Alternatives rejected
 
 - **Pay for the real bound** (`ci_lo >= -1%`, ~28,000 games, 8–10 h/phase): buys a tightening from
@@ -398,3 +447,12 @@ for the same reason.
 - **(Decision 4) Move re-ruled fixtures to a separate directory**: makes "held out" a location rather
   than a property. A frame held out for #165 on the evolve axis is still live for every other axis,
   which a directory cannot express.
+- **(Amendment C) Re-run the unstable frame until it settles / mark it `flaky`**: the same p-hacking
+  the `delta >= 0` clause was deleted for, one frame down. A coin-flip frame reports a `REGRESSION`
+  that is noise and hides one that is not, whichever way the re-run lands.
+- **(Amendment C) Keep excluding only coin-riding sims and drop f24 from the corpus**: leaves the
+  measured defect — an override committed on a sampled end-board — live in the shipped agent, and
+  buys the gate's silence by deleting the evidence.
+- **(Amendment C) Exclude the unreproducible candidates and rank the survivors**: what survives
+  exclusion is systematically the lines that touch nothing, so the rung would acquire a standing bias
+  toward passing. On f24 it would have committed the END option over the greedy pick.

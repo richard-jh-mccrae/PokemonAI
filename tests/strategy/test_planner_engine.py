@@ -314,12 +314,14 @@ def test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder():
 
 # ── #138 Leaf Profile — the ENGINE-DRIVEN halves (ADR-0068 decision 1) ─────────────────────────
 #
-# These live here rather than beside the rest of the pin in `test_leaf_profile.py` for a specific
-# reason. That module collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and
-# `ml_lethal_retreat_boost_to_ko_f24` is documented in `planner._develop_rollout_line` as depending
-# on "the process's RNG position — the CI heisenbug". Starting a native battle ahead of those pins
-# shifts that position and fires the heisenbug (it did, in CI, on this branch). This module already
-# drives battles AND sorts after the lethal pins, so the engine work belongs here.
+# These live here rather than beside the rest of the pin in `test_leaf_profile.py` for a reason that
+# is now HISTORICAL, and the placement is kept only because moving them back buys nothing. That
+# module collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and starting a
+# native battle ahead of those pins shifted the process's engine-RNG position and fired the ml f24
+# heisenbug (it did, in CI, on this branch). #178 removed the sensitivity at its source — the develop
+# rung no longer ranks on a sim that consumed engine randomness — so no test's position in the suite
+# decides f24's answer any more. Do NOT re-introduce an ordering workaround if a frame goes unstable:
+# a frame whose answer depends on where it sits in the run is a defect in what decides it.
 
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
