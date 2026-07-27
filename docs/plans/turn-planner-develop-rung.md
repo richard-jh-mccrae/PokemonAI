@@ -49,7 +49,9 @@ forethought." This doc is the investigation + the phased path.
   order-independent and does NOT count), and the rung defers **all-or-nothing** if ANY candidate rode
   it. Excluding only the offenders would select for lines that touch nothing (a bare END never draws)
   and on f24 would have committed the END. Cost: measured on live mirror drives, the rung now commits
-  on roughly half its calls rather than nearly all of them. Ruled as ADR-0072 amendment C.
+  on roughly half its calls rather than nearly all of them. `_engine_leaf_value`'s dominant-win
+  short-circuit is deliberately NOT widened — that moves 9 corpus frames `OK → MISS` against the
+  pinned Discrimination Gate and owes a user ruling of its own. Ruled as ADR-0072 amendment C.
 - **Not built:** the "hand quality" leaf dimension (undefined — a test would be phantom); the
   plan-once-materialize-replay cost optimization (receding-horizon per-frame is the shipped first cut).
   **Next = Phase 2:** flip `develop_rollout` on a Kaggle-ladder A/B (needs the live search token, so no

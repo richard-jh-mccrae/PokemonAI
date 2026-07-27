@@ -406,18 +406,40 @@ turn.
   workaround — the one that existed in `test_planner_engine.py` — treats the symptom and leaves both
   gates reading noise.
 
-**The underlying defect is fixed, not just ruled.** A rollout that ranks on a sampled end-board has
-no override authority to begin with, so `_develop_rollout_line` now defers whenever **any** candidate
-sim consumed engine randomness (all-or-nothing: excluding just the offenders selects for the lines
-that touch nothing — a bare END never draws — and on f24 would have committed the END). The
-predecessor guard excluded **coin**-riding sims only and its docstring claimed coin-free values are
-stream-invariant; f24 carries no coin log at all, which is why that guard could not settle it. The
-develop rung still commits on roughly half its calls on a live mirror drive.
+**The underlying defect is fixed, not just ruled, in the two places it decided something.** One rule
+(`_rng_probe`) answers "did this drive take a card the ENGINE picked out of a shuffled zone?" — a
+draw, a top-N peek, a mill, a face-down prize, or a coin. A full-deck *search* does not count (we pick
+by identity, so the order decides nothing) and neither do the opponent's reveals.
+
+- **`_develop_rollout_line`** defers whenever **any** candidate sim consumed engine randomness.
+  All-or-nothing: excluding just the offenders selects for the lines that touch nothing — a bare END
+  never draws — and on f24 would have committed the END. The predecessor guard excluded **coin**-riding
+  sims only and its docstring claimed coin-free values are stream-invariant; f24 carries no coin log at
+  all, which is why that guard could not settle it. The rung still commits on roughly half its calls on
+  a live mirror drive.
+- **`_engine_confirms_win`** demotes a `True` that rode the shuffle to `None`. This is the same rule the
+  module already applied to an unaccounted coin ("**None** rather than trust a chosen flip"), through
+  the door the coin rule left open: a win that needed a specific card off an unknown deck order is not
+  a guaranteed win, in the sim or in the real game. **`False` is deliberately left alone** — a refute is
+  the conservative direction, and demoting refutes would let phantom locks through, the one
+  catastrophic error. Measured over 30 fresh processes, f24's `[correct]`-only cascade draws 8–11 cards
+  and answered `False` ×29 / `True` ×1 with the tier off; that 1-in-30 is a third suite test the frame
+  was failing through.
+
+**What this deliberately does NOT change.** `_engine_leaf_value`'s dominant-win short-circuit stays
+gated on **coins** alone. Widening it to the full rule moves **9 corpus frames `OK → MISS`** (and 5
+`MISS → OK`) against the pinned Discrimination Gate — measured 2026-07-27. That is a leaf change owing
+this ADR's own user ruling on its own merits, not something to smuggle in behind a flake fix, so the
+sim reports both bits and each consumer reads the one it has earned. The unwidened case is exactly the
+`_commit_best` KO-ranker treating a shuffle-blessed win as dominant; it is on the record here as
+unruled.
 
 **Accepted costs.** The develop rung defers more often, on turns where the tuned scoring keeps the
 turn — a real behaviour change on a flag (`develop_rollout`) that is armed ON in the shipped PROFILE,
-and one that is *not* covered by a ladder A/B here. The criterion also cannot be checked once and
-forgotten: a fixture that is draw-free today can start drawing when the policy that builds its
+and one that is *not* covered by a ladder A/B here. The verify demotion costs the `lethal_veto`
+cascade replay on any drawn win line (the chosen action is unchanged, and 6 live mirror games produced
+6 verify calls, all draw-free, so nothing was measured to change). And the criterion cannot be checked
+once and forgotten: a fixture that is draw-free today can start drawing when the policy that builds its
 cascade changes, which is why the check is a test rather than a review step.
 
 ## Alternatives rejected

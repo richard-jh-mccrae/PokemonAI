@@ -707,8 +707,9 @@ def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypa
         opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 2}
         me = me_dev if first_step == [1] else me_bare
         end = {"current": {"turn": 3, "yourIndex": 0, "players": [me, opp]}}
-        return (end, 0, 2, -1, 0.0, False)              # both lines banked 1 prize (2 -> 1), no result;
-                                                        # 0 line account; coin-free (the win-trust bit)
+        return (end, 0, 2, -1, 0.0, False, False)       # both lines banked 1 prize (2 -> 1), no result;
+                                                        # 0 line account; coin-free + RNG-free (the two
+                                                        # win-trust bits)
 
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim)
     d = pilot.explain(_two_candidate_obs())
@@ -724,30 +725,38 @@ def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypa
 
 
 @pytest.mark.req("REQ-PLANNER-0037")
-def test_a_stream_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeypatch):
-    """The f24 phantom-win regression (CI, 2026-07-20): `_simulate_line` runs on engine randomness —
-    coins auto-resolve and the hidden zones it seeds are SHUFFLED — so a line can sim to an outright
-    \"win\" on one lucky RNG stream (7000) and to an ordinary board on another (162), and the dominant
-    win short-circuit let that mirage preempt the tuned scoring. The 6th sim-tuple element
-    (``stream``) demotes it: a simmed win is dominant ONLY when the line consumed no randomness at
-    all; a stream-riding one ranks as its ordinary end board (prizes banked still count), so only the
-    SOUND win rung may claim wins."""
+def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeypatch):
+    """The f24 phantom-win regression (CI, 2026-07-20): `_simulate_line` auto-resolves coins, so a
+    line can sim to an outright \"win\" on one lucky RNG stream (7000) and to an ordinary board on
+    another (162) — and the dominant win short-circuit let that mirage preempt the tuned scoring.
+    The sim tuple's ``coins`` bit demotes it: a simmed win is dominant ONLY when the line consumed no
+    coin flips; a coin-dependent one ranks as its ordinary end board (prizes banked still count), so
+    only the SOUND win rung may claim wins.
+
+    The wider ``stream`` bit (#178) deliberately does NOT gate this: the leaf's own values feed
+    ADR-0072's pinned Discrimination Gate, and widening the short-circuit moves 9 corpus frames
+    `OK → MISS` — a change that owes that gate a user ruling on its own merits."""
     pilot = _pilot()
     me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
     opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
     end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
 
-    def fake_sim(stream):
-        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 2, 0, 0.0, stream)
+    def fake_sim(coins, stream=None):
+        stream = coins if stream is None else stream
+        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 2, 0, 0.0, coins, stream)
 
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False))
     clean = pilot._engine_leaf_value({}, [0])
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim(True))
-    sampled = pilot._engine_leaf_value({}, [0])
+    coined = pilot._engine_leaf_value({}, [0])
+    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False, stream=True))
+    drawn = pilot._engine_leaf_value({}, [0])
     from common.strategy.context import KO_SCORE
-    assert clean == KO_SCORE * 3                        # RNG-free win: dominant (prizes+1)
-    assert sampled < KO_SCORE * 3                       # stream-won "win": ordinary board ranking
-    assert sampled < clean
+    assert clean == KO_SCORE * 3                        # coin-free win: dominant (prizes+1)
+    assert coined < KO_SCORE * 3                        # coin-won "win": ordinary board ranking
+    assert coined < clean
+    assert drawn == clean                               # a DRAWN win keeps the leaf's value: the
+                                                        # rung's gate is `with_stream`, not this one
 
 
 @pytest.mark.req("REQ-PLANNER-0037")
@@ -836,13 +845,13 @@ class _FakeSearchApi:
 
 
 def _sim_stream(logs):
-    """The 6th `_simulate_line` tuple element for a line whose step produced ``logs``."""
+    """The `stream` bit (the last `_simulate_line` tuple element) for a line whose step made ``logs``."""
     pilot = _pilot()
     pilot._search_api = _FakeSearchApi(logs)
     obs = dict(_two_candidate_obs(), search_begin_input="x")
     sim = pilot._simulate_line(obs, [0])
     assert sim is not None, "the fake backend must produce an end board"
-    return sim[5]
+    return sim[6]
 
 
 L = _FakeSearchApi.LogType
@@ -879,6 +888,24 @@ def test_a_card_the_engine_picked_off_a_shuffled_zone_marks_the_sim_unreproducib
     assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.DISCARD)]) is True
     assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.PRIZE, toArea=A.HAND)]) is True
     assert _sim_stream([_FakeLog(L.COIN, playerIndex=1)]) is True
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_the_verdict_probe_ignores_a_prize_take_the_board_probe_counts():
+    """The one place the two consumers legitimately differ (#178). A face-down prize's id is our own
+    prediction, so revealing it can change a resulting BOARD — but not a WIN VERDICT, which is
+    invariant to which prize is taken (ADR-0050). If `_engine_confirms_win` counted it, every real win
+    would demote itself the moment it took its own prize, and `test_agreement_is_not_vacuous`'s f110
+    anchor — whose cascade's ONLY hidden-zone traffic is that take — would go undetermined."""
+    from common.strategy.planner import _rng_probe
+
+    take = _FakeObservation(logs=[_FakeLog(L.MOVE_CARD, playerIndex=0,
+                                           fromArea=A.PRIZE, toArea=A.HAND)])
+    draw = _FakeObservation(logs=[_FakeLog(L.DRAW, playerIndex=0)])
+    api = _FakeSearchApi([])
+    assert _rng_probe(api, 0, prize=True)(take) is True      # the board question
+    assert _rng_probe(api, 0, prize=False)(take) is False    # the verdict question
+    assert _rng_probe(api, 0, prize=False)(draw) is True     # a DRAW demotes either way
 
 
 # --------------------------------- heal-before-attach (corpus 6858 shape): the attach-carried KO
