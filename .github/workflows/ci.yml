@@ -65,18 +65,24 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           F_full: ${{ steps.changes.outputs.full }}
+          F_common_agent_core: ${{ steps.changes.outputs.common_agent_core }}
           F_agents: ${{ steps.changes.outputs.agents }}
           F_arena: ${{ steps.changes.outputs.arena }}
           F_sim: ${{ steps.changes.outputs.sim }}
           F_submit: ${{ steps.changes.outputs.submit }}
-          F_train: ${{ steps.changes.outputs.train }}
+          F_train_wide: ${{ steps.changes.outputs.train_wide }}
+          F_train_value: ${{ steps.changes.outputs.train_value }}
+          F_train_label: ${{ steps.changes.outputs.train_label }}
+          F_train_probes: ${{ steps.changes.outputs.train_probes }}
           F_meta: ${{ steps.changes.outputs.meta }}
+          F_cards: ${{ steps.changes.outputs.cards }}
           F_scouting: ${{ steps.changes.outputs.scouting }}
           F_strategy: ${{ steps.changes.outputs.strategy }}
-          F_cards: ${{ steps.changes.outputs.cards }}
+          F_value: ${{ steps.changes.outputs.value }}
           F_tuner: ${{ steps.changes.outputs.tuner }}
           F_blunder: ${{ steps.changes.outputs.blunder }}
-          F_value: ${{ steps.changes.outputs.value }}
+          F_train: ${{ steps.changes.outputs.train }}
+          F_label: ${{ steps.changes.outputs.label }}
           F_parity: ${{ steps.changes.outputs.parity }}
           F_docs: ${{ steps.changes.outputs.docs }}
           F_any: ${{ steps.changes.outputs.any }}
@@ -89,25 +95,58 @@ jobs:
             run_all=true
           else
             if [ "$F_full" = "true" ]; then run_all=true; fi
-            if [ "$F_agents"   = "true" ]; then add tests/agents; fi
-            if [ "$F_arena"    = "true" ]; then add tests/arena; fi
-            if [ "$F_sim"      = "true" ]; then add tests/sim tests/arena; fi
-            if [ "$F_submit"   = "true" ]; then add tests/submit tests/sim tests/arena; fi
-            if [ "$F_train"    = "true" ]; then add tests/train tests/tuner tests/blunder tests/value tests/sim tests/label; fi
-            if [ "$F_meta"     = "true" ]; then add tests/meta_tracker tests/cards tests/arena tests/sim tests/submit tests/train tests/tuner tests/blunder; fi
+
+            # common_agent_core: common.pilot/common.runtime + everything they import at
+            # module level (scouting, strategy, value, connective root modules). Reaches
+            # nearly the whole suite via runtime.make_agent (real + dynamically-loaded
+            # fixture agents) -- see .github/filters.yml and docs/ci.md for the evidence.
+            if [ "$F_common_agent_core" = "true" ]; then
+              add tests/agents tests/arena tests/blunder tests/label tests/scouting \
+                  tests/sim tests/strategy tests/submit tests/train tests/tuner tests/value
+            fi
+
+            if [ "$F_agents" = "true" ]; then add tests/agents; fi
+            if [ "$F_arena"  = "true" ]; then add tests/arena; fi
+            if [ "$F_sim"    = "true" ]; then add tests/sim tests/arena tests/label tests/submit; fi
+            if [ "$F_submit" = "true" ]; then add tests/submit tests/sim tests/arena tests/agents tests/blunder tests/label; fi
+
+            # tune.py imports both train.blunder.* and train.tuner.* at module level and is
+            # the shared pilot-builder ~20 test files across agents/strategy/blunder/sim/
+            # value/tuner import directly -- so blunder, tuner, and the tools/train/*.py
+            # root scripts all share this one broad blast radius (see filters.yml).
+            if [ "$F_train_wide" = "true" ]; then
+              add tests/train tests/tuner tests/blunder tests/value tests/label tests/sim \
+                  tests/strategy tests/agents
+            fi
+            if [ "$F_train_value"  = "true" ]; then add tests/value tests/label tests/sim; fi
+            if [ "$F_train_label"  = "true" ]; then add tests/label; fi
+            if [ "$F_train_probes" = "true" ]; then add tests/train; fi
+
+            if [ "$F_meta" = "true" ]; then
+              add tests/meta_tracker tests/cards tests/agents tests/arena tests/blunder \
+                  tests/label tests/scouting tests/sim tests/submit tests/train
+            fi
+            if [ "$F_cards" = "true" ]; then add tests/cards; fi
+
+            # Test-only filters: a pure test-file edit touches no source, so these stay
+            # narrow (own dir only) instead of paying for a broader filter's add-list above.
             if [ "$F_scouting" = "true" ]; then add tests/scouting; fi
             if [ "$F_strategy" = "true" ]; then add tests/strategy; fi
-            if [ "$F_cards"    = "true" ]; then add tests/cards; fi
+            if [ "$F_value"    = "true" ]; then add tests/value; fi
             if [ "$F_tuner"    = "true" ]; then add tests/tuner; fi
             if [ "$F_blunder"  = "true" ]; then add tests/blunder; fi
-            if [ "$F_value"    = "true" ]; then add tests/value; fi
+            if [ "$F_train"    = "true" ]; then add tests/train; fi
+            if [ "$F_label"    = "true" ]; then add tests/label; fi
+
             if [ "$F_parity"   = "true" ]; then add tests/parity; fi
 
             # Something changed but nothing recognised (and not docs-only) => full suite.
             matched=false
-            for v in "$F_full" "$F_agents" "$F_arena" "$F_sim" "$F_submit" "$F_train" "$F_meta" \
-                     "$F_scouting" "$F_strategy" "$F_cards" "$F_tuner" "$F_blunder" "$F_value" \
-                     "$F_parity" "$F_docs"; do
+            for v in "$F_full" "$F_common_agent_core" "$F_agents" "$F_arena" "$F_sim" \
+                     "$F_submit" "$F_train_wide" "$F_train_value" "$F_train_label" \
+                     "$F_train_probes" "$F_meta" "$F_cards" "$F_scouting" "$F_strategy" \
+                     "$F_value" "$F_tuner" "$F_blunder" "$F_train" "$F_label" "$F_parity" \
+                     "$F_docs"; do
               if [ "$v" = "true" ]; then matched=true; fi
             done
             if [ "$F_any" = "true" ] && [ "$matched" = "false" ]; then run_all=true; fi
