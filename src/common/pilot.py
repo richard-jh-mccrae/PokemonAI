@@ -582,6 +582,19 @@ class Board:
                                           # attack-payable THIS turn — the false famine `active_attack_payable`
                                           # (attached + hand-attach only) misses; False when unknown, so a
                                           # PROVABLE famine still fires the stall-gust (dragapult f70)
+    active_famine: bool = False           # **Famine** (#142): my Active cannot attack this turn — NO attack
+                                          # reachable under the FULL Attach Budget, or the rules forbid it one
+                                          # at all (Asleep/Paralyzed/turn-1-going-first, `attack_blocked`).
+                                          # The corrected premise the stall-gust family reads; False when
+                                          # unknown, so only a demonstrable famine stands anything down
+    active_attack_provable: bool = True   # my Active can PAY and legally use an attack this turn on the
+                                          # **Provable Budget** — the sound deck leg, plus the engine's own
+                                          # attack menu. The read for a consumer about to SPEND something that
+                                          # expires unused (a this-turn damage boost); True when unknown
+    active_should_swing: bool = False     # an UNARMED Active (0 attached) that can still REACH an attack this
+                                          # turn: it should swing, not stall-gust (ml f19, dragapult f70). The
+                                          # stall-gust family's shared attack guard — two rules need the
+                                          # identical clause, so it is derived once here
     immediate_preevo_in_play: bool = False  # the payoff's immediate pre-evo (e.g. Drakloak) is ALREADY on
                                           # my board, so a hand copy of it is redundant — refuel over it
     deploy_now_ids: frozenset = field(default_factory=frozenset)  # hand card ids that are evolutions with
@@ -1117,7 +1130,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
-                 promote_retreat_value=True, doom_matched_relax=False):
+                 promote_retreat_value=True, doom_matched_relax=False,
+                 famine_via_oracle=True):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1283,6 +1297,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # (plan_turn else None) where greedy is weak/indifferent,
                                                         # sim each candidate first action to end-of-turn and
                                                         # commit the best leaf. OFF = byte-identical
+        self.famine_via_oracle = famine_via_oracle      # #142 swap switch (armed-ON): read **Famine** off the
+                                            # StateModel's `reachable_attach` + `attack_blocked` instead of the
+                                            # retired `payable`/`+1-via-accel` pair. OFF replays the retired
+                                            # premise — the Decision Gate sweep's OLD arm, and nothing else.
         self.doom_matched_relax = doom_matched_relax    # doom-shadow grill kill-switch (2026-07-23): behind a
                                                         # γ-matched Brief (`_incoming_budget` set) AND no
                                                         # discard-recur fuel, a worst-case `active_doomed` cry
@@ -5787,6 +5805,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                    + (0 if state.get("energyAttached")
                       else self._best_hand_attach_units(
                           hand_ids_now, self.stats.get((ma or {}).get("id")) if self.stats else None)))
+        # **Famine** (#142) — the corrected "my Active cannot attack this turn" premise. The
+        # `famine_via_oracle` kill-switch keeps the RETIRED premise computable so the Decision Gate
+        # sweep can replay both; it dies with the retired helpers, leaving the model read alone.
+        famine = (model.mine.active_famine if self.famine_via_oracle else
+                  (not self._active_attack_payable(ma, payable)
+                   and not self._active_attack_payable_via_accel(
+                       me, ma, bool(state.get("supporterPlayed")),
+                       self._basic_energy_in_deck(deck_empty))))
         base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
                      else Plan.SETUP)                   # the readiness core (SETUP→RACE)
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
@@ -5828,10 +5854,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             recycle_dead_only=self._recycle_dead_only(me),
             active_attack_payable=(self._active_attack_payable(ma, payable)
-                                   and not self._attack_impossible_on_menu(
+                                   and not self._attack_impossible_on_menu_legacy(
                                        select, me, bool(state.get("energyAttached")))),
             active_attack_payable_via_accel=self._active_attack_payable_via_accel(
                 me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
+            active_famine=famine,                                        # ← StateModel (#142): the ONE
+            active_should_swing=(len((ma or {}).get("energies") or []) == 0   # corrected famine premise
+                                 and not famine),
+            active_attack_provable=(model.mine.reachable_attach(model.mine.active, provable=True)
+                                    and not self._attack_impossible_on_menu(
+                                        select, model.mine.attach_budget(model.mine.active,
+                                                                         provable=True))),
             immediate_preevo_in_play=self._immediate_preevo_in_play(me),
             deploy_now_ids=self._deploy_now_ids(me, state.get("turn", 0)),
             active_arm_available=self._active_arm_available(ma, self._bench_wincon_ready(me)),
@@ -7299,16 +7332,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                       if self._attack_cost(aid) <= payable]
         return any(aid != same for aid in affordable) if affordable else True
 
-    def _attack_impossible_on_menu(self, select, me: dict, energy_attached: bool) -> bool:
+    def _attack_impossible_on_menu(self, select, budget) -> bool:
         """The ENGINE says my Active cannot attack this turn: I am at the open turn menu and it lists no
         ATTACK option. Authoritative where the closed-form energy math is not — it already accounts for
         a transient attack-lock, a Special Condition, and turn-1-going-first, and unlike the ADR-0033
         tracker it survives a single-frame retest (a Correction carries one `obs`, so the tracker never
         saw last turn's attack).
 
-        NOT decisive while an attach could still turn an attack on: with the manual attach unspent and a
-        reusable Energy in hand, the ATTACK option simply hasn't appeared yet. Only once the attach is
-        gone (or there is nothing to attach) does an empty attack menu mean 'no attack this turn'."""
+        NOT decisive while THIS TURN'S ATTACH BUDGET could still turn an attack on — only once the
+        budget is empty does an empty attack menu mean 'no attack this turn'. The guard is the Budget
+        and not "a reusable Energy card sits in hand" (#142): the narrower reading is the SAME
+        under-read as the retired `+1`, and it fired at dragapult f70, where the hand was three
+        Supporters and Crispin's fetch-and-attach was invisible to it."""
+        if not select or select.get("context") != _MAIN:
+            return False
+        opts = select.get("option") or []
+        if not opts or any(o.get("type") == _ATTACK for o in opts):
+            return False
+        return not (budget is not None and budget.size > 0)
+
+    def _attack_impossible_on_menu_legacy(self, select, me: dict, energy_attached: bool) -> bool:
+        """The RETIRED guard, kept byte-identical only so the Decision Gate sweep's OLD arm replays
+        what shipped. Dies with `active_attack_payable` (#142); no live consumer."""
         if not select or select.get("context") != _MAIN:
             return False
         opts = select.get("option") or []

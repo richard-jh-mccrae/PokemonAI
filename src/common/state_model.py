@@ -248,6 +248,17 @@ class BodyView(_Lazily):
         return sum(self.attached_types.values())
 
     @lazy
+    def energy_key(self) -> tuple:
+        """The attached Energy as a HASHABLE tuple of card ids — the value-memo key component for
+        every read that depends on what this body is carrying.
+
+        The engine gives them as bare ids, so the coercion below is a cheap guard rather than a
+        real branch: a memo key must never be the thing that raises, and ``len()``-only readers
+        would not have noticed a wrong shape. One accessor, so no memo re-invents it."""
+        return tuple(e.get("id") if isinstance(e, dict) else e
+                     for e in (self.body.get("energies") or ()))
+
+    @lazy
     def attacks(self) -> tuple:
         stat = self.stat
         return tuple(stat.attacks or ()) if stat is not None else ()
@@ -562,8 +573,8 @@ class MySide(_SideBase):
         could collide across a freed-and-reallocated dict."""
         if body is None:
             return False
-        key = ("reachable_attach", body.card_id, body.is_active,
-               tuple(body.body.get("energies") or ()), attack_id, bool(provable))
+        key = ("reachable_attach", body.card_id, body.is_active, body.energy_key,
+               attack_id, bool(provable))
         return self._memoized(key, lambda: self._combat.reachable_attach(
             body.body, attack_id, budget=self.attach_budget(body, provable=provable)))
 
@@ -616,8 +627,8 @@ class MySide(_SideBase):
         if body is None:
             return 0.0
         extra = tuple(extra_energy_ids)
-        key = ("best_reachable_damage", body.card_id, body.is_active,
-               tuple(body.body.get("energies") or ()), extra, bool(manual_spent))
+        key = ("best_reachable_damage", body.card_id, body.is_active, body.energy_key,
+               extra, bool(manual_spent))
 
         def _make():
             raw = body.body if not extra else dict(
