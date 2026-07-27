@@ -342,7 +342,7 @@ class MySide(_SideBase):
 
     def __init__(self, player: dict, *, combat, deck=None, deck_empty=frozenset(),
                  own_prizes=None, needs=None, energy_attached=False, supporter_played=False,
-                 more_prizes_than_opp=False, probe=None):
+                 more_prizes_than_opp=False, turn=0, probe=None):
         super().__init__(player, combat=combat, probe=probe, prefix="mine")
         self._deck = tuple(deck or ())
         self._deck_empty = frozenset(deck_empty or ())
@@ -351,6 +351,7 @@ class MySide(_SideBase):
         self.energy_attached = bool(energy_attached)
         self.supporter_played = bool(supporter_played)
         self.more_prizes_than_opp = bool(more_prizes_than_opp)
+        self.turn = int(turn or 0)
 
     # -- hand -----------------------------------------------------------------------------------
     @lazy
@@ -471,18 +472,41 @@ class MySide(_SideBase):
         sound emptiness oracle, when supplied — can only narrow further: both inputs are sound, so
         intersecting them stays sound, and a type is dropped the moment EITHER proves it gone.
         """
-        possible = frozenset(t for t, c in self.deck_energy_counts.items() if c.possible)
+        return self._narrowed(frozenset(t for t, c in self.deck_energy_counts.items()
+                                        if c.possible))
+
+    @lazy
+    def deck_energy_types_provable(self) -> frozenset:
+        """The same set on the SOUND leg — the **Provable Budget**'s deck argument (ADR-0067's
+        2026-07-27 amendment). A type counts only where the Count Triple's ``floor`` proves at least
+        one copy CANNOT be prized (the pigeonhole), so this fails CLOSED where
+        :attr:`deck_energy_types` fails open.
+
+        Which leg a consumer takes is decided by what its error costs: a consumer about to STAND
+        DOWN takes the open leg (a false famine is the f70 blunder), one about to SPEND something
+        that expires unused takes this one. Expect it EMPTY pre-anchor for any realistic Energy
+        suite — ``floor`` is zero whenever unseen copies do not outnumber the hidden prize slots —
+        and expect both legs to coincide once a deck-revealing search anchors the prizes.
+        """
+        return self._narrowed(frozenset(t for t, c in self.deck_energy_counts.items()
+                                        if c.floor >= 1))
+
+    def _narrowed(self, types: frozenset) -> frozenset:
+        """``types`` intersected with what the caller's sound emptiness oracle still allows. Both
+        inputs are sound, so intersecting them stays sound on EITHER leg, and a type is dropped the
+        moment either proves it gone."""
         if not self._deck_empty:
-            return possible
+            return types
         surviving = frozenset(
             stat.energyType for cid in set(self._deck)
             if cid not in self._deck_empty
             and (stat := self._combat._card_stat(cid)) is not None
             and stat.is_typed_basic_energy)
-        return possible & surviving
+        return types & surviving
 
     # -- the affordability family (0a's oracle; the model holds the RESULTS) --------------------
-    def attach_budget(self, body: BodyView | None, *, manual_spent: bool = False):
+    def attach_budget(self, body: BodyView | None, *, manual_spent: bool = False,
+                      provable: bool = False):
         """This turn's full **Attach Budget** toward ``body`` (ADR-0067).
 
         Memoized PER BODY, because the Budget genuinely is per-target: a bench-restricted clause
@@ -508,27 +532,72 @@ class MySide(_SideBase):
         """
         if body is None:
             return None
-        key = ("attach_budget", body.card_id, body.is_active, bool(manual_spent))
+        key = ("attach_budget", body.card_id, body.is_active, bool(manual_spent), bool(provable))
         return self._memoized(key, lambda: self._combat.attach_budget(
             body.body, self.hand_ids,
             energy_attached=self.energy_attached or bool(manual_spent),
             supporter_played=self.supporter_played,
-            deck_energy_types=self.deck_energy_types,
+            deck_energy_types=(self.deck_energy_types_provable if provable
+                               else self.deck_energy_types),
             hand_energy_types=self.hand_energy_types,
             discard_energy_counts=self.discard_energy_counts,
             target_benched=not body.is_active,
             more_prizes_than_opp=self.more_prizes_than_opp))
 
-    def reachable_attach(self, body: BodyView | None, attack_id=None) -> bool:
+    def reachable_attach(self, body: BodyView | None, attack_id=None, *,
+                         provable: bool = False) -> bool:
         """Can ``body`` pay (and legally use) an attack this turn under its Budget? ``attack_id``
-        None asks the FAMINE question — is ANY attack reachable — which is the premise the stall-gust
-        family had wrong at f70. Works for ANY body and ANY attack, not Active-and-cheapest only."""
+        None asks the affordability half of the FAMINE question — is ANY attack reachable, scanning
+        every attack rather than the cheapest, which is what makes the boolean sound once costs are
+        typed. Works for ANY body and ANY attack, not Active-and-cheapest only.
+
+        ``provable`` selects the **Provable Budget** (ADR-0067's amendment) — the sound deck leg for
+        a consumer about to spend something that expires.
+
+        A COST question only: it never asks whether the rules permit an attack at all. That half is
+        :attr:`attack_blocked`, and :attr:`active_famine` is the two composed — see the note there.
+
+        Keyed by VALUE, like the Budget it rests on: reachability depends on the body only through
+        its ``CardStat``, its area and its attached Energy, so an identity key would buy nothing and
+        could collide across a freed-and-reallocated dict."""
         if body is None:
             return False
-        return self._memoized(
-            ("reachable_attach", id(body.body), attack_id),
-            lambda: self._combat.reachable_attach(body.body, attack_id,
-                                                  budget=self.attach_budget(body)))
+        key = ("reachable_attach", body.card_id, body.is_active,
+               tuple(body.body.get("energies") or ()), attack_id, bool(provable))
+        return self._memoized(key, lambda: self._combat.reachable_attach(
+            body.body, attack_id, budget=self.attach_budget(body, provable=provable)))
+
+    @lazy
+    def attack_blocked(self) -> bool:
+        """The rules forbid me an attack this turn AT ALL, whatever my Energy says.
+
+        Three facts, all verified at source and none of them expressible as a cost:
+        **Asleep** ("If a Pokémon is Asleep, it cannot attack or retreat", `docs/rulebook.txt` L190),
+        **Paralyzed** (same wording, L206 — L215 confirms these two are the only conditions that
+        block retreat), and the **first player on turn 1** (the starting player skips the attack
+        step, rulebook L152 / `docs/rules.md` §first-turn; ``turn <= 1`` is the idiom every other
+        site in this codebase already uses for it).
+
+        A SIDE-level read on purpose: the condition flags ride on the engine's ``PlayerState``, not
+        on the body, so pushing them into the body-scoped oracle would mean handing ``CombatMath`` a
+        player. It stays typed cost plus ADR-0033 locks; this is the layer that knows the rest."""
+        if self.turn <= 1:
+            return True
+        return bool(self.player.get("asleep") or self.player.get("paralyzed"))
+
+    @lazy
+    def active_famine(self) -> bool:
+        """**Famine**: my Active cannot attack this turn — the premise the stall-gust family had
+        wrong at f70, and the one this model exists to answer once (ADR-0067, amended 2026-07-27).
+
+        Composed rather than derived in a consumer, so every reader inherits BOTH halves: the
+        rule-level :attr:`attack_blocked` and the affordability :meth:`reachable_attach` over the
+        FULL (fail-open) Budget. Never "0 Energy attached", never "the cheapest attack is unpayable",
+        and never a body the rules will not let swing however rich its Budget.
+
+        A body-less side is a famine (fail-closed on the read, which is the standing-down direction
+        a missing Active wants anyway)."""
+        return bool(self.attack_blocked or not self.reachable_attach(self.active))
 
     def best_reachable_damage(self, body: BodyView | None, *, extra_energy_ids=(),
                               manual_spent: bool = False) -> float:
@@ -734,7 +803,8 @@ class StateModel(_Lazily):
                       own_prizes=(obs or {}).get("own_prizes"), needs=needs,
                       energy_attached=bool(state.get("energyAttached")),
                       supporter_played=bool(state.get("supporterPlayed")),
-                      more_prizes_than_opp=(my_prizes > opp_prizes), probe=probe)
+                      more_prizes_than_opp=(my_prizes > opp_prizes),
+                      turn=state.get("turn", 0), probe=probe)
         theirs = their_side if their_side is not None else TheirSide(
             opp, combat=combat, read=read, brief=brief, matchup_plan=matchup_plan,
             posture_confidence=posture_confidence, favorability=favorability,
