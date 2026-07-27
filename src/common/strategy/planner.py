@@ -12,8 +12,9 @@ Goal* / *Turn Line* / *Lethal Solver* terms in ``common/CONTEXT.md``.
 **Two soundness regimes, one module.** The win rung locks only a GUARANTEED win: min-bound damage
 floors, worst-case coins, and the `_engine_confirms_win` verdict-driver (refute drops the candidate;
 an unreachable verdict keeps the sound closed-form lock). Everything below it is **heuristic**:
-`_simulate_line` auto-resolves coins and its end-of-turn board is trusted for RANKING, never as a
-guarantee.
+`_simulate_line` auto-resolves coins, and the hidden zones it seeds are SHUFFLED by the engine, so its
+end-of-turn board is trusted for RANKING, never as a guarantee — and only where the line took nothing
+out of that shuffle (`stream`, see `_simulate_line`).
 
 **Layer-on-top (ADR-0031 decision 6).** Below the win rung the Planner commits only when a line
 reaches an outcome the tuned per-option scoring would MISS — otherwise it defers, so the proven
@@ -116,6 +117,75 @@ _GOAL_LINE = {"survive": {"stabilize_then_ko"},          # the directed goal →
               "trade": {"ko_for_prizes"}}                # candidate line — they defer to the tuned scoring)
 _PRIZE_AREA = 6                # AreaType.PRIZE — a hidden-zone pick: the sim's ids are predictions,
                                # so a recorded prize pick is policy-driven at replay (ADR-0037 stage 3)
+
+
+def _rng_probe(cgapi, my_index: int, *, prize: bool):
+    """Build ``saw(observation) -> bool``: did these logs consume engine RANDOMNESS on MY behalf?
+
+    ONE rule, two consumers (#178). ``search_begin`` is seeded from `_seed_zones` with a predicted
+    MULTISET for the hidden zones and the engine shuffles it into an order we never see. An outcome
+    that turned on a card the ENGINE picked out of one of those zones is therefore not a fact about
+    the position, for two INDEPENDENT reasons — and the rule below is worth its keep on either:
+
+      1. **Epistemic, and it holds for every draw.** The order is our PREDICTION. In the real game
+         nobody knows it either, so a line whose value depends on what came off the top is a guess
+         about a hidden zone, however faithfully the engine repeats it.
+      2. **Mechanical, and it is what makes a frame FLAP.** A shuffle DURING the line — the
+         Professor's-Research class, shuffle your hand in and draw — is not reproducible: measured
+         on ml f24, one Pilot re-running the identical sim drew a different 8 cards every call.
+
+    Do not narrow this to (2). ``search_begin``'s OWN seeding shuffle *is* reproducible given
+    identical inputs (`docs/pyeng/determinism.md` §4, re-measured 2026-07-27: identical draws across
+    processes and across intervening searches), so a rule keyed on reproducibility alone would let a
+    pre-shuffle draw through — and reproducing a guess does not make it knowledge.
+
+    Counts, for ``playerIndex == my_index`` (their reveals land after my turn has passed):
+
+      * ``DRAW`` — off the deck top;
+      * ``MOVE_CARD`` ``DECK``→``LOOKING`` (a top-N peek) or ``DECK``→``DISCARD`` (a mill);
+      * ``MOVE_CARD`` out of ``PRIZE`` — only when ``prize=True``. A face-down prize's id is our own
+        prediction, which can change a resulting BOARD; it cannot change a WIN VERDICT, which is
+        invariant to which prize is taken (ADR-0050, `_engine_confirms_win`).
+
+    Plus any ``COIN`` flip, whoever flipped it.
+
+    NOT counted, measured 2026-07-27: a bare ``SHUFFLE`` (every seeded search shuffles, and a shuffle
+    nobody then looks at changes nothing) and a ``DECK``→``HAND``/field **search** (the deck is
+    revealed and WE pick by identity, so the order decides nothing — all the hidden-zone traffic the
+    ml f26/f48 tutor lines have). Absent under a backend that emits no such logs, where the probe
+    finds nothing and behavior is unchanged."""
+    _logs = getattr(cgapi, "LogType", None)
+    coin_t = getattr(_logs, "COIN", None)
+    draw_t = getattr(_logs, "DRAW", None)
+    move_t = getattr(_logs, "MOVE_CARD", None)
+    _a = getattr(cgapi, "AreaType", None)
+    deck_a, prize_a = getattr(_a, "DECK", None), getattr(_a, "PRIZE", None)
+    positional = {(int(deck_a), int(x))
+                  for x in (getattr(_a, "LOOKING", None), getattr(_a, "DISCARD", None))
+                  if deck_a is not None and x is not None}
+
+    def saw(ob) -> bool:
+        for lg in (getattr(ob, "logs", None) or ()):
+            t = getattr(lg, "type", None)
+            if coin_t is not None and t == coin_t:
+                return True
+            if getattr(lg, "playerIndex", None) != my_index:
+                continue
+            if draw_t is not None and t == draw_t:
+                return True
+            if move_t is None or t != move_t:
+                continue
+            fr, to = getattr(lg, "fromArea", None), getattr(lg, "toArea", None)
+            if fr is None:
+                continue
+            if prize and prize_a is not None and int(fr) == int(prize_a):
+                return True
+            if to is not None and (int(fr), int(to)) in positional:
+                return True
+        return False
+
+    return saw
+
 
 # ═══ READINESS LEAF + SPEND ACCOUNT (board-state-valuation-grill.md / t0-planner-disposition.md,
 #     decided 2026-07-16) ═════════════════════════════════════════════════════════════════════════
@@ -396,13 +466,19 @@ class PlannerMixin:
         telemetry (top-K sorted desc, committed + greedy flagged), so a correction reader sees what the
         rung out-scored. ``diverged`` marks an override of greedy's argmax — the key A/B signal.
 
-        COIN-CONTAMINATED sims are excluded from the ranking (treated like failed forks): the rung's
-        authority to OVERRIDE the tuned scoring comes from a reproducible end-board, and a line whose
-        sim consumed auto-resolved coins is one lucky RNG stream, not a plan — its value provably
-        swings across streams (ml f24: the bench-Meowth line simmed 162 on one stream and a phantom
-        outright WIN on another, and whether the rung overrode the human's lethal-enabling attach
-        depended on the process's RNG position — the CI heisenbug). Coin-free line values are
-        stream-invariant, so the surviving ranking is deterministic."""
+        The ranking must be REPRODUCIBLE, or the rung defers — ALL-OR-NOTHING (#178). The rung's whole
+        authority to OVERRIDE the tuned scoring is that its end-board is a fact; a sim that consumed
+        engine randomness (`_simulate_line`'s ``stream`` bit — an auto-resolved coin, or a card taken out
+        of the SHUFFLED predicted deck/prize) produced one sample instead, and its value provably swings
+        (ml f24: the same first step simmed 7000 / 162 / 129 / 89 / 57.5 across processes, and whether
+        the rung overrode the human's lethal-enabling attach came down to whether ANY candidate happened
+        to roll a phantom win that turn — the CI heisenbug, #178).
+
+        Why the whole ranking and not just the offending candidates: a subset ranking is not a ranking.
+        The excluded lines are not known-worse, and the ones that survive exclusion are systematically
+        the ones that TOUCH NOTHING — a bare END never draws, so it is reproducible by construction. On
+        f24 dropping the 12 stream-riding candidates would have left exactly the END option standing and
+        committed it. Rank everything or rank nothing."""
         self._develop_candidates_pending = None
         if not options:
             return None
@@ -411,16 +487,18 @@ class PlannerMixin:
         for i in range(len(options)):
             self._planning = True                        # per-sim reentrancy guard (never nest a search)
             try:
-                val, coined = self._engine_leaf_value(obs, [i], with_coins=True)
+                val, stream = self._engine_leaf_value(obs, [i], with_stream=True)
             except Exception:
-                val, coined = None, False                # a failed fork never crashes the decision
+                val, stream = None, False                # a failed fork never crashes the decision
             finally:
                 self._planning = False
-            if val is not None and not coined:
+            if stream:
+                return None                              # unreproducible ranking -> defer (all-or-nothing)
+            if val is not None:
                 ranked.append((val, i))
         if not ranked:
-            return None                                  # nothing simmable coin-free — defer to the
-                                                         # tuned scoring (never rank on coin noise)
+            return None                                  # nothing simmable at all — defer to the tuned
+                                                         # scoring rather than pick blind
         ranked.sort(key=lambda t: t[0], reverse=True)
         best_val, best_i = ranked[0]
         if best_val >= KO_SCORE:
@@ -926,13 +1004,26 @@ class PlannerMixin:
         Sound and fail-safe:
           * ``manual_coin=True`` so a coin the line doesn't account for surfaces as a COIN_HEAD
             select → **None** rather than trust a chosen flip (never let the policy pick heads).
+          * a cascade that DREW off the shuffled deck can only be confirmed as far as that draw:
+            a ``True`` there is demoted to **None** (#178). Same rule as the coin, through the door
+            the coin rule left open — `_seed_zones` seeds the hidden zones with a predicted MULTISET
+            whose ORDER is our guess, so a win that needed a specific card off it is not a guaranteed
+            win in the real game, whatever the sim did. Asymmetric on purpose:
+            **False is left alone.** A refute is the conservative direction (it drops a candidate and
+            costs at most a turn), while demoting refutes to None would let phantom locks through —
+            the one catastrophic error. Measured on ml f24 (2026-07-27): its `[correct]`-only
+            cascade shuffles its hand back in mid-line and then draws ELEVEN cards off the reshuffled
+            deck — every one of them AFTER that shuffle, which is the part the engine does not
+            reproduce — and its verdict came back False on most runs and True on some, which is what
+            made two suite tests flake through the same frame.
           * the select passing to the OPPONENT with no verdict = the win did not materialize before
             they act → False (a real refute: our win-shapes need no opponent action).
           * an exhausted cascade cap is **None** (undetermined never refutes); so is an unavailable
             search (lib-free suite), a missing ``search_begin_input``, or any error — the caller
             then keeps its sound closed-form verdict.
         The hidden-zone predictions are filled from my own deck list; the cascade's prize picks
-        reveal predicted cards but the ``result`` verdict is invariant to WHICH prize is taken.
+        reveal predicted cards but the ``result`` verdict is invariant to WHICH prize is taken (so a
+        prize take alone never demotes — `_rng_probe(prize=False)`).
         Lazy DLL import keeps the fast unit suite from ever loading the native engine.
 
         ``record`` (a list, ADR-0037 stage 3): materialize each cascade select this drive answers as
@@ -963,13 +1054,17 @@ class PlannerMixin:
         boost_snap = {k: list(v) for k, v in self._turn_boosts._by_side.items()}
         boost_turn_snap = self._turn_boosts._last_turn
         try:                                           # search, never verify inside a verify
+            saw_rng = _rng_probe(cgapi, yi, prize=False)   # the VERDICT question: prize ids are moot
+            sampled = False
             ob = cgapi.to_observation_class(obs)
             st = cgapi.search_begin(ob, yd, yp, od, op_, oh, [], manual_coin=True)
             for step in line_steps:
                 st = cgapi.search_step(st.searchId, list(step))
+                sampled = sampled or saw_rng(st.observation)
             verdict = None
             for _ in range(max_cascade):
                 o = st.observation
+                sampled = sampled or saw_rng(o)
                 c = o.current
                 if c and c.result != -1:
                     verdict = c.result == yi           # the engine's own verdict
@@ -996,7 +1091,9 @@ class PlannerMixin:
                         "chosen": [self._option_identity(od, osel, p) for p in picked]})
                 st = cgapi.search_step(st.searchId, chosen)
             cgapi.search_end()
-            return verdict
+            if verdict is True and sampled:
+                return None                            # confirmed only for THAT shuffle — undetermined
+            return verdict                             # (False is left alone: a refute never lies)
         except Exception:
             try:
                 cgapi.search_end()
@@ -2992,7 +3089,7 @@ class PlannerMixin:
 
     # ---- Tier-1 Engine Search (ADR-0031 phase 3): simulate a line to its end-of-turn board -----------
     def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True,
-                           with_coins: bool = False):
+                           with_stream: bool = False):
         """The leaf-eval value of a candidate line computed on its ENGINE-SIMULATED end-of-turn board
         (ADR-0031 phase 3): the exact prizes taken and my Active's survival vs Incoming, read off the
         board the simulator produces rather than closed-form-approximated, PLUS the MY-side ``readiness``
@@ -3002,16 +3099,18 @@ class PlannerMixin:
         count (dominant). None when the search is unavailable — the caller then keeps the closed-form leaf
         value (never crashes, decision 7). ``spend_account=False`` drops the line term (a pure-readiness
         terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on).
-        ``with_coins=True`` returns ``(value, coins)`` — the sim's coin bit beside the value, so a
-        caller whose OVERRIDE authority needs a reproducible board (the develop rollout) can treat a
-        coin-riding value as unrankable noise."""
+        ``with_stream=True`` returns ``(value, stream)`` — the sim's engine-RNG bit beside the value, so
+        a caller whose OVERRIDE authority needs a reproducible board (the develop rollout) can treat a
+        stream-riding value as unrankable noise. The VALUE itself is unaffected by that bit: the win
+        short-circuit below stays gated on ``coins`` alone, because the leaf's own numbers feed
+        ADR-0072's pinned Discrimination Gate (see `_simulate_line`)."""
         sim = self._simulate_line(obs, first_step)
         if sim is None:
-            return (None, False) if with_coins else None
-        end, my_index, start_prizes, result, line_val, coins = sim
+            return (None, False) if with_stream else None
+        end, my_index, start_prizes, result, line_val, coins, stream = sim
 
         def _out(val):
-            return (val, coins) if with_coins else val
+            return (val, stream) if with_stream else val
 
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
@@ -3429,15 +3528,27 @@ class PlannerMixin:
         ranking, not as a guarantee. The live game is untouched (the search forks an independent sim).
         Lazy DLL import keeps the fast unit suite from ever loading the native engine.
 
-        The 6th tuple element is ``coins``: True iff any ``LogType.COIN`` log appeared along the
-        stepped line — the sim consumed engine-RNG coin flips, so its outcome (including a "win")
-        is one lucky stream among many, NOT a guarantee. `_engine_leaf_value` reads it to demote a
-        coin-dependent simmed win from the dominant short-circuit to ordinary board ranking (the
-        f24 phantom: a coin-blessed Meowth-ex line simmed to an outright "win" — 7000 on one RNG
-        stream, 162 on another — and preempted the human's sound lethal-enabling attach). Errs
-        toward demotion (a stray coin log only costs the SHORT-CIRCUIT, never the ranking); absent
-        under a backend without COIN logs (cgpy), where detection finds nothing and behavior is
-        unchanged."""
+        The last two tuple elements are the line's RANDOMNESS bits, both measured on the logs
+        (`_rng_probe` owns the rule):
+
+          * ``coins`` — a ``LogType.COIN`` flip appeared (``manual_coin=False`` auto-resolves them).
+            `_engine_leaf_value` reads THIS one, and only this one, to demote a coin-won simmed win
+            from the dominant short-circuit to ordinary board ranking.
+          * ``stream`` — ``coins`` OR the line took a card off a SHUFFLED hidden zone (`prize=True`,
+            so a face-down prize counts alongside a draw / peek / mill). `_develop_rollout_line`
+            reads this one to refuse an unreproducible ranking outright.
+
+        Why two and not one: the leaf's own value feeds ADR-0072's pinned Discrimination Gate, and
+        widening the short-circuit takes that gate from main's own 2 unruled `OK → MISS` to 9
+        (measured 2026-07-27) — seven frames owing the gate's user ruling on their own merits, not a
+        side effect of #178.
+
+        Measured on ml f24 (2026-07-27, #178): all 13 candidate first actions carry ``SHUFFLE`` +
+        ``DRAW`` and **not one COIN**, and each one's leaf value swings across processes — 7000 /
+        162 / 129 / 122 / 89 / 57.5 on the same first step. Which is why ``coins`` alone could not
+        settle that frame: the earlier claim that coin-free line values are stream-invariant is
+        false, and the shuffle is the channel that carried it. Both bits err toward demotion, and
+        both are absent under a backend that emits no logs, where behavior is unchanged."""
         if not (obs or {}).get("search_begin_input") or not first_step:
             return None
         cgapi = getattr(self, "_search_api", None)     # injectable search backend (leaf-lab harness sets
@@ -3497,15 +3608,17 @@ class PlannerMixin:
 
             my_ctx = _held_snapshot(me, cur) if capture_hand else None
             coin_t = getattr(getattr(cgapi, "LogType", None), "COIN", None)
+            _saw_stream = _rng_probe(cgapi, my_index, prize=True)   # the BOARD question: prize ids count
 
             def _saw_coin(ob) -> bool:
                 return coin_t is not None and any(getattr(lg, "type", None) == coin_t
                                                   for lg in (getattr(ob, "logs", None) or ()))
 
-            coins = False
+            coins = stream = False
             for _ in range(max_steps):
                 o = st.observation
                 coins = coins or _saw_coin(o)
+                stream = stream or _saw_stream(o)
                 c = o.current
                 if c is None or c.result != -1 or o.select is None:
                     break                                 # game over
@@ -3528,7 +3641,8 @@ class PlannerMixin:
                 if mine and not crossed_my_turn_end:       # only MY within-turn actions carry a line term
                     line_val += self._line_account(dec.options, dec.chosen)
                 st = cgapi.search_step(st.searchId, list(dec.chosen))
-            coins = coins or _saw_coin(st.observation)    # the final step's logs (a coin-won attack)
+            coins = coins or _saw_coin(st.observation)       # the final step's logs (a coin-won attack)
+            stream = stream or _saw_stream(st.observation)
             end = _prune_none(asdict(st.observation))
             if capture_hand and my_ctx:                   # inject my hidden hand + held-context
                 epl = (end.get("current") or {}).get("players") or []
@@ -3537,7 +3651,7 @@ class PlannerMixin:
                     epl[my_index]["heldCtx"] = {k: v for k, v in my_ctx.items() if k != "hand"}
             result = st.observation.current.result if st.observation.current else -1
             cgapi.search_end()
-            return (end, my_index, start_prizes, result, line_val, coins)
+            return (end, my_index, start_prizes, result, line_val, coins, stream)
         except Exception:
             try:
                 cgapi.search_end()

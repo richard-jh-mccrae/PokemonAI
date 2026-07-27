@@ -35,8 +35,12 @@ def _decide(pilot, fx: dict):
 # FUNCTION-scoped, not module-scoped: a FRESH pilot per replay, the statefulness lesson the corpus
 # harnesses already follow. Each fixture below is a different EPISODE, but a Pilot's ADR-0033
 # transient-grant tracker is MATCH-scoped by design — correct in a real game, where one Pilot plays
-# one match, and cross-contamination here, where one Pilot was replaying several. It made f24
-# order-dependent once #142 had famine consult that tracker on every decision.
+# one match, and cross-contamination here, where one Pilot was replaying several.
+#
+# This scoping was introduced (#142) as the fix for f24's order-dependence. It is right on its own
+# terms and stays, but that attribution was WRONG and #178 measured it: f24 flips between `[5]` and
+# `[3]` with a fresh Pilot in a fresh process, so no fixture-scope change could ever have settled it.
+# The cause was the develop rung ranking on engine-RNG-sampled leaf values; see ADR-0072 amendment C.
 @pytest.fixture
 def lucario():
     return _pilot("mega_lucario")
@@ -182,7 +186,13 @@ def test_line_readiness_signals_model_the_multi_stage_line(request, name, agent_
 
 def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
     """Guard on the pre-evo fallback: with every Riolu bare there is nothing to concentrate, so the
-    attach stays free for the winning Solrock line (ml 84889011 f24)."""
+    attach stays free for the winning Solrock line (ml 84889011 f24).
+
+    Also the repo's determinism tracer (#178). This frame answered `[5]` or `[3]` depending on where
+    the process's engine-RNG position happened to sit — the develop rung was ranking 13 candidates
+    whose simmed leaf values were samples of the seeded deck's shuffle, and deferred only when one of
+    them happened to roll a phantom win. The rung now refuses an unreproducible ranking outright, so
+    the answer here is a property of the board again."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     assert _decide(lucario, fx)[0] == fx["correct"]
 

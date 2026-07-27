@@ -37,11 +37,11 @@ def _trace(index, score):
 
 def _stub_leaf(pilot, by_step):
     """Stub ``_engine_leaf_value`` to a fixed value per first-step (bypasses the native engine).
-    Mirrors the real signature: ``with_coins=True`` returns ``(value, coins)`` — always coin-free
-    here (the coin-exclusion path has its own test, `test_a_coin_dependent_simmed_win_...`)."""
-    def leaf(obs, step, spend_account=True, with_coins=False):
+    Mirrors the real signature: ``with_stream=True`` returns ``(value, stream)`` — always RNG-free
+    here (the stream-exclusion path has its own tests in `test_planner.py`)."""
+    def leaf(obs, step, spend_account=True, with_stream=False):
         val = by_step.get(tuple(step))
-        return (val, False) if with_coins else val
+        return (val, False) if with_stream else val
     pilot._engine_leaf_value = leaf
 
 

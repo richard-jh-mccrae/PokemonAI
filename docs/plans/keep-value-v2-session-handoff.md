@@ -133,13 +133,21 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
   engine's coins/shuffles are UNSEEDED and process-global — `search_begin` has no seed param — so
   a handful of engine-driven tests sit on RNG knife edges and can flake run-to-run in the FULL
   suite while passing standalone (ml f24 / `test_lethal_engine`'s own retry loop admits this).
-  Two SOUND fixes landed from the f24 dissection: `_engine_leaf_value`'s win short-circuit is
-  COIN-GATED (a simmed "win" that consumed coin flips ranks as an ordinary board — only the sound
-  win rung claims wins), and the develop rollout EXCLUDES coin-contaminated sims from its ranking
-  (override authority requires a reproducible end-board; ml f24's bench-Meowth line simmed 162 on
-  one stream and a phantom outright win on another). A residual environmental flake (a test whose
-  own retries lose the RNG lottery) is possible on any CI run — re-run before diagnosing; a
-  standalone-passing failure in an engine test is this class.
+  Two fixes landed from the f24 dissection and **both named the wrong channel** — corrected by #178
+  (2026-07-27), read that first: f24 carries no COIN log at all, so the coin gate was a no-op there
+  and the frame went on failing ~2 of 3 full-suite runs. The randomness is the **shuffle**, not the
+  coin — and specifically a shuffle the policy triggers DURING the line (Professor's-Research class).
+  `search_begin`'s OWN seeding shuffle is reproducible (determinism.md §4, re-measured 2026-07-27);
+  the in-line one is not, and f24 draws all 11 of its cards after it. The rule still counts EVERY
+  draw, not only post-shuffle ones, because the seeded deck order is our prediction either way —
+  reproducing a guess does not make it knowledge. Both consumers now read a general `stream` bit
+  (coin, draw, top-N peek, mill, face-down prize; a full-deck *search* is order-independent and does
+  not count), and the develop rollout defers **all-or-nothing** when any candidate rode it. ⚠️ Do not
+  reach for "re-run before diagnosing" on an engine-driven frame: a frame whose answer depends on the
+  process's RNG position is a defect in what decides it (ADR-0072 amendment C), and re-running is
+  the p-hacking that ADR deleted the `delta >= 0` clause for. (`test_lethal_engine`'s retry loop is
+  NOT this class and stays: it re-rolls fresh unseeded battles to reach a board of the right SHAPE,
+  and then asserts one fixed thing about it — not the same board answering differently.)
 - The user's **dev window** (declared 2026-07-19): no Kaggle submission for ~a week; the corpus is
   the bench, ladder penalty-free, forward-leaning arming acceptable — but every arm still cleared
   its bench this session; keep that bar.

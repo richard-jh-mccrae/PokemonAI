@@ -141,24 +141,46 @@ def test_the_promote_decider_off_does_not_take_the_ko():
 
 # ─────────────────────────── Proposal B: boost lethal (f24) ───────────────────────────
 
+# ⚠ f24's ``[correct]``-only cascade is a SAMPLE, not a fact (#178, measured 2026-07-27). Driving one
+# step and letting decide() play out the rest makes the sim draw 8-11 cards off the deck `_seed_zones`
+# seeded from a PREDICTED multiset and the engine shuffled — so its verdict is whatever that shuffle
+# allowed. Measured over 30 fresh processes: flags-ON None ×30 (the engine reaches its own win and
+# `_engine_confirms_win` declines to certify a shuffle-dependent True); flags-OFF False ×29, None ×1
+# — the lucky shuffle where closed-form recognition composes the line WITHOUT the tier. That 1-in-30
+# is what failed the full suite here. No assertion below may turn on that verdict.
+#
+# Everything else in this module is draw-free and asserted exactly, f24's own explicit line included.
+
 @pytest.mark.req("REQ-BOOST-LETHAL-0001")
-def test_boost_lethal_f24_wins_end_to_end_when_flags_on():
-    """The fix's gate: once the boost tier + KO-aware promote steer the cascade, f24's ``[correct]``-only
-    form drives to a real engine WIN — decide() now composes attach->boost->boost->retreat->promote->
-    swing on its own."""
+def test_boost_lethal_f24_composes_the_win_line_and_is_never_refuted():
+    """The fix's gate, on the part of it that is a fact: with the boost tier + KO-aware promote ON,
+    f24's ``[correct]``-only form is NEVER refuted — decide() composes attach->boost->boost->retreat->
+    promote->swing far enough that the engine never passes the turn to the opponent unresolved, which
+    is the refute this gate would otherwise show.
+
+    It cannot assert ``is True``. The engine does reach its own win here, but only via a cascade that
+    drew 8-11 cards off the shuffled predicted deck, so that True holds for one shuffle and
+    `_engine_confirms_win` demotes it to None (see the note above). The REPRODUCIBLE proof that the
+    target win is real is the explicit line below — which is measurably draw-free."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
-    assert engine_confirms(fx, _pilot("mega_lucario", promote_ko_aware=True, boost_lethal=True)) is True
+    assert engine_confirms(fx, _pilot("mega_lucario", promote_ko_aware=True,
+                                      boost_lethal=True)) is not False
 
 
 @pytest.mark.req("REQ-BOOST-LETHAL-0001")
-def test_boost_lethal_f24_target_is_real_and_off_flag_still_refutes():
-    """Soundness bookends: the full explicit line is a REAL win (proof-of-target), and with the flags
-    OFF the ``[correct]``-only form still REFUTES (closed-form recognition alone never composes it —
-    the byte-identical baseline the shipped `test_engine_confirms_multi_step_line` pins)."""
+def test_boost_lethal_f24_target_is_real():
+    """Proof-of-target: the full explicit win line IS a real engine win, and reproducibly so — driving
+    every step leaves the cascade nothing to draw for (measured: zero DRAW, zero COIN, one prize take,
+    which the verdict is invariant to). This is the multi-step gate `lethal_helpers.engine_confirms`
+    documents for a lethal whose decide() follow-up hooks can't be trusted to compose it.
+
+    The old OFF-side bookend is DELETED, not moved: it asserted that the flag-off cascade "still
+    REFUTES ... closed-form recognition alone never composes it", and that is false as measured — it
+    composes on roughly 1 shuffle in 30. The claim was never about the tier; it was about the deck
+    order the process happened to draw."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     win_line = [[5], [1], [1], [2], [0], [0], [2]]
     assert engine_confirms(fx, _pilot("mega_lucario"), line=win_line) is True
-    assert engine_confirms(fx, _pilot("mega_lucario")) is False
 
 
 @pytest.mark.req("REQ-BOOST-LETHAL-0001")
@@ -200,11 +222,13 @@ def test_retreat_enabler_lethal_off_does_not_lock_f15():
 
 @pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
 def test_retreat_enabler_lethal_counter_fixtures_do_not_regress():
-    """The three shipped lethal counter-fixtures still behave with the tier ON: f24/f110 confirm a WIN,
-    f26/f48 stay KO-not-win (engine_confirms is a WIN gate, so it correctly refutes them by category —
-    they ship via promote_ko_aware, not this gate)."""
+    """The three shipped lethal counter-fixtures still behave with the tier ON: f110 confirms a WIN and
+    f24 is never refuted (its `[correct]`-only verdict is a shuffle sample — see the note above the
+    boost-lethal gates), f26/f48 stay KO-not-win (engine_confirms is a WIN gate, so it correctly
+    refutes them by category — they ship via promote_ko_aware, not this gate)."""
     on = dict(promote_ko_aware=True, boost_lethal=True, retreat_enabler_lethal=True)
-    assert engine_confirms(_fixture("ml_lethal_retreat_boost_to_ko_f24"), _pilot("mega_lucario", **on)) is True
+    assert engine_confirms(_fixture("ml_lethal_retreat_boost_to_ko_f24"),
+                           _pilot("mega_lucario", **on)) is not False
     assert engine_confirms(_fixture("ms_lethal_recover_energy_to_win_f110"), _pilot("mega_starmie", **on)) is True
     assert engine_confirms(_fixture("ml_lethal_recover_energy_retreat_ko_f26"), _pilot("mega_lucario", **on)) is False
     assert engine_confirms(_fixture("ml_lethal_recover_energy_via_gong_f48"), _pilot("mega_lucario", **on)) is False

@@ -371,6 +371,101 @@ imported — verified that a bare `import cg.api` maps the native library (`libc
 `/proc/self/maps`), which would drag the DLL into the offline unit path that `planner.py` keeps lazy
 for the same reason.
 
+## Amendment C — a frame is only an instrument if its answer is reproducible (2026-07-27, #178)
+
+Both mid-build merit gates in decision 2 read **per-frame verdict flips**: the Decision Gate's
+`REGRESSION` table and the Discrimination Gate's `OK → MISS` diff. Both silently assume a frame has
+*an* answer. One did not, and had not for as long as it had been pinned.
+
+**Measured.** `ml_lethal_retreat_boost_to_ko_f24` failed the full suite on `main` in 2 of 3 runs,
+through two different tests, while passing in isolation every time. It is not test pollution and not
+hash ordering (`PYTHONHASHSEED` 1/2/3/5/7/11 all pass). `pilot.explain()` on that fixture returns
+`[5]` or `[3]` from a **fresh process with a fresh Pilot**, and two identical fresh processes disagree
+on the very first call. On f24 the 13 candidate leaf values swing 7000 / 162 / 129 / 122 / 89 / 57.5
+on the same first step, so whether the develop rung overrode greedy came down to whether any
+candidate happened to roll a phantom win that turn.
+
+**The channel, stated precisely — the first draft of this amendment got it wrong and is corrected
+here.** It is NOT that `search_begin`'s seeding shuffle is entropy-seeded. That shuffle is
+*reproducible*: `docs/pyeng/determinism.md` §4 pins the fork as deterministic from a plain MAIN
+select, and re-measuring on 2026-07-27 (f24 is a plain MAIN select) gave byte-identical draws across
+processes **and** across intervening searches. The nondeterminism is a shuffle that happens **during
+the simulated line** — the Professor's-Research class, shuffle your hand into the deck and draw. Split
+by that boundary, f24's sim draws **zero** cards before the in-line shuffle and **eleven** after, and
+one Pilot re-running the identical sim drew a different eight every call. That is §4's "mid-effect
+forks are NOT reproducible" reaching a line that did not *begin* mid-effect but shuffled inside it —
+a fact §4 does not yet carry and `pin_determinism.probe_fork` does not measure (it compares two
+back-to-back forks driven straight to END, which never shuffle).
+
+**Two independent reasons a drawn line's value is not a fact, and the rule needs only one.**
+*Mechanical:* the in-line shuffle is not reproducible — this is what made the frame flap. *Epistemic:*
+the seeded deck ORDER is our prediction, and in the real game nobody knows it either, so a line whose
+value turns on what came off the top is a guess however faithfully the engine repeats it. The rule
+below counts **every** draw rather than only post-shuffle ones, and the epistemic reason is why:
+reproducing a guess does not make it knowledge. This is the same argument that rules out "seed the
+twin and route the planner through cgpy" — determinism there would convert a visible flake into a
+confident wrong answer.
+
+**Ruled: reproducibility is an admission criterion, not a property to hope for.**
+
+- A frame may gate an instrument only if the decision under measurement is **reproducible** — no
+  outcome on any path that decides it may be taken positionally out of a shuffled hidden zone
+  (a draw, a top-N peek, a mill, a face-down prize) or off a coin.
+- Where the criterion is stated, it is **measured in code**, never asserted in a comment. The
+  `SEEDED_FIXTURES` list in `tests/strategy/test_engine_agreement_engine.py` carried "whose cascade
+  is DRAW-FREE" in prose for its whole life while one member drew eleven cards; a test now drives
+  each cascade and counts, and a second test pins the excluded fixture as the counter-example so the
+  exclusion cannot rot into a stale deferral.
+- A frame that fails the criterion is **excluded by a re-ruling** with its measurement recorded
+  (f24 joins f15), not conformed away and not silenced by moving tests around it. An ordering
+  workaround — the one that existed in `test_planner_engine.py` — treats the symptom and leaves both
+  gates reading noise.
+
+**The underlying defect is fixed, not just ruled, in the two places it decided something.** One rule
+(`_rng_probe`) answers "did this drive take a card the ENGINE picked out of a shuffled zone?" — a
+draw, a top-N peek, a mill, a face-down prize, or a coin. A full-deck *search* does not count (we pick
+by identity, so the order decides nothing) and neither do the opponent's reveals.
+
+- **`_develop_rollout_line`** defers whenever **any** candidate sim consumed engine randomness.
+  All-or-nothing: excluding just the offenders selects for the lines that touch nothing — a bare END
+  never draws — and on f24 would have committed the END. The predecessor guard excluded **coin**-riding
+  sims only and its docstring claimed coin-free values are stream-invariant; f24 carries no coin log at
+  all, which is why that guard could not settle it. The rung still commits on roughly half its calls on
+  a live mirror drive.
+- **`_engine_confirms_win`** demotes a `True` that rode the shuffle to `None`. This is the same rule the
+  module already applied to an unaccounted coin ("**None** rather than trust a chosen flip"), through
+  the door the coin rule left open: a win that needed a specific card off an unknown deck order is not
+  a guaranteed win, in the sim or in the real game. **`False` is deliberately left alone** — a refute is
+  the conservative direction, and demoting refutes would let phantom locks through, the one
+  catastrophic error. Measured over 30 fresh processes, f24's `[correct]`-only cascade draws 8–11 cards
+  and answered `False` ×29 / `True` ×1 with the tier off; that 1-in-30 is a third suite test the frame
+  was failing through.
+
+**What this deliberately does NOT change.** `_engine_leaf_value`'s dominant-win short-circuit stays
+gated on **coins** alone. Widening it to the full rule takes the Discrimination Gate from **2 unruled
+`OK → MISS` to 9** — seven frames this change would have owed a ruling for. That is a leaf change
+owing this ADR's own user ruling on its own merits, not something to smuggle in behind a flake fix, so
+the sim reports both bits and each consumer reads the one it has earned. The unwidened case is exactly
+the `_commit_best` KO-ranker treating a shuffle-blessed win as dominant; it is on the record here as
+unruled.
+
+**A separate finding the control run turned up, also unruled.** Untouched `origin/main` (`ce32206`)
+already fails this gate: **2 `OK → MISS`** (`85163634|1|decision|41` rank 1→2,
+`86091435|0|decision|13` rank 1→4) and 5 `MISS → OK`, against `data/leaf_lab/baseline.json` pinned at
+`81eac82`. The #178 branch reports exactly the same 2 and the same 5, so it is gate-identical to main
+— but decision 5's promise that "from 1c onward every red the gate shows is caused by the swap being
+measured" no longer holds. Either main has drifted since the baseline was pinned and it needs
+re-capturing, or those two frames are real regressions someone landed unmeasured. Both possibilities
+need the same first step: run the gate on `main` before the next swap, not after it.
+
+**Accepted costs.** The develop rung defers more often, on turns where the tuned scoring keeps the
+turn — a real behaviour change on a flag (`develop_rollout`) that is armed ON in the shipped PROFILE,
+and one that is *not* covered by a ladder A/B here. The verify demotion costs the `lethal_veto`
+cascade replay on any drawn win line (the chosen action is unchanged, and 6 live mirror games produced
+6 verify calls, all draw-free, so nothing was measured to change). And the criterion cannot be checked
+once and forgotten: a fixture that is draw-free today can start drawing when the policy that builds its
+cascade changes, which is why the check is a test rather than a review step.
+
 ## Alternatives rejected
 
 - **Pay for the real bound** (`ci_lo >= -1%`, ~28,000 games, 8–10 h/phase): buys a tightening from
@@ -398,3 +493,12 @@ for the same reason.
 - **(Decision 4) Move re-ruled fixtures to a separate directory**: makes "held out" a location rather
   than a property. A frame held out for #165 on the evolve axis is still live for every other axis,
   which a directory cannot express.
+- **(Amendment C) Re-run the unstable frame until it settles / mark it `flaky`**: the same p-hacking
+  the `delta >= 0` clause was deleted for, one frame down. A coin-flip frame reports a `REGRESSION`
+  that is noise and hides one that is not, whichever way the re-run lands.
+- **(Amendment C) Keep excluding only coin-riding sims and drop f24 from the corpus**: leaves the
+  measured defect — an override committed on a sampled end-board — live in the shipped agent, and
+  buys the gate's silence by deleting the evidence.
+- **(Amendment C) Exclude the unreproducible candidates and rank the survivors**: what survives
+  exclusion is systematically the lines that touch nothing, so the rung would acquire a standing bias
+  toward passing. On f24 it would have committed the END option over the greedy pick.

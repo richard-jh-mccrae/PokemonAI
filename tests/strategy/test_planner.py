@@ -7,6 +7,8 @@ Lib-free (the closed-form layers); the engine-sim slices live in the engine-back
 (``test_planner_engine.py``). The Planner is layer-on-top: it commits ONLY when a line beats what the
 tuned scoring would already play, so a decision the existing machinery handles leaves ``planned`` None.
 """
+from dataclasses import dataclass, field
+
 import pytest
 
 from common.cards import CardFunctions
@@ -705,8 +707,9 @@ def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypa
         opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 2}
         me = me_dev if first_step == [1] else me_bare
         end = {"current": {"turn": 3, "yourIndex": 0, "players": [me, opp]}}
-        return (end, 0, 2, -1, 0.0, False)              # both lines banked 1 prize (2 -> 1), no result;
-                                                        # 0 line account; coin-free (the win-trust bit)
+        return (end, 0, 2, -1, 0.0, False, False)       # both lines banked 1 prize (2 -> 1), no result;
+                                                        # 0 line account; coin-free + RNG-free (the two
+                                                        # win-trust bits)
 
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim)
     d = pilot.explain(_two_candidate_obs())
@@ -726,47 +729,183 @@ def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeyp
     """The f24 phantom-win regression (CI, 2026-07-20): `_simulate_line` auto-resolves coins, so a
     line can sim to an outright \"win\" on one lucky RNG stream (7000) and to an ordinary board on
     another (162) — and the dominant win short-circuit let that mirage preempt the tuned scoring.
-    The 6th sim-tuple element (``coins``) demotes it: a simmed win is dominant ONLY when the line
-    consumed no coin flips; a coin-dependent one ranks as its ordinary end board (prizes banked
-    still count), so only the SOUND win rung may claim wins."""
+    The sim tuple's ``coins`` bit demotes it: a simmed win is dominant ONLY when the line consumed no
+    coin flips; a coin-dependent one ranks as its ordinary end board (prizes banked still count), so
+    only the SOUND win rung may claim wins.
+
+    The wider ``stream`` bit (#178) deliberately does NOT gate this: the leaf's own values feed
+    ADR-0072's pinned Discrimination Gate, and widening the short-circuit takes that gate from main's
+    own 2 unruled `OK → MISS` to 9 — seven frames owing that gate a user ruling on their own merits."""
     pilot = _pilot()
     me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
     opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
     end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
 
-    def fake_sim(coins):
-        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 2, 0, 0.0, coins)
+    def fake_sim(coins, stream=None):
+        stream = coins if stream is None else stream
+        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 2, 0, 0.0, coins, stream)
 
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False))
     clean = pilot._engine_leaf_value({}, [0])
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim(True))
     coined = pilot._engine_leaf_value({}, [0])
+    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False, stream=True))
+    drawn = pilot._engine_leaf_value({}, [0])
     from common.strategy.context import KO_SCORE
     assert clean == KO_SCORE * 3                        # coin-free win: dominant (prizes+1)
     assert coined < KO_SCORE * 3                        # coin-won "win": ordinary board ranking
     assert coined < clean
+    assert drawn == clean                               # a DRAWN win keeps the leaf's value: the
+                                                        # rung's gate is `with_stream`, not this one
 
 
 @pytest.mark.req("REQ-PLANNER-0037")
-def test_develop_rollout_never_ranks_a_coin_contaminated_sim(monkeypatch):
-    """The other half of the f24 heisenbug: the develop rollout's OVERRIDE authority comes from a
-    reproducible end-board — a coin-riding sim's value swings across RNG streams (162 vs a phantom
-    win on the same line), so it is excluded from the ranking like a failed fork. All-coined →
-    defer (the tuned scoring keeps the turn); a coin-free line still ranks and commits."""
-    pilot = _pilot()
-    values = {0: (50.0, True), 1: (40.0, False), 2: (45.0, True)}   # [0]/[2] coined, [1] clean
+def test_develop_rollout_defers_when_any_candidate_sim_rode_the_rng_stream(monkeypatch):
+    """The other half of the f24 heisenbug (#178): the develop rollout's OVERRIDE authority comes from
+    a reproducible end-board, and ONE stream-riding candidate makes the whole ranking unreproducible —
+    so the rung defers rather than rank the survivors.
 
-    def fake_leaf(obs, first_step, spend_account=True, with_coins=False):
-        val, coined = values[first_step[0]]
-        return (val, coined) if with_coins else val
+    All-or-nothing, not per-candidate exclusion. The excluded lines are not known-worse, and what
+    survives exclusion is systematically what TOUCHES NOTHING (a bare END never draws). On the real
+    f24 board 12 of 13 candidates draw off the shuffled deck; ranking the survivors would have
+    committed the END option."""
+    pilot = _pilot()
+    values = {0: (50.0, False), 1: (40.0, False), 2: (45.0, False)}
+
+    def fake_leaf(obs, first_step, spend_account=True, with_stream=False):
+        val, stream = values[first_step[0]]
+        return (val, stream) if with_stream else val
 
     monkeypatch.setattr(pilot, "_engine_leaf_value", fake_leaf)
     traces = [type("T", (), {"score": 0.0, "card_id": None})() for _ in range(3)]
     line = pilot._develop_rollout_line({}, {}, None, [{}, {}, {}], traces)
-    assert line is not None and line.next_step == [1]   # the clean 40 beats the coined 50/45
-    values.update({1: (40.0, True)})                    # now everything is coin-noise
+    assert line is not None and line.next_step == [0]   # fully reproducible ranking -> the argmax commits
+    values.update({2: (45.0, True)})                    # ONE candidate rode the stream...
     line = pilot._develop_rollout_line({}, {}, None, [{}, {}, {}], traces)
-    assert line is None                                 # all-coined -> defer to the tuned scoring
+    assert line is None                                 # ...and the whole ranking is forfeit
+    assert pilot._develop_candidates_pending is None    # nothing to emit: there was no ranking
+
+
+# ── the `stream` bit itself: what `_simulate_line` counts as engine randomness (#178) ────────────
+# Driven through the injectable `_search_api` seam (the leaf lab's), so this stays in the lib-free
+# suite: a bare `import cg.api` maps the native library (ADR-0072 amendment B).
+
+@dataclass
+class _FakeLog:
+    type: int
+    playerIndex: int | None = None
+    fromArea: int | None = None
+    toArea: int | None = None
+
+
+@dataclass
+class _FakeCurrent:
+    turn: int = 3
+    yourIndex: int = 0
+    result: int = -1
+    players: list = field(default_factory=list)
+
+
+@dataclass
+class _FakeObservation:
+    current: _FakeCurrent | None = None
+    select: dict | None = None          # None -> the sim stops after one step (my turn passed)
+    logs: list = field(default_factory=list)
+
+
+@dataclass
+class _FakeState:
+    searchId: int
+    observation: _FakeObservation
+
+
+class _FakeSearchApi:
+    """A `cg.api`-shaped surface that replays ONE canned log list, with the real enum values."""
+
+    class LogType:
+        SHUFFLE, DRAW, DRAW_REVERSE, MOVE_CARD, COIN = 0, 4, 5, 6, 22
+
+    class AreaType:
+        DECK, HAND, DISCARD, BENCH, PRIZE, LOOKING = 1, 2, 3, 5, 6, 12
+
+    def __init__(self, logs):
+        self._logs = logs
+
+    def to_observation_class(self, obs):
+        return obs
+
+    def search_begin(self, *a, **kw):
+        return _FakeState(1, _FakeObservation(current=_FakeCurrent(), select={}))
+
+    def search_step(self, search_id, select):
+        return _FakeState(1, _FakeObservation(current=_FakeCurrent(yourIndex=1), logs=self._logs))
+
+    def search_end(self):
+        return None
+
+
+def _sim_stream(logs):
+    """The `stream` bit (the last `_simulate_line` tuple element) for a line whose step made ``logs``."""
+    pilot = _pilot()
+    pilot._search_api = _FakeSearchApi(logs)
+    obs = dict(_two_candidate_obs(), search_begin_input="x")
+    sim = pilot._simulate_line(obs, [0])
+    assert sim is not None, "the fake backend must produce an end board"
+    return sim[6]
+
+
+L = _FakeSearchApi.LogType
+A = _FakeSearchApi.AreaType
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_a_line_the_shuffle_cannot_change_stays_reproducible():
+    """The negative cases, so the bit is not vacuously True — each one measured on a real cascade:
+
+    * a bare ``SHUFFLE`` nobody then looks at, and moves out of zones we can already see;
+    * a ``DECK``→``HAND`` **search**: the deck is revealed and we pick by identity, so the order
+      decides nothing (all the hidden-zone traffic the f26/f48 tutor lines have);
+    * the OPPONENT's draws, which land after my turn has passed. Without this exclusion a bare END
+      would count, since the sim always steps into their turn start before it stops."""
+    assert _sim_stream([]) is False
+    assert _sim_stream([_FakeLog(L.SHUFFLE, playerIndex=0),
+                        _FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.HAND, toArea=A.DISCARD)]) is False
+    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.HAND),
+                        _FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.BENCH)]) is False
+    assert _sim_stream([_FakeLog(L.DRAW, playerIndex=1),
+                        _FakeLog(L.DRAW_REVERSE, playerIndex=0)]) is False
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_a_card_the_engine_picked_off_a_shuffled_zone_marks_the_sim_unreproducible():
+    """The channel the COIN-only bit missed (#178). `_seed_zones` hands `search_begin` a predicted
+    MULTISET for my deck and prizes and the engine SHUFFLES it, so a card taken POSITIONALLY out of
+    one — a draw, a top-N peek, a mill, or a face-down prize whose id is our own prediction — is a
+    sample of that shuffle, and the end board it produces is not a fact about the position. A coin
+    anywhere on the line still counts, whoever flipped it."""
+    assert _sim_stream([_FakeLog(L.DRAW, playerIndex=0)]) is True
+    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.LOOKING)]) is True
+    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.DISCARD)]) is True
+    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.PRIZE, toArea=A.HAND)]) is True
+    assert _sim_stream([_FakeLog(L.COIN, playerIndex=1)]) is True
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_the_verdict_probe_ignores_a_prize_take_the_board_probe_counts():
+    """The one place the two consumers legitimately differ (#178). A face-down prize's id is our own
+    prediction, so revealing it can change a resulting BOARD — but not a WIN VERDICT, which is
+    invariant to which prize is taken (ADR-0050). If `_engine_confirms_win` counted it, every real win
+    would demote itself the moment it took its own prize, and `test_agreement_is_not_vacuous`'s f110
+    anchor — whose cascade's ONLY hidden-zone traffic is that take — would go undetermined."""
+    from common.strategy.planner import _rng_probe
+
+    take = _FakeObservation(logs=[_FakeLog(L.MOVE_CARD, playerIndex=0,
+                                           fromArea=A.PRIZE, toArea=A.HAND)])
+    draw = _FakeObservation(logs=[_FakeLog(L.DRAW, playerIndex=0)])
+    api = _FakeSearchApi([])
+    assert _rng_probe(api, 0, prize=True)(take) is True      # the board question
+    assert _rng_probe(api, 0, prize=False)(take) is False    # the verdict question
+    assert _rng_probe(api, 0, prize=False)(draw) is True     # a DRAW demotes either way
 
 
 # --------------------------------- heal-before-attach (corpus 6858 shape): the attach-carried KO

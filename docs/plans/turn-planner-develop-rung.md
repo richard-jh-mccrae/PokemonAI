@@ -37,6 +37,24 @@ forethought." This doc is the investigation + the phased path.
   the win rung's exclusive job (it runs first and had already declined), and an unsound rollout-win must
   never override the tuned scoring. This keeps the rung strictly a NON-winning-development rung. Two
   `f24` regression tests drove the fix; full suite green after.
+- **Reproducibility guard (#178, 2026-07-27) — the guard above was necessary and not sufficient.**
+  `ml f24` stayed a heisenbug for another week: the defer-on-phantom-win rule made the rung's *answer*
+  depend on whether any candidate happened to roll a phantom win on that RNG stream, so it flipped
+  `[5]`/`[3]` across processes and failed ~2 of 3 full-suite runs on `main`. The channel is the
+  **shuffle**, not coins — specifically a shuffle the policy triggers DURING the line (the
+  Professor's-Research class; `search_begin`'s own seeding shuffle is reproducible, determinism.md §4).
+  `_seed_zones` seeds it with a predicted MULTISET whose order we are guessing, so every card the sim
+  draws off it is a sample (f24's 13 candidates carry `SHUFFLE` +
+  `DRAW` and **no COIN** — the earlier coin-only exclusion was a no-op there, and its docstring's claim
+  that coin-free values are stream-invariant was false). Fix: `_simulate_line`'s 6th tuple element is
+  now a general `stream` bit (coin, draw, top-N peek, mill, or face-down prize — a deck *search* is
+  order-independent and does NOT count), and the rung defers **all-or-nothing** if ANY candidate rode
+  it. Excluding only the offenders would select for lines that touch nothing (a bare END never draws)
+  and on f24 would have committed the END. Cost: measured on live mirror drives, the rung now commits
+  on roughly half its calls rather than nearly all of them. `_engine_leaf_value`'s dominant-win
+  short-circuit is deliberately NOT widened — that takes the pinned Discrimination Gate from main's
+  own 2 unruled `OK → MISS` to 9, and those seven owe a user ruling of their own. Ruled as ADR-0072
+  amendment C, which also records that `main` itself is already 2 red against the pinned baseline.
 - **Not built:** the "hand quality" leaf dimension (undefined — a test would be phantom); the
   plan-once-materialize-replay cost optimization (receding-horizon per-frame is the shipped first cut).
   **Next = Phase 2:** flip `develop_rollout` on a Kaggle-ladder A/B (needs the live search token, so no

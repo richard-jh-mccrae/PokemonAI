@@ -51,6 +51,22 @@ card's index) — first-divergence diffs in M1 will correct any residue here.
   44/62 divergent in the same probe, and no mid-effect context is trustworthy (EVOLVES_FROM
   diverged 2/4; SWITCH/DISCARD_ENERGY were quiet only at n≤7). Fork from MAIN; never pin or
   replay through a mid-effect fork.
+- **A shuffle INSIDE the line is not reproducible either — forking from MAIN does not save
+  you** (added 2026-07-27, #178). The first bullet is narrower than it reads: `probe_fork`
+  compares two back-to-back forks driven straight to `END`, which never shuffle. Let the line
+  play a Professor's-Research-class card (shuffle your hand into the deck, then draw) and every
+  draw *after* that shuffle varies call-to-call, from a plain MAIN fork, with one Pilot, in one
+  process. Measured on `ml_lethal_retreat_boost_to_ko_f24`: **0 draws before the in-line
+  shuffle, 11 after**, and five identical re-runs drew five different eights. The pre-shuffle
+  order is still byte-identical across processes and across intervening searches — so the
+  boundary is the in-line shuffle, not the fork.
+
+  ⚠️ Reproducible ≠ knowable, and consumers must not conflate them. The seeded deck ORDER is a
+  prediction (`_seed_zones` supplies a multiset; the engine picks the order), so a line whose
+  value depends on what came off the top is a guess even where the engine repeats it exactly.
+  `planner._rng_probe` therefore counts **every** draw, not only post-shuffle ones — and this is
+  why routing the planner's lookahead through cgpy's `SeededRng(0)` would remove the flake
+  without removing the error.
 
 ## 5. Setup & mulligan state machine
 
