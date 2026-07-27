@@ -18,6 +18,22 @@ REPO = Path(__file__).resolve().parents[2]
 
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 
+# NATIVE-ONLY by definition: every pin here is an empirical fact about the DLL that cgpy is
+# built to match, so running them ON cgpy measures the twin against itself. Worse than useless
+# under `CG_ENGINE=py` (tests/conftest.py): the module reaches past the alias with its own
+# `from cg import api` while driving an aliased `battle_start`, so the native lib receives a
+# cgpy-produced observation and **aborts the interpreter** — taking the whole run down at ~24%,
+# not just this module. Skip cleanly instead so the twin arm is usable at all.
+try:
+    from cgpy.alias import installed as _alias_installed
+except Exception:                                            # cgpy absent: nothing to guard
+    def _alias_installed() -> bool:
+        return False
+
+if _alias_installed():
+    pytest.skip("native-engine pins: meaningless (and fatal) on the cgpy twin",
+                allow_module_level=True)
+
 from cg.game import battle_finish, battle_select, battle_start, visualize_data  # noqa: E402
 
 DEFS = REPO / "src" / "cgpy" / "defs"
