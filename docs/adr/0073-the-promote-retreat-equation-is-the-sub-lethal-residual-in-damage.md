@@ -1,8 +1,7 @@
 # ADR-0073: The promote/retreat equation is the sub-lethal residual, denominated in damage
 
-**Status.** PROPOSED — grill in progress (`/grill-with-docs` on issue #141, Phase 1c of the Value
-System, tracker #136). Decisions 1–3 are ruled by the user; further decisions are appended as the
-grill settles them, and the status flips to Accepted when it closes. Companion vocabulary:
+**Status.** Accepted (grilled 2026-07-27, `/grill-with-docs` on issue #141 — twelve locked decisions).
+Build: #141 (Phase 1c of the Value System, tracker #136). Companion vocabulary:
 **Sub-lethal Residual · Prize Damage Rate** in the Agent Runtime
 [`CONTEXT.md`](../../src/common/CONTEXT.md). The currency precedent is ADR-0070 decision 1 (#140);
 the combiner discipline is ADR-0069 §1 (#139); the layer-ownership test is ADR-0070 amendment J /
@@ -359,6 +358,23 @@ dissolves — `in_lane` matches type+context and cannot express a tag predicate,
 cross-lane by nature, so those frames need no lane at all.
 
 Net new artifacts in 1c: **one rebuilt sweep script and one lane constant.**
+
+## Build entailments (ruled with the decisions, not separate choices)
+
+- The equation stays **pure over MEASUREMENTS** — the Pilot fills a richer inputs dataclass and the
+  equation makes no oracle calls, ADR-0070's `EvolveBody` pattern verbatim ("filled by the Pilot from
+  the StateModel; every field is a measurement, never a tier").
+- All reads route through the **StateModel snapshot** (ADR-0068) — `BodyView`, `attach_budget`,
+  `turns_to_ko_me`, `incoming(t)`. `_retreat_side` / `_retreat_action_value` stop reading raw `obs`.
+- Feature flag **`promote_retreat_value` in `runtime.py` FEATURES, default `True`** (standing directive
+  1), documented as ADR-0069 documents its own: OFF is **degraded mode, not a rollback** — 11 rungs are
+  deleted, so OFF means promote/retreat goes quiet. An incident lever, never a comparison baseline.
+- The missing fixture is authored as a **SWITCH/whether** frame (decision 5), one attach short with
+  hand accel, driving `closure(B) > 0` — a term never yet exercised above zero.
+- `test_runtime` / PROFILE updated for the flag.
+- `_halve` / `_HORIZON` extract to a small **shared module** rather than one equation importing
+  another. NOT `src/common/value/`, which holds the learned value model (`model.py`,
+  `value_model.json`) — a grading convention does not belong there.
 
 ## Consequences
 
