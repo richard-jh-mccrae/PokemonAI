@@ -143,8 +143,6 @@ _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped En
                            # must PLAY, and dragapult 85046350 f32 (Active Gabite, 1 Energy, forward 100)
                            # must stay BELOW the retreat-to-wall (30) it would otherwise bury — which
                            # forces 0.154 < _DENIAL_FORWARD < 0.8.
-_ENERGY_RECOVER = 75       # per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X}
-                           # from discard") on a NON-KO turn — chip-scale, so fueled Aura Jab beats bare Mega Brave
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
 _FOLLOWUP_W = 0.5          # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
@@ -2240,7 +2238,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return KO_SCORE + bench_ko - eff                # distributable spread KOs benched Pokémon — a PRIZE this turn
         race = self._race_attack_tactical(obs, board, attack_id, dmg_ctx)   # Tier-3 KO Race (ADR-0040):
         if race is not None:                                # vs a standing wall the single hit is fake
-            return (race - eff + _ENERGY_RECOVER * recover  # value — price the SEQUENCE (chip included,
+            return (race - eff + ENERGY_RECOVER * recover  # value — price the SEQUENCE (chip included,
                     - lock_cost                             # so no separate spread bonus here)
                     - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
                     + self._self_return_escape_credit(attack_id, board))
@@ -2252,7 +2250,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if hi > lo:                                     # a coin/conditional CHIP ranks by its mean;
                 dmg = (lo + hi) / 2                         # the KO test above and every sound path
                                                             # (Lethal floor / Incoming ceiling) untouched
-        return (dmg - eff + _ENERGY_RECOVER * recover - lock_cost
+        return (dmg - eff + ENERGY_RECOVER * recover - lock_cost
                 - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
                 + self._bench_spread_bonus(board, attack_id)     # a non-KO spread still chips the Bench (pre-load)
                 + self._self_return_escape_credit(attack_id, board))

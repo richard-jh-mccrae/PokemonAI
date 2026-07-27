@@ -40,15 +40,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-#: Turns of survival beyond which nothing on the board threatens the body — `turns_to_ko_me`'s
-#: "survives the horizon" answer (``max_t + 1``). Not a tunable: it mirrors the clock's own horizon.
-_HORIZON = 9
-
-
-def _halve(turns: float) -> float:
-    """The shipped grading convention — `deny_slot`'s ``value / 2**t``, reused rather than a new
-    decay rate invented for this equation (ADR-0070 §6)."""
-    return 0.5 ** max(0.0, float(turns))
+# The grading convention lives in `common.grading` now that the promote/retreat equation reads it
+# too (ADR-0073 §4) — one halving rule and one horizon, so a re-tune on either equation cannot
+# silently re-open the other. Aliased at module scope because this file's prose names them.
+from common.grading import HORIZON as _HORIZON
+from common.grading import halve as _halve
 
 
 @dataclass
