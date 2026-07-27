@@ -937,11 +937,16 @@ current obs), belief (#149's `known_top` is one MEMBER of this channel, not the 
 (engine per-turn flags like `supporterPlayed` are obs facts, not Carried State)
 
 **Count Triple**:
-The three-legged shape of a hidden-zone count field (first instance: `deck_energy_counts`, per-type
+The multi-legged shape of a hidden-zone count field (first instance: `deck_energy_counts`, per-type
 Basic Energy still in MY deck): **floor** (provably at least — pigeonhole over hidden prizes; sound,
 safe for `>=` checks), **expected** (the hypergeometric prize-split average — EV math only, a fraction
-of a card, never comparable to a cost), and **ceiling** (provably at most; the fail-open "could it be
-there" leg — 0a's sound type-set gate is exactly `ceiling > 0`). Two regimes, one interface: PRE-ANCHOR
+of a card, never comparable to a cost), **ceiling** (provably at most; the fail-open "could it be
+there" leg — 0a's sound type-set gate is exactly `ceiling > 0`), and **`p_any`** — the **Probability
+Leg**: P(at least one copy is still in the deck), `deck_odds.p_contains` over the same `(unseen,
+prizes_hidden, deck_count)` the other legs read (#175). It is the honest middle the two boolean legs
+collapse: ≈0.06% wrong at 3 unseen copies where `ceiling > 0` is nearly free, ≈13% wrong at 1 where
+`floor` is still zero. A RANKED consumer (one whose output is a compared scalar) weights by it; a
+LOCK consumer (one whose output gates) may never read it — see **Leg Assignment**. Two regimes, one interface: PRE-ANCHOR
 (before the first deck-revealing search) the legs honestly diverge; ANCHORED (`deck_known_counts`
 resolved, `obs['own_prizes']` exact) all three collapse to the same integer — so consumers never branch
 on "are we anchored?", and a consumer must NAME the epistemic it reads (`.floor`/`.expected`/`.ceiling`),
@@ -949,7 +954,22 @@ making the estimate-smuggled-into-sound-math mistake (ADR-0067's contamination) 
 than merely discouraged. The pre-anchor window is short (turns 1–2) but is exactly where the famine
 misreads live (f70; ADR-0067's pre-anchor ruling).
 _Avoid_: expected count alone (that's ONE leg — a bare expectation invites `1.6 >= 1` on a deck that
-holds zero), deck tracker (the SOUND per-card ledger the triple's anchored regime reads from)
+holds zero), deck tracker (the SOUND per-card ledger the triple's anchored regime reads from),
+count triple (as a claim of exactly three legs — `p_any` is the fourth)
+
+**Leg Assignment**:
+The rule deciding WHICH **Count Triple** leg a consumer reads, extended by #175 from "what is
+uncertain" (ADR-0067's yield-vs-deck split) through "who is asking" (its 2026-07-27 amendment) to
+**what the consumer's output IS**: a consumer whose output GATES — a boolean a lock turns on, where
+being wrong is catastrophic and unrecoverable — takes a sound leg (`floor`, or the fail-open
+`ceiling` where a false stand-down is the costly error) and may never read `p_any`. A consumer whose
+output is a SCALAR COMPARED against sibling options weights by `p_any`, because a mis-ranked option
+costs a turn, not the match. The Win Rung (`planner._win_line`, ADR-0030/0037) is the canonical lock
+and already fails closed on deck fetches (`_tutor_energy_certain`, `deck_definitely_has`); the
+`ko_for_prizes` ladder is the canonical ranked consumer.
+_Avoid_: threshold (there is no probability cut-off anywhere — a threshold turns an estimate back
+into a boolean and re-imports the error it exists to price), fail direction (that's WHICH way a
+boolean leg errs; Leg Assignment is which leg you may read at all)
 
 **Leaf Profile**:
 The measured subset of **StateModel** fields a planner-leaf evaluation actually touches, plus its
