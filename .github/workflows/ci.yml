@@ -254,8 +254,11 @@ jobs:
       # answer gets `@needs_live_board_search` or a module-level skip that says WHY (see
       # tests/conftest.py). That way "cgpy can't do this yet" is a claim in the diff someone signs
       # off, and it disappears on its own as parity grows.
+      # `always()`, so a red backstop cannot hide this arm's result (it did on run 30303172709,
+      # where the backstop failed and this step was skipped — two signals, one of them lost).
+      # Still gating: `if:` controls whether a step RUNS, not whether it counts.
       - name: cgpy twin arm (ADR-0050 M3)
-        if: steps.plan.outputs.empty != 'true'
+        if: always() && steps.plan.outputs.empty != 'true'
         env:
           CG_ENGINE: py
         run: python -m pytest ${{ steps.plan.outputs.paths }} -q -p no:cacheprovider --tb=line --durations=10

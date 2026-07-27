@@ -63,27 +63,49 @@ def test_cheren_measures_draw_3(cards):
 # is hiding the case that matters, a probe-harness regression that stops the scenario aligning at
 # all — after which these tests report green-ish forever without measuring a thing. The module
 # already takes this line elsewhere ("Cheren never became playable — probe harness regression?").
-_NEVER_ALIGNED = ("combat scenario never aligned in %d passes — the heal was MEASURED on nothing. "
-                  "Measured 25/25 alignment on 2026-07-27, so suspect a probe-harness regression "
-                  "before bad luck; re-run once to tell them apart." % _HEAL_PASSES)
+_NEVER_ALIGNED = ("combat scenario never aligned in %d passes — the claim was MEASURED on nothing. "
+                  "For the rider case this also fires when the heal aligned but the RIDER never "
+                  "did (Super Potion only discards an Energy if the healed body had one). Suspect "
+                  "a probe-harness regression before bad luck; re-run once to tell them apart."
+                  % _HEAL_PASSES)
 
 
-def _measured_heal(cid, cards):
-    """Max heal clause across bounded combat passes (None if never aligned)."""
+def _measured_heal(cid, cards, *, rider=None):
+    """Max heal clause across bounded combat passes (None if never aligned).
+
+    ``rider`` names a rider the CALLER is going to assert. Pass it, or this loop stops one
+    observation too early: a rider is a per-resolution fact (Super Potion only discards an Energy
+    if the healed body had one), and `merge_clauses` keys on ``(kind, restriction, condition,
+    rider)`` — so a riderless heal and a riderful heal are two SEPARATE clauses. Breaking on "any
+    heal" could therefore stop before the rider was ever seen, and `next(... kind == "heal")` could
+    return the riderless clause even when both were observed. Both bugs, one symptom: `assert None
+    == 'discard_own_energy'` on a heal that measured 60 correctly.
+
+    Caught by the #178 determinism backstop on its 11th repeat, ~2 weeks after the assertion was
+    written — it was invisible before because a miss surfaced as a `pytest.skip`. The loop now
+    stops on the clause the caller will actually assert.
+    """
+    def _pick(clauses):
+        heals = [c for c in clauses if c["kind"] == "heal"]
+        if rider is not None:
+            return next((c for c in heals if c.get("rider") == rider), None)
+        return heals[0] if heals else None
+
     measured = []
     for _ in range(_HEAL_PASSES):
         rec = probe_card(cid, cards, attack=True)
         if rec is None:
             continue
         measured = merge_clauses(measured, classify_effect_clauses(cards[cid], probe=rec))
-        if any(c["kind"] == "heal" for c in measured):
-            break                             # aligned — amount is the claim under test
-    return next((c for c in measured if c["kind"] == "heal"), None)
+        hit = _pick(measured)                 # aligned — the amount is the claim under test
+        if hit is not None:
+            return hit
+    return _pick(measured)
 
 
 @pytest.mark.req("REQ-EFFECT-0010")
 def test_super_potion_measures_heal_60_with_discard_rider(cards):
-    heal = _measured_heal(1112, cards)
+    heal = _measured_heal(1112, cards, rider="discard_own_energy")
     assert heal is not None, _NEVER_ALIGNED
     assert heal["amount"] == 60
     assert heal.get("rider") == "discard_own_energy"   # own ENERGY->DISCARD after heal
