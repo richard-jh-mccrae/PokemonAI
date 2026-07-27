@@ -18,10 +18,16 @@ def _poke(cid):
     return {"id": cid, "energyCards": [], "tools": [], "preEvolution": []}
 
 
+def _take(cid, serial, player=0):
+    """One PRIZE->HAND log entry: the engine names the exact card instance taken as a prize."""
+    return {"cardId": cid, "serial": serial, "playerIndex": player,
+            "fromArea": 6, "toArea": 2, "type": 6}
+
+
 def _obs(*, deck_count, prize, hand=(), discard=(), active=None, bench=(),
-         reveal=None, effect=None, turn=2):
+         reveal=None, effect=None, turn=2, logs=()):
     """An observation the tracker reads: my zones + `deckCount` + (optionally) a search that reveals
-    the deck (`reveal`) and names the resolving card (`effect`)."""
+    the deck (`reveal`) and names the resolving card (`effect`), plus the engine's `logs` delta."""
     me = {
         "hand": [{"id": c} for c in hand],
         "discard": [{"id": c} for c in discard],
@@ -35,7 +41,8 @@ def _obs(*, deck_count, prize, hand=(), discard=(), active=None, bench=(),
         "deck": [{"id": c} for c in reveal] if reveal is not None else None,
         "effect": {"id": effect} if effect is not None else None,
     }
-    return {"current": {"turn": turn, "yourIndex": 0, "players": [me, None]}, "select": select}
+    return {"current": {"turn": turn, "yourIndex": 0, "players": [me, None]},
+            "select": select, "logs": list(logs)}
 
 
 # ----------------------------------------------------------------------- anchoring
@@ -82,6 +89,62 @@ def test_prize_take_falls_back_when_ambiguous():
     assert m.prize_export() == {3: 2}
     m.observe(_obs(deck_count=2, prize=1, hand=[1, 1, 1, 2, 2, 2, 3]))
     assert m.prize_export() is None                   # which prized id3 was taken is unknowable -> no guess
+
+
+@pytest.mark.req("REQ-GEN-0034")
+def test_prize_take_is_resolved_exactly_from_the_log():
+    """The engine NAMES the card taken as a prize (`logs` PRIZE->HAND carries `cardId`/`serial`),
+    so the ambiguous case above must resolve rather than drop the anchor."""
+    m = OwnCardModel(DECK)
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2], reveal=[3, 3]))
+    assert m.prize_export() == {3: 2}
+    # Same frame as test_prize_take_falls_back_when_ambiguous — but the log names WHICH id3 left.
+    m.observe(_obs(deck_count=2, prize=1, hand=[1, 1, 1, 2, 2, 2, 3], logs=[_take(3, serial=99)]))
+    assert m.prize_export() == {3: 1}
+
+
+@pytest.mark.req("REQ-GEN-0034")
+def test_prize_take_log_is_idempotent():
+    """`logs` is a DELTA, not a cumulative stream, and the same card instance must never be counted
+    twice — takes are accumulated by `serial` (unique per physical card, engine-verified)."""
+    m = OwnCardModel(DECK)
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2], reveal=[3, 3]))
+    take = _obs(deck_count=2, prize=1, hand=[1, 1, 1, 2, 2, 2, 3], logs=[_take(3, serial=99)])
+    m.observe(take)
+    m.observe(take)                                   # replayed frame: must not double-count
+    assert m.prize_export() == {3: 1}
+
+
+@pytest.mark.req("REQ-GEN-0034")
+def test_opponent_prize_take_is_never_consumed():
+    """The opponent's prize takes carry no `cardId` and are not ours — they must not touch MY model."""
+    m = OwnCardModel(DECK)
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2], reveal=[3, 3]))
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2],
+                   logs=[{"fromArea": 6, "toArea": 2, "playerIndex": 1, "type": 6}]))
+    assert m.prize_export() == {3: 2}                  # unchanged — not my take
+
+
+@pytest.mark.req("REQ-GEN-0034")
+def test_prize_take_without_a_log_still_falls_back():
+    """No log entry (or one lacking `serial`/`cardId`) -> the sound pre-#175 behaviour is unchanged."""
+    m = OwnCardModel(DECK)
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2], reveal=[3, 3]))
+    m.observe(_obs(deck_count=2, prize=1, hand=[1, 1, 1, 2, 2, 2, 3]))
+    assert m.prize_export() is None                    # unknowable without the log -> no guess
+
+
+@pytest.mark.req("REQ-GEN-0034")
+def test_reset_clears_recorded_prize_takes():
+    """Takes are match state: a new match must not inherit the previous match's prize takes."""
+    m = OwnCardModel(DECK)
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2], reveal=[3, 3]))
+    m.observe(_obs(deck_count=2, prize=1, hand=[1, 1, 1, 2, 2, 2, 3], logs=[_take(3, serial=99)]))
+    m.reset()
+    m.observe(_obs(deck_count=2, prize=2, hand=[1, 1, 1, 2, 2, 2], reveal=[3, 3], turn=2))
+    # A take with the SAME serial in the new match is a different physical card and must register.
+    m.observe(_obs(deck_count=2, prize=1, hand=[1, 1, 1, 2, 2, 2, 3], logs=[_take(3, serial=99)]))
+    assert m.prize_export() == {3: 1}
 
 
 @pytest.mark.req("REQ-GEN-0034")

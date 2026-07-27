@@ -17,6 +17,17 @@ named by ``select.effect`` / ``select.contextCard``, so it is counted as visible
 ``prizes = decklist - select.deck - visible`` is exact — accepted only when it has exactly
 ``prizes_remaining`` cards (a partial/filtered reveal is rejected).
 
+**Prize takes are read from the LOG, not guessed** (#175). When a Knock Out takes one of my prizes
+into hand, the engine names the exact card: a ``logs`` entry ``{fromArea: PRIZE, toArea: HAND,
+playerIndex, cardId, serial}``. Measured on the corrections corpus, **42 of 42** of my own prize
+takes carry ``cardId``; the opponent's carry none (correctly — their prizes are hidden). Without
+reading it the model had to guess which copy left, and dropped the anchor whenever the taken id also
+still sat in the deck — which is most likely for a high-copy card like Basic Energy, and cost the
+anchor for the rest of the match. ``logs`` is a **delta**, not a cumulative stream, so takes are
+accumulated across observations; they are keyed by ``serial`` (unique per physical card —
+engine-verified: 103 distinct serials over a match with zero serial→cardId conflicts) so a replayed
+or overlapping frame can never count one twice.
+
 **Before the first reveal** the prize split is genuinely unknown (prizes are set face-down), so the
 model reports None and the caller falls back to the sound stateless bounds (a card with more copies
 hidden than there are prize slots must have the surplus in the deck — pigeonhole). On ANY
@@ -32,6 +43,7 @@ from collections import Counter
 
 _HAND, _DISCARD, _ACTIVE, _BENCH = "hand", "discard", "active", "bench"
 _STACKS = ("energyCards", "tools", "preEvolution")   # cards attached to / stacked under a board Pokémon
+_AREA_HAND, _AREA_PRIZE = 2, 6                       # cg.api AreaType.HAND / .PRIZE (log zone codes)
 
 
 def _card_id(entry) -> int | None:
@@ -53,11 +65,15 @@ class OwnCardModel:
         self._prizes: Counter | None = None       # exact prize multiset once anchored (else None)
         self._anchor_remaining: int | None = None  # prizes_remaining at last anchor
         self._last_turn: int | None = None
+        self._takes: dict = {}                    # serial -> cardId of MY logged prize takes
+        self._takes_at_anchor: set = set()        # serials already priced into `_prizes`
 
     def reset(self) -> None:
         """Forget all match state (a new game began)."""
         self._prizes = None
         self._anchor_remaining = None
+        self._takes = {}
+        self._takes_at_anchor = set()
         self._last_turn = None
 
     def prize_export(self) -> dict | None:
@@ -89,6 +105,7 @@ class OwnCardModel:
         if self._last_turn is not None and turn is not None and turn < self._last_turn:
             self.reset()                           # turn went backwards -> new match (local harness)
         self._last_turn = turn
+        self._record_prize_takes(obs, yi)
 
         visible = self._visible(me, select)
         if any(visible[c] > self.decklist.get(c, 0) for c in visible):
@@ -102,6 +119,7 @@ class OwnCardModel:
             prizes = self.decklist - revealed - visible
             if sum(prizes.values()) == remaining and all(v >= 0 for v in prizes.values()):
                 self._prizes, self._anchor_remaining = prizes, remaining
+                self._takes_at_anchor = set(self._takes)   # takes before this reveal are priced in
                 return                             # anchored — done
             # partial / filtered reveal (size mismatch): fall through, keep prior anchor
 
@@ -111,6 +129,11 @@ class OwnCardModel:
             if not self._consistent(self._prizes, hidden, remaining):
                 self._prizes = None                # prized card surfaced -> desync, drop it
         elif remaining < self._anchor_remaining:   # a prize was taken since the anchor
+            named = self._prizes_after_logged_takes(remaining)   # the engine NAMED them (#175)
+            if named is not None and self._consistent(named, hidden, remaining):
+                self._prizes, self._anchor_remaining = named, remaining
+                self._takes_at_anchor = set(self._takes)         # re-baseline: now priced in
+                return
             candidate = self._prizes & hidden      # prizes still possibly hidden (taken ones left)
             if sum(candidate.values()) == remaining and self._consistent(candidate, hidden, remaining):
                 self._prizes, self._anchor_remaining = candidate, remaining   # uniquely reconciled
@@ -118,6 +141,33 @@ class OwnCardModel:
                 self._prizes = None                # ambiguous -> fall back until next reveal
         else:                                      # prizes grew -> impossible -> desync
             self._prizes = None
+
+    def _record_prize_takes(self, obs: dict, yi: int) -> None:
+        """Accumulate MY prize takes from the engine's log DELTA, keyed by the card's unique
+        ``serial`` so a replayed or overlapping frame can never count one twice. The opponent's
+        takes are skipped (not mine, and they carry no ``cardId`` anyway); an entry missing
+        ``serial``/``cardId`` is ignored, leaving the sound pigeonhole fallback in charge."""
+        for entry in (obs.get("logs") or ()):
+            if not isinstance(entry, dict):
+                continue
+            if (entry.get("fromArea") != _AREA_PRIZE or entry.get("toArea") != _AREA_HAND
+                    or entry.get("playerIndex") != yi):
+                continue
+            serial, cid = entry.get("serial"), entry.get("cardId")
+            if serial is not None and cid is not None:
+                self._takes[serial] = cid
+
+    def _prizes_after_logged_takes(self, remaining: int) -> Counter | None:
+        """The EXACT prize multiset after the takes the log named, or None when the log does not
+        fully account for the drop — a missing entry must fall back to the sound heuristic rather
+        than assert a prize pile the engine never confirmed."""
+        taken = Counter(cid for serial, cid in self._takes.items()
+                        if serial not in self._takes_at_anchor)
+        if sum(taken.values()) != self._anchor_remaining - remaining:
+            return None                            # log doesn't explain the drop -> don't trust it
+        if any(n > self._prizes[c] for c, n in taken.items()):
+            return None                            # names a card that wasn't prized -> desync
+        return self._prizes - taken
 
     def _visible(self, me: dict, select: dict) -> Counter:
         """MY cards provably OUTSIDE deck+prizes: hand, discard, every board Pokémon (its id +
