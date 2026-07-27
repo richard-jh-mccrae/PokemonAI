@@ -427,12 +427,21 @@ by identity, so the order decides nothing) and neither do the opponent's reveals
   was failing through.
 
 **What this deliberately does NOT change.** `_engine_leaf_value`'s dominant-win short-circuit stays
-gated on **coins** alone. Widening it to the full rule moves **9 corpus frames `OK → MISS`** (and 5
-`MISS → OK`) against the pinned Discrimination Gate — measured 2026-07-27. That is a leaf change owing
-this ADR's own user ruling on its own merits, not something to smuggle in behind a flake fix, so the
-sim reports both bits and each consumer reads the one it has earned. The unwidened case is exactly the
-`_commit_best` KO-ranker treating a shuffle-blessed win as dominant; it is on the record here as
+gated on **coins** alone. Widening it to the full rule takes the Discrimination Gate from **2 unruled
+`OK → MISS` to 9** — seven frames this change would have owed a ruling for. That is a leaf change
+owing this ADR's own user ruling on its own merits, not something to smuggle in behind a flake fix, so
+the sim reports both bits and each consumer reads the one it has earned. The unwidened case is exactly
+the `_commit_best` KO-ranker treating a shuffle-blessed win as dominant; it is on the record here as
 unruled.
+
+**A separate finding the control run turned up, also unruled.** Untouched `origin/main` (`ce32206`)
+already fails this gate: **2 `OK → MISS`** (`85163634|1|decision|41` rank 1→2,
+`86091435|0|decision|13` rank 1→4) and 5 `MISS → OK`, against `data/leaf_lab/baseline.json` pinned at
+`81eac82`. The #178 branch reports exactly the same 2 and the same 5, so it is gate-identical to main
+— but decision 5's promise that "from 1c onward every red the gate shows is caused by the swap being
+measured" no longer holds. Either main has drifted since the baseline was pinned and it needs
+re-capturing, or those two frames are real regressions someone landed unmeasured. Both possibilities
+need the same first step: run the gate on `main` before the next swap, not after it.
 
 **Accepted costs.** The develop rung defers more often, on turns where the tuned scoring keeps the
 turn — a real behaviour change on a flag (`develop_rollout`) that is armed ON in the shipped PROFILE,

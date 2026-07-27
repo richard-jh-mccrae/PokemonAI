@@ -3526,8 +3526,9 @@ class PlannerMixin:
             reads this one to refuse an unreproducible ranking outright.
 
         Why two and not one: the leaf's own value feeds ADR-0072's pinned Discrimination Gate, and
-        widening the short-circuit moves 9 corpus frames `OK → MISS` (measured 2026-07-27) — a
-        change that owes the gate's user ruling on its own merits, not a side effect of #178.
+        widening the short-circuit takes that gate from main's own 2 unruled `OK → MISS` to 9
+        (measured 2026-07-27) — seven frames owing the gate's user ruling on their own merits, not a
+        side effect of #178.
 
         Measured on ml f24 (2026-07-27, #178): all 13 candidate first actions carry ``SHUFFLE`` +
         ``DRAW`` and **not one COIN**, and each one's leaf value swings across processes — 7000 /

@@ -734,8 +734,8 @@ def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeyp
     only the SOUND win rung may claim wins.
 
     The wider ``stream`` bit (#178) deliberately does NOT gate this: the leaf's own values feed
-    ADR-0072's pinned Discrimination Gate, and widening the short-circuit moves 9 corpus frames
-    `OK → MISS` — a change that owes that gate a user ruling on its own merits."""
+    ADR-0072's pinned Discrimination Gate, and widening the short-circuit takes that gate from main's
+    own 2 unruled `OK → MISS` to 9 — seven frames owing that gate a user ruling on their own merits."""
     pilot = _pilot()
     me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
     opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
