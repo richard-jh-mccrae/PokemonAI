@@ -286,11 +286,31 @@ def test_prefer_wincon_line_piece_fetches_the_preevolution_over_an_offline_card(
 
 @pytest.mark.req("REQ-GEN-0019")
 def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
-    """Promote after a KO: (1) a powered benched win-condition attacks now; (2) else evolve a
-    pre-evolution IF the payoff is in hand; (3) else promote the disposable opener to protect the
-    fragile pre-evolution. The bare pre-evo is NOT promoted just because it's on the line."""
-    stats = DictCardStatProvider({STARYU: CardStat(STARYU, hp=70), MEGA: CardStat(MEGA, megaEx=True, hp=330),
-                                  CINDERACE: CardStat(CINDERACE, hp=160)})
+    """Promote after a KO: (1) a powered benched win-condition attacks now; (2) else promote the body
+    that can ACT; (3) else promote the disposable opener to protect the fragile pre-evolution. The
+    bare pre-evo is NOT promoted just because it's on the line.
+
+    Case (2) CHANGED with ADR-0073 (#141) and the change is deliberate. The rung era promoted the
+    pre-evolution whenever the payoff sat in hand, gated on `evolve_to_ready_wincon_available` —
+    "enough Energy to attack post-evolve". This fixture never met that premise: the pre-evolution
+    carries ONE Energy and the evolved form's attack costs THREE, so evolving it produces a body that
+    cannot attack. The gate passed only because the old statline gave the payoff no attack record at
+    all, leaving `maxDamageCost` None and the check vacuous.
+
+    With the record present the decider prices what is really on offer — 50 damage now from the
+    opener, versus nothing from a pre-evolution that would still be Energy-starved after evolving —
+    and promotes the opener. Nothing is lost by that: a benched Pokémon can still be evolved, and
+    `_finish_turn_last` already sequences a benched evolve at tier 0 as free development."""
+    # Real attack records on both attackers: the promote/retreat decider reads DAMAGE, and ADR-0052
+    # retired the card-level `minCostDamage` scalar fallback ("no record, no claim"), so a statline
+    # without `attacks` prices every body at zero and the frame asserts nothing about the decider.
+    stats = DictCardStatProvider(
+        {STARYU: CardStat(STARYU, hp=70),
+         MEGA: CardStat(MEGA, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
+                        maxDamageCost=3, attacks=(21,)),
+         CINDERACE: CardStat(CINDERACE, hp=160, minAttackCost=1, maxDamage=50,
+                             maxDamageCost=1, attacks=(22,))},
+        attacks={21: AttackStat(21, damage=210, cost=3), 22: AttackStat(22, damage=50, cost=1)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA)],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
     funcs = CardFunctions({CINDERACE: ["opener"]})
@@ -298,26 +318,34 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
     promote = [card_opt(BENCH, 0, player=0), card_opt(BENCH, 1, player=0)]
 
     # (3) no Mega, no powered wincon -> promote the staller (Cinderace), keep Staryu safe
-    obs = make_select(promote, context=4, current=state(bench=[poke(CINDERACE), poke(STARYU, energy=1)]))
-    assert pilot.decide(obs) == [0]
-    assert "promote-the-staller" in _fired(pilot.explain(obs).options[0])
-
-    # (2) Mega in hand -> promote the pre-evo to evolve it this turn
     obs = make_select(promote, context=4,
-                      current=state(bench=[poke(CINDERACE), poke(STARYU, energy=1)], hand=[MEGA]))
-    assert pilot.decide(obs) == [1]
+                      current=state(bench=[poke(CINDERACE, energy=1), poke(STARYU, energy=1)]))
+    assert pilot.decide(obs) == [0]   # the staller pick is EMERGENT now (ADR-0073 §6a): its own
+                                     # damage plus the LOW exposure that IS "disposable"
+
+    # (2) Mega in hand but the pre-evo could not pay the evolved attack -> promote the body that acts
+    obs = make_select(promote, context=4,
+                      current=state(bench=[poke(CINDERACE, energy=1), poke(STARYU, energy=1)],
+                                    hand=[MEGA]))
+    assert pilot.decide(obs) == [0]
 
     # (1) a powered Mega is benched -> promote it to attack
-    obs = make_select(promote, context=4, current=state(bench=[poke(CINDERACE), poke(MEGA, energy=3)]))
-    assert pilot.decide(obs) == [1]
-    assert "promote-the-ready-wincon" in _fired(pilot.explain(obs).options[1])
+    obs = make_select(promote, context=4,
+                      current=state(bench=[poke(CINDERACE, energy=1), poke(MEGA, energy=3)]))
+    assert pilot.decide(obs) == [1]   # EMERGENT from reachable damage (ADR-0073 §3) — the rung and
+                                     # its `is_best_promote_target` tie-break are DELETED
 
 
 # --- retreat-to-ready-attacker: bring a powered benched win-condition to the front ----------------
 @pytest.mark.req("REQ-GEN-0020")
 def test_retreat_to_a_ready_benched_wincon_over_a_weak_chip():
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=60), MEGA: CardStat(MEGA, megaEx=True, hp=330)},
-                                 attacks={11: AttackStat(11, damage=50)})
+    # The benched win-condition carries a real attack record: the decider prices a retreat by what
+    # the DESTINATION reaches, so without one the "ready" wincon reaches nothing (ADR-0052).
+    stats = DictCardStatProvider(
+        {CINDERACE: CardStat(CINDERACE, hp=60, minAttackCost=1, attacks=(11,)),
+         MEGA: CardStat(MEGA, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
+                        maxDamageCost=3, attacks=(12,))},
+        attacks={11: AttackStat(11, damage=50, cost=1), 12: AttackStat(12, damage=210, cost=3)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -385,8 +413,8 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
     obs2 = make_select([opt(12), attack_opt(11), opt(14)], context=MAIN,
                        current=state(active=poke(CINDERACE, energy=1, hp=120),
                                      bench=[poke(MEGA, energy=1)], opp_active=poke(999, hp=120)))
-    assert pilot.decide(obs2) == [0]                                  # retreat -> bring up the ready Mega
-    assert "retreat-to-ready-attacker" in _fired(pilot.explain(obs2).options[0])
+    assert pilot.decide(obs2) == [0]   # retreat -> bring up the ready Mega. EMERGENT from
+                                      # destination value minus retreat cost (ADR-0073 §11)
 
 
 @pytest.mark.req("REQ-GEN-0017")

@@ -318,7 +318,12 @@ def test_lone_locking_attack_is_never_charged_below_passing():
     assert _pilot().decide(obs) == [0]
 
 
-# --- GENERAL: swap-out-the-locked-attacker (dual-Mega cadence) --------------------------------
+# --- GENERAL: the dual-Mega swap, now a DECIDER claim (ADR-0073 §11) --------------------------
+#
+# `swap-out-the-locked-attacker` (+35) is DELETED. The doctrine is emergent from destination value
+# minus retreat cost: a transient-locked attack scores LESS on its OWN option, and a fresh powered
+# copy scores more as a destination, so the swap wins without a rung asserting it. These tests
+# therefore assert the DECISION (is the pivot endorsed?) rather than a rung firing.
 
 def _locked_board(bench_energy, logs):
     active = poke(MEGA_LUCARIO, energy=2, hp=340)
@@ -334,24 +339,31 @@ _MEGA_BRAVE_LOG = [{"type": 15, "playerIndex": 0, "attackId": MEGA_BRAVE, "seria
 
 
 @pytest.mark.req("REQ-ML-0006")
-def test_swap_fires_when_mega_brave_is_locked_and_a_fresh_mega_is_ready():
+def test_the_swap_is_endorsed_when_a_fresh_powered_mega_is_ready():
+    """The dual-Mega cadence: with Mega Brave transient-locked on the Active and a second POWERED
+    Mega on the Bench, the pivot is priced positive — the destination reaches real damage while the
+    locked body does not."""
     obs = _locked_board(bench_energy=2, logs=_MEGA_BRAVE_LOG)
-    assert "swap-out-the-locked-attacker" in _fired(_pilot().explain(obs).options[0])
+    row = _pilot().explain(obs).options[0].promote_retreat_working
+    assert row is not None and row["site"] == "whether"
+    assert row["my_yield"] > 0 and row["total"] > 0
 
 
 @pytest.mark.req("REQ-ML-0006")
-def test_swap_silent_without_a_lock():
-    obs = _locked_board(bench_energy=2, logs=[])
-    assert "swap-out-the-locked-attacker" not in _fired(_pilot().explain(obs).options[0])
-
-
-@pytest.mark.req("REQ-ML-0006")
-def test_swap_silent_when_the_benched_mega_is_bare():
+def test_the_swap_is_declined_when_the_benched_mega_is_bare():
+    """The discrimination that matters: a BARE second Mega reaches nothing, so pivoting into it
+    buys no damage and still pays exposure — the pivot prices negative. This is the half the deleted
+    rung expressed as its `bench_wincon_ready` gate, now measured rather than gated."""
     obs = _locked_board(bench_energy=0, logs=_MEGA_BRAVE_LOG)
-    assert "swap-out-the-locked-attacker" not in _fired(_pilot().explain(obs).options[0])
+    row = _pilot().explain(obs).options[0].promote_retreat_working
+    assert row["my_yield"] == 0.0 and row["total"] < 0
 
 
-# --- GENERAL: dont-promote-into-their-prize-reach ---------------------------------------------
+# --- GENERAL: the prize-reach brake, now EMERGENT from Exposure (ADR-0073 §4/§7) ---------------
+#
+# `dont-promote-into-their-prize-reach` (−20) is DELETED. Exposing a body costs `prizes x 100`
+# graded by the clock, so the 3-prize Mega is charged three times what the 1-prize Hariyama is —
+# a continuous per-body price where the rung was a flag with a boolean stand-down.
 
 def _promote(opp_prizes):
     cur = state(active=None, bench=[poke(MEGA_LUCARIO, hp=340), poke(HARIYAMA, hp=150)],
@@ -360,17 +372,25 @@ def _promote(opp_prizes):
 
 
 @pytest.mark.req("REQ-ML-0007")
-def test_dont_promote_the_mega_when_its_ko_hands_them_the_game():
-    """Opponent at 3 prizes: a 3-prize Mega KO wins for them — soften the Mega promote."""
+def test_the_three_prize_mega_is_charged_three_times_the_one_prize_body():
+    """Opponent at 3 prizes: promoting the 3-prize Mega risks handing them the match, so it carries
+    strictly more Exposure than the 1-prize Hariyama on the identical board — and the cheap body is
+    promoted. Per-body, which is the defect §4 fixes: the retired read resolved ONE body's verdict
+    and applied it to every candidate."""
     opts = _pilot().explain(_promote(opp_prizes=3)).options
-    assert "dont-promote-into-their-prize-reach" in _fired(opts[0])      # the Mega
-    assert "dont-promote-into-their-prize-reach" not in _fired(opts[1])  # Hariyama (1 prize)
+    mega, hariyama = opts[0].promote_retreat_working, opts[1].promote_retreat_working
+    assert mega["exposure"] == pytest.approx(3 * hariyama["exposure"])
+    assert hariyama["total"] > mega["total"]
 
 
 @pytest.mark.req("REQ-ML-0007")
-def test_promote_reach_silent_when_their_prizes_exceed_the_mega():
-    opts = _pilot().explain(_promote(opp_prizes=4)).options
-    assert "dont-promote-into-their-prize-reach" not in _fired(opts[0])
+def test_exposure_scales_with_their_remaining_prizes_without_a_goal_band():
+    """§7b: the near-goal escalation needs no `_NEAR_GOAL`/`_GOAL_BAND` weighting. Exposure itself is
+    prize-count-blind — it prices what a Knock Out YIELDS — and the endgame enters through the fatal
+    step's condition alone, so the same board reads the same exposure at 3 prizes and at 4."""
+    at_three = _pilot().explain(_promote(opp_prizes=3)).options[0].promote_retreat_working
+    at_four = _pilot().explain(_promote(opp_prizes=4)).options[0].promote_retreat_working
+    assert at_three["exposure"] == pytest.approx(at_four["exposure"])
 
 
 # --- GENERAL covered-as-is proof: Aura Jab's ATTACH_FROM load routes to the 2nd Mega ----------

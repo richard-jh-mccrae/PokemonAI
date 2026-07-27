@@ -428,7 +428,11 @@ def test_gust_target_does_not_fire_on_my_own_retreat():
         context=SWITCH,
         current=state(active=poke(WINCON, energy=1, hp=200), bench=[poke(BENCHIE, hp=60)]))
     p = _pilot()
-    assert p.explain(obs).options[0].tactical == 0   # my own bench -> no gust KO_SCORE boost
+    trace = p.explain(obs).options[0]
+    # `tactical` is a SUM across layers, and since ADR-0073 (#141) my OWN retreat destination is also
+    # priced by the promote/retreat decider — so net that residual out to isolate the gust claim.
+    residual = trace.promote_retreat_working["tactical"]
+    assert trace.tactical - residual == 0            # my own bench -> no gust KO_SCORE boost
 
 
 @pytest.mark.req("REQ-GUST-0009")

@@ -102,6 +102,8 @@ All three are `active`-only or `+1`-only or boolean-only. The oracle generalises
 - `dp_stall_gust_false_famine_accel_f70` (the primitive's reason to exist — the +105 false stall).
 - Promote/retreat B2: `81905522-47`, `82749168-61` (attacker one attach from ready), `83007714-8`
   (turn-1 setup) — the whether-site regressions the stay-to-develop term should convert
-  (`tools/train/promote_retreat_sweep.py` measures it).
+  (`tools/train/probes/promote_retreat_decider_sweep.py` measures it — the shadow-era
+  `tools/train/promote_retreat_sweep.py` was deleted by #141/ADR-0073, which retired the record
+  and the sign bit it read).
 - `fetch_enables_p` has no corpus frame that drives it >0 today (the pick/whether fixtures fail-close
   correctly); the readiness_p upgrade wants a fresh 1-attach-short-wincon-with-hand-accel fixture.

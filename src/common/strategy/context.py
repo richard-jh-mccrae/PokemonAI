@@ -67,12 +67,20 @@ _MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active
 
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
+ENERGY_RECOVER = 75        # per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X}
+                           # from discard") on a NON-KO turn — chip-scale, so fueled Aura Jab beats bare
+                           # Mega Brave. Lives HERE rather than in `pilot` because the promote/retreat
+                           # equation reads it too (ADR-0073 §3b: retreating INTO Cinderace must credit
+                           # what attacking WITH Cinderace credits), and `pilot` imports that equation —
+                           # so one leaf owner is what keeps the two readings from drifting apart.
 _SUPPORTER = 3             # CardType.SUPPORTER — gust on this card costs the one-per-turn Supporter slot
 _TOOL_CARD = 2             # CardType.TOOL — a Pokémon Tool. Arrives as OptionType.ATTACH exactly like an
                            # Energy, so the Energy hypotheses must test `attach_is_energy` (ml f87)
 _BASIC_ENERGY = 5          # CardType.BASIC_ENERGY — fungible Energy: spare = always a future attach,
 _SPECIAL_ENERGY = 6        # CardType.SPECIAL_ENERGY — …never a redundant pitch, so excluded from
                            # hand-duplicate discard signal (cf. `discard-the-hand-duplicate`)
+_METAL = 8                 # EnergyType.METAL — the predicate Archaludon's board-level retreat grant
+                           # scopes to ("all of your Pokémon that have {M} Energy attached")
 _BENCH_MAX = 5             # full Bench holds 5 — bench-filler places nothing once you're here
 _THIN_BENCH = 2            # below this many benched Pokémon board's underdeveloped — a starter need
 _OPENER_TAG = "opener"     # Function Tag: card whose Ability opens Active Spot (Explosiveness)
@@ -108,7 +116,8 @@ __all__ = [
     "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_MOVE_CARD",
-    "KO_SCORE", "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
+    "KO_SCORE", "ENERGY_RECOVER", "_METAL",
+    "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
     "_UTILITY_TAGS", "_EVOLVING_THREAT_DMG",
     "_POSTURE_UNFAVORED", "_POSTURE_FAVORED", "_POSTURE_MIN_COVERAGE",

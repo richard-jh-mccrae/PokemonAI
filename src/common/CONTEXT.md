@@ -597,6 +597,33 @@ for a `discard_eot` burst (evaporates end of turn — funds no future retreat). 
 _Avoid_: retreat value (1c's pivot-decision currency), mobility bonus (vague), restricting it to
 utility bodies (every body earns it — attack terms dominate wherever they exist)
 
+**Sub-lethal Residual**:
+The share of a promote/retreat trade the value equation owns: what remains once the Knock-Outs
+available on BOTH sides of the swap have cancelled (#141 grill, ADR-0073 decision 1). Retreat and
+promote are a three-part decision — whether to retreat, why, and who to promote — and no single layer
+sees all of it, so each prices what it can: the KO **delta** between staying and pivoting is the
+tactical lookahead's and, where the steps depend on each other, **#165's** (a **Maneuver**); the
+residual — readiness, prize **Exposure**, the accel dividend, denied tempo — is the equation's. They
+SUM on the same option (`max` within an axis, sum across, per ADR-0069 §1), and the sum is honest by
+construction because rulings 4/5 keep the residual strictly sub-lethal, so it can never carry a KO
+magnitude. The residual DECIDES exactly where the KO cancels — a doomed Mega Starmie ex swapped for a
+fresh one takes the same prize either way, so the 3 prizes preserved are the whole decision.
+_Avoid_: recusal / abstention (the shadow-era guard this replaces — a layer that cannot see a fact
+prices 0, it does not withdraw), retreat verdict (a sign test; the residual is a per-option score),
+sub-lethal band (the readiness *range* `my_yield` reads — the residual is the whole net)
+
+**Prize Damage Rate**:
+The one exchange rate between prizes and damage: **100 damage per prize**, the median HP-per-prize
+over every body in the set (`data/EN_Card_Data.csv`, prize value per `docs/rules.md` §6 — 1061
+bodies, median 100.0, mean 101.5; per band 90 / 130 / 110 — recomputed at build time, which corrected
+the ADR's 101.8 mean; the median and the bands reproduce exactly). DERIVED, so it is re-computable and
+falsifiable rather than tuned. It is what lets prize **Exposure** be denominated in the damage
+currency ADR-0069/0070 put the attach and evolve marginals in, so one `score` holds one unit — the
+rate a superseded `_PRIZE_UNIT = 12` asserted at roughly an eighth of honest value, which is why the
+shipped equation endorsed feeding a 3-prize body to save a 40-point band.
+_Avoid_: prize value (a card's own {1,2,3} — the rate CONVERTS it), `KO_SCORE` (the KO's dominance
+band, deliberately unbounded by this rate), Worth (the card/role tier currency)
+
 **Ability Fuel**:
 The attach marginal's second additive channel (#139): the value of attaching the colour a DORMANT
 in-play Ability needs while none of that colour is attached (`abilityEnergyTypes` — Munkidori's

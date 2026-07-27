@@ -52,6 +52,73 @@ def _parse_tool_retreat_reduction(card) -> int:
     return 0
 
 
+# Retreat-cost GRANTS beyond the flat Tool reduction (ADR-0073 §8). The flat read was Tool-only and
+# unconditional, and under the convex build-delta cost a missed reduction is worth ~117 damage of
+# PHANTOM cost on a 3-slot attacker — systematic on an archetype built around free-retreat pivoting.
+# Both parsers are FAIL-CLOSED: an unreadable or unmodelled grant returns nothing, so the caller
+# charges the PRINTED cost and errs toward not retreating, never toward the retreat-happy pathology.
+#
+# Scoped deliberately to the shapes our decks and the tracked meta run — NOT a general effects DSL.
+# Verified against `data/EN_Card_Data.csv`: the set holds six retreat-grant texts beyond Air
+# Balloon's flat one, and the deck scan puts Latias ex in `slowking` and Air Balloon in
+# `grimmsnarl_ex`/`mega_lucario`.
+
+# Rescue Board: "…is {C} less. If that Pokémon's remaining HP is 30 or less, it has no Retreat Cost."
+# The flat leg is already `_RETREAT_TOOL_RE`'s; this is the CONDITIONAL second sentence.
+_RETREAT_FREE_AT_HP_RE = re.compile(
+    r"If that Pok.mon.s remaining HP is (\d+) or less, it has no Retreat Cost")
+
+#: Board-level grant predicates we can evaluate SOUNDLY, by the phrase that introduces them. A
+#: predicate not listed here parses to None even when the sentence clearly grants something — that is
+#: the fail-closed direction, and it is why N's Castle ("N's Pokémon in play", a card-NAME family the
+#: Pilot has no membership oracle for) is deliberately absent.
+_RETREAT_FREE_GRANT_RES = (
+    # Latias ex (Skyliner): "Your Basic Pokémon in play have no Retreat Cost." — slowking runs it.
+    ("basic", re.compile(r"Your Basic Pok.mon in play have no Retreat Cost")),
+    # Archaludon: "All of your Pokémon that have {M} Energy attached have no Retreat Cost."
+    ("metal_attached", re.compile(
+        r"All of your Pok.mon that have \{M\} Energy attached have no Retreat Cost")),
+)
+
+
+def _skill_texts(card):
+    """Every skill text on ``card`` — the shape both retreat-grant parsers walk."""
+    for s in (getattr(card, "skills", None) or []):
+        text = getattr(s, "text", None)
+        if text is None and isinstance(s, dict):
+            text = s.get("text")
+        if text:
+            yield text
+
+
+def _parse_tool_retreat_free_at_hp(card) -> int:
+    """Remaining HP at or below which an attached Tool zeroes its holder's Retreat Cost entirely
+    (``CardStat.retreatFreeAtHp``) — Rescue Board's 30. 0 when the card carries no such clause.
+
+    Separate from ``retreatReduction`` because the two legs of Rescue Board are different facts: the
+    flat ``{C}`` always applies, the zeroing only below the threshold."""
+    for text in _skill_texts(card):
+        m = _RETREAT_FREE_AT_HP_RE.search(text)
+        if m:
+            return int(m.group(1))
+    return 0
+
+
+def _parse_retreat_free_grant(card):
+    """The PREDICATE name of a board-level Ability granting no Retreat Cost
+    (``CardStat.retreatFreeGrant``), or None.
+
+    Board-level because the granting body is not the one retreating — the engine cannot supply this
+    at all: ``retreatCost`` exists only on ``CardData`` as the static PRINTED value, and the in-play
+    ``Pokemon`` carries no effective-cost field. The caller evaluates the predicate against the body
+    that wants to retreat."""
+    for text in _skill_texts(card):
+        for name, pattern in _RETREAT_FREE_GRANT_RES:
+            if pattern.search(text):
+                return name
+    return None
+
+
 # Attack-rider parsers (ADR-0022 #2/#14): recoil/bench-snipe amount lives only in free-text (no
 # engine field). Whole-sentence UNCONDITIONAL match only; conditional riders parse to 0 (safe: under-credit never).
 _RECOIL_RE = re.compile(r"This Pok.mon (?:also )?does (\d+) damage to itself\.?$")

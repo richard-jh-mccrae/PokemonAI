@@ -118,9 +118,6 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     attach_working = getattr(decision, "attach_working", None)  # the ENERGY-ATTACH DECIDER's legible
     if attach_working:                            # working (ADR-0069 §9): the per-option AXES rows —
         rec["attach_working"] = attach_working    # attack_axis/channels/gates + the tactical each scored
-    promote_retreat_shadow = getattr(decision, "promote_retreat_shadow", None)  # the PROMOTE/RETREAT value
-    if promote_retreat_shadow:                    # shadow (fifth shadow, promote/retreat grill): per-option
-        rec["promote_retreat_shadow"] = promote_retreat_shadow  # window-rollout total + pick + agree bit
     threat_shadow = getattr(decision, "threat_shadow", None)  # the DOOM worst-case SHADOW (Threat-Clock
     if threat_shadow:                             # unification S1b): incumbent active_doomed vs the
         rec["threat_shadow"] = threat_shadow      # incoming(t=1)-curve re-expression + the agree bit —

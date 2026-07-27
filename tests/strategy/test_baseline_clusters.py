@@ -42,14 +42,14 @@ CLUSTERS = {
                                  "develop-the-accel-recipient", "develop-a-basic-in-setup",
                                  "develop-the-wincon-base-first",   # prefer the wincon Line base among develops
                                  "dont-bench-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
-    "promote": (PROMOTE_HYPOTHESES, {
-        "promote-the-accelerator-for-the-ko", "interpose-the-cheap-attacker-to-preserve-the-wincon",
-        "promote-the-ready-wincon", "promote-the-staller", "dont-promote-into-their-prize-reach",
-        "promote-the-ko-attacker",          # KO-aware, boost-inclusive promote (promote_ko_aware)
-        "dont-promote-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
-    "retreat": (RETREAT_HYPOTHESES, {"hold-position-in-setup", "retreat-to-ready-attacker",
-                                     "swap-out-the-locked-attacker", "dont-play-switch-for-no-gain",
-                                     "retreat-to-wall-the-line"}),
+    # EMPTY since ADR-0073 (#141): all seven promote rungs are DELETED — the promote/retreat DECIDER
+    # prices the family as the Sub-lethal Residual, so the KO half is `_promote_ko_tactical` and the
+    # rest is emergent from reachable damage and prize Exposure.
+    "promote": (PROMOTE_HYPOTHESES, set()),
+    # Four of five retreat rungs DELETED by the same ruling. `retreat-to-wall-the-line` SURVIVES
+    # because it is a MANEUVER, not a value claim: its payoff lands on later steps, which a
+    # per-option equation cannot see. Owner #165.
+    "retreat": (RETREAT_HYPOTHESES, {"retreat-to-wall-the-line"}),
     "evolution": (EVOLUTION_HYPOTHESES, {
                         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
