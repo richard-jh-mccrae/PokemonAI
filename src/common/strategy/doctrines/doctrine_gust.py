@@ -507,7 +507,7 @@ HYPOTHESES = [
                   "Weighted below every tutor/draw so it only wins the slot when nothing else helps; never "
                   "fires on an Active carrying a special condition (`opp_active_condition_gift`), since "
                   "switching it out CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022). "
-                  "ONE attack guard (`active_should_swing`, #142): an UNARMED Active that can still REACH an "
+                  "ONE attack guard (`active_unarmed_but_able`, #142): an UNARMED Active that can still REACH an "
                   "attack this turn swings instead of stalling. It replaced a PAIR of partial guards that did "
                   "not compose — the old accel half never checked that the Active was unarmed, so merely "
                   "HOLDING a Crispin suppressed an armed stall this rationale defends.",
@@ -515,7 +515,7 @@ HYPOTHESES = [
         and c.board.active_doomed and c.board.opp_active_can_damage_us
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
-        and not c.board.active_should_swing  # go down swinging: an UNARMED Active whose attack this turn's
+        and not c.board.active_unarmed_but_able  # go down swinging: an UNARMED Active whose attack this turn's
         #   full Attach Budget can still reach should ATTACK, not stall-gust (ml f19's hand attach; dragapult
         #   f70's Crispin line). An already-armed Active (energy>0) may still legitimately stall — it keeps
         #   its attack option either way, and an accel in hand does not change that.
@@ -558,7 +558,7 @@ HYPOTHESES = [
                   "on its own once the sibling was fixed.",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
-        and not c.board.active_should_swing  # an Active that can still reach an attack beats the stall (dp f70)
+        and not c.board.active_unarmed_but_able  # an Active that can still reach an attack beats the stall (dp f70)
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_is_keystone
         and not c.board.opp_active_condition_gift,

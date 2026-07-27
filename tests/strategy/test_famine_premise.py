@@ -117,3 +117,74 @@ def test_the_stall_gust_stands_down_on_the_f70_board():
     for option in boss:
         fired = {h.id for h, _ in option.fired}
         assert "stall-gust-over-dev-when-starved" not in fired, "the false famine stall is back"
+
+
+# ── fail direction: "I cannot tell" must never read as a PROVABLE famine ────────────────────────
+
+def _blind_model(energies, *, turn=5, **flags):
+    """A StateModel whose Stat Provider resolves NOTHING — the unreadable-body case."""
+    from common.state_model import StateModel
+    from common.strategy.combat import CombatMath
+    from common.scouting.provider import DictCardStatProvider
+    me = {"active": [{"id": 999, "hp": 100, "energies": list(energies)}], "bench": [], "hand": [],
+          "prize": [None] * 4, "deckCount": 30}
+    me.update(flags)
+    obs = {"current": {"players": [me, {"active": [], "bench": [], "prize": [None] * 6}],
+                       "yourIndex": 0, "turn": turn}}
+    return StateModel.build(obs, combat=CombatMath(DictCardStatProvider({}), functions=None,
+                                                   transients=None))
+
+
+def test_an_unreadable_body_is_not_a_famine():
+    """`reachable_attach` fails CLOSED — an unknown CardStat makes NO claim, so it returns False.
+    Negating that would turn "I cannot tell" into "PROVABLE famine" and fire the +105 stall this
+    premise exists to kill. The retired signal was explicit about the direction ("True on unknown
+    stats — the starved stall-gust must only fire on a PROVABLE famine", ep83457493 f20)."""
+    assert _blind_model([1, 1, 1]).mine.active_famine is False
+    assert _blind_model([]).mine.active_famine is False       # even with nothing attached
+
+
+def test_the_rule_leg_still_claims_a_famine_without_reading_a_stat():
+    """The one claim that needs no card knowledge: the rules forbid the attack outright. Paralysis
+    and turn-1-going-first hold even when nothing about the body resolves."""
+    assert _blind_model([1, 1, 1], paralyzed=True).mine.active_famine is True
+    assert _blind_model([1, 1, 1], turn=1).mine.active_famine is True
+
+
+def test_a_body_less_side_makes_no_famine_claim():
+    from common.state_model import StateModel
+    from common.strategy.combat import CombatMath
+    from common.scouting.provider import DictCardStatProvider
+    obs = {"current": {"players": [{"active": [], "bench": [], "hand": [], "prize": [None] * 4},
+                                   {"active": [], "bench": [], "prize": [None] * 6}],
+                       "yourIndex": 0, "turn": 5}}
+    m = StateModel.build(obs, combat=CombatMath(DictCardStatProvider({}), functions=None,
+                                                transients=None))
+    assert m.mine.active_famine is False
+
+
+# ── the one row this phase deliberately starts firing on ───────────────────────────────────────
+
+def test_an_armed_active_holding_an_accelerator_is_not_told_to_swing():
+    """The deliberate behaviour change (#142 ruling A), pinned so it cannot pass silently.
+
+    The retired pair of guards did not compose: the accel half never checked that the Active was
+    UNARMED, so merely HOLDING a Crispin suppressed a stall that an armed Active may legitimately
+    take. The collapsed clause is gated on 0 attached Energy, so an armed Active reads
+    `active_unarmed_but_able` False and the stall-gust family is free to fire — where the retired
+    `not active_attack_payable_via_accel` clause blocked it."""
+    obs = _obs()
+    _me(obs)["active"][0]["energies"] = [E_R, E_P]     # ARMED, and Crispin is still in hand
+    board = _board(_pilot(), obs)
+    assert board.my_active_energy > 0
+    assert board.active_famine is False                # it can attack — not a famine either way
+    assert board.active_unarmed_but_able is False, (
+        "an ARMED Active must not be told to swing-instead-of-stall; holding an accel is irrelevant")
+
+
+def test_an_unarmed_active_reaching_an_attack_is_told_to_swing():
+    """The complement, on the same board: strip the Energy and the Crispin line still reaches an
+    attack, so the Active is unarmed-but-able and the stall stands down (this IS f70)."""
+    board = _board(_pilot(), _obs())
+    assert board.my_active_energy == 0
+    assert board.active_unarmed_but_able is True

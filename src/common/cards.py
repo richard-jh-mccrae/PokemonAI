@@ -31,13 +31,7 @@ class CardFunctions:
         (top 2, take 1) is 2, but Tatsugiri reveals only a Supporter and Metang attaches {M} directly
         (its value is the Budget's, not the dig's), so neither is tagged. 0 when untagged — the
         decider then makes no income claim (fail-CLOSED, ADR-0067)."""
-        for t in self._table.get(card_id, ()):
-            if isinstance(t, str) and t.startswith("dig:"):
-                try:
-                    return max(0, int(t.split(":", 1)[1]))
-                except ValueError:
-                    return 0
-        return 0
+        return self._parametric_tag(card_id, "dig:")
 
     def energy_provision(self, card_id: int, *, evolution: bool = False) -> int:
         """How many Energy units this card provides once ATTACHED — the `provides:N` PARAMETRIC tag,
@@ -57,23 +51,22 @@ class CardFunctions:
         0 when untagged (fail-CLOSED, ADR-0067): an unreadable provision contributes nothing to the
         Budget rather than a guessed one. `test_attach_budget_coverage.py` audits that zero, so a
         shipped deck cannot quietly run a Special Energy the Budget cannot price."""
-        best = 0
+        # The evolution reading REPLACES the base one ("instead"), and both are floors of the same
+        # quantity, so the larger APPLICABLE tag is the provision.
+        prefixes = ("provides:",) + (("provides_evo:",) if evolution else ())
+        return max((self._parametric_tag(card_id, p) for p in prefixes), default=0)
+
+    def _parametric_tag(self, card_id: int, prefix: str) -> int:
+        """The integer carried by a ``<prefix>N`` PARAMETRIC tag, or 0 when the card has none and on
+        any unreadable value — the fail-CLOSED read both :meth:`dig_depth` and
+        :meth:`energy_provision` are, so the two cannot drift in how they parse the same tag shape."""
         for tag in self._table.get(card_id, ()):
-            if not isinstance(tag, str):
-                continue
-            if tag.startswith("provides_evo:"):
-                if not evolution:
-                    continue
-            elif not tag.startswith("provides:"):
-                continue
-            try:
-                value = int(tag.split(":", 1)[1])
-            except ValueError:
-                continue
-            # The evolution reading REPLACES the base one ("instead"), and both are floors of the
-            # same quantity, so the larger applicable tag is the provision.
-            best = max(best, max(0, value))
-        return best
+            if isinstance(tag, str) and tag.startswith(prefix):
+                try:
+                    return max(0, int(tag.split(":", 1)[1]))
+                except ValueError:
+                    return 0
+        return 0
 
     @classmethod
     def load(cls, path=None) -> "CardFunctions":

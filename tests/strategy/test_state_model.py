@@ -596,6 +596,10 @@ def test_the_first_player_cannot_attack_on_turn_one():
     assert m.mine.active_famine is True
 
 
-def test_an_empty_board_is_a_famine_rather_than_a_crash():
+def test_a_body_less_side_makes_no_famine_claim_rather_than_crashing():
+    """Fail-OPEN on an unreadable board, the opposite of the oracle underneath. `reachable_attach`
+    returns False for "I cannot tell", and negating that would turn silence into a PROVABLE famine
+    and fire the stall this premise exists to kill (the direction the retired signal spelled out:
+    "True on unknown stats ... only on a PROVABLE famine", ep83457493 f20)."""
     m = _model(_player(prize=4), _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
-    assert m.mine.active_famine is True
+    assert m.mine.active_famine is False

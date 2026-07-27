@@ -162,3 +162,25 @@ exactly as `_attached_units` colours the same card once attached.
 Untagged still contributes ZERO (the yield ruling above, unchanged), and
 `test_attach_budget_coverage.py` now audits Special Energy in shipped decks exactly as it audits
 accel cards — verified non-vacuous by dropping the tag and watching the gate fail.
+
+### The Decision Gate's result, recorded here because its probe did not survive
+
+`tools/train/probes/famine_decider_sweep.py` replayed all **332** recorded Corrections through both
+premises, fresh Pilot per arm per frame: **332 agree, 0 flips, gate PASS**. Read honestly that says
+the corpus holds no frame that DISCRIMINATES the two premises — the shipped interim `+1` patch had
+already fixed dragapult f70 — not that the swap was validated by it.
+
+The probe is not in the tree. Unlike its siblings, whose retired rungs survive at weight 0 and stay
+replayable, it compared two PREMISES and one of them is now deleted, so it would report zero flips
+trivially — unrunnable in the same way #141's `promote_retreat_sweep.py` was. The result is recorded
+here, and the coverage the sweep could not provide lives in
+`tests/strategy/test_famine_premise.py`: boards built by mutating a real observation where the two
+premises genuinely disagreed (a Paralyzed or Asleep Active carrying enough Energy to pay its attack),
+plus the fail-OPEN direction on an unreadable body and the one row this phase deliberately starts
+firing on.
+
+**Fail direction, stated because it is easy to invert.** `reachable_attach` fails CLOSED — an
+unknown `CardStat` makes no claim and returns False. `active_famine` must NOT simply negate it: that
+turns "I cannot tell" into "PROVABLE famine" and fires the +105 stall this ADR exists to prevent. The
+unreadable body is therefore checked BEFORE the oracle is asked, and only the rule leg
+(`attack_blocked`) may claim a famine without reading a stat.

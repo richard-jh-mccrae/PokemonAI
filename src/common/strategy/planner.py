@@ -2551,15 +2551,7 @@ class PlannerMixin:
         model = getattr(self, "_state_model", None)
         if model is None or card_id is None:
             return 0
-        mine = model.mine
-        budget = self.combat.attach_budget(
-            {"id": card_id, "energies": []}, mine.hand_ids,
-            energy_attached=mine.energy_attached, supporter_played=mine.supporter_played,
-            deck_energy_types=mine.deck_energy_types,
-            hand_energy_types=mine.hand_energy_types,
-            discard_energy_counts=mine.discard_energy_counts,
-            target_benched=benched, more_prizes_than_opp=mine.more_prizes_than_opp)
-        return int(budget.size)
+        return int(model.mine.attach_budget_for_card(card_id, benched=benched).size)
 
     def _play_accel_extra(self, obs, board, select, options, enabler_consumes_supporter: bool) -> int:
         """MIN-BOUND: 1 iff a PLAY-based energy accelerator in MY hand can PROVABLY add ONE more attach to

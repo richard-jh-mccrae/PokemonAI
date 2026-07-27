@@ -30,8 +30,8 @@ REPO = Path(__file__).resolve().parents[2]
 #: decision, not only on a menu offering an attach, so the deck-availability chain
 #: (`visible_counts` -> `unseen_counts` -> `deck_energy_counts` -> the two typed leg projections)
 #: moved out of `ATTACH_DECIDER_PROFILE` and into the per-decision cost. Measured on these frames,
-#: dragapult_ex, `famine_via_oracle` OFF vs ON: **1.216 ms -> 1.511 ms per Board build (+0.294 ms,
-#: +24%)**. Paid once per decision — every field here memoizes for the life of the snapshot, and
+#: dragapult_ex, the retired premise vs the oracle: **1.216 ms -> 1.511 ms per Board build
+#: (+0.294 ms, +24%)**. Paid once per decision — every field here memoizes for the life of the snapshot, and
 #: both Budget legs share the one `deck_energy_counts` derivation, so the second leg is an extra
 #: `attach_budget` assembly rather than a second walk over my zones. Accepted: it is the price of
 #: the famine premise being typed and accelerator-aware at all, which is the entire point of the
@@ -39,6 +39,7 @@ REPO = Path(__file__).resolve().parents[2]
 PER_DECISION_PROFILE = frozenset({
     "mine.active",
     "mine.active.energy_key",
+    "mine.active.stat",            # the fail-OPEN unreadable-body check the famine read makes first
     "mine.active_famine",
     "mine.attach_budget",
     "mine.attack_blocked",

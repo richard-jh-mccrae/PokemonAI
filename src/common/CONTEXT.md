@@ -608,6 +608,19 @@ never an "attached-now" truth, which is why it dies rather than surviving beside
 active_attack_payable_via_accel (the retired +1/cheapest-only/untyped approximation), payable
 (unqualified — say which Budget leg)
 
+**Unarmed but Able**:
+My Active carries ZERO Energy yet is not in a **Famine** — an attack is still reachable this turn
+out of the **Attach Budget**. A descriptive board fact, not an instruction, though the doctrine it
+serves reads it as one: such a body should SWING rather than take a tempo stall (ml f19's hand
+attach; dragapult f70's Crispin line). Derived once because two stall-gust rules need the identical
+clause. It deliberately says nothing about an ARMED Active — one carrying Energy keeps its attack
+option either way, so it may still legitimately stall, and an accelerator sitting in hand does not
+change that (the incoherence in the retired pair of guards, where merely HOLDING a Crispin
+suppressed an armed stall).
+_Avoid_: "should swing" as a field name (a Board holds facts; the prescription belongs to the rule
+reading it), active_arm_available (the go-down-swinging read for a body whose BIGGEST attack one
+more Energy would complete — a different question on a body that may already be armed)
+
 **Retreat Equity**:
 The mobility value of Energy attached toward a body's printed Retreat cost — an ADDITIVE orthogonal
 channel of the attach marginal (`attack_axis + retreat_equity + ability_fuel`, #139; the attack axis

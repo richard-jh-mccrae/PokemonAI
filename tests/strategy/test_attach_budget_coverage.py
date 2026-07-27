@@ -50,8 +50,9 @@ def _clauses() -> dict:
 
 
 def _special_energy_ids() -> set:
-    """Special Energy card ids, straight from the shipped card data (cardType 6 in the engine's
-    CardType enum; the CSV names the class in its type column)."""
+    """Special Energy card ids, read off the shipped CSV's type column — the same pure-data seam the
+    rest of this gate uses, so it needs no engine. (`CardStat.is_special_energy` answers the same
+    question at runtime from the engine's cardType 6; this file deliberately does not boot it.)"""
     path = _ROOT / "data" / "EN_Card_Data.csv"
     rows = csv.DictReader(path.read_text(encoding="utf-8").splitlines())
     return {int(r["Card ID"]) for r in rows

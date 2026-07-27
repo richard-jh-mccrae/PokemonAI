@@ -543,16 +543,28 @@ class MySide(_SideBase):
         """
         if body is None:
             return None
-        key = ("attach_budget", body.card_id, body.is_active, bool(manual_spent), bool(provable))
+        return self.attach_budget_for_card(body.card_id, benched=not body.is_active,
+                                           manual_spent=manual_spent, provable=provable)
+
+    def attach_budget_for_card(self, card_id, *, benched: bool, manual_spent: bool = False,
+                               provable: bool = False):
+        """The Budget toward a card id rather than a body in play — for a HYPOTHETICAL attacker the
+        board does not carry yet (the composed KO line's evolved form, #142).
+
+        This is the real primitive and :meth:`attach_budget` is the BodyView-shaped face of it: the
+        Budget reads its target only through the ``CardStat`` and the area, which is exactly this
+        pair. Callers that assembled the zone arguments by hand went around the memo and had to keep
+        seven kwargs in step with it; there is one assembly now."""
+        key = ("attach_budget", card_id, not benched, bool(manual_spent), bool(provable))
         return self._memoized(key, lambda: self._combat.attach_budget(
-            body.body, self.hand_ids,
+            {"id": card_id}, self.hand_ids,
             energy_attached=self.energy_attached or bool(manual_spent),
             supporter_played=self.supporter_played,
             deck_energy_types=(self.deck_energy_types_provable if provable
                                else self.deck_energy_types),
             hand_energy_types=self.hand_energy_types,
             discard_energy_counts=self.discard_energy_counts,
-            target_benched=not body.is_active,
+            target_benched=benched,
             more_prizes_than_opp=self.more_prizes_than_opp))
 
     def reachable_attach(self, body: BodyView | None, attack_id=None, *,
@@ -606,9 +618,19 @@ class MySide(_SideBase):
         FULL (fail-open) Budget. Never "0 Energy attached", never "the cheapest attack is unpayable",
         and never a body the rules will not let swing however rich its Budget.
 
-        A body-less side is a famine (fail-closed on the read, which is the standing-down direction
-        a missing Active wants anyway)."""
-        return bool(self.attack_blocked or not self.reachable_attach(self.active))
+        **Fail-OPEN on an unreadable body**, which is the opposite of the oracle it calls.
+        :meth:`reachable_attach` fails CLOSED — an unknown ``CardStat`` makes NO claim, so it returns
+        False — and negating that would turn "I cannot tell" into "PROVABLE famine", firing the very
+        +105 stall this premise exists to kill. The retired signal was explicit about the direction
+        ("True on unknown stats — the starved stall-gust must only fire on a PROVABLE famine",
+        ep83457493 f20) and it is preserved here rather than inverted. So the unknown body is checked
+        BEFORE the oracle is asked, and only the RULE leg may claim a famine without one."""
+        if self.attack_blocked:
+            return True                     # the rules settle it without reading a single stat
+        body = self.active
+        if body is None or body.stat is None:
+            return False                    # no claim — an unreadable body is not a demonstrable famine
+        return not self.reachable_attach(body)
 
     def best_reachable_damage(self, body: BodyView | None, *, extra_energy_ids=(),
                               manual_spent: bool = False) -> float:

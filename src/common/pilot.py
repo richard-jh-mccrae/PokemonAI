@@ -583,10 +583,11 @@ class Board:
                                           # **Provable Budget** — the sound deck leg, plus the engine's own
                                           # attack menu. The read for a consumer about to SPEND something that
                                           # expires unused (a this-turn damage boost); True when unknown
-    active_should_swing: bool = False     # an UNARMED Active (0 attached) that can still REACH an attack this
-                                          # turn: it should swing, not stall-gust (ml f19, dragapult f70). The
-                                          # stall-gust family's shared attack guard — two rules need the
-                                          # identical clause, so it is derived once here
+    active_unarmed_but_able: bool = False  # my Active carries ZERO Energy yet can still REACH an attack
+                                          # this turn (not `active_famine`) — the descriptive fact behind
+                                          # "go down swinging rather than stall-gust" (ml f19, dragapult
+                                          # f70). Derived once because two stall-gust rules need the
+                                          # identical clause
     immediate_preevo_in_play: bool = False  # the payoff's immediate pre-evo (e.g. Drakloak) is ALREADY on
                                           # my board, so a hand copy of it is redundant — refuel over it
     deploy_now_ids: frozenset = field(default_factory=frozenset)  # hand card ids that are evolutions with
@@ -5754,9 +5755,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # **Famine** (#142) — "my Active cannot attack this turn", read ONCE off the model: no attack
         # reachable under the full Attach Budget, or the rules forbid one at all (`attack_blocked`).
         famine = model.mine.active_famine
-        # "an UNARMED Active that can still REACH an attack should swing, not stall" — the stall-gust
-        # family's shared guard, derived here because two of its rules need the identical clause.
-        should_swing = len((ma or {}).get("energies") or []) == 0 and not famine
+        # 0 attached, yet an attack is still reachable this turn — the fact behind "go down swinging
+        # rather than stall-gust". Derived here because two stall-gust rules need the identical clause.
+        unarmed_but_able = len((ma or {}).get("energies") or []) == 0 and not famine
         base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
                      else Plan.SETUP)                   # the readiness core (SETUP→RACE)
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
@@ -5798,8 +5799,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             recycle_dead_only=self._recycle_dead_only(me),
             active_famine=famine,                                        # ← StateModel (#142): the ONE
-            active_should_swing=should_swing,                             # corrected famine premise
-            active_attack_provable=(model.mine.reachable_attach(model.mine.active, provable=True)
+            active_unarmed_but_able=unarmed_but_able,
+            active_attack_provable=(not model.mine.attack_blocked        # the rules first: a boost on
+                                    and model.mine.reachable_attach(model.mine.active, provable=True)
                                     and not self._attack_impossible_on_menu(
                                         select, model.mine.attach_budget(model.mine.active,
                                                                          provable=True))),
