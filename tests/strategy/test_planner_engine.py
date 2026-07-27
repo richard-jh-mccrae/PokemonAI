@@ -17,6 +17,7 @@ from common.scouting.provider import EngineCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.telemetry import to_record
+from conftest import needs_live_board_search
 
 REPO = Path(__file__).resolve().parents[2]
 MEGA = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
@@ -50,6 +51,7 @@ def _first_open_menu(pilot, obs, limit=80):
 
 
 @pytest.mark.req("REQ-PLANNER-0011")
+@needs_live_board_search
 def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
     """Drive a real mirror game to its first open turn menu, then evaluate the live first move through
     the engine sim: the primitive must return a concrete FINITE leaf value (not None), proving
@@ -73,6 +75,7 @@ def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
+@needs_live_board_search
 def test_simulate_line_reaches_a_board_and_ends_my_turn():
     """``_simulate_line`` returns a real end-of-turn board (not None) and stops on MY side: the returned
     tuple carries my player index and the prize count I started the turn with, and the resulting State
@@ -236,6 +239,7 @@ def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
+@needs_live_board_search
 def test_develop_rung_commits_a_well_formed_line_on_a_live_drive():
     """End-to-end on the committed engine: with `develop_rollout=True`, a real mirror drive engages the
     develop rung on its setup turns (no KO to aim at, greedy weak/indifferent). Every develop line it

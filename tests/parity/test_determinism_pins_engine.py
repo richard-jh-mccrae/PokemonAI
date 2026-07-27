@@ -18,6 +18,22 @@ REPO = Path(__file__).resolve().parents[2]
 
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 
+# NATIVE-ONLY by definition: every pin here is an empirical fact about the DLL that cgpy is
+# built to match, so running them ON cgpy measures the twin against itself. Worse than useless
+# under `CG_ENGINE=py` (tests/conftest.py): the module reaches past the alias with its own
+# `from cg import api` while driving an aliased `battle_start`, so the native lib receives a
+# cgpy-produced observation and **aborts the interpreter** — taking the whole run down at ~24%,
+# not just this module. Skip cleanly instead so the twin arm is usable at all.
+try:
+    from cgpy.alias import installed as _alias_installed
+except Exception:                                            # cgpy absent: nothing to guard
+    def _alias_installed() -> bool:
+        return False
+
+if _alias_installed():
+    pytest.skip("native-engine pins: meaningless (and fatal) on the cgpy twin",
+                allow_module_level=True)
+
 from cg.game import battle_finish, battle_select, battle_start, visualize_data  # noqa: E402
 
 DEFS = REPO / "src" / "cgpy" / "defs"
@@ -111,7 +127,10 @@ def test_select_deck_listing_preserves_true_order():
                 return
         finally:
             battle_finish()
-    pytest.skip("no deck-revealing select reached in 20 games (stochastic)")
+    pytest.fail("no deck-revealing select reached in 20 chaos games — the pin measured NOTHING. "
+                "Measured 25/25 alignment on 2026-07-27, so this is a harness regression (the "
+                "chaos driver stopped reaching searches), not bad luck. A skip here would have "
+                "retired the pin silently.")
 
 
 def test_validation_error_codes():
@@ -186,7 +205,9 @@ def test_fork_reshuffles_but_is_deterministic():
             return
         finally:
             battle_finish()
-    pytest.skip("no plain-MAIN post-drive state reached in 20 games (stochastic)")
+    pytest.fail("no plain-MAIN post-drive state reached in 20 chaos games — the pin measured "
+                "NOTHING. Measured 25/25 alignment on 2026-07-27, so this is a harness regression, "
+                "not bad luck. A skip here would have retired the pin silently.")
 
 
 def test_a_shuffle_inside_the_line_breaks_the_fork_pin():

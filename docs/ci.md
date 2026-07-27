@@ -76,6 +76,27 @@ full suite):
   (phantom-KO risk). Runs when attack/damage/effect code is in scope (`tests/sim`,
   `tests/meta_tracker`, or `tests/cards`).
 
+### Determinism gates (#178, ADR-0072 amendment C)
+
+Both run on every non-docs change, gating, and together they cost about 2 minutes.
+
+- **Determinism backstop** — the six live-native-engine modules, repeated **15×**. They are the
+  only tests whose answer can ride the engine's RNG (a shuffle *inside* a simulated line is not
+  reproducible — `docs/pyeng/determinism.md` §4), and the whole set runs in ~4 s, so repeating it
+  is nearly free. A frame that answers differently between repeats is unstable by definition. This
+  is the cheap net *underneath* the real guard, which is
+  `tests/strategy/test_engine_admissibility.py`: that one measures whether a drive consumed
+  randomness at all, so a sampled frame fails the day it is added rather than 1 run in 30 later.
+- **cgpy twin arm** — the whole selected suite again under `CG_ENGINE=py`. cgpy's search is
+  `SeededRng(0)`, so this arm is reproducible *by construction* and any flap in it is a real bug.
+  Green as of 2026-07-27 (3883 passed / 8 skipped).
+
+  A test the twin cannot answer is marked in the diff, never waved through by making the step
+  non-gating: `@needs_live_board_search` (`tests/conftest.py`) for one that needs a live-board
+  search round-trip, or a module-level skip stating why (the native determinism pins, the
+  engine-audited effect probes). Those markers are the parity ledger — they disappear as cgpy
+  parity grows, and a non-gating step would have hidden the same information.
+
 ## What runs (the suite itself)
 
 The suite is offline and self-contained on Linux:
