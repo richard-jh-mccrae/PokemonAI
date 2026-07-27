@@ -515,7 +515,11 @@ def test_starved_stall_gust_outranks_development_only_under_the_energy_famine():
     Boss's over a strongly-endorsed tutor. Hand the Active one {W} Energy (attack payable again) and
     the rule stands down — normal development resumes."""
     stats = DictCardStatProvider(dict(_STATS._stats), attacks=_ATTACKS)
-    stats._stats[3] = CardStat(3, name="Basic {W} Energy", hp=0, energyType=WATER)
+    # cardType 5 = BASIC_ENERGY (`cg.api.CardType`). Required, not decorative: the Attach Budget's
+    # manual-attach leg counts hand Energy through `is_typed_basic_energy`, which is exactly
+    # `cardType == 5 and energyType is not None`. Without it this card is not an Energy to the typed
+    # reader at all, and the "fed" board below would still read as a famine.
+    stats._stats[3] = CardStat(3, name="Basic {W} Energy", hp=0, energyType=WATER, cardType=5)
     p = Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
               general_strategy=GENERAL_STRATEGY, stats=stats, functions=_TAGS)
 

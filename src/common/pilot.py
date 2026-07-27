@@ -739,14 +739,6 @@ class Context:
     attach_target_under_max: bool = False  # receiving Pokémon carries fewer Energy than its
                                            # HIGHEST-damage attack costs — can't yet fire its big attack
                                            # (1 W can Jetting Blow but not Nebula Beam CCC). Fail-CLOSED (False when unknown).
-    attach_completes_biggest_attack: bool = False  # this ATTACH onto the ACTIVE crosses it from short-of to
-                                           # able-to-afford its HIGHEST-damage attack THIS turn (was < maxDamageCost,
-                                           # attached + provided >= maxDamageCost). Gates the stand-down of
-                                           # `dont-overbuild-the-doomed-wincon`: a DOOMED Active that this very
-                                           # attach turns the big attack ON should still fire it — go down swinging
-                                           # (ms 85163079 f51: 2W+1 = Nebula 210), unlike one merely overbuilt for a
-                                           # turn that won't come (ep83037962 f48: 1W→2W still short of CCC=3).
-                                           # Fail-CLOSED (False when target / CardStat / maxDamageCost unknown).
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
                                            # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
@@ -5154,9 +5146,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and "accel_source" in at_roles and self._attach_target_needs(at_target)
             and not board.accel_recipient_missing and not board.bench_wincon_ready)
-        attach_completes_biggest_attack = (
-            option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
-            and self._attach_completes_biggest_attack(at_target, tags))
         search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, cid, board)
         search_unlikely = self._search_probable_whiff(option, cid, board)
         search_confirmed = self._search_confirmed_hit(option, cid, board, plan)
@@ -5200,7 +5189,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_is_energy=self._attach_is_energy(stat),
                        attach_target_is_utility_body=attach_target_is_utility_body,
                        attach_target_under_max=self._attach_target_under_max(at_target),
-                       attach_completes_biggest_attack=attach_completes_biggest_attack,
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_fuels_dormant_ability=self._attach_fuels_dormant_ability(stat, at_target),
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
@@ -5497,24 +5485,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return len((target.get("energies") or [])) < cost
 
-    def _attach_completes_biggest_attack(self, target: dict | None, tags: list) -> bool:
-        """True if attaching this Energy onto the ACTIVE crosses it from short-of to able-to-afford its
-        HIGHEST-damage attack THIS turn — the attach COMPLETES the big attack. Guards the stand-down of
-        `dont-overbuild-the-doomed-wincon`: a doomed Active this very attach turns the payoff attack ON
-        should fire it (go down swinging, ms 85163079 f51: 2 W + 1 = Nebula CCC), unlike one merely
-        overbuilt for a turn that won't come (ep83037962 f48: 1 W → 2 W, still short of CCC=3, dies first).
-        `provided` mirrors the planner's `_attach_provided` (3 for a `discard_eot` burst onto an Evolution,
-        else 1). Fail-CLOSED (False when target / CardStat / maxDamageCost unknown), like `_attach_target_under_max`."""
-        if not target:
-            return False
-        stat = self.stats.get(target.get("id")) if self.stats else None
-        cost = getattr(stat, "maxDamageCost", None) if stat else None
-        if cost is None:
-            return False
-        have = len((target.get("energies") or []))
-        provided = 3 if ("discard_eot" in (tags or []) and getattr(stat, "evolvesFrom", None)) else 1
-        return have < cost and (have + provided) >= cost
-
     def _active_attack_payable_via_accel(self, me: dict, ma: dict | None,
                                          supporter_played: bool, basic_energy_in_deck: bool) -> bool:
         """My Active could be made attack-payable THIS turn by a PLAYABLE hand energy-accelerator (a
@@ -5543,15 +5513,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _active_arm_available(self, ma: dict | None, bench_wincon_ready: bool) -> bool:
         """Go-down-swinging is available on the Active: it is a real ATTACKER (NOT a utility draw/tutor/stall
-        body) whose HIGHEST-damage attack ONE more Energy would COMPLETE this turn, and there is no ready
+        body) whose HIGHEST-damage attack this turn's Attach Budget would COMPLETE, and there is no ready
         benched win-condition to retreat into instead. Distinguishes ml f21 (doomed Solrock — Cosmic Beam
         {F} completed by one {F} → arm + swing for 70) from f42 Makuhita (biggest attack costs 2, one {F}
         short) / f54 Lunatone (utility engine) and from the retreat-into-a-ready-wincon case (accel f70).
         Fail-CLOSED. Backs `arm-the-doomed-active`, `dont-feed-the-doomed`'s go-down-swinging stand-down,
-        and the Lunar-Cycle famine's yield-to-arming."""
+        and the Lunar-Cycle famine's yield-to-arming.
+
+        Both legs are the ONE oracle at different budgets (#142), which is what retired the last untyped
+        count-vs-`maxDamageCost` matcher in the tree: the biggest attack is NOT payable on the EMPTY
+        budget — the honest "with what is attached right now" reading — but IS reachable under the full
+        one. So it reads typed slots rather than a bare count, honours ADR-0033 attack locks, and sees an
+        accelerator's yield instead of assuming a flat one more Energy."""
         if ma is None or not self.stats or bench_wincon_ready or self._is_utility_body(ma.get("id")):
             return False
-        return self._attach_completes_biggest_attack(ma, [])
+        model = getattr(self, "_state_model", None)
+        body = model.mine.active if model is not None else None
+        stat = self.stats.get(ma.get("id"))
+        aids = (getattr(stat, "attacks", None) or ()) if stat is not None else ()
+        if body is None or not aids:
+            return False
+        biggest = max(aids, key=self._attack_damage)
+        if self.combat.reachable_attach(ma, biggest, budget=Budget()):
+            return False                    # already armed — there is nothing left for an attach to complete
+        return bool(model.mine.reachable_attach(body, biggest))
 
     def _immediate_preevo_in_play(self, me: dict) -> bool:
         """The payoff's IMMEDIATE pre-evolution (e.g. Drakloak for the Dragapult line) is ALREADY on my
