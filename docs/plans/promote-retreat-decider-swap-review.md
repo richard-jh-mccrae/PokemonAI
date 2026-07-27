@@ -85,47 +85,85 @@ f104/f92 are the "first-bench-slot blindness" pair, now EMERGENT from reachable 
    slot=(5,2) Staryu            total=-80.0  [my_yield= 20.0 exposure=100.0]
 ```
 
-**The board.** Turn 9, forced promote. Their Active is a Mega Lucario ex on **20 HP**, so *every*
-candidate Knocks it Out — `_promote_ko_tactical` fires on all three and the pick turns on the
-residual plus the KO oracle's riders. Our Bench: a Cinderace at **30/130** (1 prize, badly damaged),
-a fresh Mega Starmie ex at 330 (3 prizes), a Staryu at 70.
+Turn 9, forced promote. Their Active is on **20 HP**, so *every* candidate Knocks it Out —
+`_promote_ko_tactical` fires on all three and the pick turns on the residual plus the KO oracle's
+riders.
 
 **What the human wants.** Take the Knock Out with the body that is dying anyway. Feeding a 3-prize
 Mega Evolution Pokémon *ex* to gain a Knock Out available to a 1-prize chump is the prize-economy
 mistake `interpose-the-cheap-attacker-to-preserve-the-wincon` (+50) existed to prevent.
 
-**Why the equation disagrees, and it is not a bug.** Three legs were checked at source before
-bringing this here:
+**The board**, dumped in full (2026-07-27 — correcting a first pass that mis-read it):
 
-1. **The accel dividend is correctly zero.** Cinderace's Turbo Flare has `recoverN=3, source=deck`,
-   but `_recover_units` bounds it by the recipients' remaining NEED — and *every* benched body is
-   already at 3 Energy. The rider would fire blanks, so §3b credits nothing. Correct.
-2. **`my_yield` is correct.** No `wall_progress` discount applies because there is no wall — they all
-   Knock Out at 20 HP. 120 is Jetting Blow, 50 is Turbo Flare, 20 is Staryu's chip.
-3. **Exposure is correct arithmetic.** Cinderace `1 × 100 × halve(0)` = 100; the Mega
-   `3 × 100 × halve(1)` = 150. The Mega yields three times the prizes but one turn later, and §4's
-   halving — REUSED from `evolve_value`, deliberately no new constant — discounts that to a
-   50-point gap, which the 70-point damage gap then out-votes. On top, the KO oracle credits Jetting
-   Blow's +50 bench-snipe rider, which Turbo Flare has no answer to.
+```
+ME (seat 1, mega_starmie) — Active EMPTY (just Knocked Out), 5 prizes left, 25 cards in deck
+  BENCH[0] Cinderace         30/130   1x {W}
+  BENCH[1] Mega Starmie ex  330/330   1x {W}   (over Staryu)
+  BENCH[2] Staryu            70/70    1x {W}
+  HAND (10): Ultra Ball · 2x Harlequin · 2x Cinderace · Night Stretcher ·
+             Buddy-Buddy Poffin · 3x Basic {W} Energy
+  DISCARD (13): 3x Crushing Hammer · 2x Lillie's Determination · 2x Ignition Energy ·
+             Buddy-Buddy Poffin · Mega Signal · Wally's Compassion · Hilda ·
+             Mega Starmie ex · Staryu          [NO Basic {W} Energy]
 
-So ADR-0073 §11's claim that interpose is *emergent from Exposure* holds where its premise holds —
-"exposure 100 vs 300", i.e. when they can take the 3-prize Knock Out **next turn**. Here they need
-two, the ruled grading halves it to 150, and the emergence is not strong enough to carry the frame.
+OPPONENT (seat 0) — 3 prizes left, 9 cards in deck, 7 in hand
+  ACTIVE   Mega Lucario ex   20/440   3x {F}  + Hero's Cape   <-- one hit from a Knock Out
+  BENCH[0] Lunatone         110/110   -
+  BENCH[1] Mega Lucario ex  290/340   5x {F}
+  BENCH[2] Solrock          110/110   1x {F}
+  DISCARD (24): 4x Fighting Gong · 3x Lillie's Determination · 3x Dusk Ball ·
+             3x Premium Power Pro · 3x Poké Pad · 2x Hariyama · Solrock · Riolu ·
+             Switch · Mega Lucario ex · Basic {F} Energy · Carmine
+  STADIUM: 1252 (theirs)
+```
 
-**The ruling is the user's.** The three readings that seem live:
+Every benched body of mine carries exactly **one** {W}, so nothing is "already powered".
 
-* **A — the frame is right and the equation is wrong.** A prize the opponent takes one turn later is
-  worth much more than half, because prizes do not decay the way damage does. That is an argument for
-  grading `exposure` on a shallower curve than `_halve`, and it re-opens §4's "no new constants".
-* **B — the equation is right and the label is a judgement call.** Jetting Blow takes the prize AND
-  snipes 50 off their Bench; the Mega survives a hit where the 30 HP Cinderace does not. Record the
-  frame as a ruled flip and move on.
-* **C — the frame belongs to another layer.** "Take the available Knock Out with the cheapest body
-  that can" is a KO-selection rule, not a sub-lethal one, and the residual is not where it should
-  live. That would hold it out with an owner (#165 or #145) rather than change §4.
+**Why the equation disagrees — and the cause is NOT the exposure grading.** A first pass recorded the
+accel dividend as correctly zero "because every bench body is already fully powered." **That was
+wrong on both counts** and is corrected here. The three legs, re-measured:
 
-No option is taken here. Until it is ruled, the Decision Gate stays `FAIL` and this document is the
-sitting's material.
+1. **The accel dividend is zero because of the FUEL leg, not the NEED leg.** `_recover_units` is
+   `min(recoverN, deck fuel, recipient need)` = `min(3, 0, 4)`. Recipient need is **4** — the bodies
+   genuinely want Energy. The binding bound is `_deck_basic_energy_fuel` returning **0**, and the
+   arithmetic is: the decklist runs **9** Basic {W}, **6** are already visible (3 attached, 3 in
+   hand), leaving 3 unseen — against **5** face-down prizes. The pre-anchor read is the SOUND
+   PIGEONHOLE FLOOR, `max(0, unseen − prizes_hidden) = max(0, 3 − 5) = 0`: it cannot *prove* a single
+   Water is still in the deck rather than prized, so an endorser claims nothing. Its own docstring
+   assumes the floor "typically saturates … (9 Water unseen − 6 prizes ≥ 3)"; here two thirds of the
+   suite is already on the board, and the assumption fails.
+2. **`my_yield` is otherwise correct.** No `wall_progress` discount applies because no wall stands —
+   their Active is on 20 HP and every candidate Knocks it Out.
+3. **Exposure is the ruled arithmetic.** Cinderace `1 × 100 × halve(0)` = 100; the Mega
+   `3 × 100 × halve(1)` = 150.
+
+**The counterfactual that identifies the cause.** Feed the fuel leg the 3 UNSEEN copies instead of
+the provable floor and nothing else changes — the frame lands on `correct`, decisively:
+
+| body | `my_yield` | exposure | total | with fuel = 0 |
+|---|---|---|---|---|
+| Cinderace | **275** (50 + 3×75) | 100 | **+175** | −50 |
+| Mega Starmie ex | 120 | 150 | −30 | −30 |
+| Staryu | 20 | 100 | −80 | −80 |
+
+So the regression is an artefact of a conservative EPISTEMIC read collapsing, not of §4's grading.
+
+**The ruling is the user's.** Four readings, the last of which the counterfactual makes the strongest:
+
+* **A — grade exposure on a shallower curve than `_halve`.** Re-opens §4's "no new constants", and
+  the counterfactual above suggests it would be treating a symptom.
+* **B — it is a judgement call.** Jetting Blow takes the prize AND snipes 50; record a ruled flip.
+* **C — it belongs to another layer.** "Take the available Knock Out with the cheapest body that can"
+  is KO-selection, not sub-lethal; hold out with an owner (#165 / #145).
+* **D — fix the fuel READ, not the equation.** The pigeonhole floor is sound but very pessimistic once
+  a suite is mostly visible. The closure term already faced this exact choice and took the other road
+  — ADR-0070 §3 rules income "an ODDS read, never a tier", and `_promote_closure` uses
+  `CountTriple.expected` for precisely this reason. An expected-value leg here (or letting the deck
+  tracker anchor) would be consistent with that, and it is a change to `_deck_basic_energy_fuel`
+  (ADR-0061's, pre-existing and shared with the attack option) rather than to anything 1c authored —
+  so it wants its own ruling and probably its own issue.
+
+No option is taken here. Until it is ruled, the Decision Gate stays `FAIL`.
 
 ## What the gate does NOT cover
 
