@@ -138,60 +138,27 @@ active_famine` the two therefore pull opposite ways rather than compounding, and
 tighter than either leg. The one path that could still manufacture a false famine — an accel card
 with no Effect-Clause row — is audited and CI-gated by `tests/strategy/test_attach_budget_coverage.py`.
 
-## Amendment (2026-07-27, grilled — issue #142, Phase 1d): the epistemic also splits by WHICH CONSUMER ASKS
+## Amendment (2026-07-27, grilled — issue #142): hand SPECIAL Energy is a Function Tag, not a branch
 
-The decision above splits the epistemic by **what** is uncertain. Phase 1d found that is necessary
-but not sufficient: two consumers can ask the same question about the same board and need opposite
-fail directions, because what a wrong answer COSTS them differs.
+A third way the Budget went silently blind, found while swapping the consumers — and live on a
+shipped deck, so it belongs beside the fail-closed rulings above rather than in a follow-up.
 
-- A consumer about to **stand down** — the stall-gust family reading **Famine** — is ruined by a
-  false famine. That is `dp_stall_gust_false_famine_accel_f70`, the +105 blunder this ADR exists to
-  kill, and it takes the fail-OPEN deck leg above.
-- A consumer about to **spend something that expires unused** — `dont-play-damage-boost-when-cant-attack`,
-  whose Item is discarded at end of turn having buffed nothing (ep83966336 f14) — is ruined by a
-  false live-ness. It takes a **Provable Budget**: the same oracle, the same clause interpreter, the
-  deck leg read off `CountTriple.floor >= 1` (the pigeonhole) instead of `ceiling > 0`.
+The Budget's hand leg counted `is_typed_basic_energy`, so a **Special** Energy contributed nothing.
+Ignition Energy "provides {C} Energy… If this card is attached to an Evolution Pokémon, it provides
+{C}{C}{C} Energy instead" (card text, `data/EN_Card_Data.csv` id 17) — one attach arms a Mega
+Starmie ex from ZERO. mega_starmie runs it; slowking runs Boomerang (9) and Telepath Psychic (19).
+Unmodelled, that board reads as a famine while the hand holds the card that arms it: the same class
+as the retired `+1`, one zone over.
 
-One argument apart, so the two answers cannot diverge the way three hand-rolled models did. Every
-certainty is in BOTH legs — an Energy in hand, an Item accelerator (Items all play, no quota to
-lose), a discard-sourced attach over the public pile — and both collapse to the same answer once a
-deck-revealing search anchors the prizes.
-
-**Stated limitation.** The Provable leg is not a clean instrument for the risk behind a spend
-decision. That risk is largely the **one-Supporter-per-turn slot**, which NO Budget leg models: a
-Budget asserts that *a* play-set exists, never which one the turn actually spends. The Provable leg
-addresses it only obliquely, by zeroing the deck leg for any realistic Energy suite before the
-prizes are anchored (`floor` is 0 whenever unseen copies do not outnumber the hidden prize slots).
-Accepted knowingly: it errs toward not spending, which is the safe direction for a card that
-expires. The honest instrument for the *deck* half of that risk is `readiness_p` — issue #175.
-
-### Famine is not purely an affordability question
-
-`reachable_attach` answers a COST question and nothing else. A body can be forbidden from attacking
-outright: **Asleep** and **Paralyzed** each "cannot attack or retreat" (`docs/rulebook.txt` L190,
-L206; L215 confirms they are the only two conditions that block retreat), and the first player
-cannot attack on turn 1 (L152). Those are properties of the PLAYER, not the body, so they live as
-`MySide.attack_blocked` on the StateModel side and `active_famine` composes the two. `CombatMath`
-stays body-scoped — typed cost plus ADR-0033 locks.
-
-The famine call is `attack_id=None`, which scans **every** attack. "The cheapest attack is unpayable"
-is not sound once costs are typed: a cheap `{F}{F}` can be unpayable while a dearer `●●●` is not.
-
-### Hand Special Energy is a Function Tag, not a Budget branch
-
-The Budget's hand leg counted `is_typed_basic_energy`, so a Special Energy contributed nothing —
-and Ignition Energy "provides {C}{C}{C}" attached to an Evolution Pokémon (card text, id 17), which
-arms a Mega Starmie ex from zero in one attach. mega_starmie runs it; slowking runs Boomerang (9)
-and Telepath Psychic (19). That was a false famine on a shipped deck: the same class as the retired
-`+1`, one zone over.
-
-The provision is carried as a **`provides:N` / `provides_evo:N` parametric Function Tag** — the same
+**Ruled: the provision is a `provides:N` / `provides_evo:N` PARAMETRIC Function Tag** — the same
 shape and the same reason as `dig:N`, per-card DATA that ages with the card pool through the
-card-functions pipeline rather than a constant in the affordability code. It is curated in
+card-functions pipeline rather than a constant in the affordability code. Curated in
 `tools/meta_tracker/function_overrides.json` against the card text (unioned at build, never
-clobbered by regeneration). The COLOUR is deliberately not tagged: `CardStat.energyType` already
-carries it. The manual attach therefore plays one source GROUP rather than one unit — a Basic is
-one, a Special is however many it prints.
+clobbered by regeneration). The COLOUR is deliberately NOT tagged — `CardStat.energyType` already
+carries it, so the tag adds only what the stats cannot say. The manual attach consequently plays one
+source GROUP rather than one unit: a Basic is one, a Special is however many it prints, coloured
+exactly as `_attached_units` colours the same card once attached.
 
-Untagged still contributes ZERO, and the coverage gate now audits Special Energy in shipped decks
-exactly as it audits accel cards, so the next one cannot be silently invisible.
+Untagged still contributes ZERO (the yield ruling above, unchanged), and
+`test_attach_budget_coverage.py` now audits Special Energy in shipped decks exactly as it audits
+accel cards — verified non-vacuous by dropping the tag and watching the gate fail.
