@@ -4,7 +4,6 @@ System test — runs the fixture agent in a real `cabt` match and reads the tele
 the episode's agent log (the same `{duration, stdout, stderr}` structure you download from
 Kaggle), so we verify the *collected* data end-to-end, not an imagined shape.
 """
-import json
 from pathlib import Path
 
 import pytest
@@ -16,14 +15,20 @@ FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 
 
 def _stderr_telemetry(env) -> list[dict]:
-    """Every `@T` telemetry record our agent wrote to stderr across the match."""
-    recs = []
-    for step in (env.logs or []):
-        for seat in step:
-            for line in (seat or {}).get("stderr", "").splitlines():
-                if line.startswith("@T"):
-                    recs.append(json.loads(line[2:].strip()))
-    return recs
+    """Every `@T` telemetry record our agent wrote to stderr across the match.
+
+    Delegates to the same `parse_records` the real collection tooling (`/blunder-buster`,
+    `tools/submit/collect.py`) uses on downloaded Kaggle logs, rather than re-parsing `@T` lines
+    by hand: `kaggle_environments` hard-truncates each decision's captured stderr at
+    `maxLogLength` (default 10,000 chars — `Agent.act`), so a rare, unusually large decision
+    (many legal options) can truncate an `@T` line mid-JSON. `parse_records` already treats that
+    as an expected artifact of the `{duration, stdout, stderr}` capture path and skips the bad
+    line rather than raising — a hand-rolled parser here that doesn't do the same went flaky on
+    exactly that (issue #180).
+    """
+    from train.blunder.telemetry_log import parse_records
+
+    return parse_records(env.logs or [])
 
 
 @pytest.mark.req("REQ-SUB-0006")
