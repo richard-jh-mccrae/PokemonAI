@@ -436,7 +436,11 @@ def test_reachable_attach_answers_for_any_body_not_just_the_active():
 
 def test_readiness_p_is_certain_when_the_budget_already_reaches_and_closed_without_an_enabler():
     m = _model(_player(active=_pult(), hand=[CRISPIN]), _player(active=_poke(RIOLU, hp=80)))
-    assert m.mine.readiness_p(m.mine.active, PHANTOM_DIVE) == 1.0
+    # ADR-0074 / #175: Crispin REACHES only through a deck fetch, so "already reaches" is not
+    # certainty — the fetch can whiff. Weighted, that reads as its real odds; the boolean oracle
+    # still says reachable, and `weighted=False` recovers the pre-#175 fail-open 1.0.
+    assert 0.0 < m.mine.readiness_p(m.mine.active, PHANTOM_DIVE) < 1.0
+    assert m.mine.readiness_p(m.mine.active, PHANTOM_DIVE, weighted=False) == 1.0
     dry = _model(_player(active=_pult()), _player(active=_poke(RIOLU, hp=80)),
                  energy_attached=True)
     assert dry.mine.readiness_p(dry.mine.active, PHANTOM_DIVE) == 0.0

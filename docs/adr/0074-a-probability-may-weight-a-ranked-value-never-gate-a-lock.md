@@ -1,7 +1,8 @@
 # ADR-0074: A probability may WEIGHT a ranked value, never GATE a lock
 
 **Status.** Accepted (grilled 2026-07-27, `/grill-with-docs`, issue #175 — split out of the #142
-Phase-1d grill as grill-item-3 Option 3). Extends [ADR-0067](0067-attach-budget-fails-closed-on-yield-open-on-deck-presence.md)
+Phase-1d grill as grill-item-3 Option 3). **Implemented 2026-07-27** — see the Build record at the
+foot of this ADR. Extends [ADR-0067](0067-attach-budget-fails-closed-on-yield-open-on-deck-presence.md)
 (the split epistemic and its 2026-07-27 leg-assignment amendment) and **amends
 [ADR-0031](0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md) decision 3** (the hard-rung
 invariant). Leaves [ADR-0030](0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md)
@@ -206,3 +207,38 @@ Owed:
 - The build's centre of gravity is the assignment-returning matcher and the typed-Budget path
   through `best_affordable_ko_value` — groundwork counted as part of the decision, not deferred.
 - `#175`'s title should be amended: `p_contains`, not `readiness_p`.
+
+## Build record (2026-07-27)
+
+| decision | landed as |
+|---|---|
+| 2 — the instrument | `CountTriple.p_any` (= `deck_odds.p_contains` over the legs' own `(u, k, d)`), projected as `MySide.deck_energy_p`. Reproduces this ADR's table exactly: 0.068 % whiff at 3 unseen, 13.0 % at 1. |
+| 3 — per-assignment weight | `AttachUnit.source` (`"deck"` = the one uncertain zone) + `Budget.realising_p` + `CombatMath.attack_realising_p` / `reachable_attach_p`, and an `attack_p` hook on `best_affordable_ko_value`. |
+| 4 — the prize term | `_composed_rank` orders by EXPECTED prizes; `_ko_for_prizes_lines` passes `prizes * p` into `_leaf_value`. ADR-0031 decision 3 amended. |
+| 5 — the floor | `_pool_floor_fails` / `_deferral_value`: dominance for `_WEIGHTED_GOALS`, the original `< KO_SCORE` for every other goal, on BOTH commit paths. |
+| 6 — scope | the two composed-line sites, plus `pilot.py`'s dig-readiness and promote-readiness marginals (`reachable_attach_p` / weighted `readiness_p`). `_play_accel_extra` still deferred to #177. |
+| 7 — verification | the tail / complement / degeneracy fixtures + the reorder test, in `tests/strategy/test_reachable_attach.py`. |
+
+**The commensurability measurement decision 5 demanded, taken BEFORE the floor was built**
+(`tools/train/probes/rung_scale.py`, 72 firing frames over dragapult_ex + mega_lucario): tuned top
+score 20–210, pool values 1009–3035 — cleanly separated, with the dominance test vetoing nothing the
+constant floor did. It did not force a rethink.
+
+**One scope correction found by building.** Decision 5 said the floor should apply "on the
+closed-form path too". Applied literally it also floors `stabilize_then_ko` lines, which share
+`_commit_best` but carry no probability and had no floor on that path — it regressed
+`test_stabilize_fires_when_the_ko_rides_the_attach_and_the_burst_survives_the_bounce`. The floor is
+therefore scoped to `_WEIGHTED_GOALS`: the rungs whose value #175 changed are the rungs whose floor
+#175 may change.
+
+**A ruled behaviour change, not a regression.**
+`test_readiness_p_is_certain_when_the_budget_already_reaches_and_closed_without_an_enabler` asserted
+`1.0` for a Crispin line that reaches only through a deck fetch. Under this ADR that is 0.86, not
+certainty — the fetch can whiff. The test now pins both readings: weighted (`0 < p < 1`) and
+`weighted=False` (the pre-#175 fail-open `1.0`).
+
+**Residual scope of the whole issue, measured** (`tools/train/probes/anchor_rate.py`): the weighting
+can only change a decision on an UN-ANCHORED frame, and after the two deck-tracker fixes this ADR's
+investigation surfaced (`cb60927`, `003b1b7`) that is ~18 % of frames, concentrated late. #175 is
+therefore honest but small — which is the shape the grill predicted and the reason the Win Rung was
+kept out of scope.

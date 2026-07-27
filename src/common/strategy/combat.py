@@ -978,6 +978,43 @@ class CombatMath:
                    for slots in (self._attack_slots(aid),) if slots
                    for option in budget.options)
 
+    def reachable_attach_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
+                           p_by_type=None) -> float:
+        """The EV reading of :meth:`reachable_attach`: P(``my_body`` can really pay an attack this
+        turn), taking the BEST attack by probability (ADR-0074 decision 6, #175).
+
+        Exactly 1.0 when a payable attack needs nothing from the deck, and 0.0 whenever the boolean
+        oracle says nothing is payable at all — the two readings agree on feasibility by
+        construction, because both walk the same locks, the same attacks and the same matcher. With
+        no probability map it degenerates to ``1.0 if reachable_attach(...) else 0.0``, so an
+        unweighted caller is unchanged.
+
+        For RANKED consumers only. A gating consumer takes :meth:`reachable_attach` — see **Leg
+        Assignment** in ``src/common/CONTEXT.md``."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        grant = self._grant(my_body) or {}
+        if grant.get("self_lock"):
+            return 0.0
+        if not p_by_type:
+            return 1.0 if self.reachable_attach(my_body, attack_id, budget=budget) else 0.0
+        attack_ids = (attack_id,) if attack_id is not None else tuple(stat.attacks or ())
+        attached = self._attached_units(my_body)
+        best = 0.0
+        for aid in attack_ids:
+            if aid == grant.get("same_lock"):
+                continue
+            slots = self._attack_slots(aid)
+            if not slots:
+                continue                       # unresolvable cost makes NO claim, either direction
+            p = budget.realising_p(slots, p_by_type, attached=attached)
+            if p > best:
+                best = p
+                if best >= 1.0:
+                    break
+        return best
+
     def attach_units(self, card_id, count: int = 1) -> tuple:
         """``count`` Budget units of the Energy card ``card_id`` — the PROVISION an attach delivers.
 
@@ -1027,7 +1064,7 @@ class CombatMath:
 
     def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
                     enabler_budget: Budget | None = None,
-                    copies: int = 0, pool: int = 0, draws: int = 0) -> float:
+                    copies: int = 0, pool: int = 0, draws: int = 0, p_by_type=None) -> float:
         """P(``my_body`` is READY to use the attack this turn) — the EV variant of
         :meth:`reachable_attach`, and the probabilistic MIDDLE the interim promote/retreat
         ``fetch_enables_p`` never had (it shipped a bare 1.0/0.0).
@@ -1036,13 +1073,22 @@ class CombatMath:
         deck enabler WOULD reach (``enabler_budget``, the same Budget computed as though that card
         were in hand), the exact hypergeometric that the turn's remaining dig finds one:
         ``draw_hit_probability(copies, pool, draws)``. Fail-CLOSED at 0.0 — no enabler modelled, or
-        an enabler that still would not pay, is worth nothing, never its bare draw odds."""
-        if self.reachable_attach(my_body, attack_id, budget=budget):
+        an enabler that still would not pay, is worth nothing, never its bare draw odds.
+
+        ``p_by_type`` (ADR-0074 decision 6, #175) additionally prices the DECK-fetch leg inside each
+        Budget: this method priced the *draw* honestly while leaving deck presence a fail-open
+        boolean, so a line resting on the last copy of a colour read the same as one resting on
+        three. Omitted, every reading is 1.0/0.0 and the result is byte-identical to before."""
+        now = self.reachable_attach_p(my_body, attack_id, budget=budget, p_by_type=p_by_type)
+        if now >= 1.0:
             return 1.0
-        if enabler_budget is None or not self.reachable_attach(my_body, attack_id,
-                                                               budget=enabler_budget):
-            return 0.0
-        return draw_hit_probability(copies, pool, draws)
+        if enabler_budget is None:
+            return now
+        via = self.reachable_attach_p(my_body, attack_id, budget=enabler_budget,
+                                      p_by_type=p_by_type)
+        if via <= 0.0:
+            return now                             # no enabler pays -> only what I already hold
+        return max(now, via * draw_hit_probability(copies, pool, draws))
 
     # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
@@ -1432,6 +1478,18 @@ class CombatMath:
             return 0
         return min(int(opp_discard_energy.get(recur.energyType, 0)), _RECUR_RELOAD_CAP)
 
+    def attack_realising_p(self, attack_id, *, budget, body=None, p_by_type=None) -> float:
+        """P(``budget`` plus ``body``'s attached Energy really pays ``attack_id``) — the Probability
+        Leg applied to ONE attack's typed cost (ADR-0074, #175). 1.0 with no probability map (an
+        unweighted caller), and 1.0 for a cost this oracle cannot resolve — an unknown cost makes no
+        claim, so it must not manufacture a discount either."""
+        if not p_by_type:
+            return 1.0
+        slots = self._attack_slots(attack_id)
+        if not slots:
+            return 1.0
+        return budget.realising_p(slots, p_by_type, attached=self._attached_units(body))
+
     # --- KO valuation (the shared band every hypothetical attacker is priced on) ------------
     def bench_snipe_bonus(self, opp_bench, attack_id) -> float:
         """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes a benched Pokémon is
@@ -1454,7 +1512,7 @@ class CombatMath:
                                  opp_bench=(), bound: str = "exact", body: dict | None = None,
                                  extra_type=None, extra_units: int = 0,
                                  boost_amount: int = 0, boost_type=None,
-                                 promote_bench_names=None) -> float:
+                                 promote_bench_names=None, attack_p=None) -> float:
         """The best KO value ``attacker_id`` (carrying ``energy`` Energy) reaches against the
         opponent's Active — KO_SCORE + prize − efficiency + bench-snipe rider, the ONE band every
         hypothetical attacker is priced on (retreat/gust/promote/attach/boost lookaheads). 0 if no
@@ -1470,7 +1528,13 @@ class CombatMath:
         ``promote_bench_names`` names the bodies that WILL sit on my Bench after the presumed
         promote/retreat — a ``requiresBench`` attack whose partner is provably benched then reads
         its printed damage rather than the does-nothing floor. ``opp_bench`` is the Board's
-        ``((cardId, hp), …)`` snapshot behind the rider tiebreaks."""
+        ``((cardId, hp), …)`` snapshot behind the rider tiebreaks.
+
+        ``attack_p`` (ADR-0074, #175) weights each candidate attack by P(the Energy it needs is
+        really there) — ``attack_p(attack_id) -> float``. It is the RANKED-consumer hook and is
+        omitted by every lock: with it absent the method is byte-identical to before. Because the
+        weight is applied per attack BEFORE the max, the winner is the attack with the best
+        *expected* value, not the best value that might not happen."""
         stat = self._card_stat(attacker_id)
         opp_hp = (opp or {}).get("hp", 0)
         if not (stat and opp_hp):
@@ -1508,5 +1572,7 @@ class CombatMath:
             if dmg >= opp_hp:
                 val = (KO_SCORE + self.prize_value(opp) - _EFFICIENCY * cost
                        + self.bench_snipe_bonus(opp_bench, aid) + self.bench_spread_bonus(opp_bench, aid))
+                if attack_p is not None:
+                    val *= max(0.0, min(1.0, float(attack_p(aid))))   # ranked consumer: EV, not claim
                 best = max(best, val)
         return best

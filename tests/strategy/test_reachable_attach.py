@@ -691,3 +691,59 @@ def test_realising_p_agrees_with_can_pay_on_feasibility():
 
 def test_realising_p_of_a_free_cost_is_certain():
     assert Budget(options=((),)).realising_p((), {}) == 1.0
+
+
+# ── #175 acceptance: the three fixture families (ADR-0074 decision 7) ─────────────────────────
+# The TAIL fixture alone cannot distinguish decision 3 (per-assignment) from the per-Budget
+# weighting the grill rejected — both discount at low `unseen`. The COMPLEMENT is what falsifies
+# the wrong design, and the DEGENERACY fixture is what discharges the no-regression claim.
+
+def _thin_deck_p(p_thin):
+    """A probability map for a deck depleted to its last {P}: {R} plentiful, {P} nearly gone."""
+    return {FIRE: 0.999, PSYCHIC: p_thin}
+
+
+def test_tail_a_deck_sourced_ko_is_discounted_at_low_unseen():
+    """FAMILY 1 (the tail): the composed line's KO rides a {P} fetch with one copy unseen, so the
+    cost's realising probability tracks the depletion ramp instead of reading 1.0."""
+    deck_r = AttachUnit(frozenset({FIRE}), source="deck")
+    deck_p = AttachUnit(frozenset({PSYCHIC}), source="deck")
+    budget = Budget(options=((deck_r, deck_p),))
+    # Phantom Dive's {R}{P}: both slots ride the deck, so both colours are priced.
+    assert round(budget.realising_p((FIRE, PSYCHIC), _thin_deck_p(0.87)), 6) == round(
+        0.999 * 0.87, 6)
+
+
+def test_complement_the_same_frame_pays_from_hand_at_full_value():
+    """FAMILY 2 (the complement) — the load-bearing one. SAME depleted deck, but the cost is paid by
+    Energy already in hand/attached. Per-assignment pricing reads exactly 1.0; the rejected
+    per-Budget weighting would have discounted this line because a thin fetch sits in the option."""
+    in_hand_r = AttachUnit(frozenset({FIRE}))                 # certain — no source
+    in_hand_p = AttachUnit(frozenset({PSYCHIC}))              # certain
+    thin_fetch = AttachUnit(frozenset({PSYCHIC}), source="deck")
+    budget = Budget(options=((in_hand_r, in_hand_p, thin_fetch),))
+    assert budget.realising_p((FIRE, PSYCHIC), _thin_deck_p(0.05)) == 1.0
+
+
+def test_degeneracy_an_anchored_deck_is_byte_identical_to_the_unweighted_read():
+    """FAMILY 3 (degeneracy): once a search anchors the prizes every `p_any` is exactly 1.0, so the
+    weighted read equals the unweighted one. This — not the tail fixture — is what discharges
+    #175's "no regression to the composed-line KO frames #142 leaves green"."""
+    deck_r = AttachUnit(frozenset({FIRE}), source="deck")
+    deck_p = AttachUnit(frozenset({PSYCHIC}), source="deck")
+    budget = Budget(options=((deck_r, deck_p),))
+    anchored = {FIRE: 1.0, PSYCHIC: 1.0}
+    assert budget.realising_p((FIRE, PSYCHIC), anchored) == 1.0
+    # and a type the sound oracle proved gone is exactly 0 — never a small positive claim
+    assert budget.realising_p((FIRE, PSYCHIC), {FIRE: 1.0, PSYCHIC: 0.0}) == 0.0
+
+
+def test_weighting_reorders_a_shaky_two_prize_line_below_a_certain_one_prize_line():
+    """ADR-0074 decision 4: the point of weighting the PRIZE term. A capped positional score could
+    never express this, which is why the hard-rung invariant had to be restated in expectation."""
+    from common.strategy.planner import _composed_rank
+    shaky_two = (2.0, False, 0.40)                            # 2 prizes, 40% to land
+    certain_one = (1.0, False, 1.0)                           # 1 prize, certain
+    assert _composed_rank(certain_one) > _composed_rank(shaky_two)
+    # …and a merely-slightly-shaky 2-prize line still beats it (no threshold anywhere)
+    assert _composed_rank((2.0, False, 0.87)) > _composed_rank(certain_one)

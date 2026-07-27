@@ -946,7 +946,10 @@ Leg**: P(at least one copy is still in the deck), `deck_odds.p_contains` over th
 prizes_hidden, deck_count)` the other legs read (#175). It is the honest middle the two boolean legs
 collapse: ≈0.06% wrong at 3 unseen copies where `ceiling > 0` is nearly free, ≈13% wrong at 1 where
 `floor` is still zero. A RANKED consumer (one whose output is a compared scalar) weights by it; a
-LOCK consumer (one whose output gates) may never read it — see **Leg Assignment**. Two regimes, one interface: PRE-ANCHOR
+LOCK consumer (one whose output gates) may never read it — see **Leg Assignment**. Reached through
+`MySide.deck_energy_p` (per EnergyType) and applied by `Budget.realising_p` /
+`CombatMath.reachable_attach_p`, which price the assignment a payment REALLY uses rather than the
+whole Budget — so a KO paid from hand stays at 1.0 on a deck depleted of some other colour. Two regimes, one interface: PRE-ANCHOR
 (before the first deck-revealing search) the legs honestly diverge; ANCHORED (`deck_known_counts`
 resolved, `obs['own_prizes']` exact) all three collapse to the same integer — so consumers never branch
 on "are we anchored?", and a consumer must NAME the epistemic it reads (`.floor`/`.expected`/`.ceiling`),
@@ -966,7 +969,10 @@ being wrong is catastrophic and unrecoverable — takes a sound leg (`floor`, or
 output is a SCALAR COMPARED against sibling options weights by `p_any`, because a mis-ranked option
 costs a turn, not the match. The Win Rung (`planner._win_line`, ADR-0030/0037) is the canonical lock
 and already fails closed on deck fetches (`_tutor_energy_certain`, `deck_definitely_has`); the
-`ko_for_prizes` ladder is the canonical ranked consumer.
+`ko_for_prizes` ladder is the canonical ranked consumer (`_WEIGHTED_GOALS`), and its floor moves
+with it: a weighted goal is vetoed by DOMINANCE against the tuned pick it would otherwise defer to
+(`_deferral_value`), never by a constant, because a 1-prize KO at p=0.87 scores 870 and the old
+`< KO_SCORE` floor would have thrown away an 87%-likely prize.
 _Avoid_: threshold (there is no probability cut-off anywhere — a threshold turns an estimate back
 into a boolean and re-imports the error it exists to price), fail direction (that's WHICH way a
 boolean leg errs; Leg Assignment is which leg you may read at all)

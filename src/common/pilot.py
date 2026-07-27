@@ -1868,8 +1868,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 discard_energy_counts=mine.discard_energy_counts,
                 target_benched=not is_active,
                 more_prizes_than_opp=mine.more_prizes_than_opp)
-            if self.combat.reachable_attach(raw, None, budget=enabler):
-                best = max(best, draw_hit_probability(copies, pool, depth))
+            # ADR-0074 decision 6 (#175): this priced the DRAW honestly while leaving the enabler
+            # Budget's deck-fetch leg a fail-open boolean, so a line resting on the last copy of a
+            # colour read identically to one resting on three. Both are priced now; with an
+            # anchored deck `pay_p` is exactly 1.0 and the reading is unchanged.
+            pay_p = self.combat.reachable_attach_p(raw, None, budget=enabler,
+                                                   p_by_type=mine.deck_energy_p)
+            if pay_p > 0.0:
+                best = max(best, pay_p * draw_hit_probability(copies, pool, depth))
         return best
 
     def _evolve_decision(self, obs: dict, board: Board, ctx, option: dict):
@@ -2997,7 +3003,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                   energy: int, *, bound: str = "exact", body: dict | None = None,
                                   extra_type=None, extra_units: int = 0,
                                   boost_amount: int = 0, boost_type=None,
-                                  promote_bench_names=None) -> float:
+                                  promote_bench_names=None, attack_p=None) -> float:
         """The best KO value a hypothetical attacker reaches vs the opp Active — the KO oracle's
         ``best_affordable_ko_value`` (ADR-0052), handed the Board's ``opp_bench`` snapshot for the
         rider tiebreaks. Signature kept for the planner/tactical call sites (``obs`` vestigial)."""
@@ -3005,7 +3011,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp, attacker_id, energy, opp_bench=board.opp_bench, bound=bound, body=body,
             extra_type=extra_type, extra_units=extra_units,
             boost_amount=boost_amount, boost_type=boost_type,
-            promote_bench_names=promote_bench_names)
+            promote_bench_names=promote_bench_names, attack_p=attack_p)
 
     def _boost_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for a damage-boost Trainer that UNLOCKS a knockout this turn — the

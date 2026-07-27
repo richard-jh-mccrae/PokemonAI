@@ -690,14 +690,20 @@ class MySide(_SideBase):
         return self._memoized(key, _make)
 
     def readiness_p(self, body: BodyView | None, attack_id=None, *, enabler_budget=None,
-                    copies: int = 0, pool: int = 0, draws: int = 0) -> float:
+                    copies: int = 0, pool: int = 0, draws: int = 0, weighted: bool = True) -> float:
         """P(``body`` is ready to use the attack this turn) — the EV variant, and the ONLY place an
-        honest probability enters the affordability family (ADR-0067's split). Fails closed at 0.0."""
+        honest probability enters the affordability family (ADR-0067's split). Fails closed at 0.0.
+
+        ``weighted`` (default True, ADR-0074 decision 6) also prices the deck-fetch leg by
+        :attr:`deck_energy_p`. This is a RANKED consumer's reading by construction — it returns a
+        compared scalar, never a gate — so the Probability Leg belongs here. Pass ``weighted=False``
+        for the pre-#175 fail-open deck leg."""
         if body is None:
             return 0.0
         return self._combat.readiness_p(body.body, attack_id, budget=self.attach_budget(body),
                                         enabler_budget=enabler_budget, copies=copies,
-                                        pool=pool, draws=draws)
+                                        pool=pool, draws=draws,
+                                        p_by_type=self.deck_energy_p if weighted else None)
 
     def turns_to_afford(self, body: BodyView | None, *, attaches_per_turn: int = 1) -> int | None:
         """**The Two Clocks**, my half (ADR-0070 §6): the earliest future turn ``body``'s line is

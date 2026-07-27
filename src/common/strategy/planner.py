@@ -258,6 +258,17 @@ class TurnLine:
     verified: bool | None = None
 
 
+_WEIGHTED_GOALS = ("ko_for_prizes", "ko_key_threat")   # the rungs whose prize term #175 weights
+
+
+def _composed_rank(cand):
+    """Order composed KO candidates by EXPECTED prizes (ADR-0074 decision 4, #175) — a 2-prize line
+    that is 40% to whiff must lose to a certain 1-prize line, which raw prize count cannot express.
+    Survival stays the tiebreak below it."""
+    prizes, survives, p = cand
+    return (prizes * p, survives)
+
+
 class PlannerMixin:
     """Pilot-side Turn Planner. ``plan_turn`` returns a :class:`TurnLine` to commit, or None to defer
     to the tuned scoring. Depends on Pilot internals (``_opp_active``, ``_best_affordable_ko_value``,
@@ -296,7 +307,7 @@ class PlannerMixin:
             line = self._forgo_ko_line(obs, select, board, options, traces)   # KO-defer under its tight gate
         if line is None:
             candidates = self._closed_form_candidates(obs, select, board, options, traces)
-            line = self._commit_best(obs, candidates)
+            line = self._commit_best(obs, candidates, traces=traces)
         if line is None:                              # Tier-2 Gamble rung (ADR-0039): below every
             line = self._best_gamble_line(obs, select, board, options, traces)   # deterministic goal
         # Tier-6 escalation (ADR-0043) REMOVED — deprecated by ADR-0064 Decision 6 (its depth-2 reply
@@ -333,7 +344,40 @@ class PlannerMixin:
             candidates += self._ko_key_threat_lines(obs, select, board, options)
         return candidates
 
-    def _commit_best(self, obs, candidates) -> TurnLine | None:
+    def _pool_floor_fails(self, line, value: float, traces) -> bool:
+        """Should the pool commit NOTHING and defer to the tuned scoring?
+
+        Two rules, because only one rung is probability-weighted (ADR-0074 decision 5, #175):
+
+        * A **weighted** goal (``_WEIGHTED_GOALS``) is floored by DOMINANCE — it loses if it is not
+          worth more than the alternative. The old constant cannot serve here: a 1-prize KO at
+          p=0.87 scores 870 and `< KO_SCORE` would veto an 87%-likely prize.
+        * Every other goal keeps the original ``< KO_SCORE`` premise check, byte-for-byte. A
+          stabilize line carries no probability, so nothing about it changed and it must not
+          inherit a floor it never had — least of all on the closed-form path, which had none.
+        """
+        if line is not None and line.goal in _WEIGHTED_GOALS:
+            return value <= self._deferral_value(traces)
+        return value < KO_SCORE
+
+    def _deferral_value(self, traces) -> float:
+        """What the turn is worth if the pool commits NOTHING — the tuned/greedy pick's own score.
+
+        ADR-0074 decision 5 (#175) replaces `_commit_best`'s constant `< KO_SCORE` floor with this.
+        The constant breaks under a weighted prize term: a 1-prize KO at p=0.87 scores 870 and would
+        be vetoed outright, though an 87%-likely prize is plainly worth taking. Comparing against
+        the real alternative needs no threshold — which is the rule ADR-0074 decision 1 sets.
+
+        Measured commensurate before adoption (`tools/train/probes/rung_scale.py`, 72 firing frames
+        over dragapult_ex + mega_lucario): the tuned top sits at 20-210 while pool values sit at
+        1009-3035, cleanly separated, and the comparison vetoes nothing the constant floor did not.
+        The pool is layer-on-top (it is empty whenever the tuned menu already reaches a KO), so
+        `tactical` is never KO-class here and this really is the positional alternative.
+
+        0.0 with no traces — an unreadable alternative never vetoes a line."""
+        return max((getattr(t, "score", 0.0) or 0.0 for t in (traces or ())), default=0.0)
+
+    def _commit_best(self, obs, candidates, *, traces=()) -> TurnLine | None:
         """The line to commit from the candidate pool — the multi-candidate ENGINE RANKING seam
         (ADR-0031 P3 completed; `planner_engine_rank`).
 
@@ -349,6 +393,9 @@ class PlannerMixin:
             return None
         closed_best = max(candidates, key=lambda ln: ln.value)
         if not self.planner_engine_rank:
+            if (closed_best.goal in _WEIGHTED_GOALS
+                    and closed_best.value <= self._deferral_value(traces)):
+                return None                              # the weighted rung is floored on BOTH paths
             return self._engine_rank(obs, closed_best)   # status quo: sharpen the committed value only
         ranked = []
         for cand in candidates:
@@ -361,8 +408,8 @@ class PlannerMixin:
                 self._planning = False                   # closed-form value below
             ranked.append((val if val is not None else cand.value, val is not None, cand))
         best_val, engine_valued, best = max(ranked, key=lambda t: t[0])
-        if best_val < KO_SCORE:
-            return None                                  # every candidate's prize premise failed in sim
+        if self._pool_floor_fails(best, best_val, traces):
+            return None                                  # premise failed / loses to the alternative
         return replace(best, value=best_val,
                        ranked_by=("engine" if engine_valued else "closed"),
                        diverged=(best is not closed_best))
@@ -1438,14 +1485,23 @@ class PlannerMixin:
                 continue
             if cand is None:
                 continue
-            prizes, survives = cand
-            value = self._leaf_value(prizes=prizes, active_survives=survives, threat_removed=threat)
+            prizes, survives, *rest = cand
+            # ADR-0074 decision 4 (#175): the prize term is weighted by P(the line's Energy is
+            # really there) for the RANKED consumers that carry one. The hard-rung invariant is
+            # restated in expectation — a positional score can never outrank a REALISABLE prize —
+            # so a line that is unlikely to happen can now lose to one that will. Candidates
+            # carrying no probability pass 1.0 and are byte-identical to before.
+            line_p = max(0.0, min(1.0, float(rest[0]))) if rest else 1.0
+            value = self._leaf_value(prizes=prizes * line_p, active_survives=survives,
+                                     threat_removed=threat)
             value += self._gameplan_goal_bonus("ko_for_prizes", board)       # ADR-0045 seam (S3)
             value += self._deckout_grind_bonus(board)                        # BUILD 2 seam (opp_resource_reads)
             value += cost                                 # sub-prize/sub-survival: breaks a same-KO tie
                                                           # among enablers, never over a real prize delta
+            odds = "" if line_p >= 1.0 else f" at p={line_p:.2f}"
             lines.append(TurnLine(next_step=[i], goal="ko_for_prizes", value=value,
-                                  rationale=f"plan (ko_for_prizes): {kind} unlocks a {int(prizes)}-prize KO"))
+                                  rationale=(f"plan (ko_for_prizes): {kind} unlocks a "
+                                             f"{int(prizes)}-prize KO{odds}")))
         return lines
 
     def _ko_key_threat_lines(self, obs, select, board, options) -> list:
@@ -2545,13 +2601,39 @@ class PlannerMixin:
         the pile does not hold. The magnitude is read through ``Budget.size``, NEVER ``len(option)``:
         options retain units that may not be jointly realisable (ADR-0067).
 
-        Fail-CLOSED at 0 without a model. Takes the POSSIBLE leg, at parity with the fail-open
-        `basic_energy_in_deck` gate the retired helpers used, so this fold changes no epistemic;
-        pricing the depletion tail honestly is #175's."""
+        Fail-CLOSED at 0 without a model. Takes the POSSIBLE (fail-open) leg for REACH — a line is
+        considered whenever the fetch could land — and #175 prices the resulting depletion tail
+        separately, through :meth:`_composed_budget`'s probability rather than by narrowing this."""
+        budget = self._composed_budget(card_id, benched=benched)
+        return 0 if budget is None else int(budget.size)
+
+    def _composed_budget(self, card_id, *, benched: bool):
+        """The Attach Budget object behind :meth:`_composed_budget_units`, or None without a model.
+
+        The units answer "does this line REACH a KO"; the Budget itself answers "how likely is the
+        Energy really there" (ADR-0074 decision 3) — the same oracle read twice, so reach and
+        probability can never be computed off different budgets."""
         model = getattr(self, "_state_model", None)
         if model is None or card_id is None:
-            return 0
-        return int(model.mine.attach_budget_for_card(card_id, benched=benched).size)
+            return None
+        return model.mine.attach_budget_for_card(card_id, benched=benched)
+
+    def _composed_attack_p(self, card_id, body, *, benched: bool):
+        """``attack_id -> P(the composed line's Energy is really there)`` for this candidate form,
+        or None when nothing can be priced (no model / no Budget) — the caller then makes no claim
+        and the line keeps its unweighted value, exactly as before #175.
+
+        This is the RANKED-consumer half of ADR-0074's Leg Assignment: the `ko_for_prizes` ladder
+        emits a compared scalar, so it weights; the Win Rung gates, so it never calls this."""
+        budget = self._composed_budget(card_id, benched=benched)
+        model = getattr(self, "_state_model", None)
+        if budget is None or model is None:
+            return None
+        p_by_type = model.mine.deck_energy_p
+        if not p_by_type:
+            return None
+        return lambda aid: self.combat.attack_realising_p(
+            aid, budget=budget, body=body, p_by_type=p_by_type)
 
     def _play_accel_extra(self, obs, board, select, options, enabler_consumes_supporter: bool) -> int:
         """MIN-BOUND: 1 iff a PLAY-based energy accelerator in MY hand can PROVABLY add ONE more attach to
@@ -2653,15 +2735,35 @@ class PlannerMixin:
                 # The Budget is PER TARGET BODY, so it is built for THIS candidate evolved form
                 # (its stats gate every accel clause's target restriction), not once for the menu.
                 units = self._composed_budget_units(cid, benched=benched)
+                attack_p = self._composed_attack_p(cid, body, benched=benched)
                 if self._best_affordable_ko_value(obs, board, opp, cid, energy + units,
-                                                  bound="min", body=body) <= 0:
+                                                  bound="min", body=body, attack_p=attack_p) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
-                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
-                if best is None or cand > best:
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player),
+                        self._composed_line_p(obs, board, opp, cid, energy + units, body, attack_p))
+                if best is None or _composed_rank(cand) > _composed_rank(best):
                     best = cand
         return best
+
+    def _composed_line_p(self, obs, board, opp, card_id, energy: int, body, attack_p) -> float:
+        """P(the composed line's KO really lands) — the weighted KO value over the unweighted one,
+        i.e. the probability attached to whichever attack the weighted valuation actually picked
+        (ADR-0074 decisions 3-4, #175).
+
+        Reading it back off the two valuations, rather than recomputing a "best" attack here, is
+        what keeps the weight tied to the line the ranker committed to. 1.0 with nothing to price
+        (no model, an unresolvable cost), so an unweighted build is byte-identical."""
+        if attack_p is None:
+            return 1.0
+        raw = self._best_affordable_ko_value(obs, board, opp, card_id, energy,
+                                             bound="min", body=body)
+        if raw <= 0:
+            return 0.0
+        weighted = self._best_affordable_ko_value(obs, board, opp, card_id, energy,
+                                                  bound="min", body=body, attack_p=attack_p)
+        return max(0.0, min(1.0, weighted / raw))
 
     def _is_rare_candy(self, obs, select, option) -> bool:
         """BUILD 1 helper: this PLAY option is Rare Candy (card id ``_RARE_CANDY_ID`` = 1079). Matched by
@@ -2715,13 +2817,15 @@ class PlannerMixin:
                 if not self._stage2_roots_at(st, base.name):
                     continue                              # its chain must root at THIS Basic (skip Stage 1)
                 units = self._composed_budget_units(cid, benched=benched)   # per-candidate Budget
+                attack_p = self._composed_attack_p(cid, body, benched=benched)
                 if self._best_affordable_ko_value(obs, board, opp, cid, energy + units,
-                                                  bound="min", body=body) <= 0:
+                                                  bound="min", body=body, attack_p=attack_p) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
-                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
-                if best is None or cand > best:
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player),
+                        self._composed_line_p(obs, board, opp, cid, energy + units, body, attack_p))
+                if best is None or _composed_rank(cand) > _composed_rank(best):
                     best = cand
         return best
 
