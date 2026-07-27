@@ -242,3 +242,29 @@ can only change a decision on an UN-ANCHORED frame, and after the two deck-track
 investigation surfaced (`cb60927`, `003b1b7`) that is ~18 % of frames, concentrated late. #175 is
 therefore honest but small — which is the shape the grill predicted and the reason the Win Rung was
 kept out of scope.
+
+## Extension to decision 6 (2026-07-27): the POKEMON-presence leg, and a threshold retired
+
+Building decision 6 surfaced the same defect one zone over. The composed line's **Energy** fetch was
+weighted while the **Pokémon** fetch beside it was still a boolean — and in the opposite direction
+from the one this ADR was written about:
+
+- `_item_evolve_ko_candidate` gated on `board.deck_definitely_has(cid)` — the SOUND positive
+  certainty, which requires the prize anchor. So this RANKED line was **inert pre-anchor**, i.e.
+  silent on exactly the frames the weighting exists to serve. It is now weighted by
+  `Board.deck_contains_probability(cid)`, which is sound-capped at both extremes (provably empty →
+  0.0, pigeonhole-certain or prize-resolved → 1.0) and so cannot resurrect a card proven gone.
+- `_tutor_evolve_ko_candidate` carried `if board.deck_contains_probability(cid) <= 0.5: continue` —
+  **a threshold on this very probability**, the shape decision 1 rejects outright. It scored a 0.51
+  fetch and a 0.99 fetch identically and a 0.49 fetch at zero. Retired; the odds are the weight, and
+  a test pins the ladder strictly monotone in the odds so no cliff can be reintroduced.
+
+The two probabilities MULTIPLY into the one line probability `_composed_rank` reads: a composed line
+can whiff two independent ways (the evolution prized, the Energy fetch missing) and both must be
+priced. The Win Rung's uses of `deck_definitely_has` (`_tutor_evolution_wins`, tiers 3-4) are
+UNCHANGED — they gate, so decision 1 forbids them a probability. That asymmetry is the rule working.
+
+*Worth stating plainly:* this extension widens what the ranked rung fires on (pre-anchor lines that
+were previously suppressed outright, plus every sub-0.5 fetch), so it moves more frames than
+decisions 3-5 did. Decision 7's Decision Gate sweep covers it, and the widening is deliberate — a
+line that is 45 % to land is worth ranking at 45 %, not at zero.

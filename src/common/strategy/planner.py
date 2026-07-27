@@ -2730,8 +2730,13 @@ class PlannerMixin:
                     continue
                 if mega_only and not getattr(st, "megaEx", False):
                     continue                              # this item cannot fetch a non-Mega evolution
-                if not board.deck_definitely_has(cid):    # SOUND present-check — never plan on a whiff
-                    continue
+                # ADR-0074 decision 6 (extended, #175): the Pokemon-presence leg is WEIGHTED, not
+                # gated. `deck_definitely_has` needs the anchor, so gating on it made this RANKED
+                # line inert pre-anchor — exactly the frames the weighting exists to serve. 0.0 is
+                # provably-empty and still drops the line; the Win Rung keeps the sound gate.
+                present_p = board.deck_contains_probability(cid)
+                if present_p <= 0.0:
+                    continue                              # provably gone — no line to rank
                 # The Budget is PER TARGET BODY, so it is built for THIS candidate evolved form
                 # (its stats gate every accel clause's target restriction), not once for the menu.
                 units = self._composed_budget_units(cid, benched=benched)
@@ -2742,7 +2747,8 @@ class PlannerMixin:
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
                         bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player),
-                        self._composed_line_p(obs, board, opp, cid, energy + units, body, attack_p))
+                        present_p * self._composed_line_p(obs, board, opp, cid,
+                                                          energy + units, body, attack_p))
                 if best is None or _composed_rank(cand) > _composed_rank(best):
                     best = cand
         return best
@@ -2917,15 +2923,20 @@ class PlannerMixin:
                 if (st is None or getattr(st, "evolvesFrom", None) != base.name
                         or getattr(st, "hasAbility", False)):
                     continue
-                if board.deck_contains_probability(cid) <= 0.5:
-                    continue                          # likely whiff: never plan on a improbable fetch
+                # ADR-0074 decision 1 forbids a THRESHOLD: the retired `<= 0.5` cut-off scored a
+                # 0.51 fetch and a 0.99 fetch identically and a 0.49 one at zero — the same
+                # boolean-collapse defect #175 exists to remove. The odds are now the weight.
+                present_p = board.deck_contains_probability(cid)
+                if present_p <= 0.0:
+                    continue                          # provably gone — nothing to rank
                 if self._best_affordable_ko_value(obs, board, opp, cid, energy + extra,
                                                   body=body) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
-                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player))
-                if best is None or cand > best:
+                        bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player),
+                        present_p)
+                if best is None or _composed_rank(cand) > _composed_rank(best):
                     best = cand
         return best
 

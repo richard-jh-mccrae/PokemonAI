@@ -747,3 +747,28 @@ def test_weighting_reorders_a_shaky_two_prize_line_below_a_certain_one_prize_lin
     assert _composed_rank(certain_one) > _composed_rank(shaky_two)
     # …and a merely-slightly-shaky 2-prize line still beats it (no threshold anywhere)
     assert _composed_rank((2.0, False, 0.87)) > _composed_rank(certain_one)
+
+
+# ── #175 decision-6 extension: the POKEMON-presence leg is weighted too ───────────────────────
+
+def test_pokemon_presence_weight_composes_with_the_energy_weight():
+    """A composed line can whiff two independent ways — the evolution may be prized AND the Energy
+    fetch may whiff. `_composed_rank` sees one probability, so the two must be multiplied into it,
+    not chosen between."""
+    from common.strategy.planner import _composed_rank
+    energy_only = (2.0, False, 0.87)                          # Energy 87%, Pokemon certain
+    both = (2.0, False, 0.87 * 0.90)                          # …and the evolution 90% present
+    assert _composed_rank(both) < _composed_rank(energy_only)
+    # EV, not pessimism: 2 prizes at 0.783 is worth 1.57 and still BEATS a certain 1-prize line…
+    assert _composed_rank(both) > _composed_rank((1.0, False, 1.0))
+    # …it is only once the compounded odds drop below half that the certain single prize wins.
+    assert _composed_rank((2.0, False, 0.87 * 0.50)) < _composed_rank((1.0, False, 1.0))
+
+
+def test_no_threshold_survives_anywhere_in_the_ranked_ladder():
+    """The retired `deck_contains_probability(cid) <= 0.5` cut-off is the shape ADR-0074 decision 1
+    rejects. Ranking must be strictly monotone in the odds — no cliff at any value."""
+    from common.strategy.planner import _composed_rank
+    ladder = [_composed_rank((1.0, False, p)) for p in (0.05, 0.49, 0.51, 0.75, 0.99, 1.0)]
+    assert ladder == sorted(ladder)
+    assert len(set(ladder)) == len(ladder)                    # strictly increasing: no flat cliff
