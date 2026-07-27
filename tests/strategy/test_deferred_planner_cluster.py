@@ -17,6 +17,7 @@ score delta (every seam is off / weight 0).
 import types
 
 from common.cards import CardFunctions as _CardFunctions
+from common.effects import CardEffects as _CardEffects
 from common.pilot import Board, Context, Pilot
 from common.runtime import PROFILE
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -160,7 +161,7 @@ def test_composer_no_ops_without_stats():
     # Fail-safe: no stat provider → no composite line (never crashes).
     pilot = _pilot(enabler_item_composer=True)
     obs, sel, option = _play_from_hand(1145)
-    assert pilot._item_evolve_ko_candidate(obs, sel, Board(), option, {"id": 1, "hp": 60}, {}, 1, True) is None
+    assert pilot._item_evolve_ko_candidate(obs, sel, Board(), option, {"id": 1, "hp": 60}, {}, True) is None
 
 
 # ══════════════════════════════ BUILD 4 — one-Supporter-per-turn slot accounting ══════════════════════════════
@@ -220,6 +221,7 @@ def test_item_gap_shrinks_when_no_supporter_competes():
 # is deliberately NOT counted (unbounded for a composed attacker) — the line under-fires instead.
 
 _EVO_ID, _BASE_ID, _ITEM_ID, _ETUTOR_ID, _AID = 202, 201, 203, 204, 9902
+_ENERGY_ID = 205                          # the Basic Energy the tutor actually fetches
 
 
 def _energy_chain_pilot(*, energy_tutor_is_supporter=False, deck=None):
@@ -232,10 +234,25 @@ def _energy_chain_pilot(*, energy_tutor_is_supporter=False, deck=None):
                           evolvesFrom="Base", attacks=(_AID,)),
         _ITEM_ID: CardStat(cardId=_ITEM_ID, cardType=1),                          # the Mega Signal Item
         _ETUTOR_ID: CardStat(cardId=_ETUTOR_ID, cardType=etutor_type),
+        _ENERGY_ID: CardStat(cardId=_ENERGY_ID, cardType=5, energyType=2),        # a Basic Energy
     }, {_AID: AttackStat(attackId=_AID, damage=200, cost=2, damageMax=200)})      # 2-Energy 200-dmg KO
     fns = _CardFunctions({_ITEM_ID: ["tutor_mega"], _ETUTOR_ID: ["tutor_energy"]})
-    return _deck_pilot([_EVO_ID] + (deck or [_BASE_ID] * 59), stats=stats, functions=fns,
-                  enabler_item_composer=True)
+    # The Attach Budget reads the YIELD off an Effect Clause, never off the tag — tags only route
+    # (ADR-0067). A tagged card with no clause contributes ZERO, so the fixture has to say what its
+    # tutor actually fetches, exactly as `test_attach_budget_coverage.py` demands of a shipped deck.
+    effects = _CardEffects({_ETUTOR_ID: [{"kind": "fetch", "target": "basic_energy",
+                                          "zone": "deck"}]})
+    return _deck_pilot([_EVO_ID] + (deck or [_BASE_ID] * 49 + [_ENERGY_ID] * 10),
+                  stats=stats, functions=fns,
+                  effects=effects, enabler_item_composer=True)
+
+
+def _prime(pilot, obs):
+    """Build the StateModel the planner reads. In production `_board` always runs first; a test that
+    calls a planner internal straight has to establish the same precondition or it is measuring a
+    fail-closed zero."""
+    pilot._board(obs, obs.get("select"), carried=pilot.carried())
+    return pilot
 
 
 def _energy_chain_obs(*, hand):
@@ -252,41 +269,20 @@ def _chain_board(**kw):
     return Board(**base)
 
 
-def test_tutor_energy_attach_available_is_sound():
-    pilot = _energy_chain_pilot()
-    assert pilot._tutor_energy_attach_available(_chain_board()) is True
-    # attach slot already spent → no second attach
-    assert pilot._tutor_energy_attach_available(_chain_board(energy_attached=True)) is False
-    # no Basic Energy left to fetch → nothing usable
-    assert pilot._tutor_energy_attach_available(_chain_board(basic_energy_in_deck=False)) is False
-    # no tutor_energy card in hand → nothing to play
-    assert pilot._tutor_energy_attach_available(_chain_board(hand_ids=frozenset({_ITEM_ID}))) is False
-
-
-def test_tutor_energy_supporter_needs_a_free_slot():
-    pilot = _energy_chain_pilot(energy_tutor_is_supporter=True)
-    assert pilot._tutor_energy_attach_available(_chain_board(supporter_played=False)) is True
-    assert pilot._tutor_energy_attach_available(_chain_board(supporter_played=True)) is False
-
-
-def test_composed_extra_caps_at_one_and_reflects_the_tutor():
-    pilot = _energy_chain_pilot()
-    assert pilot._composed_extra(_chain_board(), 0) == 1                 # tutor supplies the 1 attach
-    assert pilot._composed_extra(_chain_board(), 1) == 1                 # already had it → capped at 1
-    assert pilot._composed_extra(_chain_board(hand_ids=frozenset({_ITEM_ID})), 0) == 0  # no tutor → 0
-
-
 def test_composer_finds_the_ko_only_with_the_tutored_attach():
-    pilot = _energy_chain_pilot()
     obs, sel, option = _energy_chain_obs(hand=[_ITEM_ID, _ETUTOR_ID])
+    pilot = _prime(_energy_chain_pilot(), obs)
     opp = {"id": 320, "hp": 190}
     # base extra=0 (no reusable Energy in hand): the tutor makes the single attach available → 200-dmg KO.
-    got = pilot._item_evolve_ko_candidate(obs, sel, _chain_board(), option, opp, {}, 0, True)
+    got = pilot._item_evolve_ko_candidate(obs, sel, _chain_board(), option, opp, {}, True)
     assert got is not None and got[0] == 1                              # a 1-prize KO composed
-    # remove the tutor: body's 1 Energy can't pay the 2-Energy attack → no composite.
-    none = pilot._item_evolve_ko_candidate(obs, sel, _chain_board(hand_ids=frozenset({_ITEM_ID})),
-                                           option, opp, {}, 0, True)
-    assert none is None
+    # Remove the tutor — from the HAND, not just from the hand-built Board: the Attach Budget reads
+    # the model's hand, so a Board that disagrees with the observation is describing two boards.
+    obs2, sel2, option2 = _energy_chain_obs(hand=[_ITEM_ID])
+    bare = _prime(_energy_chain_pilot(), obs2)
+    none = bare._item_evolve_ko_candidate(obs2, sel2, _chain_board(hand_ids=frozenset({_ITEM_ID})),
+                                          option2, opp, {}, True)
+    assert none is None                     # body's 1 Energy can't pay the 2-Energy attack alone
 
 
 def test_energy_chain_line_appears_only_with_the_flag_on():
@@ -296,11 +292,11 @@ def test_energy_chain_line_appears_only_with_the_flag_on():
     obs, sel, option = _energy_chain_obs(hand=[_ITEM_ID, _ETUTOR_ID])
     board = _chain_board()
 
-    on = _energy_chain_pilot()
+    on = _prime(_energy_chain_pilot(), obs)
     lines_on = on._ko_for_prizes_lines(obs, sel, board, sel["option"], None)
     assert any("item tutor" in ln.rationale for ln in lines_on)
 
-    off = _energy_chain_pilot()
+    off = _prime(_energy_chain_pilot(), obs)
     off.enabler_item_composer = False
     assert off._ko_for_prizes_lines(obs, sel, board, sel["option"], None) == []
 
@@ -338,7 +334,7 @@ def _rare_candy_call(pilot, *, turn=2, appear_this_turn=False, hand=(_RC_TOP,), 
     board = Board(turn=turn, hand_ids=frozenset(hand), basic_energy_in_deck=True,
                   no_supporter_in_hand=True)
     return pilot._rare_candy_ko_candidate(obs, obs["select"], board, obs["select"]["option"][0],
-                                          {"id": 320, "hp": 190}, {}, extra, True)
+                                          {"id": 320, "hp": 190}, {}, True)
 
 
 def test_is_rare_candy_matches_by_id():
