@@ -18,7 +18,8 @@ Card facts VERIFIED at source (`data/EN_Card_Data.csv`, `src/common/card_functio
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
-from common.strategy.combat import DISCARD_SUPPLY, CombatMath
+from common.strategy.combat import (DISCARD_SUPPLY, AttachUnit, Budget, CombatMath,
+                                    _can_pay)
 
 # EnergyType codes (cg.api.EnergyType)
 COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
@@ -636,3 +637,57 @@ def test_an_untagged_special_energy_provides_nothing():
     c = _special_combat({IGNITION: ["discard_eot"]})
     body = {"id": MEGA_LUC, "energies": []}
     assert c.attach_budget(body, [IGNITION]).size == 0
+
+
+# ── the Probability Leg on the Budget (ADR-0074 / #175) ───────────────────────────────────────
+
+def test_realising_p_is_1_when_the_cost_is_paid_from_certain_units():
+    """The dependency, not the pantry: a cost paid by units that are already certain scores exactly
+    1.0 even when a deck-sourced unit sits in the same option on a depleted type."""
+    certain = AttachUnit(frozenset({1}))                      # in hand / attached — no source
+    thin = AttachUnit(frozenset({2}), source="deck")          # deck-sourced, type 2 nearly gone
+    b = Budget(options=((certain, thin),))
+    assert b.realising_p((1,), {2: 0.05}) == 1.0              # slot {1} taken by the certain unit
+
+
+def test_realising_p_prices_a_deck_sourced_unit_the_cost_actually_needs():
+    thin = AttachUnit(frozenset({2}), source="deck")
+    b = Budget(options=((thin,),))
+    assert round(b.realising_p((2,), {2: 0.87}), 10) == 0.87
+
+
+def test_realising_p_prices_distinct_deck_types_once_each():
+    """Two distinct deck-sourced colours compound; the SAME colour twice is priced once (P(>=1))."""
+    r = AttachUnit(frozenset({1}), source="deck")
+    p = AttachUnit(frozenset({2}), source="deck")
+    p2 = AttachUnit(frozenset({2}), source="deck")
+    assert round(Budget(options=((r, p),)).realising_p((1, 2), {1: 0.9, 2: 0.8}), 10) == 0.72
+    assert round(Budget(options=((p, p2),)).realising_p((2, 2), {2: 0.8}), 10) == 0.8
+
+
+def test_realising_p_is_zero_when_nothing_pays():
+    """A Budget that cannot pay scores 0.0 — never a probability for an unpayable cost."""
+    unit = AttachUnit(frozenset({1}), source="deck")
+    assert Budget(options=((unit,),)).realising_p((2,), {1: 1.0, 2: 1.0}) == 0.0
+    assert Budget(options=((unit,),)).realising_p((1, 1), {1: 1.0}) == 0.0   # too few units
+
+
+def test_realising_p_takes_the_best_assignment_not_the_first():
+    """Two ways to pay a colourless slot; the maximiser must choose the certain one."""
+    certain = AttachUnit(frozenset({1}))
+    thin = AttachUnit(frozenset({1}), source="deck")
+    b = Budget(options=((thin, certain),))                    # deck unit listed FIRST
+    assert b.realising_p((0,), {1: 0.1}) == 1.0
+
+
+def test_realising_p_agrees_with_can_pay_on_feasibility():
+    """`realising_p > 0` iff the boolean matcher would have paid — one matcher, two readings."""
+    units = (AttachUnit(frozenset({1}), source="deck"), AttachUnit(frozenset({2})))
+    b = Budget(options=(units,))
+    for slots in ((1,), (2,), (1, 2), (0, 0), (1, 1), (3,)):
+        payable = _can_pay(slots, units, b.caps)
+        assert (b.realising_p(slots, {1: 0.5, 2: 1.0}) > 0.0) is bool(payable)
+
+
+def test_realising_p_of_a_free_cost_is_certain():
+    assert Budget(options=((),)).realising_p((), {}) == 1.0
