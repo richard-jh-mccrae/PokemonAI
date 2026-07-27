@@ -1,8 +1,7 @@
 # ADR-0074: A probability may WEIGHT a ranked value, never GATE a lock
 
-**Status.** Grilled 2026-07-27 (`/grill-with-docs`, issue #175, split out of the #142 Phase-1d
-grill as grill-item-3 Option 3). Decisions 1–5 locked; scope and verification still open at time of
-writing. Extends [ADR-0067](0067-attach-budget-fails-closed-on-yield-open-on-deck-presence.md)
+**Status.** Accepted (grilled 2026-07-27, `/grill-with-docs`, issue #175 — split out of the #142
+Phase-1d grill as grill-item-3 Option 3). Extends [ADR-0067](0067-attach-budget-fails-closed-on-yield-open-on-deck-presence.md)
 (the split epistemic and its 2026-07-27 leg-assignment amendment) and **amends
 [ADR-0031](0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md) decision 3** (the hard-rung
 invariant). Leaves [ADR-0030](0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md)
@@ -144,14 +143,66 @@ compares `t.tactical >= KO_SCORE` — but the **positional bands below one prize
 comparable**, and a discounted line lives exactly there. That calibration is part of this issue, not
 a follow-up, and must be measured before the build commits to the comparison.
 
+### 6. Scope is bounded by a seam, not by the ticket: every consumer already ON the Budget
+
+Four call sites carry a fail-open deck leg into a compared scalar. Three are in scope:
+
+- `_composed_budget_units`'s two sites (`_item_evolve_ko_candidate` :2655, `_rare_candy_ko_candidate`
+  :2717) — the issue's named scope; they weight the prize term per decision 4.
+- [pilot.py](../../src/common/pilot.py):1866 and :2117 — **already EV consumers**. Both multiply by
+  `draw_hit_probability` / `readiness_p` and emit a compared marginal (`dmg * max(0, p - base)`),
+  yet both pass `deck_energy_types=mine.deck_energy_types` — the fail-OPEN leg — into their enabler
+  Budget. They price the *draw* honestly and leave the *deck presence* a boolean, so they are the
+  clearest instances of decision 1 and currently the loudest violations of it. They fold `p_any`
+  into their own marginal; **decision 4's prize-term rule is specific to the `ko_for_prizes` rung,
+  while decision 1 is general** — these are not `_leaf_value` consumers.
+
+`_play_accel_extra` ([planner.py](../../src/common/strategy/planner.py):2556) is **out of scope**
+and inherits via **#177**. It is not on the Budget: it gates on `board.basic_energy_in_deck` (:2589),
+an *untyped* fail-open gate. Pricing it today would mint a SECOND probability instrument — an untyped
+union beside the per-type projection — which decision 2's "one derivation, readings that cannot
+disagree" forbids, and which #177's fold onto the typed Budget then discards. Once folded, it
+inherits the existing leg with no new ruling.
+
+*Accepted cost:* :1866 and :2117 are live deciders on the attach and promote/retreat paths, so their
+marginals move on any thin-Energy frame. Both sit under shipped ADRs (0069/0070 §3 and 0073), each
+of which takes an amendment note rather than a silent behaviour change.
+
+### 7. Verification: both gates, three fixture families, and one measurement taken FIRST
+
+**#175's question 3 dissolves.** It worried that "a probabilistic lethal claim is not
+frame-deterministic in the way the gates assume." `p_contains` is a pure closed-form function of
+`(unseen, prizes_hidden, deck_count)`, all obs-derived, `comb`-based, no RNG — same frame, same
+probability, same value. ADR-0072's gates require exact *reproducibility*, not integrality. The
+concern would bite a SAMPLED estimate; it does not bite a hypergeometric. What genuinely changes is
+that a continuous value flips verdicts on small deltas, so there are more flips to rule — each still
+deterministic.
+
+Owed:
+
+- **Decision Gate** (`tools/train/probes/*_decider_sweep.py`, zero unruled `REGRESSION`) and
+  **Discrimination Gate** (`tools/train/leaf_lab.py` capture/diff, all 267 scorable frames, zero
+  unruled `OK → MISS`) — both mandatory (ADR-0072 decision 2), baseline re-pinned.
+- **Tail fixture** — the depletion tail at low `unseen` (the issue's own ask).
+- **Complement fixture** — a hand-paid KO in the SAME low-`unseen` frame asserting `p = 1.0`. This
+  is load-bearing: the tail fixture alone cannot distinguish decision 3 (per-assignment) from the
+  rejected per-Budget weighting, because both discount at low `unseen`. Only the complement
+  falsifies the wrong design.
+- **Degeneracy fixture** — anchored / `p = 1` frames byte-identical; this, not the tail fixture, is
+  what discharges "no regression to the composed-line KO frames #142 leaves green."
+- **Commensurability measurement** — tuned score vs `_leaf_value` in the positional band, taken
+  BEFORE decision 5's dominance test is built. It may come back and force a rethink mid-build; that
+  is preferable to discovering it in a Decision Gate sweep.
+
 ## Consequences
 
 - The Win Rung is untouched and now *stated* as untouchable: soundness there is a property of the
   rung, not an accident of which oracle it happened to call.
-- `#177` (`_play_accel_extra`'s remaining call sites) and any future fail-open deck-leg consumer
-  inherit the Leg Assignment rule rather than re-deriving it — #175's "rule once for the class".
-- Ranked values shift on frames where a deck leg is thin, so a **Decision Gate sweep is mandatory**
-  (ADR-0072), not optional.
+- `#177` (`_play_accel_extra`) and any future fail-open deck-leg consumer inherit the Leg Assignment
+  rule rather than re-deriving it — #175's "rule once for the class" — and inherit the *instrument*
+  too, once folded onto the Budget (decision 6).
+- Ranked values shift on frames where a deck leg is thin, so both ADR-0072 gates are **mandatory**
+  (decision 7), not optional.
 - The build's centre of gravity is the assignment-returning matcher and the typed-Budget path
   through `best_affordable_ko_value` — groundwork counted as part of the decision, not deferred.
 - `#175`'s title should be amended: `p_contains`, not `readiness_p`.
