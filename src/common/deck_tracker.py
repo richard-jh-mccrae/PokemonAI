@@ -172,28 +172,48 @@ class OwnCardModel:
     def _visible(self, me: dict, select: dict) -> Counter:
         """MY cards provably OUTSIDE deck+prizes: hand, discard, every board Pokémon (its id +
         attached Energy/Tools + the cards stacked under it) AND the card whose effect is resolving
-        (``select.effect`` / ``contextCard`` — it has left the deck but sits in no zone)."""
+        (``select.effect`` / ``contextCard``).
+
+        The resolving-card rider exists for a card that has left the deck but sits in no zone — a
+        played Trainer mid-resolution. That premise is FALSE for an **Ability**, whose context card
+        is the Pokémon still in play and already counted above (Drakloak's Recon Directive; measured
+        on real games as 9 of 9 ``visible``-overflow de-anchors, on Drakloak id 120 and Meowth ex
+        id 1071). Counting it twice pushed ``visible`` past the decklist and dropped the anchor for a
+        desync that never happened. So the rider is deduped by the engine's ``serial`` — the unique
+        physical-card id, carried on BOTH zone entries and the rider — which also covers ``effect``
+        and ``contextCard`` naming the same card. A rider with no serial is counted as before: the
+        old behaviour is the fallback, never a new assumption."""
         c: Counter = Counter()
+        seen: set = set()
+
+        def add(entry) -> None:
+            cid = _card_id(entry)
+            if cid is None:
+                return
+            c[cid] += 1
+            serial = entry.get("serial") if isinstance(entry, dict) else None
+            if serial is not None:
+                seen.add(serial)
+
         for zone in (_HAND, _DISCARD):
             for entry in (me.get(zone) or []):
-                cid = _card_id(entry)
-                if cid is not None:
-                    c[cid] += 1
+                add(entry)
         for zone in (_ACTIVE, _BENCH):
             for poke in (me.get(zone) or []):
                 if not poke:
                     continue
-                if poke.get("id") is not None:
-                    c[poke["id"]] += 1
+                add(poke)
                 for group in _STACKS:
                     for e in (poke.get(group) or []):
-                        cid = _card_id(e)
-                        if cid is not None:
-                            c[cid] += 1
+                        add(e)
         for key in ("effect", "contextCard"):
-            cid = _card_id(select.get(key))
-            if cid is not None:
-                c[cid] += 1
+            entry = select.get(key)
+            if _card_id(entry) is None:
+                continue
+            serial = entry.get("serial") if isinstance(entry, dict) else None
+            if serial is not None and serial in seen:
+                continue                           # already counted where it actually sits
+            add(entry)
         return c
 
     def _revealed_full_deck(self, select: dict, me: dict) -> Counter | None:
