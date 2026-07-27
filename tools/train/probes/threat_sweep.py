@@ -13,11 +13,16 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
     clock (turns_to_afford) and the incoming to my Active.
   * TARGET   (S3a, `opp_target_shadow`) — the two-term removal value per opponent body (prize +
     phase × survival), the Option-B currency, for eyeballing vs the shipped snipe/gust/deny pick.
+  * SLOTS    (S3b, ADR-0074) — the generalized `needs.py` slot family: for every frame, replays the
+    SAME decision through a shipped pilot (`gust_target_slots` OFF, today's default) and a second
+    pilot with it forced ON, and flags any frame where the DECIDED pick differs. Localizes the
+    disagreements this issue's own charter commits to adjudicating before closing.
 
-    python tools/train/probes/threat_sweep.py            # all three
+    python tools/train/probes/threat_sweep.py            # all four
     python tools/train/probes/threat_sweep.py --doom     # doom only
     python tools/train/probes/threat_sweep.py --recur
     python tools/train/probes/threat_sweep.py --target
+    python tools/train/probes/threat_sweep.py --slots
 
 Offline and read-only.
 """
@@ -118,6 +123,29 @@ def sweep_target(tune, frames) -> None:
     print(f"\nTARGET: frames-with-opp-bodies={fired}\n")
 
 
+def sweep_slots(tune, frames) -> None:
+    total = flips = errors = 0
+    for (ep, fr), rec in frames:
+        d_off = _decide(tune, rec)
+        if isinstance(d_off, Exception):
+            errors += 1
+            continue
+        try:
+            pilot_on = tune._build_pilot(rec["agent"])[0]
+            pilot_on.gust_target_slots = True
+            d_on = pilot_on.explain(rec["obs"])
+        except Exception:
+            errors += 1
+            continue
+        total += 1
+        if d_off.chosen != d_on.chosen:
+            flips += 1
+            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} "
+                  f"off={d_off.chosen} on={d_on.chosen}  DISAGREE")
+    print(f"\nSLOTS: frames checked={total}  gust_target_slots decision flips={flips}  "
+          f"(unreplayable={errors})\n")
+
+
 def main(argv=None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -127,8 +155,9 @@ def main(argv=None) -> int:
     ap.add_argument("--doom", action="store_true")
     ap.add_argument("--recur", action="store_true")
     ap.add_argument("--target", action="store_true")
+    ap.add_argument("--slots", action="store_true")
     args = ap.parse_args(argv)
-    run_all = not (args.doom or args.recur or args.target)
+    run_all = not (args.doom or args.recur or args.target or args.slots)
     tune, frames = _tune(), _frames()
     if args.doom or run_all:
         sweep_doom(tune, frames)
@@ -136,6 +165,8 @@ def main(argv=None) -> int:
         sweep_recur(tune, frames)
     if args.target or run_all:
         sweep_target(tune, frames)
+    if args.slots or run_all:
+        sweep_slots(tune, frames)
     return 0
 
 

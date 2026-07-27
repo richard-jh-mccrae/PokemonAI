@@ -71,6 +71,63 @@ by #187 or a dedicated follow-up, not silently dropped.
 - #186 ships an intentionally asymmetric Threat Clock read: more cautious about survival immediately,
   unchanged for deny/posture until a calibrated follow-up lands.
 
+## Amendment A — forced-promotion pre-chip is a snipe-family read, not a held card (2026-07-27, build)
+
+Building #186 surfaced a factual error in the Decision above. Read at source
+(`baseline_snipe.py`'s `snipe-the-forced-promotion` rung, `Context.target_is_forced_promotion`,
+`Pilot._forced_promotion_key`, ADR-0044): "forced-promo chip" is the ADR-0044 Forced-Promotion Read —
+a DAMAGE-select target-priority rung that pre-chips whichever bench body the opponent will be forced
+to promote next turn. It is not a Trainer card at all, held or otherwise; it lives entirely inside the
+snipe family's existing target-picking logic, gated by `Pilot.forced_promotion` (an existing kill-switch,
+default ON since 2026-07-06 — unrelated to this issue). The design doc's own description at the point
+it names the instruments ("Snipe rider, gust+KO, Hammer strip, forced-promotion pre-chip are the SAME
+question, different instrument") already says this; Decision 1 above misread the later "cards being
+assigned to those slots" phrasing as implying a held card for every instrument, including this one.
+
+**Corrected split:**
+
+- **Held-card instruments needing the DP: deny (Hammer) and gust (Guzma/Boss's-Orders-class Trainer
+  cards) only.** No `"promo_chip"` slot kind is added to `needs.py` — there is no held card it would
+  price.
+- **Direct-value-read instruments (DAMAGE-select target choices, no held card): snipe AND
+  forced-promotion pre-chip both.** Both read `needs.opponent_target_value` / `needs.phase_scale`
+  directly; #188 (S4-snipe) is where either or both are actually wired in as the live decider.
+
+This does not change the grill's underlying ruling (split by instrument SHAPE, not treat all four
+uniformly) — it corrects which instruments fall on which side of that split. Consequences and the
+build plan below are updated accordingly; nothing in `needs.SUPPLIES` names a `promo_chip` kind.
+
+## Amendment B — the S2 integration point, and the sweep result (2026-07-27, build)
+
+Two things settled during the build that the grill's Decision 0 didn't pin precisely enough to code
+against directly.
+
+**Where S2 actually lands.** `active_doomed`'s worst-case leg (`combat.active_doomed`) never called
+`combat.incoming` at all — it's built on the older `incoming_active_damage` / `forward_incoming_damage`
+pair, which is unconditionally worst-case and doesn't gate on Energy affordability, so feeding fuel
+into it would change nothing. The actual place fuel matters is the matched-Read RELAX path
+(`doomed_incoming`, the CHARGED policy) — and that path already shipped its own coarse fuel guard,
+`Pilot._doom_recur_fueled` (2026-07-23): whenever a recur-fueled line is merely POSSIBLE, the relax
+stands down entirely, never checking whether the fuel actually matters. Its own docstring names the
+target precisely — *"the S2 recur read models the fuel; the doom swap only refuses to relax across
+it"* — so S2 going live here means quantifying that guard, not wiring a new `incoming()` consumer:
+`Pilot.recur_fuel_relax` (OFF by default) augments the opponent Active's Energy with its real
+`discard_recur_fuel` reload before the charged relax check runs, so a line whose fuel still can't
+afford its attack is told apart from one where it does — recovering a legitimate relax the boolean
+guard was blocking for no reason, never manufacturing a doom the worst-case oracle didn't already cry.
+Resolved from the code itself (`_active_doomed`, `_doom_recur_fueled`, `combat.active_doomed`), not
+re-litigated with the user — it doesn't change the ruling (S2 stays survival-only, fail-scared-safe),
+only which function it wires into.
+
+**The sweep found nothing to adjudicate.** `tools/train/probes/threat_sweep.py --slots` (new: replays
+every corpus frame through a shipped pilot and a second one with `gust_target_slots` forced ON, and
+flags any decided-pick disagreement) ran clean: **331 frames checked, 0 flips, 1 unreplayable.** The
+DOOM/RECUR/TARGET sweep numbers were re-run for drift and match the design doc's recorded figures
+exactly (259/274 DOOM agreement, 15 one-directional disagreements; 43 RECUR frames, 41 moved; TARGET
+unchanged) — the S3 refactor (extracting `_opponent_target_rows` as the shared computation both the
+shadow and the live `gust_target` emission read) is confirmed behavior-preserving. With zero
+disagreements, there was nothing for decision 3's adjudication to rule on.
+
 ## Alternatives rejected
 
 - **Flat shared value function, no DP extension for gust/forced-promo.** Simpler — one function, four

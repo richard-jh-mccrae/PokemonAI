@@ -1115,7 +1115,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  enabler_item_composer=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
-                 promote_retreat_value=True, doom_matched_relax=False):
+                 promote_retreat_value=True, doom_matched_relax=False,
+                 recur_fuel_relax=False, gust_target_slots=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1282,6 +1283,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # burst_on_evo=2: Ignition on an Evolution). RELAX-ONLY:
                                                         # it clears phantom doom, never adds one. Unmatched/
                                                         # fueled/OFF = byte-identical worst-case (ADR-0064 §2)
+        self.recur_fuel_relax = recur_fuel_relax        # ADR-0074 kill-switch (S2 live, survival-only):
+                                                        # refines `_doom_recur_fueled`'s all-or-nothing
+                                                        # relax-block into a QUANTIFIED one — instead of
+                                                        # always standing down whenever a recur-fueled line
+                                                        # is possible, augment its Energy with the actual
+                                                        # `discard_recur_fuel` reload and let the CHARGED
+                                                        # curve decide. OFF = today's behavior exactly (the
+                                                        # boolean block fires); ON only ever narrows when
+                                                        # relax is allowed (fail-scared preserved either way)
+        self.gust_target_slots = gust_target_slots      # ADR-0074 kill-switch: generalizes `deny_slot` to
+                                                        # a second instrument — held gust-effect Trainer
+                                                        # cards (Guzma/Boss's-Orders-class) keep-price
+                                                        # against the real per-body `opponent_target_value`
+                                                        # instead of riding the flat `deny` disruption tier.
+                                                        # OFF = today's `deny`-only routing, byte-identical;
+                                                        # ON = gust rows route to `gust_target` INSTEAD of
+                                                        # `deny` for that decision (never both)
         self._phase_prev = None                         # Carried State (ADR-0068): the phase
                                                         # hysteresis memory (Schmitt trigger) — read
                                                         # via `carried()`, never mutated by a
@@ -3682,7 +3700,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # gust tier (`TAG_TIER["gust"]`, ~10) — NOT each denier's global worth (a role-less Hammer
         # stays worth 0 globally; only its live-strip DENY slot earns the band), so the leaf and
         # every other worth site are untouched.
+        # ADR-0074: gust ALWAYS supplies both "deny" and "gust_target" kinds (`needs.SUPPLIES`), but
+        # only ONE is ever LIVE for a given decision — armed, gust rows route to their own instrument
+        # instead of riding the flat deny tier (a Boss's Orders doesn't strip Energy; pricing it
+        # through `deny`'s oracle-value/timing-grade shape never matched what it actually does). OFF
+        # (default) leaves `deny_tags` exactly as shipped — byte-identical.
         deny_tags = {src for src, kinds in needs.SUPPLIES.items() if "deny" in kinds}
+        gust_tags = {src for src, kinds in needs.SUPPLIES.items() if "gust_target" in kinds}
+        if self.gust_target_slots:
+            deny_tags = deny_tags - gust_tags
         deniers = [k for k, r in enumerate(rows) if deny_tags & _tags(r["cid"])]
         deny_tier = TAG_TIER["gust"]
         if deniers:
@@ -3702,6 +3728,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         continue               # unknown stats — fail closed, no deny slot
                     _emit(needs.deny_slot(f"deny:{area}{bi}:{p.get('id')}",
                                           oracle_value=deny_tier, turns_to_ready=t), deniers)
+        # GUST-TARGET SLOTS (ADR-0074, kill-switched): held gust-effect Trainer cards keep-priced
+        # against the REAL per-body removal value (`_opponent_target_rows`), not a flat card tier.
+        # Bench ONLY — a gust effect forces a switch of a BENCHED Pokémon (verified at source,
+        # `doctrine_gust.py`); the opponent's Active is never a legal gust target, so it never opens
+        # a slot here (unlike deny, which strips Energy off either area).
+        if self.gust_target_slots:
+            gusters = [k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])]
+            if gusters:
+                result = self._opponent_target_rows(obs, board)
+                if result is not None:
+                    _phase, target_rows = result
+                    for r in target_rows:
+                        if r["area"] != "bench" or r["value"] <= 0:
+                            continue           # off-area, or a removal that isn't worth anything
+                        _emit(needs.gust_target_slot(
+                            f"gust_target:{r['area']}{r['bi']}:{r['id']}", value=r["value"]),
+                            gusters)
         fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
         if fuels:
             _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
@@ -6977,6 +7020,39 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return bool(self._discard_energy_counts(opp.get("discard") or [])[1])
 
+    def _recur_fueled_oa(self, oa: dict | None, opp: dict | None) -> dict | None:
+        """ADR-0074 S2 live (survival-only): augments `oa`'s energies with its discard-recur reload
+        for the CHARGED relax read — the same current-form-energyType proxy the S2 shadow
+        (`_recur_shadow`) already uses; precise per-form reload TARGETING (Aura Jab feeds the
+        BENCH, not itself; Archaludon any {M}) stays a further refinement, not required to make the
+        relax gate fuel-aware. Returns `oa` unchanged when there's no fuel, no tag, or the discard/
+        stats are unknown — fail-open to the unaugmented read."""
+        if not (oa and self.stats):
+            return oa
+        model = getattr(self, "_state_model", None)
+        disc = model.theirs.discard_energy_counts if model is not None else None
+        if not disc:
+            return oa
+        fuel = self.combat.discard_recur_fuel(oa, disc, forward_ids=self._forward_card_ids)
+        if fuel <= 0:
+            return oa
+        st = self.stats.get(oa.get("id"))
+        etype = getattr(st, "energyType", None)
+        return dict(oa, energies=list(oa.get("energies") or []) + [etype] * fuel)
+
+    def _doom_relax_inputs(self, oa: dict | None, opp: dict | None) -> tuple:
+        """Shared inputs for the matched-Read doom relax, read by both the live decider
+        (`_active_doomed`) and its diagnostic (`_threat_shadow`) so they cannot drift: whether a
+        γ-matched Brief exists (`matched`), whether the opponent's Active is a POSSIBLE
+        discard-recur refueler (`fueled`, `_doom_recur_fueled`'s existing gate), and the oa dict the
+        CHARGED read should actually consume (`read_oa`) — augmented with its real fuel reload only
+        when `recur_fuel_relax` is armed AND fuel is possible; unaugmented otherwise (today's
+        behavior, byte-identical when the kill-switch is OFF)."""
+        matched = getattr(self, "_incoming_budget", None) is not None
+        fueled = self._doom_recur_fueled(oa, opp)
+        read_oa = self._recur_fueled_oa(oa, opp) if (fueled and self.recur_fuel_relax) else oa
+        return matched, fueled, read_oa
+
     def _active_doomed(self, ma: dict | None, oa: dict | None, opp: dict | None = None) -> bool:
         """The opponent can KO my Active next turn (current OR forward-evolved attack).
 
@@ -6984,28 +7060,31 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         mirroring `_incoming_budget`):
 
         - **Matched Read** (`doom_matched_relax` ON + `_incoming_budget` populated + no discard-recur
-          fuel): RELAX-ONLY conjunction — a doom the worst-case oracle cries stands only if the
-          CHARGED Threat-Clock curve confirms it (`doomed_incoming` under `_DOOM_CHARGED`: per-attack
-          typed affordability at manual + one supporter-accel attach, Ignition burst on Evolutions).
-          The charged read can CLEAR a worst-case doom, never manufacture one — its own extra
-          reach (the +1 supporter wild can credit a forward form the incumbent's `attached + 1`
-          forward gate does not, e.g. a 1-Energy Makuhita → Wild Press 210) must not re-open the
-          phantom play-scared class (ADR-0064 §3; the 82525101-14 Ultra-Ball-discard pin). On the
-          15-frame disagreement corpus this relaxes exactly the ruled-B frames (bare Terapagos ex /
-          0-Energy Archaludon ex) while every ruled-C frame stays doomed (Hammer-lanche density 600,
-          weakness-doubled Mind Bend 120, 1-Energy Metal Defender 220).
-        - **Unmatched / fueled / switch OFF**: the WORST-CASE oracle, byte-identical (`combat.
-          active_doomed` — no affordability charge, the hidden-Ignition planner_6858 lesson;
-          docs/todo/incoming-affordability.md). Never relax on a guess."""
+          fuel, OR fuel present but quantified via `recur_fuel_relax`, ADR-0074 S2): RELAX-ONLY
+          conjunction — a doom the worst-case oracle cries stands only if the CHARGED Threat-Clock
+          curve confirms it (`doomed_incoming` under `_DOOM_CHARGED`: per-attack typed affordability
+          at manual + one supporter-accel attach, Ignition burst on Evolutions, PLUS the recur reload
+          when `recur_fuel_relax` is armed). The charged read can CLEAR a worst-case doom, never
+          manufacture one — its own extra reach (the +1 supporter wild can credit a forward form the
+          incumbent's `attached + 1` forward gate does not, e.g. a 1-Energy Makuhita → Wild Press
+          210) must not re-open the phantom play-scared class (ADR-0064 §3; the 82525101-14
+          Ultra-Ball-discard pin). On the 15-frame disagreement corpus this relaxes exactly the
+          ruled-B frames (bare Terapagos ex / 0-Energy Archaludon ex) while every ruled-C frame stays
+          doomed (Hammer-lanche density 600, weakness-doubled Mind Bend 120, 1-Energy Metal Defender
+          220).
+        - **Unmatched / fueled-with-`recur_fuel_relax`-OFF / switch OFF**: the WORST-CASE oracle,
+          byte-identical (`combat.active_doomed` — no affordability charge, the hidden-Ignition
+          planner_6858 lesson; docs/todo/incoming-affordability.md). Never relax on a guess."""
         ctx = getattr(self, "_opp_attack_context", None)
         worst = self.combat.active_doomed(ma, oa, opp, context=ctx)
-        if (worst and self.doom_matched_relax
-                and getattr(self, "_incoming_budget", None) is not None
-                and not self._doom_recur_fueled(oa, opp)):
-            my_hp = (ma or {}).get("hp", 0) or 0
-            return bool(my_hp) and self.combat.doomed_incoming(
-                ma, oa, charged=self._DOOM_CHARGED, context=ctx) >= my_hp
-        return worst
+        if not (worst and self.doom_matched_relax):
+            return worst
+        matched, fueled, read_oa = self._doom_relax_inputs(oa, opp)
+        if not matched or (fueled and not self.recur_fuel_relax):
+            return worst
+        my_hp = (ma or {}).get("hp", 0) or 0
+        return bool(my_hp) and self.combat.doomed_incoming(
+            ma, read_oa, charged=self._DOOM_CHARGED, context=ctx) >= my_hp
 
     def _threat_shadow(self, obs: dict, board) -> dict | None:
         """S1b threat-clock doom SHADOW (docs/plans/opponent-value-equation-unification.md): emit the
@@ -7039,10 +7118,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         dmg = self.combat.doomed_incoming(ma, oa, context=ctx)
         old = bool(self.combat.active_doomed(ma, oa, opp, context=ctx))
         new = bool(my_hp and dmg >= my_hp)
-        matched = getattr(self, "_incoming_budget", None) is not None
+        matched, fueled, read_oa = self._doom_relax_inputs(oa, opp)
         decided = bool(old and self.doom_matched_relax and matched
-                       and not self._doom_recur_fueled(oa, opp))   # relax-only: consulted iff worst cries
-        charged = (int(self.combat.doomed_incoming(ma, oa, charged=self._DOOM_CHARGED, context=ctx))
+                       and (not fueled or self.recur_fuel_relax))  # relax-only: consulted iff worst cries
+        charged = (int(self.combat.doomed_incoming(ma, read_oa, charged=self._DOOM_CHARGED, context=ctx))
                    if matched else None)
         return {"doom_old": old, "doom_curve": new, "doom_incoming": int(dmg),
                 "my_hp": int(my_hp), "agree": old == new, "doom_charged": charged,
@@ -7089,16 +7168,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rows.append(row)
         return {"bodies": rows} if rows else None
 
-    def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
-        """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
-        Option B): per opponent in-play body, the two-term REMOVAL value in the ONE currency —
-        `prize_advance + phase × survival_shift` (`needs.opponent_target_value`). `survival_shift` is
-        the turns of survival bought by removing the body (Δ `combat.turns_to_ko_me` via the S1 curve);
-        `prize_advance` is its prize value (the if-KO'd term); `phase` is the KO-race scale
-        (`needs.phase_scale`). The sweep compares this per-body ranking to the shipped snipe / gust /
-        deny picks — the evidence for the Option-B assignment. Deciding NOTHING. Sparse: None mid-sim
-        (`self._planning`), no live my Active, or no opponent in-play bodies. Redundancy (the ADR-0044
-        guards) and instrument-specifics (chip vs KO, reachability) are swap-time, not priced here."""
+    def _opponent_target_rows(self, obs: dict, board) -> tuple | None:
+        """S3 opponent-target value, the SHARED per-body computation (ADR-0074): `prize_advance +
+        phase × survival_shift` (`needs.opponent_target_value`) for every opponent in-play body —
+        the ONE place both the S3a diagnostic (`_opponent_target_shadow`) and the live
+        `gust_target` slot emission (`_resolve_needs`) read it, so they cannot drift apart.
+        `survival_shift` is the turns of survival bought by removing the body (Δ
+        `combat.turns_to_ko_me` via the S1 curve); `prize_advance` is its prize value (the if-KO'd
+        term); `phase` is the KO-race scale (`needs.phase_scale`). A THREAT read, so it keeps the
+        conservative default reading; `opp_active` is passed for the promotion gate, which opens
+        correctly when the loop removes it (the replacement Active is chosen from the Bench for
+        free, rulebook.txt:176). Redundancy (the ADR-0044 guards) and instrument-specifics (chip vs
+        KO, reachability) are each consumer's own job, not priced here.
+
+        Returns ``(phase, rows)``; each row carries the raw ``body`` dict, its ``area``
+        (``"active"``/``"bench"``) and within-area index ``bi`` (the deny-slot key convention), plus
+        ``id``/``prize``/``survival_shift``/``value``. None when sparse: mid-sim (`self._planning`),
+        no live my Active, or no opponent in-play bodies."""
         if getattr(self, "_planning", False):
             return None
         state = obs.get("current") or {}
@@ -7107,17 +7193,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         me = players[yi] if 0 <= yi < len(players) else None
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
         ma = next((p for p in ((me or {}).get("active") or []) if p), None)
-        bodies = [p for p in (((opp or {}).get("active") or []) + ((opp or {}).get("bench") or [])) if p]
+        active_list = [p for p in ((opp or {}).get("active") or []) if p]
+        bench_list = [p for p in ((opp or {}).get("bench") or []) if p]
+        bodies = active_list + bench_list
         if not (ma and bodies):
             return None
         from common import needs
         phase = needs.phase_scale(race_ahead=getattr(board, "race_ahead", None),
                                   opp_prizes_remaining=getattr(board, "opp_prizes_remaining", 0))
-        # A THREAT read, so it keeps the conservative default reading. `ma` is my ACTIVE, so this is
-        # the Active leg — no harvest, but it now ACCUMULATES (ADR-0071 decision 4). `opp_active` is
-        # passed for the promotion gate; when the loop removes it the gate correctly opens, because
-        # the replacement Active is chosen from the Bench for free (rulebook.txt:176).
-        opp_active = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        opp_active = active_list[0] if active_list else None
         enabler = self._opp_switch_enabler()
         base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
                                             switch_enabler=enabler)
@@ -7128,9 +7212,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                switch_enabler=enabler) - base_t
             prize = self.combat.prize_value(b)
             val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
-            rows.append({"id": b.get("id"), "prize": prize, "survival_shift": shift,
-                         "value": round(val, 3)})
-        return {"phase": round(phase, 3), "bodies": rows}
+            area, bi = ("active", i) if i < len(active_list) else ("bench", i - len(active_list))
+            rows.append({"body": b, "area": area, "bi": bi, "id": b.get("id"), "prize": prize,
+                         "survival_shift": shift, "value": val})
+        return phase, rows
+
+    def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
+        """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
+        Option B): the sweep compares `_opponent_target_rows`' per-body ranking to the shipped snipe
+        / gust / deny picks — the evidence for the Option-B assignment. Deciding NOTHING."""
+        result = self._opponent_target_rows(obs, board)
+        if result is None:
+            return None
+        phase, rows = result
+        return {"phase": round(phase, 3),
+                "bodies": [{"id": r["id"], "prize": r["prize"], "survival_shift": r["survival_shift"],
+                           "value": round(r["value"], 3)} for r in rows]}
 
     def _forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None) -> int:
         """Worst-case incoming if their Active EVOLVES next turn (the Posture forward read;
