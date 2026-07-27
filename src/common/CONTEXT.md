@@ -589,7 +589,12 @@ named, ANY of them — THIS turn, the attack's TYPED per-slot cost tested agains
 plus the **Attach Budget** (exact per-slot assignment). **Famine** = NO attack reachable even under
 the full Budget; never "0 Energy attached", and never "the cheapest attack is unpayable" — once
 costs are typed a cheap `{F}{F}` can be unpayable while a dearer `●●●` is not, so the famine
-question scans every attack. Boolean and sound-or-silent; its EV variant **readiness_p** prices a
+question scans every attack. Famine also carries a leg that is not an affordability question at
+all: **`attack_blocked`** — Asleep or Paralyzed ("it cannot attack or retreat", `rulebook.txt`
+L190/L206), or the first player on turn 1 (`turn <= 1`; `rules.md` §first-turn, rulebook L152).
+Those are SIDE-level facts (condition flags ride on the player dict, not the body), so they live on
+the StateModel side rather than inside the body-scoped oracle, which stays typed-cost plus ADR-0033
+locks. A body that cannot legally attack is a famine however much Energy it holds. Boolean and sound-or-silent; its EV variant **readiness_p** prices a
 still-uncertain enabler by the hypergeometric draw instead of 1.0/0.0. The mirror of
 `reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table,
 opposite fail direction (under-count my budget; over-count their threat).
