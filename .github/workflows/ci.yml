@@ -214,6 +214,52 @@ jobs:
             $COV \
             --durations=10
 
+      # DETERMINISM BACKSTOP (#178). The live-native-engine tests are the only ones whose answer can
+      # ride the engine's RNG — a shuffle INSIDE a simulated line is not reproducible
+      # (docs/pyeng/determinism.md §4), and ml f24 flapped that way through three tests for weeks
+      # while passing in isolation every time. `planner._rng_probe` + the admissibility meta-test are
+      # the real guard (deterministic: a sampled frame fails the day it lands); this is the cheap
+      # backstop underneath them, for anything the probe cannot see.
+      #
+      # All 35 live-engine tests run in ~4.3 s, so repeating them is close to free. A frame that
+      # answers differently between repeats is unstable BY DEFINITION — no interpretation needed.
+      - name: Determinism backstop (repeat the live-engine tests)
+        if: steps.plan.outputs.empty != 'true'
+        run: |
+          ENGINE_TESTS="tests/parity/test_determinism_pins_engine.py
+                        tests/sim/test_retreat_lock_engine.py
+                        tests/sim/test_transients_engine.py
+                        tests/strategy/test_lethal_engine.py
+                        tests/strategy/test_planner_engine.py
+                        tests/cards/test_card_effects_engine.py"
+          for i in $(seq 1 15); do
+            python -m pytest $ENGINE_TESTS -q -p no:cacheprovider --tb=line \
+              || { echo "::error::live-engine tests differed on repeat $i of 15 — a frame's answer is not a property of its board. See ADR-0072 amendment C."; exit 1; }
+          done
+          echo "15/15 repeats agreed ✅"
+
+      # ADR-0050 M3 TWIN ARM: the same suite on cgpy, whose search is SeededRng(0) and therefore
+      # reproducible BY CONSTRUCTION — so any flap here is a real bug rather than engine RNG. The
+      # mode already existed (tests/conftest.py reads CG_ENGINE) but nothing ever ran it, and it
+      # did not merely fail: the native determinism pins reached past the alias and ABORTED the
+      # interpreter at ~24%, taking every later test with it (#178).
+      #
+      # GATING, because it is green: 3883 passed / 8 skipped / 0 failed on 2026-07-27. It was
+      # tempting to ship this `continue-on-error` while cgpy is parity-limited (~298/434) — but a
+      # non-gating step is one nobody reads, which is the same invisibility that let a silent
+      # `pytest.skip` retire a determinism pin and let f24 flap for weeks. If it can go red without
+      # anyone caring, it is not worth the minutes.
+      #
+      # The escape valve is explicit and reviewable, not a workflow flag: a test the twin cannot
+      # answer gets `@needs_live_board_search` or a module-level skip that says WHY (see
+      # tests/conftest.py). That way "cgpy can't do this yet" is a claim in the diff someone signs
+      # off, and it disappears on its own as parity grows.
+      - name: cgpy twin arm (ADR-0050 M3)
+        if: steps.plan.outputs.empty != 'true'
+        env:
+          CG_ENGINE: py
+        run: python -m pytest ${{ steps.plan.outputs.paths }} -q -p no:cacheprovider --tb=line --durations=10
+
       # ADR-0032 soundness gate: a bounded engine audit (the ignore-flag family + goldens, <1 min)
       # diffed against the SHIPPED damage oracle — fails on any over-prediction (damage the closed
       # form promises that the engine won't deal = phantom-KO risk). Runs whenever attack/damage/

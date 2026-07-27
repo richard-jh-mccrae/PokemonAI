@@ -15,6 +15,7 @@ from common.pilot import Pilot
 from common.scouting.provider import EngineCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from conftest import needs_live_board_search
 
 REPO = Path(__file__).resolve().parents[2]
 MEGA = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
@@ -35,6 +36,7 @@ def _engine_pilot(deck, **kw):
 
 
 @pytest.mark.req("REQ-LETHAL-0014")
+@needs_live_board_search
 def test_live_wiring_engine_refutes_a_phantom_direct_lock():
     """End-to-end backstop wiring (ADR-0030 item-1): with ``lethal_verify=True`` and closed-form math
     LYING that an early attack wins (a phantom lock), the REAL engine search refutes it — no lock, the
@@ -126,6 +128,7 @@ def test_veto_survives_a_live_drive_and_replays_only_verified_locks():
 
 
 @pytest.mark.req("REQ-LETHAL-0009")
+@needs_live_board_search
 def test_engine_confirms_win_round_trips_the_search_on_a_real_observation():
     """Drive a real mirror game to its first open turn menu, then run the candidate step through the
     engine search: the primitive must return a concrete verdict (not None), proving ``search_begin`` /

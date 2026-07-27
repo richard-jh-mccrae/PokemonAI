@@ -1,4 +1,10 @@
-"""Effect Clauses on the committed native engine — the measured-magnitude smoke gate.
+"""Effect Clauses on the committed NATIVE engine — the measured-magnitude smoke gate.
+
+NATIVE-ONLY, enforced below (#178). These tests do not check cgpy; they DERIVE what a card does by
+probing the engine (ADR-0032, the engine-audited effect compendium). Point them at the twin and they
+measure cgpy against cgpy — circular, and the twin's `probe_card` scenarios do not align anyway, so
+under `CG_ENGINE=py` they simply fail with a heal that was measured on nothing.
+
 
 Engine-backed (drives the real probe, like ``test_lethal_engine.py``), offline on
 Windows + Linux. Proves the probe→classify pipeline reads the *quantities* the boolean
@@ -20,11 +26,20 @@ test); a *wrong measured amount* always fails.
 """
 import pytest
 
+from conftest import on_cgpy_twin
 from meta_tracker.card_effects import classify_effect_clauses, merge_clauses
 from meta_tracker.cards import load_cards
 from meta_tracker.probe_cards import probe_card
 
-_HEAL_PASSES = 30   # p(align) ~ 0.2/pass -> p(never) ~ 0.1%; passes ~ms on native engine
+if on_cgpy_twin():
+    pytest.skip("engine-audited effect probes: circular on the cgpy twin", allow_module_level=True)
+
+# Re-sized from measurement, not from the estimate (#178). The old value was 30 on an assumed
+# p(align) ~ 0.2/pass -> p(never) ~ 0.1%; running the module 25× showed the two heal probes failing
+# to align ~4% of the time, so the real p(align) is ~0.10/pass and 30 passes was ~40× flakier than
+# the comment claimed. That went unnoticed because a miss was a `pytest.skip` — invisible in CI.
+# Now that a miss is a FAILURE the budget has to match the measured rate: 0.9^120 ~ 3e-6.
+_HEAL_PASSES = 120  # p(align) ~ 0.10/pass MEASURED -> p(never) ~ 3e-6; passes ~ms on native engine
 
 
 @pytest.fixture(scope="module")
@@ -40,6 +55,17 @@ def test_cheren_measures_draw_3(cards):
     assert rec is not None, "Cheren never became playable — probe harness regression?"
     clauses = classify_effect_clauses(cards[1224], probe=rec)
     assert {"kind": "draw", "amount": 3} in clauses
+
+
+# A FAILURE, not a skip (#178). These probes drive the live native engine, so alignment is
+# stochastic in principle — but `_HEAL_PASSES`=30 puts p(never) around 0.1%, and measured
+# 2026-07-27 it aligned 25/25. A skip at that rate is not protecting the suite from bad luck; it
+# is hiding the case that matters, a probe-harness regression that stops the scenario aligning at
+# all — after which these tests report green-ish forever without measuring a thing. The module
+# already takes this line elsewhere ("Cheren never became playable — probe harness regression?").
+_NEVER_ALIGNED = ("combat scenario never aligned in %d passes — the heal was MEASURED on nothing. "
+                  "Measured 25/25 alignment on 2026-07-27, so suspect a probe-harness regression "
+                  "before bad luck; re-run once to tell them apart." % _HEAL_PASSES)
 
 
 def _measured_heal(cid, cards):
@@ -58,8 +84,7 @@ def _measured_heal(cid, cards):
 @pytest.mark.req("REQ-EFFECT-0010")
 def test_super_potion_measures_heal_60_with_discard_rider(cards):
     heal = _measured_heal(1112, cards)
-    if heal is None:
-        pytest.skip("combat scenario never aligned (stochastic); re-run")
+    assert heal is not None, _NEVER_ALIGNED
     assert heal["amount"] == 60
     assert heal.get("rider") == "discard_own_energy"   # own ENERGY->DISCARD after heal
 
@@ -67,8 +92,7 @@ def test_super_potion_measures_heal_60_with_discard_rider(cards):
 @pytest.mark.req("REQ-EFFECT-0010")
 def test_potion_measures_heal_30(cards):
     heal = _measured_heal(1117, cards)
-    if heal is None:
-        pytest.skip("combat scenario never aligned (stochastic); re-run")
+    assert heal is not None, _NEVER_ALIGNED
     assert heal["amount"] == 30
 
 

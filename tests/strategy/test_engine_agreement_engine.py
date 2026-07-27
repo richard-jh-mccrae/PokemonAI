@@ -110,6 +110,42 @@ def test_agreement_is_not_vacuous():
 
 
 def _cascade_reveals(name, agent):
+    """The engine-RNG channels ``name``'s cascade consumes — the membership criterion for
+    `SEEDED_FIXTURES`, measured instead of assumed.
+
+    Thin wrapper over the shared `engine_admissibility.cascade_reveals`, which asks
+    `planner._rng_probe` — the SAME rule the planner itself applies. This module used to carry its
+    own copy of that rule; two copies of "what counts as engine randomness" is exactly how the
+    original defect survived, since a comment claiming these cascades were draw-free sat beside
+    code that never checked.
+
+    ``prize=False`` is the point of the default: a win's own prize take does not change WHO wins
+    (ADR-0050), and f110 — the fixture anchoring `test_agreement_is_not_vacuous` — has no other
+    hidden-zone traffic, so counting it would empty this gate."""
+    from engine_admissibility import cascade_reveals
+
+    return cascade_reveals(_fixture(name), _pilot(_deck(agent)))
+
+
+@pytest.mark.req("REQ-CGPY-M3-0012")
+@pytest.mark.parametrize("name,agent", SEEDED_FIXTURES, ids=lambda v: v)
+def test_engine_confirms_win_verdicts_agree(name, agent):
+    native, py = _both_verdicts(name, agent)
+    assert native is not None, f"{name}: native verdict unavailable — fixture seed broken?"
+    assert py == native or py is None, (
+        f"{name}: cgpy verdict {py!r} contradicts native {native!r}")
+
+
+@pytest.mark.req("REQ-CGPY-M3-0012")
+def test_agreement_is_not_vacuous():
+    """The twin must actually decide the decidable: the shipped recover-energy win (f110)
+    confirms True on BOTH engines — the whole fetch->attach->retreat->promote->attack->win
+    cascade drives through cgpy to the same verdict."""
+    native, py = _both_verdicts("ms_lethal_recover_energy_to_win_f110", "mega_starmie")
+    assert native is True and py is True
+
+
+def _cascade_reveals(name, agent):
     """Drive ``name``'s native cascade and return the engine-RNG reveals it consumed.
 
     The membership criterion for `SEEDED_FIXTURES`, measured instead of assumed: a cascade that

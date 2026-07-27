@@ -12,11 +12,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # from any subdir.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# cgpy owns its randomness and is UNSEEDED by default, deliberately — `cgpy/game.py` mirrors the
+# native engine there so self-play is realistic. A test suite wants the opposite: pin the seed so a
+# cgpy-driven game is the same game every run, on every machine, in CI. `game.py` re-reads the var
+# per `battle_start`, so setting it here covers every call regardless of import order, and
+# `setdefault` lets an explicit CGPY_SEED (a deliberate seed sweep, or test_compat_game's own
+# monkeypatch) win.
+os.environ.setdefault("CGPY_SEED", "1178")             # 178 = the issue that earned this line
+
 if os.environ.get("CG_ENGINE") == "py":                # ADR-0050 M3: run the suite on the
     from cgpy.alias import install                     # cgpy twin instead of the DLL
     install()
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def on_cgpy_twin() -> bool:
+    """True when the suite is running against the cgpy twin (``CG_ENGINE=py``)."""
+    try:
+        from cgpy.alias import installed
+    except Exception:                                  # cgpy absent: the native arm, by definition
+        return False
+    return installed()
+
+
+#: Skip a test that asserts the NATIVE search round-trips from a LIVE battle board (#178).
+#:
+#: cgpy reseeds a MAIN-select board from an observation (`cgpy.search.state_from_obs`) but cannot
+#: reconstruct an arbitrary mid-battle one, so on the twin `_simulate_line` / `_engine_confirms_win`
+#: return **None** there. That is the twin being honest — None never lies — but it makes "assert the
+#: search reached a board / a verdict" unanswerable rather than false, so the assertion measures the
+#: parity gap instead of the thing under test.
+#:
+#: This is a PARITY marker, not a native-only one: delete it when cgpy grows live-board reseeding,
+#: and do not weaken the assertion to `is None or ...` to make it pass on both arms — an assertion
+#: that accepts both answers pins neither.
+needs_live_board_search = pytest.mark.skipif(
+    on_cgpy_twin(),
+    reason="asserts a live-board search round-trip; cgpy cannot reseed an arbitrary live board")
 
 
 def require_kaggle_environments():

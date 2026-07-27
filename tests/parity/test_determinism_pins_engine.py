@@ -127,7 +127,10 @@ def test_select_deck_listing_preserves_true_order():
                 return
         finally:
             battle_finish()
-    pytest.skip("no deck-revealing select reached in 20 games (stochastic)")
+    pytest.fail("no deck-revealing select reached in 20 chaos games — the pin measured NOTHING. "
+                "Measured 25/25 alignment on 2026-07-27, so this is a harness regression (the "
+                "chaos driver stopped reaching searches), not bad luck. A skip here would have "
+                "retired the pin silently.")
 
 
 def test_validation_error_codes():
@@ -202,7 +205,9 @@ def test_fork_reshuffles_but_is_deterministic():
             return
         finally:
             battle_finish()
-    pytest.skip("no plain-MAIN post-drive state reached in 20 games (stochastic)")
+    pytest.fail("no plain-MAIN post-drive state reached in 20 chaos games — the pin measured "
+                "NOTHING. Measured 25/25 alignment on 2026-07-27, so this is a harness regression, "
+                "not bad luck. A skip here would have retired the pin silently.")
 
 
 def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
