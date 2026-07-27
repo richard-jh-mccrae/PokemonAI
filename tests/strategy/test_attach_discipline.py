@@ -127,7 +127,8 @@ def _arm_pilot():
                  JETTING_BLOW: AttackStat(JETTING_BLOW, damage=60, cost=1, energyTypes=(0,))})
     return Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}))
+                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1",
+                                                     "provides_evo:3"]}))
 
 
 def _arm_board(p, energies, hand=()):
@@ -158,12 +159,15 @@ def test_go_down_swinging_turns_on_only_at_the_biggest_attacks_boundary():
 
 
 @pytest.mark.req("REQ-GEN-0016")
-def test_a_hand_special_energy_does_not_arm_the_active():
-    """A NARROWING taken knowingly (#142). The retired matcher hardcoded "a `discard_eot` burst onto
-    an Evolution provides 3", so an Ignition in hand armed a bare Mega. The Attach Budget's manual
-    leg reads TYPED BASIC Energy only, so a Special Energy contributes zero — fail-closed per
-    ADR-0067, and the honest fix is an Effect-Clause row for its provision, not a second matcher.
-    INERT on every shipped deck: none of the five agent decklists runs a Special Energy (verified
-    against `data/EN_Card_Data.csv` card types), so this asserts the boundary rather than a loss."""
+def test_a_hand_ignition_arms_an_evolution_from_zero():
+    """Ignition Energy "provides {C}{C}{C}" attached to an Evolution Pokémon (card text,
+    `data/EN_Card_Data.csv` id 17) — so ONE attach arms a bare Mega Starmie ex for Nebula Beam CCC.
+
+    mega_starmie actually runs it, and the Attach Budget could not see it: the hand leg counts typed
+    BASIC Energy, and a Special Energy is not one unit of its own colour. Left unmodelled this board
+    read as a famine while the hand held the card that arms it — a false famine on a shipped deck,
+    the same class as the retired `+1` one zone over. The provision is now a `provides:N` Function
+    Tag, so this is data the card pool carries rather than a constant in the affordability code."""
     p = _arm_pilot()
-    assert _arm_board(p, [], hand=[IGNITION]).active_arm_available is False
+    assert _arm_board(p, [], hand=[IGNITION]).active_arm_available is True
+    assert _arm_board(p, [], hand=[]).active_arm_available is False   # nothing in hand, nothing armed

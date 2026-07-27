@@ -39,6 +39,42 @@ class CardFunctions:
                     return 0
         return 0
 
+    def energy_provision(self, card_id: int, *, evolution: bool = False) -> int:
+        """How many Energy units this card provides once ATTACHED — the `provides:N` PARAMETRIC tag,
+        with `provides_evo:N` for a card whose provision changes on an Evolution Pokémon (#142).
+
+        Same shape and same reason as :meth:`dig_depth`: per-card DATA that ages with the card pool
+        through the card-functions pipeline, not a constant in the affordability code. A Basic Energy
+        needs no tag — it is one unit of its own colour, and the Attach Budget's hand leg already
+        counts those; this answers the question only a Special Energy raises. The COLOUR is not here
+        either: ``CardStat.energyType`` already carries it (Ignition and Boomerang report colourless,
+        Telepath Psychic reports {P}), so the tag adds only what the stats cannot say.
+
+        Verified at `data/EN_Card_Data.csv`: Ignition Energy "provides {C} Energy… If this card is
+        attached to an Evolution Pokémon, it provides {C}{C}{C} Energy instead" — hence the pair of
+        tags and the ``evolution`` argument.
+
+        0 when untagged (fail-CLOSED, ADR-0067): an unreadable provision contributes nothing to the
+        Budget rather than a guessed one. `test_attach_budget_coverage.py` audits that zero, so a
+        shipped deck cannot quietly run a Special Energy the Budget cannot price."""
+        best = 0
+        for tag in self._table.get(card_id, ()):
+            if not isinstance(tag, str):
+                continue
+            if tag.startswith("provides_evo:"):
+                if not evolution:
+                    continue
+            elif not tag.startswith("provides:"):
+                continue
+            try:
+                value = int(tag.split(":", 1)[1])
+            except ValueError:
+                continue
+            # The evolution reading REPLACES the base one ("instead"), and both are floors of the
+            # same quantity, so the larger applicable tag is the provision.
+            best = max(best, max(0, value))
+        return best
+
     @classmethod
     def load(cls, path=None) -> "CardFunctions":
         p = Path(path) if path is not None else _DEFAULT

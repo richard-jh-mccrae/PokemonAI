@@ -160,6 +160,13 @@ class CardStat:
         return self.cardType == _BASIC_ENERGY
 
     @property
+    def is_special_energy(self) -> bool:
+        """A Special Energy — one whose PROVISION is card text rather than one unit of its own
+        colour (Ignition Energy provides {C}{C}{C} on an Evolution). The Attach Budget reads the
+        amount off the `provides:N` Function Tag; ``energyType`` still gives the colour."""
+        return self.cardType == _SPECIAL_ENERGY
+
+    @property
     def is_energy(self) -> bool:
         """Any Energy card (Basic or Special)."""
         return self.cardType in (_BASIC_ENERGY, _SPECIAL_ENERGY)

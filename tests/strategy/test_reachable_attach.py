@@ -551,3 +551,88 @@ def test_the_typed_matcher_agrees_with_an_exhaustive_reference():
                rng.choice([(), (), ("A",), ("B",), ("A", "B")]))
             for _ in range(rng.randint(0, 4)))
         assert _can_pay(slots, units, caps) is brute(slots, units, caps), (slots, units, caps)
+
+
+# ── hand SPECIAL Energy provision (#142) ───────────────────────────────────────────────────────
+#
+# Card text verified at `data/EN_Card_Data.csv`:
+#   Ignition Energy (17, Special): "As long as this card is attached to a Pokemon, it provides {C}
+#     Energy. If this card is attached to an Evolution Pokemon, it provides {C}{C}{C} Energy instead."
+#   Boomerang Energy (9, Special): "it provides {C} Energy."
+# Engine card types confirm both report energyType 0 (colourless); Telepath Psychic (19) reports {P}.
+
+IGNITION, BOOMERANG = 17, 9
+MEGA_LUC, RIOLU = 678, 677                       # the single-hop line: Riolu (Basic) -> Mega Lucario ex
+MEGA_BRAVE, RIOLU_BIG = 983, 984                 # synthetic attack ids
+
+
+def _special_combat(tags):
+    stats = {
+        MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, energyType=FIGHTING,
+                           evolvesFrom="Riolu", attacks=(MEGA_BRAVE,), cardType=0),
+        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, attacks=(RIOLU_BIG,),
+                        cardType=0),
+        IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=0),
+        BOOMERANG: CardStat(BOOMERANG, name="Boomerang Energy", cardType=6, energyType=0),
+    }
+    attacks = {MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=3, energyTypes=(0, 0, 0)),
+               RIOLU_BIG: AttackStat(RIOLU_BIG, damage=30, cost=3, energyTypes=(0, 0, 0))}
+    return CombatMath(DictCardStatProvider(stats, attacks=attacks),
+                      functions=CardFunctions(tags), transients=None, effects=CardEffects({}))
+
+
+_IGNITION_TAGS = {IGNITION: ["discard_eot", "provides:1", "provides_evo:3"],
+                  BOOMERANG: ["provides:1"]}
+
+
+def test_an_ignition_arms_an_evolution_from_zero():
+    """The false famine this closes: Mega Lucario ex is an Evolution, so one Ignition provides three
+    colourless — Mega Brave's whole cost — from an empty body."""
+    c = _special_combat(_IGNITION_TAGS)
+    body = {"id": MEGA_LUC, "energies": []}
+    budget = c.attach_budget(body, [IGNITION])
+    assert budget.size == 3
+    assert c.reachable_attach(body, MEGA_BRAVE, budget=budget) is True
+
+
+def test_the_same_ignition_provides_one_on_a_basic():
+    """"...to an Evolution Pokemon... instead" — a Basic gets the plain {C}, so the identical hand
+    reaches nothing on Riolu."""
+    c = _special_combat(_IGNITION_TAGS)
+    body = {"id": RIOLU, "energies": []}
+    budget = c.attach_budget(body, [IGNITION])
+    assert budget.size == 1
+    assert c.reachable_attach(body, RIOLU_BIG, budget=budget) is False
+
+
+def test_a_colourless_provision_cannot_pay_a_typed_slot():
+    """Ignition reports energyType 0, so its units are coloured exactly as an ATTACHED Ignition is —
+    colourless-only. A {F}{F}{F} cost is NOT reachable off it."""
+    c = _special_combat(_IGNITION_TAGS)
+    typed = {MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=3,
+                                    energyTypes=(FIGHTING, FIGHTING, FIGHTING))}
+    c.stats = DictCardStatProvider(dict(c.stats._stats), attacks=typed)
+    body = {"id": MEGA_LUC, "energies": []}
+    assert c.reachable_attach(body, MEGA_BRAVE,
+                              budget=c.attach_budget(body, [IGNITION])) is False
+
+
+def test_the_manual_attach_plays_one_special_energy_not_both():
+    """Two Specials in hand are two ALTERNATIVE sources for the single manual attach, never a sum."""
+    c = _special_combat(_IGNITION_TAGS)
+    body = {"id": MEGA_LUC, "energies": []}
+    assert c.attach_budget(body, [IGNITION, BOOMERANG]).size == 3
+
+
+def test_a_spent_manual_attach_zeroes_a_hand_special_energy():
+    c = _special_combat(_IGNITION_TAGS)
+    body = {"id": MEGA_LUC, "energies": []}
+    assert c.attach_budget(body, [IGNITION], energy_attached=True).size == 0
+
+
+def test_an_untagged_special_energy_provides_nothing():
+    """Fail-CLOSED (ADR-0067): no `provides:N` row, no units — never a guessed one. The coverage
+    gate is what stops a shipped deck reaching this state silently."""
+    c = _special_combat({IGNITION: ["discard_eot"]})
+    body = {"id": MEGA_LUC, "energies": []}
+    assert c.attach_budget(body, [IGNITION]).size == 0
