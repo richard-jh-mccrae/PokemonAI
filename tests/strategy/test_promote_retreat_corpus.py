@@ -129,6 +129,41 @@ def test_whether_no_longer_recuses_when_the_active_can_ko_f59():
     assert abs(row["total"]) < KO_SCORE                  # …and still sub-lethal
 
 
+# ---- the CLAIMS each pick-site fixture declares (ADR-0072 decision 3, ADR-0073 §12) ------------
+
+@pytest.mark.parametrize("agent,fixture", [
+    ("mega_starmie", "pr_promote_accelerator_f120"),
+    ("mega_starmie", "pr_promote_ready_wincon_f104"),
+    ("mega_starmie", "pr_retreat_into_ready_wincon_f92"),
+    ("dragapult_ex", "dragapult_promote_over_fragile_base_f31"),
+])
+def test_the_pick_site_axis_claims(agent, fixture):
+    """ADR-0073 §12's measured position, made executable: the 131 committed fixtures are LEFT ALONE
+    (a bare `correct` already IS a Decision Claim, and nothing in the corpus is pinned to a score),
+    and Axis Claims are added ONLY to the pick-site frames — where "promote THIS body over that one"
+    is exactly what the frame means.
+
+    An ORDERING within one lane is the right shape here precisely because 1c is a ~10x re-banding: an
+    ordering survives it, a score does not. `PROMOTE_LANE` is what scopes the claim, so a non-promote
+    option out-scoring the lane is irrelevant to it — and the four frames are the four pick-site
+    fixtures that are MINE (the other two `_SWITCH` fixtures in the corpus are Boss's-gust target
+    selects, which are the gust equation's turf and carry no promote lane at all)."""
+    from train.gates import PROMOTE_LANE, evaluate_axis_claim, parse_claims
+    fx = json.loads((FIXTURES / f"{fixture}.json").read_text(encoding="utf-8"))
+    claims = parse_claims(fx)
+    assert claims.axis, f"{fixture} declares no Axis Claim"
+    dec = _pilot(agent).explain(fx["obs"])
+    sel = fx["obs"].get("select") or {}
+    options, ctx = sel.get("option") or [], sel.get("context")
+    scores = [None] * len(options)
+    for o in dec.options:
+        scores[o.index] = o.score
+    for c in claims.axis:
+        assert c.lane == PROMOTE_LANE, f"{fixture}: axis claim is not in the promote lane"
+        assert evaluate_axis_claim(c, options=options, scores=scores, select_context=ctx) is True, (
+            f"{fixture} axis claim {c.prefer} over {c.over}: scores={scores}")
+
+
 @pytest.mark.parametrize("agent,fixture", [
     ("mega_starmie", "pr_promote_accelerator_f120"),
     ("mega_starmie", "pr_promote_ready_wincon_f104"),

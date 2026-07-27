@@ -438,5 +438,36 @@
   ],
   "chosen_label": "Dreepy (bench 1 · 70/70 · 1⚡)",
   "correct_label": "Budew (bench 2 · 30/30)",
-  "note": "f31 ToActive promote (CRITICAL): Active KO'd. prefer-wincon-line-piece (+18) promotes the bare bench Dreepy (a fragile 2-hop base). _evolve_to_ready_wincon_available=True (wincon Dragapult ex in hand + a line pre-evo on bench) so promote-the-staller stood down — but the bench body is Dreepy (Stage-0), TWO evolutions from a ready attacker, not one. Human wants Budew (item_lock disposable staller) promoted; keep the Dreepy line safe on bench. Budew carries item_lock but not opener, so promote-the-staller can't see it. Correct=[1] Budew."
+  "note": "f31 ToActive promote (CRITICAL): Active KO'd. prefer-wincon-line-piece (+18) promotes the bare bench Dreepy (a fragile 2-hop base). _evolve_to_ready_wincon_available=True (wincon Dragapult ex in hand + a line pre-evo on bench) so promote-the-staller stood down — but the bench body is Dreepy (Stage-0), TWO evolutions from a ready attacker, not one. Human wants Budew (item_lock disposable staller) promoted; keep the Dreepy line safe on bench. Budew carries item_lock but not opener, so promote-the-staller can't see it. Correct=[1] Budew.",
+  "claims": {
+    "axis": [
+      {
+        "lane": [
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "prefer": [
+          5,
+          1
+        ],
+        "over": [
+          [
+            5,
+            0
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "why": "CRITICAL f31 (TO_ACTIVE): promote the item-lock Budew over the bare Stage-0 Dreepy, keeping the fragile line safe. `promote-the-staller` is deleted (ADR-0073 §6a) — a disposable staller decomposes with no remainder into the terms the decider already builds (its own damage, its LOW exposure), so this ordering must hold without a rung asserting it."
+      }
+    ]
+  }
 }
