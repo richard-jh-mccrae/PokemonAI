@@ -90,10 +90,6 @@ EXPECTED_SHIPPED = {
     "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: matched-Read charged doom
                                     # (`_DOOM_CHARGED`) confirms-or-clears a worst-case `active_doomed`
                                     # cry (relax-only); unmatched = worst-case
-    "famine_via_oracle": True,      # #142 Phase 1d armed-ON: **Famine** read off the StateModel's
-                                    # Reachable Attach + `attack_blocked`, in place of the retired
-                                    # untyped-count payable and its flat `+1` accel. OFF replays the
-                                    # retired premise for the Decision Gate sweep's OLD arm only.
 }
 
 

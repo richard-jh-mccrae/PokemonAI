@@ -140,12 +140,6 @@ PROFILE = {
                                     # (Hammer-lanche density, ×2-weak Mind Bend, 1e Metal Defender)
                                     # stays doomed. Unmatched → byte-identical worst-case (ADR-0064
                                     # §4: never relax on a guess)
-    "famine_via_oracle": True,      # #142 (Phase 1d) armed-ON: **Famine** is read off the StateModel —
-                                    # NO attack reachable under the full Attach Budget, or the rules
-                                    # forbid one at all (`attack_blocked`) — in place of the retired
-                                    # untyped-count `payable` and its flat `+1` accel approximation.
-                                    # OFF replays the retired premise for the Decision Gate sweep's OLD
-                                    # arm and nothing else; it dies with the retired helpers.
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one

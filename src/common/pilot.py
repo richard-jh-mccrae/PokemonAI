@@ -571,17 +571,9 @@ class Board:
     recycle_dead_only: bool = False       # my discard's recycle pool (Pokémon/Basic Energy) is non-empty
                                           # yet every member is a dead pick (a stranded, hand-unplayable
                                           # evolution; no Energy) — gates `dont-recycle-the-dead` (f33)
-    active_attack_payable: bool = True    # my Active can PAY some attack this turn (attached Energy +
-                                          # the best unspent hand attach ≥ its cheapest attack cost).
-                                          # True when unknown (fail-open) — gates the starved stall-gust
     active_fully_powered: bool = False    # my Active already carries its HIGHEST-damage attack's cost
                                           # (attached ≥ maxDamageCost) — a burst Energy has no urgent
                                           # job; False when unknown (fail-closed keeps the keep rules)
-    active_attack_payable_via_accel: bool = False  # a PLAYABLE hand energy-accelerator (`tutor_energy`,
-                                          # e.g. Crispin) could fetch+attach ONE Energy and make my Active
-                                          # attack-payable THIS turn — the false famine `active_attack_payable`
-                                          # (attached + hand-attach only) misses; False when unknown, so a
-                                          # PROVABLE famine still fires the stall-gust (dragapult f70)
     active_famine: bool = False           # **Famine** (#142): my Active cannot attack this turn — NO attack
                                           # reachable under the FULL Attach Budget, or the rules forbid it one
                                           # at all (Asleep/Paralyzed/turn-1-going-first, `attack_blocked`).
@@ -1122,8 +1114,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
-                 promote_retreat_value=True, doom_matched_relax=False,
-                 famine_via_oracle=True):
+                 promote_retreat_value=True, doom_matched_relax=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1289,10 +1280,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # (plan_turn else None) where greedy is weak/indifferent,
                                                         # sim each candidate first action to end-of-turn and
                                                         # commit the best leaf. OFF = byte-identical
-        self.famine_via_oracle = famine_via_oracle      # #142 swap switch (armed-ON): read **Famine** off the
-                                            # StateModel's `reachable_attach` + `attack_blocked` instead of the
-                                            # retired `payable`/`+1-via-accel` pair. OFF replays the retired
-                                            # premise — the Decision Gate sweep's OLD arm, and nothing else.
         self.doom_matched_relax = doom_matched_relax    # doom-shadow grill kill-switch (2026-07-23): behind a
                                                         # γ-matched Brief (`_incoming_budget` set) AND no
                                                         # discard-recur fuel, a worst-case `active_doomed` cry
@@ -5485,32 +5472,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return len((target.get("energies") or [])) < cost
 
-    def _active_attack_payable_via_accel(self, me: dict, ma: dict | None,
-                                         supporter_played: bool, basic_energy_in_deck: bool) -> bool:
-        """My Active could be made attack-payable THIS turn by a PLAYABLE hand energy-accelerator (a
-        `tutor_energy` card, e.g. Crispin: fetch a Basic Energy from the deck and attach it). The famine
-        stall-gust family reads only `active_attack_payable` (attached + best hand-attach) and misses the
-        deck-fetch accel, so it declares a FALSE famine (dragapult f70: Active Dragapult ex 0e, Crispin in
-        hand → Jet Headbutt {C} payable). Kept SEPARATE from `active_attack_payable` (attached-now truth
-        other consumers need). Fail-CLOSED (False on unknown stats / nothing to fetch / accel one short),
-        so a PROVABLE famine still fires the stall."""
-        if ma is None or not (self.stats and self.functions):
-            return False
-        stat = self.stats.get(ma.get("id"))
-        if stat is None or (stat.minAttackCost or 0) <= 0 or not basic_energy_in_deck:
-            return False
-        if (len(ma.get("energies") or []) + 1) < (stat.minAttackCost or 0):
-            return False                                   # even one accel-attach is short of the cheapest attack
-        for c in (me.get("hand") or []):
-            cid = c.get("id") if c else None
-            if cid is None or "tutor_energy" not in self.functions.tags(cid):
-                continue
-            cstat = self.stats.get(cid)
-            if getattr(cstat, "cardType", None) == 3 and supporter_played:  # 3 = Supporter: only one/turn
-                continue
-            return True
-        return False
-
     def _active_arm_available(self, ma: dict | None, bench_wincon_ready: bool) -> bool:
         """Go-down-swinging is available on the Active: it is a real ATTACKER (NOT a utility draw/tutor/stall
         body) whose HIGHEST-damage attack this turn's Attach Budget would COMPLETE, and there is no ready
@@ -5790,23 +5751,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                    + (0 if state.get("energyAttached")
                       else self._best_hand_attach_units(
                           hand_ids_now, self.stats.get((ma or {}).get("id")) if self.stats else None)))
-        # **Famine** (#142) — the corrected "my Active cannot attack this turn" premise. The
-        # `famine_via_oracle` kill-switch keeps the RETIRED premise computable so the Decision Gate
-        # sweep can replay both; it dies with the retired helpers, leaving the model read alone.
-        if self.famine_via_oracle:
-            famine = model.mine.active_famine
-            # "an UNARMED Active that can still REACH an attack should swing, not stall" — ruling A.
-            should_swing = len((ma or {}).get("energies") or []) == 0 and not famine
-        else:
-            _payable = self._active_attack_payable(ma, payable)
-            _via_accel = self._active_attack_payable_via_accel(
-                me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty))
-            famine = not _payable and not _via_accel
-            # The retired PAIR, re-expressed so `not active_should_swing` is byte-identical to the
-            # two clauses it replaced in `gust-for-the-stall`. `gust-to-strand-the-key-attacker`
-            # cannot be reproduced this way — it carried the accel half ALONE — so the sweep will
-            # surface its added guard as a flip. That is the ruling, not an artefact.
-            should_swing = (len((ma or {}).get("energies") or []) == 0 and _payable) or _via_accel
+        # **Famine** (#142) — "my Active cannot attack this turn", read ONCE off the model: no attack
+        # reachable under the full Attach Budget, or the rules forbid one at all (`attack_blocked`).
+        famine = model.mine.active_famine
+        # "an UNARMED Active that can still REACH an attack should swing, not stall" — the stall-gust
+        # family's shared guard, derived here because two of its rules need the identical clause.
+        should_swing = len((ma or {}).get("energies") or []) == 0 and not famine
         base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
                      else Plan.SETUP)                   # the readiness core (SETUP→RACE)
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
@@ -5847,11 +5797,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_prizes_remaining=model.prize_race.opp_prizes_remaining,  # the ONE prize-race read
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             recycle_dead_only=self._recycle_dead_only(me),
-            active_attack_payable=(self._active_attack_payable(ma, payable)
-                                   and not self._attack_impossible_on_menu_legacy(
-                                       select, me, bool(state.get("energyAttached")))),
-            active_attack_payable_via_accel=self._active_attack_payable_via_accel(
-                me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
             active_famine=famine,                                        # ← StateModel (#142): the ONE
             active_should_swing=should_swing,                             # corrected famine premise
             active_attack_provable=(model.mine.reachable_attach(model.mine.active, provable=True)
@@ -7297,34 +7242,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                              if n - seen.get(cid, 0) - prizes.get(cid, 0) <= 0)
         return frozenset(cid for cid, n in deck_counts.items() if seen.get(cid, 0) >= n)
 
-    def _active_attack_payable(self, ma: dict | None, payable: int) -> bool:
-        """My Active can PAY **and legally use** some attack this turn: ``payable`` (attached Energy +
-        the best unspent hand attach) covers an attack's cost AND that attack is not transient-locked.
-        True on unknown stats (fail-open — the starved stall-gust must only fire on a PROVABLE famine,
-        ep83457493 f20).
-
-        The lock half (ADR-0033) matters: a Riolu holding one {F} 'pays' Accelerating Stab, but it used
-        Accelerating Stab last turn and the card says it can't again — the engine offered no ATTACK
-        option at all. Energy math alone said payable, so `dont-play-damage-boost-when-cant-attack`
-        stood down and the agent burned a Premium Power Pro that expired having buffed nothing
-        (ml f69, CRITICAL)."""
-        stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
-        if stat is None:
-            return True
-        if payable < (stat.minAttackCost or 0):
-            return False
-        grant = self._transients.grant_for_serial((ma or {}).get("serial"))
-        if not grant:
-            return True
-        if grant.get("self_lock"):                     # every attack locked (blanket)
-            return False
-        same = grant.get("same_lock")                  # exactly one attack id locked
-        if same is None:
-            return True
-        affordable = [aid for aid in (getattr(stat, "attacks", None) or ())
-                      if self._attack_cost(aid) <= payable]
-        return any(aid != same for aid in affordable) if affordable else True
-
     def _attack_impossible_on_menu(self, select, budget) -> bool:
         """The ENGINE says my Active cannot attack this turn: I am at the open turn menu and it lists no
         ATTACK option. Authoritative where the closed-form energy math is not — it already accounts for
@@ -7343,18 +7260,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not opts or any(o.get("type") == _ATTACK for o in opts):
             return False
         return not (budget is not None and budget.size > 0)
-
-    def _attack_impossible_on_menu_legacy(self, select, me: dict, energy_attached: bool) -> bool:
-        """The RETIRED guard, kept byte-identical only so the Decision Gate sweep's OLD arm replays
-        what shipped. Dies with `active_attack_payable` (#142); no live consumer."""
-        if not select or select.get("context") != _MAIN:
-            return False
-        opts = select.get("option") or []
-        if not opts or any(o.get("type") == _ATTACK for o in opts):
-            return False
-        if not energy_attached and self._has_reusable_energy(me.get("hand") or []):
-            return False
-        return True
 
     def _active_fully_powered(self, ma: dict | None) -> bool:
         """My Active already carries the Energy for its HIGHEST-damage attack (attached ≥
