@@ -149,14 +149,14 @@ PROFILE = {
                                     # relax check runs, instead of always standing down. SHIPPED OFF:
                                     # the refinement is corpus-swept clean (no live decider consumes
                                     # it beyond the already-armed `doom_matched_relax` boolean guard),
-                                    # but arming it is a #187-scope decision, not this issue's
+                                    # but arming it is a #187-scope decision, not this issue's to make
     "gust_target_slots": False,     # ADR-0074 (#186), 2026-07-27: generalizes `deny_slot` to a
                                     # `gust_target` kind — held gust-effect Trainer cards keep-price
                                     # against the real per-body `opponent_target_value` instead of
                                     # the flat `deny` disruption tier. SHIPPED OFF: the sweep found 0
                                     # decision flips across 331 corpus frames (nothing to adjudicate),
                                     # but arming it — and folding the snipe/gust play-side rungs onto
-                                    # the same marginal — is #189's scope, not this issue's
+                                    # the same marginal — is #189's scope, not this issue's to make
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
