@@ -40,6 +40,19 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
 - **CI runs tests only.** The rest of the global CI spec (Doxygen / Sphinx / GitHub Pages /
   PDF) stays out until those toolchains exist here. Run locally: `python -m pytest tests/ -q`.
   Details: `docs/ci.md`.
+- **Reference issues and PRs by kind, never a bare number.** In prose — chat, commit messages,
+  PR/issue bodies and comments, skill docs — write **Issue #145** and **PR #6**, never a bare
+  `#145`/`#6` (GitHub shares one number space across issues and PRs, so a bare number is
+  ambiguous about which it is). *Exception:* GitHub's own functional syntax stays bare exactly as
+  GitHub requires it to work — closing keywords (`Closes #45`, `Fixes #45`), inline autolinks, and
+  data-field values (e.g. a `"owner": "#165"` ledger entry) are not prose and must not gain an
+  inserted word.
+- **A test fixture/Correction is not a "pin."** Don't use "pin"/"pins" as a casual generic word
+  for a regression fixture, Correction, or test case — say **test** (or the specific, more precise
+  term a doc calls for) instead. This does not touch the deliberately narrower, ADR-backed
+  vocabulary in `tools/train/CONTEXT.md` (Decision Claim / Axis Claim / Endorsement Claim, etc.),
+  which already retired "pin" in favor of those more precise names and reserves "test" for the
+  pytest suite specifically — that glossary remains authoritative as written.
 
 ## Secrets
 
