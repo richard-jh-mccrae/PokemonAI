@@ -596,8 +596,13 @@ Those are SIDE-level facts (condition flags ride on the player dict, not the bod
 the StateModel side rather than inside the body-scoped oracle, which stays typed-cost plus ADR-0033
 locks. A body that cannot legally attack is a famine however much Energy it holds. Boolean and sound-or-silent; its EV variant **readiness_p** prices a
 still-uncertain enabler by the hypergeometric draw instead of 1.0/0.0. The mirror of
-`reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table,
-opposite fail direction (under-count my budget; over-count their threat).
+`reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table.
+Their fail directions are NOT simple opposites: `reachable_incoming` over-counts their threat
+uniformly, while mine splits by what is uncertain (ADR-0067) — under-count on *yield*, fail-OPEN on
+*deck presence*, which is precisely the f70 fix. Composed under a stall gate
+(`active_doomed and active_famine`) the two therefore pull opposite ways rather than compounding:
+doom over-claims and famine is optimistic about my own reach, so the conjunction is tighter than
+either leg.
 _Avoid_: active_attack_payable (the retired manual-only sub-budget scored by an UNTYPED count —
 never an "attached-now" truth, which is why it dies rather than surviving beside the oracle),
 active_attack_payable_via_accel (the retired +1/cheapest-only/untyped approximation), payable
