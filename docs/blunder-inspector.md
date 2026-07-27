@@ -18,6 +18,7 @@ agents get wrong over the competition. See the [Training context](../tools/train
 | `correction.py` | `Correction` + `build_correction(...)` with validation |
 | `store.py` | per-build correction tree `data/corrections/<agent_build>/corrections.jsonl` (committed); routes by `agent_build`, reads union the tree, **dedup by default** |
 | `seats.py` | `detect_seat(replay, team_name)` — which seat is ours |
+| `frame_view.py` | `dump("<ep>-<frame>")` → **one frame's complete board state as plain text** (see below) |
 | `report.py` | `summarize(...)` + `avg_blunders_per_game(...)` (own blunders ÷ distinct tagged games, by build over time) + `build_report(log, out, *, reviewed_path, proposals_dir)` → offline HTML trends; given the reviewed ledger + the `data/corrections/tuner` snapshot it also badges each blunder **fixed / covered / refuted / deferred / open / skipped** and splits resolved vs open |
 
 A **Decision** = one engine `select` at one frame; `chosen`/`correct` index `select.option`.
@@ -121,11 +122,56 @@ The build inlines everything into a single self-contained `dist/index.html` (~60
   `corrections.jsonl`; build identity comes from the directory stem (`batch.discover_replays` /
   `batch.load_game`).
 
+## Frame read-out — the full board state of one frame
+
+Diagnosing a frame always opens with "pull up the board state for `82756664-97`". By hand that is
+slow and **inconsistent** — a different subset of the state each time, formatted differently, so two
+sittings on the same frame aren't comparable. `frame_view.py` is the deterministic answer: one
+`<episode>-<frame>` key in, one fixed-order plain-text dump out. The `/board-state` skill just runs
+it and relays the output.
+
+```
+python tools/train/frame_view.py 82756664-97          # the whole board state
+python tools/train/frame_view.py 82756664-97 --brief  # minus card rule text
+python tools/train/frame_view.py 82756664-97 --width 100     # wide terminal
+python tools/train/frame_view.py 82756664-97 --deck-order   # + the deck's recorded order
+python tools/train/frame_view.py --list 82756664      # which frames resolve for an episode
+python tools/train/frame_view.py <key> --replay <film.json>  # any frame, from a film on disk
+```
+
+**Laid out for a phone.** The read-out is normally read on a handset, so the default column is **38
+characters** and every line is wrapped to it with a hanging indent — nothing truncated, no wide
+terminal assumed. Card zones are grouped by category and comma-joined rather than given a line each,
+which keeps a 25-card deck to a handful of lines instead of four screens. The tests assert no line
+exceeds the width at 30/38/60/100, so a layout regression fails CI rather than reaching a phone.
+
+It resolves a key from the richest source available: a **replay film** (any frame), else the
+**Correction log**'s embedded snapshot (tagged frames, plus the ruling and `live_trace`), else a
+**fixture**'s per-seat Observation. Raw replays aren't committed (ADR-0002), so on a fresh clone only
+the latter two resolve — a miss prints the keys that do.
+
+Two things it is careful about, because both are easy to get wrong by hand:
+
+- **Visibility.** The film is full-information, so it lists zones the acting seat could not see. Each
+  is labelled `[public]` / `[you see this]` / `[hidden from you]`. A deck's *multiset* is legitimately
+  derivable by deck-tracking; its *order* is not, and is withheld unless `--deck-order` asks.
+- **Whose turn flags.** `energyAttached` / `supporterPlayed` / `retreated` / `stadiumPlayed` belong to
+  the **turn player** — `(firstPlayer + turn - 1) % 2` — who is *not* always the seat being asked. A
+  post-KO `ToActive` promotion is prompted during the opponent's turn, so those flags are the
+  opponent's; the read-out says so instead of implying "you". `82756664-97` is exactly that case.
+
+Card facts (printed HP, type, weakness, retreat, attack names/costs, prize value per
+[rules §6](rules.md)) come from the committed `src/cgpy/defs/` tables — no native engine needed, and
+enrichment fails open. Attack **affordability** is deliberately not computed: that is an inference
+over `common.strategy` cost rules, not board state, so the dump prints attached energy and printed
+costs side by side and leaves the judgment to the reader.
+
 ## Run
 
 ```
 python tools/train/blunder_correction.py <replay.json|.gz> --team <ours> --agent mega_starmie
 python tools/train/blunder_correction.py data/replays/<build_stem>/ --team <ours> --agent mega_starmie  # batch
+python tools/train/frame_view.py 82756664-97                 # one frame's full board state
 python tools/train/blunder_report.py                         # rebuild the trend report
 python -m pytest tests/blunder/test_blunder_*.py -q                  # data-spine tests (REQ-BLUNDER-####)
 ```
