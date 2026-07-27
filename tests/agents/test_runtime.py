@@ -89,6 +89,12 @@ EXPECTED_SHIPPED = {
     "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: matched-Read charged doom
                                     # (`_DOOM_CHARGED`) confirms-or-clears a worst-case `active_doomed`
                                     # cry (relax-only); unmatched = worst-case
+    "recur_fuel_relax": False,      # ADR-0074 (#186) armed-OFF 2026-07-27: quantifies the
+                                    # `_doom_recur_fueled` relax-block; corpus-swept clean, but
+                                    # arming it is #187's scope, not this issue's
+    "gust_target_slots": False,     # ADR-0074 (#186) armed-OFF 2026-07-27: generalizes `deny_slot`
+                                    # to a `gust_target` kind; 0 decision flips over 331 corpus
+                                    # frames, but arming it is #189's scope, not this issue's
 }
 
 

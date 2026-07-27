@@ -143,6 +143,20 @@ PROFILE = {
                                     # (Hammer-lanche density, ×2-weak Mind Bend, 1e Metal Defender)
                                     # stays doomed. Unmatched → byte-identical worst-case (ADR-0064
                                     # §4: never relax on a guess)
+    "recur_fuel_relax": False,      # ADR-0074 (#186), 2026-07-27: quantifies `_doom_recur_fueled`'s
+                                    # all-or-nothing relax-block — augments a possible refueler's
+                                    # Energy with its real discard-recur reload before the CHARGED
+                                    # relax check runs, instead of always standing down. SHIPPED OFF:
+                                    # the refinement is corpus-swept clean (no live decider consumes
+                                    # it beyond the already-armed `doom_matched_relax` boolean guard),
+                                    # but arming it is a #187-scope decision, not this issue's
+    "gust_target_slots": False,     # ADR-0074 (#186), 2026-07-27: generalizes `deny_slot` to a
+                                    # `gust_target` kind — held gust-effect Trainer cards keep-price
+                                    # against the real per-body `opponent_target_value` instead of
+                                    # the flat `deny` disruption tier. SHIPPED OFF: the sweep found 0
+                                    # decision flips across 331 corpus frames (nothing to adjudicate),
+                                    # but arming it — and folding the snipe/gust play-side rungs onto
+                                    # the same marginal — is #189's scope, not this issue's
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
