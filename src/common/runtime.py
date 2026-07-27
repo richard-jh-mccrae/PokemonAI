@@ -101,8 +101,13 @@ PROFILE = {
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): the within-turn
                                     # rollout rung — cost-measured affordable + crash-safe (60 games, 0
                                     # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off
-                                    # submission. Kill-switch if its ladder value is weak. Needs the live
-                                    # search token, so it no-ops (defers) on offline correction retests
+                                    # submission. Kill-switch if its ladder value is weak.
+                                    # ⚠ It does NOT "no-op on offline correction retests" as this comment
+                                    # claimed until 2026-07-27 (#160 caught the claim, #178 the damage):
+                                    # the 5 seeded correction fixtures DO carry `search_begin_input`
+                                    # (ADR-0050), so the rung fires on them and its pick was decided by
+                                    # the engine's shuffle. Since #178 it defers whenever ANY candidate's
+                                    # sim rode that shuffle, so a retest is reproducible again.
     "evolve_value": True,           # the EVOLVE DECIDER, shipped ON 2026-07-25 (ADR-0070, #140): the body-substituted
                                     # deploy delta + the odds-priced income. The sweep's 10 flips were
                                     # user-ruled (6 FIX, 0 regression) and the rungs it replaced are
