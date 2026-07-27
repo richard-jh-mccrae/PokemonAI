@@ -6,8 +6,10 @@ parity corpus failing obscurely. Skips cleanly when the native lib can't load. R
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import random
+import sys
 from pathlib import Path
 
 import pytest
@@ -185,3 +187,62 @@ def test_fork_reshuffles_but_is_deterministic():
         finally:
             battle_finish()
     pytest.skip("no plain-MAIN post-drive state reached in 20 games (stochastic)")
+
+
+def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
+    """The boundary the pin above does NOT cover (#178, determinism.md §4).
+
+    `test_fork_reshuffles_but_is_deterministic` drives its forks straight to END, so nothing
+    ever shuffles inside the line — and the reproducibility it pins is real but narrow. Let the
+    line play a shuffle-your-hand-in-and-draw card and every draw AFTER that shuffle varies
+    call-to-call, from a plain MAIN fork, in one process. That is what made ml f24 flap through
+    three suite tests, and `planner._rng_probe` exists because of it.
+
+    Asserted as an inequality, so it stays honest if a future engine build makes the in-line
+    shuffle reproducible: this test then fails and the planner's rule can be revisited on the
+    epistemic argument alone (a predicted deck ORDER is still a guess).
+    """
+    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" /
+                     "ml_lethal_retreat_boost_to_ko_f24.json").read_text(encoding="utf-8"))
+    obs = fx["obs"]
+    sel = obs.get("select") or {}
+    assert (sel.get("type"), sel.get("context")) == (0, 0), "f24 must be a plain MAIN select"
+
+    sys.path.insert(0, str(REPO / "tools"))
+    spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
+    tune = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tune)
+    pilot = tune._build_pilot("mega_lucario")[0]
+
+    from cg import api
+    step = api.search_step
+
+    def one_run():
+        """(draws before the first in-line SHUFFLE, draws after) for one identical sim."""
+        pre, post, shuffled = [], [], []
+
+        def spy(sid, chosen):
+            st = step(sid, chosen)
+            for lg in (st.observation.logs or []):
+                if lg.type == api.LogType.SHUFFLE:
+                    shuffled.append(True)
+                elif lg.type == api.LogType.DRAW and lg.cardId:
+                    (post if shuffled else pre).append(lg.cardId)
+            return st
+
+        api.search_step = spy
+        pilot._planning = True
+        try:
+            pilot._engine_leaf_value(obs, [3])
+        finally:
+            pilot._planning = False
+            api.search_step = step
+        return pre, post
+
+    runs = [one_run() for _ in range(6)]   # 6, not 2: an inequality assertion wants margin
+    assert all(r[1] for r in runs), "this line must draw after an in-line shuffle, or it pins nothing"
+    assert all(r[0] == runs[0][0] for r in runs), (
+        "draws BEFORE the in-line shuffle must still be reproducible — that is the fork pin above")
+    assert any(r[1] != runs[0][1] for r in runs), (
+        "draws AFTER an in-line shuffle varied call-to-call when measured (#178); if this now holds, "
+        "re-measure and re-rule planner._rng_probe rather than deleting it")

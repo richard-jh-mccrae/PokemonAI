@@ -114,8 +114,9 @@ def _cascade_reveals(name, agent):
 
     The membership criterion for `SEEDED_FIXTURES`, measured instead of assumed: a cascade that
     takes a card POSITIONALLY out of a shuffled hidden zone has a verdict that is a sample of that
-    shuffle, not a fact about the board (`_seed_zones` hands `search_begin` a predicted MULTISET;
-    the engine shuffles it, and the native engine is unseedable). Counts MY-side ``DRAW``, a
+    shuffle, not a fact about the board (`_seed_zones` hands `search_begin` a predicted MULTISET and
+    the engine picks the order; a shuffle inside the line then makes even that unreproducible —
+    `docs/pyeng/determinism.md` §4). Counts MY-side ``DRAW``, a
     ``DECK``→``LOOKING`` peek or ``DECK``→``DISCARD`` mill, and any ``COIN``.
 
     Three kinds of hidden-zone traffic are deliberately NOT counted, each because it cannot move

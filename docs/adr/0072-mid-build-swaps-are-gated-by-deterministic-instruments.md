@@ -381,15 +381,30 @@ Both mid-build merit gates in decision 2 read **per-frame verdict flips**: the D
 through two different tests, while passing in isolation every time. It is not test pollution and not
 hash ordering (`PYTHONHASHSEED` 1/2/3/5/7/11 all pass). `pilot.explain()` on that fixture returns
 `[5]` or `[3]` from a **fresh process with a fresh Pilot**, and two identical fresh processes disagree
-on the very first call — the native engine's shuffle is entropy-seeded and unseedable (the fact this
-ADR already records for common-random-numbers pairing, `src/cgpy/rng.py`).
+on the very first call. On f24 the 13 candidate leaf values swing 7000 / 162 / 129 / 122 / 89 / 57.5
+on the same first step, so whether the develop rung overrode greedy came down to whether any
+candidate happened to roll a phantom win that turn.
 
-The channel is `_seed_zones` → `search_begin`: the planner hands the engine a *predicted multiset*
-for its own deck and prizes, and the engine **shuffles** it. Every card the sim then takes off the
-top of that shuffle is a sample. On f24 all 13 candidate first actions draw, and their leaf values
-swing 7000 / 162 / 129 / 122 / 89 / 57.5 on the same first step across processes — so whether the
-develop rung overrode greedy came down to whether any candidate happened to roll a phantom win that
-turn.
+**The channel, stated precisely — the first draft of this amendment got it wrong and is corrected
+here.** It is NOT that `search_begin`'s seeding shuffle is entropy-seeded. That shuffle is
+*reproducible*: `docs/pyeng/determinism.md` §4 pins the fork as deterministic from a plain MAIN
+select, and re-measuring on 2026-07-27 (f24 is a plain MAIN select) gave byte-identical draws across
+processes **and** across intervening searches. The nondeterminism is a shuffle that happens **during
+the simulated line** — the Professor's-Research class, shuffle your hand into the deck and draw. Split
+by that boundary, f24's sim draws **zero** cards before the in-line shuffle and **eleven** after, and
+one Pilot re-running the identical sim drew a different eight every call. That is §4's "mid-effect
+forks are NOT reproducible" reaching a line that did not *begin* mid-effect but shuffled inside it —
+a fact §4 does not yet carry and `pin_determinism.probe_fork` does not measure (it compares two
+back-to-back forks driven straight to END, which never shuffle).
+
+**Two independent reasons a drawn line's value is not a fact, and the rule needs only one.**
+*Mechanical:* the in-line shuffle is not reproducible — this is what made the frame flap. *Epistemic:*
+the seeded deck ORDER is our prediction, and in the real game nobody knows it either, so a line whose
+value turns on what came off the top is a guess however faithfully the engine repeats it. The rule
+below counts **every** draw rather than only post-shuffle ones, and the epistemic reason is why:
+reproducing a guess does not make it knowledge. This is the same argument that rules out "seed the
+twin and route the planner through cgpy" — determinism there would convert a visible flake into a
+confident wrong answer.
 
 **Ruled: reproducibility is an admission criterion, not a property to hope for.**
 

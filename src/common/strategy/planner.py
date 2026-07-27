@@ -123,10 +123,21 @@ def _rng_probe(cgapi, my_index: int, *, prize: bool):
     """Build ``saw(observation) -> bool``: did these logs consume engine RANDOMNESS on MY behalf?
 
     ONE rule, two consumers (#178). ``search_begin`` is seeded from `_seed_zones` with a predicted
-    MULTISET for the hidden zones and the engine SHUFFLES it — and the native engine is unseedable
-    (`src/cgpy/rng.py`), entropy-seeded per process. So an outcome that turned on a card the ENGINE
-    picked out of one of those zones is a sample of that shuffle, not a fact about the position, and
-    anything claiming reproducibility has to know it happened.
+    MULTISET for the hidden zones and the engine shuffles it into an order we never see. An outcome
+    that turned on a card the ENGINE picked out of one of those zones is therefore not a fact about
+    the position, for two INDEPENDENT reasons — and the rule below is worth its keep on either:
+
+      1. **Epistemic, and it holds for every draw.** The order is our PREDICTION. In the real game
+         nobody knows it either, so a line whose value depends on what came off the top is a guess
+         about a hidden zone, however faithfully the engine repeats it.
+      2. **Mechanical, and it is what makes a frame FLAP.** A shuffle DURING the line — the
+         Professor's-Research class, shuffle your hand in and draw — is not reproducible: measured
+         on ml f24, one Pilot re-running the identical sim drew a different 8 cards every call.
+
+    Do not narrow this to (2). ``search_begin``'s OWN seeding shuffle *is* reproducible given
+    identical inputs (`docs/pyeng/determinism.md` §4, re-measured 2026-07-27: identical draws across
+    processes and across intervening searches), so a rule keyed on reproducibility alone would let a
+    pre-shuffle draw through — and reproducing a guess does not make it knowledge.
 
     Counts, for ``playerIndex == my_index`` (their reveals land after my turn has passed):
 
@@ -993,16 +1004,18 @@ class PlannerMixin:
         Sound and fail-safe:
           * ``manual_coin=True`` so a coin the line doesn't account for surfaces as a COIN_HEAD
             select → **None** rather than trust a chosen flip (never let the policy pick heads).
-          * a cascade that DREW off the shuffled deck can only be confirmed as far as that shuffle:
+          * a cascade that DREW off the shuffled deck can only be confirmed as far as that draw:
             a ``True`` there is demoted to **None** (#178). Same rule as the coin, through the door
             the coin rule left open — `_seed_zones` seeds the hidden zones with a predicted MULTISET
-            and the engine shuffles it, so a win that needed a specific card off an unknown deck
-            order is not a guaranteed win, in the sim or in the real game. Asymmetric on purpose:
+            whose ORDER is our guess, so a win that needed a specific card off it is not a guaranteed
+            win in the real game, whatever the sim did. Asymmetric on purpose:
             **False is left alone.** A refute is the conservative direction (it drops a candidate and
             costs at most a turn), while demoting refutes to None would let phantom locks through —
             the one catastrophic error. Measured on ml f24 (2026-07-27): its `[correct]`-only
-            cascade draws ELEVEN cards, and its native verdict was False on most streams and True on
-            some, which is what made two suite tests flake through the same frame.
+            cascade shuffles its hand back in mid-line and then draws ELEVEN cards off the reshuffled
+            deck — every one of them AFTER that shuffle, which is the part the engine does not
+            reproduce — and its verdict came back False on most runs and True on some, which is what
+            made two suite tests flake through the same frame.
           * the select passing to the OPPONENT with no verdict = the win did not materialize before
             they act → False (a real refute: our win-shapes need no opponent action).
           * an exhausted cascade cap is **None** (undetermined never refutes); so is an unavailable

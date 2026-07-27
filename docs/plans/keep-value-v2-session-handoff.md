@@ -136,12 +136,15 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
   Two fixes landed from the f24 dissection and **both named the wrong channel** — corrected by #178
   (2026-07-27), read that first: f24 carries no COIN log at all, so the coin gate was a no-op there
   and the frame went on failing ~2 of 3 full-suite runs. The randomness is the **shuffle**, not the
-  coin — `_seed_zones` hands `search_begin` a predicted MULTISET and the engine shuffles it, so every
-  card drawn off it is a sample. Both consumers now read a general `stream` bit (coin, draw, top-N
-  peek, mill, face-down prize; a full-deck *search* is order-independent and does not count), and the
-  develop rollout defers **all-or-nothing** when any candidate rode it. ⚠️ Do not reach for "re-run
-  before diagnosing" on an engine-driven frame: a frame whose answer depends on the process's RNG
-  position is a defect in what decides it (ADR-0072 amendment C), and re-running until it lands is
+  coin — and specifically a shuffle the policy triggers DURING the line (Professor's-Research class).
+  `search_begin`'s OWN seeding shuffle is reproducible (determinism.md §4, re-measured 2026-07-27);
+  the in-line one is not, and f24 draws all 11 of its cards after it. The rule still counts EVERY
+  draw, not only post-shuffle ones, because the seeded deck order is our prediction either way —
+  reproducing a guess does not make it knowledge. Both consumers now read a general `stream` bit
+  (coin, draw, top-N peek, mill, face-down prize; a full-deck *search* is order-independent and does
+  not count), and the develop rollout defers **all-or-nothing** when any candidate rode it. ⚠️ Do not
+  reach for "re-run before diagnosing" on an engine-driven frame: a frame whose answer depends on the
+  process's RNG position is a defect in what decides it (ADR-0072 amendment C), and re-running is
   the p-hacking that ADR deleted the `delta >= 0` clause for. (`test_lethal_engine`'s retry loop is
   NOT this class and stays: it re-rolls fresh unseeded battles to reach a board of the right SHAPE,
   and then asserts one fixed thing about it — not the same board answering differently.)

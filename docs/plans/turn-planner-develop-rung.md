@@ -41,8 +41,10 @@ forethought." This doc is the investigation + the phased path.
   `ml f24` stayed a heisenbug for another week: the defer-on-phantom-win rule made the rung's *answer*
   depend on whether any candidate happened to roll a phantom win on that RNG stream, so it flipped
   `[5]`/`[3]` across processes and failed ~2 of 3 full-suite runs on `main`. The channel is the
-  **shuffle**, not coins: `_seed_zones` seeds `search_begin` with a predicted MULTISET and the engine
-  shuffles it, so every card the sim draws off it is a sample (f24's 13 candidates carry `SHUFFLE` +
+  **shuffle**, not coins — specifically a shuffle the policy triggers DURING the line (the
+  Professor's-Research class; `search_begin`'s own seeding shuffle is reproducible, determinism.md §4).
+  `_seed_zones` seeds it with a predicted MULTISET whose order we are guessing, so every card the sim
+  draws off it is a sample (f24's 13 candidates carry `SHUFFLE` +
   `DRAW` and **no COIN** — the earlier coin-only exclusion was a no-op there, and its docstring's claim
   that coin-free values are stream-invariant was false). Fix: `_simulate_line`'s 6th tuple element is
   now a general `stream` bit (coin, draw, top-N peek, mill, or face-down prize — a deck *search* is
