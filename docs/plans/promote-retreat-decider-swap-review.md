@@ -4,9 +4,10 @@ The batched review #136 standing directive 2 owes before the deletion commit is 
 re-ruled with the user, never auto-conformed*. Companion to `attach-decider-swap-review.md` (1a) and
 `evolve-decider-swap-review.md` (1b). Authority for every design choice is **ADR-0073**.
 
-**Status: ONE frame needs a user ruling.** The Decision Gate is at `FAIL` with exactly one unruled
-`REGRESSION`, which is the gate working as designed rather than a defect to route around. Nothing in
-the equation has been tuned toward this frame — auto-conforming it is the thing directive 2 forbids.
+**Status: RULED by the user 2026-07-27.** The single `REGRESSION` is held out with owner **#165** (it
+is a Maneuver), and the defect it exposed in `_deck_basic_energy_fuel` is filed separately. ADR-0073
+§4's exposure grading is exonerated. Nothing in the equation was tuned toward the frame — auto-
+conforming it is the thing directive 2 forbids.
 
 ## The instrument
 
@@ -34,6 +35,7 @@ comparison cannot express "stayed").
 frames 133   (pick 9 · whether 124)
 agree  117
 flip    16   FIX 15 · REGRESSION 1 · DIVERGENT 0 · unlabelled 0 · error 0
+gate   PASS  (the one REGRESSION is RULED — held out with owner #165, see below)
 ```
 
 Deleting the `active_can_ko` recusal returned the frames the shadow used to withdraw from, as
@@ -148,22 +150,62 @@ the provable floor and nothing else changes — the frame lands on `correct`, de
 
 So the regression is an artefact of a conservative EPISTEMIC read collapsing, not of §4's grading.
 
-**The ruling is the user's.** Four readings, the last of which the counterfactual makes the strongest:
+## The ruling — user, 2026-07-27: **correct = Cinderace, and the frame is a MANEUVER**
 
-* **A — grade exposure on a shallower curve than `_halve`.** Re-opens §4's "no new constants", and
-  the counterfactual above suggests it would be treating a symptom.
-* **B — it is a judgement call.** Jetting Blow takes the prize AND snipes 50; record a ruled flip.
-* **C — it belongs to another layer.** "Take the available Knock Out with the cheapest body that can"
-  is KO-selection, not sub-lethal; hold out with an owner (#165 / #145).
-* **D — fix the fuel READ, not the equation.** The pigeonhole floor is sound but very pessimistic once
-  a suite is mostly visible. The closure term already faced this exact choice and took the other road
-  — ADR-0070 §3 rules income "an ODDS read, never a tier", and `_promote_closure` uses
-  `CountTriple.expected` for precisely this reason. An expected-value leg here (or letting the deck
-  tracker anchor) would be consistent with that, and it is a change to `_deck_basic_energy_fuel`
-  (ADR-0061's, pre-existing and shared with the attack option) rather than to anything 1c authored —
-  so it wants its own ruling and probably its own issue.
+The user supplied the intended line, which settles both the verdict and the cause. Verified against
+the card text and the board before recording (Gravity Mountain is why Cinderace reads 30/**130** —
+it is a Stage 2 and the stadium is theirs; Mega Starmie ex is Stage 1 and untouched at 330):
 
-No option is taken here. Until it is ruled, the Decision Gate stays `FAIL`.
+> Opponent needs 3 prizes, we need 5. We must Knock Out this Lucario **and** their backup Lucario; it
+> helps that the backup is already weakened. To shield our Starmie from a revenge attack **and to
+> Energy-accelerate**, promote Cinderace. Then, on our turn: Night Stretcher fetches the Mega Starmie
+> ex from the discard · evolve the Staryu · attach Energy to the benched Starmie · Buddy-Buddy Poffin
+> to thin the deck · Harlequin (their hand is 7 — that is the disruption). Now attack: Turbo Flare
+> Knocks Out their Active and places 3 Energy onto the freshly evolved Starmie. We end with Cinderace
+> up front, **2 prizes remaining**, and two full-HP Starmies benched.
+
+Every step checks out. Turbo Flare costs `●` and Cinderace holds its `{W}`; 50 damage against a
+20 HP Active is a Knock Out; **Mega Lucario ex is a Mega ex, so that Knock Out takes 3 prizes** —
+5 → 2, exactly as stated. One detail differs and is in the user's favour: the benched Staryu already
+carries 1 `{W}`, and evolution keeps attached cards (`rules.md` §4), so the evolved body starts on 1
+and Turbo Flare leaves it on **4**, not 3. The end state is 2 and 4.
+
+**What this settles.** The Knock Out is available to every candidate and yields the same 3 prizes, so
+it cancels — the decision is entirely about what else the promoted body does. Cinderace does two
+things the Mega cannot: it **shields** the 3-prize win-condition from the revenge attack, and its
+attack **accelerates**. The equation prices the first (exposure, 100 vs 150 — correctly, just not
+decisively) and is blind to the second, because the accel dividend is zeroed by the fuel leg.
+
+**And the fuel leg is worse than under-read — it is out of phase.** `_deck_basic_energy_fuel` reads
+the deck as it stands AT THE PROMOTE. The line plays **Harlequin** before attacking, which shuffles
+the hand — including its Basic `{W}` — back INTO the deck, manufacturing the very fuel Turbo Flare
+then searches for. No decision-time read of the deck can see that; it is a property of the step
+ORDER. So there are two distinct defects behind this one frame:
+
+* **(i) the floor is over-pessimistic.** `max(0, unseen − prizes_hidden) = max(0, 3 − 5) = 0` refuses
+  to claim fuel that is very probably there. This is reading **D** below, and the counterfactual shows
+  it alone flips the frame.
+* **(ii) the value is a dependent STEP-CHAIN.** promote → fetch → evolve → attach → thin → disrupt →
+  attack-with-accel is a **Maneuver** in this project's vocabulary, and ADR-0070 amendment J puts
+  those with **#165**. A per-option equation structurally cannot price a chain whose payoff lands on
+  later steps — which is the same argument that kept `retreat-to-wall-the-line` alive.
+
+**Disposition.** The frame is **HELD OUT with owner #165** (defect ii — the Maneuver), and defect (i)
+is filed separately against `_deck_basic_energy_fuel`, which is ADR-0061's, pre-existing, and shared
+with the attack option, so it is not 1c's to change unilaterally. ADR-0073 §4's exposure grading is
+**exonerated** — reading A is withdrawn as treating a symptom.
+
+### The readings, for the record
+
+* ~~**A — grade exposure on a shallower curve than `_halve`.**~~ WITHDRAWN: the counterfactual shows
+  the exposure arithmetic was never the cause.
+* **B — a judgement call.** Superseded: the user gave a concrete winning line, so it is not a
+  toss-up.
+* **C — it belongs to another layer.** ADOPTED for the frame → owner **#165** (the Maneuver).
+* **D — fix the fuel READ.** ADOPTED as a separate filing. The closure term already faced this exact
+  fork and took the other road: ADR-0070 §3 rules income *"an ODDS read, never a tier"*, which is why
+  `_promote_closure` uses `CountTriple.expected`. An expected-value leg (or letting the deck tracker
+  anchor) would make the two consistent.
 
 ## What the gate does NOT cover
 
