@@ -323,7 +323,11 @@ marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives
 deadline" and dissolves per the ledger. `pilot._needs_v2` resolves the live board into slots;
 v2 now DECIDES the forced discard (`Pilot.needs_keep_value` armed ON, superseding v1 — the
 duplicate-pair naivety flipped without a new gate), while the gamble/refresh keep-value sites and
-the gate stack stay live pending their own swaps). Pure modules,
+the gate stack stay live pending their own swaps. **Planned (ADR-0074, design-only, not yet
+built):** `deny_slot` generalizes to an opponent-target slot FAMILY — gust and forced-promo Trainer
+cards join deny as held-card keep questions on the same DP; snipe stays OUTSIDE the DP entirely and
+reads the shared per-body marginal (`opponent_target_value` / `phase_scale`) directly, since a snipe
+rider is not a held card competing for a slot). Pure modules,
 no Pilot imports; the Pilot resolves board facts and delegates (`_role_value` / `_keep_cost` /
 `_deploy_odds` / `_card_reaccess_outs` / `_needs_v2`). `keep_cost = Worth × Gates × (1 − re-access
 Odds over the
