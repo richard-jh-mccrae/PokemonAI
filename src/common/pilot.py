@@ -5793,11 +5793,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # **Famine** (#142) — the corrected "my Active cannot attack this turn" premise. The
         # `famine_via_oracle` kill-switch keeps the RETIRED premise computable so the Decision Gate
         # sweep can replay both; it dies with the retired helpers, leaving the model read alone.
-        famine = (model.mine.active_famine if self.famine_via_oracle else
-                  (not self._active_attack_payable(ma, payable)
-                   and not self._active_attack_payable_via_accel(
-                       me, ma, bool(state.get("supporterPlayed")),
-                       self._basic_energy_in_deck(deck_empty))))
+        if self.famine_via_oracle:
+            famine = model.mine.active_famine
+            # "an UNARMED Active that can still REACH an attack should swing, not stall" — ruling A.
+            should_swing = len((ma or {}).get("energies") or []) == 0 and not famine
+        else:
+            _payable = self._active_attack_payable(ma, payable)
+            _via_accel = self._active_attack_payable_via_accel(
+                me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty))
+            famine = not _payable and not _via_accel
+            # The retired PAIR, re-expressed so `not active_should_swing` is byte-identical to the
+            # two clauses it replaced in `gust-for-the-stall`. `gust-to-strand-the-key-attacker`
+            # cannot be reproduced this way — it carried the accel half ALONE — so the sweep will
+            # surface its added guard as a flip. That is the ruling, not an artefact.
+            should_swing = (len((ma or {}).get("energies") or []) == 0 and _payable) or _via_accel
         base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
                      else Plan.SETUP)                   # the readiness core (SETUP→RACE)
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
@@ -5844,8 +5853,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             active_attack_payable_via_accel=self._active_attack_payable_via_accel(
                 me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
             active_famine=famine,                                        # ← StateModel (#142): the ONE
-            active_should_swing=(len((ma or {}).get("energies") or []) == 0   # corrected famine premise
-                                 and not famine),
+            active_should_swing=should_swing,                             # corrected famine premise
             active_attack_provable=(model.mine.reachable_attach(model.mine.active, provable=True)
                                     and not self._attack_impossible_on_menu(
                                         select, model.mine.attach_budget(model.mine.active,
