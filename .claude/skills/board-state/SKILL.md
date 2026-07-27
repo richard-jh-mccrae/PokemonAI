@@ -1,7 +1,7 @@
 ---
 name: board-state
-description: Print the COMPLETE board state of one diagnostic frame — both sides' active/bench/hand/deck/discard/prizes, the turn-so-far allowances (energy attached? supporter played? retreated?), the options offered and the ruling — by running tools/train/frame_view.py and relaying its output verbatim as a plain-text list. Use whenever the user names a frame key like "82756664-97" and wants the board pulled up: "board state for 82756664-97", "pull up the full board state of f97", "what's the state at 83686860-29", "/board-state <key>". Do NOT reconstruct a board state by hand or from memory — the script is the single source of truth.
-argument-hint: "the frame key, e.g. 82756664-97 (add --deck-order for the raw deck order)"
+description: Print the COMPLETE board state of one diagnostic frame — both sides' active/bench/hand/deck/discard/prizes, the turn-so-far allowances (energy attached? supporter played? retreated?), the options offered and the ruling — by running tools/train/frame_view.py and relaying its output verbatim as a phone-width plain-text list. Use whenever the user names a frame key like "82756664-97" and wants the board pulled up: "board state for 82756664-97", "pull up the full board state of f97", "what's the state at 83686860-29", "/board-state <key>". Do NOT reconstruct a board state by hand or from memory — the script is the single source of truth.
+argument-hint: "the frame key, e.g. 82756664-97 (--brief to drop card rule text, --width N to widen)"
 ---
 
 # board-state — the full board state of one frame, from the script
@@ -19,11 +19,16 @@ the single deterministic answer. Your job here is to **run it and relay it** —
 python tools/train/frame_view.py <key>
 ```
 
-e.g. `python tools/train/frame_view.py 82756664-97`. Pass `--deck-order` through if the user asked
-for the raw deck order, and `--replay <path>` if they named a replay file.
+e.g. `python tools/train/frame_view.py 82756664-97`. Pass through what the user asked for:
+`--brief` (drop attack/ability rule text — the bulk of the length), `--width N` (they're on a wide
+terminal), `--deck-order` (the raw deck order), `--replay <path>` (they named a replay file).
 
-**2. Print its stdout into the chat, verbatim.** The whole thing, top to bottom. That output *is*
-the deliverable.
+**2. Print its stdout into the chat, verbatim, inside a fenced code block.** The whole thing, top
+to bottom. That output *is* the deliverable.
+
+The fence is **not optional**. The read-out is laid out for a phone — every line is pre-wrapped to
+38 characters, and the indentation is what carries the structure. Unfenced, the chat client reflows
+it and the column collapses into mush. Fence it and the layout survives.
 
 **3. Stop there.** No summary, no analysis, no "key takeaways", no next-step suggestion — unless
 the user asks. They asked for the board state; give them the board state and wait.
@@ -34,8 +39,10 @@ the user asks. They asked for the board state; give them the board state and wai
   or from reading the JSON yourself. If the script won't resolve the frame, say so and stop (see
   below) — a reconstructed dump is exactly the inconsistency this skill exists to end.
 - **Never reformat it.** No markdown tables, no re-ordering the sections, no collapsing the zones
-  into prose, no trimming "for brevity" — the fixed shape is the whole point, and the user asked
-  for a plain-text list specifically. Wrap it in a code fence so the terminal spacing survives.
+  into prose, no re-wrapping to a different width, no trimming "for brevity" — the fixed shape is
+  the whole point, and the user asked for a plain-text list at a phone-readable width specifically.
+- **Never abridge it in the reply.** If the output feels long, that is what `--brief` is for — ask,
+  or run it. Silently printing half the zones is the failure mode this skill was built to end.
 - **Never drop the visibility labels.** `[hidden from you]` marks a zone the agent could **not**
   see; the full-information film lists it anyway. Reasoning "it should have known" off a hidden
   zone is the trap those labels exist to stop, and stripping them re-opens it.
@@ -56,6 +63,14 @@ resolve. Relay the error, then offer the two real options:
 
 A scoped Correction key (`<ep>-t<turn>s<seat>`, `<ep>-m<seat>`) names a Turn or a whole Match, not
 one frame, so it has no single board state. The script says so; pass the Anchor frame instead.
+
+## Width
+
+The default column is **38 characters**, sized for reading on a handset — every line is wrapped to
+it with a hanging indent, so nothing is truncated and nothing needs a wide terminal. Card zones are
+grouped by category and comma-joined rather than given a line each, which is what keeps a 25-card
+deck to a handful of lines. `--width N` widens it for a desktop terminal; `--brief` drops card rule
+text and keeps every zone, count and flag.
 
 ## What the read-out contains
 

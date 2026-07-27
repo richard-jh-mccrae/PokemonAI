@@ -20,9 +20,16 @@ in ADRs, fixture notes and chat.
 
 Both normalize into the same section order here, so the read-out never changes shape with the
 source. Where the film shows more than the agent could see, the zone is labelled — see
-`VISIBILITY`. The full-info deck/prize contents are a diagnostic aid, never evidence the agent had
-them: reasoning "it should have known" off a `[hidden]` zone is the whole trap this labelling exists
+`LABELS`. The full-info deck/prize contents are a diagnostic aid, never evidence the agent had
+them: reasoning "it should have known" off a `[hid]` zone is the whole trap this labelling exists
 to stop.
+
+**Laid out for a phone.** The read-out is normally read on a handset, so the default column is
+`WIDTH` = 38 characters and every line is wrapped to it with a hanging indent — nothing is
+truncated and nothing needs a wide terminal. Card zones are grouped by category and comma-joined
+rather than given a line each, which is what keeps a 25-card deck to a handful of lines instead of
+four screens. `--width` widens it; `effects=False` drops attack/ability rule text, the bulk of the
+length.
 
 **The turn flags belong to the TURN PLAYER, not to whoever is being asked.** ``energyAttached`` /
 ``supporterPlayed`` / ``retreated`` / ``stadiumPlayed`` are properties of the turn in progress. A
@@ -47,6 +54,7 @@ from __future__ import annotations
 import gzip
 import json
 import re
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,22 +62,6 @@ REPO = Path(__file__).resolve().parents[3]
 DEFAULT_CORRECTIONS = REPO / "data" / "corrections"
 DEFAULT_REPLAYS = REPO / "data" / "replays"
 DEFAULT_FIXTURES = REPO / "tests" / "fixtures" / "corrections"
-
-VISIBILITY = (
-    "[public] — both players can see it.",
-    "[you see this] — the asked seat's own hand.",
-    "[hidden from you] — the asked seat could NOT see it. It is listed only because the film is "
-    "full-information; never read it as something the agent knew.",
-    "A deck's multiset is legitimately derivable by deck-tracking; its ORDER is not — treat the "
-    "recorded order as engine-internal.",
-)
-
-VISIBILITY_OBS = (
-    "[public] — both players can see it.",
-    "[you see this] — the asked seat's own hand.",
-    "This snapshot is the agent's own Observation, so nothing hidden from it appears at all — a "
-    "zone it could not see is either absent or listed as face-down placeholders.",
-)
 
 # --- engine enums (src/cg/api.py) ------------------------------------------------------------
 # The film spells these as strings and the obs as ints, so every lookup takes either.
@@ -270,12 +262,12 @@ def _energy_symbols(energies) -> str:
 def _prize_value(stat) -> tuple[int, str]:
     """Prizes a KO on this Pokémon awards, per docs/rules.md §6 (megaEx 3 / ex 2 / else 1)."""
     if stat is None:
-        return 1, "assumed 1 (card table unavailable)"
+        return 1, "1 prize (assumed — card table off)"
     if getattr(stat, "megaEx", False):
-        return 3, "3 (Mega Evolution Pokémon ex)"
+        return 3, "3 prizes (Mega ex)"
     if getattr(stat, "ex", False):
-        return 2, "2 (Pokémon ex)"
-    return 1, "1 (regular Pokémon)"
+        return 2, "2 prizes (ex)"
+    return 1, "1 prize"
 
 
 def _stage(stat) -> str:
@@ -364,7 +356,7 @@ def _hit_from_correction(rec: dict, path: Path) -> FrameHit:
         episode_id=rec.get("episode_id"),
         frame=dec.get("frame"),
         current=cur,
-        source=f"Correction log (embedded full-information snapshot) — {path}",
+        source="Correction log — its embedded full-information snapshot",
         source_path=path,
         full_info=True,
         turn=dec.get("turn"),
@@ -391,7 +383,7 @@ def _hit_from_film(replay: dict, path: Path, episode_id: int, frame: int) -> Fra
         episode_id=episode_id,
         frame=frame,
         current=cur,
-        source=f"Replay film, frame {frame} of {len(film)} (full information) — {path}",
+        source=f"Replay film, frame {frame} of {len(film)} — full information",
         source_path=path,
         full_info=True,
         turn=cur.get("turn"),
@@ -413,8 +405,7 @@ def _hit_from_fixture(rec: dict, path: Path, episode_id: int, frame: int) -> Fra
         episode_id=episode_id,
         frame=frame,
         current=cur,
-        source=f"Test fixture (per-seat agent Observation — opponent hand, both decks and both "
-               f"prize piles are NOT in this snapshot) — {path}",
+        source="Test fixture — the per-seat agent Observation",
         source_path=path,
         full_info=False,
         turn=cur.get("turn"),
@@ -504,114 +495,236 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
         "film (raw replays are not committed).")
 
 
-# --- rendering --------------------------------------------------------------------------------
+# --- rendering ---------------------------------------------------------------------------------
+# Laid out for a NARROW column. The read-out is normally read on a phone, so the default width is
+# 38 characters and every line is wrapped to it with a hanging indent: nothing is truncated, and
+# nothing relies on a wide terminal. Long zone lists are grouped by card category and comma-joined
+# rather than given a line each, which is what keeps a 25-card deck to a handful of lines.
 
-def _pokemon_lines(pk: dict | None, cards: _Cards, *, slot: str, indent: str = "") -> list[str]:
-    """One Pokémon in play, as an indented plain-text block."""
+WIDTH = 38
+"""Default column width — sized for reading the read-out on a phone."""
+
+LABELS = (
+    "[pub] both players can see it",
+    "[you] the asked seat's own hand",
+    "[hid] the asked seat could NOT see it. Listed only because the film is full-information — "
+    "never read it as something the agent knew.",
+    "a deck's multiset is derivable by deck-tracking; its ORDER is not — treat the recorded order "
+    "as engine-internal.",
+)
+
+LABELS_OBS = (
+    "[pub] both players can see it",
+    "[you] the asked seat's own hand",
+    "this snapshot is the agent's own Observation, so nothing hidden from it appears at all — a "
+    "zone it could not see is absent or face-down.",
+)
+
+_CAT_SHORT = {"Pokemon": "Pkmn", "Item": "Item", "Tool": "Tool", "Supporter": "Supp",
+              "Stadium": "Stadium", "Basic Energy": "Basic E", "Special Energy": "Spec E"}
+
+_CAT_ORDER = ["Pokemon", "Basic Energy", "Special Energy", "Item", "Tool", "Supporter",
+              "Stadium", "?"]
+
+
+class _Out:
+    """A width-bounded line accumulator.
+
+    Every line goes through `textwrap` at ``width`` with a hanging indent for its continuations,
+    so a narrow column stays readable and nothing is silently cut. Words are not broken (a card
+    name must never be corrupted mid-word), so a name longer than the column overflows it — the
+    one case where exceeding the width is the lesser evil. ``hard=True`` opts into breaking, for
+    paths and JSON blobs where a wrong-looking break costs nothing.
+    """
+
+    def __init__(self, width: int = WIDTH):
+        self.width = max(20, int(width))
+        self.lines: list[str] = []
+
+    def raw(self, text: str = "") -> None:
+        """Emit verbatim — for blank lines and rules, which are already width-exact."""
+        self.lines.append(text)
+
+    def rule(self, label: str = "") -> None:
+        if not label:
+            self.raw("-" * self.width)
+            return
+        head = f"-- {label} "
+        if len(head) + 2 > self.width:
+            # a long label wraps rather than pushing the rule past the column
+            self.add(f"-- {label}")
+            return
+        self.raw(head + "-" * (self.width - len(head)))
+
+    def add(self, text, *, indent: int = 0, hang: int = 1, hard: bool = False) -> None:
+        pad = " " * indent
+        wrapped = textwrap.wrap(
+            str(text), width=self.width, initial_indent=pad,
+            subsequent_indent=" " * (indent + hang),
+            break_long_words=hard, break_on_hyphens=False)
+        self.lines.extend(wrapped or [pad + str(text)])
+
+    def path(self, text: str, *, indent: int = 0) -> None:
+        """A path, broken at ``/`` rather than mid-segment.
+
+        Hard-wrapping a path splits a directory name in half, which reads as a typo. Packing whole
+        ``/``-terminated segments keeps every break at a boundary a reader recognises.
+        """
+        segments = [s + "/" for s in text.split("/")[:-1]] + [text.split("/")[-1]]
+        pad, room = " " * indent, max(4, self.width - indent)
+        line = ""
+        for segment in segments:
+            if len(segment) > room:
+                # a single segment wider than the column has to be broken somewhere
+                if line:
+                    self.raw(pad + line)
+                    line = ""
+                for chunk in textwrap.wrap(segment, width=room, break_long_words=True,
+                                           break_on_hyphens=False):
+                    self.raw(pad + chunk)
+                continue
+            if line and len(line) + len(segment) > room:
+                self.raw(pad + line)
+                line = segment
+            else:
+                line += segment
+        if line:
+            self.raw(pad + line)
+
+    def text(self) -> str:
+        return "\n".join(self.lines).rstrip() + "\n"
+
+
+def _rel(path) -> str:
+    """A repo-relative path — an absolute one eats most of a narrow column."""
+    if path is None:
+        return ""
+    try:
+        return Path(path).resolve().relative_to(REPO).as_posix()
+    except (ValueError, OSError):
+        return str(path)
+
+
+def _count_names(cards_list, cards: _Cards) -> list[str]:
+    """``["Basic {F} Energy x3"]`` — names with counts, so five identical energies are one item."""
+    counts: dict[str, int] = {}
+    for card in cards_list or ():
+        name = _card_name(card, cards)
+        counts[name] = counts.get(name, 0) + 1
+    return [f"{n} x{k}" if k > 1 else n
+            for n, k in sorted(counts.items(), key=lambda kv: kv[0].lower())]
+
+
+def _zone(out: _Out, cards_list, cards: _Cards, *, indent: int = 0) -> None:
+    """A card zone grouped by category, one line per category, names comma-joined.
+
+    A 25-card deck listed one card per line is four screens on a phone; grouped it is six lines.
+    The category label is emitted once per group instead of repeated on every card.
+    """
+    if not cards_list:
+        out.add("(empty)", indent=indent)
+        return
+    groups: dict[str, dict[str, int]] = {}
+    unknown = 0
+    for card in cards_list:
+        if not isinstance(card, dict):
+            unknown += 1
+            continue
+        cat = _category(card, cards)
+        name = _card_name(card, cards)
+        groups.setdefault(cat, {})
+        groups[cat][name] = groups[cat].get(name, 0) + 1
+    for cat in sorted(groups, key=lambda c: (_CAT_ORDER.index(c) if c in _CAT_ORDER else 99, c)):
+        names = [f"{n} x{k}" if k > 1 else n
+                 for n, k in sorted(groups[cat].items(), key=lambda kv: kv[0].lower())]
+        out.add(f"{_CAT_SHORT.get(cat, cat)}: " + ", ".join(names), indent=indent, hang=1)
+    if unknown:
+        out.add(f"{unknown} card(s) face down", indent=indent)
+
+
+def _pokemon(out: _Out, pk: dict | None, cards: _Cards, *, head: str, indent: int,
+             detail: int, effects: bool = True) -> None:
+    """One Pokémon in play: a head line, then its facts one short line at a time."""
     if not isinstance(pk, dict):
         # A face-down Active during Set Up (the Cinderace "Explosiveness" opener) reaches an
         # Observation as a bare null.
-        return [f"{indent}{slot}: {UNKNOWN_CARD}"]
+        out.add(f"{head} {UNKNOWN_CARD}", indent=indent)
+        return
     stat = cards.card(pk.get("id"))
-    name = _card_name(pk, cards)
+    out.add(f"{head} {_card_name(pk, cards)}", indent=indent)
+
     hp, max_hp = pk.get("hp"), pk.get("maxHp")
-    damage = (max_hp - hp) if isinstance(hp, int) and isinstance(max_hp, int) else None
-    head = f"{indent}{slot}: {name}"
     if isinstance(hp, int) and isinstance(max_hp, int):
-        head += f" — {hp} of {max_hp} HP left"
-        head += f" ({damage} damage on it)" if damage else " (undamaged)"
-    lines = [head]
-    sub = indent + "  "
+        damage = max_hp - hp
+        out.add(f"{hp}/{max_hp} HP · " + (f"{damage} dmg taken" if damage else "undamaged"),
+                indent=detail)
+        printed = getattr(stat, "hp", None) if stat is not None else None
+        if isinstance(printed, int) and printed and printed != max_hp:
+            out.add(f"max {max_hp} vs printed {printed} "
+                    f"({max_hp - printed:+d} from effects in play)", indent=detail)
 
-    printed = getattr(stat, "hp", None) if stat is not None else None
-    if isinstance(printed, int) and isinstance(max_hp, int) and printed and printed != max_hp:
-        delta = max_hp - printed
-        lines.append(f"{sub}max HP is {max_hp}, printed HP is {printed} "
-                     f"({delta:+d} from effects in play, e.g. a Tool or the Stadium)")
-
-    facts = []
-    stage = _stage(stat)
-    if stage:
-        facts.append(stage)
     if stat is not None:
+        head_bits = [b for b in (_stage(stat),) if b]
         etype = getattr(stat, "energyType", None)
         if etype is not None:
-            facts.append(f"type {_ENERGY.get(int(etype), etype)}")
+            head_bits.append(_ENERGY.get(int(etype), str(etype)))
+        if head_bits:
+            out.add(" · ".join(head_bits), indent=detail)
+
         weak = getattr(stat, "weakness", None)
-        facts.append(f"weakness {_ENERGY.get(int(weak), weak)} (takes x2)" if weak is not None
-                     else "no weakness")
+        line = (f"weak {_ENERGY.get(int(weak), weak)} x2" if weak is not None else "no weakness")
         resist = getattr(stat, "resistance", None)
         if resist is not None:
-            facts.append(f"resistance {_ENERGY.get(int(resist), resist)}")
+            line += f" · resist {_ENERGY.get(int(resist), resist)}"
         retreat = getattr(stat, "retreatCost", None)
         if retreat is not None:
-            facts.append(f"retreat cost {retreat}")
-        prizes, why = _prize_value(stat)
-        facts.append(f"KO here gives the opponent {why}")
-    if facts:
-        lines.append(f"{sub}{' · '.join(facts)}")
+            line += f" · retreat {retreat}"
+        out.add(line, indent=detail)
+        out.add(f"KO gives {_prize_value(stat)[1]}", indent=detail)
 
     energies = pk.get("energies") or []
     ecards = pk.get("energyCards") or []
     if energies or ecards:
-        names = ", ".join(_card_name(c, cards) for c in ecards) if ecards else "?"
-        unit = "unit" if len(energies) == 1 else "units"
-        lines.append(f"{sub}energy attached: {len(energies)} {unit} providing "
-                     f"{_energy_symbols(energies)} — cards: {names}")
+        out.add(f"energy {len(energies)}: {_energy_symbols(energies)}", indent=detail)
+        if ecards:
+            out.add(", ".join(_count_names(ecards, cards)), indent=detail + 1)
     else:
-        lines.append(f"{sub}energy attached: none")
+        out.add("energy: none", indent=detail)
 
     tools = pk.get("tools") or []
-    lines.append(f"{sub}tool attached: {', '.join(_card_name(t, cards) for t in tools)}"
-                 if tools else f"{sub}tool attached: none")
+    out.add("tool: " + (", ".join(_count_names(tools, cards)) if tools else "none"), indent=detail)
 
     pre = pk.get("preEvolution") or []
     if pre:
-        lines.append(f"{sub}evolved from (underneath): "
-                     f"{', '.join(_card_name(c, cards) for c in pre)}")
+        out.add("evolved from: " + ", ".join(_count_names(pre, cards)), indent=detail)
 
-    if stat is not None and getattr(stat, "attacks", None):
-        for aid in stat.attacks:
-            atk = cards.attack(aid)
+    if stat is not None:
+        for attack_id in getattr(stat, "attacks", None) or ():
+            atk = cards.attack(attack_id)
             if atk is None:
-                lines.append(f"{sub}attack: id {aid} (not in the card table)")
+                out.add(f"atk id {attack_id} (not in card table)", indent=detail)
                 continue
-            dmg = f"{atk.damage} damage" if atk.damage else "no listed damage"
-            lines.append(f"{sub}attack: {atk.name} — costs {_energy_symbols(atk.energies)} "
-                         f"({len(atk.energies)} energy) — {dmg}")
-            if atk.text:
-                lines.append(f"{sub}  effect: {atk.text}")
-    if stat is not None and getattr(stat, "skills", None):
-        for sname, stext in stat.skills:
-            lines.append(f"{sub}ability: {sname.strip()} — {stext}")
+            dmg = f"{atk.damage} dmg" if atk.damage else "no dmg"
+            out.add(f"atk {atk.name} · {_energy_symbols(atk.energies)} · {dmg}", indent=detail)
+            if effects and atk.text:
+                out.add(atk.text, indent=detail + 1)
+        for name, stext in getattr(stat, "skills", None) or ():
+            out.add(f"abil {name.strip()}", indent=detail)
+            if effects and stext:
+                out.add(stext, indent=detail + 1)
 
     if pk.get("appearThisTurn"):
-        lines.append(f"{sub}came into play THIS TURN (so it cannot evolve this turn)")
-    return lines
+        out.add("came into play THIS TURN (cannot evolve this turn)", indent=detail)
 
 
-def _group_cards(cards_list, cards: _Cards) -> list[str]:
-    """A zone as ``name x N — Category`` lines, ordered by category then name."""
-    counts: dict[tuple[str, str], int] = {}
-    for card in cards_list:
-        key = (_category(card, cards), _card_name(card, cards))
-        counts[key] = counts.get(key, 0) + 1
-    order = {name: i for i, name in enumerate(
-        ["Pokemon", "Basic Energy", "Special Energy", "Item", "Tool", "Supporter", "Stadium", "?"])}
-    out = []
-    for (cat, name), n in sorted(counts.items(), key=lambda kv: (order.get(kv[0][0], 99),
-                                                                kv[0][1].lower())):
-        if name == UNKNOWN_CARD:
-            out.append(f"{n} card(s) {UNKNOWN_CARD}")
-            continue
-        out.append(f"{name} x{n} — {cat}" if n > 1 else f"{name} — {cat}")
-    return out
+def _option_parts(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> list[str]:
+    """One offered option as a head line plus a line per thing it names.
 
-
-def _option_line(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> str:
-    """One offered option, resolved to the thing it actually names."""
+    Split rather than joined: at a narrow width a single joined line wraps into an unscannable
+    block, whereas one target per line stays aligned down the column.
+    """
     otype = _enum_name(opt.get("type"), _OPTION_TYPE, "optionType")
-    bits = [f"[{idx}] {otype}"]
+    parts = [f"[{idx}] {otype}"]
 
     def _slot(player_index, area, index):
         """The Pokémon/card an (area, index) pair points at, named."""
@@ -631,13 +744,15 @@ def _option_line(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> s
         if zone is None:
             # ENERGY / TOOL / PRE_EVOLUTION hang off a Pokémon rather than off a zone list, so
             # there is nothing to index into here — name the area and let the index stand.
-            return f"seat {seat} {area_name} index {index}" if isinstance(index, int) else None
+            return f"s{seat} {area_name}{index}" if isinstance(index, int) else None
         entries = players[seat].get(zone)
         if not isinstance(entries, list) or not isinstance(index, int):
             return None
         if not (0 <= index < len(entries)):
             return None
-        return f"seat {seat} {zone.upper()} index {index} = {_card_name(entries[index], cards)}"
+        # ACTIVE is a single slot, so its index carries no information worth the characters.
+        ref = f"s{seat} {area_name}" + ("" if area_name == "ACTIVE" else str(index))
+        return f"{ref} = {_card_name(entries[index], cards)}"
 
     # A PLAY option carries a bare hand index and no `area` — see the engine's own builder
     # (`cgpy.options`: {"type": PLAY, "index": i} over the hand). Everything else that points at a
@@ -647,263 +762,272 @@ def _option_line(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> s
         area = 2                                          # AreaType.HAND
     target = _slot(opt.get("playerIndex"), area, opt.get("index"))
     if target:
-        bits.append(target)
+        parts.append(target)
     elif opt.get("index") is not None:
-        bits.append(f"index {opt['index']}")
+        parts.append(f"index {opt['index']}")
 
     if opt.get("inPlayArea") is not None:
         onto = _slot(opt.get("inPlayPlayerIndex", asked_seat), opt.get("inPlayArea"),
                      opt.get("inPlayIndex"))
-        bits.append(f"onto {onto}" if onto else
-                    f"onto {_enum_name(opt.get('inPlayArea'), _AREA)} "
-                    f"index {opt.get('inPlayIndex')}")
+        parts.append(f"onto {onto}" if onto else
+                     f"onto {_enum_name(opt.get('inPlayArea'), _AREA)}"
+                     f"{opt.get('inPlayIndex')}")
 
     if opt.get("attackId") is not None:
         atk = cards.attack(opt["attackId"])
-        bits.append(f"{atk.name} — costs {_energy_symbols(atk.energies)} — {atk.damage} damage"
-                    if atk else f"attackId {opt['attackId']}")
+        parts.append(f"{atk.name} · {_energy_symbols(atk.energies)} · {atk.damage} dmg"
+                     if atk else f"attackId {opt['attackId']}")
 
     for extra in ("number", "specialCondition"):
         if opt.get(extra) is not None:
-            bits.append(f"{extra} {opt[extra]}")
-    return " · ".join(bits)
+            parts.append(f"{extra} {opt[extra]}")
+    return parts
 
 
-def _side_lines(seat: int, cur: dict, cards: _Cards, *, asked_seat,
-                label: str, deck_order: bool) -> list[str]:
+def _option_summary(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> str:
+    """The same option on one line — for echoing a choice or a ruling.
+
+    The index already sits on the ``AGENT CHOSE [1]`` line above, so it is dropped here and the
+    line leads with what was actually picked; those characters are worth more in a narrow column.
+    """
+    parts = _option_parts(idx, opt, cur, cards, asked_seat)
+    if len(parts) > 1:
+        return " · ".join(parts[1:])
+    return parts[0].split("] ", 1)[-1]                    # "[3] Retreat" -> "Retreat"
+
+
+def _side(out: _Out, seat: int, cur: dict, cards: _Cards, *, asked_seat, label: str,
+          deck_order: bool, effects: bool) -> None:
     players = cur.get("players") or []
+    out.raw("")
+    out.rule(f"SEAT {seat} · {label}")
     if not (0 <= seat < len(players)):
-        return [f"seat {seat}: not in this snapshot"]
+        out.add("not in this snapshot")
+        return
     pl = players[seat]
     you = (seat == asked_seat)
-    mine = "[you see this]" if you else "[hidden from you]"
-    lines = [f"--- SEAT {seat} — {label} ---"]
+    mine = "[you]" if you else "[hid]"
 
     # prizes first: the clock every plan is measured against
     prize = pl.get("prize")
     if isinstance(prize, list):
         remaining = len(prize)
-        lines.append(f"prizes remaining: {remaining} of 6 — {6 - remaining} already taken "
-                     f"(taking the 6th wins the game) [public count]")
+        out.add(f"PRIZES {remaining} of 6 left · {6 - remaining} taken")
+        out.add("count is [pub] · the 6th taken wins", indent=1)
         if _all_unknown(prize):
-            lines.append("prize cards: face down, identities not in this snapshot "
-                         "(the agent cannot see them)")
+            out.add("contents: face down, not in this snapshot", indent=1)
         else:
-            lines.append("prize cards, face down [hidden from you]:")
-            for line in _group_cards(prize, cards):
-                lines.append(f"  {line}")
+            out.add("contents [hid]:", indent=1)
+            _zone(out, prize, cards, indent=2)
     elif isinstance(prize, int):
-        lines.append(f"prizes remaining: {prize} of 6 — {6 - prize} already taken "
-                     f"(taking the 6th wins the game) [public count]")
-        lines.append("prize cards: not in this snapshot (the agent cannot see them)")
+        out.add(f"PRIZES {prize} of 6 left · {6 - prize} taken")
+        out.add("count is [pub] · the 6th taken wins", indent=1)
+        out.add("contents: not in this snapshot", indent=1)
     else:
-        lines.append("prizes: not in this snapshot")
+        out.add("PRIZES: not in this snapshot")
 
     active = pl.get("active") or []
     if active:
         for pk in active:
-            lines.extend(_pokemon_lines(pk, cards, slot="ACTIVE"))
+            _pokemon(out, pk, cards, head="ACTIVE", indent=0, detail=2, effects=effects)
     else:
-        lines.append("ACTIVE: EMPTY — this seat has no Active Pokémon and must promote one "
-                     "(if it cannot, it loses)")
-
+        out.add("ACTIVE: EMPTY")
+        out.add("no Active Pokémon — must promote one (if it cannot, it loses)", indent=2)
     conditions = [c for c in _CONDITIONS if pl.get(c)]
-    lines.append("  special conditions on the Active: "
-                 + (", ".join(conditions) if conditions else "none") + " [public]")
+    out.add("conditions: " + (", ".join(conditions) if conditions else "none") + " [pub]",
+            indent=2)
 
     bench = pl.get("bench") or []
     bench_max = pl.get("benchMax", 5)
-    lines.append(f"BENCH: {len(bench)} of {bench_max} filled [public]")
+    out.add(f"BENCH {len(bench)} of {bench_max} [pub]")
     if not bench:
-        lines.append("  (empty)")
+        out.add("(empty)", indent=1)
     for i, pk in enumerate(bench):
-        lines.extend(_pokemon_lines(pk, cards, slot=f"bench {i}", indent="  "))
+        _pokemon(out, pk, cards, head=f"{i}.", indent=1, detail=4, effects=effects)
 
     hand = pl.get("hand")
     hand_count = pl.get("handCount", len(hand) if isinstance(hand, list) else None)
     if isinstance(hand, list):
-        lines.append(f"HAND: {hand_count} cards {mine}"
-                     + ("" if you else " — the count is public, the contents are not"))
-        for line in _group_cards(hand, cards):
-            lines.append(f"  {line}")
+        out.add(f"HAND {hand_count} {mine}"
+                + ("" if you else " count is pub, contents are not"))
+        _zone(out, hand, cards, indent=1)
     else:
-        lines.append(f"HAND: {hand_count} cards — contents not in this snapshot "
-                     f"[hidden from you; the count is public]")
+        out.add(f"HAND {hand_count} · contents not in this snapshot [pub count]")
 
     deck = pl.get("deck")
     deck_count = pl.get("deckCount", len(deck) if isinstance(deck, list) else None)
     if isinstance(deck, list):
-        why = ("hidden from you — but this multiset is derivable by deck-tracking" if you
-               else "hidden from you")
-        lines.append(f"DECK: {deck_count} cards left [count is public; contents {why}]")
-        for line in _group_cards(deck, cards):
-            lines.append(f"  {line}")
+        out.add(f"DECK {deck_count} left [pub count · hid contents]")
+        if you:
+            out.add("(this multiset is derivable by deck-tracking; the order is not)", indent=1)
+        _zone(out, deck, cards, indent=1)
         if deck_order:
-            lines.append("  deck order as recorded in the film (engine-internal — NOT a legitimate "
-                         "top-of-deck read):")
+            out.add("recorded order — engine-internal, NOT a legitimate top-of-deck read:",
+                    indent=1)
             for i, card in enumerate(deck):
-                lines.append(f"    {i}. {_card_name(card, cards)}")
+                out.add(f"{i}. {_card_name(card, cards)}", indent=2)
     else:
-        lines.append(f"DECK: {deck_count} cards left — contents not in this snapshot "
-                     f"[count is public]")
+        out.add(f"DECK {deck_count} left · contents not in this snapshot [pub count]")
 
     discard = pl.get("discard")
     if isinstance(discard, list):
-        lines.append(f"DISCARD: {len(discard)} cards [public — both players may look]")
-        if not discard:
-            lines.append("  (empty)")
-        for line in _group_cards(discard, cards):
-            lines.append(f"  {line}")
+        out.add(f"DISCARD {len(discard)} [pub — both may look]")
+        _zone(out, discard, cards, indent=1)
     else:
-        lines.append(f"DISCARD: {discard} cards [public]")
-    return lines
+        out.add(f"DISCARD {discard} [pub]")
 
 
-def render(hit: FrameHit, *, deck_order: bool = False, cards: _Cards | None = None) -> str:
-    """The frame as a plain-text list — fixed section order, no tables."""
+def render(hit: FrameHit, *, deck_order: bool = False, cards: _Cards | None = None,
+           width: int = WIDTH, effects: bool = True) -> str:
+    """The frame as a plain-text list — fixed section order, wrapped to ``width``.
+
+    ``effects=False`` drops attack and ability rule text, which is the bulk of the length; every
+    zone, count and flag stays.
+    """
     cards = cards or _Cards()
     cur = hit.current or {}
-    out: list[str] = []
+    out = _Out(width)
     asked = hit.asked_seat if hit.asked_seat is not None else cur.get("yourIndex")
 
     corr = hit.correction or {}
     agent = corr.get("agent")
-    build = corr.get("agent_build") or corr.get("agent_version")
+    build = corr.get("agent_version") or corr.get("agent_build")
 
-    out.append(f"BOARD STATE — FRAME {hit.episode_id}-{hit.frame}")
-    out.append(f"episode {hit.episode_id} · frame {hit.frame} · turn {cur.get('turn')}")
-    out.append(f"source: {hit.source}")
+    # --- header --------------------------------------------------------------------------
+    out.add(f"BOARD STATE {hit.episode_id}-{hit.frame}")
+    out.add(f"ep {hit.episode_id} · frame {hit.frame} · turn {cur.get('turn')}")
     if agent or build:
-        out.append(f"our agent: {agent or '?'} (build {build or '?'})")
+        out.add(f"agent {agent or '?'}" + (f" ({build})" if build else ""))
+    out.add(f"src {hit.source}")
+    if hit.source_path:
+        out.path(_rel(hit.source_path), indent=1)
     if not hit.full_info:
-        out.append("NOTE: this is the per-seat Observation, not the full-information film — the "
-                   "opponent's hand, both decks and both prize piles are simply absent.")
+        out.add("NOTE this is the per-seat Observation, not the full-information film — the "
+                "opponent's hand, both decks and both prize piles are simply absent.")
     if not cards.present:
-        out.append(f"NOTE: card enrichment is OFF ({cards.error}) — every zone below is still "
-                   f"exact; printed HP, types, weakness, retreat cost and attack names are "
-                   f"omitted.")
-    out.append("how to read the visibility labels:")
-    for note in (VISIBILITY if hit.full_info else VISIBILITY_OBS):
-        out.append(f"  {note}")
-    out.append("")
+        out.add(f"NOTE card enrichment is OFF ({cards.error}) — every zone below is still exact; "
+                f"printed HP, types, weakness, retreat cost and attack names are omitted.")
+    out.raw("")
+    out.raw("LABELS")
+    for note in (LABELS if hit.full_info else LABELS_OBS):
+        out.add(note, indent=1)
+    out.raw("")
 
     # --- what the engine is asking -------------------------------------------------------
+    out.rule("DECISION")
     ctx_name, ctx_meaning = _context_name(hit.select_context)
-    out.append("--- THE DECISION (what the engine is asking for) ---")
     ours = agent is not None and asked == corr.get("seat")
-    out.append(f"asked seat: {asked}" + (f" (our agent {agent})" if ours else ""))
-    out.append(f"select context: {ctx_name}" + (f" — {ctx_meaning}" if ctx_meaning else ""))
-    out.append(f"select type: {_enum_name(hit.select_type, _SELECT_TYPE, 'selectType')}")
+    out.add(f"asked seat s{asked}" + (f" · us · {agent}" if ours else ""))
+    out.add(f"context {ctx_name}")
+    if ctx_meaning:
+        out.add(ctx_meaning, indent=1)
+    out.add(f"type {_enum_name(hit.select_type, _SELECT_TYPE, 'selectType')}")
     options = hit.options or []
-    out.append(f"options offered: {len(options)}")
-    for i, opt in enumerate(options):
-        out.append(f"  {_option_line(i, opt, cur, cards, asked)}")
+    out.add(f"options ({len(options)}):")
     if not options:
-        out.append("  (none recorded at this frame)")
+        out.add("(none recorded at this frame)", indent=1)
+    for i, opt in enumerate(options):
+        for j, part in enumerate(_option_parts(i, opt, cur, cards, asked)):
+            out.add(part, indent=1 if j == 0 else 5)
 
-    def _labels(indices):
-        picked = []
+    def _echo(indices):
         for i in indices or []:
             if isinstance(i, int) and 0 <= i < len(options):
-                picked.append(_option_line(i, options[i], cur, cards, asked))
+                out.add(_option_summary(i, options[i], cur, cards, asked), indent=1)
             else:
-                picked.append(f"[{i}] (out of range)")
-        return picked
+                out.add(f"[{i}] (out of range)", indent=1)
 
     if hit.chosen is not None:
-        out.append(f"the agent chose: {hit.chosen}")
-        for line in _labels(hit.chosen):
-            out.append(f"  {line}")
+        out.add(f"AGENT CHOSE {hit.chosen}")
+        _echo(hit.chosen)
         if corr.get("chosen_label"):
-            out.append(f"  tagged label: {corr['chosen_label']}")
+            out.add(f"tag: {corr['chosen_label']}", indent=1)
     if corr.get("correct") is not None:
-        out.append(f"human ruling — the correct choice was: {corr['correct']}")
-        for line in _labels(corr["correct"]):
-            out.append(f"  {line}")
+        out.add(f"RULED CORRECT {corr['correct']}")
+        _echo(corr["correct"])
         if corr.get("correct_label"):
-            out.append(f"  tagged label: {corr['correct_label']}")
+            out.add(f"tag: {corr['correct_label']}", indent=1)
     if corr.get("category"):
-        out.append(f"blunder category: {corr['category']}")
+        out.add(f"category {corr['category']}")
     if corr.get("rationale"):
-        out.append(f"rationale: {corr['rationale']}")
+        out.add("rationale:")
+        out.add(corr["rationale"], indent=1)
     if corr.get("live_trace"):
-        trace = json.dumps(corr["live_trace"], ensure_ascii=False)
-        out.append(f"agent trace at this frame: {trace}")
-    out.append("")
+        out.add("agent trace:")
+        out.add(json.dumps(corr["live_trace"], ensure_ascii=False), indent=1, hard=True)
+    out.raw("")
 
     # --- turn state ----------------------------------------------------------------------
     turn = cur.get("turn")
     first = cur.get("firstPlayer")
     tp = turn_player(turn, first)
-    out.append("--- TURN STATE ---")
-    out.append(f"turn {turn} (one ply — a single seat's turn)")
-    out.append(f"first player: seat {first}" if first is not None else "first player: unknown")
+    out.rule("TURN")
+    out.add(f"turn {turn} — one ply, a single seat's turn")
+    out.add(f"first player s{first}" if first is not None else "first player unknown")
     if tp is None:
-        out.append("turn player: none — turn 0 is the shared setup phase, both seats act in it")
+        out.add("turn player: none — turn 0 is the shared setup phase, both seats act in it")
     else:
-        out.append(f"turn player: seat {tp} — the per-turn flags below are SEAT {tp}'s")
+        out.add(f"turn player s{tp}")
         if asked is not None and asked != tp:
-            out.append(f"!! seat {asked} is being asked OUT OF TURN (a forced select during seat "
-                       f"{tp}'s turn, e.g. promoting after a KO). The flags below are NOT yours.")
+            out.add(f"!! s{asked} is being asked OUT OF TURN — a forced select during s{tp}'s "
+                    f"turn, e.g. promoting after a KO. The flags below are s{tp}'s, NOT yours.")
         else:
-            out.append(f"seat {asked} is the turn player — these are your own flags")
+            out.add(f"s{asked} is the turn player — the flags below are your own")
+    out.add(f"where s{tp if tp is not None else '?'} is in the turn:")
 
     def flag(key, label, yes, no):
         val = cur.get(key)
         if val is None:
-            return f"  {label}: not recorded in this snapshot"
-        return f"  {label}: {'YES' if val else 'NO'} — {yes if val else no}"
+            out.add(f"{label}: not recorded", indent=1)
+            return
+        out.add(f"{label}: {'YES' if val else 'NO'}", indent=1)
+        out.add(yes if val else no, indent=3)
 
-    out.append(f"where seat {tp if tp is not None else '?'} is in the turn:")
-    out.append(flag("energyAttached", "energy attached from hand",
-                    "energy already attached from hand this turn — no manual attach left "
-                    "(card effects can still add energy)",
-                    "no energy attached from hand yet — the 1 manual attach is still available"))
-    out.append(flag("supporterPlayed", "supporter played",
-                    "a Supporter has been played this turn — no second Supporter",
-                    "no Supporter played yet — the 1 Supporter is still available"))
-    out.append(flag("stadiumPlayed", "stadium played",
-                    "a Stadium has been played this turn — no second Stadium",
-                    "no Stadium played yet — one may be played if it differs from the one in play"))
-    out.append(flag("retreated", "retreated",
-                    "already retreated manually this turn — no second manual retreat "
-                    "(Switch-style effects still work)",
-                    "has not retreated yet — the 1 manual retreat is available, paying the "
-                    "Retreat cost"))
-    out.append(f"  actions taken this turn: {cur.get('turnActionCount')}")
-    out.append("  attacking is once per turn and ENDS the turn")
+    flag("energyAttached", "energy attached from hand",
+         "no manual attach left (card effects can still add energy)",
+         "the 1 manual attach is still available")
+    flag("supporterPlayed", "supporter played",
+         "no second Supporter this turn",
+         "the 1 Supporter is still available")
+    flag("stadiumPlayed", "stadium played",
+         "no second Stadium this turn",
+         "one may be played if it differs from the one in play")
+    flag("retreated", "retreated",
+         "no second manual retreat (Switch-style effects still work)",
+         "the 1 manual retreat is available, paying the Retreat cost")
+    out.add(f"actions taken: {cur.get('turnActionCount')}", indent=1)
+    out.add("attack: 1/turn, and it ENDS the turn", indent=1)
     if turn == 1 and tp is not None and first == tp:
-        out.append("  first player, turn 1: CANNOT attack and CANNOT play a Supporter this turn "
-                   "(docs/rules.md §2)")
+        out.add("first player, turn 1: CANNOT attack and CANNOT play a Supporter "
+                "(docs/rules.md §2)", indent=1)
 
     stadium = cur.get("stadium")
     if isinstance(stadium, list) and stadium:
         for st in stadium:
             owner = st.get("playerIndex")
-            out.append(f"stadium in play: {_card_name(st, cards)}"
-                       + (f" (played by seat {owner})" if owner is not None else "")
-                       + " [public — it affects both sides]")
+            out.add(f"stadium: {_card_name(st, cards)}"
+                    + (f" (s{owner})" if owner is not None else "")
+                    + " [pub, affects both]")
     else:
-        out.append("stadium in play: none")
+        out.add("stadium: none")
 
     looking = cur.get("looking")
     look_n = cur.get("lookingCount")
     if isinstance(looking, list) and looking:
-        out.append(f"cards being looked at right now ({len(looking)}): "
-                   + ", ".join(_card_name(c, cards) for c in looking))
+        out.add(f"looking at ({len(looking)}): "
+                + ", ".join(_count_names(looking, cards)))
     elif look_n:
-        out.append(f"cards being looked at right now: {look_n} (contents not in this snapshot)")
+        out.add(f"looking at: {look_n} (contents not in this snapshot)")
     else:
-        out.append("cards being looked at right now: none")
+        out.add("looking at: none")
 
     result = cur.get("result")
     if result is None or result == -1:
-        out.append("match result: not decided yet")
+        out.add("result: not decided yet")
     elif result == 2:
-        out.append("match result: DRAW")
+        out.add("result: DRAW")
     else:
-        out.append(f"match result: seat {result} has WON")
-    out.append("")
+        out.add(f"result: s{result} has WON")
 
     # --- both sides ----------------------------------------------------------------------
     players = cur.get("players") or []
@@ -911,29 +1035,29 @@ def render(hit: FrameHit, *, deck_order: bool = False, cards: _Cards | None = No
     if asked in seats:
         seats = [asked] + [s for s in seats if s != asked]
     for seat in seats:
-        label = ("the asked seat — us" if seat == asked else "the other seat")
-        if seat == asked and agent:
-            label = f"the asked seat — us, {agent}"
-        elif seat != asked and agent:
-            label = "the other seat — the opponent"
-        out.extend(_side_lines(seat, cur, cards, asked_seat=asked,
-                               label=label, deck_order=deck_order))
-        out.append("")
+        if seat == asked:
+            label = f"us · {agent}" if agent else "the asked seat · us"
+        else:
+            label = "the opponent" if agent else "the other seat"
+        _side(out, seat, cur, cards, asked_seat=asked, label=label, deck_order=deck_order,
+              effects=effects)
 
     if hit.obs_recorded:
-        out.append("an agent Observation was recorded alongside this frame (the exact per-seat "
-                   "input the agent saw).")
-    return "\n".join(out).rstrip() + "\n"
+        out.raw("")
+        out.add("an agent Observation was recorded alongside this frame — the exact per-seat "
+                "input the agent saw.")
+    return out.text()
 
 
 def dump(key: str, *, deck_order: bool = False, replay_path: Path | None = None,
          replays=DEFAULT_REPLAYS, corrections=DEFAULT_CORRECTIONS,
-         fixtures=DEFAULT_FIXTURES) -> str:
+         fixtures=DEFAULT_FIXTURES, width: int = WIDTH, effects: bool = True) -> str:
     """``dump("82756664-97")`` -> the whole read-out as one plain-text string."""
     episode_id, frame = parse_frame_key(key)
     hit = find_frame(episode_id, frame, replays=replays, corrections=corrections,
                      fixtures=fixtures, replay_path=replay_path)
-    return render(hit, deck_order=deck_order)
+    return render(hit, deck_order=deck_order, width=width, effects=effects)
+
 
 
 def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRECTIONS,

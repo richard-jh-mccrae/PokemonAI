@@ -1,14 +1,17 @@
 """Print one frame's complete board state as plain text.
 
     python tools/train/frame_view.py 82756664-97
+    python tools/train/frame_view.py 82756664-97 --brief       # drop card rule text
+    python tools/train/frame_view.py 82756664-97 --width 100   # wide terminal
     python tools/train/frame_view.py 82756664-97 --deck-order
     python tools/train/frame_view.py 82756664-97 --replay path/to/replay.json
     python tools/train/frame_view.py --list                # every resolvable frame key
     python tools/train/frame_view.py --list 82756664       # ...in one episode
 
 The read-out is deliberately fixed in shape and section order so two sittings on the same frame are
-comparable. See `train.blunder.frame_view` for what each section means, where the snapshot comes
-from, and why the per-turn flags are labelled with the *turn player* rather than "you".
+comparable, and wrapped to a narrow column (38 chars by default) so it reads on a phone. See
+`train.blunder.frame_view` for what each section means, where the snapshot comes from, and why the
+per-turn flags are labelled with the *turn player* rather than "you".
 """
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
 
 from train.blunder.frame_view import (  # noqa: E402
-    available_frames, dump, parse_frame_key,
+    WIDTH, available_frames, dump, parse_frame_key,
 )
 
 
@@ -38,6 +41,11 @@ def main(argv=None):
     ap.add_argument("--deck-order", action="store_true",
                     help="also print the deck in its recorded order (engine-internal — not a "
                          "legitimate top-of-deck read)")
+    ap.add_argument("--width", type=int, default=WIDTH, metavar="N",
+                    help=f"column width (default {WIDTH}, sized for reading on a phone)")
+    ap.add_argument("--brief", action="store_true",
+                    help="drop attack and ability rule text — the bulk of the length. Every zone, "
+                         "count and flag is still printed")
     ap.add_argument("--list", nargs="?", const="", metavar="EPISODE",
                     help="list every frame key resolvable from the committed stores, optionally "
                          "just one episode's")
@@ -63,7 +71,8 @@ def main(argv=None):
         return 2
 
     try:
-        print(dump(args.key, deck_order=args.deck_order, replay_path=args.replay), end="")
+        print(dump(args.key, deck_order=args.deck_order, replay_path=args.replay,
+                   width=args.width, effects=not args.brief), end="")
     except LookupError as exc:
         print(f"error: {exc}", file=sys.stderr)
         try:

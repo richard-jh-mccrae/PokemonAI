@@ -132,10 +132,18 @@ it and relays the output.
 
 ```
 python tools/train/frame_view.py 82756664-97          # the whole board state
+python tools/train/frame_view.py 82756664-97 --brief  # minus card rule text
+python tools/train/frame_view.py 82756664-97 --width 100     # wide terminal
 python tools/train/frame_view.py 82756664-97 --deck-order   # + the deck's recorded order
 python tools/train/frame_view.py --list 82756664      # which frames resolve for an episode
 python tools/train/frame_view.py <key> --replay <film.json>  # any frame, from a film on disk
 ```
+
+**Laid out for a phone.** The read-out is normally read on a handset, so the default column is **38
+characters** and every line is wrapped to it with a hanging indent — nothing truncated, no wide
+terminal assumed. Card zones are grouped by category and comma-joined rather than given a line each,
+which keeps a 25-card deck to a handful of lines instead of four screens. The tests assert no line
+exceeds the width at 30/38/60/100, so a layout regression fails CI rather than reaching a phone.
 
 It resolves a key from the richest source available: a **replay film** (any frame), else the
 **Correction log**'s embedded snapshot (tagged frames, plus the ruling and `live_trace`), else a
