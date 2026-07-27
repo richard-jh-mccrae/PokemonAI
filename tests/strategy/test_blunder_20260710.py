@@ -32,17 +32,22 @@ def _decide(pilot, fx: dict):
     return d.chosen, d
 
 
-@pytest.fixture(scope="module")
+# FUNCTION-scoped, not module-scoped: a FRESH pilot per replay, the statefulness lesson the corpus
+# harnesses already follow. Each fixture below is a different EPISODE, but a Pilot's ADR-0033
+# transient-grant tracker is MATCH-scoped by design — correct in a real game, where one Pilot plays
+# one match, and cross-contamination here, where one Pilot was replaying several. It made f24
+# order-dependent once #142 had famine consult that tracker on every decision.
+@pytest.fixture
 def lucario():
     return _pilot("mega_lucario")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def starmie():
     return _pilot("mega_starmie")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def dragapult():
     return _pilot("dragapult_ex")
 
