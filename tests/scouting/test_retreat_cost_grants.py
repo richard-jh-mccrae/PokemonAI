@@ -18,10 +18,33 @@ Card text verified at source in `data/EN_Card_Data.csv`:
     the granting body is not the body retreating and no per-card read could ever see it. The engine
     cannot supply it either: `retreatCost` exists only on `CardData` as the static printed value.
 
-**One deliberate exception to "test at the highest seam possible."** The board-level grant is pinned
-at the READ rather than on a live board, because the only deck running Latias ex is `slowking`, which
-has no strategy module until **#149**. The live-board test is OWED TO #149 and named here so the debt
-is visible rather than implied. The conditional Tool has no such constraint and is tested on a board.
+**One deliberate exception to "test at the highest seam possible."** The board-level grant is tested
+against a SYNTHETIC board here, not a real one, because the only deck running Latias ex is
+`slowking` — which has `deck.csv`/`deck.txt` and **no `strategy.py`** (#149 §Charter), so it cannot
+be built as a Pilot and owns no corpus frames. The debt is named here rather than implied.
+
+**OWED TO #149 — two things, the second sharper than the first:**
+
+1. A real-deck end-to-end test: a `slowking` Pilot on a real frame where the retreat DECISION changes
+   because Latias ex is in play, through `decide()` with engine-backed card data — not a synthetic
+   statline calling `_effective_retreat_cost` directly.
+2. **A KNOWN DIVERGENCE to reconcile.** `_effective_retreat_cost` is now grant-aware; the other nine
+   retreat-cost readers in the codebase are NOT. Measured on a synthetic board with Latias ex benched
+   and a Basic Active at printed retreat 2 with ZERO Energy attached:
+
+       _effective_retreat_cost(obs, active)  ->  0      (the grant is seen: free retreat)
+       _can_retreat(active)                  ->  False  (printed cost 2 > 0 Energy attached)
+
+   So the promote/retreat decider would price a free pivot that the affordability gate denies. The
+   same blindness sits in `planner.py`'s duplicate of this arithmetic (:3212-3231), `_retreat_shortfall`
+   (:698), `objectives.py` (:400) and `combat.py` (:965) — the "one function owns the fact" lesson
+   ADR-0070 drew for `_build_standing`, not yet applied to retreat cost.
+
+   **This is LATENT, not live**: every reader agrees on the four decks that have strategy modules,
+   because none of them runs a board-level grant (`grimmsnarl_ex`/`mega_lucario` run Air Balloon,
+   which is an attached Tool every reader already handles). It goes live the moment #149 onboards
+   slowking — which is exactly why it is recorded here. The fail direction is safe meanwhile:
+   `_can_retreat` under-claims, refusing a legal free retreat rather than asserting an illegal one.
 """
 import pytest
 
