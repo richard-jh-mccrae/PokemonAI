@@ -569,17 +569,34 @@ _Avoid_: "+1 accel" (the retired one-unit approximation — the Budget is the fu
 attach (the single manual action; the Budget is the whole turn's capacity), energy budget
 (unqualified — say whose side)
 
+**Provable Budget**:
+The **Attach Budget** taken on the SOUND deck leg — a typed deck-fetch counts only where
+`CountTriple.floor >= 1` (pigeonhole: more unseen copies than hidden prize slots, so they cannot
+all be prized), instead of the fail-OPEN `ceiling > 0` presence the plain Budget uses. Same oracle,
+same clause modelling, one argument apart; everything already certain is in BOTH — an Energy in
+hand, an Item accel (Items all play, no quota to lose), a discard-sourced attach over the public
+pile. It exists because the two epistemics have opposite safe fail directions: **Famine** must
+under-claim my budget (a false famine is the f70 blunder), while "is this card DEAD this turn"
+must under-claim the other way (a false live-ness spends a card on a turn that never comes). Both
+legs collapse to the same answer once a deck-revealing search anchors the prizes.
+_Avoid_: certain budget / guaranteed budget (the residue is the one-Supporter-per-turn slot, which
+no Budget leg resolves — it asserts a play-set EXISTS, never which one the turn spends),
+sound budget (unqualified — say which zone)
+
 **Reachable Attach**:
-The self-side affordability oracle: whether MY body can pay a given attack (or its cheapest) THIS
-turn — the attack's TYPED per-slot cost tested against attached Energy plus the **Attach Budget**
-(greedy typed match). **Famine** = the cheapest attack unreachable even under the full Budget —
-never "0 Energy attached". Boolean and sound-or-silent; its EV variant **readiness_p** prices a
+The self-side affordability oracle: whether MY body can pay a given attack — or, with no attack
+named, ANY of them — THIS turn, the attack's TYPED per-slot cost tested against attached Energy
+plus the **Attach Budget** (exact per-slot assignment). **Famine** = NO attack reachable even under
+the full Budget; never "0 Energy attached", and never "the cheapest attack is unpayable" — once
+costs are typed a cheap `{F}{F}` can be unpayable while a dearer `●●●` is not, so the famine
+question scans every attack. Boolean and sound-or-silent; its EV variant **readiness_p** prices a
 still-uncertain enabler by the hypergeometric draw instead of 1.0/0.0. The mirror of
 `reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table,
 opposite fail direction (under-count my budget; over-count their threat).
-_Avoid_: active_attack_payable (the attached-now truth — no budget), active_attack_payable_via_accel
-(the retired +1/cheapest-only/untyped approximation), payable (unqualified — attached-now or
-budget-aware?)
+_Avoid_: active_attack_payable (the retired manual-only sub-budget scored by an UNTYPED count —
+never an "attached-now" truth, which is why it dies rather than surviving beside the oracle),
+active_attack_payable_via_accel (the retired +1/cheapest-only/untyped approximation), payable
+(unqualified — say which Budget leg)
 
 **Retreat Equity**:
 The mobility value of Energy attached toward a body's printed Retreat cost — an ADDITIVE orthogonal
