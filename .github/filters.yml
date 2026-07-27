@@ -1,12 +1,19 @@
 # Path filters for selective CI (consumed by .github/workflows/ci.yml via dorny/paths-filter).
 # Each filter is a boolean the "Determine test plan" step turns into pytest targets, applying
-# the reverse-dependency unions (e.g. a `sim` change also runs arena). Broad + fail-safe: when a
-# change could break a test, that test runs. See docs/ci.md for the full mapping table.
+# the reverse-dependency unions declared there. The source-area -> test-dir mapping below was
+# derived from a repo-wide static import-graph walk (every `import`/`from X import Y` in
+# src/, tools/, tests/, resolved transitively) cross-checked against the three subprocess/
+# importlib "dynamic agent load" sites (tools/sim/check_agent.py, tools/arena/worker.py,
+# tools/submit/brief.py) that a plain import graph can't see but real test behavior does
+# depend on. See docs/ci.md for the full mapping table and methodology. Broad + fail-safe:
+# when a change *could* break a test, that test runs.
 
-# Foundation & shared infra — imported/loaded by ~everything => full suite.
+# True global foundation. src/cg/** (the native engine) underlies nearly everything except
+# tools/meta_tracker, which only ever parses already-recorded replay JSON and never makes a
+# live engine call. Shared test infra + committed data stay foundation-level too: anything
+# here can break collection for the *whole* suite.
 full:
   - 'src/cg/**'
-  - 'src/common/**'
   - 'requirements.txt'
   - '.coveragerc'
   - 'pytest.ini'
@@ -26,6 +33,23 @@ full:
   - 'tools/audit_card_functions.py'
   - 'tools/verify_meta_cards.py'
 
+# Deck-agnostic agent core: common.pilot / common.runtime and everything they import at
+# module level (scouting, strategy, value, and the connective root modules directly under
+# src/common/). common.runtime.make_agent is imported by every agent main.py -- real ones
+# AND the fixture agents that tools/sim/check_agent.py, tools/arena/worker.py, and
+# tools/submit/brief.py dynamically load (importlib.util.spec_from_file_location) into
+# subprocess-run matches -- so a change *anywhere* in this group can move outcomes in
+# agents, arena, sim, submit, train, tuner, blunder, value, scouting, and strategy tests
+# alike. Genuinely narrower than the old blanket `src/common/**` only in that it excludes
+# tools/meta_tracker's own tests, the card-tool tests (folded into `cards` below, since
+# common.cards/common.effects need both that AND this broad set), and the self-contained
+# cgpy/parity twin -- none of which import any of this.
+common_agent_core:
+  - 'src/common/*.py'
+  - 'src/common/scouting/**'
+  - 'src/common/strategy/**'
+  - 'src/common/value/**'
+
 # Leaf/tool source areas + their own tests (reverse deps applied in the ci.yml plan step).
 agents:
   - 'src/agents/**'
@@ -40,10 +64,27 @@ submit:
   - 'tools/submit/**'
   - 'tools/submit_agent.py'
   - 'tests/submit/**'
-train:
-  - 'tools/train/**'
-  - 'tests/train/**'
-  - 'tests/label/**'
+
+# tools/train/** is itself layered (verified via the import graph): tune.py imports BOTH
+# train.blunder.* and train.tuner.* at module level, and is the shared pilot-builder that
+# ~20 test files across tests/agents, tests/strategy, tests/blunder, tests/sim, tests/value,
+# tests/tuner import directly (see conftest.py's `ms_pilot` fixture docstring) -- so a
+# blunder OR tuner change (or a change to a root tools/train/*.py script) rides that same
+# broad blast radius. tools/train/value/**, tools/train/label/**, and tools/train/probes/**
+# are genuine leaves nothing else imports -- real narrowing vs. the old
+# `tools/train/** -> tests/train tests/tuner tests/blunder tests/value tests/sim tests/label`
+# blanket, which used to run all five even for a probes-only or label-only change.
+train_wide:
+  - 'tools/train/*.py'
+  - 'tools/train/blunder/**'
+  - 'tools/train/tuner/**'
+train_value:
+  - 'tools/train/value/**'
+train_label:
+  - 'tools/train/label/**'
+train_probes:
+  - 'tools/train/probes/**'
+
 meta:
   - 'tools/meta_tracker/**'
   - 'tools/deck_convert.py'
@@ -51,24 +92,39 @@ meta:
   - 'tools/export_meta_decks.py'
   - 'tools/run_meta_tracker.py'
   - 'tests/meta_tracker/**'
+
+# common.cards / common.effects sit in common_agent_core's broad blast radius (they're
+# imported by runtime.py) AND are the two files tests/cards directly exercises (test_cards.py
+# imports common.cards; the rest of tests/cards tests tools/meta_tracker's independent
+# card-parsing twin, already covered by `meta` above) -- both filters fire together for an
+# edit here, which is exactly the union that's needed.
+cards:
+  - 'src/common/cards.py'
+  - 'src/common/effects.py'
+  - 'tests/cards/**'
+
+# Test-only filters: editing just a test file touches no source, so these stay narrow (own
+# dir only) rather than paying for a broader filter's reverse-dependency add-list above.
 scouting:
   - 'tools/build_scouting_artifact.py'
   - 'tests/scouting/**'
 strategy:
   - 'tests/strategy/**'
-cards:
-  - 'tests/cards/**'
+value:
+  - 'tests/value/**'
 tuner:
   - 'tests/tuner/**'
 blunder:
   - 'tests/blunder/**'
-value:
-  - 'tests/value/**'
+train:
+  - 'tests/train/**'
+label:
+  - 'tests/label/**'
 
-# cgpy pure-Python engine twin + its trace-replay parity gate (ADR-0050). Self-contained:
-# nothing else imports src/cgpy, so a cgpy/parity change runs ONLY tests/parity (and,
-# conversely, an unrelated PR never pays for the heavy parity suite). The committed coverage
-# ledger + the parity micro-trace corpus live here too (carved out of `full` above).
+# cgpy pure-Python engine twin + its trace-replay parity gate (ADR-0050/59). Self-contained:
+# nothing else imports src/cgpy at runtime (its only other reference is a conftest.py opt-in
+# env-var switch used solely by the parity suite itself), so a cgpy/parity change runs ONLY
+# tests/parity (and, conversely, an unrelated PR never pays for the heavy parity suite).
 parity:
   - 'src/cgpy/**'
   - 'tests/parity/**'

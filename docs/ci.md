@@ -18,24 +18,37 @@ A [`dorny/paths-filter`](https://github.com/dorny/paths-filter) step (*Detect ch
 areas*) reads the declarative source-area → glob map from
 [`.github/filters.yml`](../.github/filters.yml); the *Determine test plan* step in
 [`ci.yml`](../.github/workflows/ci.yml) then turns those booleans into a concrete pytest
-target list, applying the reverse-dependency unions. The map is derived from the repo's real
-module import graph and is deliberately **broad and fail-safe**: when a change *could* break
-a test, that test runs.
+target list, applying the reverse-dependency unions. The map was derived from a **repo-wide
+static import-graph walk** (every `import`/`from X import Y` in `src/`, `tools/`, `tests/`,
+resolved transitively — including function-local imports, which is how the analysis caught
+that `tests/conftest.py`'s session fixtures pull in `train.tune`/`sim.corpus`/
+`meta_tracker.parse`/`common.value.model`), then **cross-checked against the three
+subprocess/`importlib` "dynamic agent load" sites** that a plain import graph can't see but
+real test behavior does depend on: `tools/sim/check_agent.py`, `tools/arena/worker.py`, and
+`tools/submit/brief.py` each load an agent's `main.py`/`strategy.py` via
+`importlib.util.spec_from_file_location` (or a worker subprocess) rather than a static
+`import`. The map is deliberately **broad and fail-safe**: when a change *could* break a
+test, that test runs.
 
 ### Which change runs which tests
 
 | Change under… | Runs | Why |
 | --- | --- | --- |
-| `src/cg/**`, `src/common/**` | **full suite** | Foundation — agents, sim, train, submit, arena all import `common`; `cg` underlies everything |
+| `src/cg/**` | **full suite** | The native engine underlies everything except `meta_tracker` (which only ever parses recorded replay JSON, no live engine calls) |
+| `src/common/*.py`, `src/common/scouting/**`, `src/common/strategy/**`, `src/common/value/**` (the `common_agent_core` filter) | `tests/agents`, `tests/arena`, `tests/blunder`, `tests/label`, `tests/scouting`, `tests/sim`, `tests/strategy`, `tests/submit`, `tests/train`, `tests/tuner`, `tests/value` | `common.pilot`/`common.runtime` import scouting+strategy+value directly, and `common.runtime.make_agent` is imported by every agent `main.py` — real ones AND the fixture agents dynamically loaded into sim/arena/submit matches. Narrower than the old blanket `src/common/**` only in that it skips `tests/meta_tracker`, `tests/cards` (folded into `cards` below), and the self-contained cgpy/parity twin |
 | `src/agents/**` | `tests/agents` | Nothing imports agents at module load (sim battles use *fixture* agents, not `src/agents`) |
 | `tools/arena/**` | `tests/arena` | Pure leaf — nothing imports arena |
-| `tools/sim/**` | `tests/sim`, `tests/arena` | `arena` imports `sim.selfplay` |
-| `tools/submit/**` | `tests/submit`, `tests/sim`, `tests/arena` | `sim` imports `submit.history` |
-| `tools/train/**` | `tests/train`, `tests/tuner`, `tests/blunder`, `tests/value`, `tests/sim` | `sim`/`value` tests import `train.value.*` |
-| `tools/meta_tracker/**`, root card/meta tool scripts | `tests/meta_tracker`, `tests/cards`, `tests/arena`, `tests/sim`, `tests/submit`, `tests/train`, `tests/tuner`, `tests/blunder` | `parse`/`archetype`/`cards` are imported widely |
-| `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json` | `tests/parity` | The ADR-0059 pure-Python engine twin is self-contained — nothing else imports `src/cgpy`, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it) |
+| `tools/sim/**` | `tests/sim`, `tests/arena`, `tests/label`, `tests/submit` | `arena` imports `sim.selfplay`; `label`'s corpus fixture and `submit`'s `check_agent` import sim modules too |
+| `tools/submit/**` | `tests/submit`, `tests/sim`, `tests/arena`, `tests/agents`, `tests/blunder`, `tests/label` | verified via the import graph |
+| `tools/train/*.py`, `tools/train/blunder/**`, `tools/train/tuner/**` (the `train_wide` filter) | `tests/train`, `tests/tuner`, `tests/blunder`, `tests/value`, `tests/label`, `tests/sim`, `tests/strategy`, `tests/agents` | `tune.py` imports **both** `train.blunder.*` and `train.tuner.*` at module level and is the shared pilot-builder ~20 test files across those dirs import directly (see `conftest.py`'s `ms_pilot` fixture) — so a blunder or tuner change rides this one broad blast radius |
+| `tools/train/value/**` | `tests/value`, `tests/label`, `tests/sim` | genuine leaf — narrower than `train_wide` |
+| `tools/train/label/**` | `tests/label` | genuine leaf, nothing else imports it |
+| `tools/train/probes/**` | `tests/train` | genuine leaf (exercised by `tests/train/test_gates.py`) |
+| `tools/meta_tracker/**`, root card/meta tool scripts | `tests/meta_tracker`, `tests/cards`, `tests/agents`, `tests/arena`, `tests/blunder`, `tests/label`, `tests/scouting`, `tests/sim`, `tests/submit`, `tests/train` | `cards`/`archetype`/`parse` are imported widely, but **not** by `tuner`, `strategy`, `value`, or `parity` — verified via the import graph (a real narrowing; the old mapping also under-counted `agents`/`label`/`scouting`, a gap this fixes) |
+| `src/common/cards.py`, `src/common/effects.py` (the `cards` filter) | `tests/cards` (plus `common_agent_core`'s broad set, since these two files are also in that glob) | `test_cards.py` imports `common.cards` directly; the rest of `tests/cards` exercises `tools/meta_tracker`'s independent card-parsing twin, already covered above |
+| `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json` | `tests/parity` | The ADR-0050/59 pure-Python engine twin is self-contained — nothing else imports `src/cgpy` at runtime, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it) |
 | shared test infra (`tests/conftest.py`, `tests/*_helpers.py`, `tests/fixtures/**` except `tests/fixtures/parity/**`), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**` except `data/engine/coverage.json`, root card-builder scripts | **full suite** | Can break anything |
-| a single `tests/<area>/**` file | just `tests/<area>` | Editing a test only affects its own dir |
+| a single `tests/<area>/**` file with no matching source change | just `tests/<area>` | A pure test-file edit touches no source, so it stays narrow instead of paying for a broader filter's reverse-dependency add-list |
 | docs / any `*.md` | **nothing** (job passes green) | No runtime surface |
 | anything unmatched | **full suite** | A new top-level area is never silently skipped |
 
@@ -43,6 +56,11 @@ The plan step unions the sets for a multi-area diff, and any *foundation* filter
 change that matches no filter — the `any`-but-nothing-recognised case) forces the full
 suite. `.github/filters.yml` is the source-area map; the reverse-dependency unions (e.g.
 `sim` → also `arena`) are the `add …` lines in the *Determine test plan* step of `ci.yml`.
+
+On **push to `main`** (i.e. after a PR merges) the filter is skipped entirely and the full
+suite always runs — `github.event_name` is `push`, not `pull_request`, so the plan step's
+`if [ "$EVENT" != "pull_request" ]; then run_all=true; fi` branch fires unconditionally.
+Main is never left validated only by a narrowed PR run.
 
 ### Conditional gates
 
