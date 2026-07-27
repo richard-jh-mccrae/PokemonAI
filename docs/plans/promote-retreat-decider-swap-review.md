@@ -5,7 +5,7 @@ re-ruled with the user, never auto-conformed*. Companion to `attach-decider-swap
 `evolve-decider-swap-review.md` (1b). Authority for every design choice is **ADR-0073**.
 
 **Status: RULED by the user 2026-07-27.** The single `REGRESSION` is held out with owner **#165** (it
-is a Maneuver), and the defect it exposed in `_deck_basic_energy_fuel` is filed separately. ADR-0073
+is a Maneuver), and the defect it exposed in `_deck_basic_energy_fuel` is filed as **#172**. ADR-0073
 §4's exposure grading is exonerated. Nothing in the equation was tuned toward the frame — auto-
 conforming it is the thing directive 2 forbids.
 
@@ -77,7 +77,7 @@ The remaining four are pick-site frames where the new decider brings up the righ
 f104/f92 are the "first-bench-slot blindness" pair, now EMERGENT from reachable damage rather than
 `is_best_promote_target` plus a `+5` tie-break bonus.
 
-## The one frame needing a ruling — 82756664-97
+## The one flip that needed a ruling — 82756664-97 (RULED, held out to #165)
 
 ```
 82756664-97  mega_starmie  pick   NEW=(5,1)  OLD=(5,0)  correct=(5,0)   REGRESSION
@@ -161,14 +161,26 @@ it is a Stage 2 and the stadium is theirs; Mega Starmie ex is Stage 1 and untouc
 > Energy-accelerate**, promote Cinderace. Then, on our turn: Night Stretcher fetches the Mega Starmie
 > ex from the discard · evolve the Staryu · attach Energy to the benched Starmie · Buddy-Buddy Poffin
 > to thin the deck · Harlequin (their hand is 7 — that is the disruption). Now attack: Turbo Flare
-> Knocks Out their Active and places 3 Energy onto the freshly evolved Starmie. We end with Cinderace
-> up front, **2 prizes remaining**, and two full-HP Starmies benched.
+> Knocks Out their Active and distributes its 3 Energy so that **both** benched Starmies end the turn
+> on **3**. We end with Cinderace up front, **2 prizes remaining**, and two full-HP Starmies benched.
 
 Every step checks out. Turbo Flare costs `●` and Cinderace holds its `{W}`; 50 damage against a
 20 HP Active is a Knock Out; **Mega Lucario ex is a Mega ex, so that Knock Out takes 3 prizes** —
-5 → 2, exactly as stated. One detail differs and is in the user's favour: the benched Staryu already
-carries 1 `{W}`, and evolution keeps attached cards (`rules.md` §4), so the evolved body starts on 1
-and Turbo Flare leaves it on **4**, not 3. The end state is 2 and 4.
+5 → 2, exactly as stated.
+
+**The Energy lands 3 / 3, and that is the point of the line.** The benched Staryu already carries
+1 `{W}`, and evolution keeps attached cards (`rules.md` §4), so the evolved body starts on 1 rather
+than 0 — and Turbo Flare attaches "to your Benched Pokémon **in any way you like**", so its 3 split
+1 / 2 rather than 0 / 3:
+
+| body | before | manual attach | Turbo Flare | **end** |
+|---|---|---|---|---|
+| Mega Starmie ex (standing) | 1 `{W}` | +1 | +1 | **3** |
+| Mega Starmie ex (just evolved) | 1 `{W}` (kept from Staryu) | — | +2 | **3** |
+
+Three is the number that matters: **Nebula Beam costs `●●●`**, so BOTH benched Starmies end the turn
+able to swing 210 — damage unaffected by Weakness or Resistance, or by any effect on their Active. A
+2 / 4 split would strand one body on Jetting Blow's 120 and waste an Energy on the other.
 
 **What this settles.** The Knock Out is available to every candidate and yields the same 3 prizes, so
 it cancels — the decision is entirely about what else the promoted body does. Cinderace does two
@@ -191,7 +203,7 @@ ORDER. So there are two distinct defects behind this one frame:
   later steps — which is the same argument that kept `retreat-to-wall-the-line` alive.
 
 **Disposition.** The frame is **HELD OUT with owner #165** (defect ii — the Maneuver), and defect (i)
-is filed separately against `_deck_basic_energy_fuel`, which is ADR-0061's, pre-existing, and shared
+is filed as **#172** against `_deck_basic_energy_fuel`, which is ADR-0061's, pre-existing, and shared
 with the attack option, so it is not 1c's to change unilaterally. ADR-0073 §4's exposure grading is
 **exonerated** — reading A is withdrawn as treating a symptom.
 
@@ -202,7 +214,7 @@ with the attack option, so it is not 1c's to change unilaterally. ADR-0073 §4's
 * **B — a judgement call.** Superseded: the user gave a concrete winning line, so it is not a
   toss-up.
 * **C — it belongs to another layer.** ADOPTED for the frame → owner **#165** (the Maneuver).
-* **D — fix the fuel READ.** ADOPTED as a separate filing. The closure term already faced this exact
+* **D — fix the fuel READ.** ADOPTED, filed as **#172**. The closure term already faced this exact
   fork and took the other road: ADR-0070 §3 rules income *"an ODDS read, never a tier"*, which is why
   `_promote_closure` uses `CountTriple.expected`. An expected-value leg (or letting the deck tracker
   anchor) would make the two consistent.
