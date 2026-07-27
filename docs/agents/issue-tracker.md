@@ -51,7 +51,9 @@ finished issue stay visible on an open board.
 
 **One issue per feature.** The originating issue is the unit of tracking — `/to-spec` posts the spec
 as a **comment on that same issue** and advances its chip, rather than spawning a second issue. Keep
-the spec, the discussion, and the status all on one issue.
+the spec, the discussion, and the status all on one issue. That post is **automatic**: `/to-spec`
+publishes the finished spec in the same turn it writes it, without asking first — a spec that only
+ever appeared in chat is not published.
 
 ## When a skill says "publish to the issue tracker"
 
