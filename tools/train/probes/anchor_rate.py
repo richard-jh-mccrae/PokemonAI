@@ -64,6 +64,7 @@ def run_game(agent_dir: Path, deck: list, stats: dict) -> None:
             battle_finish()
             return
         models = {0: OwnCardModel(deck), 1: OwnCardModel(deck)}
+        baseline = {0: OwnCardModel(deck), 1: OwnCardModel(deck)}   # logs-stripped control
         prev_anchored = {0: False, 1: False}
         prize_take_since = {0: False, 1: False}
         watch = 0                            # measure seat 0 only (one sample per game)
@@ -87,6 +88,15 @@ def run_game(agent_dir: Path, deck: list, stats: dict) -> None:
                         anchored = models[seat].prize_export() is not None
                     except Exception:
                         anchored = prev_anchored[seat]
+                    # PAIRED control: the pre-#175 tracker is behaviourally identical to the fixed
+                    # one fed an obs with `logs` stripped (it never read them), so the same frames
+                    # grade both arms — no unseeded-sample confound.
+                    try:
+                        baseline[seat].observe({**obs, "logs": []})
+                        if baseline[seat].prize_export() is None:
+                            stats["base_unanchored"] += 1
+                    except Exception:
+                        pass
                     stats["frames"] += 1
                     stats["by_turn"][turn] += 1
                     if anchored:
@@ -129,6 +139,7 @@ def main() -> int:
     print(f"agent={args.agent}  decklist={len(deck)} cards  games={args.games}", flush=True)
 
     stats = {"frames": 0, "anchored": 0, "unanchored": 0, "deanchors": 0,
+             "base_unanchored": 0,
              "deanchor_after_prize": 0, "by_turn": Counter(), "by_turn_un": Counter(),
              "first_anchor_turn": None, "deanchor_turns": [], "first_anchor_turns": []}
     for g in range(args.games):
@@ -149,6 +160,9 @@ def main() -> int:
     print(f"decision frames         : {stats['frames']}")
     print(f"UN-anchored             : {stats['unanchored']}  ({100*stats['unanchored']/f:.1f}%)")
     print(f"anchored                : {stats['anchored']}  ({100*stats['anchored']/f:.1f}%)")
+    b = stats["base_unanchored"]
+    print(f"UN-anchored, PRE-FIX    : {b}  ({100*b/f:.1f}%)   [same frames, logs stripped]")
+    print(f"frames RECOVERED by fix : {b - stats['unanchored']}  ({100*(b-stats['unanchored'])/f:.1f} pp)")
     print(f"de-anchor events        : {stats['deanchors']}")
     print(f"  ...after our prize take: {stats['deanchor_after_prize']}")
     if stats["deanchor_turns"]:
