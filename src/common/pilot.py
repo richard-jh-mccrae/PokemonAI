@@ -13,7 +13,8 @@ from dataclasses import dataclass, field, replace
 
 from common import deck_odds
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
-from common.promote_retreat_value import PromoteRetreatInputs, promote_retreat_value
+from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
+                                          promote_value)
 from common.opponent_model import OpponentModel
 from common.state_model import StateModel
 from common.strategy import GamePlan, Plan, Strategy
@@ -165,10 +166,6 @@ _SNIPE_THREAT_PRIZE_FLOOR = 5   # deny an ENERGIZED off-Prize-Path attacker (don
                            # threat will bleed my prizes before I close; below it I race my committed path
                            # (ms f39 snipe @6 vs 83667237-107 stand-down @4, symmetric boards). Calibrated
                            # on 2 corrections — a ladder-tuned floor.
-_ITEM_LOCK_EARLY_TURN = 3  # promote/retreat shadow (Sweep #2 Finding A): an `item_lock` body's disruption
-                           # (Itchy Pollen) is credited only while the opponent still depends on SETUP
-                           # Items — turn <= this. dragapult f20/f13 (turn 2, retreat-into-Budew correct)
-                           # keep it; f30/f35/f96 (turn 4/6/12) lose the flat +27 over-fire.
 _HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evolution line CERTAINLY
                            # reaches a hand-size attacker (Kadabra→Alakazam "Powerful Hand") — latent
                            # win-condition hidden by low printed damage. `hand_size_attacker` Function Tag.
@@ -1002,11 +999,14 @@ class OptionTrace:
                                  # Like `attach_working` this DECIDES, so there is no agreement bit: one
                                  # emission path, one truth, and the substrate #146/#148 consume. Sparse:
                                  # None off an EVOLVE option or while the kill-switch is OFF.
-    promote_retreat_shadow: float = 0.0  # REPORTING-ONLY (promote/retreat grill, 2026-07-22): the SHADOW
-                                 # promote/retreat value oracle's output for a TO_ACTIVE/SWITCH option
-                                 # (common/promote_retreat_value.py) — the two-sided window-rollout diff. NOT
-                                 # in `score`; the baseline_promote/baseline_retreat rungs still decide. 0.0
-                                 # off a promote/retreat option.
+    promote_retreat_working: dict | None = None  # the PROMOTE/RETREAT DECIDER's legible working
+                                 # (ADR-0073, #141): the per-option TERM row — my_yield, closure,
+                                 # exposure, tempo_denied, fatal, and (whether-site only) preservation
+                                 # and retreat_cost, plus the `tactical` the option actually scored.
+                                 # Like `attach_working`/`evolve_working` this DECIDES, so there is no
+                                 # agreement bit: one emission path, one truth. `site` names which of
+                                 # ADR-0073 §9's call sites priced it ("pick" | "whether"). Sparse:
+                                 # None off a promote/retreat option or while the kill-switch is OFF.
 
 
 @dataclass
@@ -1071,12 +1071,6 @@ class Decision:
                                      # not a shadow's), so there is no agreement bit: one emission path,
                                      # one truth. A Pokémon Tool ABSTAINS (not Energy) and is counted.
                                      # Sparse: None off an attach menu / mid-sim
-    promote_retreat_shadow: dict | None = None  # the PROMOTE/RETREAT value shadow (promote-retreat-grill-
-                                     # spec.md §Settled design; the fifth shadow): every promote/retreat
-                                     # option's two-sided window-rollout total (common/promote_retreat_value.py)
-                                     # + the pick (`eq_pick`) and the agreement bit vs the shipped rungs'
-                                     # `chosen`. DECIDES NOTHING — sparse: None off a TO_ACTIVE/SWITCH select
-                                     # (< 2 options) / mid-sim. The swap-ranking sweep reads its disagreement rows.
     threat_shadow: dict | None = None   # the DOOM keep-worst-case SHADOW (Threat-Clock unification
                                      # S1b, docs/plans/opponent-value-equation-unification.md): the
                                      # incumbent `active_doomed` (worst-case, the decider) beside its
@@ -1123,7 +1117,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  enabler_item_composer=False, play_accel_lethal=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
-                 doom_matched_relax=False):
+                 promote_retreat_value=True, doom_matched_relax=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1262,6 +1256,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
+        self.promote_retreat_value = promote_retreat_value   # the PROMOTE/RETREAT DECIDER's emergency
+                                                        # lever (ADR-0073, shipped ON): the Sub-lethal
+                                                        # Residual, one evaluator across the body pick, the
+                                                        # whether-to-retreat question and the forced
+                                                        # promote. OFF is DEGRADED MODE, not a rollback —
+                                                        # eleven of the twelve rungs it replaced are
+                                                        # deleted, so OFF silences promote/retreat and
+                                                        # leaves only `retreat-to-wall-the-line` speaking.
         self.evolve_value = evolve_value                # the EVOLVE DECIDER's emergency lever (ADR-0070,
                                                         # shipped ON): the body-substituted deploy delta
                                                         # + odds-priced income. OFF is DEGRADED MODE, not
@@ -1426,7 +1428,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         attach_working=self._attach_working(obs, select, board, options),
-                        promote_retreat_shadow=self._promote_retreat_record(obs, select, board, options, traces, chosen),
                         threat_shadow=self._threat_shadow(obs, board),
                         recur_shadow=self._recur_shadow(obs, board),
                         opp_target_shadow=self._opponent_target_shadow(obs, board),
@@ -1693,6 +1694,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_row = self._attach_decision(obs, select, board, option)   # priced ONCE: the score term
                                                            # and the planner's spend account read it
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
+        promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0073
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -1706,12 +1708,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
                     + self._retreat_to_lethal_tactical(obs, board, option)
+                    + self._promote_ko_tactical(obs, select, board, option)   # ADR-0073 §11
                     + self._grab_lethal_tactical(obs, select, board, option)
                     + self._grab_enabler_lethal_tactical(obs, select, board, option)
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
                     + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
                     + (attach_row["tactical"] if attach_row is not None else 0.0)
-                    + (evolve_row["tactical"] if evolve_row is not None else 0.0))
+                    + (evolve_row["tactical"] if evolve_row is not None else 0.0)
+                    + (promote_row["tactical"] if promote_row is not None else 0.0))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
@@ -1725,7 +1729,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                          if attach_row is not None else 0.0),
                            hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
                            evolve_working=evolve_row,
-                           promote_retreat_shadow=self._promote_retreat_shadow(obs, select, ctx, option))  # REPORTING-ONLY
+                           promote_retreat_working=promote_row)
 
     def _evolve_side(self, obs: dict, board: Board, raw: dict | None, card_id, *,
                      is_active: bool, bench=None) -> EvolveBody:
@@ -1942,193 +1946,401 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return True
         return False
 
-    def _promote_retreat_shadow(self, obs: dict, select: dict, ctx, option: dict) -> float:
-        """The SHADOW promote/retreat value oracle's output for a TO_ACTIVE/SWITCH option
-        (common/promote_retreat_value.py) — the two-sided window-rollout diff (grill 2026-07-22).
-        REPORTING-ONLY, not in `score`; 0.0 off a promote/retreat select. Reads the SAME Context flags
-        the `baseline_promote` ladder consumes into `PromoteRetreatInputs`, so the equation stays a pure
-        function. Readiness is sourced DIRECTLY off the option body (`_promote_can_attack`) rather than
-        the TO_ACTIVE-scoped `ctx.promote_target_can_attack`, so the readiness leg is live on SWITCH
-        retreats too. The retreat-side terms — the current Active's Energy cost and its forgone attack
-        (`stay_yield`, ruling 1) — are wired for a voluntary SWITCH (`_retreat_side`). The closure
-        probability (`fetch_enables_p`, spec §4's gamble-Outcome-Class assembly) remains the one 1-exchange
-        hook at its default until that shared machinery is pointed at the promote target."""
-        if ctx.select_context not in (_TO_ACTIVE, _SWITCH):
+    # ── the PROMOTE/RETREAT DECIDER (ADR-0073, #141) ───────────────────────────────────────────
+    # ONE evaluator, three call sites (§9). Every read routes through the StateModel snapshot
+    # (ADR-0068), so a memoized clock cannot shift under a hypothetical build, and the equation
+    # itself stays pure over MEASUREMENTS — the Pilot fills `PromoteBody`/`RetreatSide`, exactly
+    # ADR-0070's `EvolveBody` pattern.
+
+    def _promote_body(self, obs: dict, board: Board, raw: dict | None, *, draws: int = 0,
+                      bench_after=None) -> PromoteBody:
+        """Read ONE body into the promote/retreat decider's damage-currency view (ADR-0073 §3-§7).
+
+        The body is measured AS THE ACTIVE — that is where a promote candidate arrives and where the
+        retreating Active currently stands — so its Attach Budget is built at ``target_benched=False``
+        (#137 contract hazard 1: a Budget is PER-TARGET-BODY, and the same body budgeted as benched
+        vs Active can differ).
+
+        ``bench_after`` is the Bench this body would sit on if it went there — supplied only for the
+        RETREATING Active, whose `preservation` needs the bench leg. Without it the bench clock is
+        pinned to the Active one, so `preservation` reads a safe ZERO rather than a phantom credit on
+        a body nobody is asking about."""
+        from common.state_model import BodyView
+        raw = raw or {}
+        model = self._state_model
+        mine = model.mine if model is not None else None
+        view = BodyView(raw, combat=self.combat, is_active=True)
+        # CARD RULE, not a heuristic: the player going FIRST cannot attack on turn 1
+        # (`docs/rules.md` §2 L71-72, rulebook L152), so a body promoted then earns NO attack yield
+        # and readying it buys nothing THIS turn. `_evolve_side` gates its own `this_turn` leg on the
+        # same fact; without it the equation promises damage the rules forbid and endorses a turn-1
+        # pivot on the strength of it (corpus 83007714-8).
+        can_swing = board.turn > 1
+        reach = float(mine.best_reachable_damage(view)) if (mine is not None and can_swing) else 0.0
+        opp = self._opp_player(obs) or {}
+        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        opp_active = (model.theirs.active_raw if model is not None
+                      else next((p for p in (opp.get("active") or []) if p), None))
+        clock = dict(charged=getattr(self, "_incoming_budget", None),
+                     context=getattr(self, "_opp_attack_context", None),
+                     key_ids=self._harvest_key_ids(), opp_active=opp_active,
+                     switch_enabler=self._opp_switch_enabler())
+        ko_active = self.combat.turns_to_ko_me(raw, opp_bodies, my_benched=False,
+                                               my_bench=self._my_bench_raws(obs), **clock)
+        if bench_after is None:
+            ko_bench = ko_active                      # not asked — `preservation` reads 0, never a
+        else:                                         # phantom rescue credit
+            # HARVEST READING (ADR-0071 decision 3): this is a RESCUE read — it asks what retreating
+            # BUYS — so it declares UNAVOIDABLE. A benched knockout the opponent can simply redirect
+            # onto another body in range denies nothing; crediting it inflates every bench rescue.
+            # The 35 bench-immune Tera bodies drop out of the harvest entirely
+            # (`combat._harvest_items`, verified), so their bench leg reads the full horizon.
+            ko_bench = self.combat.turns_to_ko_me(raw, opp_bodies, my_benched=True,
+                                                  my_bench=list(bench_after),
+                                                  reading=HARVEST_UNAVOIDABLE, **clock)
+        cid = raw.get("id")
+        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        return PromoteBody(
+            reach=reach,
+            # Gated on the same card rule: the race leg is still an ATTACK claim, and it REPLACES
+            # `reach` rather than adding to it, so leaving it live would re-introduce the turn-1
+            # damage the line above just refused.
+            wall_progress=self._promote_wall_progress(obs, board, raw) if can_swing else None,
+            accel_units=self._promote_accel_units(obs, board, raw) if can_swing else 0,
+            closure=self._promote_closure(obs, raw, draws=draws if can_swing else 0),
+            prizes=self._prize_value(raw),
+            ko_active=ko_active, ko_bench=ko_bench,
+            tempo_step=self._promote_tempo_step(raw),
+            denies_items=("item_lock" in tags and self._opp_items_live()),
+            opp_prizes_remaining=board.opp_prizes_remaining,
+            takes_ko=self._promote_body_kos(obs, board, raw))
+
+    def _promote_wall_progress(self, obs: dict, board: Board, raw: dict) -> float | None:
+        """ADR-0040's per-turn wall progress (``hp / t_star``) for a body promoted into a STANDING
+        WALL, or None when the wall does not stand and the body's reachable damage speaks for itself
+        (ADR-0073 §3a: "vs a standing wall the single hit is fake value — price the SEQUENCE").
+
+        Scoped to THIS body rather than `board.active_can_ko`, because the question is what B faces
+        after arriving. Returns None the moment B can Knock the defender Out: the KO is then the
+        tactical layer's (`_promote_ko_tactical`), and the residual must not re-price it.
+
+        Deliberately `hp / t_star` ALONE, without `_race_attack_tactical`'s incidental-chip terms:
+        that chip is a tie-break between the attacks of ONE body, and importing it here would let an
+        attack-choice tie-break reorder a BODY comparison."""
+        from common.strategy.objectives import race_values
+        if not getattr(self, "objectives_race", False):
+            return None
+        opp = self._opp_active(obs)
+        hp = (opp or {}).get("hp", 0)
+        cid = (raw or {}).get("id")
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not (hp and stat and stat.attacks):
+            return None
+        energy = len(raw.get("energies") or [])
+        table = {}
+        for aid in (stat.attacks or ()):
+            if self.combat.attack_cost(aid) > energy:
+                continue                              # not affordable on the Energy it carries
+            dmg = self.predicted_damage(cid, aid, opp)
+            if dmg <= 0:
+                continue
+            if dmg >= hp:
+                return None                           # no wall — B takes the KO, the KO layer's turf
+            table[aid] = (dmg, 0)                     # chip omitted deliberately (see docstring)
+        vals = race_values(table, hp)
+        if not vals:
+            return None
+        return hp / min(t_star for t_star, _chip in vals.values())
+
+    def _promote_accel_units(self, obs: dict, board: Board, raw: dict) -> int:
+        """Energy this body's accel rider would actually attach AND a recipient can actually USE —
+        the `_recover_units` count (ADR-0073 §3b).
+
+        `max` over the body's AFFORDABLE attacks, because it commits to one attack and picks the
+        best: `max` WITHIN the axis, per ADR-0069 §1. Retreating INTO Cinderace must credit what
+        attacking WITH Cinderace credits, which the shipped `_DIVIDEND = 5` under-paid ~45x."""
+        cid = (raw or {}).get("id")
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if not (stat and stat.attacks):
+            return 0
+        energy = len(raw.get("energies") or [])
+        best = 0
+        for aid in (stat.attacks or ()):
+            if self.combat.attack_cost(aid) <= energy:
+                best = max(best, self._recover_units(aid, {}, board, obs))
+        return best
+
+    def _promote_closure(self, obs: dict, raw: dict, *, draws: int) -> float:
+        """``max`` over attacks of ``damage(a) x [readiness_p(a | enabler) - readiness_p(a)]`` — the
+        odds that THIS turn's dig readies an unready body, priced as probability x the damage it
+        unlocks (ADR-0073 §5).
+
+        `_evolve_income_delta` is the wiring this copies, so it inherits that path's fixes rather
+        than re-earning them — notably `CountTriple.expected` rather than the raw triple, whose
+        absence silently zeroed three of ADR-0070's terms on every board (#167).
+
+        Three sub-rulings hold here. PER ATTACK, never ``attack_id=None`` (which asks the famine
+        question across ALL attacks — right for a boolean, wrong for a magnitude, since the reachable
+        attack may be the cheap one while the biggest damage belongs to the dear one). ONE Budget per
+        target body, at this site's ``target_benched``. And the draw window is SITE-DEPENDENT: the
+        caller passes ``draws=0`` at a forced promote, where no play window remains at all.
+
+        Fail-CLOSED at 0.0 throughout (ADR-0067): no dig, no enabler that would still pay, or an
+        already-ready body all earn nothing rather than bare draw odds. A body that ALREADY reaches
+        has ``Δ = 0``, which is what stops closure double-crediting readiness."""
+        from common.state_model import BodyView
+        model = self._state_model
+        mine = model.mine if model is not None else None
+        cid = (raw or {}).get("id")
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if draws <= 0 or mine is None or not (raw and stat and stat.attacks):
+            return 0.0
+        view = BodyView(raw, combat=self.combat, is_active=True)
+        pool = mine.deck_count
+        best = 0.0
+        for aid in (stat.attacks or ()):
+            dmg = float(self.combat.attack_damage(aid) or 0)
+            if dmg <= 0:
+                continue
+            base = mine.readiness_p(view, aid)
+            if base >= 1.0:
+                continue                              # already ready — no double credit
+            for etype, count in (mine.deck_energy_counts or {}).items():
+                # `expected` is the leg: a dig's odds ARE an estimate, and passing the CountTriple
+                # itself raises into `draw_hit_probability`'s "bad input -> 0.0" guard (#167).
+                copies = int(getattr(count, "expected", count) or 0)
+                enabler = self.combat.attach_budget(
+                    raw, mine.hand_ids, energy_attached=mine.energy_attached,
+                    supporter_played=mine.supporter_played,
+                    deck_energy_types=mine.deck_energy_types,
+                    hand_energy_types=frozenset(mine.hand_energy_types) | {etype},
+                    discard_energy_counts=mine.discard_energy_counts,
+                    target_benched=False,             # it is being promoted INTO the Active Spot
+                    more_prizes_than_opp=mine.more_prizes_than_opp)
+                p = mine.readiness_p(view, aid, enabler_budget=enabler, copies=copies,
+                                     pool=pool, draws=draws)
+                best = max(best, dmg * max(0.0, p - base))
+        return best
+
+    def _promote_tempo_step(self, raw: dict) -> float:
+        """``incoming(t=2) - incoming(t=1)`` against the body that would be my Active — ONE
+        development step's threat growth off the live Threat-Clock curve (ADR-0073 §6).
+
+        The curve's own docstring notes that `t` moves only the ENERGY budget, evolution reach being
+        maximal at `t=1`, so the delta IS one step. 0.0 without a snapshot (fail-closed)."""
+        model = self._state_model
+        if model is None or not raw:
+            return 0.0
+        ctx = getattr(self, "_opp_attack_context", None)
+        return float(max(0, model.theirs.incoming(raw, 2, context=ctx)
+                         - model.theirs.incoming(raw, 1, context=ctx)))
+
+    def _opp_items_live(self) -> bool:
+        """Does the opponent PROVABLY still hold live Item copies — the gate on `tempo_denied`
+        (ADR-0073 §6).
+
+        The shape of `_opp_switch_enabler`, but failing **CLOSED**: no facade, no functions table, no
+        matched Read or any error all mean NO CREDIT. That is the opposite fail direction from a
+        survival read, and it is the right one here because this term ENDORSES a play, and ADR-0067's
+        rule is fail-closed on yield. An item lock that denies nothing must not pay."""
+        if self.opponent is None or not self.stats:
+            return False
+        try:
+            odds = self.opponent.copies_left_odds()
+            if not odds:                              # unrecognised opponent — claim nothing
+                return False
+            return any(p > 0 for cid, p in odds.items()
+                       if (st := self.stats.get(cid)) is not None and st.is_item)
+        except Exception:
+            return False
+
+    def _promote_body_kos(self, obs: dict, board: Board, raw: dict) -> bool:
+        """Does this body take a Knock Out on arrival — ruling 5's provable-KO stand-down for the
+        fatal step (trading while ahead on the exchange is fine). The KO's own MAGNITUDE is not
+        priced here; that is `_promote_ko_tactical`'s, summed on the same option (§1, §11)."""
+        opp = self._opp_active(obs)
+        if not (opp and opp.get("hp") and raw):
+            return False
+        return self._best_affordable_ko_value(
+            obs, board, opp, raw.get("id"), len(raw.get("energies") or []), body=raw) > 0
+
+    def _turn_dig_depth(self, obs: dict) -> int:
+        """The cards this turn's REMAINING dig still puts within reach — the closure term's draw
+        window (ADR-0073 §5).
+
+        Summed over my in-play bodies whose draw/dig Ability is STILL ON THE MENU, because the menu
+        is the fact about whether a use is left (the same argument ADR-0070 §7 makes for
+        `body_ability_on_menu`). 0 when nothing is tagged or nothing is offered — fail-closed, and
+        automatically 0 at a forced promote, where the menu is a TO_ACTIVE select and no play window
+        remains at all (`docs/rulebook.txt` L173-176/L183)."""
+        if self.functions is None:
+            return 0
+        me = self._my_player(obs) or {}
+        bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
+        return sum(self.functions.dig_depth(b.get("id")) for b in bodies
+                   if b.get("id") is not None and self._ability_on_menu(obs, b.get("id")))
+
+    def _retreat_discard_choice(self, ma: dict, n: int) -> dict:
+        """``ma`` as it stands after a retreat discards ``n`` Energy — the GREEDY cheapest-to-lose
+        typed choice (ADR-0073 §8).
+
+        A Retreat Cost slot is COLOURLESS (`docs/rules.md` §89, rulebook.txt L142: "discard 1 Energy
+        for each ⟨C⟩"), so which Energy goes is genuinely ours to pick — and the engine poses a
+        `DISCARD_ENERGY` select over EVERY attached Energy to ask (verified in
+        `cgpy/turn.py:_pose_retreat_energy`). Competent play, not optimism: it sheds the unit whose
+        removal costs the least Build Standing first, which is off-type waste before matched slots."""
+        energies = list(ma.get("energies") or [])
+        for _ in range(min(max(0, int(n)), len(energies))):
+            keep = max(range(len(energies)),
+                       key=lambda i: self._build_standing(
+                           dict(ma, energies=energies[:i] + energies[i + 1:])))
+            energies.pop(keep)
+        return dict(ma, energies=energies)
+
+    def _retreat_side(self, obs: dict, board: Board, *, promoted_raw=None,
+                      card_worth: float = 0.0) -> RetreatSide | None:
+        """The A-side of a voluntary swap — the Active leaving the spot, and what leaving costs
+        (ADR-0073 §4 preservation, §8 retreat cost). None with no readable Active.
+
+        ``promoted_raw`` is the body coming up, so the bench A joins is the POST-SWAP one; the
+        preservation leg is a fact about the board A actually lands on, and reading A among its
+        current bench-mates would mis-price the Harvest exactly as ADR-0070 warned for the evolve
+        result. ``card_worth`` prices a switch-class ITEM instead of an Energy discard (§11's rider):
+        a Switch costs a CARD and no Energy, so it destroys no build."""
+        ma = self._my_active(obs)
+        if not ma:
+            return None
+        bench = self._my_bench_raws(obs)
+        bench_after = [b for b in bench if b is not promoted_raw] + [ma]
+        body = self._promote_body(obs, board, ma, draws=0, bench_after=bench_after)
+        if card_worth > 0.0:                          # a Switch Item pays a card, never a build
+            return RetreatSide(body=body, card_worth=float(card_worth))
+        n = self._effective_retreat_cost(obs, ma)
+        after = self._retreat_discard_choice(ma, n)
+        kept = list(after.get("energies") or [])
+        discarded = list(ma.get("energies") or [])
+        for eid in kept:                              # the multiset difference — what actually goes
+            if eid in discarded:
+                discarded.remove(eid)
+        # ADR-0069 §5c's resource premium: charged on worth ABOVE a reusable Basic, so a plain Basic
+        # pays nothing and only a one-shot is nudged. Sub-band — it orders equals.
+        premium = _ATTACH_RESOURCE_TIEBREAK * sum(
+            max(0.0, self._role_value(eid) - ENERGY_TIER) for eid in discarded)
+        return RetreatSide(body=body, build_before=self._build_standing(ma),
+                           build_after=self._build_standing(after), resource_premium=premium)
+
+    def _promote_retreat_decision(self, obs: dict, select: dict, board: Board, ctx, option: dict):
+        """The PROMOTE/RETREAT DECIDER: price ONE option (ADR-0073). Returns the per-option TERM row
+        — the decider's legible working — or None to abstain: the kill-switch is OFF, or this option
+        is neither a body PICK nor a whether-to-retreat action.
+
+        The three sites §9 names, all through ONE evaluator:
+
+        * **pick** (a TO_ACTIVE forced promote or a SWITCH retreat destination) — `promote_value(B)`
+          with NO A-side terms, because `preservation`/`retreat_cost` are constant across
+          destinations and could change no ordering there.
+        * **whether** (a native RETREAT at MAIN, or a switch-class Item PLAY) — the best destination's
+          `promote_value(B)` PLUS `preservation(A) - retreat_cost(A)`.
+        * **forced promote** — the pick site with the draw window at zero (§5).
+
+        That both sites run this one evaluator is what makes the shipped divergence — retreat BECAUSE
+        Cinderace is worth promoting, then promote Budew — structurally impossible rather than
+        merely fixed."""
+        if not getattr(self, "promote_retreat_value", False):
+            return None
+        sctx, otype = ctx.select_context, ctx.option_type
+        my_index = (obs.get("current") or {}).get("yourIndex", 0)
+        if sctx in (_TO_ACTIVE, _SWITCH):
+            if option.get("playerIndex") not in (None, my_index):
+                return None                           # a Boss's-gust target — the gust equation's turf
+            raw = self._option_pokemon(obs, select, option)
+            if not raw:
+                return None
+            # §5: the replacement Active is chosen right after the KO'ing attack resolves or at
+            # Checkup, and attacking ends the turn — so at a FORCED promote no play window remains.
+            draws = 0 if sctx == _TO_ACTIVE else self._turn_dig_depth(obs)
+            body = self._promote_body(obs, board, raw, draws=draws)
+            return self._promote_row(promote_value(PromoteRetreatInputs(body=body)), site="pick")
+        if sctx != _MAIN:
+            return None
+        is_switch_item = (otype == _PLAY and "switch" in (ctx.tags or []))
+        if otype != _RETREAT and not is_switch_item:
+            return None
+        # §11's rider: a switch-class ITEM is priced by the SAME equation as a manual retreat, with
+        # the card's Worth as the cost — the charter names "SWITCH-class retreats", and two of the
+        # deleted rungs fired on a `_PLAY` + `switch` option that the whether-site never saw.
+        worth = self._role_value(ctx.card_id) if is_switch_item else 0.0
+        draws = self._turn_dig_depth(obs)
+        best = None
+        for raw in self._my_bench_raws(obs):
+            if not raw or raw.get("id") is None:
+                continue
+            side = self._retreat_side(obs, board, promoted_raw=raw, card_worth=worth)
+            if side is None:
+                return None                           # no readable Active — make no claim
+            val = promote_value(PromoteRetreatInputs(
+                body=self._promote_body(obs, board, raw, draws=draws), retreat=side))
+            if best is None or val.total > best.total:
+                best = val
+        return None if best is None else self._promote_row(best, site="whether")
+
+    @staticmethod
+    def _promote_row(val, *, site: str) -> dict:
+        """The decider's per-option working (ADR-0008/0019 full working), rounded for the wire. This
+        DECIDES, so — like the attach and evolve rows — there is no agreement bit: one emission path,
+        one truth, and the substrate #146/#148 consume."""
+        return {"site": site, "tactical": val.total,
+                "my_yield": round(val.my_yield, 2), "closure": round(val.closure, 2),
+                "exposure": round(val.exposure, 2), "tempo_denied": round(val.tempo_denied, 2),
+                "fatal": round(val.fatal, 2), "preservation": round(val.preservation, 2),
+                "retreat_cost": round(val.retreat_cost, 2), "total": round(val.total, 2)}
+
+    def _promote_ko_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """KO_SCORE-class value for the body PICK that takes the prize — the pick site's own Knock-Out
+        layer (ADR-0073 §11), mirroring `_retreat_to_lethal_tactical`.
+
+        Rulings 4/5 defer wins to the Lethal Solver and provable KOs to the Turn Planner, but BOTH are
+        MAIN-only (`planner.py:283`; `_retreat_to_lethal_tactical` fires only on a `_RETREAT` option).
+        At a TO_ACTIVE/SWITCH body pick those owners DO NOT EXIST, so a strictly sub-lethal equation
+        would promote the body that hits hardest over the body that takes the prize.
+
+        Load-bearing at the two selects for DIFFERENT reasons:
+
+        * **SWITCH — REALISATION, not a new decision.** The KO comparison already happened at MAIN,
+          but `_retreat_to_lethal_tactical` takes a `max` over the bench and returns only a NUMBER —
+          it never says WHICH body won. A sub-lethal pick could therefore retreat *because* Mega
+          Lucario ex takes the Knock Out and then promote Cinderace. Both sites calling
+          `best_affordable_ko_value` makes the pick land on the body that justified the retreat:
+          consistency by construction, §9's argument applied to the KO layer.
+        * **TO_ACTIVE — a fresh claim.** Their attack Knocked our Active out and attacking ends the
+          turn (`docs/rules.md` §5), so per `docs/rulebook.txt` L176 we promote, their turn ends, and
+          OUR turn starts with only the Checkup between — the promoted body swings against
+          essentially the same board.
+
+        Decision 1's split is preserved exactly: the KO DELTA is tactical, the sub-lethal residual is
+        the equation's, and they SUM on the option. No new constant.
+
+        Rides the SAME `promote_retreat_value` kill-switch as the equation, because it is half of one
+        replacement: it takes over from `promote-the-ko-attacker` (+45) and
+        `promote-the-accelerator-for-the-ko` (+50), both DELETED. Gating it separately would make OFF
+        an incoherent state — a body pick with a KO layer but no residual, which is neither the old
+        agent nor the new one. (This supersedes the `promote_ko_aware` kill-switch for SCORING; that
+        flag now only feeds `board.ko_promote_slot`'s Context reads.)"""
+        if not getattr(self, "promote_retreat_value", False):
+            return 0.0
+        if select.get("context") not in (_TO_ACTIVE, _SWITCH):
             return 0.0
         my_index = (obs.get("current") or {}).get("yourIndex", 0)
         if option.get("playerIndex") not in (None, my_index):
-            return 0.0            # a Boss's-gust target (opponent body) — the gust-value equation's turf
-        board = ctx.board
-        tags, roles = (ctx.tags or []), (ctx.roles or [])
-        is_switch = ctx.select_context == _SWITCH
-        retreat_worth, stay_yield = self._retreat_side(obs) if is_switch else (0.0, 0.0)
-        can_attack = self._promote_can_attack(obs, select, option)
-        fetch_p = (self._promote_fetch_p(obs, select, board, option)
-                   if (ctx.card_is_wincon and not can_attack) else 0.0)
-        item_lock_live = self._item_lock_live(tags, board)   # Sweep #2 Finding A: early-game gate
-        inp = PromoteRetreatInputs(
-            is_switch=is_switch,
-            can_attack_now=can_attack,
-            is_wincon=ctx.card_is_wincon,
-            is_best_target=ctx.is_best_promote_target,
-            is_staller=("opener" in tags or item_lock_live),
-            is_accelerator=("accel_source" in roles),
-            bench_underpowered=(board.bench_wincon_underpowered and board.basic_energy_in_deck),
-            provable_ko=(ctx.promote_target_kos or ctx.is_ko_promote_target),
-            prize_value=ctx.card_prize_value,
-            opp_can_punish=not board.opp_cannot_punish_wincon,
-            opp_prizes_remaining=board.opp_prizes_remaining,
-            on_their_path=ctx.promote_target_on_their_path,
-            is_item_lock=item_lock_live,
-            fetch_enables_p=fetch_p,
-            retreat_energy_worth=retreat_worth,
-            stay_yield=stay_yield)
-        return promote_retreat_value(inp).total
-
-    def _promote_retreat_record(self, obs: dict, select: dict, board: Board, options: list,
-                                traces: list, chosen: list):
-        """The promote/retreat value shadow (the fifth shadow), two emission SITES. DECIDES NOTHING;
-        None mid-sim (`self._planning`) — the disagreement rows the swap-ranking sweep reads.
-
-        - **pick** (TO_ACTIVE/SWITCH own-retreat select): every option's two-sided window-rollout total
-          (per-option on `OptionTrace.promote_retreat_shadow`) + the top pick + the agreement bit vs the
-          shipped rungs' `chosen`. None off a <2-option select or a Boss's-gust target (opponent bodies).
-        - **whether** (MAIN select with a native RETREAT option): the value of retreating the Active into
-          the BEST benched body (`_retreat_action_value`, ruling 1 — `stay_yield` live here) + the
-          SIGN-agreement bit (retreat-worth-it vs did the ladder retreat). This is where the Group-A
-          "whether to retreat" mass lives — invisible to the pick site."""
-        if self._planning:
-            return None
-        ctx = select.get("context")
-        my_index = (obs.get("current") or {}).get("yourIndex", 0)
-        if ctx in (_TO_ACTIVE, _SWITCH):
-            if len(options) < 2 or (options and options[0].get("playerIndex") not in (None, my_index)):
-                return None                              # <2 options, or a gust-target (opponent) select
-            rows = [{"i": i, "v": round(t.promote_retreat_shadow, 2)} for i, t in enumerate(traces)]
-            eq_pick = max(range(len(traces)), key=lambda i: traces[i].promote_retreat_shadow)
-            return {"site": "pick", "eq": rows, "eq_pick": eq_pick, "picks": sorted(chosen or []),
-                    "agree": eq_pick in (chosen or [])}
-        if ctx == _MAIN:
-            retreat_idx = next((i for i, o in enumerate(options) if o.get("type") == _RETREAT), None)
-            if retreat_idx is None:
-                return None                              # no retreat action on the menu
-            # Sweep #2 Finding B1: when the Active can KO the opp Active NOW, staying-and-KOing and
-            # retreating-into-a-bigger-KO+snipe are BOTH on the table — a KO-vs-KO comparison the Turn
-            # Planner owns (ruling 5), and the sub-lethal shadow cannot adjudicate (ep82717711-37's
-            # correct retreat-to-finisher scores the SAME +30 as ep82750161-59's wrong pivot). The
-            # shadow RECUSES itself rather than guess.
-            if board.active_can_ko:
-                return None
-            value = self._retreat_action_value(obs, board)
-            if value is None:
-                return None                              # no benched body to retreat into
-            worth_it = value > 0.0
-            ladder_retreated = retreat_idx in (chosen or [])
-            return {"site": "whether", "retreat_idx": retreat_idx, "value": round(value, 2),
-                    "worth_it": worth_it, "ladder_retreated": ladder_retreated,
-                    "agree": worth_it == ladder_retreated}
-        return None
-
-    def _retreat_action_value(self, obs: dict, board: Board) -> float | None:
-        """Ruling 1's whether-to-retreat value at a MAIN menu: the BEST two-sided window-rollout total
-        over every benched body the Active could retreat into, MINUS the retreat Energy and the Active's
-        forgone attack (`_retreat_side` — constant across destinations). > 0 ⇒ retreating out-earns
-        staying-and-attacking. None with no benched body. The destination readiness/exposure legs are
-        computed off each body directly (valid without a per-option Context)."""
-        me = self._my_player(obs)
-        bench = (me.get("bench") or []) if me else []
-        wincon = self._wincon_set()
-        best_slot = board.best_promote_slot
-        retreat_worth, stay_yield = self._retreat_side(obs)
-        best = None
-        for i, b in enumerate(bench):
-            bid = b.get("id") if b else None
-            if bid is None:
-                continue
-            stat = self.stats.get(bid) if self.stats else None
-            tags = self.functions.tags(bid) if self.functions else []
-            can_attack = bool(stat and stat.minAttackCost is not None
-                              and len(b.get("energies") or []) >= stat.minAttackCost)
-            item_lock_live = self._item_lock_live(tags, board)   # Sweep #2 Finding A: early-game gate
-            inp = PromoteRetreatInputs(
-                is_switch=True,
-                can_attack_now=can_attack,
-                is_wincon=(bid in wincon),
-                is_best_target=(best_slot == (_BENCH, i)),
-                is_staller=("opener" in tags or item_lock_live),
-                is_accelerator=("accel_source" in self._roles_of(bid)),
-                bench_underpowered=(board.bench_wincon_underpowered and board.basic_energy_in_deck),
-                provable_ko=(board.ko_promote_slot == (_BENCH, i)),
-                prize_value=self._prize_value(b),
-                opp_can_punish=not board.opp_cannot_punish_wincon,
-                opp_prizes_remaining=board.opp_prizes_remaining,
-                on_their_path=False,
-                is_item_lock=item_lock_live,
-                retreat_energy_worth=retreat_worth,
-                stay_yield=stay_yield)
-            total = promote_retreat_value(inp).total
-            if best is None or total > best:
-                best = total
-        return best
-
-    def _promote_fetch_p(self, obs: dict, select: dict, board: Board, option: dict) -> float:
-        """Ruling 3 (EV over closure): P that the closure READIES an unready wincon promote target THIS
-        turn. Interim = the CERTAIN one-attach-short accel case, reusing the body-agnostic
-        `_active_attack_payable_via_accel` (a playable `tutor_energy` in hand + a Basic Energy the deck
-        holds → one accel-attach reaches the cheapest attack) pointed at the promote body — sound and
-        fail-CLOSED (0.0 on unknowns / multi-attach-short). The probabilistic MIDDLE (drawing a
-        not-yet-held enabler over the turn's remaining dig) is deferred to the shared self reachable-attach
-        affordability oracle (the f70 finding in valuation-systems-coverage-review.md, symmetric to
-        ADR-0064 `reachable_incoming`); until it lands this returns 1.0/0.0, never a partial."""
-        poke = self._option_pokemon(obs, select, option)
-        if not poke:
+            return 0.0                                # a gust target (opponent body), not my pick
+        opp = self._opp_active(obs)
+        if not (opp and opp.get("hp")):
             return 0.0
-        me = self._my_player(obs)
-        state = obs.get("current") or {}
-        payable = self._active_attack_payable_via_accel(
-            me, poke, bool(state.get("supporterPlayed")), board.basic_energy_in_deck)
-        return 1.0 if payable else 0.0
-
-    def _item_lock_live(self, tags, board: Board) -> bool:
-        """Whether an `item_lock` body's disruption is worth crediting NOW (Sweep #2 Finding A). Itchy
-        Pollen denies the opponent's SETUP Items — valuable while they still depend on them (early game),
-        near-worthless once they're built. Proxied by `board.turn <= _ITEM_LOCK_EARLY_TURN`; a candidate
-        to replace with a real opponent-Item-reliance read. Without this the tempo/staller credit fired
-        UNCONDITIONALLY (a flat +27 retreat-into-Budew on every dragapult frame — ep86091435 f30/35/96)."""
-        return "item_lock" in tags and board.turn <= _ITEM_LOCK_EARLY_TURN
-
-    def _promote_can_attack(self, obs: dict, select: dict, option: dict) -> bool:
-        """Context-agnostic readiness for the shadow: the option's benched body can use an attack this
-        turn (Energy >= its cheapest attack cost). Unlike `ctx.promote_target_can_attack` (which
-        fail-closes off TO_ACTIVE), this is valid on a SWITCH retreat too — the readiness leg must live
-        for the voluntary-retreat family. Same minAttackCost logic the ladder's TO_ACTIVE flag uses."""
-        if select.get("context") not in (_TO_ACTIVE, _SWITCH):
-            return False
-        poke = self._option_pokemon(obs, select, option)
-        cid = (poke or {}).get("id")
-        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if not (poke and stat and stat.minAttackCost is not None):
-            return False
-        return len(poke.get("energies") or []) >= stat.minAttackCost
-
-    def _retreat_side(self, obs: dict) -> tuple[float, float]:
-        """The voluntary-retreat side terms for the shadow: (retreat_energy_worth, stay_yield). The
-        Energy the current Active pays to retreat (its effective cost x ENERGY_TIER — lost on retreat),
-        and the sub-lethal attack it FORGOES by leaving (ruling 1), priced by the SAME `my_yield` term
-        the equation applies to a promote target so the currency is consistent. Both 0.0 on an unknown
-        Active. A KO the Active could land by staying is the planner's (ruling 5); this reads only the
-        readiness band, so it never carries a lethal magnitude."""
-        from common.card_worth import ENERGY_TIER
-        ma = self._my_active(obs)
-        if not ma or not self.stats:
-            return 0.0, 0.0
-        retreat_worth = self._effective_retreat_cost(ma) * ENERGY_TIER
-        aid = ma.get("id")
-        can_attack = self._typed_can_pay(self._valued_attack_types(aid), ma.get("energies") or [])
-        is_wincon = aid is not None and aid in self._wincon_set()
-        stay = promote_retreat_value(PromoteRetreatInputs(
-            can_attack_now=can_attack, is_wincon=is_wincon, is_best_target=is_wincon)).my_yield
-        return retreat_worth, stay
+        raw = self._option_pokemon(obs, select, option)
+        if not raw:
+            return 0.0
+        return self._best_affordable_ko_value(
+            obs, board, opp, raw.get("id"), len(raw.get("energies") or []), body=raw)
 
     def _my_active(self, obs: dict) -> dict | None:
         """My Active Pokémon dict (mirror of `_opp_active`)."""
@@ -2140,21 +2352,61 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         actives = players[yi].get("active") or []
         return actives[0] if actives and actives[0] else None
 
-    def _effective_retreat_cost(self, ma: dict | None) -> int:
-        """The Active's Retreat Cost in Energy, minus any ATTACHED retreat-reduction Tool (Air Balloon
-        −2, `retreatReduction`) — the count of Energy a retreat discards. READ-ONLY (mirrors the cost
-        arithmetic of `_can_retreat` without its affordability verdict); 0 on an unknown stat."""
+    def _effective_retreat_cost(self, obs: dict, ma: dict | None) -> int:
+        """The Active's Retreat Cost in Energy — the count of Energy a retreat actually discards, and
+        so (ADR-0073 §8) the size of the build a retreat destroys. READ-ONLY (mirrors the cost
+        arithmetic of `_can_retreat` without its affordability verdict); 0 on an unknown stat.
+
+        Three grant shapes, all fail-CLOSED — an unreadable or unmodelled grant charges the PRINTED
+        cost, erring toward not retreating and never toward the retreat-happy pathology:
+
+        1. a flat attached-Tool reduction (Air Balloon −2, `retreatReduction`);
+        2. a CONDITIONAL attached Tool (`retreatFreeAtHp` — Rescue Board zeroes the cost outright once
+           the holder is down to 30 HP or less);
+        3. a BOARD-LEVEL Ability on ANOTHER of my bodies (`retreatFreeGrant` — Latias ex's Skyliner
+           gives every Basic of mine no Retreat Cost, and `slowking` runs it).
+
+        Shape 3 is why this now takes ``obs``: the granting body is not the body retreating, so no
+        per-card read could ever see it. Under the old flat `x ENERGY_TIER` pricing a missed
+        reduction cost 8 points; under the convex build delta, over-charging one Energy on a 3-slot
+        attacker is `(3/3)^2 - (2/3)^2 = 5/9 x maxDamage` ~ **117 damage of phantom cost**, and it
+        would be systematic on an archetype built around free-retreat pivoting."""
         if not ma or not self.stats:
             return 0
         stat = self.stats.get(ma.get("id"))
         if stat is None:
             return 0
         cost = getattr(stat, "retreatCost", 0)
+        hp = ma.get("hp") or 0
         for tool in (ma.get("tools") or []):
             tid = tool.get("id") if isinstance(tool, dict) else tool
             tstat = self.stats.get(tid) if tid is not None else None
-            cost -= getattr(tstat, "retreatReduction", 0) if tstat is not None else 0
+            if tstat is None:
+                continue
+            free_at = getattr(tstat, "retreatFreeAtHp", 0)
+            if free_at and hp and hp <= free_at:
+                return 0                                  # Rescue Board on a damaged holder
+            cost -= getattr(tstat, "retreatReduction", 0)
+        if cost > 0 and self._retreat_free_granted(obs, ma, stat):
+            return 0
         return max(0, cost)
+
+    def _retreat_free_granted(self, obs: dict, ma: dict, stat) -> bool:
+        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0073 §8)?
+
+        The predicate travels WITH the grant (`CardStat.retreatFreeGrant`), so adding a card adds a
+        parse and a predicate rather than a call-site special case. Unknown predicate → False, which
+        is the fail-closed direction: we charge the printed cost."""
+        me = self._my_player(obs) or {}
+        bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
+        for body in bodies:
+            gstat = self.stats.get(body.get("id")) if body.get("id") is not None else None
+            grant = getattr(gstat, "retreatFreeGrant", None) if gstat is not None else None
+            if grant == "basic" and (getattr(stat, "stage", None) or "").lower() == "basic":
+                return True
+            if grant == "metal_attached" and self._attached_type_counts(ma).get(_METAL):
+                return True
+        return False
 
     def _valued_attack_types(self, cid) -> tuple:
         """The TYPED cost (per-slot EnergyType codes; 0 = colourless) of a card's biggest-damage attack

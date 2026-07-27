@@ -124,6 +124,18 @@ def test_retreat_into_ready_wincon_to_take_the_ko():
     assert pilot.decide(obs) == [1]                                  # retreat into it
 
 
+
+def _lethal_only(trace) -> float:
+    """The RETREAT-to-lethal layer's own contribution, with the promote/retreat decider's residual
+    netted out.
+
+    `OptionTrace.tactical` is a SUM across layers (ADR-0069 §1: `max` within an axis, sum across),
+    and since ADR-0073 (#141) a RETREAT option also carries the promote/retreat decider's Sub-lethal
+    Residual. These frames are about whether the LETHAL lookahead fires, so pinning the total would
+    now assert two claims at once and fail on the one it never meant to make."""
+    row = trace.promote_retreat_working
+    return trace.tactical - (row["tactical"] if row is not None else 0.0)
+
 @pytest.mark.req("REQ-GEN-0050")
 def test_retreat_lethal_stands_down_when_no_benched_wincon_can_ko():
     """The lookahead never forfeits a KO: when no ready benched wincon can KO the opponent's Active,
@@ -135,7 +147,7 @@ def test_retreat_lethal_stands_down_when_no_benched_wincon_can_ko():
                 opp_active=poke(OPP, hp=10))
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert traces.options[1].tactical == 0                           # retreat carries no lethal value
+    assert _lethal_only(traces.options[1]) == 0                      # retreat carries no lethal value
     assert pilot.decide(obs) == [0]                                  # take the Active's KO instead
 
 
@@ -146,7 +158,7 @@ def test_retreat_lethal_does_not_fire_when_the_active_is_the_wincon():
     cur = state(active=poke(WINCON, energy=3, hp=330),
                 bench=[poke(WINCON, energy=3, hp=330)], opp_active=poke(OPP, hp=10))
     obs = make_select([attack_opt(11), opt(RETREAT), opt(END)], context=0, current=cur)
-    assert pilot.explain(obs).options[1].tactical == 0
+    assert _lethal_only(pilot.explain(obs).options[1]) == 0
 
 
 @pytest.mark.req("REQ-GEN-0050")
@@ -162,7 +174,7 @@ def test_retreat_lethal_stands_down_when_the_active_already_takes_an_equal_ko():
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
     assert traces.options[0].tactical >= KO_SCORE                    # Active's own attack is a KO
-    assert traces.options[1].tactical == 0                           # retreat carries no EXTRA value -> stand down
+    assert _lethal_only(traces.options[1]) == 0                      # no EXTRA value -> stand down
     assert pilot.decide(obs) == [0]                                  # just attack with the Active
 
 

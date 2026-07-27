@@ -51,12 +51,13 @@ def _fired_ids(option):
 def test_f31_promote_item_lock_staller_over_bare_stage0_base():
     """CRITICAL f31: Active KO'd; bench = [Stage-0 Dreepy(1e), Budew, Dunsparce], Dragapult ex in
     hand. The bench pre-evo is TWO hops from ready, so `_evolve_to_ready_wincon_available` stands
-    down -> `prefer-wincon-line-piece` drops the bare Dreepy and `promote-the-staller` (item_lock)
-    brings up Budew, keeping the fragile Dreepy line safe."""
+    down -> `prefer-wincon-line-piece` drops the bare Dreepy and the promote/retreat decider brings
+    up Budew, keeping the fragile Dreepy line safe."""
     fx = _fixture("dragapult_promote_over_fragile_base_f31")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [1] Budew, not [0] the bare Dreepy
-    assert "promote-the-staller" in _fired_ids(dec.options[fx["correct"][0]])
+    # `promote-the-staller` is DELETED (ADR-0073 §6a): a disposable staller decomposes with no
+    # remainder into terms the decider already builds, so the pick is emergent rather than runged.
 
 
 @pytest.mark.req("REQ-GEN-0073")

@@ -118,6 +118,18 @@ PROFILE = {
                                     # an EMERGENCY LEVER, not a comparison baseline: OFF is documented
                                     # degraded mode (attach endorsements silent, only the three
                                     # structure rungs speak), never a rollback to the deleted pile.
+    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER, shipped ON 2026-07-27 (ADR-0073, #141):
+                                    # the Sub-lethal Residual — `my_yield + closure − exposure +
+                                    # tempo_denied − fatal`, plus `preservation − retreat_cost` at the
+                                    # whether-site — in the same damage currency as the attach and evolve
+                                    # marginals, at a DERIVED 100 damage/prize. ONE evaluator serves the
+                                    # body pick, the whether-to-retreat question and the forced promote,
+                                    # which is what makes the two-site divergence structurally impossible.
+                                    # Eleven of the twelve promote/retreat rungs are DELETED (only
+                                    # `retreat-to-wall-the-line` survives, as #165's Maneuver), so OFF is
+                                    # documented DEGRADED MODE, not a rollback: promote/retreat goes quiet
+                                    # and only the surviving Maneuver rung speaks. An incident lever,
+                                    # never a comparison baseline.
     "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: behind a γ-matched Brief
                                     # (and no discard-recur fuel) a worst-case `active_doomed` cry
                                     # stands only if the CHARGED Threat-Clock curve confirms it

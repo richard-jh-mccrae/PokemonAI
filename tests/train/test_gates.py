@@ -39,6 +39,10 @@ def test_lane_constants_match_the_engine_enums():
     assert EVOLVE_LANE == ((int(OptionType.EVOLVE), None),)
     assert gates.ATTACH_LANE == ((int(OptionType.ATTACH), None),
                                  (int(OptionType.CARD), int(SelectContext.ATTACH_FROM)))
+    assert gates.SELECT_CONTEXT_SWITCH == int(SelectContext.SWITCH)
+    assert gates.SELECT_CONTEXT_TO_ACTIVE == int(SelectContext.TO_ACTIVE)
+    assert gates.PROMOTE_LANE == ((int(OptionType.CARD), int(SelectContext.SWITCH)),
+                                  (int(OptionType.CARD), int(SelectContext.TO_ACTIVE)))
 
 
 @pytest.mark.req("REQ-TRAIN-0040")

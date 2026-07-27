@@ -16,6 +16,8 @@ from dataclasses import dataclass
 # the private builders through this module — keep every name bound here.
 from .card_text import (  # noqa: F401
     _parse_tool_hp_bonus,
+    _parse_retreat_free_grant,
+    _parse_tool_retreat_free_at_hp,
     _parse_tool_retreat_reduction,
     parse_attack_bench_requirement,
     parse_attack_bench_snipe,
@@ -59,6 +61,18 @@ class CardStat:
                                        # {C}{C} -> 2), parsed from skill text. The SECOND Tool class the
                                        # ADR-0028 doctrine never modelled: worthless on a body that will
                                        # never retreat, so it belongs on the Active (ml f87). 0 otherwise.
+    retreatFreeAtHp: int = 0           # remaining HP at or below which an attached Tool zeroes the
+                                       # holder's Retreat Cost outright (Rescue Board: 30) — the
+                                       # CONDITIONAL leg the flat read above could not carry
+                                       # (ADR-0073 §8). 0 = no such clause.
+    retreatFreeGrant: str | None = None  # a BOARD-LEVEL Ability granting no Retreat Cost, as the
+                                       # predicate it scopes to: "basic" (Latias ex's Skyliner —
+                                       # `slowking` runs it), "metal_attached" (Archaludon). The
+                                       # granting body is not the one retreating, so no per-card
+                                       # field could hold it and the engine supplies nothing
+                                       # (`retreatCost` is CardData-only and static). None = no
+                                       # readable grant, and the caller then charges the PRINTED
+                                       # cost — fail-CLOSED, erring toward not retreating.
     recoil: int = 0                    # self-damage of card's HIGHEST-dmg attack (Hariyama Wild Press 210 -> 70),
                                        # parsed from text (no engine field). Feeds "does my nuke leave a free KO?"
     handSizeDamage: int = 0            # per-card dmg of "for each card in hand" atk (Powerful Hand: 2ctr=20);
@@ -405,6 +419,8 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # Pokémon w/ Ability skill
             hpBonus=_parse_tool_hp_bonus(c),
             retreatReduction=_parse_tool_retreat_reduction(c),
+            retreatFreeAtHp=_parse_tool_retreat_free_at_hp(c),
+            retreatFreeGrant=_parse_retreat_free_grant(c),
             stage2=bool(getattr(c, "stage2", False)),
             damageBoost=boost, damageBoostType=boost_type, damageBoostVsEx=boost_vs_ex,
             recoil=int(recoil),

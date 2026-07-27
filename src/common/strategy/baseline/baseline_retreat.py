@@ -1,85 +1,52 @@
-"""BASELINE cluster: RETREAT — the open-menu Retreat decision (ADR-0025). Hold position while setting
-up; retreat a spent body into a ready benched win-condition; swap out a cooldown-locked attacker.
+"""BASELINE cluster: RETREAT — the open-menu Retreat decision (ADR-0025).
+
+**One rung survives ADR-0073 (#141).** The promote/retreat DECIDER
+(`common/promote_retreat_value.py`) now answers the whether-to-retreat question as the Sub-lethal
+Residual, so four of the five rungs are DELETED:
+
+* `retreat-to-ready-attacker` (+60) and `swap-out-the-locked-attacker` (+35) → EMERGENT from
+  destination value minus retreat cost: a ready benched attacker simply scores more `my_yield` than
+  the Active's own option, and a transient-locked attack scores LESS on its own option, so the swap
+  wins without a rung asserting it.
+* `dont-play-switch-for-no-gain` (−8) → EMERGENT: a switch that gains nothing has a destination value
+  no better than staying, and now pays the card's Worth as `retreat_cost`, so it nets below End
+  without a penalty rung. Switch-class Items are priced by the same equation as a manual retreat
+  (ADR-0073 §11's rider).
+* `hold-position-in-setup` (−25) → DELETED on an emergence argument: a setup retreat pays real
+  `retreat_cost` for a destination that is not yet worth promoting, so the equation should decline it
+  on its own. **This is flagged in ADR-0073 as the WEAKEST claim in the ruling — the one deletion with
+  no worked frame behind it — and is the most likely to return as a ruled flip at the Decision Gate.**
+  Treat a regression here as expected rather than surprising.
+
+`retreat-to-wall-the-line` SURVIVES because it is not a value claim at all: it is step 1 of a
+dependent **Maneuver** (retreat → promote the wall → item-lock → develop behind cover), and a
+per-option value equation structurally cannot price a chain whose payoff lands on later steps. Owner
+**#165** (the Turn Planner), per ADR-0070 amendment J's layer-ownership test.
+
 Pure data, no Mixin.
 """
-from common.strategy.context import _MAIN, _PLAY, _RETREAT
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.context import _MAIN, _RETREAT
+from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
-    Hypothesis(
-        id="hold-position-in-setup",
-        rationale="During setup, don't retreat the Active — it's still your starter/accelerator and "
-                  "a setup retreat wastes the whole turn. Discourages Retreat at the open turn menu "
-                  "while Plan is SETUP. Stands down for the sacrificial-wall maneuver "
-                  "(`can_wall_line_with_disruptor`): there the setup retreat is DELIBERATE (wall the "
-                  "fragile line behind a benched item-lock disruptor), not a wasted turn.",
-        when=lambda c: not c.board.line_ready and c.select_context == _MAIN
-        and c.option_type == _RETREAT
-        and not (c.board.can_wall_line_with_disruptor or c.board.can_lock_line_with_disruptor),
-        weight=-25, status="testing"),
     Hypothesis(
         id="retreat-to-wall-the-line",
         rationale="The retreat-to-promote-the-sacrificial-wall maneuver (dragapult f32/f20): when my Active "
                   "is a fragile developing win-condition LINE pre-evo, a benched `item_lock` disruptor "
                   "(Budew) can be promoted as a sacrificial wall, and the opponent's Active can damage the "
                   "line NOW (`can_wall_line_with_disruptor`), RETREAT it — pull the fragile line to the "
-                  "Bench to safety, promote the item-lock wall (`promote-the-staller` picks it at the "
-                  "follow-up SWITCH), and evolve + energize the line behind cover while the opponent is "
-                  "item-locked. Step 1 of a multi-step turn: `_finish_turn_last` rides this retreat TIER-0 "
-                  "(ahead of a free evolve / Item strip) so it happens FIRST, and `hold-position-in-setup` "
-                  "stands down under the same premise. Silent for decks without a benched item-lock opener. "
-                  "Budew is sacrificial by design — the opponent KOs it next turn, having bought a locked "
-                  "tempo turn while the win-condition line assembles safely. Also fires for the OFFENSIVE "
-                  "variant (`can_lock_line_with_disruptor`, dragapult f20): early-game, retreat a "
-                  "nothing-better-to-do line-preevo into the item-lock to deny the opponent's Item turn "
-                  "even with no incoming damage.",
+                  "Bench to safety, promote the item-lock wall, and evolve + energize the line behind cover "
+                  "while the opponent is item-locked. Step 1 of a multi-step turn: `_finish_turn_last` rides "
+                  "this retreat TIER-0 (ahead of a free evolve / Item strip) so it happens FIRST, and the "
+                  "promote + item-lock + develop follow on later frames. Silent for decks without a benched "
+                  "item-lock opener. Budew is sacrificial by design — the opponent KOs it next turn, having "
+                  "bought a locked tempo turn while the win-condition line assembles safely. Also fires for "
+                  "the OFFENSIVE variant (`can_lock_line_with_disruptor`, dragapult f20): early-game, retreat "
+                  "a nothing-better-to-do line-preevo into the item-lock to deny the opponent's Item turn "
+                  "even with no incoming damage. SURVIVES the ADR-0073 rung deletion precisely because it is "
+                  "a MANEUVER and not a value claim: the payoff lands on the LATER steps, which a per-option "
+                  "equation cannot see. Owner #165.",
         when=lambda c: c.select_context == _MAIN and c.option_type == _RETREAT
         and (c.board.can_wall_line_with_disruptor or c.board.can_lock_line_with_disruptor),
         weight=30, status="assumed"),
-    Hypothesis(
-        id="retreat-to-ready-attacker",
-        rationale="When Active isn't the win-condition and a benched wincon is already powered to "
-                  "attack, retreat into it. Weighted to beat a weak chip from the spent Active but "
-                  "never a real attack or KO (a lethal always wins on tactical).",
-        when=lambda c: c.select_context == _MAIN and c.option_type == _RETREAT
-        and c.board.bench_wincon_ready and not c.board.active_is_wincon,
-        weight=60, status="testing"),
-    Hypothesis(
-        id="swap-out-the-locked-attacker",
-        rationale="When your Active's BIG attack is transient-locked this turn — it used a \"can't use "
-                  "<this attack> during your next turn\" nuke last turn (Mega Brave class, ADR-0033) — "
-                  "and a benched win-condition is already powered (`bench_wincon_ready`), swap: Retreat "
-                  "or play a `switch` Item so the FRESH copy attacks at full strength while the locked "
-                  "one cools down on the Bench (the lock is serial-bound, so leaving the Active clears "
-                  "it). The dual-Mega cadence: two powered Megas + a swap = the nuke EVERY turn instead "
-                  "of every other. `retreat-to-ready-attacker` can't cover this (it stands down when the "
-                  "Active IS the wincon); the new-Active pick is `promote-the-ready-wincon` at the SWITCH "
-                  "select. Fires on both the Retreat option and a `switch`-tagged PLAY (Switch Item — "
-                  "free, keeps the attached Energy and the Tool slot); if the Active's affordable "
-                  "lock-free attack still KOs, that KO wins on tactical regardless.",
-        when=lambda c: c.select_context == _MAIN
-        and (c.option_type == _RETREAT or (c.option_type == _PLAY and "switch" in c.tags))
-        and c.board.active_best_attack_locked and c.board.bench_wincon_ready,
-        weight=35, status="assumed"),
-    Hypothesis(
-        id="dont-play-switch-for-no-gain",
-        rationale="Don't play a free `switch` Item (Switch — swap the Active for a benched body) when there "
-                  "is NO sanctioned switch motive: the Active is not doomed (`not active_doomed`), there is "
-                  "no ready benched win-condition to promote (`not bench_wincon_ready`) and no "
-                  "transient-locked big attacker to swap out (`not active_best_attack_locked`) — so the swap "
-                  "only trades tempo away. Covers BOTH a bare board-equivalent swap (an unpowered Riolu for "
-                  "an unpowered Riolu, ml f30: CRITICAL) AND — the reason the old `my_active_energy == 0` "
-                  "guard was dropped — switching OFF an ENERGIZED Active that is exactly the opener we want "
-                  "(ml f14: CRITICAL — Switch benched an energized Solrock, promoting an unpowered Lunatone "
-                  "and breaking Cosmic Beam's Lunatone-on-Bench requirement). A no-gain switch is wasteful "
-                  "regardless of active energy, more so when energized. Play Switch and End both scored 0, so "
-                  "the option-index tie-break took the wasteful Switch; −8 nets it below End (0). Guarded by "
-                  "the ABSENCE of every sanctioned switch motive (`retreat-to-ready-attacker` / "
-                  "`swap-out-the-locked-attacker` / a doomed-Active interpose or escape), so a beneficial "
-                  "switch (promote a ready attacker, swap a locked nuke, escape/wall a doomed Active) is "
-                  "never suppressed.",
-        when=lambda c: c.select_context == _MAIN and c.option_type == _PLAY and "switch" in c.tags
-        and not c.board.active_doomed
-        and not c.board.bench_wincon_ready and not c.board.active_best_attack_locked,
-        weight=-8, status="assumed"),
 ]

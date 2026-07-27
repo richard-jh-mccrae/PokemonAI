@@ -1,9 +1,23 @@
-"""Promote with forward search (the b7e483a promote blunders).
+"""Promote with forward search (the b7e483a promote blunders) — now DECIDER claims (ADR-0073, #141).
 
-`promote-the-accelerator-for-the-ko`: bring up an accelerator that can KO the Active (it takes the
-prize AND loads the benched win-condition) over the win-condition itself. `promote-the-staller` +
-the `evolve_to_ready_wincon_available` gate: don't promote a BARE pre-evolution to evolve a dead
-0-Energy wincon — promote the staller instead.
+The three doctrines these frames encode all survive the rung deletion as EMERGENT properties of the
+promote/retreat decider, so every test asserts the DECISION and none asserts a rung firing:
+
+* bring up an accelerator that can Knock the Active Out over the win-condition itself — emergent from
+  `my_yield`, where §3b makes the accel dividend a MEASURED `_recover_units` count at `ENERGY_RECOVER`
+  rather than a flat `+50` on an `accel_source` role tag. The Knock-Out half is `_promote_ko_tactical`
+  (§11), which fires on BOTH bodies here and therefore cancels — so the residual decides, which is
+  exactly the layer split §1 rules.
+* don't promote a BARE pre-evolution to evolve a dead 0-Energy win-condition — emergent, because a
+  bare body reaches no damage at all and a body that can act does.
+* promote the most-built copy, at a forced promote and at a SWITCH alike — emergent from reachable
+  damage, which is what retires `is_best_promote_target` and its `+5` tie-break bonus (§3, and the
+  f104 fix becomes a damage fact).
+
+The accelerator fixture carries Turbo Flare's REAL rider (`recoverN=3, recoverSource="deck"`, per
+`data/EN_Card_Data.csv`: "search your deck for up to 3 Basic Energy cards and attach them to your
+Benched Pokémon"). It has to: the rung read the role TAG, the decider reads the card, and a fixture
+without the record measures a different claim than the one this frame is about.
 """
 import pytest
 
@@ -27,6 +41,7 @@ def _pilot(hand_ids=()):
     # fallback is retired, ADR-0052) — same damage/cost the fallback used to read.
     A_MEGA, A_STAR, A_CIND = 31, 32, 33
     stats = DictCardStatProvider({
+        3: CardStat(3, name="Water Energy", cardType=5, energyType=3),
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
                        minCostDamage=120, maxDamageCost=3, evolvesFrom="Staryu",
                        attacks=(A_MEGA,)),
@@ -37,11 +52,15 @@ def _pilot(hand_ids=()):
         678: CardStat(678, name="Mega Lucario ex", hp=340, megaEx=True),
     }, attacks={A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),
                 A_STAR: AttackStat(A_STAR, damage=20, cost=1),
-                A_CIND: AttackStat(A_CIND, damage=50, cost=1)})
+                # Turbo Flare as PRINTED — the rider the accel dividend is measured from.
+                A_CIND: AttackStat(A_CIND, damage=50, cost=1, recoverN=3, recoverSource="deck")})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"],
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})
-    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+    # The deck holds real Basic Energy so the deck-search rider has fuel to find (`_recover_units`
+    # bounds the dividend by the fuel in its source zone).
+    deck = [3] * 20 + [STARYU] * 10 + [MEGA] * 10 + [CINDERACE] * 10 + [1] * 10
+    return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({CINDERACE: ["opener"]}))
 
 
@@ -60,11 +79,14 @@ def test_promote_the_accelerator_that_kos_over_the_wincon():
     # CINDERACE — takes the prize AND its Turbo Flare loads the Mega for next turn.
     p = _pilot()
     bench = [{"id": CINDERACE, "energies": [3], "hp": 160},      # idx0: accelerator, can KO
-             {"id": MEGA, "energies": [3], "hp": 330}]           # idx1: ready wincon, can KO
+             {"id": MEGA, "energies": [3], "hp": 330},           # idx1: ready wincon, can KO
+             {"id": STARYU, "energies": [], "hp": 70}]           # idx2: the rider's recipient (NEEDS Energy)
     obs = _obs(bench, {"id": 678, "hp": 20, "energies": [1, 1, 1]})
     dec = p.explain(obs)
-    assert "promote-the-accelerator-for-the-ko" in _fired(dec.options[0])
-    assert "promote-the-ready-wincon" in _fired(dec.options[1])
+    # Both bodies take the Knock Out, so `_promote_ko_tactical` cancels and the RESIDUAL decides —
+    # the layer split ADR-0073 §1 rules. The accelerator wins on its measured rider, not a role tag.
+    acc, wincon = dec.options[0].promote_retreat_working, dec.options[1].promote_retreat_working
+    assert acc["my_yield"] > wincon["my_yield"]
     assert p.decide(obs) == [0]                                  # accelerator, not the wincon
 
 
@@ -78,8 +100,10 @@ def test_promote_the_staller_over_a_bare_preevo_even_with_the_payoff_in_hand():
     obs = _obs(bench, {"id": 678, "hp": 140, "energies": [1]}, hand=[MEGA])
     assert not p._board(obs, obs["select"]).evolve_to_ready_wincon_available
     dec = p.explain(obs)
-    assert "promote-the-staller" in _fired(dec.options[0])
-    assert "prefer-wincon-line-piece" not in _fired(dec.options[1])   # bare pre-evo: stands down
+    # EMERGENT (§6a): a disposable staller decomposes with no remainder into terms the equation
+    # already builds — its own damage, and the LOW exposure that IS "disposable".
+    assert dec.options[0].promote_retreat_working["my_yield"] > 0
+    assert dec.options[1].promote_retreat_working["my_yield"] == 0    # a bare pre-evo reaches nothing
     assert p.decide(obs) == [0]                                  # staller, not the bare Staryu
 
 
@@ -92,12 +116,10 @@ def test_best_promote_slot_picks_the_most_built_ready_wincon():
              {"id": MEGA, "energies": [3, 3, 3], "hp": 430},     # idx1: most-built ready wincon
              {"id": MEGA, "energies": [3], "hp": 330}]           # idx2: online but less built
     obs = _obs(bench, {"id": 678, "hp": 200, "energies": [1]})
-    board = p._board(obs, obs["select"])
-    assert board.best_promote_slot == (5, 1)                     # (BENCH, index 1) — the 3-Energy Mega
     dec = p.explain(obs)
-    assert "promote-the-ready-wincon" in _fired(dec.options[1])  # fires only on best body …
-    assert "promote-the-ready-wincon" not in _fired(dec.options[0])  # … not bare copy
-    assert "promote-the-ready-wincon" not in _fired(dec.options[2])  # … not lesser-built copy
+    rows = [t.promote_retreat_working for t in dec.options]
+    assert rows[0]["my_yield"] == 0                              # bare copy reaches nothing …
+    assert rows[1]["my_yield"] > 0                               # … the built copies reach damage
     assert p.decide(obs) == [1]
 
 
@@ -109,7 +131,8 @@ def test_promote_the_ready_wincon_fires_at_switch_too():
     bench = [{"id": CINDERACE, "energies": [], "hp": 160},       # idx0: bare off-line body (slot 0)
              {"id": MEGA, "energies": [3, 3, 3], "hp": 430}]     # idx1: the powered wincon
     obs = _obs(bench, {"id": 678, "hp": 200, "energies": [1]}, ctx=SWITCH, active={"id": MEGA})
-    assert p._board(obs, obs["select"]).best_promote_slot == (5, 1)
     dec = p.explain(obs)
-    assert "promote-the-ready-wincon" in _fired(dec.options[1])  # fires at SWITCH, on the wincon
+    # ONE evaluator across both pick contexts (§9), so the SWITCH destination is ranked by the same
+    # arithmetic as a forced promote — which is what makes the two sites unable to diverge.
+    assert dec.options[1].promote_retreat_working["site"] == "pick"
     assert p.decide(obs) == [1]                                  # not bench-slot-0 Cinderace

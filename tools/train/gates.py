@@ -48,10 +48,21 @@ OPTION_TYPE_EVOLVE = 9                              # cg.api.OptionType.EVOLVE
 OPTION_TYPE_ATTACH = 8                              # cg.api.OptionType.ATTACH
 OPTION_TYPE_CARD = 3                                # cg.api.OptionType.CARD
 SELECT_CONTEXT_ATTACH_FROM = 21                     # cg.api.SelectContext.ATTACH_FROM
+SELECT_CONTEXT_SWITCH = 3                           # cg.api.SelectContext.SWITCH
+SELECT_CONTEXT_TO_ACTIVE = 4                        # cg.api.SelectContext.TO_ACTIVE
 
 EVOLVE_LANE: Lane = ((OPTION_TYPE_EVOLVE, None),)
 ATTACH_LANE: Lane = ((OPTION_TYPE_ATTACH, None),
                      (OPTION_TYPE_CARD, SELECT_CONTEXT_ATTACH_FROM))
+#: The promote/retreat PICK lane (ADR-0073 §12) — "promote THIS body over that one". Both the forced
+#: promote and the retreat destination pose an `OptionType.CARD` option (verified against the corpus
+#: and `cgpy`'s `_pose_retreat_switch`), so the lane is that type under either context.
+#:
+#: The whether-to-retreat frames need NO lane: `in_lane` matches type+context and cannot express a
+#: tag predicate (a switch-class Item is a `_PLAY`), but Decision Claims are cross-lane by nature, so
+#: the switch-Item wrinkle dissolves rather than needing a second lane.
+PROMOTE_LANE: Lane = ((OPTION_TYPE_CARD, SELECT_CONTEXT_SWITCH),
+                      (OPTION_TYPE_CARD, SELECT_CONTEXT_TO_ACTIVE))
 
 #: A held-out claim must name its owner as an issue reference — the shape CI can check offline.
 #: Whether that issue is still OPEN cannot be checked here (the suite is offline, CLAUDE.md) and

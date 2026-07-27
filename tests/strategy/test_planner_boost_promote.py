@@ -124,11 +124,18 @@ def test_promote_ko_aware_brings_up_the_ko_body(fixture, grab_step):
 
 
 @pytest.mark.req("REQ-PROMOTE-KO-0001")
-def test_promote_ko_aware_off_does_not_take_the_ko():
-    """Baseline (flag OFF, the shipped defect): f26 promotes the wrong body and forfeits the KO — pins
-    that the fix, not the fixture, is what lands it."""
+def test_the_promote_decider_off_does_not_take_the_ko():
+    """Baseline (the pre-fix defect): f26 promotes the wrong body and forfeits the Knock Out — pins
+    that the fix, not the fixture, is what lands it.
+
+    The LEVER changed with ADR-0073 (#141). `promote_ko_aware` was the kill-switch for
+    `promote-the-ko-attacker`, and that rung is DELETED; the pick site's Knock-Out layer is now
+    `_promote_ko_tactical`, which rides the `promote_retreat_value` switch alongside the residual
+    it sums with. So the degraded mode this test pins is the decider OFF — which reproduces the
+    shipped defect exactly, and is what makes OFF a coherent state rather than half an agent."""
     obs = _fixture("ml_lethal_recover_energy_retreat_ko_f26")["obs"]
-    promoted, opp_ko = _drive_promote(_pilot("mega_lucario"), obs, [1])
+    promoted, opp_ko = _drive_promote(
+        _pilot("mega_lucario", promote_retreat_value=False), obs, [1])
     assert promoted != _MEGA_LUCARIO_EX and not opp_ko
 
 

@@ -68,6 +68,25 @@ ATTACH_DECIDER_PROFILE = frozenset({
     "mine.visible_counts",
 })
 
+#: The model fields the PROMOTE/RETREAT DECIDER adds (#141, ADR-0073) on any menu where it prices an
+#: option — a TO_ACTIVE/SWITCH body pick, or a MAIN menu carrying a RETREAT (which is why they show
+#: up on the attach corpus at all: those frames are open turn menus).
+#:
+#: Each read is RULED, not incidental:
+#:   * `theirs.incoming` — §6's `tempo_denied`, the `t=2 − t=1` Threat-Clock delta. This is the
+#:     expensive cluster the attach pin exists to guard, and it is here deliberately: unlike the
+#:     attach decider, this one HAS a term for it. §10 rules the horizon per term, and this is the
+#:     term whose horizon is the curve.
+#:   * `theirs.active_raw` / `theirs.body_raws` — the survival clock's opponent side, for §4's
+#:     per-body `exposure` and `preservation`.
+#:   * `mine.bench_raws` — the Bench Harvest's input, for the preservation leg's bench reading.
+PROMOTE_DECIDER_PROFILE = frozenset({
+    "mine.bench_raws",
+    "theirs.active_raw",
+    "theirs.body_raws",
+    "theirs.incoming",
+})
+
 #: The CEILING on the model field set one PLANNER-LEAF evaluation may touch.
 #:
 #: A leaf does not read the model directly — its own terms (`_readiness`, `_incoming_worst`,
@@ -85,7 +104,7 @@ ATTACH_DECIDER_PROFILE = frozenset({
 #: bank and exactly when nobody would otherwise think to look.
 #: A leaf's simulated line re-runs my policy to end of turn, so it reaches menus WITH attaches and
 #: pays the attach decider's reads too — hence the union rather than the per-decision set alone.
-LEAF_PROFILE = PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE
+LEAF_PROFILE = PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
 
 
 class _Probe:
@@ -195,11 +214,18 @@ def test_the_attach_decider_profile_is_pinned(pilot):
         for obs in _attach_frames():
             ms.explain(obs)
     added = probe.fields - PER_DECISION_PROFILE
-    assert added == ATTACH_DECIDER_PROFILE, (
-        "the attach decider's field set moved — re-measure before re-pinning\n"
-        f"  added:   {sorted(added - ATTACH_DECIDER_PROFILE)}\n"
-        f"  removed: {sorted(ATTACH_DECIDER_PROFILE - added)}")
-    assert not any("incoming" in f or "needs" in f for f in added), (
+    expected = ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
+    assert added == expected, (
+        "the decider field set moved — re-measure before re-pinning\n"
+        f"  added:   {sorted(added - expected)}\n"
+        f"  removed: {sorted(expected - added)}")
+    # The tripwire's real claim, kept intact: the ATTACH decider must not reach an expensive cluster
+    # it has no term for. The promote/retreat decider's own reads are netted out because it DOES have
+    # a term for the clock (ADR-0073 §6's `tempo_denied`), so its `theirs.incoming` is ruled cost
+    # rather than a leak — and these frames are open turn menus, where it legitimately prices the
+    # retreat option alongside the attach.
+    attach_only = added - PROMOTE_DECIDER_PROFILE
+    assert not any("incoming" in f or "needs" in f for f in attach_only), (
         "the attach decider reached an expensive cluster it has no term for")
 
 
