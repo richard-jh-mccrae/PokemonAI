@@ -295,6 +295,44 @@ accumulating clock (decision 4); `tempo_denied` is the `t=2 − t=1` curve delta
 "curve terms" the 2026-07-22 spec deferred to the unified Threat Clock — the preservation dividend and
 the tempo slip — are hereby LIVE, because that clock shipped. The 1-exchange slice is retired.
 
+**11. The pick site gets its OWN KO layer (`_promote_ko_tactical`), and 11 of the 12 rungs are DELETED.**
+Rulings 4/5 defer wins to the Lethal Solver and provable KOs to the Turn Planner — but BOTH are
+MAIN-only (`planner.py:283`; `_tactical` returns 0 for non-ATTACK options; `_retreat_to_lethal_tactical`
+fires only on `type == _RETREAT`). At a TO_ACTIVE/SWITCH body pick those owners DO NOT EXIST, so a
+strictly sub-lethal equation would promote the body that hits hardest over the body that takes the
+prize. Therefore a `_promote_ko_tactical` — `best_affordable_ko_value(B)`, KO_SCORE-class, scoped to
+the pick selects — mirroring `_retreat_to_lethal_tactical`. Decision 1's split is preserved exactly:
+KO delta = tactical, sub-lethal residual = equation, summed on the option. No new constant.
+
+The term is load-bearing at both selects for DIFFERENT reasons (user ruling):
+- **SWITCH — REALISATION, not a new decision.** The KO comparison already happened at MAIN. But
+  `_retreat_to_lethal_tactical` takes a `max` over the bench and returns only a NUMBER — it never says
+  WHICH body won. A sub-lethal pick could therefore retreat *because* Mega Lucario ex takes the KO and
+  then promote Cinderace. Both sites calling `best_affordable_ko_value` makes the pick land on the
+  body that justified the retreat — consistency by construction, decision 9's argument applied to the
+  KO layer.
+- **TO_ACTIVE — a fresh claim, and a strong one.** Their attack KO'd our Active and attacking ends the
+  turn (`docs/rules.md` §5), so per `docs/rulebook.txt` L176 we promote, their turn ends, and OUR turn
+  starts with only the Checkup between — the promoted body swings against essentially the same board.
+  The exception is a Checkup KO, where L183's "then, start the next player's turn" may hand them the
+  turn first; a heuristic edge the shipped rung already carries.
+
+**Disposition — 11 of 12 rungs deleted.** `promote-the-ko-attacker` (+45) and
+`promote-the-accelerator-for-the-ko` (+50) → `_promote_ko_tactical`. `promote-the-ready-wincon` (+40)
+and `dont-promote-onto-their-path` (−8) → emergent from `my_yield` damage / deleted by 7c.
+`interpose-…-preserve-the-wincon` (+50) and `dont-promote-into-their-prize-reach` (−20) → emergent
+(exposure 100 vs 300, plus the fatal step). `promote-the-staller` (+20) → 6a. `retreat-to-ready-
+attacker` (+60), `swap-out-the-locked-attacker` (+35), `dont-play-switch-for-no-gain` (−8) → emergent
+from destination value − retreat cost, and from a locked attack's own option scoring less.
+`hold-position-in-setup` (−25) → deleted on an emergence argument with **no worked frame behind it**,
+flagged as the weakest claim in this ADR and left to the Decision Gate to refute.
+**`retreat-to-wall-the-line` (+30) SURVIVES** — f32's Maneuver, owner #165.
+
+Two riders: **switch-class Items are priced too** (the charter names "SWITCH-class retreats", but a
+Switch Item is a `_PLAY` option and the whether-site emitted only on a native RETREAT — two deleted
+rungs fire on `_PLAY` + `switch`), with `retreat_cost` = the **card's** Worth rather than a build
+delta, since a Switch costs a card and no Energy.
+
 ## Consequences
 
 - 1c is a rewrite of the equation's internals, not a two-term completion — but a NET SIMPLIFICATION:
