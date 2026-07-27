@@ -597,7 +597,8 @@ sub-lethal band (the readiness *range* `my_yield` reads — the residual is the 
 **Prize Damage Rate**:
 The one exchange rate between prizes and damage: **100 damage per prize**, the median HP-per-prize
 over every body in the set (`data/EN_Card_Data.csv`, prize value per `docs/rules.md` §6 — 1061
-bodies, median 100.0, mean 101.8; per band 90 / 130 / 110). DERIVED, so it is re-computable and
+bodies, median 100.0, mean 101.5; per band 90 / 130 / 110 — recomputed at build time, which corrected
+the ADR's 101.8 mean; the median and the bands reproduce exactly). DERIVED, so it is re-computable and
 falsifiable rather than tuned. It is what lets prize **Exposure** be denominated in the damage
 currency ADR-0069/0070 put the attach and evolve marginals in, so one `score` holds one unit — the
 rate a superseded `_PRIZE_UNIT = 12` asserted at roughly an eighth of honest value, which is why the

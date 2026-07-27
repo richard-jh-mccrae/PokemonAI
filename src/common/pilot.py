@@ -379,7 +379,7 @@ class Board:
     ko_promote_slot: tuple | None = None  # (AreaType, index) of the benched body whose affordable attack —
                                        # given this turn's attachable Energy + a playable {F} damage-boost —
                                        # KOs the opp Active (`promote_ko_aware`; None when off / no KO-body).
-                                       # Backs `promote-the-ko-attacker`, role-independent (ml f26/f48/f24)
+                                       # Backed `promote-the-ko-attacker` (DELETED, ADR-0073 §11 -> `_promote_ko_tactical`)
     evolve_to_ready_wincon_available: bool = False  # win-condition in hand AND the payoff's IMMEDIATE
                                        # pre-evo on the Bench already carries enough Energy that evolving THIS turn
                                        # yields a ready attacker — worth promoting to evolve. False -> bare/too-deep
@@ -393,7 +393,7 @@ class Board:
     opp_cannot_punish_wincon: bool = False  # ADR-0064 Decision 4: the opponent's reachable Incoming
                                        # (charged safety read) cannot KO my best benched win-condition next
                                        # turn — the return-KO reachability veto. Stands down interpose /
-                                       # dont-promote-into-their-prize-reach so promote-the-ready-wincon wins
+                                       # the prize-reach brake; both rungs are DELETED (ADR-0073 §11, now Exposure)
                                        # (scenario 3: they literally can't afford to punish). Fails CLOSED
     basic_energy_in_deck: bool = False  # my deck can still yield a Basic Energy (a Basic-Energy id not
                                        # known-exhausted) — fuel gate for an accelerator promote
@@ -852,7 +852,7 @@ class Context:
                                        # ready wincon. `promote-the-powered-attacker` fires so it's the built Mega, not a bare copy
     is_ko_promote_target: bool = False  # at a promote/switch, this option brings up board.ko_promote_slot —
                                        # the benched body whose (boost-inclusive) attack KOs the opp Active
-                                       # (`promote_ko_aware`). Backs `promote-the-ko-attacker`
+                                       # (`promote_ko_aware`). Backed `promote-the-ko-attacker`, now DELETED
     card_prize_value: int = 1          # prizes a KO of THIS option's card yields (Mega ex 3 / ex 2
                                        # / else 1) — cost of exposing it; interpose rule promotes a
                                        # body whose value is below the benched wincon's
@@ -884,7 +884,7 @@ class Context:
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
     promote_target_on_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): this promote/switch
                                         # candidate sits on THEIR cheapest path — bringing it up walks
-                                        # it into the KO they want (`dont-promote-onto-their-path`)
+                                        # it into the KO they want (rung DELETED as subsumed, ADR-0073 §7c)
     counter_is_best_placement: bool = False   # this option puts the current counter on the knapsack-
                                               # optimal opp target at a DAMAGE_COUNTER_ANY/DAMAGE_COUNTER
                                               # select (== board.best_counter_slot) — `place-counter-to-convert`
@@ -2197,37 +2197,46 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             energies.pop(keep)
         return dict(ma, energies=energies)
 
-    def _retreat_side(self, obs: dict, board: Board, *, promoted_raw=None,
-                      card_worth: float = 0.0) -> RetreatSide | None:
-        """The A-side of a voluntary swap — the Active leaving the spot, and what leaving costs
-        (ADR-0073 §4 preservation, §8 retreat cost). None with no readable Active.
+    def _retreat_cost_legs(self, obs: dict, card_worth: float = 0.0) -> dict:
+        """What LEAVING the Active Spot costs (ADR-0073 §8) — the build the discard destroys, plus
+        ADR-0069 §5c's resource premium.
 
-        ``promoted_raw`` is the body coming up, so the bench A joins is the POST-SWAP one; the
-        preservation leg is a fact about the board A actually lands on, and reading A among its
-        current bench-mates would mis-price the Harvest exactly as ADR-0070 warned for the evolve
-        result. ``card_worth`` prices a switch-class ITEM instead of an Energy discard (§11's rider):
-        a Switch costs a CARD and no Energy, so it destroys no build."""
+        Computed ONCE per menu rather than per destination, because §9's claim is precisely that
+        this is CONSTANT across destinations: "`preservation(A)` and `retreat_cost(A)` are CONSTANT
+        across destinations, so they belong only on the whether-site's retreat option." Expressing
+        that in the code's shape (rather than recomputing an identical answer per bench body) is what
+        makes the claim checkable, and it keeps the greedy discard search off the inner loop.
+
+        ``card_worth`` prices a switch-class ITEM instead of an Energy discard (§11's rider): a
+        Switch costs a CARD and no Energy, so it destroys no build at all."""
         ma = self._my_active(obs)
         if not ma:
-            return None
-        bench = self._my_bench_raws(obs)
-        bench_after = [b for b in bench if b is not promoted_raw] + [ma]
-        body = self._promote_body(obs, board, ma, draws=0, bench_after=bench_after)
+            return {}
         if card_worth > 0.0:                          # a Switch Item pays a card, never a build
-            return RetreatSide(body=body, card_worth=float(card_worth))
-        n = self._effective_retreat_cost(obs, ma)
-        after = self._retreat_discard_choice(ma, n)
-        kept = list(after.get("energies") or [])
+            return {"card_worth": float(card_worth)}
+        after = self._retreat_discard_choice(ma, self._effective_retreat_cost(obs, ma))
         discarded = list(ma.get("energies") or [])
-        for eid in kept:                              # the multiset difference — what actually goes
+        for eid in (after.get("energies") or []):     # the multiset difference — what actually goes
             if eid in discarded:
                 discarded.remove(eid)
         # ADR-0069 §5c's resource premium: charged on worth ABOVE a reusable Basic, so a plain Basic
         # pays nothing and only a one-shot is nudged. Sub-band — it orders equals.
         premium = _ATTACH_RESOURCE_TIEBREAK * sum(
             max(0.0, self._role_value(eid) - ENERGY_TIER) for eid in discarded)
-        return RetreatSide(body=body, build_before=self._build_standing(ma),
-                           build_after=self._build_standing(after), resource_premium=premium)
+        return {"build_before": self._build_standing(ma),
+                "build_after": self._build_standing(after), "resource_premium": premium}
+
+    def _retreat_side(self, obs: dict, board: Board, *, promoted_raw, cost: dict) -> RetreatSide:
+        """The A-side of a voluntary swap, for ONE destination (ADR-0073 §4 preservation, §8 cost).
+
+        Only the PRESERVATION leg is per-destination, and only because the Bench that A lands on
+        depends on which body left it — reading A among its CURRENT bench-mates would mis-price the
+        Harvest exactly as ADR-0070 warned for the evolve result. The cost legs arrive precomputed
+        from :meth:`_retreat_cost_legs`."""
+        ma = self._my_active(obs)
+        bench_after = [b for b in self._my_bench_raws(obs) if b is not promoted_raw] + [ma]
+        return RetreatSide(body=self._promote_body(obs, board, ma, draws=0,
+                                                   bench_after=bench_after), **cost)
 
     def _promote_retreat_decision(self, obs: dict, select: dict, board: Board, ctx, option: dict):
         """The PROMOTE/RETREAT DECIDER: price ONE option (ADR-0073). Returns the per-option TERM row
@@ -2270,16 +2279,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # the card's Worth as the cost — the charter names "SWITCH-class retreats", and two of the
         # deleted rungs fired on a `_PLAY` + `switch` option that the whether-site never saw.
         worth = self._role_value(ctx.card_id) if is_switch_item else 0.0
+        if self._my_active(obs) is None:
+            return None                               # no readable Active — make no claim
+        cost = self._retreat_cost_legs(obs, worth)    # CONSTANT across destinations (§9)
         draws = self._turn_dig_depth(obs)
         best = None
         for raw in self._my_bench_raws(obs):
             if not raw or raw.get("id") is None:
                 continue
-            side = self._retreat_side(obs, board, promoted_raw=raw, card_worth=worth)
-            if side is None:
-                return None                           # no readable Active — make no claim
             val = promote_value(PromoteRetreatInputs(
-                body=self._promote_body(obs, board, raw, draws=draws), retreat=side))
+                body=self._promote_body(obs, board, raw, draws=draws),
+                retreat=self._retreat_side(obs, board, promoted_raw=raw, cost=cost)))
             if best is None or val.total > best.total:
                 best = val
         return None if best is None else self._promote_row(best, site="whether")
@@ -4726,7 +4736,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         "can't use <this attack> next turn" attack last turn (Mega Brave class; a blanket self-lock
         counts too). Read off the ADR-0033 tracker, serial-gated: a body that left the Active carries
         a new serial, so the grant expires with the swap — which is exactly why swapping in a fresh
-        benched copy (`swap-out-the-locked-attacker`) restores the attack."""
+        benched copy restores the attack (the rung is DELETED, ADR-0073 §11 — the swap is
+        now emergent from destination value minus retreat cost)."""
         grant = self._transients.grant_for_serial((ma or {}).get("serial"))
         if not grant:
             return False
@@ -7159,7 +7170,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         safety, promote the wall, item-lock, and evolve the line on the Bench behind cover. Board-SOUND
         (visible zones); silent for decks with no benched item-lock opener (no-op on mega_starmie /
         mega_lucario) and once the Active is the payoff (not a pre-evo). Backs `retreat-to-wall-the-line`
-        and stands `hold-position-in-setup` down; `_finish_turn_last` rides the retreat step tier-0."""
+        ; `_finish_turn_last` rides the retreat step tier-0. (`hold-position-in-setup` is
+        DELETED, ADR-0073 §11, so there is no longer a setup brake to stand down.)"""
         if not (self.functions and ma and ma.get("id") in self._line_preevo_set()):
             return False
         has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))
