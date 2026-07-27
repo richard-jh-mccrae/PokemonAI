@@ -13,10 +13,13 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
     clock (turns_to_afford) and the incoming to my Active.
   * TARGET   (S3a, `opp_target_shadow`) — the two-term removal value per opponent body (prize +
     phase × survival), the Option-B currency, for eyeballing vs the shipped snipe/gust/deny pick.
-  * SLOTS    (S3b, ADR-0074) — the generalized `needs.py` slot family: for every frame, replays the
-    SAME decision through a shipped pilot (`gust_target_slots` OFF, today's default) and a second
-    pilot with it forced ON, and flags any frame where the DECIDED pick differs. Localizes the
-    disagreements this issue's own charter commits to adjudicating before closing.
+  * SLOTS    (S3b/S2 live, ADR-0074) — for every frame, replays the SAME decision through a shipped
+    pilot (both new flags OFF, today's default) and two forced-ON variants — `gust_target_slots`
+    (the generalized `needs.py` slot family) and `recur_fuel_relax` (the quantified doom-relax
+    refinement) — and flags any frame where either forced variant's DECIDED pick differs from the
+    shipped one. Localizes the disagreements this issue's own charter commits to adjudicating
+    before closing (and is the actual corpus evidence backing "swept clean" for BOTH flags, not
+    just `gust_target_slots` — a gap the code-review Spec pass on #186 caught).
 
     python tools/train/probes/threat_sweep.py            # all four
     python tools/train/probes/threat_sweep.py --doom     # doom only
@@ -123,27 +126,37 @@ def sweep_target(tune, frames) -> None:
     print(f"\nTARGET: frames-with-opp-bodies={fired}\n")
 
 
+def _forced(tune, rec, **flags):
+    pilot = tune._build_pilot(rec["agent"])[0]
+    for k, v in flags.items():
+        setattr(pilot, k, v)
+    return pilot.explain(rec["obs"])
+
+
 def sweep_slots(tune, frames) -> None:
-    total = flips = errors = 0
+    total = gust_flips = recur_flips = errors = 0
     for (ep, fr), rec in frames:
         d_off = _decide(tune, rec)
         if isinstance(d_off, Exception):
             errors += 1
             continue
         try:
-            pilot_on = tune._build_pilot(rec["agent"])[0]
-            pilot_on.gust_target_slots = True
-            d_on = pilot_on.explain(rec["obs"])
+            d_gust = _forced(tune, rec, gust_target_slots=True)
+            d_recur = _forced(tune, rec, recur_fuel_relax=True)
         except Exception:
             errors += 1
             continue
         total += 1
-        if d_off.chosen != d_on.chosen:
-            flips += 1
-            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} "
-                  f"off={d_off.chosen} on={d_on.chosen}  DISAGREE")
-    print(f"\nSLOTS: frames checked={total}  gust_target_slots decision flips={flips}  "
-          f"(unreplayable={errors})\n")
+        if d_off.chosen != d_gust.chosen:
+            gust_flips += 1
+            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} gust_target_slots "
+                  f"off={d_off.chosen} on={d_gust.chosen}  DISAGREE")
+        if d_off.chosen != d_recur.chosen:
+            recur_flips += 1
+            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} recur_fuel_relax "
+                  f"off={d_off.chosen} on={d_recur.chosen}  DISAGREE")
+    print(f"\nSLOTS: frames checked={total}  gust_target_slots flips={gust_flips}  "
+          f"recur_fuel_relax flips={recur_flips}  (unreplayable={errors})\n")
 
 
 def main(argv=None) -> int:

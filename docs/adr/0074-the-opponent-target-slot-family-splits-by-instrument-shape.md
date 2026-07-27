@@ -128,6 +128,36 @@ unchanged) — the S3 refactor (extracting `_opponent_target_rows` as the shared
 shadow and the live `gust_target` emission read) is confirmed behavior-preserving. With zero
 disagreements, there was nothing for decision 3's adjudication to rule on.
 
+## Amendment C — the caching promise, and why both flags stay OFF (2026-07-27, code-review)
+
+`/code-review`'s Spec pass on this build caught two real gaps against Decision 0/2 above and this
+ADR's own Amendment B.
+
+**The "shared, cached" value wasn't actually cached.** Amendment B's S3 refactor shared the
+*computation* (one function, `_opponent_target_rows`) but not the *result* — the shadow and the live
+`gust_target` emission each called it fresh, so a decision with both paths active ran the per-body
+`turns_to_ko_me` simulation twice. Fixed: `_board()` now resolves it once per decision and stashes it
+(`self._opponent_target_cache`, the `_opp_attack_context` stash precedent); both consumers read the
+cache, falling back to a fresh compute only when called directly off a hand-built `board` that never
+went through `_board()` (the existing shadow tests' pattern). A new test
+(`test_gust_target_slot_resolver.py::test_the_per_body_value_resolves_once_per_decision_and_is_shared`)
+spies on `_opponent_target_rows` and asserts neither consumer recomputes.
+
+**`recur_fuel_relax` was never actually corpus-swept.** The original PROFILE comment claimed it was
+"corpus-swept clean," but `threat_sweep.py --slots` only forced `gust_target_slots` — `recur_fuel_relax`
+had only the four synthetic unit tests (`test_recur_fuel_relax.py`) behind it, no real-corpus check.
+Fixed: `sweep_slots` now forces each flag independently and reports both; re-run, **both are 0 flips
+across the same 331 frames.**
+
+**Neither flag arms, and the PROFILE comment's reason was wrong.** The original comments said arming
+was "#187/#189's scope" — but those issues are chartered for the deny/snipe/gust DECIDER SWAPS, not
+for arming #186's own foundation flags. The real reason is standing directive 6 (ADR-0072): every
+mid-build decider swap needs the paired-A/B gauntlet tripwire (`gauntlet_swap_ab.py --stage
+mid-build`, ~36 min of real games) **in addition to** a deterministic corpus check before arming ON —
+a `threat_sweep.py --slots` clean run is evidence toward that bar, not the bar itself. That gauntlet
+run is real, uncommitted follow-up work (not scoped into #186's spec, and not run here given its
+cost), so both flags ship OFF on that basis — corrected in both PROFILE comments.
+
 ## Alternatives rejected
 
 - **Flat shared value function, no DP extension for gust/forced-promo.** Simpler — one function, four

@@ -147,16 +147,19 @@ PROFILE = {
                                     # all-or-nothing relax-block — augments a possible refueler's
                                     # Energy with its real discard-recur reload before the CHARGED
                                     # relax check runs, instead of always standing down. SHIPPED OFF:
-                                    # the refinement is corpus-swept clean (no live decider consumes
-                                    # it beyond the already-armed `doom_matched_relax` boolean guard),
-                                    # but arming it is a #187-scope decision, not this issue's to make
+                                    # `tools/train/probes/threat_sweep.py --slots` found 0 decision
+                                    # flips across 331 real corpus frames, but that is a deterministic
+                                    # decision-level sweep, not ADR-0072's mandatory mid-build paired-A/B
+                                    # gauntlet tripwire (`gauntlet_swap_ab.py --stage mid-build`) — that
+                                    # gate hasn't run, so this stays OFF until it does, not because
+                                    # arming it belongs to a downstream issue's scope
     "gust_target_slots": False,     # ADR-0074 (#186), 2026-07-27: generalizes `deny_slot` to a
                                     # `gust_target` kind — held gust-effect Trainer cards keep-price
                                     # against the real per-body `opponent_target_value` instead of
-                                    # the flat `deny` disruption tier. SHIPPED OFF: the sweep found 0
-                                    # decision flips across 331 corpus frames (nothing to adjudicate),
-                                    # but arming it — and folding the snipe/gust play-side rungs onto
-                                    # the same marginal — is #189's scope, not this issue's to make
+                                    # the flat `deny` disruption tier. SHIPPED OFF: same standing —
+                                    # 0 decision flips across 331 corpus frames (`threat_sweep.py
+                                    # --slots`), but the ADR-0072 mid-build paired-A/B gauntlet
+                                    # tripwire hasn't run, so arming waits on that, not on #189
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one

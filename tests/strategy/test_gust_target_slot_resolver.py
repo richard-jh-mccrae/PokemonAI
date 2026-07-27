@@ -100,3 +100,32 @@ def test_on_opens_no_gust_target_slot_with_no_gust_supplier_held():
                         gust_target_slots=True)
     _rows, _slots_, _elig, denys, gusts = _slots(pilot, obs)
     assert denys == [] and gusts == []
+
+
+@pytest.mark.req("REQ-NEEDS-0012")
+def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
+    """ADR-0074: `_board()` resolves `_opponent_target_rows` ONCE per decision and caches it
+    (`_opponent_target_cache`) — the gust_target emission and the S3a diagnostic shadow both read
+    that cache rather than each re-running the per-body `turns_to_ko_me` simulation from scratch."""
+    pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
+                        gust_target_slots=True)
+    board = pilot._board(obs)
+    assert pilot._opponent_target_cache is not None
+    cached_phase, cached_rows = pilot._opponent_target_cache
+    assert cached_rows and cached_rows[0]["id"] == RIOLU
+
+    calls = []
+    real = pilot._opponent_target_rows
+
+    def _spy(o, b):
+        calls.append(1)
+        return real(o, b)
+    pilot._opponent_target_rows = _spy
+
+    rows, _ = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
+    slots, _elig = pilot._resolve_needs(obs, board, rows)
+    shadow = pilot._opponent_target_shadow(obs, board)
+
+    assert not calls                            # neither consumer recomputed — both read the cache
+    assert any(s.kind == "gust_target" for s in slots)
+    assert shadow is not None and shadow["bodies"][0]["id"] == RIOLU

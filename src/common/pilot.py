@@ -3729,14 +3729,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     _emit(needs.deny_slot(f"deny:{area}{bi}:{p.get('id')}",
                                           oracle_value=deny_tier, turns_to_ready=t), deniers)
         # GUST-TARGET SLOTS (ADR-0074, kill-switched): held gust-effect Trainer cards keep-priced
-        # against the REAL per-body removal value (`_opponent_target_rows`), not a flat card tier.
-        # Bench ONLY — a gust effect forces a switch of a BENCHED Pokémon (verified at source,
-        # `doctrine_gust.py`); the opponent's Active is never a legal gust target, so it never opens
-        # a slot here (unlike deny, which strips Energy off either area).
+        # against the REAL per-body removal value (`_opponent_target_rows`) — reads the per-decision
+        # cache `_board()` stashes when one exists (shared with the S3a shadow, never recomputed
+        # twice per decision), falling back to a fresh compute for a hand-built `board` that never
+        # went through `_board()` (test fixtures). Not a flat card tier. Bench ONLY — a gust effect
+        # forces a switch of a BENCHED Pokémon (verified at source, `doctrine_gust.py`); the
+        # opponent's Active is never a legal gust target, so it never opens a slot here (unlike deny,
+        # which strips Energy off either area).
         if self.gust_target_slots:
             gusters = [k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])]
             if gusters:
-                result = self._opponent_target_rows(obs, board)
+                result = getattr(self, "_opponent_target_cache", None)
+                if result is None:
+                    result = self._opponent_target_rows(obs, board)
                 if result is not None:
                     _phase, target_rows = result
                     for r in target_rows:
@@ -5967,6 +5972,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
         board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
+        # ADR-0074: the shared per-body opponent-target value, resolved ONCE per `_board()` call and
+        # cached (the `_opp_attack_context` stash precedent) — both the S3a diagnostic shadow and the
+        # live `gust_target` slot emission read this SAME cache rather than each re-running the
+        # per-body `turns_to_ko_me` simulation from scratch.
+        self._opponent_target_cache = self._opponent_target_rows(obs, board)
         return board                                    # COMPUTE-ONLY here — nothing scores off it yet (S2)
 
     def _opp_hand_strip_odds(self) -> float:
@@ -7220,8 +7230,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
         """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
         Option B): the sweep compares `_opponent_target_rows`' per-body ranking to the shipped snipe
-        / gust / deny picks — the evidence for the Option-B assignment. Deciding NOTHING."""
-        result = self._opponent_target_rows(obs, board)
+        / gust / deny picks — the evidence for the Option-B assignment. Deciding NOTHING.
+
+        Reads the per-decision cache `_board()` stashes (ADR-0074) when one exists, so a real
+        decision computes the per-body simulation once and shares it with the live `gust_target`
+        slot emission; falls back to a fresh compute when called directly (off a hand-built `board`
+        that never went through `_board()`, as the existing shadow tests do) — `_board()` always
+        runs first in a real decision, so the cache is never stale by the time this reads it."""
+        result = getattr(self, "_opponent_target_cache", None)
+        if result is None:
+            result = self._opponent_target_rows(obs, board)
         if result is None:
             return None
         phase, rows = result
