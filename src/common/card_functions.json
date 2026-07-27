@@ -399,7 +399,9 @@
   "recycle"
  ],
  "17": [
-  "discard_eot"
+  "discard_eot",
+  "provides:1",
+  "provides_evo:3"
  ],
  "174": [
   "search"
@@ -408,6 +410,7 @@
   "draw"
  ],
  "19": [
+  "provides:1",
   "search"
  ],
  "190": [
@@ -688,6 +691,9 @@
  ],
  "896": [
   "hand_disruption"
+ ],
+ "9": [
+  "provides:1"
  ],
  "90": [
   "search"

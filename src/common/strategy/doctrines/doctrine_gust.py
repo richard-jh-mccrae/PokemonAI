@@ -506,23 +506,27 @@ HYPOTHESES = [
                   "forward-lethal Active (Riolu → Mega Lucario ex) must still be stalled (ep83457493 f20). "
                   "Weighted below every tutor/draw so it only wins the slot when nothing else helps; never "
                   "fires on an Active carrying a special condition (`opp_active_condition_gift`), since "
-                  "switching it out CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022).",
+                  "switching it out CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022). "
+                  "ONE attack guard (`active_unarmed_but_able`, #142): an UNARMED Active that can still REACH an "
+                  "attack this turn swings instead of stalling. It replaced a PAIR of partial guards that did "
+                  "not compose — the old accel half never checked that the Active was unarmed, so merely "
+                  "HOLDING a Crispin suppressed an armed stall this rationale defends.",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed and c.board.opp_active_can_damage_us
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
-        and not (c.board.my_active_energy == 0 and c.board.active_attack_payable)  # go down swinging: an
-        #   UNARMED Active a hand attach would arm this turn should attack, not stall-gust (ml f19); an
-        #   already-armed Active (energy>0) may still legitimately stall (it keeps its attack option).
-        and not c.board.active_attack_payable_via_accel  # …and an accel that can power it this turn (dp f70)
+        and not c.board.active_unarmed_but_able  # go down swinging: an UNARMED Active whose attack this turn's
+        #   full Attach Budget can still reach should ATTACK, not stall-gust (ml f19's hand attach; dragapult
+        #   f70's Crispin line). An already-armed Active (energy>0) may still legitimately stall — it keeps
+        #   its attack option either way, and an accel in hand does not change that.
         and not c.board.opp_active_condition_gift,
         weight=10, status="assumed"),
     Hypothesis(
         id="stall-gust-over-dev-when-starved",
         rationale="When my Active is DOOMED (incl. the forward evolves-into-attacker read: their Riolu "
-                  "becomes Mega Lucario ex next turn) and I cannot pay ANY attack this turn "
-                  "(`active_attack_payable` False — no attached Energy, none in hand), development "
-                  "that doesn't remove the doom loses to a hard tempo stall: gust a strandable body "
+                  "becomes Mega Lucario ex next turn) and I am in a real **Famine** — NO attack "
+                  "reachable under this turn's FULL Attach Budget, or the rules forbid me one at all "
+                  "(Asleep/Paralyzed/turn-1-going-first) — development "
                   "Active (energyless, high-retreat — it can't attack and may be stuck for turns) and "
                   "deny the evolve-and-KO a turn. Outranks a tutor's dig stack ONLY under the "
                   "energy-famine gate, so normal development is untouched (ep83457493 f20: Boss's "
@@ -533,8 +537,9 @@ HYPOTHESES = [
                   "any stall candidate (ep86091435 f13: Duraludon-for-Duraludon denies nothing).",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
-        and not c.board.active_attack_payable
-        and not c.board.active_attack_payable_via_accel  # not a FALSE famine — an accel can power the Active (dp f70)
+        and c.board.active_famine  # the CORRECTED premise (#142): the retired pair read a flat `+1` accel
+        #   against an UNTYPED cheapest-cost count and cried famine on the f70 board, where Crispin reached
+        #   Phantom Dive's {R}{P} from zero. One oracle, full Budget, every attack scanned.
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_exists
         and not c.board.stall_swap_pointless             # wall-for-equal-wall denies nothing (ADR-0066)
@@ -547,10 +552,13 @@ HYPOTHESES = [
                   "generic wall: their win-condition can't attack and they burn a full turn retreating it. "
                   "Stacks on `gust-for-the-stall` so it beats a redundant dig for the slot (drag up their "
                   "benched Mega Starmie ex instead of a wasted Salvatore — ep82751468 f57); same guards, "
-                  "and a real KO still outranks it on tactical.",
+                  "and a real KO still outranks it on tactical. It STACKS but scores independently, so it "
+                  "carries `gust-for-the-stall`'s attack guard in its own right (#142) — the lone accel "
+                  "half it used to carry was no famine premise at all, and would have re-opened f70 here "
+                  "on its own once the sibling was fixed.",
         when=lambda c: c.option_type == _PLAY and "gust" in c.tags
         and c.board.active_doomed
-        and not c.board.active_attack_payable_via_accel  # an accel that powers the Active beats the stall (dp f70)
+        and not c.board.active_unarmed_but_able  # an Active that can still reach an attack beats the stall (dp f70)
         and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
         and c.board.stall_target_is_keystone
         and not c.board.opp_active_condition_gift,

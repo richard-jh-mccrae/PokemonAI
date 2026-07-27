@@ -569,17 +569,57 @@ _Avoid_: "+1 accel" (the retired one-unit approximation — the Budget is the fu
 attach (the single manual action; the Budget is the whole turn's capacity), energy budget
 (unqualified — say whose side)
 
+**Provable Budget**:
+The **Attach Budget** taken on the SOUND deck leg — a typed deck-fetch counts only where
+`CountTriple.floor >= 1` (pigeonhole: more unseen copies than hidden prize slots, so they cannot
+all be prized), instead of the fail-OPEN `ceiling > 0` presence the plain Budget uses. Same oracle,
+same clause modelling, one argument apart; everything already certain is in BOTH — an Energy in
+hand, an Item accel (Items all play, no quota to lose), a discard-sourced attach over the public
+pile. It exists because the two epistemics have opposite safe fail directions: **Famine** must
+under-claim my budget (a false famine is the f70 blunder), while "is this card DEAD this turn"
+must under-claim the other way (a false live-ness spends a card on a turn that never comes). Both
+legs collapse to the same answer once a deck-revealing search anchors the prizes.
+_Avoid_: certain budget / guaranteed budget (the residue is the one-Supporter-per-turn slot, which
+no Budget leg resolves — it asserts a play-set EXISTS, never which one the turn spends),
+sound budget (unqualified — say which zone)
+
 **Reachable Attach**:
-The self-side affordability oracle: whether MY body can pay a given attack (or its cheapest) THIS
-turn — the attack's TYPED per-slot cost tested against attached Energy plus the **Attach Budget**
-(greedy typed match). **Famine** = the cheapest attack unreachable even under the full Budget —
-never "0 Energy attached". Boolean and sound-or-silent; its EV variant **readiness_p** prices a
+The self-side affordability oracle: whether MY body can pay a given attack — or, with no attack
+named, ANY of them — THIS turn, the attack's TYPED per-slot cost tested against attached Energy
+plus the **Attach Budget** (exact per-slot assignment). **Famine** = NO attack reachable even under
+the full Budget; never "0 Energy attached", and never "the cheapest attack is unpayable" — once
+costs are typed a cheap `{F}{F}` can be unpayable while a dearer `●●●` is not, so the famine
+question scans every attack. Famine also carries a leg that is not an affordability question at
+all: **`attack_blocked`** — Asleep or Paralyzed ("it cannot attack or retreat", `rulebook.txt`
+L190/L206), or the first player on turn 1 (`turn <= 1`; `rules.md` §first-turn, rulebook L152).
+Those are SIDE-level facts (condition flags ride on the player dict, not the body), so they live on
+the StateModel side rather than inside the body-scoped oracle, which stays typed-cost plus ADR-0033
+locks. A body that cannot legally attack is a famine however much Energy it holds. Boolean and sound-or-silent; its EV variant **readiness_p** prices a
 still-uncertain enabler by the hypergeometric draw instead of 1.0/0.0. The mirror of
-`reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table,
-opposite fail direction (under-count my budget; over-count their threat).
-_Avoid_: active_attack_payable (the attached-now truth — no budget), active_attack_payable_via_accel
-(the retired +1/cheapest-only/untyped approximation), payable (unqualified — attached-now or
-budget-aware?)
+`reachable_incoming` (what the OPPONENT can deal me) — same family, opposite side of the table.
+Their fail directions are NOT simple opposites: `reachable_incoming` over-counts their threat
+uniformly, while mine splits by what is uncertain (ADR-0067) — under-count on *yield*, fail-OPEN on
+*deck presence*, which is precisely the f70 fix. Composed under a stall gate
+(`active_doomed and active_famine`) the two therefore pull opposite ways rather than compounding:
+doom over-claims and famine is optimistic about my own reach, so the conjunction is tighter than
+either leg.
+_Avoid_: active_attack_payable (the retired manual-only sub-budget scored by an UNTYPED count —
+never an "attached-now" truth, which is why it dies rather than surviving beside the oracle),
+active_attack_payable_via_accel (the retired +1/cheapest-only/untyped approximation), payable
+(unqualified — say which Budget leg)
+
+**Unarmed but Able**:
+My Active carries ZERO Energy yet is not in a **Famine** — an attack is still reachable this turn
+out of the **Attach Budget**. A descriptive board fact, not an instruction, though the doctrine it
+serves reads it as one: such a body should SWING rather than take a tempo stall (ml f19's hand
+attach; dragapult f70's Crispin line). Derived once because two stall-gust rules need the identical
+clause. It deliberately says nothing about an ARMED Active — one carrying Energy keeps its attack
+option either way, so it may still legitimately stall, and an accelerator sitting in hand does not
+change that (the incoherence in the retired pair of guards, where merely HOLDING a Crispin
+suppressed an armed stall).
+_Avoid_: "should swing" as a field name (a Board holds facts; the prescription belongs to the rule
+reading it), active_arm_available (the go-down-swinging read for a body whose BIGGEST attack one
+more Energy would complete — a different question on a body that may already be armed)
 
 **Retreat Equity**:
 The mobility value of Energy attached toward a body's printed Retreat cost — an ADDITIVE orthogonal

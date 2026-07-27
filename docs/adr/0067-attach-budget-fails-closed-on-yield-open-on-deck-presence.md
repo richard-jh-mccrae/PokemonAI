@@ -85,3 +85,102 @@ It buys soundness against a ~0.1% prized-copy corner at the cost of reinstating 
   The rider keeps the Budget's view complete while every existing clause consumer sees exactly
   what it saw before. New vocabulary this adds to the compendium: `to_hand`, `distinct_types`,
   `target_type` (a recipient's required EnergyType), and `energy_type` on an accel clause.
+
+## Amendment (2026-07-27, grilled — issue #142, Phase 1d): the leg is chosen by WHICH CONSUMER ASKS
+
+The original decision splits the epistemic by **what** is uncertain (yield vs deck presence). Phase
+1d's consumer sweep found that insufficient: the same deck-presence uncertainty has *opposite* safe
+directions depending on the question being asked, so the leg must also be chosen by **who is
+asking**.
+
+**The Provable Budget.** A second reading of the same Budget, one argument apart: the deck-fetch leg
+counts a type only where `CountTriple.floor >= 1` (the pigeonhole surplus — more unseen copies than
+hidden prize slots, so they cannot all be prized) instead of `ceiling > 0`. Same oracle, same clause
+interpreter, same caps; everything already certain is in BOTH legs — an Energy in hand, an Item accel
+(Items all play, no quota to lose), a discard-sourced attach over the public pile. Both legs collapse
+once a deck-revealing search anchors the prizes.
+
+**The assignment rule.** A consumer takes the fail-OPEN leg when a false *famine* is the costly error
+— it is about to STAND DOWN, and the original +105 blunder is what standing down wrongly costs. It
+takes the Provable leg when a false *live-ness* is the costly error — it is about to SPEND something
+that expires unused if the reach never materialises (`dont-play-damage-boost-when-cant-attack`: an
+Item, discarded having buffed nothing, ep83966336 f14).
+
+**Known limitation, stated rather than implied.** The instrument is imperfect for the case that
+motivated it. The residual risk behind a spend decision is largely the **one-Supporter-per-turn slot**
+— the Budget enumerates each Supporter as an alternative play-set and asserts only that *a* play-set
+exists, never which one the turn spends — and no leg models that. The Provable leg addresses it
+obliquely, by zeroing the deck leg (`floor = 0` whenever `unseen <= 6`, i.e. every realistic Energy
+suite pre-anchor). Accepted for a −12 nudge; explicitly NOT extended to the composed-line KO claim,
+which keeps the fail-open leg at parity with its predecessor. The honest instrument for the tail —
+whose error runs ≈0.06% at 3 unseen copies but ≈13% at 1 — is `readiness_p`, tracked as **#175**.
+
+## Amendment (2026-07-27, grilled — issue #142): famine scans ALL attacks, and carries a rule-level leg
+
+Two corrections to this ADR's Consequences section, both found by building against it.
+
+1. **The famine premise is `not reachable_attach(active, None)`, not `…, "cheapest"`.** Once costs
+   are typed, "the cheapest attack is unpayable ⇒ cannot attack" is unsound — a cheap `{F}{F}` can be
+   unpayable while a dearer all-colourless cost is payable. `attack_id=None` scans every attack. (The
+   shipped 0a code is already correct; the prose was not.)
+2. **Famine is not purely an affordability question.** A body that cannot legally attack is a famine
+   however much Energy it holds: Asleep or Paralyzed ("it cannot attack or retreat",
+   `docs/rulebook.txt` L190 / L206), or the first player on turn 1 (`turn <= 1`; rulebook L152). These
+   are SIDE-level facts — the condition flags ride on the player dict, not the body — so they live as
+   `MySide.attack_blocked` on the StateModel, and `CombatMath.reachable_attach` stays body-scoped
+   (typed cost plus ADR-0033 locks). The engine-menu conjunct is NOT the mechanism: it remains on the
+   attached-plus-manual signal, where its own guard is corrected from "is there an Energy card in
+   hand" to "is the Budget non-empty" — the same under-read as the retired `+1`, one conjunct away.
+
+**Composition with doom.** `active_doomed` over-claims their threat (worst-case, relax-only); the
+corrected famine is optimistic about my own reach on the deck leg. Under `active_doomed and
+active_famine` the two therefore pull opposite ways rather than compounding, and the conjunction is
+tighter than either leg. The one path that could still manufacture a false famine — an accel card
+with no Effect-Clause row — is audited and CI-gated by `tests/strategy/test_attach_budget_coverage.py`.
+
+## Amendment (2026-07-27, grilled — issue #142): hand SPECIAL Energy is a Function Tag, not a branch
+
+A third way the Budget went silently blind, found while swapping the consumers — and live on a
+shipped deck, so it belongs beside the fail-closed rulings above rather than in a follow-up.
+
+The Budget's hand leg counted `is_typed_basic_energy`, so a **Special** Energy contributed nothing.
+Ignition Energy "provides {C} Energy… If this card is attached to an Evolution Pokémon, it provides
+{C}{C}{C} Energy instead" (card text, `data/EN_Card_Data.csv` id 17) — one attach arms a Mega
+Starmie ex from ZERO. mega_starmie runs it; slowking runs Boomerang (9) and Telepath Psychic (19).
+Unmodelled, that board reads as a famine while the hand holds the card that arms it: the same class
+as the retired `+1`, one zone over.
+
+**Ruled: the provision is a `provides:N` / `provides_evo:N` PARAMETRIC Function Tag** — the same
+shape and the same reason as `dig:N`, per-card DATA that ages with the card pool through the
+card-functions pipeline rather than a constant in the affordability code. Curated in
+`tools/meta_tracker/function_overrides.json` against the card text (unioned at build, never
+clobbered by regeneration). The COLOUR is deliberately NOT tagged — `CardStat.energyType` already
+carries it, so the tag adds only what the stats cannot say. The manual attach consequently plays one
+source GROUP rather than one unit: a Basic is one, a Special is however many it prints, coloured
+exactly as `_attached_units` colours the same card once attached.
+
+Untagged still contributes ZERO (the yield ruling above, unchanged), and
+`test_attach_budget_coverage.py` now audits Special Energy in shipped decks exactly as it audits
+accel cards — verified non-vacuous by dropping the tag and watching the gate fail.
+
+### The Decision Gate's result, recorded here because its probe did not survive
+
+`tools/train/probes/famine_decider_sweep.py` replayed all **332** recorded Corrections through both
+premises, fresh Pilot per arm per frame: **332 agree, 0 flips, gate PASS**. Read honestly that says
+the corpus holds no frame that DISCRIMINATES the two premises — the shipped interim `+1` patch had
+already fixed dragapult f70 — not that the swap was validated by it.
+
+The probe is not in the tree. Unlike its siblings, whose retired rungs survive at weight 0 and stay
+replayable, it compared two PREMISES and one of them is now deleted, so it would report zero flips
+trivially — unrunnable in the same way #141's `promote_retreat_sweep.py` was. The result is recorded
+here, and the coverage the sweep could not provide lives in
+`tests/strategy/test_famine_premise.py`: boards built by mutating a real observation where the two
+premises genuinely disagreed (a Paralyzed or Asleep Active carrying enough Energy to pay its attack),
+plus the fail-OPEN direction on an unreadable body and the one row this phase deliberately starts
+firing on.
+
+**Fail direction, stated because it is easy to invert.** `reachable_attach` fails CLOSED — an
+unknown `CardStat` makes no claim and returns False. `active_famine` must NOT simply negate it: that
+turns "I cannot tell" into "PROVABLE famine" and fires the +105 stall this ADR exists to prevent. The
+unreadable body is therefore checked BEFORE the oracle is asked, and only the rule leg
+(`attack_blocked`) may claim a famine without reading a stat.

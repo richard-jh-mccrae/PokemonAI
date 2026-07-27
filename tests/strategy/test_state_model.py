@@ -504,3 +504,102 @@ def test_my_armed_clock_is_none_for_an_unknown_body():
     m = _model(_player(active=_pult(energies=[]), bench=[], prize=4),
                _player(active=_poke(RIOLU, hp=80, serial=3), bench=[], prize=6))
     assert m.mine.turns_to_afford(None) is None
+
+
+# ── the Provable Budget and the famine read (#142, ADR-0067 amendment) ─────────────────────────
+
+def _f70_shape(**kw):
+    """The originating frame: Active Dragapult ex at ZERO Energy, Crispin the only hand card (so
+    no Energy card is in hand at all), the shipped 3x{R}/3x{P}/2x{D} suite still in the deck."""
+    return _model(_player(active=_pult(energies=[]), hand=[CRISPIN], prize=4),
+                  _player(active=_poke(RIOLU, hp=80, serial=3), prize=6), **kw)
+
+
+def test_the_provable_deck_leg_is_empty_pre_anchor_on_a_thin_suite():
+    """`floor = max(0, unseen - prizes_hidden)`, so a 3-copy type against 4 hidden prizes proves
+    nothing. ADR-0067 predicted exactly this and it is why the famine premise keeps the OPEN leg."""
+    m = _f70_shape()
+    assert m.mine.deck_energy_types == frozenset({FIRE, PSYCHIC, DARKNESS})
+    assert m.mine.deck_energy_types_provable == frozenset()
+
+
+def test_the_provable_deck_leg_fills_once_the_prizes_are_anchored():
+    """Anchored, every unseen copy is in the deck and the Count Triple's legs collapse — so the
+    two Budget legs stop differing, which is the regime ADR-0067 says no consumer should branch on."""
+    m = _f70_shape(own_prizes={MUNKIDORI: 4})
+    assert m.mine.deck_energy_types_provable == m.mine.deck_energy_types
+    assert FIRE in m.mine.deck_energy_types_provable
+
+
+def test_the_famine_read_dissolves_on_the_f70_shape():
+    """Crispin attaches one Basic by its effect AND hands a second of a DIFFERENT type the unspent
+    manual attach then plays, so Dragapult ex reaches Phantom Dive's {R}{P} from zero."""
+    assert _f70_shape().mine.active_famine is False
+
+
+def test_the_provable_leg_still_reads_the_f70_shape_as_unreachable():
+    """Same board, sound leg: nothing about that deck fetch is PROVABLE pre-anchor, so a consumer
+    about to spend a card that expires unused gets the conservative answer."""
+    m = _f70_shape()
+    assert m.mine.reachable_attach(m.mine.active) is True
+    assert m.mine.reachable_attach(m.mine.active, provable=True) is False
+
+
+def test_the_two_legs_agree_once_the_prizes_are_anchored():
+    m = _f70_shape(own_prizes={MUNKIDORI: 4})
+    assert m.mine.reachable_attach(m.mine.active, provable=True) is True
+
+
+def test_a_provable_famine_is_a_famine_on_both_legs():
+    """An empty hand and no attach reaches nothing however the deck leg is read."""
+    m = _model(_player(active=_pult(energies=[]), hand=[], prize=4),
+               _player(active=_poke(RIOLU, hp=80, serial=3), prize=6), energy_attached=True)
+    assert m.mine.active_famine is True
+    assert m.mine.reachable_attach(m.mine.active, provable=True) is False
+
+
+def test_paralysis_is_a_famine_however_rich_the_budget():
+    """`rulebook.txt` L206: a Paralyzed Pokemon "cannot attack or retreat". The Energy math says
+    Phantom Dive is paid; the rules say no attack happens, and famine must agree with the rules."""
+    me = _player(active=_pult(energies=[E_R, E_P]), hand=[CRISPIN], prize=4)
+    me["paralyzed"] = True
+    m = _model(me, _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
+    assert m.mine.reachable_attach(m.mine.active) is True      # the oracle stays a COST question
+    assert m.mine.attack_blocked is True
+    assert m.mine.active_famine is True
+
+
+def test_sleep_is_a_famine_however_rich_the_budget():
+    """`rulebook.txt` L190: "If a Pokemon is Asleep, it cannot attack or retreat.\""""
+    me = _player(active=_pult(energies=[E_R, E_P]), prize=4)
+    me["asleep"] = True
+    m = _model(me, _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
+    assert m.mine.active_famine is True
+
+
+def test_a_rotating_condition_that_does_not_block_attacking_is_not_a_famine():
+    """Only Asleep and Paralyzed stop a Pokemon attacking (`rulebook.txt` L215 lists them as the
+    only two that block retreat; Confused flips a coin, it does not forbid the attack)."""
+    me = _player(active=_pult(energies=[E_R, E_P]), prize=4)
+    me["confused"], me["poisoned"], me["burned"] = True, True, True
+    m = _model(me, _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
+    assert m.mine.attack_blocked is False
+    assert m.mine.active_famine is False
+
+
+def test_the_first_player_cannot_attack_on_turn_one():
+    """`rules.md` §first-turn / rulebook L152 — the starting player skips the attack step on turn 1.
+    `turn <= 1` is the idiom every other site in the codebase already uses for it."""
+    m = _model(_player(active=_pult(energies=[E_R, E_P]), prize=4),
+               _player(active=_poke(RIOLU, hp=80, serial=3), prize=6), turn=1)
+    assert m.mine.attack_blocked is True
+    assert m.mine.active_famine is True
+
+
+def test_a_body_less_side_makes_no_famine_claim_rather_than_crashing():
+    """Fail-OPEN on an unreadable board, the opposite of the oracle underneath. `reachable_attach`
+    returns False for "I cannot tell", and negating that would turn silence into a PROVABLE famine
+    and fire the stall this premise exists to kill (the direction the retired signal spelled out:
+    "True on unknown stats ... only on a PROVABLE famine", ep83457493 f20)."""
+    m = _model(_player(prize=4), _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
+    assert m.mine.active_famine is False

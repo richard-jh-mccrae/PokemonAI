@@ -26,11 +26,39 @@ REPO = Path(__file__).resolve().parents[2]
 #: The exact model field set ONE per-decision `Board` build touches, as measured on real correction
 #: frames. Every entry traces to a field migrated in 0b under ADR-0068 decision 3's criteria; the
 #: `theirs.*.prize_value` rows are the prize map the cross-side race composite reads.
+#: **Re-measured 2026-07-27 (#142, Phase 1d).** **Famine** is now read off the model on EVERY
+#: decision, not only on a menu offering an attach, so the deck-availability chain
+#: (`visible_counts` -> `unseen_counts` -> `deck_energy_counts` -> the two typed leg projections)
+#: moved out of `ATTACH_DECIDER_PROFILE` and into the per-decision cost. Measured on these frames,
+#: dragapult_ex, the retired premise vs the oracle: **1.216 ms -> 1.511 ms per Board build
+#: (+0.294 ms, +24%)**. Paid once per decision — every field here memoizes for the life of the snapshot, and
+#: both Budget legs share the one `deck_energy_counts` derivation, so the second leg is an extra
+#: `attach_budget` assembly rather than a second walk over my zones. Accepted: it is the price of
+#: the famine premise being typed and accelerator-aware at all, which is the entire point of the
+#: phase, and it is ~3 orders below the per-match budget (grader: 2 vCPUs x ~10 min/match).
 PER_DECISION_PROFILE = frozenset({
+    "mine.active",
+    "mine.active.energy_key",
+    "mine.active.stat",            # the fail-OPEN unreadable-body check the famine read makes first
+    "mine.active_famine",
+    "mine.attach_budget",
+    "mine.attack_blocked",
+    "mine.bench",
+    "mine.bodies",
+    "mine.body_raws",
+    "mine.deck_count",
+    "mine.deck_energy_counts",
+    "mine.deck_energy_types",
+    "mine.deck_energy_types_provable",
     "mine.discard_energy_counts",
     "mine.hand_energy_counts",
+    "mine.hand_energy_types",
     "mine.hand_ids",
+    "mine.prizes_hidden",
     "mine.prizes_remaining",
+    "mine.reachable_attach",
+    "mine.unseen_counts",
+    "mine.visible_counts",
     "model.prize_race",
     "theirs.active",
     "theirs.active.prize_value",
@@ -52,20 +80,11 @@ PER_DECISION_PROFILE = frozenset({
 #: one pass over my zones per decision, memoized for the whole decision, and it is the price of the
 #: Budget being typed at all. Everything else here is body-view construction (dict wrapping, no
 #: derivation) plus the memoized per-body Budget and reachable-damage reads.
+#: **Re-measured 2026-07-27 (#142).** This set has COLLAPSED, and the collapse is the finding: the
+#: deck-availability chain it used to name is now paid on every decision by the famine read, so the
+#: attach decider adds essentially nothing over the baseline. The cost moved — it did not grow.
 ATTACH_DECIDER_PROFILE = frozenset({
-    "mine.active",
-    "mine.attach_budget",
-    "mine.bench",
     "mine.best_reachable_damage",
-    "mine.bodies",
-    "mine.body_raws",
-    "mine.deck_count",
-    "mine.deck_energy_counts",
-    "mine.deck_energy_types",
-    "mine.hand_energy_types",
-    "mine.prizes_hidden",
-    "mine.unseen_counts",
-    "mine.visible_counts",
 })
 
 #: The model fields the PROMOTE/RETREAT DECIDER adds (#141, ADR-0073) on any menu where it prices an

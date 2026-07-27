@@ -49,13 +49,16 @@ HYPOTHESES = [
         rationale="A flat this-turn attack-damage boost (Premium Power Pro / Black Belt's Training / Maximum "
                   "Belt — `CardStat.damageBoost > 0`) is worth NOTHING unless you attack this turn, and its "
                   "effect expires at end of turn — so don't play it when the Active can't pay any attack this "
-                  "turn (`not active_attack_payable`): the guaranteed-dead case (turn-1-going-first can't "
+                  "turn (`not active_attack_provable`): the guaranteed-dead case (turn-1-going-first can't "
                   "attack, or an unpowered Active with no Energy to reach a cost). The boost would be "
                   "discarded having buffed nothing (ep83966336 f14: two Premium Power Pro over End with a "
                   "0-Energy Riolu and no Energy in hand). −12 nets it below End; silent whenever an attack IS "
-                  "affordable, so a real pre-attack boost keeps its tactical value (`_boost_lethal_tactical`).",
+                  "affordable, so a real pre-attack boost keeps its tactical value (`_boost_lethal_tactical`). "
+                  "Reads the **Provable Budget** leg (#142, ADR-0067 amendment), NOT the famine leg: the boost "
+                  "is spent irrevocably now and expires unused if the reach never materialises, so a false "
+                  "live-ness is the costly error here — the opposite fail direction from a stand-down gate.",
         when=lambda c: c.option_type == _PLAY and c.stat is not None
-        and getattr(c.stat, "damageBoost", 0) > 0 and not c.board.active_attack_payable,
+        and getattr(c.stat, "damageBoost", 0) > 0 and not c.board.active_attack_provable,
         weight=-12, status="assumed"),
     Hypothesis(
         id="dont-spend-unneeded-supporter",

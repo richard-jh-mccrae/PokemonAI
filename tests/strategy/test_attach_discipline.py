@@ -11,7 +11,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
@@ -109,22 +109,65 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
     assert p.decide(obs) == [1]                                      # so Staryu (Line base) fed, not Cinderace
 
 
+NEBULA_BEAM, JETTING_BLOW = 9001, 9002
+
+
+def _arm_pilot():
+    """A pilot whose Mega Starmie ex carries REAL attack records. The retired count matcher needed
+    only `maxDamageCost`; the oracle that replaced it (#142) matches typed slots, so the boundary
+    probe now has to state the attacks it is a boundary of. Own builder — `_stats()` is shared by
+    the rest of this file and adding attacks there would move other scores."""
+    stats = DictCardStatProvider(
+        {MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+                        minAttackCost=1, maxDamageCost=3, evolvesFrom="Staryu",
+                        attacks=(JETTING_BLOW, NEBULA_BEAM)),
+         WATER: CardStat(WATER, name="Water", energyType=2, cardType=5),
+         IGNITION: CardStat(IGNITION, name="Ignition", energyType=0, cardType=6)},
+        attacks={NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3, energyTypes=(0, 0, 0)),
+                 JETTING_BLOW: AttackStat(JETTING_BLOW, damage=60, cost=1, energyTypes=(0,))})
+    return Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
+                 general_strategy=GENERAL_STRATEGY, stats=stats,
+                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1",
+                                                     "provides_evo:3"]}))
+
+
+def _arm_board(p, energies, hand=()):
+    me = {"active": [{"id": MEGA, "energies": list(energies), "hp": 330}], "bench": [],
+          "hand": [{"id": c} for c in hand], "prize": [None] * 4}
+    obs = {"current": {"players": [me, {"active": [None], "bench": [], "prize": [None] * 6}],
+                       "yourIndex": 0, "turn": 6},
+           "select": {"context": MAIN, "minCount": 1, "maxCount": 1, "option": []}}
+    return p._board(obs, obs["select"], carried=p.carried())
+
+
 @pytest.mark.req("REQ-GEN-0016")
-def test_attach_completes_biggest_attack_boundary():
-    """`_attach_completes_biggest_attack` — the board fact behind `_active_arm_available` (ms 85163079
-    f51). It turns on ONLY when THIS attach crosses the Active up to its biggest-attack cost. Its
-    doom-rung consumer is deleted (#139); the fact still gates the go-down-swinging read that the
-    decider's survival gate and the Lunar-Cycle famine share. Guards the un-fixtured counter-case
-    ep83037962 f48 (1W->2W, still short of Nebula CCC=3) — a synthetic boundary probe, no real replay frame.
-    Mega Starmie ex maxDamageCost=3 (Nebula Beam CCC)."""
-    p = _pilot()
-    # f51 shape: 2 Water -> +1 plain = 3 == cost -> COMPLETES (go down swinging).
-    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": [WATER, WATER]}, []) is True
-    # f48 shape: 1 Water -> +1 plain = 2 < cost 3 -> does NOT complete (don't overbuild; -45 stays).
-    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": [WATER]}, []) is False
-    # already maxed: 3 Water -> not under max at all -> False (nothing to complete).
-    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": [WATER, WATER, WATER]}, []) is False
-    # a discard_eot burst (Ignition CCC) onto the Evolution provides 3: 0 -> 3 == cost -> completes.
-    assert p._attach_completes_biggest_attack({"id": MEGA, "energies": []}, ["discard_eot"]) is True
-    # fail-CLOSED: unknown target / no CardStat -> False.
-    assert p._attach_completes_biggest_attack(None, []) is False
+def test_go_down_swinging_turns_on_only_at_the_biggest_attacks_boundary():
+    """`Board.active_arm_available` — the go-down-swinging read the decider's survival gate and the
+    Lunar-Cycle famine share (ms 85163079 f51). Restated at the BOARD seam: the private count
+    matcher it used to call is deleted (#142), and a pin on a deleted predicate is no pin at all.
+    Guards the un-fixtured counter-case ep83037962 f48 (1W->2W, still short of Nebula Beam CCC=3) —
+    a synthetic boundary probe, no real replay frame."""
+    p = _arm_pilot()
+    # f51 shape: 2 Water attached, a third in hand -> the Budget completes CCC -> arm and swing.
+    assert _arm_board(p, [WATER, WATER], hand=[WATER]).active_arm_available is True
+    # f48 shape: 1 Water attached, one in hand -> 2 < CCC=3 -> don't overbuild for a turn that won't come.
+    assert _arm_board(p, [WATER], hand=[WATER]).active_arm_available is False
+    # already armed: CCC is payable with what is ATTACHED -> nothing left for an attach to complete.
+    assert _arm_board(p, [WATER, WATER, WATER], hand=[WATER]).active_arm_available is False
+    # nothing to attach: the boundary is the BUDGET's, not the body's -> no arm without one.
+    assert _arm_board(p, [WATER, WATER], hand=[]).active_arm_available is False
+
+
+@pytest.mark.req("REQ-GEN-0016")
+def test_a_hand_ignition_arms_an_evolution_from_zero():
+    """Ignition Energy "provides {C}{C}{C}" attached to an Evolution Pokémon (card text,
+    `data/EN_Card_Data.csv` id 17) — so ONE attach arms a bare Mega Starmie ex for Nebula Beam CCC.
+
+    mega_starmie actually runs it, and the Attach Budget could not see it: the hand leg counts typed
+    BASIC Energy, and a Special Energy is not one unit of its own colour. Left unmodelled this board
+    read as a famine while the hand held the card that arms it — a false famine on a shipped deck,
+    the same class as the retired `+1` one zone over. The provision is now a `provides:N` Function
+    Tag, so this is data the card pool carries rather than a constant in the affordability code."""
+    p = _arm_pilot()
+    assert _arm_board(p, [], hand=[IGNITION]).active_arm_available is True
+    assert _arm_board(p, [], hand=[]).active_arm_available is False   # nothing in hand, nothing armed

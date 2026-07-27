@@ -571,17 +571,23 @@ class Board:
     recycle_dead_only: bool = False       # my discard's recycle pool (Pokémon/Basic Energy) is non-empty
                                           # yet every member is a dead pick (a stranded, hand-unplayable
                                           # evolution; no Energy) — gates `dont-recycle-the-dead` (f33)
-    active_attack_payable: bool = True    # my Active can PAY some attack this turn (attached Energy +
-                                          # the best unspent hand attach ≥ its cheapest attack cost).
-                                          # True when unknown (fail-open) — gates the starved stall-gust
     active_fully_powered: bool = False    # my Active already carries its HIGHEST-damage attack's cost
                                           # (attached ≥ maxDamageCost) — a burst Energy has no urgent
                                           # job; False when unknown (fail-closed keeps the keep rules)
-    active_attack_payable_via_accel: bool = False  # a PLAYABLE hand energy-accelerator (`tutor_energy`,
-                                          # e.g. Crispin) could fetch+attach ONE Energy and make my Active
-                                          # attack-payable THIS turn — the false famine `active_attack_payable`
-                                          # (attached + hand-attach only) misses; False when unknown, so a
-                                          # PROVABLE famine still fires the stall-gust (dragapult f70)
+    active_famine: bool = False           # **Famine** (#142): my Active cannot attack this turn — NO attack
+                                          # reachable under the FULL Attach Budget, or the rules forbid it one
+                                          # at all (Asleep/Paralyzed/turn-1-going-first, `attack_blocked`).
+                                          # The corrected premise the stall-gust family reads; False when
+                                          # unknown, so only a demonstrable famine stands anything down
+    active_attack_provable: bool = True   # my Active can PAY and legally use an attack this turn on the
+                                          # **Provable Budget** — the sound deck leg, plus the engine's own
+                                          # attack menu. The read for a consumer about to SPEND something that
+                                          # expires unused (a this-turn damage boost); True when unknown
+    active_unarmed_but_able: bool = False  # my Active carries ZERO Energy yet can still REACH an attack
+                                          # this turn (not `active_famine`) — the descriptive fact behind
+                                          # "go down swinging rather than stall-gust" (ml f19, dragapult
+                                          # f70). Derived once because two stall-gust rules need the
+                                          # identical clause
     immediate_preevo_in_play: bool = False  # the payoff's immediate pre-evo (e.g. Drakloak) is ALREADY on
                                           # my board, so a hand copy of it is redundant — refuel over it
     deploy_now_ids: frozenset = field(default_factory=frozenset)  # hand card ids that are evolutions with
@@ -726,14 +732,6 @@ class Context:
     attach_target_under_max: bool = False  # receiving Pokémon carries fewer Energy than its
                                            # HIGHEST-damage attack costs — can't yet fire its big attack
                                            # (1 W can Jetting Blow but not Nebula Beam CCC). Fail-CLOSED (False when unknown).
-    attach_completes_biggest_attack: bool = False  # this ATTACH onto the ACTIVE crosses it from short-of to
-                                           # able-to-afford its HIGHEST-damage attack THIS turn (was < maxDamageCost,
-                                           # attached + provided >= maxDamageCost). Gates the stand-down of
-                                           # `dont-overbuild-the-doomed-wincon`: a DOOMED Active that this very
-                                           # attach turns the big attack ON should still fire it — go down swinging
-                                           # (ms 85163079 f51: 2W+1 = Nebula 210), unlike one merely overbuilt for a
-                                           # turn that won't come (ep83037962 f48: 1W→2W still short of CCC=3).
-                                           # Fail-CLOSED (False when target / CardStat / maxDamageCost unknown).
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
                                            # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
@@ -5136,9 +5134,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and "accel_source" in at_roles and self._attach_target_needs(at_target)
             and not board.accel_recipient_missing and not board.bench_wincon_ready)
-        attach_completes_biggest_attack = (
-            option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
-            and self._attach_completes_biggest_attack(at_target, tags))
         search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, cid, board)
         search_unlikely = self._search_probable_whiff(option, cid, board)
         search_confirmed = self._search_confirmed_hit(option, cid, board, plan)
@@ -5182,7 +5177,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_is_energy=self._attach_is_energy(stat),
                        attach_target_is_utility_body=attach_target_is_utility_body,
                        attach_target_under_max=self._attach_target_under_max(at_target),
-                       attach_completes_biggest_attack=attach_completes_biggest_attack,
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_fuels_dormant_ability=self._attach_fuels_dormant_ability(stat, at_target),
                        attach_is_tool_deploy_target=attach_is_tool_deploy_target,
@@ -5479,61 +5473,32 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return len((target.get("energies") or [])) < cost
 
-    def _attach_completes_biggest_attack(self, target: dict | None, tags: list) -> bool:
-        """True if attaching this Energy onto the ACTIVE crosses it from short-of to able-to-afford its
-        HIGHEST-damage attack THIS turn — the attach COMPLETES the big attack. Guards the stand-down of
-        `dont-overbuild-the-doomed-wincon`: a doomed Active this very attach turns the payoff attack ON
-        should fire it (go down swinging, ms 85163079 f51: 2 W + 1 = Nebula CCC), unlike one merely
-        overbuilt for a turn that won't come (ep83037962 f48: 1 W → 2 W, still short of CCC=3, dies first).
-        `provided` mirrors the planner's `_attach_provided` (3 for a `discard_eot` burst onto an Evolution,
-        else 1). Fail-CLOSED (False when target / CardStat / maxDamageCost unknown), like `_attach_target_under_max`."""
-        if not target:
-            return False
-        stat = self.stats.get(target.get("id")) if self.stats else None
-        cost = getattr(stat, "maxDamageCost", None) if stat else None
-        if cost is None:
-            return False
-        have = len((target.get("energies") or []))
-        provided = 3 if ("discard_eot" in (tags or []) and getattr(stat, "evolvesFrom", None)) else 1
-        return have < cost and (have + provided) >= cost
-
-    def _active_attack_payable_via_accel(self, me: dict, ma: dict | None,
-                                         supporter_played: bool, basic_energy_in_deck: bool) -> bool:
-        """My Active could be made attack-payable THIS turn by a PLAYABLE hand energy-accelerator (a
-        `tutor_energy` card, e.g. Crispin: fetch a Basic Energy from the deck and attach it). The famine
-        stall-gust family reads only `active_attack_payable` (attached + best hand-attach) and misses the
-        deck-fetch accel, so it declares a FALSE famine (dragapult f70: Active Dragapult ex 0e, Crispin in
-        hand → Jet Headbutt {C} payable). Kept SEPARATE from `active_attack_payable` (attached-now truth
-        other consumers need). Fail-CLOSED (False on unknown stats / nothing to fetch / accel one short),
-        so a PROVABLE famine still fires the stall."""
-        if ma is None or not (self.stats and self.functions):
-            return False
-        stat = self.stats.get(ma.get("id"))
-        if stat is None or (stat.minAttackCost or 0) <= 0 or not basic_energy_in_deck:
-            return False
-        if (len(ma.get("energies") or []) + 1) < (stat.minAttackCost or 0):
-            return False                                   # even one accel-attach is short of the cheapest attack
-        for c in (me.get("hand") or []):
-            cid = c.get("id") if c else None
-            if cid is None or "tutor_energy" not in self.functions.tags(cid):
-                continue
-            cstat = self.stats.get(cid)
-            if getattr(cstat, "cardType", None) == 3 and supporter_played:  # 3 = Supporter: only one/turn
-                continue
-            return True
-        return False
-
     def _active_arm_available(self, ma: dict | None, bench_wincon_ready: bool) -> bool:
         """Go-down-swinging is available on the Active: it is a real ATTACKER (NOT a utility draw/tutor/stall
-        body) whose HIGHEST-damage attack ONE more Energy would COMPLETE this turn, and there is no ready
+        body) whose HIGHEST-damage attack this turn's Attach Budget would COMPLETE, and there is no ready
         benched win-condition to retreat into instead. Distinguishes ml f21 (doomed Solrock — Cosmic Beam
         {F} completed by one {F} → arm + swing for 70) from f42 Makuhita (biggest attack costs 2, one {F}
         short) / f54 Lunatone (utility engine) and from the retreat-into-a-ready-wincon case (accel f70).
         Fail-CLOSED. Backs `arm-the-doomed-active`, `dont-feed-the-doomed`'s go-down-swinging stand-down,
-        and the Lunar-Cycle famine's yield-to-arming."""
+        and the Lunar-Cycle famine's yield-to-arming.
+
+        Both legs are the ONE oracle at different budgets (#142), which is what retired the last untyped
+        count-vs-`maxDamageCost` matcher in the tree: the biggest attack is NOT payable on the EMPTY
+        budget — the honest "with what is attached right now" reading — but IS reachable under the full
+        one. So it reads typed slots rather than a bare count, honours ADR-0033 attack locks, and sees an
+        accelerator's yield instead of assuming a flat one more Energy."""
         if ma is None or not self.stats or bench_wincon_ready or self._is_utility_body(ma.get("id")):
             return False
-        return self._attach_completes_biggest_attack(ma, [])
+        model = getattr(self, "_state_model", None)
+        body = model.mine.active if model is not None else None
+        stat = self.stats.get(ma.get("id"))
+        aids = (getattr(stat, "attacks", None) or ()) if stat is not None else ()
+        if body is None or not aids:
+            return False
+        biggest = max(aids, key=self._attack_damage)
+        if self.combat.reachable_attach(ma, biggest, budget=Budget()):
+            return False                    # already armed — there is nothing left for an attach to complete
+        return bool(model.mine.reachable_attach(body, biggest))
 
     def _immediate_preevo_in_play(self, me: dict) -> bool:
         """The payoff's IMMEDIATE pre-evolution (e.g. Drakloak for the Dragapult line) is ALREADY on my
@@ -5787,6 +5752,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                    + (0 if state.get("energyAttached")
                       else self._best_hand_attach_units(
                           hand_ids_now, self.stats.get((ma or {}).get("id")) if self.stats else None)))
+        # **Famine** (#142) — "my Active cannot attack this turn", read ONCE off the model: no attack
+        # reachable under the full Attach Budget, or the rules forbid one at all (`attack_blocked`).
+        famine = model.mine.active_famine
+        # 0 attached, yet an attack is still reachable this turn — the fact behind "go down swinging
+        # rather than stall-gust". Derived here because two stall-gust rules need the identical clause.
+        unarmed_but_able = len((ma or {}).get("energies") or []) == 0 and not famine
         base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
                      else Plan.SETUP)                   # the readiness core (SETUP→RACE)
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
@@ -5827,11 +5798,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_prizes_remaining=model.prize_race.opp_prizes_remaining,  # the ONE prize-race read
             reusable_energy_in_hand=self._has_reusable_energy(me.get("hand") or []),
             recycle_dead_only=self._recycle_dead_only(me),
-            active_attack_payable=(self._active_attack_payable(ma, payable)
-                                   and not self._attack_impossible_on_menu(
-                                       select, me, bool(state.get("energyAttached")))),
-            active_attack_payable_via_accel=self._active_attack_payable_via_accel(
-                me, ma, bool(state.get("supporterPlayed")), self._basic_energy_in_deck(deck_empty)),
+            active_famine=famine,                                        # ← StateModel (#142): the ONE
+            active_unarmed_but_able=unarmed_but_able,
+            active_attack_provable=(not model.mine.attack_blocked        # the rules first: a boost on
+                                    and model.mine.reachable_attach(model.mine.active, provable=True)
+                                    and not self._attack_impossible_on_menu(
+                                        select, model.mine.attach_budget(model.mine.active,
+                                                                         provable=True))),
             immediate_preevo_in_play=self._immediate_preevo_in_play(me),
             deploy_now_ids=self._deploy_now_ids(me, state.get("turn", 0)),
             active_arm_available=self._active_arm_available(ma, self._bench_wincon_ready(me)),
@@ -7271,52 +7244,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                              if n - seen.get(cid, 0) - prizes.get(cid, 0) <= 0)
         return frozenset(cid for cid, n in deck_counts.items() if seen.get(cid, 0) >= n)
 
-    def _active_attack_payable(self, ma: dict | None, payable: int) -> bool:
-        """My Active can PAY **and legally use** some attack this turn: ``payable`` (attached Energy +
-        the best unspent hand attach) covers an attack's cost AND that attack is not transient-locked.
-        True on unknown stats (fail-open — the starved stall-gust must only fire on a PROVABLE famine,
-        ep83457493 f20).
-
-        The lock half (ADR-0033) matters: a Riolu holding one {F} 'pays' Accelerating Stab, but it used
-        Accelerating Stab last turn and the card says it can't again — the engine offered no ATTACK
-        option at all. Energy math alone said payable, so `dont-play-damage-boost-when-cant-attack`
-        stood down and the agent burned a Premium Power Pro that expired having buffed nothing
-        (ml f69, CRITICAL)."""
-        stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
-        if stat is None:
-            return True
-        if payable < (stat.minAttackCost or 0):
-            return False
-        grant = self._transients.grant_for_serial((ma or {}).get("serial"))
-        if not grant:
-            return True
-        if grant.get("self_lock"):                     # every attack locked (blanket)
-            return False
-        same = grant.get("same_lock")                  # exactly one attack id locked
-        if same is None:
-            return True
-        affordable = [aid for aid in (getattr(stat, "attacks", None) or ())
-                      if self._attack_cost(aid) <= payable]
-        return any(aid != same for aid in affordable) if affordable else True
-
-    def _attack_impossible_on_menu(self, select, me: dict, energy_attached: bool) -> bool:
+    def _attack_impossible_on_menu(self, select, budget) -> bool:
         """The ENGINE says my Active cannot attack this turn: I am at the open turn menu and it lists no
         ATTACK option. Authoritative where the closed-form energy math is not — it already accounts for
         a transient attack-lock, a Special Condition, and turn-1-going-first, and unlike the ADR-0033
         tracker it survives a single-frame retest (a Correction carries one `obs`, so the tracker never
         saw last turn's attack).
 
-        NOT decisive while an attach could still turn an attack on: with the manual attach unspent and a
-        reusable Energy in hand, the ATTACK option simply hasn't appeared yet. Only once the attach is
-        gone (or there is nothing to attach) does an empty attack menu mean 'no attack this turn'."""
+        NOT decisive while THIS TURN'S ATTACH BUDGET could still turn an attack on — only once the
+        budget is empty does an empty attack menu mean 'no attack this turn'. The guard is the Budget
+        and not "a reusable Energy card sits in hand" (#142): the narrower reading is the SAME
+        under-read as the retired `+1`, and it fired at dragapult f70, where the hand was three
+        Supporters and Crispin's fetch-and-attach was invisible to it."""
         if not select or select.get("context") != _MAIN:
             return False
         opts = select.get("option") or []
         if not opts or any(o.get("type") == _ATTACK for o in opts):
             return False
-        if not energy_attached and self._has_reusable_energy(me.get("hand") or []):
-            return False
-        return True
+        return not (budget is not None and budget.size > 0)
 
     def _active_fully_powered(self, ma: dict | None) -> bool:
         """My Active already carries the Energy for its HIGHEST-damage attack (attached ≥

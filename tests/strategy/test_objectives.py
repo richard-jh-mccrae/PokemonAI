@@ -95,7 +95,7 @@ def test_snipe_target_on_my_path_sets_target_on_path():
     kill-switch zeroes the signal."""
     from common.strategy.context import _DAMAGE
     pilot = _shipped_pilot()
-    me = {"active": [{"id": 1031, "hp": 330, "energies": [{"id": 6}] * 6}],
+    me = {"active": [{"id": 1031, "hp": 330, "energies": [6] * 6}],
           "bench": [], "hand": [], "prize": [None] * 5}
     opp = {"active": [{"id": 678, "hp": 440, "energies": []}],
            "bench": [{"id": 676, "hp": 70}, {"id": 676, "hp": 70}, {"id": 676, "hp": 70}],

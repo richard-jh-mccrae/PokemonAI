@@ -695,14 +695,46 @@ class CombatMath:
         caps = {DISCARD_SUPPLY: dict(ctx.discard)}
         caps.update({c.group: c.cap for c in items + supporters if c.group is not None})
 
+        special = self._special_energy_groups(hand_ids, target_stat)
         options = set()
         for playset in playsets:
-            sources = [AttachUnit(frozenset(hand_energy_types))] if hand_energy_types else []
-            sources += [u for c in playset for u in c.hand_yields]
-            manual = [()] if energy_attached else [()] + [(s,) for s in sources]
+            # The manual attach plays exactly ONE source, but a source is a GROUP: a Basic Energy is
+            # one unit, a Special Energy is however many its provision prints (#142).
+            groups = [(AttachUnit(frozenset(hand_energy_types)),)] if hand_energy_types else []
+            groups += [(u,) for c in playset for u in c.hand_yields]
+            groups += list(special)
+            manual = [()] if energy_attached else [()] + groups
             effect = tuple(u for c in playset for u in c.effect_units)
             options.update(effect + m for m in manual)
         return Budget(options=tuple(sorted(options, key=lambda o: (-len(o), str(o)))), caps=caps)
+
+    def _special_energy_groups(self, hand_ids, target_stat) -> tuple:
+        """Manual-attach source groups for the SPECIAL Energy in hand — one group per card, sized by
+        its `provides:N` Function Tag and coloured by its ``energyType`` (#142).
+
+        A Special Energy is not one unit of its own colour, so the hand leg's typed-Basic count
+        cannot see it: Ignition Energy provides {C}{C}{C} on an Evolution, which is a Mega Starmie ex
+        armed from ZERO by a single attach. Left unmodelled it is a FALSE FAMINE on a shipped deck —
+        the same bug class as the retired `+1`, one zone over.
+
+        Colour follows :meth:`_attached_units` exactly, so a hypothetical attach and the real board
+        it models agree: a colourless provision carries ``{0}`` and pays colourless slots only.
+        Fail-CLOSED on an untagged card, an unknown stat or an unknown target."""
+        if target_stat is None or not self.functions:
+            return ()
+        evolution = getattr(target_stat, "evolvesFrom", None) is not None
+        groups = []
+        for cid in (hand_ids or ()):
+            stat = self._card_stat(cid)
+            if stat is None or not stat.is_special_energy:
+                continue
+            count = self.functions.energy_provision(cid, evolution=evolution)
+            if count <= 0:
+                continue
+            etype = getattr(stat, "energyType", None)
+            pool = frozenset() if etype is None else frozenset({etype})
+            groups.append(tuple(AttachUnit(pool) for _ in range(count)))
+        return tuple(groups)
 
     def _attach_contribution(self, card_id, group: int, target_stat, ctx: _AttachCtx):
         """What one hand card offers the Budget, or None if it offers nothing (fail-CLOSED)."""

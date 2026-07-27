@@ -30,7 +30,11 @@ def _obs(me, opp, turn=6):
 
 
 def _E(n):
-    return [{"id": 1}] * n
+    """``n`` attached Energy, as the engine gives them: bare card ids. (Verified against the
+    recorded corrections — e.g. `dp_attach_the_recipients_color_f86.json` carries ``[2]``. The
+    earlier dict shape survived only because every reader took ``len()``; a typed read of the same
+    field goes looking for a CardStat and finds an unhashable dict.)"""
+    return [1] * n
 
 
 @pytest.mark.req("REQ-MATCH-0002")

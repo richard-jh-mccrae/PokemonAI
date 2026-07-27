@@ -49,6 +49,16 @@ def _clauses() -> dict:
     return {int(k): v for k, v in raw.items()}
 
 
+def _special_energy_ids() -> set:
+    """Special Energy card ids, read off the shipped CSV's type column — the same pure-data seam the
+    rest of this gate uses, so it needs no engine. (`CardStat.is_special_energy` answers the same
+    question at runtime from the engine's cardType 6; this file deliberately does not boot it.)"""
+    path = _ROOT / "data" / "EN_Card_Data.csv"
+    rows = csv.DictReader(path.read_text(encoding="utf-8").splitlines())
+    return {int(r["Card ID"]) for r in rows
+            if "Special Energy" in (r["Stage (Pok\u00e9mon)/Type (Energy and Trainer)"] or "")}
+
+
 def _deck_ids(deck_csv: Path) -> set:
     ids = set()
     for row in csv.reader(deck_csv.read_text(encoding="utf-8").splitlines()):
@@ -95,6 +105,33 @@ def test_every_accel_card_in_a_shipped_deck_is_modelled_or_explicitly_ruled_zero
         f"{deck_csv.parent.name}: accel-tagged cards with no Budget-readable Effect Clause: {gaps}. "
         "Author the clause in tools/meta_tracker/effect_overrides.json (verify the card text at "
         "source first), or add it to KNOWN_UNMODELLED with the ruling that makes zero correct.")
+
+
+@pytest.mark.parametrize("deck_csv", _shipped_decks(), ids=lambda p: p.parent.name)
+def test_every_special_energy_in_a_shipped_deck_carries_its_provision(deck_csv):
+    """The SECOND way a Budget goes silently blind (#142). A Special Energy is not one unit of its
+    own colour — Ignition Energy provides {C}{C}{C} on an Evolution — so the hand leg's typed-Basic
+    count cannot see it, and an untagged one contributes ZERO. On mega_starmie that zero is a Mega
+    Starmie ex reading as a famine while the Ignition in hand would arm it outright: a FALSE FAMINE
+    on a shipped deck, which is the exact class this phase exists to close.
+
+    The provision is a `provides:N` Function Tag (`provides_evo:N` where the card says "instead"),
+    curated in tools/meta_tracker/function_overrides.json against the card text — the same seam and
+    the same parametric shape as `dig:N`. The COLOUR is not tagged: CardStat.energyType has it."""
+    tags = _tags()
+    special = _special_energy_ids()
+    gaps = sorted(cid for cid in _deck_ids(deck_csv) if cid in special
+                  and not any(str(t).startswith("provides:") for t in tags.get(cid, ())))
+    assert not gaps, (
+        f"{deck_csv.parent.name}: Special Energy with no `provides:N` tag: {gaps}. Read the card's "
+        "'it provides …' line at data/EN_Card_Data.csv and add the tag to "
+        "tools/meta_tracker/function_overrides.json — untagged, the Attach Budget prices it at zero.")
+
+
+def test_the_special_energy_audit_has_something_to_audit():
+    """Guards the gate: if the card data stopped reporting Special Energy the check above would
+    pass vacuously on every deck."""
+    assert _special_energy_ids(), "no Special Energy found in the card data — the audit is vacuous"
 
 
 def test_the_known_unmodelled_list_stays_honest():

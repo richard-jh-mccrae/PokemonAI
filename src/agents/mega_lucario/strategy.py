@@ -305,7 +305,7 @@ HYPOTHESES = [
         and not (LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
                  and (c.board.active_is_weak_preevo
                       or (c.board.my_hand_size <= 1
-                      and (not c.board.active_attack_payable or c.board.active_doomed)
+                      and (not c.board.active_attack_provable or c.board.active_doomed)
                       and not c.board.active_arm_available))),
         # ^ ALSO stands down on a DEAD-HAND famine (engine online, hand ≤ 1, and the lone {F} can't arm a
         #   this-turn Active attack): draw 3 beats sinking the last card into a premature bench attach —
@@ -327,7 +327,7 @@ HYPOTHESES = [
         and LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
         and (c.board.active_is_weak_preevo
              or (c.board.my_hand_size <= 1
-                      and (not c.board.active_attack_payable or c.board.active_doomed)
+                      and (not c.board.active_attack_provable or c.board.active_doomed)
                       and not c.board.active_arm_available)),
         # ^ fires on the SAME broadened condition as the guard's stand-down (weak pre-evo OR dead-hand
         #   famine), so the two stay mutually exclusive. +30 (was +20) clears `concentrate-energy-on-wincon`

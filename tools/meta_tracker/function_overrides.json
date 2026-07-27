@@ -1,9 +1,12 @@
 {
  "_note": "Curated tags the probe can't reach, confirmed via tools/verify_meta_cards.py against card text. Unioned with probe-derived tags at build; never clobbered by regeneration. cardId -> [tags]. NOTE: `stall` is a curated *play-role* seed (a big-HP setup wall that declines to attack) — a usage pattern, not a parseable function; proper coverage needs replay-usage learning (see docs/card-functions.md). Inline names are for humans only.",
  "17": [
-  "discard_eot"
+  "discard_eot",
+  "provides:1",
+  "provides_evo:3"
  ],
  "19": [
+  "provides:1",
   "search"
  ],
  "66": [
@@ -154,5 +157,8 @@
  ],
  "162": [
   "recycle"
+ ],
+ "9": [
+  "provides:1"
  ]
 }
