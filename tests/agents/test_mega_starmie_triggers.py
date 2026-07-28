@@ -322,27 +322,52 @@ def _shipped_lucario_attack_stat():
     return _build_pilot("mega_lucario")[0]._attack_stat(982)   # Aura Jab
 
 
+def _turbo_flare_obs(*, bench=(STARYU,), discard=(), prize=6):
+    """A mega_starmie board with Cinderace Active. Driven through the real `_board()` so the read
+    reaches its StateModel — ADR-0076 retired the hand-injectable `Board(deck_known_counts=...)`
+    path, because anchoring is now the Count Triple's own regime rather than a separate branch."""
+    me = {"active": [{"id": CINDERACE, "hp": 160, "energies": []}],
+          "bench": [{"id": c, "hp": 70, "energies": []} for c in bench],
+          "hand": [], "discard": [{"id": c} for c in discard],
+          "prize": [None] * prize,
+          "deckCount": 60 - 1 - len(bench) - len(discard) - prize}
+    return {"current": {"yourIndex": 0, "turn": 5,
+                        "players": [me, {"active": [], "bench": [], "prize": []}]}}
+
+
+def _turbo_flare_units(sp, obs):
+    board = sp._board(obs, obs.get("select"), carried=sp.carried())
+    return sp._recover_units(965, {}, board, obs)
+
+
 @pytest.mark.req("REQ-ACCEL-0002")
 def test_turbo_flare_credit_is_need_and_fuel_gated():
     """`_recover_units` prices Turbo Flare like Aura Jab, with the fuel bound read from the DECK:
-    3 with a benched Staryu (its forward Mega Starmie needs 3) and Water in deck; 0 on an empty
-    bench (firing blanks — the signal the deck rules hand-encoded); 0 when the anchored deck is
-    dry of Basic Energy; the pre-anchor pigeonhole floor (9 Water unseen − 6 hidden prizes ≥ 3)
-    keeps the credit sound before the tracker resolves."""
-    from common.pilot import Board
+    the full 3 with a benched Staryu (its forward Mega Starmie needs 3) and the 9-Water suite
+    untouched; 0 on an empty bench (firing blanks — the signal the deck rules hand-encoded); 0 once
+    the deck is provably dry of Basic Energy, which the expectation must NOT resurrect."""
     sp = _shipped()
-    me = {"active": [{"id": CINDERACE, "hp": 160, "energies": []}],
-          "bench": [{"id": STARYU, "hp": 70, "energies": []}],
-          "hand": [], "discard": [], "prize": [None] * 6}
-    obs = {"current": {"yourIndex": 0, "players": [me, {"active": [], "bench": [], "prize": []}]}}
-    anchored = Board(deck_known_counts={WATER: 5, STARYU: 2})
-    assert sp._recover_units(965, {}, anchored, obs) == 3
-    empty = {**me, "bench": []}
-    obs_empty = {"current": {"yourIndex": 0, "players": [empty, {"active": [], "bench": [], "prize": []}]}}
-    assert sp._recover_units(965, {}, anchored, obs_empty) == 0
-    dry = Board(deck_known_counts={STARYU: 2})
-    assert sp._recover_units(965, {}, dry, obs) == 0
-    assert sp._deck_basic_energy_fuel(Board(), obs, None) == 3   # pre-anchor pigeonhole floor
+    assert _turbo_flare_units(sp, _turbo_flare_obs()) == 3
+    assert _turbo_flare_units(sp, _turbo_flare_obs(bench=())) == 0
+    # all 9 Water accounted for outside the deck — sound-empty, so no leg may claim a copy
+    assert _turbo_flare_units(sp, _turbo_flare_obs(discard=(WATER,) * 9)) == 0
+
+
+@pytest.mark.req("REQ-ACCEL-0002")
+def test_turbo_flare_keeps_its_credit_when_the_pigeonhole_floor_would_zero_it():
+    """Issue #172 / ADR-0076 at the shipped-agent seam. 6 of the 9 Water visible in the discard and
+    5 face-down prizes leaves 3 unseen: the retired pigeonhole floor read `max(0, 3 - 5)` = 0 and
+    killed the rider outright, on a deck that still holds Water with near-certainty. The expectation
+    is fractional and strictly positive, so the dividend survives — and stays bounded by the
+    printed `recoverN` of 3."""
+    sp = _shipped()
+    obs = _turbo_flare_obs(discard=(WATER,) * 6, prize=5)
+    board = sp._board(obs, obs.get("select"), carried=sp.carried())
+    water = sp._state_model.mine.deck_energy_counts[WATER]
+    assert water.floor == 0                                      # nothing PROVABLE behind 5 prizes
+    units = sp._recover_units(965, {}, board, obs)
+    assert 0.0 < units <= 3.0
+    assert units != int(units)                                   # genuinely fractional, not re-floored
 
 
 @pytest.mark.req("REQ-ACCEL-0002")

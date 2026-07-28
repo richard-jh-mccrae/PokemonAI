@@ -111,6 +111,30 @@ def test_the_accel_dividend_is_zero_when_no_recipient_can_use_it():
     assert PromoteBody(reach=100.0, accel_units=0).my_yield() == pytest.approx(100.0)
 
 
+def test_a_FRACTIONAL_accel_dividend_is_paid_in_full_not_truncated():
+    """ADR-0076 decision 3: the deck-fuel leg is now `CountTriple.expected`, so `accel_units` is an
+    EXPECTED count and arrives fractional. `my_yield` used to coerce it with `int(...)`, which floored
+    2.5 to 2 and silently binned 0.5 x ENERGY_RECOVER = 37.5 points — a whole half-Energy of
+    development, on the very frames the expectation exists to serve.
+
+    The dividend must be linear in the units across the fractional range: an eighth of an Energy more
+    fuel is an eighth of ENERGY_RECOVER more yield, with no step at the integer boundaries."""
+    bare = PromoteBody(reach=100.0)
+    assert replace(bare, accel_units=2.5).my_yield() - bare.my_yield() \
+        == pytest.approx(2.5 * ENERGY_RECOVER)
+    # strictly increasing across an integer boundary — no truncation step
+    yields = [replace(bare, accel_units=u).my_yield() for u in (1.75, 2.0, 2.25, 2.5)]
+    assert yields == sorted(yields) and len(set(yields)) == 4
+
+
+def test_a_fractional_dividend_below_one_unit_still_pays():
+    """The truncation's worst case: `int()` turned every sub-unit expectation into exactly zero, so a
+    deck 0.8 of an Energy deep read identically to one provably empty. The floor stays at zero for a
+    genuinely absent rider (the test above), but a real fraction is real value."""
+    bare = PromoteBody(reach=100.0)
+    assert replace(bare, accel_units=0.8).my_yield() > bare.my_yield()
+
+
 # ---- decision 4: exposure is PER-BODY, CLOCK-GRADED and AREA-CORRECT ------------------------------
 
 def test_exposure_is_continuous_in_the_clock_not_a_cliff():

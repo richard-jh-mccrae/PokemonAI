@@ -36,7 +36,7 @@ def _fired(t):
     return {h.id for h, _ in t.fired}
 
 
-def _pilot(hand_ids=()):
+def _pilot(hand_ids=(), energy=20):
     # Every attacker's cheapest attack is a real record (the card-level minCostDamage KO
     # fallback is retired, ADR-0052) — same damage/cost the fallback used to read.
     A_MEGA, A_STAR, A_CIND = 31, 32, 33
@@ -58,14 +58,18 @@ def _pilot(hand_ids=()):
                      roles={MEGA: ["win_condition", "primary_attacker"],
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})
     # The deck holds real Basic Energy so the deck-search rider has fuel to find (`_recover_units`
-    # bounds the dividend by the fuel in its source zone).
-    deck = [3] * 20 + [STARYU] * 10 + [MEGA] * 10 + [CINDERACE] * 10 + [1] * 10
+    # bounds the dividend by the fuel in its source zone). `energy` thins the suite for the
+    # ADR-0076 frames, where the point is a suite the PIGEONHOLE FLOOR cannot see behind the prizes.
+    deck = [3] * energy + [STARYU] * 10 + [MEGA] * 10 + [CINDERACE] * 10 + [1] * (30 - energy)
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({CINDERACE: ["opener"]}))
 
 
-def _obs(bench, opp_active, hand=(), ctx=TO_ACTIVE, active=None):
-    me = {"active": [active], "bench": bench, "hand": [{"id": c} for c in hand]}
+def _obs(bench, opp_active, hand=(), ctx=TO_ACTIVE, active=None, prize=0):
+    """``prize`` = that many FACE-DOWN prizes — the pre-anchor state the pigeonhole floor collapses in.
+    0 (the default) leaves every existing frame in the anchored regime it was written for."""
+    me = {"active": [active], "bench": bench, "hand": [{"id": c} for c in hand],
+          "prize": [None] * prize}
     opp = {"active": [opp_active], "bench": []}
     return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 8},
             "select": {"context": ctx, "minCount": 1, "maxCount": 1,
@@ -105,6 +109,52 @@ def test_promote_the_staller_over_a_bare_preevo_even_with_the_payoff_in_hand():
     assert dec.options[0].promote_retreat_working["my_yield"] > 0
     assert dec.options[1].promote_retreat_working["my_yield"] == 0    # a bare pre-evo reaches nothing
     assert p.decide(obs) == [0]                                  # staller, not the bare Staryu
+
+
+# ---- ADR-0076: the deck-fuel leg is an EXPECTATION, so the dividend survives a thin suite --------
+
+@pytest.mark.req("REQ-GEN-0026")
+def test_the_accel_dividend_survives_a_suite_the_pigeonhole_floor_zeroes():
+    """Issue #172 / ADR-0076, the f97 shape. 4 Basic {W} in the decklist, 2 of them VISIBLE on the
+    board, 5 face-down prizes: the provable pigeonhole floor is `max(0, 2 - 5)` = 0, so the shipped
+    read claimed no fuel at all and the accel dividend died — on a deck that still holds Water with
+    near-certainty.
+
+    Both bodies Knock the 20-HP Active Out, so `_promote_ko_tactical` cancels and the residual
+    decides (ADR-0073 §1). The wincon out-reaches the accelerator on raw damage (120 vs 50), so the
+    ONLY thing that can carry Cinderace is the dividend — which is exactly zero under the floor and
+    real under `CountTriple.expected`. This frame therefore fails closed on the defect and green on
+    the fix, without asserting any score."""
+    p = _pilot(energy=4)
+    bench = [{"id": CINDERACE, "energies": [3], "hp": 160},      # idx0: accelerator (1 visible {W})
+             {"id": MEGA, "energies": [3], "hp": 330},           # idx1: ready wincon (1 visible {W})
+             {"id": STARYU, "energies": [], "hp": 70}]           # idx2: the rider's recipient
+    obs = _obs(bench, {"id": 678, "hp": 20, "energies": [1, 1, 1]}, prize=5)
+    board = p._board(obs, obs["select"])
+    # The premise: nothing is PROVABLE here — the sound floor sees no fuel behind five prizes.
+    water = p._state_model.mine.deck_energy_counts[3]
+    assert water.floor == 0 and water.expected > 0.0
+    dec = p.explain(obs)
+    acc, wincon = dec.options[0].promote_retreat_working, dec.options[1].promote_retreat_working
+    assert acc["my_yield"] > wincon["my_yield"]
+    assert p.decide(obs) == [0]                                  # accelerator, not the wincon
+
+
+@pytest.mark.req("REQ-GEN-0026")
+def test_an_anchored_board_scores_the_dividend_exactly_as_before():
+    """The degeneracy guarantee (ADR-0076 verification). With no face-down prizes the Count Triple's
+    legs collapse to one integer, so `expected` IS the old exact count and the dividend is unmoved —
+    which is what separates "thin-Energy frames moved" from "everything moved"."""
+    p = _pilot(energy=4)
+    bench = [{"id": CINDERACE, "energies": [3], "hp": 160},
+             {"id": MEGA, "energies": [3], "hp": 330},
+             {"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, {"id": 678, "hp": 20, "energies": [1, 1, 1]}, prize=0)
+    p._board(obs, obs["select"])
+    water = p._state_model.mine.deck_energy_counts[3]
+    assert water.anchored is True                                # legs collapsed …
+    assert water.expected == float(water.floor) == float(water.ceiling)   # … to the one integer
+    assert p.decide(obs) == [0]
 
 
 @pytest.mark.req("REQ-GEN-0025")
