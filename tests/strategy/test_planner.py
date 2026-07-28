@@ -56,7 +56,7 @@ def _stats():
                          minCostDamage=340, maxDamage=340),   # benched threat, KOs my Mega next turn
         THREAT: CardStat(THREAT, name="glass cannon", hp=70, energyType=7, minAttackCost=1,
                          minCostDamage=210, maxDamage=210),   # KO-able now, dooms my Active next turn
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),  # cardType 5 = Basic Energy: without it `is_typed_basic_energy` is False and the Attach Budget sees no manual-attach source (ADR-0075)
     }, attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
                 NEBULA: AttackStat(NEBULA, damage=210, cost=3),
                 STARYU: AttackStat(STARYU, damage=20, cost=1),
@@ -598,7 +598,7 @@ def _snipe_stats():
         BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
         THREATB: CardStat(THREATB, name="benched glass cannon", hp=90, energyType=7,
                           minAttackCost=1, minCostDamage=340, maxDamage=340),
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),  # cardType 5 = Basic Energy: without it `is_typed_basic_energy` is False and the Attach Budget sees no manual-attach source (ADR-0075)
     }
     return DictCardStatProvider(base, attacks={
         JETTING: AttackStat(JETTING, damage=120, cost=1),

@@ -3022,11 +3022,18 @@ class PlannerMixin:
             return None
         if not self._is_energy_tutor(obs, select, option):
             return None
-        # The Supporter-slot clash the retired `enabler_consumes_supporter` flag encoded is now the
-        # Budget's own quota: supporter_spent=True closes the Supporter leg, so no SECOND Supporter's
-        # accel (a Crispin) can fund THIS Supporter's line — two Supporters in one turn is illegal
-        # and the phantom KO it funded would have been silent (ADR-0075 decision 3).
-        return self._retreat_ko_candidate(obs, board, opp, opp_player, supporter_spent=True)
+        # The Supporter leg stays OPEN here, and that is the opposite of the sibling Salvatore line
+        # (`_tutor_evolve_ko_candidate`, which passes supporter_spent=True). The discriminator is
+        # whether THIS line's Supporter contributes to the Budget:
+        #   * Hilda is `tutor_energy` with a readable deck-fetch clause, so she IS the Budget's
+        #     energy source for her own line — closing the leg would delete the very yield the line
+        #     depends on and make it structurally dead (measured: her Budget is size 1 open, 0 closed).
+        #   * Salvatore is `rush_evolve` with NO accel tag, so it contributes nothing and merely
+        #     SPENDS the slot — leaving the leg open there would let the Budget assume a different
+        #     Supporter is also played, which is the illegal two-Supporter turn.
+        # Double-counting is structurally impossible either way: each Supporter is a separate
+        # alternative play-set, so a hand holding both Hilda and Crispin still yields size 1, never 2.
+        return self._retreat_ko_candidate(obs, board, opp, opp_player)
 
     def _evolve_ko_candidate(self, obs, select, board, option, opp, opp_player):
         """``(prizes, active_survives)`` if EVOLVING the Active unlocks a KO of the opponent's Active this
