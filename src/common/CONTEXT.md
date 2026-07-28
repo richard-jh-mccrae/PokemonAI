@@ -323,7 +323,15 @@ marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives
 deadline" and dissolves per the ledger. `pilot._needs_v2` resolves the live board into slots;
 v2 now DECIDES the forced discard (`Pilot.needs_keep_value` armed ON, superseding v1 — the
 duplicate-pair naivety flipped without a new gate), while the gamble/refresh keep-value sites and
-the gate stack stay live pending their own swaps). Pure modules,
+the gate stack stay live pending their own swaps. **Built and ARMED (ADR-0076, #186, 2026-07-27):**
+`deny_slot` generalized to an opponent-target slot FAMILY — a `gust_target` kind (held gust-effect
+Trainer cards, bench-only per `doctrine_gust.py`) keep-prices against the real per-body
+`opponent_target_value` / `phase_scale` marginal instead of the flat disruption tier `deny` still
+uses; `Pilot.gust_target_slots` shipped ON (`needs.SUPPLIES`'s `gust` tag routes to `gust_target`
+INSTEAD of `deny`, never both) after clearing the ADR-0072 mid-build paired-A/B gauntlet tripwire.
+Snipe and the ADR-0044 forced-promotion pre-chip stay OUTSIDE the DP entirely (neither is a held
+card competing for a slot) — both read the shared marginal directly; #188 is where either is wired
+in as a live decider. Pure modules,
 no Pilot imports; the Pilot resolves board facts and delegates (`_role_value` / `_keep_cost` /
 `_deploy_odds` / `_card_reaccess_outs` / `_needs_v2`). `keep_cost = Worth × Gates × (1 − re-access
 Odds over the

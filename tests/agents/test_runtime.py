@@ -89,6 +89,14 @@ EXPECTED_SHIPPED = {
     "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: matched-Read charged doom
                                     # (`_DOOM_CHARGED`) confirms-or-clears a worst-case `active_doomed`
                                     # cry (relax-only); unmatched = worst-case
+    "recur_fuel_relax": True,       # ADR-0076 (#186) armed-ON 2026-07-27: quantifies the
+                                    # `_doom_recur_fueled` relax-block; corpus-swept clean (0/331)
+                                    # AND cleared the ADR-0072 mid-build paired-A/B tripwire
+                                    # (+2.4% delta, CI-lo -1.1%, 0 crashes/2400 games)
+    "gust_target_slots": True,      # ADR-0076 (#186) armed-ON 2026-07-27: generalizes `deny_slot`
+                                    # to a `gust_target` kind; 0 decision flips over 331 corpus
+                                    # frames AND cleared the ADR-0072 mid-build tripwire (-0.75%
+                                    # delta, CI-lo -4.3%, 0 crashes/2400 games)
 }
 
 

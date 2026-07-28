@@ -143,6 +143,29 @@ PROFILE = {
                                     # (Hammer-lanche density, ×2-weak Mind Bend, 1e Metal Defender)
                                     # stays doomed. Unmatched → byte-identical worst-case (ADR-0064
                                     # §4: never relax on a guess)
+    "recur_fuel_relax": True,       # ADR-0076 (#186), armed-ON 2026-07-27: quantifies
+                                    # `_doom_recur_fueled`'s all-or-nothing relax-block — augments a
+                                    # possible refueler's Energy with its real discard-recur reload
+                                    # before the CHARGED relax check runs, instead of always standing
+                                    # down. Corpus-swept clean (0/331 decision flips,
+                                    # `threat_sweep.py --slots`) AND cleared the ADR-0072 mid-build
+                                    # paired-A/B gauntlet tripwire (`gauntlet_ab.py`, flag-overlay
+                                    # variant — this swap deletes nothing, so the flag-overlay
+                                    # instrument is the correct fit, not the build-vs-build
+                                    # `gauntlet_swap_ab.py`): aggregate delta +2.4%, 95% CI
+                                    # [-1.1%, +5.9%], 0 crashes/2400 games — comfortably clears the
+                                    # crashes==0 AND CI-lo>=-5% Tripwire (no delta clause mid-build).
+    "gust_target_slots": True,      # ADR-0076 (#186), armed-ON 2026-07-27: generalizes `deny_slot`
+                                    # to a `gust_target` kind — held gust-effect Trainer cards
+                                    # keep-price against the real per-body `opponent_target_value`
+                                    # instead of the flat `deny` disruption tier. Corpus-swept clean
+                                    # (0/331 decision flips) AND cleared the ADR-0072 mid-build
+                                    # tripwire: aggregate delta -0.75%, 95% CI [-4.3%, +2.8%],
+                                    # 0 crashes/2400 games — CI-lo -4.3% clears the -5% floor.
+                                    # NOTE: one single matchup (mega_lucario vs mega_starmie) swung
+                                    # -11.5pp — the Tripwire screens catastrophes, not regressions,
+                                    # so this is flagged for the ladder-corrections loop to watch,
+                                    # not a reason to hold the flag back given the aggregate clears.
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
